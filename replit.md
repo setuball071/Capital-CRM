@@ -8,7 +8,7 @@ This is a Brazilian credit card and benefits simulator web application. It helps
 
 **Target Market**: Brazilian financial professionals (loan officers, bank agents), with mobile-first design approach given Brazil's high mobile usage.
 
-**Current Status**: Production-ready. All features implemented and tested. Calculator performs accurate coefficient-based calculations for Banco do Brasil, Caixa Econômica Federal, and Bradesco. Includes hierarchical user management with create, edit, delete, and activate/deactivate functionality.
+**Current Status**: Production-ready. All features implemented and tested. Calculator performs automatic real-time calculations with screenshot capture functionality ("Salvar e Copiar"). Includes hierarchical user management with create, edit, delete, and activate/deactivate functionality. Bulk CSV import for coefficient tables with Excel PT-BR compatibility.
 
 ## User Preferences
 

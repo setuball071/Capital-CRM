@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Calculator } from "lucide-react";
+import { Calculator, Download, Copy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useToast } from "@/hooks/use-toast";
+import html2canvas from "html2canvas";
 import { 
   simulationInputSchema, 
   type SimulationInput,
@@ -21,6 +22,8 @@ import { formatCurrency } from "@/lib/formatters";
 
 export default function CalculatorPage() {
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const simulatorRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   // Fetch active agreements
@@ -112,43 +115,100 @@ export default function CalculatorPage() {
     }
   }, [availableTables, form]);
 
-  function onSubmit(values: SimulationInput) {
-    // Find the selected coefficient table
-    const selectedTable = availableTables.find(
-      t => t.id === values.operation.coefficientTableId
-    );
+  // Auto-calculate when all fields are filled
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const monthlyPayment = value.operation?.monthlyPayment;
+      const outstandingBalance = value.operation?.outstandingBalance;
+      const coefficientTableId = value.operation?.coefficientTableId;
 
-    if (!selectedTable) {
+      if (monthlyPayment && outstandingBalance && coefficientTableId) {
+        const selectedTable = availableTables.find(t => t.id === coefficientTableId);
+        
+        if (selectedTable) {
+          const coefficient = parseFloat(selectedTable.coefficient);
+          const simulationResult = calculateSimulation(
+            monthlyPayment,
+            outstandingBalance,
+            coefficient
+          );
+          setResult(simulationResult);
+        }
+      } else {
+        setResult(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, availableTables]);
+
+  async function handleSaveAndCopy() {
+    if (!simulatorRef.current || !result) {
       toast({
         title: "Erro",
-        description: "Tabela de coeficiente não encontrada",
+        description: "Não há simulação para capturar. Preencha todos os campos primeiro.",
         variant: "destructive",
       });
       return;
     }
 
-    // Calculate using the coefficient from the selected table
-    const coefficient = parseFloat(selectedTable.coefficient);
-    const simulationResult = calculateSimulation(
-      values.operation.monthlyPayment,
-      values.operation.outstandingBalance,
-      coefficient
-    );
-    
-    setResult(simulationResult);
-    
-    toast({
-      title: "Simulação criada com sucesso",
-      description: "Os resultados foram calculados.",
-    });
-  }
+    setIsCapturing(true);
 
-  function onError() {
-    toast({
-      title: "Erro na validação",
-      description: "Por favor, preencha todos os campos obrigatórios corretamente.",
-      variant: "destructive",
-    });
+    try {
+      const canvas = await html2canvas(simulatorRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        logging: false,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        canvas.toBlob(async (blob) => {
+          try {
+            if (!blob) {
+              throw new Error("Falha ao gerar imagem");
+            }
+
+            try {
+              await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob }),
+              ]);
+
+              const link = document.createElement('a');
+              link.download = `simulacao-goldcard-${Date.now()}.png`;
+              link.href = canvas.toDataURL();
+              link.click();
+
+              toast({
+                title: "Sucesso!",
+                description: "Imagem salva e copiada para área de transferência.",
+              });
+            } catch (clipboardError) {
+              const link = document.createElement('a');
+              link.download = `simulacao-goldcard-${Date.now()}.png`;
+              link.href = canvas.toDataURL();
+              link.click();
+
+              toast({
+                title: "Imagem salva",
+                description: "A imagem foi salva. Não foi possível copiar para área de transferência.",
+              });
+            }
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Erro ao capturar simulação:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível capturar a simulação. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCapturing(false);
+    }
   }
 
   return (
@@ -177,9 +237,9 @@ export default function CalculatorPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto" ref={simulatorRef}>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6">
+            <div className="space-y-6">
               {/* Client Data Section */}
               <Card>
                 <CardHeader className="pb-4">
@@ -441,15 +501,25 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Save and Copy Button */}
               <Button
-                type="submit"
+                type="button"
+                onClick={handleSaveAndCopy}
+                disabled={!result || isCapturing}
                 className="w-full h-14 text-base font-semibold"
-                data-testid="button-create-simulation"
+                data-testid="button-save-copy"
               >
-                Criar Simulação
+                {isCapturing ? (
+                  <>Gerando imagem...</>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5 mr-2" />
+                    Salvar e Copiar
+                    <Copy className="h-5 w-5 ml-2" />
+                  </>
+                )}
               </Button>
-            </form>
+            </div>
           </Form>
         </div>
       </main>
