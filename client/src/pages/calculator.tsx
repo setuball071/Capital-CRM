@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useToast } from "@/hooks/use-toast";
 import { 
   simulationInputSchema, 
   type SimulationInput,
@@ -22,6 +23,7 @@ import { formatCurrency, formatCPF } from "@/lib/formatters";
 export default function CalculatorPage() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [availableTables, setAvailableTables] = useState<string[]>([]);
+  const { toast } = useToast();
 
   const form = useForm<SimulationInput>({
     resolver: zodResolver(simulationInputSchema),
@@ -62,6 +64,19 @@ export default function CalculatorPage() {
   function onSubmit(values: SimulationInput) {
     const simulationResult = calculateSimulation(values.operation);
     setResult(simulationResult);
+    
+    toast({
+      title: "Simulação criada com sucesso",
+      description: "Os resultados foram calculados.",
+    });
+  }
+
+  function onError() {
+    toast({
+      title: "Erro na validação",
+      description: "Por favor, preencha todos os campos obrigatórios corretamente.",
+      variant: "destructive",
+    });
   }
 
   function handleCPFChange(e: React.ChangeEvent<HTMLInputElement>, field: any) {
@@ -97,7 +112,7 @@ export default function CalculatorPage() {
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-5xl mx-auto">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6">
               {/* Client Data Section */}
               <Card>
                 <CardHeader className="pb-4">
