@@ -21,6 +21,8 @@ export function AppSidebar() {
   if (!user) return null;
 
   const isMaster = user.role === "master";
+  const isCoordinator = user.role === "coordenacao";
+  const hasManagerAccess = isMaster || isCoordinator;
 
   const menuItems = [
     {
@@ -45,7 +47,7 @@ export function AppSidebar() {
       title: "Usuários",
       url: "/users",
       icon: Users,
-      show: isMaster,
+      show: hasManagerAccess,
     },
   ];
 

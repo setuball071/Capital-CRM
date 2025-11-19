@@ -26,6 +26,8 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: Omit<InsertUser, "isActive">): Promise<User>;
   getAllUsers(): Promise<User[]>;
+  getUsersByManager(managerId: number): Promise<User[]>;
+  getActiveUsers(): Promise<User[]>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
   
   // Agreements
@@ -75,6 +77,14 @@ export class DbStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  async getUsersByManager(managerId: number): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.managerId, managerId));
+  }
+
+  async getActiveUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.isActive, true));
   }
 
   async updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined> {

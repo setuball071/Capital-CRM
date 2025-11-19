@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import CalculatorPage from "@/pages/calculator";
 import LoginPage from "@/pages/login";
 import ProfilePage from "@/pages/profile";
+import UsersPage from "@/pages/users";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -85,6 +86,9 @@ function Router() {
               </Route>
               <Route path="/profile">
                 {() => <ProtectedRoute component={ProfilePage} />}
+              </Route>
+              <Route path="/users">
+                {() => <ProtectedRoute component={UsersPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

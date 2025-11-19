@@ -43,11 +43,19 @@ function requireMaster(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Coordenacao or Master middleware
+function requireManagerAccess(req: Request, res: Response, next: NextFunction) {
+  if (!req.user || (req.user.role !== "master" && req.user.role !== "coordenacao")) {
+    return res.status(403).json({ message: "Acesso negado - apenas coordenadores ou administradores" });
+  }
+  next();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== AUTH ROUTES =====
   
-  // Register (master only can create users)
-  app.post("/api/auth/register", requireAuth, requireMaster, async (req, res) => {
+  // Create user (master creates all, coordenador creates only vendedor)
+  app.post("/api/users", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const result = registerSchema.safeParse(req.body);
       
@@ -58,7 +66,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { name, email, password, role } = result.data;
+      const { name, email, password, role, managerId } = result.data;
+
+      // Check permissions based on current user role
+      if (req.user!.role === "coordenacao") {
+        // Coordenador can only create vendedor
+        if (role !== "vendedor") {
+          return res.status(403).json({ 
+            message: "Coordenadores só podem criar usuários de venda" 
+          });
+        }
+        // Vendedor must be linked to this coordenador
+        if (managerId && managerId !== req.user!.id) {
+          return res.status(403).json({ 
+            message: "Você só pode criar vendedores em sua equipe" 
+          });
+        }
+      }
 
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -69,12 +93,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
+      // Determine managerId
+      let finalManagerId = managerId;
+      if (role === "vendedor" && req.user!.role === "coordenacao") {
+        // If coordenador is creating vendedor, link to themselves
+        finalManagerId = req.user!.id;
+      }
+
       // Create user
       const user = await storage.createUser({
         name,
         email,
         passwordHash,
         role,
+        managerId: finalManagerId,
       });
 
       // Don't send password hash to client
@@ -85,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: userWithoutPassword,
       });
     } catch (error) {
-      console.error("Register error:", error);
+      console.error("Create user error:", error);
       return res.status(500).json({ message: "Erro ao criar usuário" });
     }
   });
@@ -328,18 +360,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== USERS ROUTES (master only) =====
+  // ===== USERS ROUTES =====
   
-  // Get all users
-  app.get("/api/users", requireAuth, requireMaster, async (req, res) => {
+  // Get users (hierarchical: master sees all, coordenador sees their team)
+  app.get("/api/users", requireAuth, requireManagerAccess, async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
+      let users: User[];
+      
+      if (req.user!.role === "master") {
+        // Master sees all users
+        users = await storage.getAllUsers();
+      } else if (req.user!.role === "coordenacao") {
+        // Coordenador sees only their team (vendedores) + themselves
+        const teamUsers = await storage.getUsersByManager(req.user!.id);
+        users = [req.user!, ...teamUsers];
+      } else {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
       // Remove password hashes
       const usersWithoutPasswords = users.map(({ passwordHash: _, ...user }) => user);
       return res.json(usersWithoutPasswords);
     } catch (error) {
       console.error("Get users error:", error);
       return res.status(500).json({ message: "Erro ao buscar usuários" });
+    }
+  });
+
+  // Get all coordenadores (for selecting manager when creating vendedor)
+  app.get("/api/users/coordenadores", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const coordenadores = allUsers.filter(u => u.role === "coordenacao" && u.isActive);
+      const withoutPasswords = coordenadores.map(({ passwordHash: _, ...user }) => user);
+      return res.json(withoutPasswords);
+    } catch (error) {
+      console.error("Get coordenadores error:", error);
+      return res.status(500).json({ message: "Erro ao buscar coordenadores" });
     }
   });
 
