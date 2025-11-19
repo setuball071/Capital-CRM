@@ -104,7 +104,8 @@ export default function CalculatorPage() {
   // Reset term when bank changes
   useEffect(() => {
     const currentTerm = form.getValues("operation.termMonths");
-    if (currentTerm && !availableTerms.includes(currentTerm)) {
+    const currentTermNum = typeof currentTerm === 'string' ? parseInt(currentTerm, 10) : currentTerm;
+    if (currentTermNum && !availableTerms.includes(currentTermNum)) {
       form.setValue("operation.termMonths", 0);
       form.setValue("operation.coefficientTableId", 0);
     }
@@ -113,7 +114,8 @@ export default function CalculatorPage() {
   // Reset table when term changes
   useEffect(() => {
     const currentTableId = form.getValues("operation.coefficientTableId");
-    if (currentTableId && !availableTables.find(t => t.id === currentTableId)) {
+    const currentTableIdNum = typeof currentTableId === 'string' ? parseInt(currentTableId, 10) : currentTableId;
+    if (currentTableIdNum && !availableTables.find(t => t.id === currentTableIdNum)) {
       form.setValue("operation.coefficientTableId", 0);
     }
   }, [availableTables, form]);
