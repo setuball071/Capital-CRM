@@ -42,6 +42,10 @@ export interface IStorage {
   // Coefficient Tables
   getAllCoefficientTables(): Promise<CoefficientTable[]>;
   getActiveCoefficientTables(): Promise<CoefficientTable[]>;
+  getCoefficientTablesByAgreement(agreementId: number): Promise<CoefficientTable[]>;
+  getBanksByAgreement(agreementId: number): Promise<string[]>;
+  getTermsByAgreementAndBank(agreementId: number, bank: string): Promise<number[]>;
+  getTablesByAgreementBankAndTerm(agreementId: number, bank: string, termMonths: number): Promise<CoefficientTable[]>;
   getCoefficientTablesByBank(bank: string): Promise<CoefficientTable[]>;
   getCoefficientTablesByBankAndTerm(bank: string, termMonths: number): Promise<CoefficientTable[]>;
   getCoefficientTable(id: number): Promise<CoefficientTable | undefined>;
@@ -140,6 +144,45 @@ export class DbStorage implements IStorage {
 
   async getActiveCoefficientTables(): Promise<CoefficientTable[]> {
     return await db.select().from(coefficientTables).where(eq(coefficientTables.isActive, true));
+  }
+
+  async getCoefficientTablesByAgreement(agreementId: number): Promise<CoefficientTable[]> {
+    return await db.select().from(coefficientTables)
+      .where(and(
+        eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.isActive, true)
+      ));
+  }
+
+  async getBanksByAgreement(agreementId: number): Promise<string[]> {
+    const tables = await db.select().from(coefficientTables)
+      .where(and(
+        eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.isActive, true)
+      ));
+    const uniqueBanks = [...new Set(tables.map(t => t.bank))];
+    return uniqueBanks.sort();
+  }
+
+  async getTermsByAgreementAndBank(agreementId: number, bank: string): Promise<number[]> {
+    const tables = await db.select().from(coefficientTables)
+      .where(and(
+        eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.bank, bank),
+        eq(coefficientTables.isActive, true)
+      ));
+    const uniqueTerms = [...new Set(tables.map(t => t.termMonths))];
+    return uniqueTerms.sort((a, b) => a - b);
+  }
+
+  async getTablesByAgreementBankAndTerm(agreementId: number, bank: string, termMonths: number): Promise<CoefficientTable[]> {
+    return await db.select().from(coefficientTables)
+      .where(and(
+        eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.bank, bank),
+        eq(coefficientTables.termMonths, termMonths),
+        eq(coefficientTables.isActive, true)
+      ));
   }
 
   async getCoefficientTablesByBank(bank: string): Promise<CoefficientTable[]> {

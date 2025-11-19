@@ -559,6 +559,244 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== AGREEMENTS ROUTES =====
+  
+  // Get all agreements
+  app.get("/api/agreements", requireAuth, async (req, res) => {
+    try {
+      const agreements = await storage.getAllAgreements();
+      return res.json(agreements);
+    } catch (error) {
+      console.error("Get agreements error:", error);
+      return res.status(500).json({ message: "Erro ao buscar convênios" });
+    }
+  });
+
+  // Get active agreements
+  app.get("/api/agreements/active", requireAuth, async (req, res) => {
+    try {
+      const agreements = await storage.getActiveAgreements();
+      return res.json(agreements);
+    } catch (error) {
+      console.error("Get active agreements error:", error);
+      return res.status(500).json({ message: "Erro ao buscar convênios ativos" });
+    }
+  });
+
+  // Create agreement (master only)
+  app.post("/api/agreements", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = insertAgreementSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.format(),
+        });
+      }
+
+      const agreement = await storage.createAgreement(result.data);
+      return res.status(201).json(agreement);
+    } catch (error) {
+      console.error("Create agreement error:", error);
+      return res.status(500).json({ message: "Erro ao criar convênio" });
+    }
+  });
+
+  // Update agreement (master only)
+  app.patch("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const result = insertAgreementSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.format(),
+        });
+      }
+
+      const agreement = await storage.updateAgreement(id, result.data);
+      if (!agreement) {
+        return res.status(404).json({ message: "Convênio não encontrado" });
+      }
+
+      return res.json(agreement);
+    } catch (error) {
+      console.error("Update agreement error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar convênio" });
+    }
+  });
+
+  // Delete agreement (master only)
+  app.delete("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      await storage.deleteAgreement(id);
+      return res.json({ message: "Convênio excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete agreement error:", error);
+      return res.status(500).json({ message: "Erro ao excluir convênio" });
+    }
+  });
+
+  // ===== COEFFICIENT TABLES ROUTES =====
+  
+  // Get all coefficient tables
+  app.get("/api/coefficient-tables", requireAuth, async (req, res) => {
+    try {
+      const tables = await storage.getAllCoefficientTables();
+      return res.json(tables);
+    } catch (error) {
+      console.error("Get coefficient tables error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tabelas de coeficientes" });
+    }
+  });
+
+  // Get coefficient tables by agreement
+  app.get("/api/coefficient-tables/by-agreement/:agreementId", requireAuth, async (req, res) => {
+    try {
+      const agreementId = parseInt(req.params.agreementId);
+      if (isNaN(agreementId)) {
+        return res.status(400).json({ message: "ID de convênio inválido" });
+      }
+
+      const tables = await storage.getCoefficientTablesByAgreement(agreementId);
+      return res.json(tables);
+    } catch (error) {
+      console.error("Get coefficient tables by agreement error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tabelas de coeficientes" });
+    }
+  });
+
+  // Create coefficient table (master only)
+  app.post("/api/coefficient-tables", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = insertCoefficientTableSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.format(),
+        });
+      }
+
+      const table = await storage.createCoefficientTable(result.data);
+      return res.status(201).json(table);
+    } catch (error) {
+      console.error("Create coefficient table error:", error);
+      return res.status(500).json({ message: "Erro ao criar tabela de coeficiente" });
+    }
+  });
+
+  // Update coefficient table (master only)
+  app.patch("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const result = insertCoefficientTableSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.format(),
+        });
+      }
+
+      const table = await storage.updateCoefficientTable(id, result.data);
+      if (!table) {
+        return res.status(404).json({ message: "Tabela não encontrada" });
+      }
+
+      return res.json(table);
+    } catch (error) {
+      console.error("Update coefficient table error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar tabela de coeficiente" });
+    }
+  });
+
+  // Delete coefficient table (master only)
+  app.delete("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      await storage.deleteCoefficientTable(id);
+      return res.json({ message: "Tabela de coeficiente excluída com sucesso" });
+    } catch (error) {
+      console.error("Delete coefficient table error:", error);
+      return res.status(500).json({ message: "Erro ao excluir tabela de coeficiente" });
+    }
+  });
+
+  // ===== CALCULATOR HIERARCHY ROUTES =====
+  
+  // Get banks by agreement
+  app.get("/api/calculator/banks", requireAuth, async (req, res) => {
+    try {
+      const agreementId = parseInt(req.query.agreementId as string);
+      if (isNaN(agreementId)) {
+        return res.status(400).json({ message: "ID de convênio inválido" });
+      }
+
+      const banks = await storage.getBanksByAgreement(agreementId);
+      return res.json(banks);
+    } catch (error) {
+      console.error("Get banks error:", error);
+      return res.status(500).json({ message: "Erro ao buscar bancos" });
+    }
+  });
+
+  // Get terms by agreement and bank
+  app.get("/api/calculator/terms", requireAuth, async (req, res) => {
+    try {
+      const agreementId = parseInt(req.query.agreementId as string);
+      const bank = req.query.bank as string;
+
+      if (isNaN(agreementId) || !bank) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+
+      const terms = await storage.getTermsByAgreementAndBank(agreementId, bank);
+      return res.json(terms);
+    } catch (error) {
+      console.error("Get terms error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prazos" });
+    }
+  });
+
+  // Get tables by agreement, bank and term
+  app.get("/api/calculator/tables", requireAuth, async (req, res) => {
+    try {
+      const agreementId = parseInt(req.query.agreementId as string);
+      const bank = req.query.bank as string;
+      const termMonths = parseInt(req.query.termMonths as string);
+
+      if (isNaN(agreementId) || !bank || isNaN(termMonths)) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+
+      const tables = await storage.getTablesByAgreementBankAndTerm(agreementId, bank, termMonths);
+      return res.json(tables);
+    } catch (error) {
+      console.error("Get tables error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tabelas" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
