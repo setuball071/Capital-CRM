@@ -137,6 +137,13 @@ Preferred communication style: Simple, everyday language.
 - Success confirmation on simulation creation
 - Responsive mobile-first design
 - Hierarchical user management with role-based access control
+- Bulk import of coefficient tables via CSV spreadsheet:
+  - Download template CSV with proper Excel PT-BR formatting (semicolon delimiters)
+  - Upload and validate CSV files with row-level error reporting
+  - Preview imported data before confirming
+  - Batch creation of multiple tables in a single operation
+- Free-text bank input with autocomplete suggestions for 20 common Brazilian banks/fintechs
+- Brazilian decimal format support (comma or period) for coefficient values
 
 ## External Dependencies
 
@@ -217,6 +224,14 @@ Preferred communication style: Simple, everyday language.
 **date-fns**: Date utility library
 - Functional, immutable date operations
 - Tree-shakeable (only imports used functions)
+
+### File Processing
+
+**PapaParse**: CSV parsing and generation library
+- Client-side CSV file parsing with header detection
+- Configurable delimiter support (semicolon for Excel PT-BR)
+- Used for bulk import of coefficient tables
+- Error handling and data validation during parsing
 
 ### Brazilian Market Specific
 
