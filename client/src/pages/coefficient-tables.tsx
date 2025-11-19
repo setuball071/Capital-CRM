@@ -420,23 +420,20 @@ export default function CoefficientTablesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Banco</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-bank">
-                            <SelectValue placeholder="Selecione um banco" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {AVAILABLE_BANKS.map((bank) => (
-                            <SelectItem key={bank} value={bank}>
-                              {bank}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Input
+                          placeholder="Ex: Banco do Brasil, PH Tech, etc."
+                          data-testid="input-bank"
+                          list="banks-list"
+                          {...field}
+                        />
+                      </FormControl>
+                      <datalist id="banks-list">
+                        {AVAILABLE_BANKS.map((bank) => (
+                          <option key={bank} value={bank} />
+                        ))}
+                      </datalist>
+                      <FormDescription>Digite o nome do banco ou fintech</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -584,23 +581,20 @@ export default function CoefficientTablesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Banco</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-bank">
-                            <SelectValue placeholder="Selecione um banco" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {AVAILABLE_BANKS.map((bank) => (
-                            <SelectItem key={bank} value={bank}>
-                              {bank}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Input
+                          placeholder="Ex: Banco do Brasil, PH Tech, etc."
+                          data-testid="input-edit-bank"
+                          list="banks-list-edit"
+                          {...field}
+                        />
+                      </FormControl>
+                      <datalist id="banks-list-edit">
+                        {AVAILABLE_BANKS.map((bank) => (
+                          <option key={bank} value={bank} />
+                        ))}
+                      </datalist>
+                      <FormDescription>Digite o nome do banco ou fintech</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
