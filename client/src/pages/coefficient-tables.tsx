@@ -65,9 +65,11 @@ const coefficientFormSchema = z.object({
   bank: z.string().min(1, { message: "Banco é obrigatório" }),
   termMonths: z.number().int().min(12, { message: "Prazo mínimo é 12 meses" }).max(140, { message: "Prazo máximo é 140 meses" }),
   tableName: z.string().min(1, { message: "Nome da tabela é obrigatório" }),
-  coefficient: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-    message: "Coeficiente deve ser um número positivo",
-  }),
+  coefficient: z.string()
+    .transform((val) => val.replace(',', '.'))
+    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+      message: "Coeficiente deve ser um número positivo",
+    }),
   isActive: z.boolean().default(true),
 });
 
@@ -460,12 +462,12 @@ export default function CoefficientTablesPage() {
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder="Ex: 0.0216"
+                        placeholder="Ex: 0,0216 ou 0.0216"
                         data-testid="input-coefficient"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>Valor decimal positivo</FormDescription>
+                    <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -614,12 +616,12 @@ export default function CoefficientTablesPage() {
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder="Ex: 0.0216"
+                        placeholder="Ex: 0,0216 ou 0.0216"
                         data-testid="input-edit-coefficient"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>Valor decimal positivo</FormDescription>
+                    <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
