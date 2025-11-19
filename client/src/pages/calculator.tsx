@@ -157,11 +157,16 @@ export default function CalculatorPage() {
     setIsCapturing(true);
 
     try {
+      console.log('Iniciando captura de tela...');
       const canvas = await html2canvas(simulatorRef.current, {
         backgroundColor: '#ffffff',
         scale: 2,
-        logging: false,
+        logging: true,
+        useCORS: true,
+        allowTaint: true,
       });
+      
+      console.log('Canvas gerado com sucesso:', canvas.width, 'x', canvas.height);
 
       const timestamp = Date.now();
       const link = document.createElement('a');
@@ -228,9 +233,12 @@ export default function CalculatorPage() {
       }
     } catch (error) {
       console.error('Erro ao salvar simulação:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('Detalhes do erro:', errorMessage);
+      
       toast({
-        title: "Erro",
-        description: "Não foi possível salvar a simulação. Tente novamente.",
+        title: "Erro ao salvar",
+        description: `Não foi possível salvar a simulação. ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
