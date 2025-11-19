@@ -56,6 +56,13 @@ import {
 const agreementFormSchema = z.object({
   name: z.string().min(1, { message: "Nome é obrigatório" }),
   description: z.string().optional(),
+  safetyMargin: z.string().refine(
+    (val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    },
+    { message: "Margem de segurança deve ser entre 0 e 100%" }
+  ),
   isActive: z.boolean().default(true),
 });
 
@@ -73,6 +80,7 @@ export default function AgreementsPage() {
     defaultValues: {
       name: "",
       description: "",
+      safetyMargin: "0",
       isActive: true,
     },
   });
@@ -82,6 +90,7 @@ export default function AgreementsPage() {
     defaultValues: {
       name: "",
       description: "",
+      safetyMargin: "0",
       isActive: true,
     },
   });
@@ -95,6 +104,7 @@ export default function AgreementsPage() {
       const payload: InsertAgreement = {
         name: data.name,
         description: data.description || undefined,
+        safetyMargin: data.safetyMargin,
         isActive: data.isActive,
       };
       return await apiRequest("POST", "/api/agreements", payload);
@@ -123,6 +133,7 @@ export default function AgreementsPage() {
       const payload: Partial<InsertAgreement> = {
         name: data.name,
         description: data.description || undefined,
+        safetyMargin: data.safetyMargin,
         isActive: data.isActive,
       };
       return await apiRequest("PATCH", `/api/agreements/${selectedAgreement.id}`, payload);
@@ -178,6 +189,7 @@ export default function AgreementsPage() {
     editForm.reset({
       name: agreement.name,
       description: agreement.description || "",
+      safetyMargin: agreement.safetyMargin || "0",
       isActive: agreement.isActive,
     });
     setIsEditDialogOpen(true);
@@ -344,6 +356,28 @@ export default function AgreementsPage() {
                 )}
               />
 
+              <FormField
+                control={createForm.control}
+                name="safetyMargin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Margem de Segurança (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="0.00"
+                        data-testid="input-safety-margin"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <DialogFooter>
                 <Button
                   type="button"
@@ -412,6 +446,28 @@ export default function AgreementsPage() {
                       <Textarea
                         placeholder="Descrição do convênio"
                         data-testid="input-edit-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="safetyMargin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Margem de Segurança (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="0.00"
+                        data-testid="input-edit-safety-margin"
                         {...field}
                       />
                     </FormControl>

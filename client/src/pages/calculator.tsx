@@ -25,6 +25,7 @@ import { formatCurrency } from "@/lib/formatters";
 export default function CalculatorPage() {
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [liquidPayment, setLiquidPayment] = useState<number>(0);
   const simulatorRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -58,36 +59,36 @@ export default function CalculatorPage() {
   const { data: availableBanks = [] } = useQuery<string[]>({
     queryKey: ["/api/calculator/banks", watchAgreementId],
     queryFn: async () => {
-      if (!watchAgreementId) return [];
+      if (!watchAgreementId || watchAgreementId === 0) return [];
       const res = await fetch(`/api/calculator/banks?agreementId=${watchAgreementId}`);
       if (!res.ok) throw new Error("Erro ao buscar bancos");
       return res.json();
     },
-    enabled: !!watchAgreementId,
+    enabled: !!watchAgreementId && watchAgreementId > 0,
   });
 
   // Fetch terms by agreement and bank
   const { data: availableTerms = [] } = useQuery<number[]>({
     queryKey: ["/api/calculator/terms", watchAgreementId, watchBank],
     queryFn: async () => {
-      if (!watchAgreementId || !watchBank) return [];
+      if (!watchAgreementId || watchAgreementId === 0 || !watchBank) return [];
       const res = await fetch(`/api/calculator/terms?agreementId=${watchAgreementId}&bank=${watchBank}`);
       if (!res.ok) throw new Error("Erro ao buscar prazos");
       return res.json();
     },
-    enabled: !!watchAgreementId && !!watchBank,
+    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchBank,
   });
 
   // Fetch tables by agreement, bank and term
   const { data: availableTables = [] } = useQuery<CoefficientTable[]>({
     queryKey: ["/api/calculator/tables", watchAgreementId, watchBank, watchTerm],
     queryFn: async () => {
-      if (!watchAgreementId || !watchBank || !watchTerm) return [];
+      if (!watchAgreementId || watchAgreementId === 0 || !watchBank || !watchTerm || watchTerm === 0) return [];
       const res = await fetch(`/api/calculator/tables?agreementId=${watchAgreementId}&bank=${watchBank}&termMonths=${watchTerm}`);
       if (!res.ok) throw new Error("Erro ao buscar tabelas");
       return res.json();
     },
-    enabled: !!watchAgreementId && !!watchBank && !!watchTerm,
+    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchBank && !!watchTerm && watchTerm > 0,
   });
 
   // Reset bank when agreement changes
@@ -117,6 +118,27 @@ export default function CalculatorPage() {
     }
   }, [availableTables, form]);
 
+  // Calculate liquid payment when monthly payment or agreement changes
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const monthlyPayment = value.operation?.monthlyPayment || 0;
+      const agreementId = value.client?.agreementId;
+      
+      if (monthlyPayment && agreementId && agreements.length > 0) {
+        const selectedAgreement = agreements.find(a => a.id === agreementId);
+        if (selectedAgreement) {
+          const safetyMargin = parseFloat(selectedAgreement.safetyMargin || "0");
+          const liquid = monthlyPayment * (1 - safetyMargin / 100);
+          setLiquidPayment(liquid);
+        }
+      } else {
+        setLiquidPayment(0);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, agreements]);
+
   // Auto-calculate when all fields are filled
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -124,13 +146,13 @@ export default function CalculatorPage() {
       const outstandingBalance = value.operation?.outstandingBalance;
       const coefficientTableId = value.operation?.coefficientTableId;
 
-      if (monthlyPayment && outstandingBalance && coefficientTableId) {
+      if (monthlyPayment && outstandingBalance && coefficientTableId && liquidPayment > 0) {
         const selectedTable = availableTables.find(t => t.id === coefficientTableId);
         
         if (selectedTable) {
           const coefficient = parseFloat(selectedTable.coefficient);
           const simulationResult = calculateSimulation(
-            monthlyPayment,
+            liquidPayment,
             outstandingBalance,
             coefficient
           );
@@ -142,7 +164,7 @@ export default function CalculatorPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, availableTables]);
+  }, [form, availableTables, liquidPayment]);
 
   async function handleSave(format: 'png' | 'jpeg' | 'pdf') {
     if (!simulatorRef.current || !result) {
@@ -157,12 +179,17 @@ export default function CalculatorPage() {
     setIsCapturing(true);
 
     try {
-      const canvas = await html2canvas(simulatorRef.current, {
+      const element = simulatorRef.current;
+      const canvas = await html2canvas(element, {
         backgroundColor: '#ffffff',
         scale: 2,
         logging: false,
         useCORS: true,
         allowTaint: true,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
         onclone: (clonedDoc) => {
           clonedDoc.documentElement.classList.remove('dark');
         },
@@ -360,7 +387,7 @@ export default function CalculatorPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-sm font-medium">
-                              Parcela (R$)
+                              Parcela Atual (R$)
                             </FormLabel>
                             <FormControl>
                               <Input
@@ -377,6 +404,21 @@ export default function CalculatorPage() {
                           </FormItem>
                         )}
                       />
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Parcela Líquida (R$)
+                        </label>
+                        <div 
+                          className="flex h-12 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm items-center"
+                          data-testid="text-liquid-payment"
+                        >
+                          {formatCurrency(liquidPayment)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Valor após desconto da margem de segurança
+                        </p>
+                      </div>
 
                       <FormField
                         control={form.control}
@@ -485,7 +527,7 @@ export default function CalculatorPage() {
                               disabled={availableTables.length === 0}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-12" data-testid="select-coefficient-table">
+                                <SelectTrigger className="h-12 w-full min-w-[22rem]" data-testid="select-coefficient-table">
                                   <SelectValue placeholder="Selecione a tabela" />
                                 </SelectTrigger>
                               </FormControl>

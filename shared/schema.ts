@@ -21,6 +21,7 @@ export const agreements = pgTable("agreements", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  safetyMargin: decimal("safety_margin", { precision: 5, scale: 2 }).notNull().default("0"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -66,6 +67,13 @@ export const insertUserSchema = createInsertSchema(users, {
 
 export const insertAgreementSchema = createInsertSchema(agreements, {
   name: z.string().min(1, { message: "Nome é obrigatório" }),
+  safetyMargin: z.string().refine(
+    (val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    },
+    { message: "Margem de segurança deve ser entre 0 e 100%" }
+  ),
 }).omit({ id: true, createdAt: true });
 
 export const insertCoefficientTableSchema = createInsertSchema(coefficientTables, {
