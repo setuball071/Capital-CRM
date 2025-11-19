@@ -143,7 +143,7 @@ export default function CalculatorPage() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
-                  Simulador de Compra
+                  Simulador GoldCard
                 </h1>
                 <p className="text-sm text-muted-foreground hidden sm:block">
                   Cartão de Crédito e Benefício

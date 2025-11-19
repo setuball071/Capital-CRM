@@ -1,4 +1,4 @@
-# Simulador de Compra - Cartão de Crédito e Benefício
+# Simulador GoldCard - Cartão de Crédito e Benefício
 
 ## Overview
 
