@@ -1,17 +1,134 @@
+import { pgTable, serial, text, varchar, decimal, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Client data schema
+// ===== DATABASE TABLES =====
+
+// Users table
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: varchar("role", { length: 50 }).notNull().default("vendedor"), // 'vendedor' or 'master'
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Agreements table
+export const agreements = pgTable("agreements", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Coefficient tables
+export const coefficientTables = pgTable("coefficient_tables", {
+  id: serial("id").primaryKey(),
+  bank: varchar("bank", { length: 255 }).notNull(),
+  termMonths: integer("term_months").notNull(),
+  tableName: varchar("table_name", { length: 255 }).notNull(),
+  coefficient: decimal("coefficient", { precision: 12, scale: 10 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Simulations history
+export const simulations = pgTable("simulations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  clientName: varchar("client_name", { length: 255 }).notNull(),
+  clientCpf: varchar("client_cpf", { length: 14 }).notNull(),
+  agreementId: integer("agreement_id").references(() => agreements.id),
+  agreementName: varchar("agreement_name", { length: 255 }), // Denormalized for history
+  bank: varchar("bank", { length: 255 }).notNull(),
+  termMonths: integer("term_months").notNull(),
+  tableName: varchar("table_name", { length: 255 }).notNull(),
+  coefficient: decimal("coefficient", { precision: 12, scale: 10 }).notNull(),
+  monthlyPayment: decimal("monthly_payment", { precision: 12, scale: 2 }).notNull(),
+  outstandingBalance: decimal("outstanding_balance", { precision: 12, scale: 2 }).notNull(),
+  totalContractValue: decimal("total_contract_value", { precision: 12, scale: 2 }).notNull(),
+  clientRefund: decimal("client_refund", { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ===== INSERT SCHEMAS =====
+
+export const insertUserSchema = createInsertSchema(users, {
+  email: z.string().email({ message: "Email inválido" }),
+  name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
+  passwordHash: z.string().min(6, { message: "Senha deve ter pelo menos 6 caracteres" }),
+  role: z.enum(["vendedor", "master"], { message: "Role deve ser 'vendedor' ou 'master'" }),
+}).omit({ id: true, createdAt: true });
+
+export const insertAgreementSchema = createInsertSchema(agreements, {
+  name: z.string().min(1, { message: "Nome é obrigatório" }),
+}).omit({ id: true, createdAt: true });
+
+export const insertCoefficientTableSchema = createInsertSchema(coefficientTables, {
+  bank: z.string().min(1, { message: "Banco é obrigatório" }),
+  termMonths: z.number().int().positive({ message: "Prazo deve ser positivo" }),
+  tableName: z.string().min(1, { message: "Nome da tabela é obrigatório" }),
+  coefficient: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+    message: "Coeficiente deve ser um número positivo",
+  }),
+}).omit({ id: true, createdAt: true });
+
+export const insertSimulationSchema = createInsertSchema(simulations, {
+  clientName: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
+  clientCpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, { 
+    message: "CPF deve estar no formato 000.000.000-00" 
+  }),
+  monthlyPayment: z.string().refine((val) => parseFloat(val) > 0, { message: "Parcela deve ser positiva" }),
+  outstandingBalance: z.string().refine((val) => parseFloat(val) > 0, { message: "Saldo deve ser positivo" }),
+}).omit({ id: true, createdAt: true });
+
+// ===== SELECT TYPES =====
+
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Agreement = typeof agreements.$inferSelect;
+export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
+
+export type CoefficientTable = typeof coefficientTables.$inferSelect;
+export type InsertCoefficientTable = z.infer<typeof insertCoefficientTableSchema>;
+
+export type Simulation = typeof simulations.$inferSelect;
+export type InsertSimulation = z.infer<typeof insertSimulationSchema>;
+
+// ===== AUTHENTICATION SCHEMAS =====
+
+export const loginSchema = z.object({
+  email: z.string().email({ message: "Email inválido" }),
+  password: z.string().min(1, { message: "Senha é obrigatória" }),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
+export const registerSchema = z.object({
+  name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
+  email: z.string().email({ message: "Email inválido" }),
+  password: z.string().min(6, { message: "Senha deve ter pelo menos 6 caracteres" }),
+  role: z.enum(["vendedor", "master"], { message: "Role deve ser 'vendedor' ou 'master'" }),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+
+// ===== FRONTEND SCHEMAS (for calculator) =====
+
 export const clientDataSchema = z.object({
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
   cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, { 
     message: "CPF deve estar no formato 000.000.000-00" 
   }),
-  agreement: z.string().min(1, { message: "Selecione um convênio" }),
+  agreementId: z.number().positive({ message: "Selecione um convênio" }),
 });
 
 export type ClientData = z.infer<typeof clientDataSchema>;
 
-// Operation data schema
 export const operationDataSchema = z.object({
   monthlyPayment: z.number()
     .positive({ message: "Parcela deve ser maior que zero" })
@@ -20,16 +137,15 @@ export const operationDataSchema = z.object({
     .positive({ message: "Saldo devedor deve ser maior que zero" })
     .max(10000000, { message: "Saldo muito alto" }),
   bank: z.string().min(1, { message: "Selecione um banco" }),
-  term: z.number()
+  termMonths: z.number()
     .int({ message: "Prazo deve ser um número inteiro" })
     .positive({ message: "Selecione um prazo" })
     .max(360, { message: "Prazo máximo é 360 meses" }),
-  coefficientTable: z.string().min(1, { message: "Selecione uma tabela" }),
+  coefficientTableId: z.number().positive({ message: "Selecione uma tabela" }),
 });
 
 export type OperationData = z.infer<typeof operationDataSchema>;
 
-// Complete simulation input
 export const simulationInputSchema = z.object({
   client: clientDataSchema,
   operation: operationDataSchema,
@@ -37,73 +153,9 @@ export const simulationInputSchema = z.object({
 
 export type SimulationInput = z.infer<typeof simulationInputSchema>;
 
-// Coefficient table entry
-export interface CoefficientEntry {
-  bank: string;
-  term: number;
-  table: string;
-  coefficient: number;
-}
-
-// Simulation result
+// Simulation result (frontend)
 export interface SimulationResult {
   totalContractValue: number;
   clientRefund: number;
   coefficient: number;
 }
-
-// Predefined coefficient tables
-export const coefficientTables: CoefficientEntry[] = [
-  // Banco do Brasil - Tabela A
-  { bank: "Banco do Brasil", term: 12, table: "Tabela A", coefficient: 0.0875 },
-  { bank: "Banco do Brasil", term: 24, table: "Tabela A", coefficient: 0.0462 },
-  { bank: "Banco do Brasil", term: 36, table: "Tabela A", coefficient: 0.0324 },
-  { bank: "Banco do Brasil", term: 48, table: "Tabela A", coefficient: 0.0256 },
-  { bank: "Banco do Brasil", term: 60, table: "Tabela A", coefficient: 0.0216 },
-  { bank: "Banco do Brasil", term: 72, table: "Tabela A", coefficient: 0.0189 },
-  { bank: "Banco do Brasil", term: 84, table: "Tabela A", coefficient: 0.0169 },
-  
-  // Banco do Brasil - Tabela B
-  { bank: "Banco do Brasil", term: 12, table: "Tabela B", coefficient: 0.0892 },
-  { bank: "Banco do Brasil", term: 24, table: "Tabela B", coefficient: 0.0478 },
-  { bank: "Banco do Brasil", term: 36, table: "Tabela B", coefficient: 0.0338 },
-  { bank: "Banco do Brasil", term: 48, table: "Tabela B", coefficient: 0.0268 },
-  { bank: "Banco do Brasil", term: 60, table: "Tabela B", coefficient: 0.0227 },
-  { bank: "Banco do Brasil", term: 72, table: "Tabela B", coefficient: 0.0199 },
-  { bank: "Banco do Brasil", term: 84, table: "Tabela B", coefficient: 0.0178 },
-  
-  // Caixa Econômica Federal - Tabela A
-  { bank: "Caixa Econômica Federal", term: 12, table: "Tabela A", coefficient: 0.0881 },
-  { bank: "Caixa Econômica Federal", term: 24, table: "Tabela A", coefficient: 0.0468 },
-  { bank: "Caixa Econômica Federal", term: 36, table: "Tabela A", coefficient: 0.0329 },
-  { bank: "Caixa Econômica Federal", term: 48, table: "Tabela A", coefficient: 0.0261 },
-  { bank: "Caixa Econômica Federal", term: 60, table: "Tabela A", coefficient: 0.0221 },
-  { bank: "Caixa Econômica Federal", term: 72, table: "Tabela A", coefficient: 0.0193 },
-  { bank: "Caixa Econômica Federal", term: 84, table: "Tabela A", coefficient: 0.0173 },
-  
-  // Bradesco - Tabela A
-  { bank: "Bradesco", term: 12, table: "Tabela A", coefficient: 0.0886 },
-  { bank: "Bradesco", term: 24, table: "Tabela A", coefficient: 0.0472 },
-  { bank: "Bradesco", term: 36, table: "Tabela A", coefficient: 0.0333 },
-  { bank: "Bradesco", term: 48, table: "Tabela A", coefficient: 0.0264 },
-  { bank: "Bradesco", term: 60, table: "Tabela A", coefficient: 0.0224 },
-  { bank: "Bradesco", term: 72, table: "Tabela A", coefficient: 0.0196 },
-  { bank: "Bradesco", term: 84, table: "Tabela A", coefficient: 0.0176 },
-];
-
-// Available options
-export const agreements = [
-  "INSS",
-  "Governo Federal",
-  "Governo Estadual",
-  "Governo Municipal",
-  "Forças Armadas",
-];
-
-export const banks = [
-  "Banco do Brasil",
-  "Caixa Econômica Federal",
-  "Bradesco",
-];
-
-export const availableTerms = [12, 24, 36, 48, 60, 72, 84];
