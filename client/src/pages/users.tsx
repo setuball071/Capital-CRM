@@ -20,6 +20,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -37,7 +47,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import type { User } from "@shared/schema";
 
 export default function UsersPage() {
@@ -45,6 +55,7 @@ export default function UsersPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -106,6 +117,28 @@ export default function UsersPage() {
         description: error.message || "Não foi possível atualizar o usuário",
         variant: "destructive",
       });
+    },
+  });
+
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/users/${id}`, undefined);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Usuário excluído com sucesso!",
+      });
+      setUserToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir usuário",
+        description: error.message || "Não foi possível excluir o usuário",
+        variant: "destructive",
+      });
+      setUserToDelete(null);
     },
   });
 
@@ -177,6 +210,23 @@ export default function UsersPage() {
       id: user.id,
       data: { isActive: !user.isActive },
     });
+  };
+
+  const canDeleteUser = (user: User): boolean => {
+    if (!currentUser || user.id === currentUser.id) {
+      return false; // Cannot delete yourself
+    }
+    
+    if (isMaster) {
+      return true; // Master can delete anyone except themselves
+    }
+    
+    if (isCoordinator) {
+      // Coordinator can ONLY delete vendedores from their own team
+      return user.role === "vendedor" && user.managerId === currentUser.id;
+    }
+    
+    return false; // Vendedores cannot delete anyone
   };
 
   const getRoleLabel = (role: string) => {
@@ -403,6 +453,16 @@ export default function UsersPage() {
                           {user.isActive ? "Desativar" : "Ativar"}
                         </Button>
                       )}
+                      {canDeleteUser(user) && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setUserToDelete(user)}
+                          data-testid={`button-delete-user-${user.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -418,6 +478,36 @@ export default function UsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o usuário <strong>{userToDelete?.name}</strong>?
+              Esta ação não pode ser desfeita e todos os dados associados a este usuário serão permanentemente removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
+              disabled={deleteUserMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                "Excluir Usuário"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

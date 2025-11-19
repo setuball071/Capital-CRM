@@ -29,6 +29,7 @@ export interface IStorage {
   getUsersByManager(managerId: number): Promise<User[]>;
   getActiveUsers(): Promise<User[]>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<void>;
   
   // Agreements
   getAllAgreements(): Promise<Agreement[]>;
@@ -93,6 +94,10 @@ export class DbStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // ===== AGREEMENTS =====

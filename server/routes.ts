@@ -483,6 +483,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete user
+  app.delete("/api/users/:id", requireAuth, requireManagerAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Validate ID is a valid number
+      if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+      
+      // Cannot delete yourself
+      if (id === req.user!.id) {
+        return res.status(403).json({ message: "Você não pode excluir sua própria conta" });
+      }
+      
+      // Fetch target user
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Check permissions
+      if (req.user!.role === "coordenacao") {
+        // Coordinators can only delete vendedores from their team
+        if (targetUser.role !== "vendedor" || targetUser.managerId !== req.user!.id) {
+          return res.status(403).json({ message: "Você só pode excluir vendedores da sua equipe" });
+        }
+      }
+
+      // Delete user
+      await storage.deleteUser(id);
+      return res.json({ message: "Usuário excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete user error:", error);
+      return res.status(500).json({ message: "Erro ao excluir usuário" });
+    }
+  });
+
   // ===== SIMULATIONS ROUTES =====
   
   // Get user's simulations
