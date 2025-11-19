@@ -93,7 +93,7 @@ function downloadTemplateCSV() {
   ];
 
   const csvContent = [headers, ...exampleRows]
-    .map(row => row.join(","))
+    .map(row => row.join(";"))
     .join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -314,6 +314,7 @@ export default function CoefficientTablesPage() {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      delimiter: ";",
       complete: (results) => {
         const errors: string[] = [];
         const data: InsertCoefficientTable[] = [];
