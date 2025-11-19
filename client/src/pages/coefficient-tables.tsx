@@ -60,6 +60,29 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const AVAILABLE_BANKS = [
+  "Banco do Brasil",
+  "Caixa Econômica Federal",
+  "Bradesco",
+  "Itaú",
+  "Santander",
+  "Banrisul",
+  "BMG",
+  "Pan",
+  "Safra",
+  "C6 Bank",
+  "Nubank",
+  "Inter",
+  "Original",
+  "Sicoob",
+  "Sicredi",
+  "Mercantil do Brasil",
+  "Daycoval",
+  "BV",
+  "Votorantim",
+  "Pine",
+] as const;
+
 const coefficientFormSchema = z.object({
   agreementId: z.number().positive({ message: "Convênio é obrigatório" }),
   bank: z.string().min(1, { message: "Banco é obrigatório" }),
@@ -397,13 +420,23 @@ export default function CoefficientTablesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Banco</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ex: Banco do Brasil"
-                          data-testid="input-bank"
-                          {...field}
-                        />
-                      </FormControl>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bank">
+                            <SelectValue placeholder="Selecione um banco" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {AVAILABLE_BANKS.map((bank) => (
+                            <SelectItem key={bank} value={bank}>
+                              {bank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -551,13 +584,23 @@ export default function CoefficientTablesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Banco</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ex: Banco do Brasil"
-                          data-testid="input-edit-bank"
-                          {...field}
-                        />
-                      </FormControl>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-bank">
+                            <SelectValue placeholder="Selecione um banco" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {AVAILABLE_BANKS.map((bank) => (
+                            <SelectItem key={bank} value={bank}>
+                              {bank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
