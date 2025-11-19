@@ -157,16 +157,16 @@ export default function CalculatorPage() {
     setIsCapturing(true);
 
     try {
-      console.log('Iniciando captura de tela...');
       const canvas = await html2canvas(simulatorRef.current, {
         backgroundColor: '#ffffff',
         scale: 2,
-        logging: true,
+        logging: false,
         useCORS: true,
         allowTaint: true,
+        onclone: (clonedDoc) => {
+          clonedDoc.documentElement.classList.remove('dark');
+        },
       });
-      
-      console.log('Canvas gerado com sucesso:', canvas.width, 'x', canvas.height);
 
       const timestamp = Date.now();
       const link = document.createElement('a');

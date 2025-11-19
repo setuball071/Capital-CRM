@@ -237,12 +237,20 @@ Preferred communication style: Simple, everyday language.
 **html2canvas**: Screenshot capture library
 - Captures DOM elements as high-quality images (2x scale)
 - Used for exporting simulation results
-- Configurable background and logging options
+- **Important**: Does not support CSS Color 4 functions (`hsl(from ...)`, `color()`)
+- Solution: Border colors use static HSL values instead of computed CSS functions
+- Exports always render in light mode (dark class removed in onclone)
 
 **jsPDF**: PDF generation library
 - Client-side PDF document creation
 - A4 format with automatic scaling and centering
 - Converts captured images to PDF format with proper margins
+
+**CSS Compatibility Notes:**
+- Border color variables (`*-border`) use pre-calculated static HSL values
+- Light mode: base color lightness - 8% for borders
+- Dark mode: base color lightness + 9% for borders
+- Future theme updates require manual recalculation of border values in `index.css`
 
 ### Brazilian Market Specific
 
