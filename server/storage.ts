@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/neon-serverless";
 import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import { eq, and } from "drizzle-orm";
 import {
   users,
@@ -16,8 +16,9 @@ import {
   type InsertSimulation,
 } from "@shared/schema";
 
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+// Use neon-http for serverless/edge environments
+const queryClient = neon(process.env.DATABASE_URL!);
+const db = drizzle(queryClient);
 
 export interface IStorage {
   // Users

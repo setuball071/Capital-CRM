@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Calculator } from "lucide-react";
@@ -12,18 +13,30 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   simulationInputSchema, 
   type SimulationInput,
-  type SimulationResult,
-  agreements,
-  banks,
-  availableTerms
+  type Agreement,
+  type CoefficientTable,
 } from "@shared/schema";
-import { calculateSimulation, getAvailableTables } from "@/lib/calculations";
+import { calculateSimulation, getUniqueBanks, getTermsForBank, getTablesForBankAndTerm } from "@/lib/calculations";
 import { formatCurrency, formatCPF } from "@/lib/formatters";
 
 export default function CalculatorPage() {
-  const [result, setResult] = useState<SimulationResult | null>(null);
-  const [availableTables, setAvailableTables] = useState<string[]>([]);
+  const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
+  const [availableTables, setAvailableTables] = useState<CoefficientTable[]>([]);
+  const [availableTerms, setAvailableTerms] = useState<number[]>([]);
   const { toast } = useToast();
+
+  // Fetch agreements
+  const { data: agreements = [] } = useQuery<Agreement[]>({
+    queryKey: ["/api/agreements"],
+  });
+
+  // Fetch coefficient tables
+  const { data: coefficientTables = [] } = useQuery<CoefficientTable[]>({
+    queryKey: ["/api/coefficient-tables"],
+  });
+
+  // Get unique banks
+  const banks = getUniqueBanks(coefficientTables);
 
   const form = useForm<SimulationInput>({
     resolver: zodResolver(simulationInputSchema),
@@ -31,38 +44,78 @@ export default function CalculatorPage() {
       client: {
         name: "",
         cpf: "",
-        agreement: "",
+        agreementId: 0,
       },
       operation: {
         monthlyPayment: 0,
         outstandingBalance: 0,
         bank: "",
-        term: 0,
-        coefficientTable: "",
+        termMonths: 0,
+        coefficientTableId: 0,
       },
     },
   });
 
   const watchBank = form.watch("operation.bank");
-  const watchTerm = form.watch("operation.term");
+  const watchTerm = form.watch("operation.termMonths");
 
+  // Update available terms when bank changes
   useEffect(() => {
-    if (watchBank && watchTerm) {
-      const tables = getAvailableTables(watchBank, watchTerm);
+    if (watchBank && coefficientTables.length > 0) {
+      const terms = getTermsForBank(coefficientTables, watchBank);
+      setAvailableTerms(terms);
+      
+      // Reset term if current selection is not available
+      const currentTerm = form.getValues("operation.termMonths");
+      if (!terms.includes(currentTerm)) {
+        form.setValue("operation.termMonths", 0);
+        form.setValue("operation.coefficientTableId", 0);
+      }
+    } else {
+      setAvailableTerms([]);
+      setAvailableTables([]);
+    }
+  }, [watchBank, coefficientTables, form]);
+
+  // Update available tables when bank and term change
+  useEffect(() => {
+    if (watchBank && watchTerm && coefficientTables.length > 0) {
+      const tables = getTablesForBankAndTerm(coefficientTables, watchBank, watchTerm);
       setAvailableTables(tables);
       
       // Reset table if current selection is not available
-      const currentTable = form.getValues("operation.coefficientTable");
-      if (!tables.includes(currentTable)) {
-        form.setValue("operation.coefficientTable", "");
+      const currentTableId = form.getValues("operation.coefficientTableId");
+      if (!tables.find(t => t.id === currentTableId)) {
+        form.setValue("operation.coefficientTableId", 0);
       }
     } else {
       setAvailableTables([]);
     }
-  }, [watchBank, watchTerm, form]);
+  }, [watchBank, watchTerm, coefficientTables, form]);
 
   function onSubmit(values: SimulationInput) {
-    const simulationResult = calculateSimulation(values.operation);
+    // Find the selected coefficient table
+    const selectedTable = coefficientTables.find(
+      t => t.id === values.operation.coefficientTableId
+    );
+
+    if (!selectedTable) {
+      toast({
+        title: "Erro",
+        description: "Tabela de coeficiente não encontrada",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Calculate using the coefficient from the selected table
+    const coefficient = parseFloat(selectedTable.coefficient);
+    const simulationResult = calculateSimulation(
+      values.operation.monthlyPayment,
+      values.operation.outstandingBalance,
+      coefficient
+    );
+    
     setResult(simulationResult);
     
     toast({
@@ -169,13 +222,16 @@ export default function CalculatorPage() {
 
                   <FormField
                     control={form.control}
-                    name="client.agreement"
+                    name="client.agreementId"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-sm font-medium">
                           Convênio
                         </FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(parseInt(value))} 
+                          value={field.value?.toString()}
+                        >
                           <FormControl>
                             <SelectTrigger className="h-12" data-testid="select-agreement">
                               <SelectValue placeholder="Selecione o convênio" />
@@ -183,8 +239,8 @@ export default function CalculatorPage() {
                           </FormControl>
                           <SelectContent>
                             {agreements.map((agreement) => (
-                              <SelectItem key={agreement} value={agreement}>
-                                {agreement}
+                              <SelectItem key={agreement.id} value={agreement.id.toString()}>
+                                {agreement.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -298,7 +354,7 @@ export default function CalculatorPage() {
 
                       <FormField
                         control={form.control}
-                        name="operation.term"
+                        name="operation.termMonths"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-sm font-medium">
@@ -307,6 +363,7 @@ export default function CalculatorPage() {
                             <Select 
                               onValueChange={(value) => field.onChange(parseInt(value))} 
                               value={field.value?.toString()}
+                              disabled={availableTerms.length === 0}
                             >
                               <FormControl>
                                 <SelectTrigger className="h-12" data-testid="select-term">
@@ -328,15 +385,15 @@ export default function CalculatorPage() {
 
                       <FormField
                         control={form.control}
-                        name="operation.coefficientTable"
+                        name="operation.coefficientTableId"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-sm font-medium">
                               Tabela (Coeficiente)
                             </FormLabel>
                             <Select 
-                              onValueChange={field.onChange} 
-                              value={field.value}
+                              onValueChange={(value) => field.onChange(parseInt(value))} 
+                              value={field.value?.toString()}
                               disabled={availableTables.length === 0}
                             >
                               <FormControl>
@@ -346,8 +403,8 @@ export default function CalculatorPage() {
                               </FormControl>
                               <SelectContent>
                                 {availableTables.map((table) => (
-                                  <SelectItem key={table} value={table}>
-                                    {table}
+                                  <SelectItem key={table.id} value={table.id.toString()}>
+                                    {table.tableName} (Coef: {table.coefficient})
                                   </SelectItem>
                                 ))}
                               </SelectContent>

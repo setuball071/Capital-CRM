@@ -1,69 +1,64 @@
-import type { OperationData, SimulationResult, CoefficientEntry } from "@shared/schema";
-import { coefficientTables } from "@shared/schema";
+import type { CoefficientTable } from "@shared/schema";
 
 /**
- * Get coefficient for a specific bank, term, and table combination
- */
-export function getCoefficient(
-  bank: string,
-  term: number,
-  table: string
-): number {
-  const entry = coefficientTables.find(
-    (c) => c.bank === bank && c.term === term && c.table === table
-  );
-  return entry?.coefficient || 0;
-}
-
-/**
- * Get available tables for a specific bank and term
- */
-export function getAvailableTables(bank: string, term: number): string[] {
-  const tables = coefficientTables
-    .filter((c) => c.bank === bank && c.term === term)
-    .map((c) => c.table);
-  return [...new Set(tables)];
-}
-
-/**
- * Calculate simulation result using coefficient table
+ * Calculate simulation result using coefficient from database
  * 
  * Formula:
  * - Principal (Total Contract Value) = Monthly Payment / Coefficient
  * - Client Refund = Principal - Outstanding Balance
- * 
- * The coefficient determines how much loan principal each R$1 of monthly payment can support.
- * For example, with coefficient 0.0216 and payment R$ 1,000:
- * - Principal = 1000 / 0.0216 = R$ 46,296.30
- * - If outstanding balance is R$ 40,000, client refund = R$ 6,296.30
  */
-export function calculateSimulation(operation: OperationData): SimulationResult {
-  const coefficient = getCoefficient(
-    operation.bank,
-    operation.term,
-    operation.coefficientTable
-  );
-
+export function calculateSimulation(
+  monthlyPayment: number,
+  outstandingBalance: number,
+  coefficient: number
+) {
   if (coefficient === 0) {
     return {
       totalContractValue: 0,
       clientRefund: 0,
-      coefficient: 0,
     };
   }
 
   // Calculate principal (total contract value) from monthly payment and coefficient
-  const principal = operation.monthlyPayment / coefficient;
+  const principal = monthlyPayment / coefficient;
   
   // Total contract value is the calculated principal
   const totalContractValue = principal;
   
   // Client refund is the difference between principal and outstanding balance
-  const clientRefund = principal - operation.outstandingBalance;
+  const clientRefund = principal - outstandingBalance;
 
   return {
     totalContractValue,
     clientRefund,
-    coefficient,
   };
+}
+
+/**
+ * Get unique banks from coefficient tables
+ */
+export function getUniqueBanks(tables: CoefficientTable[]): string[] {
+  const banks = tables.map((t) => t.bank);
+  return Array.from(new Set(banks)).sort();
+}
+
+/**
+ * Get unique terms for a specific bank
+ */
+export function getTermsForBank(tables: CoefficientTable[], bank: string): number[] {
+  const terms = tables
+    .filter((t) => t.bank === bank)
+    .map((t) => t.termMonths);
+  return Array.from(new Set(terms)).sort((a, b) => a - b);
+}
+
+/**
+ * Get available tables for a specific bank and term
+ */
+export function getTablesForBankAndTerm(
+  tables: CoefficientTable[],
+  bank: string,
+  termMonths: number
+): CoefficientTable[] {
+  return tables.filter((t) => t.bank === bank && t.termMonths === termMonths);
 }

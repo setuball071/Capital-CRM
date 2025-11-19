@@ -15,6 +15,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: User;
+      session: any; // Express session already configured in server/index.ts
     }
   }
 }
@@ -137,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Logout
   app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
+    req.session.destroy((err: any) => {
       if (err) {
         return res.status(500).json({ message: "Erro ao fazer logout" });
       }
