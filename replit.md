@@ -8,7 +8,7 @@ This is a Brazilian credit card and benefits simulator web application. It helps
 
 **Target Market**: Brazilian financial professionals (loan officers, bank agents), with mobile-first design approach given Brazil's high mobile usage.
 
-**Current Status**: Production-ready. All features implemented and tested. Calculator performs automatic real-time calculations with screenshot capture functionality ("Salvar e Copiar"). Includes hierarchical user management with create, edit, delete, and activate/deactivate functionality. Bulk CSV import for coefficient tables with Excel PT-BR compatibility.
+**Current Status**: Production-ready. All features implemented and tested. Calculator performs automatic real-time calculations with multi-format export ("Salvar" - PDF/JPEG/PNG). Includes hierarchical user management with create, edit, delete, and activate/deactivate functionality. Bulk CSV import for coefficient tables with Excel PT-BR compatibility.
 
 ## User Preferences
 
@@ -122,8 +122,9 @@ Preferred communication style: Simple, everyday language.
 **Key Pages**:
 - Calculator Page: Main simulation interface with form inputs and results
   - Three-section layout: Client Data, Operation Data (two columns), Results
-  - Real-time validation with form error handling
-  - Toast notifications for submission feedback
+  - Real-time automatic calculations when all fields are filled
+  - Multi-format export via "Salvar" dropdown button (PDF, JPEG, PNG)
+  - Toast notifications for feedback
 - Not Found: 404 error page
 
 **Shared Logic**:
@@ -232,6 +233,16 @@ Preferred communication style: Simple, everyday language.
 - Configurable delimiter support (semicolon for Excel PT-BR)
 - Used for bulk import of coefficient tables
 - Error handling and data validation during parsing
+
+**html2canvas**: Screenshot capture library
+- Captures DOM elements as high-quality images (2x scale)
+- Used for exporting simulation results
+- Configurable background and logging options
+
+**jsPDF**: PDF generation library
+- Client-side PDF document creation
+- A4 format with automatic scaling and centering
+- Converts captured images to PDF format with proper margins
 
 ### Brazilian Market Specific
 

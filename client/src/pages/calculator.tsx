@@ -2,15 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Calculator, Download, Copy } from "lucide-react";
+import { Calculator, Download, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useToast } from "@/hooks/use-toast";
 import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { 
   simulationInputSchema, 
   type SimulationInput,
@@ -142,7 +144,7 @@ export default function CalculatorPage() {
     return () => subscription.unsubscribe();
   }, [form, availableTables]);
 
-  async function handleSaveAndCopy() {
+  async function handleSave(format: 'png' | 'jpeg' | 'pdf') {
     if (!simulatorRef.current || !result) {
       toast({
         title: "Erro",
@@ -156,54 +158,79 @@ export default function CalculatorPage() {
 
     try {
       const canvas = await html2canvas(simulatorRef.current, {
-        backgroundColor: null,
+        backgroundColor: '#ffffff',
         scale: 2,
         logging: false,
       });
 
-      await new Promise<void>((resolve, reject) => {
-        canvas.toBlob(async (blob) => {
-          try {
-            if (!blob) {
-              throw new Error("Falha ao gerar imagem");
-            }
+      const timestamp = Date.now();
+      const link = document.createElement('a');
 
-            try {
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob }),
-              ]);
-
-              const link = document.createElement('a');
-              link.download = `simulacao-goldcard-${Date.now()}.png`;
-              link.href = canvas.toDataURL();
-              link.click();
-
-              toast({
-                title: "Sucesso!",
-                description: "Imagem salva e copiada para área de transferência.",
-              });
-            } catch (clipboardError) {
-              const link = document.createElement('a');
-              link.download = `simulacao-goldcard-${Date.now()}.png`;
-              link.href = canvas.toDataURL();
-              link.click();
-
-              toast({
-                title: "Imagem salva",
-                description: "A imagem foi salva. Não foi possível copiar para área de transferência.",
-              });
-            }
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
+      if (format === 'pdf') {
+        const pageWidthMM = 210;
+        const pageHeightMM = 297;
+        const margin = 10;
+        const maxWidth = pageWidthMM - (margin * 2);
+        const maxHeight = pageHeightMM - (margin * 2);
+        
+        const canvasRatio = canvas.width / canvas.height;
+        const pageRatio = maxWidth / maxHeight;
+        
+        let imgWidth, imgHeight;
+        
+        if (canvasRatio > pageRatio) {
+          imgWidth = maxWidth;
+          imgHeight = maxWidth / canvasRatio;
+        } else {
+          imgHeight = maxHeight;
+          imgWidth = maxHeight * canvasRatio;
+        }
+        
+        const xOffset = (pageWidthMM - imgWidth) / 2;
+        const yOffset = (pageHeightMM - imgHeight) / 2;
+        
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
         });
-      });
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
+        pdf.save(`simulacao-goldcard-${timestamp}.pdf`);
+
+        toast({
+          title: "PDF salvo!",
+          description: "O arquivo foi salvo com sucesso.",
+        });
+      } else if (format === 'jpeg') {
+        link.download = `simulacao-goldcard-${timestamp}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({
+          title: "JPEG salvo!",
+          description: "A imagem foi salva com sucesso.",
+        });
+      } else {
+        link.download = `simulacao-goldcard-${timestamp}.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({
+          title: "PNG salvo!",
+          description: "A imagem foi salva com sucesso.",
+        });
+      }
     } catch (error) {
-      console.error('Erro ao capturar simulação:', error);
+      console.error('Erro ao salvar simulação:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível capturar a simulação. Tente novamente.",
+        description: "Não foi possível salvar a simulação. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -501,24 +528,50 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-              {/* Save and Copy Button */}
-              <Button
-                type="button"
-                onClick={handleSaveAndCopy}
-                disabled={!result || isCapturing}
-                className="w-full h-14 text-base font-semibold"
-                data-testid="button-save-copy"
-              >
-                {isCapturing ? (
-                  <>Gerando imagem...</>
-                ) : (
-                  <>
-                    <Download className="h-5 w-5 mr-2" />
-                    Salvar e Copiar
-                    <Copy className="h-5 w-5 ml-2" />
-                  </>
-                )}
-              </Button>
+              {/* Save Button with Format Options */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    disabled={!result || isCapturing}
+                    className="w-full h-14 text-base font-semibold"
+                    data-testid="button-save"
+                  >
+                    {isCapturing ? (
+                      <>Gerando arquivo...</>
+                    ) : (
+                      <>
+                        <Download className="h-5 w-5 mr-2" />
+                        Salvar
+                        <ChevronDown className="h-5 w-5 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-full" align="center">
+                  <DropdownMenuItem 
+                    onClick={() => handleSave('pdf')}
+                    data-testid="option-save-pdf"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Salvar como PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => handleSave('jpeg')}
+                    data-testid="option-save-jpeg"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Salvar como JPEG
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => handleSave('png')}
+                    data-testid="option-save-png"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Salvar como PNG
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </Form>
         </div>
