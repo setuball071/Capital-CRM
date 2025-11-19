@@ -85,11 +85,11 @@ const AVAILABLE_BANKS = [
 ] as const;
 
 function downloadTemplateCSV() {
-  const headers = ["convênio", "banco", "prazo", "nome_tabela", "coeficiente"];
+  const headers = ["convênio", "banco", "prazo", "nome_tabela", "coeficiente", "margem_seguranca"];
   const exampleRows = [
-    ["Gov SP", "Banco do Brasil", "60", "Tabela BB 60 meses", "0.0216"],
-    ["Gov SP", "Caixa Econômica Federal", "72", "Tabela CEF 72 meses", "0.0198"],
-    ["Gov SP", "PH Tech", "48", "Tabela PH Tech Especial", "0.0235"],
+    ["Gov SP", "Banco do Brasil", "60", "Tabela BB 60 meses", "0.0216", "10"],
+    ["Gov SP", "Caixa Econômica Federal", "72", "Tabela CEF 72 meses", "0.0198", "8"],
+    ["Gov SP", "PH Tech", "48", "Tabela PH Tech Especial", "0.0235", "0"],
   ];
 
   const csvContent = [headers, ...exampleRows]
@@ -117,6 +117,13 @@ const coefficientFormSchema = z.object({
     .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
       message: "Coeficiente deve ser um número positivo",
     }),
+  safetyMargin: z.string().refine(
+    (val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    },
+    { message: "Margem de segurança deve ser entre 0 e 100%" }
+  ),
   isActive: z.boolean().default(true),
 });
 
@@ -140,6 +147,7 @@ export default function CoefficientTablesPage() {
       termMonths: 12,
       tableName: "",
       coefficient: "",
+      safetyMargin: "0",
       isActive: true,
     },
   });
@@ -152,6 +160,7 @@ export default function CoefficientTablesPage() {
       termMonths: 12,
       tableName: "",
       coefficient: "",
+      safetyMargin: "0",
       isActive: true,
     },
   });
@@ -172,6 +181,7 @@ export default function CoefficientTablesPage() {
         termMonths: data.termMonths,
         tableName: data.tableName,
         coefficient: data.coefficient,
+        safetyMargin: data.safetyMargin,
         isActive: data.isActive,
       };
       return await apiRequest("POST", "/api/coefficient-tables", payload);
@@ -203,6 +213,7 @@ export default function CoefficientTablesPage() {
         termMonths: data.termMonths,
         tableName: data.tableName,
         coefficient: data.coefficient,
+        safetyMargin: data.safetyMargin,
         isActive: data.isActive,
       };
       return await apiRequest("PATCH", `/api/coefficient-tables/${selectedTable.id}`, payload);
@@ -283,6 +294,7 @@ export default function CoefficientTablesPage() {
       termMonths: table.termMonths,
       tableName: table.tableName,
       coefficient: table.coefficient,
+      safetyMargin: table.safetyMargin || "0",
       isActive: table.isActive,
     });
     setIsEditDialogOpen(true);
@@ -326,6 +338,7 @@ export default function CoefficientTablesPage() {
           const termMonths = parseInt(row.prazo);
           const tableName = row.nome_tabela;
           const coefficient = (row.coeficiente || "").toString().replace(',', '.');
+          const safetyMargin = (row.margem_seguranca || "0").toString().replace(',', '.');
 
           const agreement = agreements?.find(a => a.name === agreementName);
 
@@ -349,12 +362,19 @@ export default function CoefficientTablesPage() {
             return;
           }
 
+          const safetyMarginNum = parseFloat(safetyMargin);
+          if (isNaN(safetyMarginNum) || safetyMarginNum < 0 || safetyMarginNum > 100) {
+            errors.push(`Linha ${index + 2}: Margem de segurança inválida (deve estar entre 0 e 100)`);
+            return;
+          }
+
           data.push({
             agreementId: agreement.id,
             bank,
             termMonths,
             tableName,
             coefficient,
+            safetyMargin,
             isActive: true,
           });
         });
@@ -623,25 +643,50 @@ export default function CoefficientTablesPage() {
                 />
               </div>
 
-              <FormField
-                control={createForm.control}
-                name="coefficient"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Coeficiente</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Ex: 0,0216 ou 0.0216"
-                        data-testid="input-coefficient"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createForm.control}
+                  name="coefficient"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Coeficiente</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Ex: 0,0216 ou 0.0216"
+                          data-testid="input-coefficient"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={createForm.control}
+                  name="safetyMargin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Margem de Segurança (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          placeholder="0.00"
+                          data-testid="input-safety-margin"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Percentual de desconto (0 a 100%)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <DialogFooter>
                 <Button
@@ -784,25 +829,50 @@ export default function CoefficientTablesPage() {
                 />
               </div>
 
-              <FormField
-                control={editForm.control}
-                name="coefficient"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Coeficiente</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Ex: 0,0216 ou 0.0216"
-                        data-testid="input-edit-coefficient"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="coefficient"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Coeficiente</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Ex: 0,0216 ou 0.0216"
+                          data-testid="input-edit-coefficient"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Valor decimal positivo (use vírgula ou ponto)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="safetyMargin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Margem de Segurança (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          placeholder="0.00"
+                          data-testid="input-edit-safety-margin"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Percentual de desconto (0 a 100%)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={editForm.control}

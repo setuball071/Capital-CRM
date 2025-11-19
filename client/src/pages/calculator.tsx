@@ -118,16 +118,16 @@ export default function CalculatorPage() {
     }
   }, [availableTables, form]);
 
-  // Calculate liquid payment when monthly payment or agreement changes
+  // Calculate liquid payment when monthly payment or selected table changes
   useEffect(() => {
     const subscription = form.watch((value) => {
       const monthlyPayment = value.operation?.monthlyPayment || 0;
-      const agreementId = value.client?.agreementId;
+      const coefficientTableId = value.operation?.coefficientTableId;
       
-      if (monthlyPayment && agreementId && agreements.length > 0) {
-        const selectedAgreement = agreements.find(a => a.id === agreementId);
-        if (selectedAgreement) {
-          const safetyMargin = parseFloat(selectedAgreement.safetyMargin || "0");
+      if (monthlyPayment && coefficientTableId && availableTables.length > 0) {
+        const selectedTable = availableTables.find(t => t.id === coefficientTableId);
+        if (selectedTable) {
+          const safetyMargin = parseFloat(selectedTable.safetyMargin || "0");
           const liquid = monthlyPayment * (1 - safetyMargin / 100);
           setLiquidPayment(liquid);
         }
@@ -137,7 +137,7 @@ export default function CalculatorPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, agreements]);
+  }, [form, availableTables]);
 
   // Auto-calculate when all fields are filled
   useEffect(() => {
