@@ -50,6 +50,7 @@ export interface IStorage {
   getCoefficientTablesByBankAndTerm(bank: string, termMonths: number): Promise<CoefficientTable[]>;
   getCoefficientTable(id: number): Promise<CoefficientTable | undefined>;
   createCoefficientTable(table: InsertCoefficientTable): Promise<CoefficientTable>;
+  createCoefficientTablesBulk(tables: InsertCoefficientTable[]): Promise<CoefficientTable[]>;
   updateCoefficientTable(id: number, data: Partial<InsertCoefficientTable>): Promise<CoefficientTable | undefined>;
   deleteCoefficientTable(id: number): Promise<void>;
   
@@ -210,6 +211,14 @@ export class DbStorage implements IStorage {
   async createCoefficientTable(table: InsertCoefficientTable): Promise<CoefficientTable> {
     const [newTable] = await db.insert(coefficientTables).values(table).returning();
     return newTable;
+  }
+
+  async createCoefficientTablesBulk(tables: InsertCoefficientTable[]): Promise<CoefficientTable[]> {
+    if (tables.length === 0) {
+      return [];
+    }
+    const newTables = await db.insert(coefficientTables).values(tables).returning();
+    return newTables;
   }
 
   async updateCoefficientTable(id: number, data: Partial<InsertCoefficientTable>): Promise<CoefficientTable | undefined> {

@@ -9,6 +9,7 @@ import {
   insertAgreementSchema,
   insertCoefficientTableSchema,
   type User,
+  type InsertCoefficientTable,
 } from "@shared/schema";
 
 // Schema for updating users
@@ -694,6 +695,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create coefficient table error:", error);
       return res.status(500).json({ message: "Erro ao criar tabela de coeficiente" });
+    }
+  });
+
+  // Bulk import coefficient tables (master only)
+  app.post("/api/coefficient-tables/bulk-import", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { tables } = req.body;
+
+      if (!Array.isArray(tables) || tables.length === 0) {
+        return res.status(400).json({ message: "Nenhuma tabela para importar" });
+      }
+
+      const validatedTables: InsertCoefficientTable[] = [];
+      const errors: any[] = [];
+
+      for (let i = 0; i < tables.length; i++) {
+        const result = insertCoefficientTableSchema.safeParse(tables[i]);
+        if (!result.success) {
+          errors.push({
+            row: i + 1,
+            errors: result.error.format(),
+          });
+        } else {
+          validatedTables.push(result.data);
+        }
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).json({
+          message: "Algumas linhas contêm erros",
+          errors,
+        });
+      }
+
+      const createdTables = await storage.createCoefficientTablesBulk(validatedTables);
+      return res.status(201).json({
+        message: `${createdTables.length} tabelas importadas com sucesso`,
+        count: createdTables.length,
+        tables: createdTables,
+      });
+    } catch (error) {
+      console.error("Bulk import coefficient tables error:", error);
+      return res.status(500).json({ message: "Erro ao importar tabelas" });
     }
   });
 

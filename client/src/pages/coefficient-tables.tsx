@@ -3,7 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Plus, Pencil, Trash2, Calculator } from "lucide-react";
+import Papa from "papaparse";
+import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
@@ -83,6 +84,28 @@ const AVAILABLE_BANKS = [
   "Pine",
 ] as const;
 
+function downloadTemplateCSV() {
+  const headers = ["convênio", "banco", "prazo", "nome_tabela", "coeficiente"];
+  const exampleRows = [
+    ["Gov SP", "Banco do Brasil", "60", "Tabela BB 60 meses", "0.0216"],
+    ["Gov SP", "Caixa Econômica Federal", "72", "Tabela CEF 72 meses", "0.0198"],
+    ["Gov SP", "PH Tech", "48", "Tabela PH Tech Especial", "0.0235"],
+  ];
+
+  const csvContent = [headers, ...exampleRows]
+    .map(row => row.join(","))
+    .join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", "modelo_tabelas_coeficientes.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 const coefficientFormSchema = z.object({
   agreementId: z.number().positive({ message: "Convênio é obrigatório" }),
   bank: z.string().min(1, { message: "Banco é obrigatório" }),
@@ -103,7 +126,10 @@ export default function CoefficientTablesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<CoefficientTable | null>(null);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   const createForm = useForm<CoefficientFormData>({
     resolver: zodResolver(coefficientFormSchema),
@@ -221,6 +247,29 @@ export default function CoefficientTablesPage() {
     },
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (tables: InsertCoefficientTable[]) => {
+      return await apiRequest("POST", "/api/coefficient-tables/bulk-import", { tables });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      setIsImportDialogOpen(false);
+      setImportData([]);
+      setImportErrors([]);
+      toast({
+        title: "Importação concluída com sucesso",
+        description: `${data.count} tabelas foram importadas.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao importar tabelas",
+        description: error.message || "Ocorreu um erro ao importar as tabelas.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreate = (data: CoefficientFormData) => {
     createMutation.mutate(data);
   };
@@ -258,6 +307,77 @@ export default function CoefficientTablesPage() {
     return agreement?.name || `Convênio #${agreementId}`;
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const errors: string[] = [];
+        const data: InsertCoefficientTable[] = [];
+
+        results.data.forEach((row: any, index: number) => {
+          const agreementName = row.convênio || row.convenio;
+          const bank = row.banco;
+          const termMonths = parseInt(row.prazo);
+          const tableName = row.nome_tabela;
+          const coefficient = (row.coeficiente || "").toString().replace(',', '.');
+
+          const agreement = agreements?.find(a => a.name === agreementName);
+
+          if (!agreement) {
+            errors.push(`Linha ${index + 2}: Convênio "${agreementName}" não encontrado`);
+            return;
+          }
+
+          if (!bank || !tableName || !coefficient) {
+            errors.push(`Linha ${index + 2}: Campos obrigatórios faltando`);
+            return;
+          }
+
+          if (isNaN(termMonths) || termMonths < 12 || termMonths > 140) {
+            errors.push(`Linha ${index + 2}: Prazo inválido (deve estar entre 12 e 140)`);
+            return;
+          }
+
+          if (isNaN(parseFloat(coefficient)) || parseFloat(coefficient) <= 0) {
+            errors.push(`Linha ${index + 2}: Coeficiente inválido`);
+            return;
+          }
+
+          data.push({
+            agreementId: agreement.id,
+            bank,
+            termMonths,
+            tableName,
+            coefficient,
+            isActive: true,
+          });
+        });
+
+        setImportData(data);
+        setImportErrors(errors);
+      },
+      error: (error) => {
+        toast({
+          title: "Erro ao ler arquivo",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
+
+    event.target.value = "";
+  };
+
+  const handleConfirmImport = () => {
+    if (importData.length > 0) {
+      bulkImportMutation.mutate(importData);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -275,13 +395,31 @@ export default function CoefficientTablesPage() {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setIsCreateDialogOpen(true)}
-            data-testid="button-create-table"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Tabela
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={downloadTemplateCSV}
+              data-testid="button-download-template"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Baixar Modelo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(true)}
+              data-testid="button-import-spreadsheet"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Importar Planilha
+            </Button>
+            <Button
+              onClick={() => setIsCreateDialogOpen(true)}
+              data-testid="button-create-table"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Tabela
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -716,6 +854,142 @@ export default function CoefficientTablesPage() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importar Planilha de Coeficientes</DialogTitle>
+            <DialogDescription>
+              Faça upload de um arquivo CSV com as tabelas de coeficientes
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Formato do Arquivo</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  O arquivo CSV deve conter as colunas: convênio, banco, prazo, nome_tabela, coeficiente
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadTemplateCSV}
+                data-testid="button-download-template-dialog"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Baixar Modelo
+              </Button>
+            </div>
+
+            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="csv-upload"
+                data-testid="input-csv-file"
+              />
+              <label
+                htmlFor="csv-upload"
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="h-10 w-10 text-muted-foreground" />
+                <p className="text-sm font-medium">Clique para selecionar arquivo CSV</p>
+                <p className="text-xs text-muted-foreground">ou arraste o arquivo aqui</p>
+              </label>
+            </div>
+
+            {importErrors.length > 0 && (
+              <div className="border border-destructive rounded-lg p-4 bg-destructive/10">
+                <p className="text-sm font-medium text-destructive mb-2">
+                  Erros encontrados ({importErrors.length}):
+                </p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {importErrors.map((error, index) => (
+                    <p key={index} className="text-xs text-destructive">
+                      • {error}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importData.length > 0 && (
+              <div className="border rounded-lg">
+                <div className="p-4 border-b bg-muted/50">
+                  <p className="text-sm font-medium">
+                    Preview da Importação ({importData.length} tabela{importData.length > 1 ? 's' : ''})
+                  </p>
+                </div>
+                <div className="max-h-80 overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Convênio</TableHead>
+                        <TableHead>Banco</TableHead>
+                        <TableHead>Prazo</TableHead>
+                        <TableHead>Nome da Tabela</TableHead>
+                        <TableHead>Coeficiente</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importData.slice(0, 10).map((row, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="text-sm">
+                            {getAgreementName(row.agreementId)}
+                          </TableCell>
+                          <TableCell className="text-sm">{row.bank}</TableCell>
+                          <TableCell className="text-sm">{row.termMonths} meses</TableCell>
+                          <TableCell className="text-sm">{row.tableName}</TableCell>
+                          <TableCell className="text-sm">{row.coefficient}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {importData.length > 10 && (
+                    <div className="p-2 text-center text-xs text-muted-foreground border-t">
+                      ... e mais {importData.length - 10} tabela{importData.length - 10 > 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsImportDialogOpen(false);
+                setImportData([]);
+                setImportErrors([]);
+              }}
+              data-testid="button-import-cancel"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmImport}
+              disabled={importData.length === 0 || importErrors.length > 0 || bulkImportMutation.isPending}
+              data-testid="button-import-confirm"
+            >
+              {bulkImportMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                `Importar ${importData.length} Tabela${importData.length > 1 ? 's' : ''}`
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
