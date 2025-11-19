@@ -94,9 +94,10 @@ function downloadTemplateCSV() {
 
   const csvContent = [headers, ...exampleRows]
     .map(row => row.join(";"))
-    .join("\n");
+    .join("\r\n");
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
