@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +34,7 @@ export default function LoginPage() {
         title: "Login realizado com sucesso!",
         description: "Redirecionando...",
       });
-      // PublicRoute will automatically redirect to "/" when user is set
+      // Router will automatically redirect to "/" when user state is set
     } catch (error: any) {
       toast({
         title: "Erro ao fazer login",

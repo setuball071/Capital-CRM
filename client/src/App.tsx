@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -54,6 +54,7 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 
 function Router() {
   const { user } = useAuth();
+  const [location] = useLocation();
 
   if (!user) {
     return (
@@ -66,6 +67,11 @@ function Router() {
         </Route>
       </Switch>
     );
+  }
+
+  // Redirect authenticated users away from /login
+  if (location === "/login") {
+    return <Redirect to="/" />;
   }
 
   const sidebarStyle = {
