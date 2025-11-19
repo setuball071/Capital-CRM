@@ -16,27 +16,17 @@ import {
   type Agreement,
   type CoefficientTable,
 } from "@shared/schema";
-import { calculateSimulation, getUniqueBanks, getTermsForBank, getTablesForBankAndTerm } from "@/lib/calculations";
+import { calculateSimulation } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/formatters";
 
 export default function CalculatorPage() {
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
-  const [availableTables, setAvailableTables] = useState<CoefficientTable[]>([]);
-  const [availableTerms, setAvailableTerms] = useState<number[]>([]);
   const { toast } = useToast();
 
-  // Fetch agreements
+  // Fetch active agreements
   const { data: agreements = [] } = useQuery<Agreement[]>({
-    queryKey: ["/api/agreements"],
+    queryKey: ["/api/agreements/active"],
   });
-
-  // Fetch coefficient tables
-  const { data: coefficientTables = [] } = useQuery<CoefficientTable[]>({
-    queryKey: ["/api/coefficient-tables"],
-  });
-
-  // Get unique banks
-  const banks = getUniqueBanks(coefficientTables);
 
   const form = useForm<SimulationInput>({
     resolver: zodResolver(simulationInputSchema),
@@ -55,46 +45,76 @@ export default function CalculatorPage() {
     },
   });
 
+  const watchAgreementId = form.watch("client.agreementId");
   const watchBank = form.watch("operation.bank");
   const watchTerm = form.watch("operation.termMonths");
 
-  // Update available terms when bank changes
-  useEffect(() => {
-    if (watchBank && coefficientTables.length > 0) {
-      const terms = getTermsForBank(coefficientTables, watchBank);
-      setAvailableTerms(terms);
-      
-      // Reset term if current selection is not available
-      const currentTerm = form.getValues("operation.termMonths");
-      if (!terms.includes(currentTerm)) {
-        form.setValue("operation.termMonths", 0);
-        form.setValue("operation.coefficientTableId", 0);
-      }
-    } else {
-      setAvailableTerms([]);
-      setAvailableTables([]);
-    }
-  }, [watchBank, coefficientTables, form]);
+  // Fetch banks by agreement
+  const { data: availableBanks = [] } = useQuery<string[]>({
+    queryKey: ["/api/calculator/banks", watchAgreementId],
+    queryFn: async () => {
+      if (!watchAgreementId) return [];
+      const res = await fetch(`/api/calculator/banks?agreementId=${watchAgreementId}`);
+      if (!res.ok) throw new Error("Erro ao buscar bancos");
+      return res.json();
+    },
+    enabled: !!watchAgreementId,
+  });
 
-  // Update available tables when bank and term change
+  // Fetch terms by agreement and bank
+  const { data: availableTerms = [] } = useQuery<number[]>({
+    queryKey: ["/api/calculator/terms", watchAgreementId, watchBank],
+    queryFn: async () => {
+      if (!watchAgreementId || !watchBank) return [];
+      const res = await fetch(`/api/calculator/terms?agreementId=${watchAgreementId}&bank=${watchBank}`);
+      if (!res.ok) throw new Error("Erro ao buscar prazos");
+      return res.json();
+    },
+    enabled: !!watchAgreementId && !!watchBank,
+  });
+
+  // Fetch tables by agreement, bank and term
+  const { data: availableTables = [] } = useQuery<CoefficientTable[]>({
+    queryKey: ["/api/calculator/tables", watchAgreementId, watchBank, watchTerm],
+    queryFn: async () => {
+      if (!watchAgreementId || !watchBank || !watchTerm) return [];
+      const res = await fetch(`/api/calculator/tables?agreementId=${watchAgreementId}&bank=${watchBank}&termMonths=${watchTerm}`);
+      if (!res.ok) throw new Error("Erro ao buscar tabelas");
+      return res.json();
+    },
+    enabled: !!watchAgreementId && !!watchBank && !!watchTerm,
+  });
+
+  // Reset bank when agreement changes
   useEffect(() => {
-    if (watchBank && watchTerm && coefficientTables.length > 0) {
-      const tables = getTablesForBankAndTerm(coefficientTables, watchBank, watchTerm);
-      setAvailableTables(tables);
-      
-      // Reset table if current selection is not available
-      const currentTableId = form.getValues("operation.coefficientTableId");
-      if (!tables.find(t => t.id === currentTableId)) {
-        form.setValue("operation.coefficientTableId", 0);
-      }
-    } else {
-      setAvailableTables([]);
+    const currentBank = form.getValues("operation.bank");
+    if (currentBank && !availableBanks.includes(currentBank)) {
+      form.setValue("operation.bank", "");
+      form.setValue("operation.termMonths", 0);
+      form.setValue("operation.coefficientTableId", 0);
     }
-  }, [watchBank, watchTerm, coefficientTables, form]);
+  }, [availableBanks, form]);
+
+  // Reset term when bank changes
+  useEffect(() => {
+    const currentTerm = form.getValues("operation.termMonths");
+    if (currentTerm && !availableTerms.includes(currentTerm)) {
+      form.setValue("operation.termMonths", 0);
+      form.setValue("operation.coefficientTableId", 0);
+    }
+  }, [availableTerms, form]);
+
+  // Reset table when term changes
+  useEffect(() => {
+    const currentTableId = form.getValues("operation.coefficientTableId");
+    if (currentTableId && !availableTables.find(t => t.id === currentTableId)) {
+      form.setValue("operation.coefficientTableId", 0);
+    }
+  }, [availableTables, form]);
 
   function onSubmit(values: SimulationInput) {
     // Find the selected coefficient table
-    const selectedTable = coefficientTables.find(
+    const selectedTable = availableTables.find(
       t => t.id === values.operation.coefficientTableId
     );
 
@@ -302,14 +322,18 @@ export default function CalculatorPage() {
                             <FormLabel className="text-sm font-medium">
                               Banco
                             </FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                              disabled={availableBanks.length === 0}
+                            >
                               <FormControl>
                                 <SelectTrigger className="h-12" data-testid="select-bank">
-                                  <SelectValue placeholder="Selecione o banco" />
+                                  <SelectValue placeholder={watchAgreementId ? "Selecione o banco" : "Selecione um convênio primeiro"} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {banks.map((bank) => (
+                                {availableBanks.map((bank) => (
                                   <SelectItem key={bank} value={bank}>
                                     {bank}
                                   </SelectItem>
