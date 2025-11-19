@@ -68,10 +68,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Calculation Engine
 
-**Core Algorithm**: Coefficient-based loan calculation
-- Formula: `Principal = Monthly Payment / Coefficient`
-- Client Refund: `Principal - Outstanding Balance`
-- Coefficient tables stored as static data (bank-specific, term-specific, table-specific)
+**Core Algorithm**: Coefficient-based loan calculation with safety margin
+- **Safety Margin System**: Each coefficient table has a safety margin percentage (stored per bank+agreement combination)
+- **Parcela Líquida** (Liquid Payment) = Parcela Atual × (1 - safety margin %)
+- **Total Contract Value** = Parcela Líquida / Coefficient  
+- **Client Refund** = Total Contract Value - Outstanding Balance
+- Coefficient tables stored in database (bank-specific, term-specific, table-specific, safety margin)
 
 **Available Data**:
 - Three banks configured: Banco do Brasil, Caixa Econômica Federal, Bradesco
