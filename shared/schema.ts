@@ -41,7 +41,6 @@ export const simulations = pgTable("simulations", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   clientName: varchar("client_name", { length: 255 }).notNull(),
-  clientCpf: varchar("client_cpf", { length: 14 }).notNull(),
   agreementId: integer("agreement_id").references(() => agreements.id),
   agreementName: varchar("agreement_name", { length: 255 }), // Denormalized for history
   bank: varchar("bank", { length: 255 }).notNull(),
@@ -79,11 +78,8 @@ export const insertCoefficientTableSchema = createInsertSchema(coefficientTables
 
 export const insertSimulationSchema = createInsertSchema(simulations, {
   clientName: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
-  clientCpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, { 
-    message: "CPF deve estar no formato 000.000.000-00" 
-  }),
   monthlyPayment: z.string().refine((val) => parseFloat(val) > 0, { message: "Parcela deve ser positiva" }),
-  outstandingBalance: z.string().refine((val) => parseFloat(val) > 0, { message: "Saldo deve ser positivo" }),
+  outstandingBalance: z.string().refine((val) => parseFloat(val) > 0, { message: "Saldo deve ser positiva" }),
 }).omit({ id: true, createdAt: true });
 
 // ===== SELECT TYPES =====
@@ -123,9 +119,6 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const clientDataSchema = z.object({
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
-  cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, { 
-    message: "CPF deve estar no formato 000.000.000-00" 
-  }),
   agreementId: z.number().positive({ message: "Selecione um convênio" }),
 });
 

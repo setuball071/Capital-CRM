@@ -1,14 +1,14 @@
-# Simulador de Portabilidade de Crédito Consignado
+# Simulador de Compra - Cartão de Crédito e Benefício
 
 ## Overview
 
-This is a Brazilian payroll loan origination calculator web application. It helps loan officers and financial advisors calculate new loan offers for clients with existing payroll-deducted loans (crédito consignado). The application uses bank-specific coefficient tables to calculate the total contract value and client refund based on the client's monthly payment capacity and outstanding balance.
+This is a Brazilian credit card and benefits simulator web application. It helps financial professionals calculate loan offers for clients with credit cards and benefits. The application uses bank-specific coefficient tables to calculate the total contract value and client refund based on the client's monthly payment capacity and outstanding balance.
 
-**Core Purpose**: Provide a fast, accurate coefficient-based calculator for Brazilian financial institutions to create loan origination simulations using Material Design principles optimized for financial applications.
+**Core Purpose**: Provide a fast, accurate coefficient-based calculator for Brazilian financial institutions to create purchase simulations using Material Design principles optimized for financial applications.
 
 **Target Market**: Brazilian financial professionals (loan officers, bank agents), with mobile-first design approach given Brazil's high mobile usage.
 
-**Current Status**: Production-ready. All features implemented and tested. Calculator performs accurate coefficient-based calculations for Banco do Brasil, Caixa Econômica Federal, and Bradesco.
+**Current Status**: Production-ready. All features implemented and tested. Calculator performs accurate coefficient-based calculations for Banco do Brasil, Caixa Econômica Federal, and Bradesco. Includes hierarchical user management with create, edit, delete, and activate/deactivate functionality.
 
 ## User Preferences
 
@@ -91,12 +91,26 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication and Authorization
 
-**Current State**: Basic user schema defined but no active authentication
-- User model includes: id, username (unique identifier)
-- No password/session management implemented yet
-- Infrastructure in place for future auth implementation
+**Current State**: Full authentication and authorization system implemented
+- User model includes: id, name, email, passwordHash, role (master/coordenacao/vendedor), managerId, isActive
+- Session-based authentication using express-session with PostgreSQL store
+- Password hashing with bcrypt
+- Role-based access control (RBAC) with hierarchical permissions
 
-**Session Management**: connect-pg-simple configured for PostgreSQL session store (not currently active)
+**Roles**:
+- **Master**: Full system access (create/edit/delete any user, manage all data)
+- **Coordenação**: Team management (create/edit/delete vendedores in their team, access team simulations)
+- **Vendedor**: Simulation-only access (create simulations, view own data)
+
+**User Management Features**:
+- Create new users with role assignment
+- Edit user information (name, email, password, role, manager, status)
+- Delete users permanently (master can delete anyone except themselves, coordinators can delete their team members)
+- Activate/deactivate users (soft delete alternative)
+- Hierarchical visibility: master sees all, coordinator sees only their team
+- Self-protection: users cannot delete themselves
+
+**Session Management**: PostgreSQL session store with connect-pg-simple
 
 ### Component Architecture
 
@@ -113,16 +127,16 @@ Preferred communication style: Simple, everyday language.
 - Not Found: 404 error page
 
 **Shared Logic**:
-- Formatters: Currency (Brazilian Real with R$ prefix), CPF auto-formatting (000.000.000-00)
+- Formatters: Currency (Brazilian Real with R$ prefix)
 - Calculations: Coefficient-based loan simulation logic
 - Query Client: Configured TanStack Query instance
 
 **User Experience Features**:
-- CPF auto-formatting as user types
 - Dynamic coefficient table dropdown based on bank + term selection
 - Form validation with clear error messages via toast notifications
 - Success confirmation on simulation creation
 - Responsive mobile-first design
+- Hierarchical user management with role-based access control
 
 ## External Dependencies
 
@@ -205,10 +219,6 @@ Preferred communication style: Simple, everyday language.
 - Tree-shakeable (only imports used functions)
 
 ### Brazilian Market Specific
-
-**CPF Validation**: Custom formatting for Brazilian tax ID (CPF)
-- Format: 000.000.000-00
-- Regex validation in Zod schema
 
 **Currency Formatting**: Brazilian Real (BRL)
 - Intl.NumberFormat configured for pt-BR locale

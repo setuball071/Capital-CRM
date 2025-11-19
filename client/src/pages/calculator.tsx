@@ -17,7 +17,7 @@ import {
   type CoefficientTable,
 } from "@shared/schema";
 import { calculateSimulation, getUniqueBanks, getTermsForBank, getTablesForBankAndTerm } from "@/lib/calculations";
-import { formatCurrency, formatCPF } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 
 export default function CalculatorPage() {
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
@@ -43,7 +43,6 @@ export default function CalculatorPage() {
     defaultValues: {
       client: {
         name: "",
-        cpf: "",
         agreementId: 0,
       },
       operation: {
@@ -132,11 +131,6 @@ export default function CalculatorPage() {
     });
   }
 
-  function handleCPFChange(e: React.ChangeEvent<HTMLInputElement>, field: any) {
-    const formatted = formatCPF(e.target.value);
-    field.onChange(formatted);
-  }
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -149,10 +143,10 @@ export default function CalculatorPage() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
-                  Simulador de Portabilidade
+                  Simulador de Compra
                 </h1>
                 <p className="text-sm text-muted-foreground hidden sm:block">
-                  Crédito Consignado
+                  Cartão de Crédito e Benefício
                 </p>
               </div>
             </div>
@@ -174,51 +168,26 @@ export default function CalculatorPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="client.name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">
-                            Nome
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Nome completo do cliente"
-                              className="h-12"
-                              data-testid="input-client-name"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="client.cpf"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">
-                            CPF
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="000.000.000-00"
-                              className="h-12"
-                              maxLength={14}
-                              data-testid="input-client-cpf"
-                              {...field}
-                              onChange={(e) => handleCPFChange(e, field)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="client.name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          Nome
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nome completo do cliente"
+                            className="h-12"
+                            data-testid="input-client-name"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={form.control}
