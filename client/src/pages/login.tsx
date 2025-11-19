@@ -35,7 +35,7 @@ export default function LoginPage() {
         title: "Login realizado com sucesso!",
         description: "Redirecionando...",
       });
-      setLocation("/");
+      // PublicRoute will automatically redirect to "/" when user is set
     } catch (error: any) {
       toast({
         title: "Erro ao fazer login",

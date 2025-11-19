@@ -110,7 +110,7 @@ export function AppSidebar() {
                 <div className="flex flex-col items-start text-left">
                   <span className="text-sm font-medium">{user.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    {user.role === "master" ? "Admin" : "Vendedor"}
+                    {user.role === "master" ? "Administrador" : user.role === "coordenacao" ? "Coordenador" : "Vendedor"}
                   </span>
                 </div>
               </button>

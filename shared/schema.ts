@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: varchar("role", { length: 50 }).notNull().default("vendedor"), // 'vendedor', 'coordenacao', or 'master'
-  managerId: integer("manager_id").references(() => users.id), // For vendedor -> coordenador hierarchy
+  managerId: integer("manager_id").references(() => users.id, { onDelete: "set null" }), // For vendedor -> coordenador hierarchy
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

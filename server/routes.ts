@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
+import { z } from "zod";
 import { storage } from "./storage";
 import {
   loginSchema,
@@ -9,6 +10,16 @@ import {
   insertCoefficientTableSchema,
   type User,
 } from "@shared/schema";
+
+// Schema for updating users
+const updateUserSchema = z.object({
+  name: z.string().min(3).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(6).optional(),
+  role: z.enum(["vendedor", "coordenacao", "master"]).optional(),
+  managerId: z.number().int().nullable().optional(),
+  isActive: z.boolean().optional(),
+}).strict(); // Reject extra fields
 
 // Extend Express Request to include user
 declare global {
@@ -401,25 +412,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update user
-  app.put("/api/users/:id", requireAuth, requireMaster, async (req, res) => {
+  app.put("/api/users/:id", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { password, ...updateData } = req.body;
-
-      let dataToUpdate = updateData;
-
-      // If password is being updated, hash it
-      if (password) {
-        const passwordHash = await bcrypt.hash(password, 10);
-        dataToUpdate = { ...updateData, passwordHash };
+      
+      // Validate input
+      const validationResult = updateUserSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: validationResult.error.errors,
+        });
       }
 
-      const user = await storage.updateUser(id, dataToUpdate);
-      if (!user) {
+      const validatedData = validationResult.data;
+      
+      // Fetch target user
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      const { passwordHash: _, ...userWithoutPassword } = user;
+      // Check permissions
+      if (req.user!.role === "coordenacao") {
+        // Coordinators can only edit themselves or their direct reports
+        const canEdit = targetUser.id === req.user!.id || targetUser.managerId === req.user!.id;
+        if (!canEdit) {
+          return res.status(403).json({ message: "Você só pode editar seu próprio perfil ou membros da sua equipe" });
+        }
+        
+        // Coordinators cannot change role or managerId
+        if (validatedData.role !== undefined || validatedData.managerId !== undefined) {
+          return res.status(403).json({ message: "Você não pode alterar a função ou coordenador de usuários" });
+        }
+      }
+
+      // Build update object from validated data
+      let dataToUpdate: any = {};
+      if (validatedData.name !== undefined) dataToUpdate.name = validatedData.name;
+      if (validatedData.email !== undefined) dataToUpdate.email = validatedData.email;
+      if (validatedData.isActive !== undefined) dataToUpdate.isActive = validatedData.isActive;
+      
+      // Only master can change role and managerId
+      if (req.user!.role === "master") {
+        if (validatedData.role !== undefined) dataToUpdate.role = validatedData.role;
+        if (validatedData.managerId !== undefined) dataToUpdate.managerId = validatedData.managerId;
+      }
+
+      // Hash password if provided
+      if (validatedData.password) {
+        const passwordHash = await bcrypt.hash(validatedData.password, 10);
+        dataToUpdate.passwordHash = passwordHash;
+      }
+
+      // Reject empty updates
+      if (Object.keys(dataToUpdate).length === 0) {
+        return res.status(400).json({ message: "Nenhuma alteração fornecida" });
+      }
+
+      const updatedUser = await storage.updateUser(id, dataToUpdate);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const { passwordHash: _, ...userWithoutPassword } = updatedUser;
       return res.json(userWithoutPassword);
     } catch (error) {
       console.error("Update user error:", error);

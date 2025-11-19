@@ -161,7 +161,7 @@ export default function UsersPage() {
       data.password = password;
     }
 
-    if (role === "vendedor" && managerId) {
+    if (role === "vendedor" && managerId && managerId !== "none") {
       data.managerId = parseInt(managerId);
     }
 
@@ -287,12 +287,12 @@ export default function UsersPage() {
               {isMaster && role === "vendedor" && (
                 <div className="space-y-2">
                   <Label htmlFor="manager">Coordenador (opcional)</Label>
-                  <Select value={managerId} onValueChange={setManagerId}>
+                  <Select value={managerId || "none"} onValueChange={setManagerId}>
                     <SelectTrigger id="manager" data-testid="select-user-manager">
                       <SelectValue placeholder="Selecione um coordenador" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       {coordenadores.map((coord) => (
                         <SelectItem key={coord.id} value={coord.id.toString()}>
                           {coord.name}
