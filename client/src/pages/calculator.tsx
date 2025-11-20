@@ -313,7 +313,6 @@ export default function CalculatorPage() {
           </div>
         </div>
       </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-5xl mx-auto" ref={simulatorRef}>
@@ -326,7 +325,7 @@ export default function CalculatorPage() {
                     Dados do Cliente
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6 space-y-4 pt-[0px] pb-[0px] pl-[24px] pr-[24px]">
+                <CardContent className="p-6 space-y-4 pl-[24px] pr-[24px] pt-[3px] pb-[3px]">
                   <FormField
                     control={form.control}
                     name="client.name"
