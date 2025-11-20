@@ -348,65 +348,67 @@ export default function CalculatorPage() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="client.agreementId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Convênio
-                        </FormLabel>
-                        <Select 
-                          onValueChange={(value) => field.onChange(parseInt(value))} 
-                          value={field.value?.toString()}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-10" data-testid="select-agreement">
-                              <SelectValue placeholder="Selecione o convênio" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {agreements.map((agreement) => (
-                              <SelectItem key={agreement.id} value={agreement.id.toString()}>
-                                {agreement.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="client.agreementId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">
+                            Convênio
+                          </FormLabel>
+                          <Select 
+                            onValueChange={(value) => field.onChange(parseInt(value))} 
+                            value={field.value?.toString()}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-10" data-testid="select-agreement">
+                                <SelectValue placeholder="Selecione o convênio" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {agreements.map((agreement) => (
+                                <SelectItem key={agreement.id} value={agreement.id.toString()}>
+                                  {agreement.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="operation.operationType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Tipo de Operação
-                        </FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-10" data-testid="select-operation-type">
-                              <SelectValue placeholder="Selecione o tipo de operação" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {OPERATION_TYPES.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                {type.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="operation.operationType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">
+                            Tipo de Operação
+                          </FormLabel>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-10" data-testid="select-operation-type">
+                                <SelectValue placeholder="Selecione o tipo de operação" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {OPERATION_TYPES.map((type) => (
+                                <SelectItem key={type.value} value={type.value}>
+                                  {type.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </CardContent>
               </Card>
 
