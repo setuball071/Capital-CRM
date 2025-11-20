@@ -186,6 +186,7 @@ export default function CoefficientTablesPage() {
     mutationFn: async (data: CoefficientFormData) => {
       const payload: InsertCoefficientTable = {
         agreementId: data.agreementId,
+        operationType: data.operationType,
         bank: data.bank,
         termMonths: data.termMonths,
         tableName: data.tableName,
@@ -218,6 +219,7 @@ export default function CoefficientTablesPage() {
       if (!selectedTable) throw new Error("Nenhuma tabela selecionada");
       const payload: Partial<InsertCoefficientTable> = {
         agreementId: data.agreementId,
+        operationType: data.operationType,
         bank: data.bank,
         termMonths: data.termMonths,
         tableName: data.tableName,
