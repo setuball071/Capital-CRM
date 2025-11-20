@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Papa from "papaparse";
-import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X, Search } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
@@ -148,6 +148,7 @@ export default function CoefficientTablesPage() {
   const [importData, setImportData] = useState<any[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const createForm = useForm<CoefficientFormData>({
     resolver: zodResolver(coefficientFormSchema),
@@ -361,10 +362,10 @@ export default function CoefficientTablesPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === tables?.length) {
+    if (isAllSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(tables?.map(t => t.id) || []);
+      setSelectedIds(filteredTables.map(t => t.id));
     }
   };
 
@@ -376,13 +377,35 @@ export default function CoefficientTablesPage() {
     );
   };
 
-  const isAllSelected = tables && tables.length > 0 && selectedIds.length === tables.length;
-  const isSomeSelected = selectedIds.length > 0 && selectedIds.length < (tables?.length || 0);
-
   const getAgreementName = (agreementId: number) => {
     const agreement = agreements?.find((a) => a.id === agreementId);
     return agreement?.name || `Convênio #${agreementId}`;
   };
+
+  const getOperationTypeName = (operationType: string) => {
+    const type = OPERATION_TYPES.find(t => t.value === operationType);
+    return type?.label || operationType;
+  };
+
+  const filteredTables = tables?.filter(table => {
+    if (!searchTerm) return true;
+    
+    const search = searchTerm.toLowerCase();
+    const agreementName = getAgreementName(table.agreementId).toLowerCase();
+    const operationTypeName = getOperationTypeName(table.operationType).toLowerCase();
+    
+    return (
+      agreementName.includes(search) ||
+      table.bank.toLowerCase().includes(search) ||
+      table.tableName.toLowerCase().includes(search) ||
+      table.termMonths.toString().includes(search) ||
+      table.coefficient.toLowerCase().includes(search) ||
+      operationTypeName.includes(search)
+    );
+  }) || [];
+
+  const isAllSelected = filteredTables.length > 0 && selectedIds.length === filteredTables.length;
+  const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredTables.length;
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -547,6 +570,35 @@ export default function CoefficientTablesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Search/Filter Input */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar por convênio, banco, prazo, tipo de operação ou nome da tabela..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-tables"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7"
+                    onClick={() => setSearchTerm("")}
+                    data-testid="button-clear-search"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {searchTerm && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Mostrando {filteredTables.length} de {tables?.length || 0} tabelas
+                </p>
+              )}
+            </div>
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -574,8 +626,8 @@ export default function CoefficientTablesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tables && tables.length > 0 ? (
-                      tables.map((table) => (
+                    {filteredTables.length > 0 ? (
+                      filteredTables.map((table) => (
                         <TableRow key={table.id} data-testid={`row-table-${table.id}`}>
                           <TableCell>
                             <Checkbox
@@ -627,6 +679,21 @@ export default function CoefficientTablesPage() {
                           </TableCell>
                         </TableRow>
                       ))
+                    ) : searchTerm ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                          Nenhuma tabela encontrada com o filtro "{searchTerm}".
+                          <br />
+                          <Button
+                            variant="ghost"
+                            onClick={() => setSearchTerm("")}
+                            className="mt-2"
+                            data-testid="button-clear-filter-empty"
+                          >
+                            Limpar filtro
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-muted-foreground py-8">

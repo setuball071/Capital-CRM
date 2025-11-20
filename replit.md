@@ -165,6 +165,12 @@ Preferred communication style: Simple, everyday language.
   - Bulk delete button appears when tables are selected
   - Confirmation dialog before deletion
   - Backend endpoint handles concurrent deletion of multiple tables
+- Smart search/filter for coefficient tables:
+  - Real-time filtering across all table fields (agreement, bank, term, table name, coefficient, operation type)
+  - Visual feedback showing filtered count (e.g., "Showing 5 of 20 tables")
+  - "Select all" checkbox respects current filter (only selects visible filtered items)
+  - Clear filter button with helpful empty state messaging
+  - Optimized for quick bulk operations on filtered results
 - Free-text bank input with autocomplete suggestions for 20 common Brazilian banks/fintechs
 - Brazilian decimal format support (comma or period) for coefficient values
 
