@@ -43,9 +43,10 @@ export interface IStorage {
   getAllCoefficientTables(): Promise<CoefficientTable[]>;
   getActiveCoefficientTables(): Promise<CoefficientTable[]>;
   getCoefficientTablesByAgreement(agreementId: number): Promise<CoefficientTable[]>;
-  getBanksByAgreement(agreementId: number): Promise<string[]>;
-  getTermsByAgreementAndBank(agreementId: number, bank: string): Promise<number[]>;
-  getTablesByAgreementBankAndTerm(agreementId: number, bank: string, termMonths: number): Promise<CoefficientTable[]>;
+  getOperationTypesByAgreement(agreementId: number): Promise<string[]>;
+  getBanksByAgreementAndOperationType(agreementId: number, operationType: string): Promise<string[]>;
+  getTermsByAgreementOperationTypeAndBank(agreementId: number, operationType: string, bank: string): Promise<number[]>;
+  getTablesByAgreementOperationTypeBankAndTerm(agreementId: number, operationType: string, bank: string, termMonths: number): Promise<CoefficientTable[]>;
   getCoefficientTablesByBank(bank: string): Promise<CoefficientTable[]>;
   getCoefficientTablesByBankAndTerm(bank: string, termMonths: number): Promise<CoefficientTable[]>;
   getCoefficientTable(id: number): Promise<CoefficientTable | undefined>;
@@ -155,20 +156,32 @@ export class DbStorage implements IStorage {
       ));
   }
 
-  async getBanksByAgreement(agreementId: number): Promise<string[]> {
+  async getOperationTypesByAgreement(agreementId: number): Promise<string[]> {
     const tables = await db.select().from(coefficientTables)
       .where(and(
         eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.isActive, true)
+      ));
+    const uniqueTypes = [...new Set(tables.map(t => t.operationType))];
+    return uniqueTypes.sort();
+  }
+
+  async getBanksByAgreementAndOperationType(agreementId: number, operationType: string): Promise<string[]> {
+    const tables = await db.select().from(coefficientTables)
+      .where(and(
+        eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.operationType, operationType),
         eq(coefficientTables.isActive, true)
       ));
     const uniqueBanks = [...new Set(tables.map(t => t.bank))];
     return uniqueBanks.sort();
   }
 
-  async getTermsByAgreementAndBank(agreementId: number, bank: string): Promise<number[]> {
+  async getTermsByAgreementOperationTypeAndBank(agreementId: number, operationType: string, bank: string): Promise<number[]> {
     const tables = await db.select().from(coefficientTables)
       .where(and(
         eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.operationType, operationType),
         eq(coefficientTables.bank, bank),
         eq(coefficientTables.isActive, true)
       ));
@@ -176,10 +189,11 @@ export class DbStorage implements IStorage {
     return uniqueTerms.sort((a, b) => a - b);
   }
 
-  async getTablesByAgreementBankAndTerm(agreementId: number, bank: string, termMonths: number): Promise<CoefficientTable[]> {
+  async getTablesByAgreementOperationTypeBankAndTerm(agreementId: number, operationType: string, bank: string, termMonths: number): Promise<CoefficientTable[]> {
     return await db.select().from(coefficientTables)
       .where(and(
         eq(coefficientTables.agreementId, agreementId),
+        eq(coefficientTables.operationType, operationType),
         eq(coefficientTables.bank, bank),
         eq(coefficientTables.termMonths, termMonths),
         eq(coefficientTables.isActive, true)

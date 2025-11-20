@@ -788,15 +788,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== CALCULATOR HIERARCHY ROUTES =====
   
-  // Get banks by agreement
-  app.get("/api/calculator/banks", requireAuth, async (req, res) => {
+  // Get operation types by agreement
+  app.get("/api/calculator/operation-types", requireAuth, async (req, res) => {
     try {
       const agreementId = parseInt(req.query.agreementId as string);
       if (isNaN(agreementId)) {
         return res.status(400).json({ message: "ID de convênio inválido" });
       }
 
-      const banks = await storage.getBanksByAgreement(agreementId);
+      const operationTypes = await storage.getOperationTypesByAgreement(agreementId);
+      return res.json(operationTypes);
+    } catch (error) {
+      console.error("Get operation types error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tipos de operação" });
+    }
+  });
+
+  // Get banks by agreement and operation type
+  app.get("/api/calculator/banks", requireAuth, async (req, res) => {
+    try {
+      const agreementId = parseInt(req.query.agreementId as string);
+      const operationType = req.query.operationType as string;
+
+      if (isNaN(agreementId) || !operationType) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+
+      const banks = await storage.getBanksByAgreementAndOperationType(agreementId, operationType);
       return res.json(banks);
     } catch (error) {
       console.error("Get banks error:", error);
@@ -804,17 +822,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get terms by agreement and bank
+  // Get terms by agreement, operation type and bank
   app.get("/api/calculator/terms", requireAuth, async (req, res) => {
     try {
       const agreementId = parseInt(req.query.agreementId as string);
+      const operationType = req.query.operationType as string;
       const bank = req.query.bank as string;
 
-      if (isNaN(agreementId) || !bank) {
+      if (isNaN(agreementId) || !operationType || !bank) {
         return res.status(400).json({ message: "Parâmetros inválidos" });
       }
 
-      const terms = await storage.getTermsByAgreementAndBank(agreementId, bank);
+      const terms = await storage.getTermsByAgreementOperationTypeAndBank(agreementId, operationType, bank);
       return res.json(terms);
     } catch (error) {
       console.error("Get terms error:", error);
@@ -822,18 +841,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get tables by agreement, bank and term
+  // Get tables by agreement, operation type, bank and term
   app.get("/api/calculator/tables", requireAuth, async (req, res) => {
     try {
       const agreementId = parseInt(req.query.agreementId as string);
+      const operationType = req.query.operationType as string;
       const bank = req.query.bank as string;
       const termMonths = parseInt(req.query.termMonths as string);
 
-      if (isNaN(agreementId) || !bank || isNaN(termMonths)) {
+      if (isNaN(agreementId) || !operationType || !bank || isNaN(termMonths)) {
         return res.status(400).json({ message: "Parâmetros inválidos" });
       }
 
-      const tables = await storage.getTablesByAgreementBankAndTerm(agreementId, bank, termMonths);
+      const tables = await storage.getTablesByAgreementOperationTypeBankAndTerm(agreementId, operationType, bank, termMonths);
       return res.json(tables);
     } catch (error) {
       console.error("Get tables error:", error);
