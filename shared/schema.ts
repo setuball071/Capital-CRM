@@ -138,6 +138,9 @@ export const clientDataSchema = z.object({
 export type ClientData = z.infer<typeof clientDataSchema>;
 
 export const operationDataSchema = z.object({
+  operationType: z.enum(["credit_card", "benefit_card", "consignado"], {
+    errorMap: () => ({ message: "Selecione um tipo de operação" }),
+  }),
   monthlyPayment: z.number()
     .positive({ message: "Parcela deve ser maior que zero" })
     .max(1000000, { message: "Valor muito alto" }),

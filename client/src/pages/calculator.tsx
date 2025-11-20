@@ -22,6 +22,12 @@ import {
 import { calculateSimulation } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/formatters";
 
+const OPERATION_TYPES = [
+  { value: "credit_card", label: "Cartão de Crédito" },
+  { value: "benefit_card", label: "Cartão Benefício" },
+  { value: "consignado", label: "Consignado" },
+] as const;
+
 export default function CalculatorPage() {
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -42,6 +48,7 @@ export default function CalculatorPage() {
         agreementId: 0,
       },
       operation: {
+        operationType: "credit_card" as const,
         monthlyPayment: 0,
         outstandingBalance: 0,
         bank: "",
@@ -52,46 +59,47 @@ export default function CalculatorPage() {
   });
 
   const watchAgreementId = form.watch("client.agreementId");
+  const watchOperationType = form.watch("operation.operationType");
   const watchBank = form.watch("operation.bank");
   const watchTerm = form.watch("operation.termMonths");
 
-  // Fetch banks by agreement
+  // Fetch banks by agreement and operation type
   const { data: availableBanks = [] } = useQuery<string[]>({
-    queryKey: ["/api/calculator/banks", watchAgreementId],
+    queryKey: ["/api/calculator/banks", watchAgreementId, watchOperationType],
     queryFn: async () => {
-      if (!watchAgreementId || watchAgreementId === 0) return [];
-      const res = await fetch(`/api/calculator/banks?agreementId=${watchAgreementId}`);
+      if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType) return [];
+      const res = await fetch(`/api/calculator/banks?agreementId=${watchAgreementId}&operationType=${watchOperationType}`);
       if (!res.ok) throw new Error("Erro ao buscar bancos");
       return res.json();
     },
-    enabled: !!watchAgreementId && watchAgreementId > 0,
+    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType,
   });
 
-  // Fetch terms by agreement and bank
+  // Fetch terms by agreement, operation type and bank
   const { data: availableTerms = [] } = useQuery<number[]>({
-    queryKey: ["/api/calculator/terms", watchAgreementId, watchBank],
+    queryKey: ["/api/calculator/terms", watchAgreementId, watchOperationType, watchBank],
     queryFn: async () => {
-      if (!watchAgreementId || watchAgreementId === 0 || !watchBank) return [];
-      const res = await fetch(`/api/calculator/terms?agreementId=${watchAgreementId}&bank=${watchBank}`);
+      if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType || !watchBank) return [];
+      const res = await fetch(`/api/calculator/terms?agreementId=${watchAgreementId}&operationType=${watchOperationType}&bank=${watchBank}`);
       if (!res.ok) throw new Error("Erro ao buscar prazos");
       return res.json();
     },
-    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchBank,
+    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType && !!watchBank,
   });
 
-  // Fetch tables by agreement, bank and term
+  // Fetch tables by agreement, operation type, bank and term
   const { data: availableTables = [] } = useQuery<CoefficientTable[]>({
-    queryKey: ["/api/calculator/tables", watchAgreementId, watchBank, watchTerm],
+    queryKey: ["/api/calculator/tables", watchAgreementId, watchOperationType, watchBank, watchTerm],
     queryFn: async () => {
-      if (!watchAgreementId || watchAgreementId === 0 || !watchBank || !watchTerm || watchTerm === 0) return [];
-      const res = await fetch(`/api/calculator/tables?agreementId=${watchAgreementId}&bank=${watchBank}&termMonths=${watchTerm}`);
+      if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType || !watchBank || !watchTerm || watchTerm === 0) return [];
+      const res = await fetch(`/api/calculator/tables?agreementId=${watchAgreementId}&operationType=${watchOperationType}&bank=${watchBank}&termMonths=${watchTerm}`);
       if (!res.ok) throw new Error("Erro ao buscar tabelas");
       return res.json();
     },
-    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchBank && !!watchTerm && watchTerm > 0,
+    enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType && !!watchBank && !!watchTerm && watchTerm > 0,
   });
 
-  // Reset bank when agreement changes
+  // Reset bank when agreement or operation type changes
   useEffect(() => {
     const currentBank = form.getValues("operation.bank");
     if (currentBank && !availableBanks.includes(currentBank)) {
@@ -354,6 +362,36 @@ export default function CalculatorPage() {
                             {agreements.map((agreement) => (
                               <SelectItem key={agreement.id} value={agreement.id.toString()}>
                                 {agreement.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="operation.operationType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          Tipo de Operação
+                        </FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-12" data-testid="select-operation-type">
+                              <SelectValue placeholder="Selecione o tipo de operação" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {OPERATION_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
