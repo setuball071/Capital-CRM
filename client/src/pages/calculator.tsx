@@ -184,10 +184,10 @@ export default function CalculatorPage() {
   }, [form, availableTables, liquidPayment]);
 
   async function handleSave(format: 'png' | 'jpeg' | 'pdf') {
-    if (!simulatorRef.current || !result) {
+    if (!result) {
       toast({
         title: "Erro",
-        description: "Não há simulação para capturar. Preencha todos os campos primeiro.",
+        description: "Não há simulação para salvar. Preencha todos os campos primeiro.",
         variant: "destructive",
       });
       return;
@@ -196,37 +196,246 @@ export default function CalculatorPage() {
     setIsCapturing(true);
 
     try {
-      const element = simulatorRef.current;
-      const canvas = await html2canvas(element, {
+      const formData = form.getValues();
+      const selectedAgreement = agreements.find(a => a.id === formData.client.agreementId);
+      const selectedTable = availableTables.find(t => t.id === formData.operation.coefficientTableId);
+      const operationTypeLabel = OPERATION_TYPES.find(t => t.value === formData.operation.operationType)?.label || '';
+
+      const receiptHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              background: #ffffff;
+              padding: 40px;
+              color: #1a1a1a;
+            }
+            .receipt {
+              max-width: 900px;
+              margin: 0 auto;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #2563eb;
+            }
+            .header h1 {
+              font-size: 32px;
+              font-weight: 700;
+              color: #2563eb;
+              margin-bottom: 8px;
+            }
+            .header p {
+              font-size: 16px;
+              color: #666;
+            }
+            .section {
+              background: #f8fafc;
+              border: 2px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 24px;
+              margin-bottom: 24px;
+            }
+            .section-title {
+              font-size: 18px;
+              font-weight: 600;
+              color: #1a1a1a;
+              margin-bottom: 16px;
+              padding-bottom: 8px;
+              border-bottom: 2px solid #cbd5e1;
+            }
+            .field {
+              margin-bottom: 16px;
+            }
+            .field:last-child {
+              margin-bottom: 0;
+            }
+            .field-label {
+              font-size: 13px;
+              color: #64748b;
+              font-weight: 500;
+              margin-bottom: 4px;
+            }
+            .field-value {
+              font-size: 16px;
+              color: #1a1a1a;
+              font-weight: 500;
+            }
+            .two-columns {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 24px;
+            }
+            .results {
+              background: #f0f9ff;
+              border: 3px solid #2563eb;
+            }
+            .results-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 24px;
+            }
+            .result-item {
+              text-align: center;
+              padding: 20px;
+              background: #ffffff;
+              border-radius: 8px;
+            }
+            .result-label {
+              font-size: 14px;
+              color: #64748b;
+              margin-bottom: 8px;
+            }
+            .result-value {
+              font-size: 28px;
+              font-weight: 700;
+              font-family: 'Roboto Mono', monospace;
+            }
+            .result-value.positive {
+              color: #16a34a;
+            }
+            .result-value.negative {
+              color: #dc2626;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              color: #94a3b8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="header">
+              <h1>Simulador GoldCard</h1>
+              <p>Cartão de Crédito e Benefício</p>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Dados do Cliente</div>
+              <div class="field">
+                <div class="field-label">Nome</div>
+                <div class="field-value">${formData.client.name}</div>
+              </div>
+              <div class="two-columns">
+                <div class="field">
+                  <div class="field-label">Convênio</div>
+                  <div class="field-value">${selectedAgreement?.name || ''}</div>
+                </div>
+                <div class="field">
+                  <div class="field-label">Tipo de Operação</div>
+                  <div class="field-value">${operationTypeLabel}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Dados da Operação</div>
+              <div class="two-columns">
+                <div>
+                  <div class="field">
+                    <div class="field-label">Parcela Atual (R$)</div>
+                    <div class="field-value">${formatCurrency(formData.operation.monthlyPayment)}</div>
+                  </div>
+                  <div class="field">
+                    <div class="field-label">Parcela Líquida (R$)</div>
+                    <div class="field-value">${formatCurrency(liquidPayment)}</div>
+                  </div>
+                  <div class="field">
+                    <div class="field-label">Saldo Devedor (R$)</div>
+                    <div class="field-value">${formatCurrency(formData.operation.outstandingBalance)}</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="field">
+                    <div class="field-label">Banco</div>
+                    <div class="field-value">${formData.operation.bank}</div>
+                  </div>
+                  <div class="field">
+                    <div class="field-label">Prazo</div>
+                    <div class="field-value">${formData.operation.termMonths} meses</div>
+                  </div>
+                  <div class="field">
+                    <div class="field-label">Tabela (Coeficiente)</div>
+                    <div class="field-value" style="font-size: 14px;">${selectedTable?.tableName || ''}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section results">
+              <div class="section-title" style="border-color: #93c5fd;">Resultados da Simulação</div>
+              <div class="results-grid">
+                <div class="result-item">
+                  <div class="result-label">Valor Total do Contrato</div>
+                  <div class="result-value">${formatCurrency(result.totalContractValue)}</div>
+                </div>
+                <div class="result-item">
+                  <div class="result-label">Troco do Cliente</div>
+                  <div class="result-value ${result.clientRefund >= 0 ? 'positive' : 'negative'}">
+                    ${formatCurrency(result.clientRefund)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              Documento gerado em ${new Date().toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = receiptHTML;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.width = '900px';
+      document.body.appendChild(tempDiv);
+
+      const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, {
         backgroundColor: '#ffffff',
-        scale: 4,
+        scale: 3,
         logging: false,
         useCORS: true,
-        allowTaint: true,
-        width: element.scrollWidth,
-        height: element.scrollHeight,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-        onclone: (clonedDoc) => {
-          clonedDoc.documentElement.classList.remove('dark');
-        },
+        width: 900,
       });
+
+      document.body.removeChild(tempDiv);
 
       const timestamp = Date.now();
       const link = document.createElement('a');
 
       if (format === 'pdf') {
-        const pageWidthMM = 297;
-        const pageHeightMM = 210;
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: 'a4',
+        });
+        
+        const pageWidth = 297;
+        const pageHeight = 210;
         const margin = 15;
-        const maxWidth = pageWidthMM - (margin * 2);
-        const maxHeight = pageHeightMM - (margin * 2);
+        const maxWidth = pageWidth - (margin * 2);
+        const maxHeight = pageHeight - (margin * 2);
         
         const canvasRatio = canvas.width / canvas.height;
         const pageRatio = maxWidth / maxHeight;
         
         let imgWidth, imgHeight;
-        
         if (canvasRatio > pageRatio) {
           imgWidth = maxWidth;
           imgHeight = maxWidth / canvasRatio;
@@ -235,14 +444,8 @@ export default function CalculatorPage() {
           imgWidth = maxHeight * canvasRatio;
         }
         
-        const xOffset = (pageWidthMM - imgWidth) / 2;
-        const yOffset = (pageHeightMM - imgHeight) / 2;
-        
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: 'a4',
-        });
+        const xOffset = (pageWidth - imgWidth) / 2;
+        const yOffset = (pageHeight - imgHeight) / 2;
         
         const imgData = canvas.toDataURL('image/jpeg', 1.0);
         pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
@@ -250,7 +453,7 @@ export default function CalculatorPage() {
 
         toast({
           title: "PDF salvo!",
-          description: "O arquivo foi salvo com sucesso.",
+          description: "O recibo foi salvo com sucesso.",
         });
       } else if (format === 'jpeg') {
         link.download = `simulacao-goldcard-${timestamp}.jpg`;
@@ -261,7 +464,7 @@ export default function CalculatorPage() {
 
         toast({
           title: "JPEG salvo!",
-          description: "A imagem foi salva com sucesso.",
+          description: "O recibo foi salvo com sucesso.",
         });
       } else {
         link.download = `simulacao-goldcard-${timestamp}.png`;
@@ -272,7 +475,7 @@ export default function CalculatorPage() {
 
         toast({
           title: "PNG salvo!",
-          description: "A imagem foi salva com sucesso.",
+          description: "O recibo foi salvo com sucesso.",
         });
       }
     } catch (error) {
@@ -282,7 +485,7 @@ export default function CalculatorPage() {
       
       toast({
         title: "Erro ao salvar",
-        description: `Não foi possível salvar a simulação. ${errorMessage}`,
+        description: `Não foi possível salvar o recibo. ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
