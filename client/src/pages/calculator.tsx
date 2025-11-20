@@ -325,7 +325,7 @@ export default function CalculatorPage() {
                     Dados do Cliente
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6 space-y-4 pl-[24px] pr-[24px] pt-[3px] pb-[3px]">
+                <CardContent className="p-6 space-y-4 pl-[24px] pr-[24px] pt-[9px] pb-[9px]">
                   <FormField
                     control={form.control}
                     name="client.name"
