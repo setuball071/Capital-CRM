@@ -85,11 +85,11 @@ const AVAILABLE_BANKS = [
 ] as const;
 
 function downloadTemplateCSV() {
-  const headers = ["convênio", "banco", "prazo", "nome_tabela", "coeficiente", "margem_seguranca"];
+  const headers = ["convênio", "tipo_operacao", "banco", "prazo", "nome_tabela", "coeficiente", "margem_seguranca"];
   const exampleRows = [
-    ["Gov SP", "Banco do Brasil", "60", "Tabela BB 60 meses", "0.0216", "10"],
-    ["Gov SP", "Caixa Econômica Federal", "72", "Tabela CEF 72 meses", "0.0198", "8"],
-    ["Gov SP", "PH Tech", "48", "Tabela PH Tech Especial", "0.0235", "0"],
+    ["Gov SP", "credit_card", "Banco do Brasil", "60", "Tabela BB 60 meses", "0.0216", "10"],
+    ["Gov SP", "benefit_card", "Caixa Econômica Federal", "72", "Tabela CEF 72 meses", "0.0198", "8"],
+    ["Gov SP", "consignado", "PH Tech", "48", "Tabela PH Tech Especial", "0.0235", "0"],
   ];
 
   const csvContent = [headers, ...exampleRows]
@@ -107,8 +107,15 @@ function downloadTemplateCSV() {
   document.body.removeChild(link);
 }
 
+const OPERATION_TYPES = [
+  { value: "credit_card", label: "Cartão de Crédito" },
+  { value: "benefit_card", label: "Cartão Benefício" },
+  { value: "consignado", label: "Consignado" },
+] as const;
+
 const coefficientFormSchema = z.object({
   agreementId: z.number().positive({ message: "Convênio é obrigatório" }),
+  operationType: z.enum(["credit_card", "benefit_card", "consignado"], { message: "Tipo de operação é obrigatório" }),
   bank: z.string().min(1, { message: "Banco é obrigatório" }),
   termMonths: z.number().int().min(12, { message: "Prazo mínimo é 12 meses" }).max(140, { message: "Prazo máximo é 140 meses" }),
   tableName: z.string().min(1, { message: "Nome da tabela é obrigatório" }),
@@ -143,6 +150,7 @@ export default function CoefficientTablesPage() {
     resolver: zodResolver(coefficientFormSchema),
     defaultValues: {
       agreementId: 0,
+      operationType: "credit_card",
       bank: "",
       termMonths: 12,
       tableName: "",
@@ -156,6 +164,7 @@ export default function CoefficientTablesPage() {
     resolver: zodResolver(coefficientFormSchema),
     defaultValues: {
       agreementId: 0,
+      operationType: "credit_card",
       bank: "",
       termMonths: 12,
       tableName: "",
@@ -290,6 +299,7 @@ export default function CoefficientTablesPage() {
     setSelectedTable(table);
     editForm.reset({
       agreementId: table.agreementId,
+      operationType: table.operationType as "credit_card" | "benefit_card" | "consignado",
       bank: table.bank,
       termMonths: table.termMonths,
       tableName: table.tableName,
@@ -334,6 +344,7 @@ export default function CoefficientTablesPage() {
 
         results.data.forEach((row: any, index: number) => {
           const agreementName = row.convênio || row.convenio;
+          const operationType = row.tipo_operacao;
           const bank = row.banco;
           const termMonths = parseInt(row.prazo);
           const tableName = row.nome_tabela;
@@ -344,6 +355,11 @@ export default function CoefficientTablesPage() {
 
           if (!agreement) {
             errors.push(`Linha ${index + 2}: Convênio "${agreementName}" não encontrado`);
+            return;
+          }
+
+          if (!operationType || !["credit_card", "benefit_card", "consignado"].includes(operationType)) {
+            errors.push(`Linha ${index + 2}: Tipo de operação inválido (deve ser credit_card, benefit_card ou consignado)`);
             return;
           }
 
@@ -370,6 +386,7 @@ export default function CoefficientTablesPage() {
 
           data.push({
             agreementId: agreement.id,
+            operationType: operationType as "credit_card" | "benefit_card" | "consignado",
             bank,
             termMonths,
             tableName,
@@ -576,6 +593,36 @@ export default function CoefficientTablesPage() {
 
                 <FormField
                   control={createForm.control}
+                  name="operationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Operação</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-operation-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {OPERATION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createForm.control}
                   name="bank"
                   render={({ field }) => (
                     <FormItem>
@@ -594,6 +641,29 @@ export default function CoefficientTablesPage() {
                         ))}
                       </datalist>
                       <FormDescription>Digite o nome do banco ou fintech</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={createForm.control}
+                  name="termMonths"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prazo (meses)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="12 a 140"
+                          min="12"
+                          max="140"
+                          data-testid="input-term"
+                          {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormDescription>Entre 12 e 140 meses</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -762,6 +832,36 @@ export default function CoefficientTablesPage() {
 
                 <FormField
                   control={editForm.control}
+                  name="operationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Operação</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-operation-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {OPERATION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
                   name="bank"
                   render={({ field }) => (
                     <FormItem>
@@ -780,6 +880,29 @@ export default function CoefficientTablesPage() {
                         ))}
                       </datalist>
                       <FormDescription>Digite o nome do banco ou fintech</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="termMonths"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prazo (meses)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="12 a 140"
+                          min="12"
+                          max="140"
+                          data-testid="input-edit-term"
+                          {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormDescription>Entre 12 e 140 meses</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
