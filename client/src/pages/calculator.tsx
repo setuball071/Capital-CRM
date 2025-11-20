@@ -308,18 +308,18 @@ export default function CalculatorPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-5xl mx-auto" ref={simulatorRef}>
           <Form {...form}>
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Client Data Section */}
               <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg font-semibold">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">
                     Dados do Cliente
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-4">
                   <FormField
                     control={form.control}
                     name="client.name"
@@ -331,7 +331,7 @@ export default function CalculatorPage() {
                         <FormControl>
                           <Input
                             placeholder="Nome completo do cliente"
-                            className="h-12"
+                            className="h-10"
                             data-testid="input-client-name"
                             {...field}
                           />
@@ -354,7 +354,7 @@ export default function CalculatorPage() {
                           value={field.value?.toString()}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-12" data-testid="select-agreement">
+                            <SelectTrigger className="h-10" data-testid="select-agreement">
                               <SelectValue placeholder="Selecione o convênio" />
                             </SelectTrigger>
                           </FormControl>
@@ -384,7 +384,7 @@ export default function CalculatorPage() {
                           value={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-12" data-testid="select-operation-type">
+                            <SelectTrigger className="h-10" data-testid="select-operation-type">
                               <SelectValue placeholder="Selecione o tipo de operação" />
                             </SelectTrigger>
                           </FormControl>
@@ -405,8 +405,8 @@ export default function CalculatorPage() {
 
               {/* Operation Data Section */}
               <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg font-semibold">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">
                     Dados da Operação
                   </CardTitle>
                   <CardDescription className="text-sm">
@@ -414,10 +414,10 @@ export default function CalculatorPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Left Column - Valores */}
-                    <div className="space-y-6">
-                      <h3 className="text-base font-semibold text-primary">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-primary">
                         Valores (R$)
                       </h3>
 
@@ -434,7 +434,7 @@ export default function CalculatorPage() {
                                 type="number"
                                 step="0.01"
                                 placeholder="0,00"
-                                className="h-12"
+                                className="h-10"
                                 data-testid="input-monthly-payment"
                                 {...field}
                                 onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -450,7 +450,7 @@ export default function CalculatorPage() {
                           Parcela Líquida (R$)
                         </label>
                         <div 
-                          className="flex h-12 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm items-center"
+                          className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm items-center"
                           data-testid="text-liquid-payment"
                         >
                           {formatCurrency(liquidPayment)}
@@ -473,7 +473,7 @@ export default function CalculatorPage() {
                                 type="number"
                                 step="0.01"
                                 placeholder="0,00"
-                                className="h-12"
+                                className="h-10"
                                 data-testid="input-outstanding-balance"
                                 {...field}
                                 onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -486,8 +486,8 @@ export default function CalculatorPage() {
                     </div>
 
                     {/* Right Column - Coeficientes */}
-                    <div className="space-y-6">
-                      <h3 className="text-base font-semibold text-primary">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-primary">
                         Coeficientes
                       </h3>
 
@@ -505,7 +505,7 @@ export default function CalculatorPage() {
                               disabled={availableBanks.length === 0}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-12" data-testid="select-bank">
+                                <SelectTrigger className="h-10" data-testid="select-bank">
                                   <SelectValue placeholder={watchAgreementId ? "Selecione o banco" : "Selecione um convênio primeiro"} />
                                 </SelectTrigger>
                               </FormControl>
@@ -536,7 +536,7 @@ export default function CalculatorPage() {
                               disabled={availableTerms.length === 0}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-12" data-testid="select-term">
+                                <SelectTrigger className="h-10" data-testid="select-term">
                                   <SelectValue placeholder="Selecione o prazo" />
                                 </SelectTrigger>
                               </FormControl>
@@ -567,7 +567,7 @@ export default function CalculatorPage() {
                               disabled={availableTables.length === 0}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-12 w-full min-w-[22rem]" data-testid="select-coefficient-table">
+                                <SelectTrigger className="h-10 w-full min-w-[22rem]" data-testid="select-coefficient-table">
                                   <SelectValue placeholder="Selecione a tabela" />
                                 </SelectTrigger>
                               </FormControl>
@@ -590,27 +590,27 @@ export default function CalculatorPage() {
 
               {/* Results Section */}
               <div>
-                <h2 className="text-lg font-semibold text-foreground mb-4">
+                <h2 className="text-base font-semibold text-foreground mb-3">
                   Resultados da Simulação
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Card>
-                    <CardContent className="pt-6 pb-8 text-center">
+                    <CardContent className="pt-5 pb-6 text-center">
                       <p className="text-sm text-muted-foreground mb-2">
                         Valor Total do Contrato
                       </p>
-                      <p className="text-3xl font-bold font-mono text-foreground" data-testid="text-total-contract">
+                      <p className="text-2xl font-bold font-mono text-foreground" data-testid="text-total-contract">
                         {result ? formatCurrency(result.totalContractValue) : "R$ 0,00"}
                       </p>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardContent className="pt-6 pb-8 text-center">
+                    <CardContent className="pt-5 pb-6 text-center">
                       <p className="text-sm text-muted-foreground mb-2">
                         Troco do Cliente
                       </p>
-                      <p className="text-3xl font-bold font-mono text-chart-2" data-testid="text-client-refund">
+                      <p className="text-2xl font-bold font-mono text-chart-2" data-testid="text-client-refund">
                         {result ? formatCurrency(result.clientRefund) : "R$ 0,00"}
                       </p>
                     </CardContent>
@@ -624,7 +624,7 @@ export default function CalculatorPage() {
                   <Button
                     type="button"
                     disabled={!result || isCapturing}
-                    className="w-full h-14 text-base font-semibold"
+                    className="w-full h-12 text-base font-semibold"
                     data-testid="button-save"
                   >
                     {isCapturing ? (
