@@ -68,9 +68,12 @@ export default function CalculatorPage() {
     queryKey: ["/api/calculator/banks", watchAgreementId, watchOperationType],
     queryFn: async () => {
       if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType) return [];
+      console.log('🔍 Buscando bancos:', { agreementId: watchAgreementId, operationType: watchOperationType });
       const res = await fetch(`/api/calculator/banks?agreementId=${watchAgreementId}&operationType=${watchOperationType}`);
       if (!res.ok) throw new Error("Erro ao buscar bancos");
-      return res.json();
+      const banks = await res.json();
+      console.log('✅ Bancos encontrados:', banks);
+      return banks;
     },
     enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType,
   });
@@ -80,9 +83,12 @@ export default function CalculatorPage() {
     queryKey: ["/api/calculator/terms", watchAgreementId, watchOperationType, watchBank],
     queryFn: async () => {
       if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType || !watchBank) return [];
+      console.log('🔍 Buscando prazos:', { agreementId: watchAgreementId, operationType: watchOperationType, bank: watchBank });
       const res = await fetch(`/api/calculator/terms?agreementId=${watchAgreementId}&operationType=${watchOperationType}&bank=${watchBank}`);
       if (!res.ok) throw new Error("Erro ao buscar prazos");
-      return res.json();
+      const terms = await res.json();
+      console.log('✅ Prazos encontrados:', terms);
+      return terms;
     },
     enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType && !!watchBank,
   });
@@ -92,9 +98,12 @@ export default function CalculatorPage() {
     queryKey: ["/api/calculator/tables", watchAgreementId, watchOperationType, watchBank, watchTerm],
     queryFn: async () => {
       if (!watchAgreementId || watchAgreementId === 0 || !watchOperationType || !watchBank || !watchTerm || watchTerm === 0) return [];
+      console.log('🔍 Buscando tabelas:', { agreementId: watchAgreementId, operationType: watchOperationType, bank: watchBank, termMonths: watchTerm });
       const res = await fetch(`/api/calculator/tables?agreementId=${watchAgreementId}&operationType=${watchOperationType}&bank=${watchBank}&termMonths=${watchTerm}`);
       if (!res.ok) throw new Error("Erro ao buscar tabelas");
-      return res.json();
+      const tables = await res.json();
+      console.log('✅ Tabelas encontradas:', tables);
+      return tables;
     },
     enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType && !!watchBank && !!watchTerm && watchTerm > 0,
   });
