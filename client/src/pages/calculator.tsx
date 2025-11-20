@@ -423,7 +423,7 @@ export default function CalculatorPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-[2fr,3fr] gap-6">
                     {/* Left Column - Valores */}
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold text-primary">
@@ -576,7 +576,7 @@ export default function CalculatorPage() {
                               disabled={availableTables.length === 0}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-10 w-full min-w-[22rem]" data-testid="select-coefficient-table">
+                                <SelectTrigger className="h-10 w-full" data-testid="select-coefficient-table">
                                   <SelectValue placeholder="Selecione a tabela" />
                                 </SelectTrigger>
                               </FormControl>
