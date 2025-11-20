@@ -29,6 +29,7 @@ export const agreements = pgTable("agreements", {
 export const coefficientTables = pgTable("coefficient_tables", {
   id: serial("id").primaryKey(),
   agreementId: integer("agreement_id").references(() => agreements.id, { onDelete: "cascade" }).notNull(),
+  operationType: varchar("operation_type", { length: 50 }).notNull().default("credit_card"), // 'credit_card', 'benefit_card', 'consignado'
   bank: varchar("bank", { length: 255 }).notNull(),
   termMonths: integer("term_months").notNull(),
   tableName: varchar("table_name", { length: 255 }).notNull(),
@@ -45,6 +46,7 @@ export const simulations = pgTable("simulations", {
   clientName: varchar("client_name", { length: 255 }).notNull(),
   agreementId: integer("agreement_id").references(() => agreements.id),
   agreementName: varchar("agreement_name", { length: 255 }), // Denormalized for history
+  operationType: varchar("operation_type", { length: 50 }).notNull(), // 'credit_card', 'benefit_card', 'consignado'
   bank: varchar("bank", { length: 255 }).notNull(),
   termMonths: integer("term_months").notNull(),
   tableName: varchar("table_name", { length: 255 }).notNull(),
@@ -71,6 +73,7 @@ export const insertAgreementSchema = createInsertSchema(agreements, {
 
 export const insertCoefficientTableSchema = createInsertSchema(coefficientTables, {
   agreementId: z.number().positive({ message: "Convênio é obrigatório" }),
+  operationType: z.enum(["credit_card", "benefit_card", "consignado"], { message: "Tipo de operação é obrigatório" }),
   bank: z.string().min(1, { message: "Banco é obrigatório" }),
   termMonths: z.number().int().min(12, { message: "Prazo mínimo é 12 meses" }).max(140, { message: "Prazo máximo é 140 meses" }),
   tableName: z.string().min(1, { message: "Nome da tabela é obrigatório" }),
