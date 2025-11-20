@@ -670,48 +670,23 @@ export default function CoefficientTablesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={createForm.control}
-                  name="termMonths"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prazo (meses)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="12 a 140"
-                          min="12"
-                          max="140"
-                          data-testid="input-term"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormDescription>Entre 12 e 140 meses</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={createForm.control}
-                  name="tableName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome da Tabela</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ex: Tabela A"
-                          data-testid="input-table-name"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={createForm.control}
+                name="tableName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome da Tabela</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Ex: Tabela A"
+                        data-testid="input-table-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
