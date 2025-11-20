@@ -4,11 +4,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Papa from "papaparse";
-import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -142,9 +143,11 @@ export default function CoefficientTablesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<CoefficientTable | null>(null);
   const [importData, setImportData] = useState<any[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const createForm = useForm<CoefficientFormData>({
     resolver: zodResolver(coefficientFormSchema),
@@ -270,6 +273,28 @@ export default function CoefficientTablesPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return await apiRequest("POST", "/api/coefficient-tables/bulk-delete", { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      setIsBulkDeleteDialogOpen(false);
+      setSelectedIds([]);
+      toast({
+        title: "Tabelas excluídas com sucesso",
+        description: `${data.count} tabelas foram removidas.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir tabelas",
+        description: error.message || "Ocorreu um erro ao excluir as tabelas.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const bulkImportMutation = useMutation({
     mutationFn: async (tables: InsertCoefficientTable[]) => {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-import", { tables });
@@ -326,6 +351,33 @@ export default function CoefficientTablesPage() {
       deleteMutation.mutate(selectedTable.id);
     }
   };
+
+  const handleBulkDelete = () => {
+    setIsBulkDeleteDialogOpen(true);
+  };
+
+  const confirmBulkDelete = () => {
+    bulkDeleteMutation.mutate(selectedIds);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === tables?.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(tables?.map(t => t.id) || []);
+    }
+  };
+
+  const toggleSelectTable = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id)
+        ? prev.filter(item => item !== id)
+        : [...prev, id]
+    );
+  };
+
+  const isAllSelected = tables && tables.length > 0 && selectedIds.length === tables.length;
+  const isSomeSelected = selectedIds.length > 0 && selectedIds.length < (tables?.length || 0);
 
   const getAgreementName = (agreementId: number) => {
     const agreement = agreements?.find((a) => a.id === agreementId);
@@ -437,6 +489,30 @@ export default function CoefficientTablesPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 mr-2 px-3 py-2 bg-primary/10 rounded-md border border-primary/20">
+                <span className="text-sm font-medium text-primary">
+                  {selectedIds.length} selecionada{selectedIds.length > 1 ? 's' : ''}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds([])}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  data-testid="button-bulk-delete"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Selecionadas
+                </Button>
+              </div>
+            )}
             <Button
               variant="outline"
               onClick={downloadTemplateCSV}
@@ -480,6 +556,14 @@ export default function CoefficientTablesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={isAllSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Selecionar todas"
+                          data-testid="checkbox-select-all"
+                        />
+                      </TableHead>
                       <TableHead>Convênio</TableHead>
                       <TableHead>Banco</TableHead>
                       <TableHead>Prazo</TableHead>
@@ -493,6 +577,14 @@ export default function CoefficientTablesPage() {
                     {tables && tables.length > 0 ? (
                       tables.map((table) => (
                         <TableRow key={table.id} data-testid={`row-table-${table.id}`}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.includes(table.id)}
+                              onCheckedChange={() => toggleSelectTable(table.id)}
+                              aria-label={`Selecionar ${table.tableName}`}
+                              data-testid={`checkbox-select-${table.id}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium" data-testid={`text-agreement-${table.id}`}>
                             {getAgreementName(table.agreementId)}
                           </TableCell>
@@ -537,7 +629,7 @@ export default function CoefficientTablesPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           Nenhuma tabela encontrada. Crie uma nova tabela para começar.
                         </TableCell>
                       </TableRow>
@@ -1173,6 +1265,41 @@ export default function CoefficientTablesPage() {
                 </>
               ) : (
                 "Excluir Tabela"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão em Lote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{selectedIds.length} tabela{selectedIds.length > 1 ? 's' : ''}</strong>?
+              <br />
+              <br />
+              Esta ação não pode ser desfeita e todas as tabelas selecionadas serão permanentemente removidas do sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-bulk-delete-cancel">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-bulk-delete-confirm"
+            >
+              {bulkDeleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                `Excluir ${selectedIds.length} Tabela${selectedIds.length > 1 ? 's' : ''}`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

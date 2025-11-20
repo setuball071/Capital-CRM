@@ -158,6 +158,13 @@ Preferred communication style: Simple, everyday language.
   - Upload and validate CSV files with row-level error reporting (including operation type validation)
   - Preview imported data before confirming
   - Batch creation of multiple tables in a single operation
+- Bulk delete of coefficient tables:
+  - Checkbox selection in table rows (individual selection)
+  - "Select all" checkbox in table header
+  - Visual selection counter badge
+  - Bulk delete button appears when tables are selected
+  - Confirmation dialog before deletion
+  - Backend endpoint handles concurrent deletion of multiple tables
 - Free-text bank input with autocomplete suggestions for 20 common Brazilian banks/fintechs
 - Brazilian decimal format support (comma or period) for coefficient values
 

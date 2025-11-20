@@ -372,6 +372,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete coefficient tables (master only)
+  app.post("/api/coefficient-tables/bulk-delete", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+
+      const deletePromises = ids.map((id: number) => storage.deleteCoefficientTable(id));
+      await Promise.all(deletePromises);
+
+      return res.json({ 
+        message: "Tabelas deletadas com sucesso",
+        count: ids.length
+      });
+    } catch (error) {
+      console.error("Bulk delete coefficient tables error:", error);
+      return res.status(500).json({ message: "Erro ao deletar tabelas" });
+    }
+  });
+
   // ===== USERS ROUTES =====
   
   // Get users (hierarchical: master sees all, coordenador sees their team)
