@@ -131,17 +131,24 @@ export default function CalculatorPage() {
   // Calculate liquid payment when monthly payment or selected table changes
   useEffect(() => {
     const subscription = form.watch((value) => {
-      const monthlyPayment = value.operation?.monthlyPayment || 0;
-      const coefficientTableId = value.operation?.coefficientTableId;
+      const monthlyPayment = typeof value.operation?.monthlyPayment === 'number' ? value.operation.monthlyPayment : 0;
+      const coefficientTableId = typeof value.operation?.coefficientTableId === 'number' ? value.operation.coefficientTableId : 0;
       
-      if (monthlyPayment && coefficientTableId && availableTables.length > 0) {
+      if (monthlyPayment > 0 && coefficientTableId > 0) {
         const selectedTable = availableTables.find(t => t.id === coefficientTableId);
+        
         if (selectedTable) {
           const safetyMargin = parseFloat(selectedTable.safetyMargin || "0");
           const liquid = monthlyPayment * (1 - safetyMargin / 100);
           setLiquidPayment(liquid);
+        } else if (availableTables.length === 0) {
+          // Don't reset if tables haven't loaded yet
+          return;
+        } else {
+          setLiquidPayment(0);
         }
-      } else {
+      } else if (monthlyPayment > 0 && coefficientTableId === 0) {
+        // Monthly payment is set but no table selected - keep previous liquid payment or set to 0
         setLiquidPayment(0);
       }
     });
@@ -156,7 +163,7 @@ export default function CalculatorPage() {
       const outstandingBalance = value.operation?.outstandingBalance;
       const coefficientTableId = value.operation?.coefficientTableId;
 
-      if (monthlyPayment && outstandingBalance && coefficientTableId && liquidPayment > 0) {
+      if (monthlyPayment && monthlyPayment > 0 && outstandingBalance && outstandingBalance > 0 && coefficientTableId && coefficientTableId > 0 && liquidPayment > 0) {
         const selectedTable = availableTables.find(t => t.id === coefficientTableId);
         
         if (selectedTable) {
