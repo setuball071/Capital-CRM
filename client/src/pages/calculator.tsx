@@ -199,7 +199,7 @@ export default function CalculatorPage() {
       const element = simulatorRef.current;
       const canvas = await html2canvas(element, {
         backgroundColor: '#ffffff',
-        scale: 2,
+        scale: 4,
         logging: false,
         useCORS: true,
         allowTaint: true,
@@ -216,9 +216,9 @@ export default function CalculatorPage() {
       const link = document.createElement('a');
 
       if (format === 'pdf') {
-        const pageWidthMM = 210;
-        const pageHeightMM = 297;
-        const margin = 10;
+        const pageWidthMM = 297;
+        const pageHeightMM = 210;
+        const margin = 15;
         const maxWidth = pageWidthMM - (margin * 2);
         const maxHeight = pageHeightMM - (margin * 2);
         
@@ -239,12 +239,12 @@ export default function CalculatorPage() {
         const yOffset = (pageHeightMM - imgHeight) / 2;
         
         const pdf = new jsPDF({
-          orientation: 'portrait',
+          orientation: 'landscape',
           unit: 'mm',
           format: 'a4',
         });
         
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
         pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
         pdf.save(`simulacao-goldcard-${timestamp}.pdf`);
 
@@ -254,7 +254,7 @@ export default function CalculatorPage() {
         });
       } else if (format === 'jpeg') {
         link.download = `simulacao-goldcard-${timestamp}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        link.href = canvas.toDataURL('image/jpeg', 1.0);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
