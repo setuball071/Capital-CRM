@@ -419,7 +419,7 @@ export default function CalculatorPage() {
                     Dados da Operação
                   </CardTitle>
                   <CardDescription className="text-sm">
-                    Preencha os dados para calcular o refinanciamento.
+                    Preencha os dados para calcular o troco.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
