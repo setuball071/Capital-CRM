@@ -69,16 +69,23 @@ Preferred communication style: Simple, everyday language.
 ### Calculation Engine
 
 **Core Algorithm**: Coefficient-based loan calculation with safety margin
-- **Safety Margin System**: Each coefficient table has a safety margin percentage (stored per bank+agreement combination)
+- **Safety Margin System**: Each coefficient table has a safety margin percentage (stored per bank+agreement+operation type combination)
 - **Parcela Líquida** (Liquid Payment) = Parcela Atual × (1 - safety margin %)
 - **Total Contract Value** = Parcela Líquida / Coefficient  
 - **Client Refund** = Total Contract Value - Outstanding Balance
-- Coefficient tables stored in database (bank-specific, term-specific, table-specific, safety margin)
+- **Coefficient Table Hierarchy**: Agreement → Operation Type → Bank → Term → Table
+- Coefficient tables stored in database with operation type filter (bank-specific, term-specific, table-specific, operation type, safety margin)
+
+**Operation Types**:
+- **Cartão de Crédito** (Credit Card): credit_card
+- **Cartão Benefício** (Benefit Card): benefit_card
+- **Consignado** (Payroll Loan): consignado
 
 **Available Data**:
 - Three banks configured: Banco do Brasil, Caixa Econômica Federal, Bradesco
 - Terms: 12, 24, 36, 48, 60, 72, 84 months
-- Multiple coefficient tables per bank/term combination (Banco do Brasil has Tabela A and B, others have Tabela A)
+- Three operation types supported
+- Multiple coefficient tables per bank/term/operation type combination
 - Total of 20+ coefficient entries covering common loan scenarios
 
 **Rationale**: Financial calculations must be deterministic and transparent. Client-side calculation ensures instant feedback and reduces server load.
@@ -123,10 +130,16 @@ Preferred communication style: Simple, everyday language.
 
 **Key Pages**:
 - Calculator Page: Main simulation interface with form inputs and results
-  - Three-section layout: Client Data, Operation Data (two columns), Results
+  - Compact three-section layout: Client Data (with operation type), Operation Data (two columns), Results
+  - Hierarchical filtering: Agreement → Operation Type → Bank → Term → Table
   - Real-time automatic calculations when all fields are filled
   - Multi-format export via "Salvar" dropdown button (PDF, JPEG, PNG)
   - Toast notifications for feedback
+  - Optimized spacing to fit on one screen without scrolling
+- Coefficient Tables Management: CRUD interface for coefficient tables
+  - Create/edit/delete coefficient tables with operation type selector
+  - CSV bulk import/export with tipo_operacao column
+  - Filter and search functionality
 - Not Found: 404 error page
 
 **Shared Logic**:
@@ -135,14 +148,14 @@ Preferred communication style: Simple, everyday language.
 - Query Client: Configured TanStack Query instance
 
 **User Experience Features**:
-- Dynamic coefficient table dropdown based on bank + term selection
+- Dynamic coefficient table dropdown based on agreement + operation type + bank + term selection
 - Form validation with clear error messages via toast notifications
 - Success confirmation on simulation creation
-- Responsive mobile-first design
+- Responsive mobile-first design with compact layout
 - Hierarchical user management with role-based access control
 - Bulk import of coefficient tables via CSV spreadsheet:
   - Download template CSV with proper Excel PT-BR formatting (semicolon delimiters)
-  - Upload and validate CSV files with row-level error reporting
+  - Upload and validate CSV files with row-level error reporting (including operation type validation)
   - Preview imported data before confirming
   - Batch creation of multiple tables in a single operation
 - Free-text bank input with autocomplete suggestions for 20 common Brazilian banks/fintechs
