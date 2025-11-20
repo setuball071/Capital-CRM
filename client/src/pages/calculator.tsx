@@ -619,7 +619,10 @@ export default function CalculatorPage() {
                       <p className="text-sm text-muted-foreground mb-2">
                         Troco do Cliente
                       </p>
-                      <p className="text-2xl font-bold font-mono text-chart-2" data-testid="text-client-refund">
+                      <p 
+                        className={`text-2xl font-bold font-mono ${result && result.clientRefund < 0 ? 'text-destructive' : 'text-chart-2'}`}
+                        data-testid="text-client-refund"
+                      >
                         {result ? formatCurrency(result.clientRefund) : "R$ 0,00"}
                       </p>
                     </CardContent>
