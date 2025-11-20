@@ -315,9 +315,9 @@ export default function CalculatorPage() {
       </header>
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="max-w-5xl mx-auto" ref={simulatorRef}>
+        <div className="max-w-5xl mx-auto">
           <Form {...form}>
-            <div className="space-y-4">
+            <div className="space-y-4" ref={simulatorRef}>
               {/* Client Data Section */}
               <Card>
                 <CardHeader className="pb-3">
@@ -628,8 +628,10 @@ export default function CalculatorPage() {
                   </Card>
                 </div>
               </div>
+            </div>
 
-              {/* Save Button with Format Options */}
+            {/* Save Button with Format Options - Outside capture area */}
+            <div className="mt-4">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
