@@ -672,26 +672,28 @@ export default function CoefficientTablesPage() {
                         const agreementTablesCount = Object.values(banks).flat().length;
                         return (
                           <AccordionItem key={agreementName} value={agreementName}>
-                            <AccordionTrigger className="hover:no-underline">
-                              <div className="flex items-center gap-2 flex-1">
-                                <Checkbox
-                                  checked={Object.values(banks).flat().every(t => selectedIds.includes(t.id))}
-                                  onCheckedChange={(checked) => {
-                                    const allTablesInAgreement = Object.values(banks).flat();
-                                    if (checked) {
-                                      const newIds = [...selectedIds, ...allTablesInAgreement.map(t => t.id)];
-                                      setSelectedIds(Array.from(new Set(newIds)));
-                                    } else {
-                                      setSelectedIds(prev => prev.filter(id => !allTablesInAgreement.map(t => t.id).includes(id)));
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  aria-label={`Selecionar todas de ${agreementName}`}
-                                />
-                                <span className="font-semibold">{agreementName}</span>
-                                <Badge variant="outline">{agreementTablesCount} tabelas</Badge>
-                              </div>
-                            </AccordionTrigger>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={Object.values(banks).flat().every(t => selectedIds.includes(t.id))}
+                                onCheckedChange={(checked) => {
+                                  const allTablesInAgreement = Object.values(banks).flat();
+                                  if (checked) {
+                                    const newIds = [...selectedIds, ...allTablesInAgreement.map(t => t.id)];
+                                    setSelectedIds(Array.from(new Set(newIds)));
+                                  } else {
+                                    setSelectedIds(prev => prev.filter(id => !allTablesInAgreement.map(t => t.id).includes(id)));
+                                  }
+                                }}
+                                aria-label={`Selecionar todas de ${agreementName}`}
+                                data-testid={`checkbox-select-all-${agreementName}`}
+                              />
+                              <AccordionTrigger className="hover:no-underline flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{agreementName}</span>
+                                  <Badge variant="outline">{agreementTablesCount} tabelas</Badge>
+                                </div>
+                              </AccordionTrigger>
+                            </div>
                             <AccordionContent>
                               <Accordion type="multiple" className="w-full pl-4">
                                 {Object.entries(banks).map(([bankName, tablesInBank]) => (

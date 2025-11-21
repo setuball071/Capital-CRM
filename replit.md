@@ -140,6 +140,9 @@ Preferred communication style: Simple, everyday language.
   - Create/edit/delete coefficient tables with operation type selector
   - CSV bulk import/export with tipo_operacao column
   - Filter and search functionality
+  - Hierarchical grouping: Operation Type Tabs → Agreement Accordion → Bank Accordion → Table rows
+  - Badge counters showing table counts at each hierarchy level
+  - Group-level selection (select all in agreement/bank) with global selection state
 - Not Found: 404 error page
 
 **Shared Logic**:
@@ -171,6 +174,13 @@ Preferred communication style: Simple, everyday language.
   - "Select all" checkbox respects current filter (only selects visible filtered items)
   - Clear filter button with helpful empty state messaging
   - Optimized for quick bulk operations on filtered results
+- Hierarchical grouping interface for coefficient tables:
+  - Four operation type tabs: All, Cartão de Crédito, Cartão Benefício, Consignado
+  - Two-level accordion: Agreement → Bank with automatic expansion
+  - Badge counters at each level showing table counts (e.g., "SIAPE CLT (35 tabelas)")
+  - Three-tier selection system: individual checkbox, bank-level "select all", agreement-level "select all"
+  - Search filter narrows results across all hierarchy levels
+  - Maintains consistency between selection state and bulk operations
 - Free-text bank input with autocomplete suggestions for 20 common Brazilian banks/fintechs
 - Brazilian decimal format support (comma or period) for coefficient values
 
