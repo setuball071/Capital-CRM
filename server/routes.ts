@@ -8,6 +8,7 @@ import {
   registerSchema,
   insertAgreementSchema,
   insertCoefficientTableSchema,
+  insertSimulationSchema,
   type User,
   type InsertCoefficientTable,
 } from "@shared/schema";
@@ -880,6 +881,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get tables error:", error);
       return res.status(500).json({ message: "Erro ao buscar tabelas" });
+    }
+  });
+
+  // ===== SIMULATIONS ROUTES =====
+  
+  // Create a simulation
+  app.post("/api/simulations", requireAuth, async (req, res) => {
+    try {
+      const result = insertSimulationSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const simulation = await storage.createSimulation({
+        ...result.data,
+        userId: req.user!.id,
+      });
+
+      return res.json(simulation);
+    } catch (error) {
+      console.error("Create simulation error:", error);
+      return res.status(500).json({ message: "Erro ao salvar simulação" });
+    }
+  });
+
+  // Get all simulations (master only)
+  app.get("/api/simulations", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const simulations = await storage.getAllSimulations();
+      return res.json(simulations);
+    } catch (error) {
+      console.error("Get simulations error:", error);
+      return res.status(500).json({ message: "Erro ao buscar simulações" });
+    }
+  });
+
+  // Get statistics for admin dashboard (master only)
+  app.get("/api/simulations/stats", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const [simulations, users] = await Promise.all([
+        storage.getAllSimulations(),
+        storage.getAllUsers(),
+      ]);
+
+      // Calculate stats by user
+      const statsByUser = users.map(user => {
+        const userSimulations = simulations.filter(s => s.userId === user.id);
+        
+        // Convert string values to numbers for proper aggregation
+        const totalContractValue = userSimulations.reduce((sum, s) => {
+          const value = typeof s.totalContractValue === 'string' 
+            ? parseFloat(s.totalContractValue) 
+            : (s.totalContractValue as any);
+          return sum + (isNaN(value) ? 0 : value);
+        }, 0);
+
+        const totalClientRefund = userSimulations.reduce((sum, s) => {
+          const value = typeof s.clientRefund === 'string' 
+            ? parseFloat(s.clientRefund) 
+            : (s.clientRefund as any);
+          return sum + (isNaN(value) ? 0 : value);
+        }, 0);
+        
+        return {
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          simulationCount: userSimulations.length,
+          totalContractValue,
+          totalClientRefund,
+          lastSimulation: userSimulations.length > 0 
+            ? userSimulations[userSimulations.length - 1].createdAt 
+            : null,
+        };
+      });
+
+      // Calculate overall stats
+      const totalSimulations = simulations.length;
+      const stats = {
+        totalSimulations,
+        statsByUser: statsByUser.filter(s => s.simulationCount > 0),
+        recentSimulations: simulations.slice(-10).reverse(), // Last 10 simulations
+      };
+
+      return res.json(stats);
+    } catch (error) {
+      console.error("Get stats error:", error);
+      return res.status(500).json({ message: "Erro ao buscar estatísticas" });
     }
   });
 

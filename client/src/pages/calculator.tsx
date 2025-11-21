@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { apiRequest } from "@/lib/queryClient";
 import { Calculator, Download, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,26 @@ export default function CalculatorPage() {
     enabled: !!watchAgreementId && watchAgreementId > 0 && !!watchOperationType && !!watchBank && !!watchTerm && watchTerm > 0,
   });
 
+  // Save simulation mutation
+  const saveSimulationMutation = useMutation({
+    mutationFn: async (data: {
+      clientName: string;
+      agreementId: number;
+      agreementName: string;
+      operationType: string;
+      bank: string;
+      termMonths: number;
+      tableName: string;
+      coefficient: string;
+      monthlyPayment: string;
+      outstandingBalance: string;
+      totalContractValue: string;
+      clientRefund: string;
+    }) => {
+      return await apiRequest("/api/simulations", "POST", data);
+    },
+  });
+
   // Reset bank when agreement or operation type changes
   useEffect(() => {
     const currentBank = form.getValues("operation.bank");
@@ -209,6 +230,29 @@ export default function CalculatorPage() {
       const selectedAgreement = agreements.find(a => a.id === formData.client.agreementId);
       const selectedTable = availableTables.find(t => t.id === formData.operation.coefficientTableId);
       const operationTypeLabel = OPERATION_TYPES.find(t => t.value === formData.operation.operationType)?.label || '';
+
+      // Save simulation to database before exporting
+      if (selectedAgreement && selectedTable) {
+        try {
+          await saveSimulationMutation.mutateAsync({
+            clientName: formData.client.name,
+            agreementId: selectedAgreement.id,
+            agreementName: selectedAgreement.name,
+            operationType: formData.operation.operationType,
+            bank: formData.operation.bank,
+            termMonths: formData.operation.termMonths,
+            tableName: selectedTable.tableName,
+            coefficient: selectedTable.coefficient,
+            monthlyPayment: formData.operation.monthlyPayment.toString(),
+            outstandingBalance: formData.operation.outstandingBalance.toString(),
+            totalContractValue: result.totalContractValue.toString(),
+            clientRefund: result.clientRefund.toString(),
+          });
+        } catch (saveError) {
+          console.warn("Erro ao salvar simulação:", saveError);
+          // Continue with export even if save fails
+        }
+      }
 
       if (format === 'pdf') {
         const pdf = new jsPDF({

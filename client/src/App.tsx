@@ -8,6 +8,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import CalculatorPage from "@/pages/calculator";
+import DashboardPage from "@/pages/dashboard";
+import WelcomePage from "@/pages/welcome";
 import LoginPage from "@/pages/login";
 import ProfilePage from "@/pages/profile";
 import UsersPage from "@/pages/users";
@@ -34,6 +36,30 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function HomePage() {
+  const { user, isLoading } = useAuth();
+  
+  // Wait for auth to resolve before making any decisions
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  // Master users see dashboard, others see welcome page
+  if (user.role === "master") {
+    return <DashboardPage />;
+  }
+
+  return <WelcomePage />;
+}
+
 function PublicRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
 
@@ -53,8 +79,17 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 }
 
 function Router() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const [location] = useLocation();
+
+  // Wait for auth to resolve before rendering any routes
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -90,6 +125,9 @@ function Router() {
           <main className="flex-1 overflow-auto">
             <Switch>
               <Route path="/">
+                {() => <HomePage />}
+              </Route>
+              <Route path="/simulador-compra">
                 {() => <ProtectedRoute component={CalculatorPage} />}
               </Route>
               <Route path="/profile">

@@ -27,7 +27,7 @@ export function AppSidebar() {
   const menuItems = [
     {
       title: "Simulador Compra",
-      url: "/",
+      url: "/simulador-compra",
       icon: Calculator,
       show: true,
     },
