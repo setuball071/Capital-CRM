@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   Card,
   CardContent,
@@ -149,6 +151,7 @@ export default function CoefficientTablesPage() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedOperationType, setSelectedOperationType] = useState<string>("all");
 
   const createForm = useForm<CoefficientFormData>({
     resolver: zodResolver(coefficientFormSchema),
@@ -388,6 +391,12 @@ export default function CoefficientTablesPage() {
   };
 
   const filteredTables = tables?.filter(table => {
+    // Filter by operation type from selected tab
+    if (selectedOperationType !== "all" && table.operationType !== selectedOperationType) {
+      return false;
+    }
+    
+    // Filter by search term
     if (!searchTerm) return true;
     
     const search = searchTerm.toLowerCase();
@@ -403,6 +412,23 @@ export default function CoefficientTablesPage() {
       operationTypeName.includes(search)
     );
   }) || [];
+
+  // Group filtered tables by agreement -> bank
+  const groupedTables = filteredTables.reduce((acc, table) => {
+    const agreementId = table.agreementId;
+    const agreementName = getAgreementName(agreementId);
+    
+    if (!acc[agreementName]) {
+      acc[agreementName] = {};
+    }
+    
+    if (!acc[agreementName][table.bank]) {
+      acc[agreementName][table.bank] = [];
+    }
+    
+    acc[agreementName][table.bank].push(table);
+    return acc;
+  }, {} as Record<string, Record<string, CoefficientTable[]>>);
 
   const isAllSelected = filteredTables.length > 0 && selectedIds.length === filteredTables.length;
   const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredTables.length;
@@ -604,84 +630,27 @@ export default function CoefficientTablesPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={isAllSelected}
-                          onCheckedChange={toggleSelectAll}
-                          aria-label="Selecionar todas"
-                          data-testid="checkbox-select-all"
-                        />
-                      </TableHead>
-                      <TableHead>Convênio</TableHead>
-                      <TableHead>Banco</TableHead>
-                      <TableHead>Prazo</TableHead>
-                      <TableHead>Nome da Tabela</TableHead>
-                      <TableHead>Coeficiente</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTables.length > 0 ? (
-                      filteredTables.map((table) => (
-                        <TableRow key={table.id} data-testid={`row-table-${table.id}`}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedIds.includes(table.id)}
-                              onCheckedChange={() => toggleSelectTable(table.id)}
-                              aria-label={`Selecionar ${table.tableName}`}
-                              data-testid={`checkbox-select-${table.id}`}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium" data-testid={`text-agreement-${table.id}`}>
-                            {getAgreementName(table.agreementId)}
-                          </TableCell>
-                          <TableCell data-testid={`text-bank-${table.id}`}>
-                            {table.bank}
-                          </TableCell>
-                          <TableCell data-testid={`text-term-${table.id}`}>
-                            {table.termMonths} meses
-                          </TableCell>
-                          <TableCell data-testid={`text-name-${table.id}`}>
-                            {table.tableName}
-                          </TableCell>
-                          <TableCell className="font-mono" data-testid={`text-coefficient-${table.id}`}>
-                            {table.coefficient}
-                          </TableCell>
-                          <TableCell data-testid={`status-${table.id}`}>
-                            <Badge variant={table.isActive ? "default" : "secondary"}>
-                              {table.isActive ? "Ativo" : "Inativo"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(table)}
-                                data-testid={`button-edit-${table.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(table)}
-                                data-testid={`button-delete-${table.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : searchTerm ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+              <Tabs value={selectedOperationType} onValueChange={setSelectedOperationType} className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="all" data-testid="tab-all">
+                    Todos ({tables?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="credit_card" data-testid="tab-credit-card">
+                    Cartão de Crédito ({(tables?.filter(t => t.operationType === "credit_card") ?? []).length})
+                  </TabsTrigger>
+                  <TabsTrigger value="benefit_card" data-testid="tab-benefit-card">
+                    Cartão Benefício ({(tables?.filter(t => t.operationType === "benefit_card") ?? []).length})
+                  </TabsTrigger>
+                  <TabsTrigger value="consignado" data-testid="tab-consignado">
+                    Consignado ({(tables?.filter(t => t.operationType === "consignado") ?? []).length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value={selectedOperationType} className="mt-0">
+                  {filteredTables.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">
+                      {searchTerm ? (
+                        <>
                           Nenhuma tabela encontrada com o filtro "{searchTerm}".
                           <br />
                           <Button
@@ -692,18 +661,139 @@ export default function CoefficientTablesPage() {
                           >
                             Limpar filtro
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                          Nenhuma tabela encontrada. Crie uma nova tabela para começar.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                        </>
+                      ) : (
+                        "Nenhuma tabela encontrada. Crie uma nova tabela para começar."
+                      )}
+                    </div>
+                  ) : Object.keys(groupedTables).length > 0 ? (
+                    <Accordion type="multiple" className="w-full">
+                      {Object.entries(groupedTables).map(([agreementName, banks]) => {
+                        const agreementTablesCount = Object.values(banks).flat().length;
+                        return (
+                          <AccordionItem key={agreementName} value={agreementName}>
+                            <AccordionTrigger className="hover:no-underline">
+                              <div className="flex items-center gap-2 flex-1">
+                                <Checkbox
+                                  checked={Object.values(banks).flat().every(t => selectedIds.includes(t.id))}
+                                  onCheckedChange={(checked) => {
+                                    const allTablesInAgreement = Object.values(banks).flat();
+                                    if (checked) {
+                                      const newIds = [...selectedIds, ...allTablesInAgreement.map(t => t.id)];
+                                      setSelectedIds(Array.from(new Set(newIds)));
+                                    } else {
+                                      setSelectedIds(prev => prev.filter(id => !allTablesInAgreement.map(t => t.id).includes(id)));
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Selecionar todas de ${agreementName}`}
+                                />
+                                <span className="font-semibold">{agreementName}</span>
+                                <Badge variant="outline">{agreementTablesCount} tabelas</Badge>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <Accordion type="multiple" className="w-full pl-4">
+                                {Object.entries(banks).map(([bankName, tablesInBank]) => (
+                                  <AccordionItem key={`${agreementName}-${bankName}`} value={bankName}>
+                                    <AccordionTrigger className="hover:no-underline">
+                                      <div className="flex items-center gap-2">
+                                        <span>{bankName}</span>
+                                        <Badge variant="secondary">{tablesInBank.length} tabelas</Badge>
+                                      </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                      <div className="overflow-x-auto">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead className="w-12">
+                                                <Checkbox
+                                                  checked={tablesInBank.every(t => selectedIds.includes(t.id))}
+                                                  onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                      const newIds = [...selectedIds, ...tablesInBank.map(t => t.id)];
+                                                      setSelectedIds(Array.from(new Set(newIds)));
+                                                    } else {
+                                                      setSelectedIds(prev => prev.filter(id => !tablesInBank.map(t => t.id).includes(id)));
+                                                    }
+                                                  }}
+                                                  aria-label={`Selecionar todas de ${bankName}`}
+                                                />
+                                              </TableHead>
+                                              <TableHead>Prazo</TableHead>
+                                              <TableHead>Nome da Tabela</TableHead>
+                                              <TableHead>Tipo</TableHead>
+                                              <TableHead>Coeficiente</TableHead>
+                                              <TableHead>Status</TableHead>
+                                              <TableHead className="text-right">Ações</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {tablesInBank.sort((a, b) => a.termMonths - b.termMonths).map((table) => (
+                                              <TableRow key={table.id} data-testid={`row-table-${table.id}`}>
+                                                <TableCell>
+                                                  <Checkbox
+                                                    checked={selectedIds.includes(table.id)}
+                                                    onCheckedChange={() => toggleSelectTable(table.id)}
+                                                    aria-label={`Selecionar ${table.tableName}`}
+                                                    data-testid={`checkbox-select-${table.id}`}
+                                                  />
+                                                </TableCell>
+                                                <TableCell data-testid={`text-term-${table.id}`}>
+                                                  {table.termMonths} meses
+                                                </TableCell>
+                                                <TableCell data-testid={`text-name-${table.id}`}>
+                                                  {table.tableName}
+                                                </TableCell>
+                                                <TableCell>
+                                                  <Badge variant="outline">{getOperationTypeName(table.operationType)}</Badge>
+                                                </TableCell>
+                                                <TableCell className="font-mono" data-testid={`text-coefficient-${table.id}`}>
+                                                  {table.coefficient}
+                                                </TableCell>
+                                                <TableCell data-testid={`status-${table.id}`}>
+                                                  <Badge variant={table.isActive ? "default" : "secondary"}>
+                                                    {table.isActive ? "Ativo" : "Inativo"}
+                                                  </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                  <div className="flex justify-end gap-2">
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      onClick={() => handleEdit(table)}
+                                                      data-testid={`button-edit-${table.id}`}
+                                                    >
+                                                      <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      onClick={() => handleDelete(table)}
+                                                      data-testid={`button-delete-${table.id}`}
+                                                    >
+                                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                  </div>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                ))}
+                              </Accordion>
+                            </AccordionContent>
+                          </AccordionItem>
+                        );
+                      })}
+                    </Accordion>
+                  ) : null}
+                </TabsContent>
+              </Tabs>
             )}
           </CardContent>
         </Card>
