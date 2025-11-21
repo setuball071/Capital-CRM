@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -25,6 +25,12 @@ export function AppSidebar() {
   const hasManagerAccess = isMaster || isCoordinator;
 
   const menuItems = [
+    {
+      title: "Início",
+      url: "/",
+      icon: Home,
+      show: true,
+    },
     {
       title: "Simulador Compra",
       url: "/simulador-compra",

@@ -52,12 +52,35 @@ function HomePage() {
     return <Redirect to="/login" />;
   }
 
-  // Master users see dashboard, others see welcome page
+  // Master users redirect to dashboard, others see welcome page
   if (user.role === "master") {
-    return <DashboardPage />;
+    return <Redirect to="/dashboard" />;
   }
 
   return <WelcomePage />;
+}
+
+// Protected route that only allows master users
+function MasterRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  if (user.role !== "master") {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
 }
 
 function PublicRoute({ component: Component }: { component: React.ComponentType }) {
@@ -126,6 +149,9 @@ function Router() {
             <Switch>
               <Route path="/">
                 {() => <HomePage />}
+              </Route>
+              <Route path="/dashboard">
+                {() => <MasterRoute component={DashboardPage} />}
               </Route>
               <Route path="/simulador-compra">
                 {() => <ProtectedRoute component={CalculatorPage} />}
