@@ -140,7 +140,7 @@ export default function CalculatorPage() {
       totalContractValue: string;
       clientRefund: string;
     }) => {
-      return await apiRequest("/api/simulations", "POST", data);
+      return await apiRequest("POST", "/api/simulations", data);
     },
   });
 
