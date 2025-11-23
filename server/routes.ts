@@ -944,9 +944,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getRankingByOperationType(startDate, endDate),
       ]);
 
+      // Safety checks for undefined/null values
+      const safeSimulations = filteredSimulationsWithUser || [];
+      const safeUsers = users || [];
+
       // Calculate stats by user using filtered simulations
-      const statsByUser = users.map(user => {
-        const userSimulations = filteredSimulationsWithUser.filter(s => s.userId === user.id);
+      const statsByUser = safeUsers.map(user => {
+        const userSimulations = safeSimulations.filter(s => s.userId === user.id);
         
         // Convert string values to numbers for proper aggregation
         const totalContractValue = userSimulations.reduce((sum, s) => {
@@ -978,20 +982,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Recent simulations for display (limit if provided)
       const recentSimulations = limit 
-        ? filteredSimulationsWithUser.slice(0, limit)
-        : filteredSimulationsWithUser;
+        ? safeSimulations.slice(0, limit)
+        : safeSimulations;
 
       // Calculate overall stats from filtered data
-      const totalSimulations = filteredSimulationsWithUser.length;
+      const totalSimulations = safeSimulations.length;
       const stats = {
         totalSimulations,
         statsByUser: statsByUser.filter(s => s.simulationCount > 0),
         recentSimulations,
         rankings: {
-          byBank: bankRanking,
-          byAgreement: agreementRanking,
-          byTerm: termRanking,
-          byOperationType: operationTypeRanking,
+          byBank: bankRanking || [],
+          byAgreement: agreementRanking || [],
+          byTerm: termRanking || [],
+          byOperationType: operationTypeRanking || [],
         },
       };
 

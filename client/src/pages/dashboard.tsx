@@ -233,14 +233,15 @@ function DashboardAdminView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {stats?.rankings.byBank.slice(0, 3).map((item, index) => (
+                  {(stats?.rankings?.byBank ?? []).slice(0, 3).map((item, index) => (
                     <div key={item.bank} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
                         {index + 1}. {item.bank}
                       </span>
                       <Badge variant="outline">{item.count}</Badge>
                     </div>
-                  )) || (
+                  ))}
+                  {(!stats?.rankings?.byBank || stats.rankings.byBank.length === 0) && (
                     <p className="text-xs text-muted-foreground">Sem dados</p>
                   )}
                 </div>
@@ -255,14 +256,15 @@ function DashboardAdminView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {stats?.rankings.byAgreement.slice(0, 3).map((item, index) => (
+                  {(stats?.rankings?.byAgreement ?? []).slice(0, 3).map((item, index) => (
                     <div key={item.agreementName} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
                         {index + 1}. {item.agreementName}
                       </span>
                       <Badge variant="outline">{item.count}</Badge>
                     </div>
-                  )) || (
+                  ))}
+                  {(!stats?.rankings?.byAgreement || stats.rankings.byAgreement.length === 0) && (
                     <p className="text-xs text-muted-foreground">Sem dados</p>
                   )}
                 </div>
@@ -277,14 +279,15 @@ function DashboardAdminView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {stats?.rankings.byTerm.slice(0, 3).map((item, index) => (
+                  {(stats?.rankings?.byTerm ?? []).slice(0, 3).map((item, index) => (
                     <div key={item.termMonths} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
                         {index + 1}. {item.termMonths} meses
                       </span>
                       <Badge variant="outline">{item.count}</Badge>
                     </div>
-                  )) || (
+                  ))}
+                  {(!stats?.rankings?.byTerm || stats.rankings.byTerm.length === 0) && (
                     <p className="text-xs text-muted-foreground">Sem dados</p>
                   )}
                 </div>
@@ -299,14 +302,15 @@ function DashboardAdminView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {stats?.rankings.byOperationType.slice(0, 3).map((item, index) => (
+                  {(stats?.rankings?.byOperationType ?? []).slice(0, 3).map((item, index) => (
                     <div key={item.operationType} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
                         {index + 1}. {OPERATION_TYPES[item.operationType] || item.operationType}
                       </span>
                       <Badge variant="outline">{item.count}</Badge>
                     </div>
-                  )) || (
+                  ))}
+                  {(!stats?.rankings?.byOperationType || stats.rankings.byOperationType.length === 0) && (
                     <p className="text-xs text-muted-foreground">Sem dados</p>
                   )}
                 </div>
