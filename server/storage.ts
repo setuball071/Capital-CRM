@@ -59,6 +59,13 @@ export interface IStorage {
   getAllSimulations(): Promise<Simulation[]>;
   getSimulationsByUser(userId: number): Promise<Simulation[]>;
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
+  
+  // Simulation Statistics
+  getRankingByBank(startDate?: string, endDate?: string): Promise<{ bank: string; count: number }[]>;
+  getRankingByAgreement(startDate?: string, endDate?: string): Promise<{ agreementName: string; count: number }[]>;
+  getRankingByTerm(startDate?: string, endDate?: string): Promise<{ termMonths: number; count: number }[]>;
+  getRankingByOperationType(startDate?: string, endDate?: string): Promise<{ operationType: string; count: number }[]>;
+  getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string): Promise<Array<Simulation & { userName: string }>>;
 }
 
 export class DbStorage implements IStorage {
@@ -260,6 +267,154 @@ export class DbStorage implements IStorage {
   async createSimulation(simulation: InsertSimulation): Promise<Simulation> {
     const [newSimulation] = await db.insert(simulations).values(simulation).returning();
     return newSimulation;
+  }
+
+  // ===== SIMULATION STATISTICS =====
+  
+  async getRankingByBank(startDate?: string, endDate?: string): Promise<{ bank: string; count: number }[]> {
+    let query = `SELECT bank, COUNT(*)::int as count FROM simulations`;
+    const params: string[] = [];
+    const conditions: string[] = [];
+    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`created_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`created_at <= $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` GROUP BY bank ORDER BY count DESC`;
+    
+    const result = await queryClient(query, params);
+    return result.rows;
+  }
+
+  async getRankingByAgreement(startDate?: string, endDate?: string): Promise<{ agreementName: string; count: number }[]> {
+    let query = `SELECT agreement_name as "agreementName", COUNT(*)::int as count FROM simulations`;
+    const params: string[] = [];
+    const conditions: string[] = [];
+    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`created_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`created_at <= $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` GROUP BY agreement_name ORDER BY count DESC`;
+    
+    const result = await queryClient(query, params);
+    return result.rows;
+  }
+
+  async getRankingByTerm(startDate?: string, endDate?: string): Promise<{ termMonths: number; count: number }[]> {
+    let query = `SELECT term_months as "termMonths", COUNT(*)::int as count FROM simulations`;
+    const params: string[] = [];
+    const conditions: string[] = [];
+    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`created_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`created_at <= $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` GROUP BY term_months ORDER BY count DESC`;
+    
+    const result = await queryClient(query, params);
+    return result.rows;
+  }
+
+  async getRankingByOperationType(startDate?: string, endDate?: string): Promise<{ operationType: string; count: number }[]> {
+    let query = `SELECT operation_type as "operationType", COUNT(*)::int as count FROM simulations`;
+    const params: string[] = [];
+    const conditions: string[] = [];
+    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`created_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`created_at <= $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` GROUP BY operation_type ORDER BY count DESC`;
+    
+    const result = await queryClient(query, params);
+    return result.rows;
+  }
+
+  async getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string): Promise<Array<Simulation & { userName: string }>> {
+    let query = `
+      SELECT 
+        s.id,
+        s.user_id as "userId",
+        s.client_name as "clientName",
+        s.agreement_id as "agreementId",
+        s.agreement_name as "agreementName",
+        s.operation_type as "operationType",
+        s.bank,
+        s.term_months as "termMonths",
+        s.table_name as "tableName",
+        s.coefficient,
+        s.monthly_payment as "monthlyPayment",
+        s.outstanding_balance as "outstandingBalance",
+        s.total_contract_value as "totalContractValue",
+        s.client_refund as "clientRefund",
+        s.created_at as "createdAt",
+        u.name as "userName"
+      FROM simulations s
+      LEFT JOIN users u ON s.user_id = u.id
+    `;
+    
+    const params: (string | number)[] = [];
+    const conditions: string[] = [];
+    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`s.created_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`s.created_at <= $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` ORDER BY s.created_at DESC`;
+    
+    if (limit && limit > 0) {
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+    }
+    
+    const result = await queryClient(query, params);
+    return result.rows;
   }
 }
 

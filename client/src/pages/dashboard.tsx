@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Users, FileText, TrendingUp } from "lucide-react";
+import { BarChart3, Users, FileText, TrendingUp, Building2, FileCheck, Clock, CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/formatters";
-import { format } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/lib/auth";
 
@@ -28,12 +30,39 @@ interface Simulation {
   totalContractValue: string;
   clientRefund: string;
   createdAt: string;
+  userName?: string;
+}
+
+interface RankingItem {
+  count: number;
+}
+
+interface BankRanking extends RankingItem {
+  bank: string;
+}
+
+interface AgreementRanking extends RankingItem {
+  agreementName: string;
+}
+
+interface TermRanking extends RankingItem {
+  termMonths: number;
+}
+
+interface OperationTypeRanking extends RankingItem {
+  operationType: string;
 }
 
 interface StatsResponse {
   totalSimulations: number;
   statsByUser: UserStats[];
   recentSimulations: Simulation[];
+  rankings: {
+    byBank: BankRanking[];
+    byAgreement: AgreementRanking[];
+    byTerm: TermRanking[];
+    byOperationType: OperationTypeRanking[];
+  };
 }
 
 const OPERATION_TYPES: Record<string, string> = {
@@ -50,8 +79,49 @@ const ROLE_LABELS: Record<string, string> = {
 
 // Admin view component that contains the stats query - only rendered for master users
 function DashboardAdminView() {
+  const [periodFilter, setPeriodFilter] = useState<string>("all");
+
   const { data: stats, isLoading, error } = useQuery<StatsResponse>({
-    queryKey: ["/api/simulations/stats"],
+    queryKey: ["/api/simulations/stats", periodFilter],
+    queryFn: async () => {
+      let url = "/api/simulations/stats";
+      const params = new URLSearchParams();
+
+      if (periodFilter !== "all") {
+        const now = new Date();
+        let startDate: Date;
+
+        switch (periodFilter) {
+          case "today":
+            startDate = startOfDay(now);
+            break;
+          case "week":
+            startDate = subDays(now, 7);
+            break;
+          case "month":
+            startDate = subDays(now, 30);
+            break;
+          case "year":
+            startDate = subDays(now, 365);
+            break;
+          default:
+            startDate = new Date(0);
+        }
+
+        params.append("startDate", startDate.toISOString());
+        params.append("endDate", now.toISOString());
+      }
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to fetch stats");
+      }
+      return response.json();
+    },
   });
 
   if (isLoading) {
@@ -153,6 +223,97 @@ function DashboardAdminView() {
             </Card>
           </div>
 
+          {/* Rankings Section */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {/* Ranking por Banco */}
+            <Card data-testid="card-ranking-banks">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Top Bancos</CardTitle>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats?.rankings.byBank.slice(0, 3).map((item, index) => (
+                    <div key={item.bank} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {index + 1}. {item.bank}
+                      </span>
+                      <Badge variant="outline">{item.count}</Badge>
+                    </div>
+                  )) || (
+                    <p className="text-xs text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ranking por Convênio */}
+            <Card data-testid="card-ranking-agreements">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Top Convênios</CardTitle>
+                <FileCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats?.rankings.byAgreement.slice(0, 3).map((item, index) => (
+                    <div key={item.agreementName} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {index + 1}. {item.agreementName}
+                      </span>
+                      <Badge variant="outline">{item.count}</Badge>
+                    </div>
+                  )) || (
+                    <p className="text-xs text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ranking por Prazo */}
+            <Card data-testid="card-ranking-terms">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Top Prazos</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats?.rankings.byTerm.slice(0, 3).map((item, index) => (
+                    <div key={item.termMonths} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {index + 1}. {item.termMonths} meses
+                      </span>
+                      <Badge variant="outline">{item.count}</Badge>
+                    </div>
+                  )) || (
+                    <p className="text-xs text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ranking por Tipo de Operação */}
+            <Card data-testid="card-ranking-operation-types">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Top Tipos</CardTitle>
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats?.rankings.byOperationType.slice(0, 3).map((item, index) => (
+                    <div key={item.operationType} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {index + 1}. {OPERATION_TYPES[item.operationType] || item.operationType}
+                      </span>
+                      <Badge variant="outline">{item.count}</Badge>
+                    </div>
+                  )) || (
+                    <p className="text-xs text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Top Users Table */}
           <Card data-testid="card-top-users">
             <CardHeader>
@@ -206,14 +367,31 @@ function DashboardAdminView() {
           {/* Recent Simulations Table */}
           <Card data-testid="card-recent-simulations">
             <CardHeader>
-              <CardTitle>Simulações Recentes</CardTitle>
-              <p className="text-sm text-muted-foreground">Últimas 10 simulações realizadas</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Simulações Recentes</CardTitle>
+                  <p className="text-sm text-muted-foreground">Simulações realizadas no período selecionado</p>
+                </div>
+                <Select value={periodFilter} onValueChange={setPeriodFilter} data-testid="select-period-filter">
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Selecione o período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="today">Hoje</SelectItem>
+                    <SelectItem value="week">Última Semana</SelectItem>
+                    <SelectItem value="month">Último Mês</SelectItem>
+                    <SelectItem value="year">Último Ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>Usuário</TableHead>
                     <TableHead>Convênio</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Banco</TableHead>
@@ -226,7 +404,7 @@ function DashboardAdminView() {
                 <TableBody>
                   {!stats?.recentSimulations || stats.recentSimulations.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground">
                         Nenhuma simulação encontrada
                       </TableCell>
                     </TableRow>
@@ -234,6 +412,7 @@ function DashboardAdminView() {
                     stats.recentSimulations.map((simulation) => (
                       <TableRow key={simulation.id} data-testid={`row-simulation-${simulation.id}`}>
                         <TableCell className="font-medium">{simulation.clientName}</TableCell>
+                        <TableCell>{simulation.userName || "-"}</TableCell>
                         <TableCell>{simulation.agreementName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">

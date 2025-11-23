@@ -924,14 +924,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get statistics for admin dashboard (master only)
   app.get("/api/simulations/stats", requireAuth, requireMaster, async (req, res) => {
     try {
-      const [simulations, users] = await Promise.all([
-        storage.getAllSimulations(),
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+      const [
+        filteredSimulationsWithUser,
+        users,
+        bankRanking,
+        agreementRanking,
+        termRanking,
+        operationTypeRanking,
+      ] = await Promise.all([
+        storage.getRecentSimulationsWithUser(undefined, startDate, endDate),
         storage.getAllUsers(),
+        storage.getRankingByBank(startDate, endDate),
+        storage.getRankingByAgreement(startDate, endDate),
+        storage.getRankingByTerm(startDate, endDate),
+        storage.getRankingByOperationType(startDate, endDate),
       ]);
 
-      // Calculate stats by user
+      // Calculate stats by user using filtered simulations
       const statsByUser = users.map(user => {
-        const userSimulations = simulations.filter(s => s.userId === user.id);
+        const userSimulations = filteredSimulationsWithUser.filter(s => s.userId === user.id);
         
         // Convert string values to numbers for proper aggregation
         const totalContractValue = userSimulations.reduce((sum, s) => {
@@ -961,12 +976,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
-      // Calculate overall stats
-      const totalSimulations = simulations.length;
+      // Recent simulations for display (limit if provided)
+      const recentSimulations = limit 
+        ? filteredSimulationsWithUser.slice(0, limit)
+        : filteredSimulationsWithUser;
+
+      // Calculate overall stats from filtered data
+      const totalSimulations = filteredSimulationsWithUser.length;
       const stats = {
         totalSimulations,
         statsByUser: statsByUser.filter(s => s.simulationCount > 0),
-        recentSimulations: simulations.slice(-10).reverse(), // Last 10 simulations
+        recentSimulations,
+        rankings: {
+          byBank: bankRanking,
+          byAgreement: agreementRanking,
+          byTerm: termRanking,
+          byOperationType: operationTypeRanking,
+        },
       };
 
       return res.json(stats);
