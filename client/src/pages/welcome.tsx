@@ -148,12 +148,6 @@ export default function WelcomePage() {
                   <li>Salve a simulação em PDF, JPEG ou PNG para compartilhar</li>
                 </ol>
               </div>
-
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Importante:</strong> Todas as simulações são salvas automaticamente no sistema para controle e auditoria.
-                </p>
-              </div>
             </CardContent>
           </Card>
         </div>
