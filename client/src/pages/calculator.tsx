@@ -64,6 +64,21 @@ export default function CalculatorPage() {
   const watchBank = form.watch("operation.bank");
   const watchTerm = form.watch("operation.termMonths");
 
+  // Fetch operation types by agreement
+  const { data: availableOperationTypes = [] } = useQuery<string[]>({
+    queryKey: ["/api/calculator/operation-types", watchAgreementId],
+    queryFn: async () => {
+      if (!watchAgreementId || watchAgreementId === 0) return [];
+      console.log('🔍 Buscando tipos de operação:', { agreementId: watchAgreementId });
+      const res = await fetch(`/api/calculator/operation-types?agreementId=${watchAgreementId}`);
+      if (!res.ok) throw new Error("Erro ao buscar tipos de operação");
+      const types = await res.json();
+      console.log('✅ Tipos de operação encontrados:', types);
+      return types;
+    },
+    enabled: !!watchAgreementId && watchAgreementId > 0,
+  });
+
   // Fetch banks by agreement and operation type
   const { data: availableBanks = [] } = useQuery<string[]>({
     queryKey: ["/api/calculator/banks", watchAgreementId, watchOperationType],
@@ -128,6 +143,19 @@ export default function CalculatorPage() {
       return await apiRequest("/api/simulations", "POST", data);
     },
   });
+
+  // Reset operation type when agreement changes and current type is not available
+  useEffect(() => {
+    const currentOperationType = form.getValues("operation.operationType");
+    if (currentOperationType && !availableOperationTypes.includes(currentOperationType)) {
+      // Reset to first available type or default
+      const newType = availableOperationTypes[0] || "credit_card";
+      form.setValue("operation.operationType", newType as "credit_card" | "benefit_card" | "consignado");
+      form.setValue("operation.bank", "");
+      form.setValue("operation.termMonths", 0);
+      form.setValue("operation.coefficientTableId", 0);
+    }
+  }, [availableOperationTypes, form]);
 
   // Reset bank when agreement or operation type changes
   useEffect(() => {
@@ -628,6 +656,7 @@ export default function CalculatorPage() {
                           <Select 
                             onValueChange={field.onChange} 
                             value={field.value}
+                            disabled={!watchAgreementId || watchAgreementId === 0 || availableOperationTypes.length === 0}
                           >
                             <FormControl>
                               <SelectTrigger className="h-10" data-testid="select-operation-type">
@@ -635,11 +664,13 @@ export default function CalculatorPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {OPERATION_TYPES.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>
-                                  {type.label}
-                                </SelectItem>
-                              ))}
+                              {OPERATION_TYPES
+                                .filter(type => availableOperationTypes.includes(type.value))
+                                .map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    {type.label}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                           <FormMessage />
