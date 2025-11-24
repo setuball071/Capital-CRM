@@ -120,6 +120,29 @@ export default function UsersPage() {
     },
   });
 
+  // Toggle active mutation
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      return apiRequest("PUT", `/api/users/${id}`, { isActive });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: variables.isActive ? "Usuário ativado!" : "Usuário desativado!",
+        description: variables.isActive 
+          ? "O usuário foi ativado e pode fazer login novamente." 
+          : "O usuário foi desativado e não poderá mais fazer login.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao alterar status",
+        description: error.message || "Não foi possível alterar o status do usuário",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -205,10 +228,10 @@ export default function UsersPage() {
     }
   };
 
-  const toggleUserStatus = async (user: User) => {
-    updateUserMutation.mutate({
+  const toggleUserStatus = (user: User) => {
+    toggleActiveMutation.mutate({
       id: user.id,
-      data: { isActive: !user.isActive },
+      isActive: !user.isActive,
     });
   };
 
