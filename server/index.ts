@@ -1,20 +1,42 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import pgSession from "connect-pg-simple";
+import { neon } from "@neondatabase/serverless";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
 
 const app = express();
 
-// Use memory store for sessions (simpler for development)
-const MemoryStore = createMemoryStore(session);
+// Use PostgreSQL store in production, memory store in development
+let sessionStore: any;
+
+if (process.env.NODE_ENV === "production" && process.env.DATABASE_URL) {
+  // PostgreSQL store for production (persistent across restarts)
+  const pgStore = pgSession(session);
+  const queryClient = neon(process.env.DATABASE_URL!);
+  sessionStore = new pgStore({
+    pool: {
+      query: async (text: string, params: any[]) => {
+        const result = await queryClient(text, params);
+        return { rows: result.rows || [], rowCount: result.rowCount || 0 };
+      }
+    }
+  });
+  log("Using PostgreSQL session store");
+} else {
+  // Memory store for development
+  const MemoryStore = createMemoryStore(session);
+  sessionStore = new MemoryStore({
+    checkPeriod: 86400000, // prune expired entries every 24h
+  });
+  log("Using memory session store");
+}
 
 app.use(
   session({
-    store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET || "default-secret-change-in-production",
     resave: false,
     saveUninitialized: false,
