@@ -73,7 +73,9 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   // Seed database on startup (creates master user if none exists)
+  log("Starting seed...");
   await seedDatabase();
+  log("Seed completed!");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
