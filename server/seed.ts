@@ -19,10 +19,10 @@ export async function seedDatabase() {
       
       // Cria usuário master padrão
       const masterUser = await storage.createUser({
-        name: "Administrador",
-        email: "admin@sistema.com",
-        passwordHash,
-        role: "master",
+        name: "Administrador" as string,
+        email: "admin@sistema.com" as string,
+        passwordHash: passwordHash as string,
+        role: "master" as const,
       });
       
       log(`✅ Usuário master criado com sucesso!`);
