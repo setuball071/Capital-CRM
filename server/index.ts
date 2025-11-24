@@ -3,6 +3,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { seedDatabase } from "./seed";
 
 const app = express();
 
@@ -70,6 +71,9 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Seed database on startup (creates master user if none exists)
+  await seedDatabase();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
