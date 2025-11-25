@@ -1,6 +1,35 @@
 import type { CoefficientTable } from "@shared/schema";
 
 /**
+ * Calcula a parcela líquida considerando o tipo de margem de segurança
+ * 
+ * @param valorParcelaBruta - Valor bruto da parcela mensal
+ * @param tipoMargem - Tipo de margem: 'percentual' ou 'fixo'
+ * @param margemSeguranca - Valor da margem (percentual ou valor fixo em R$)
+ * @returns Valor da parcela após desconto da margem
+ */
+export function calcularParcelaComMargem(
+  valorParcelaBruta: number,
+  tipoMargem: 'percentual' | 'fixo',
+  margemSeguranca: number
+): number {
+  let desconto: number;
+  
+  if (tipoMargem === 'fixo') {
+    // Desconto é o valor fixo em reais
+    desconto = margemSeguranca;
+  } else {
+    // Desconto é um percentual da parcela bruta
+    desconto = valorParcelaBruta * (margemSeguranca / 100);
+  }
+  
+  const valorParcelaFinal = valorParcelaBruta - desconto;
+  
+  // Garantir que a parcela final não seja negativa
+  return Math.max(0, valorParcelaFinal);
+}
+
+/**
  * Calculate simulation result using coefficient from database
  * 
  * Formula:

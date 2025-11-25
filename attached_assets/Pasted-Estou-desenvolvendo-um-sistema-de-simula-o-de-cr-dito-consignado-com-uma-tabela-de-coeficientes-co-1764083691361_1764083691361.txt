@@ -1,0 +1,84 @@
+Estou desenvolvendo um sistema de simulação de crédito consignado com uma tabela de coeficientes (convênio, tipo_oper, banco, prazo, coeficiente etc.).
+
+Hoje existe apenas o campo margem_seguranca, que o sistema interpreta como percentual de margem de segurança sobre a parcela. Porém, preciso suportar DOIS MODELOS de margem, e isso deve vir definido na própria tabela de coeficientes (CSV / banco de dados), para qualquer banco:
+
+Modelo 1: percentual da parcela
+
+Modelo 2: valor fixo em reais a ser descontado da parcela
+
+Quero que você implemente as seguintes mudanças no projeto, de forma organizada, sem quebrar o que já existe:
+
+Banco de Dados / Model
+
+Adicionar um novo campo na tabela de coeficientes, chamado tipo_margem (ou margin_type), com os valores possíveis: "percentual" ou "fixo".
+
+Manter o campo existente margem_seguranca (margin_value) como number.
+
+Definir valor padrão de tipo_margem como "percentual" para manter compatibilidade com os dados antigos.
+
+Criar a migration necessária para atualizar o schema no banco de dados.
+
+Importação de CSV (tabela de coeficientes)
+
+A rotina de importação deve ler uma coluna extra no CSV chamada tipo_margem.
+
+Aceitar pelo menos estes valores (case-insensitive): "percentual", "fixo".
+
+Se a coluna tipo_margem não existir ou vier vazia, assumir "percentual".
+
+Salvar tipo_margem e margem_seguranca corretamente no banco para cada linha importada.
+
+Tela de cadastro/edição da Tabela de Coeficiente (frontend)
+
+No modal de edição, adicionar um campo do tipo select/dropdown chamado "Tipo da Margem de Segurança", com as opções:
+
+Percentual da parcela → valor "percentual"
+
+Valor fixo em R$ → valor "fixo"
+
+Manter o campo existente de valor numérico (margem_seguranca).
+
+Se o tipo selecionado for "percentual", o rótulo pode indicar % (ex: “Margem de Segurança (%)”).
+
+Se o tipo selecionado for "fixo", o rótulo pode indicar “R$”.
+
+No submit, enviar tipo_margem e margem_seguranca para o backend.
+
+Regra de cálculo na simulação
+
+Localize a função atual que calcula o valor da parcela a partir do coeficiente (provavelmente algo como calcularParcela, simulate, calcInstallment etc.).
+
+Extraia a parte de margem de segurança para uma função separada, com assinatura parecida com:
+
+function calcularParcelaComMargem(
+  valorParcelaBruta: number,
+  tipoMargem: 'percentual' | 'fixo',
+  margemSeguranca: number
+): number
+
+
+Implementar a função da seguinte forma:
+
+Se tipoMargem === 'percentual':
+
+desconto = valorParcelaBruta * (margemSeguranca / 100)
+
+Se tipoMargem === 'fixo':
+
+desconto = margemSeguranca (valor em reais)
+
+valorParcelaFinal = valorParcelaBruta - desconto
+
+No fluxo de simulação, ao buscar o coeficiente, também buscar tipo_margem e margem_seguranca dessa tabela, e usar essa função genérica na hora de calcular a parcela final.
+
+Critérios de aceite
+
+Se eu cadastrar um coeficiente com tipo_margem = "percentual" e margem_seguranca = 20, a simulação deve descontar 20% da parcela.
+
+Se eu cadastrar um coeficiente com tipo_margem = "fixo" e margem_seguranca = 1, a simulação deve descontar exatamente R$ 1,00 da parcela, independentemente do valor da parcela.
+
+As tabelas antigas, que não têm tipo_margem, devem continuar funcionando como antes (tratadas como percentual).
+
+Mostre o código completo das partes alteradas (model, migration, importação, cálculo e tela de edição) e deixe comentários explicando onde entra a lógica de tipo_margem.
+
+Não mude nenhuma outra regra de negócio, apenas essa lógica de margem.

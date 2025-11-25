@@ -35,6 +35,7 @@ export const coefficientTables = pgTable("coefficient_tables", {
   tableName: varchar("table_name", { length: 255 }).notNull(),
   coefficient: decimal("coefficient", { precision: 12, scale: 10 }).notNull(),
   safetyMargin: decimal("safety_margin", { precision: 5, scale: 2 }).notNull().default("0"),
+  marginType: varchar("margin_type", { length: 20 }).notNull().default("percentual"), // 'percentual' or 'fixo'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -83,10 +84,11 @@ export const insertCoefficientTableSchema = createInsertSchema(coefficientTables
   safetyMargin: z.string().refine(
     (val) => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 100;
+      return !isNaN(num) && num >= 0;
     },
-    { message: "Margem de segurança deve ser entre 0 e 100%" }
+    { message: "Margem de segurança deve ser um número não-negativo" }
   ),
+  marginType: z.enum(["percentual", "fixo"]).default("percentual"),
 }).omit({ id: true, createdAt: true });
 
 export const insertSimulationSchema = createInsertSchema(simulations, {

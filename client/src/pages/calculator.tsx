@@ -20,7 +20,7 @@ import {
   type Agreement,
   type CoefficientTable,
 } from "@shared/schema";
-import { calculateSimulation } from "@/lib/calculations";
+import { calculateSimulation, calcularParcelaComMargem } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/formatters";
 
 const OPERATION_TYPES = [
@@ -197,7 +197,8 @@ export default function CalculatorPage() {
         
         if (selectedTable) {
           const safetyMargin = parseFloat(selectedTable.safetyMargin || "0");
-          const liquid = monthlyPayment * (1 - safetyMargin / 100);
+          const marginType = (selectedTable.marginType as 'percentual' | 'fixo') || 'percentual';
+          const liquid = calcularParcelaComMargem(monthlyPayment, marginType, safetyMargin);
           setLiquidPayment(liquid);
         } else if (availableTables.length === 0) {
           // Don't reset if tables haven't loaded yet
