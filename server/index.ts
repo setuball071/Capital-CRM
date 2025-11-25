@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import pgSession from "connect-pg-simple";
+import pg from "pg";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
@@ -10,21 +12,42 @@ const app = express();
 // Trust proxy for production (Replit is behind a proxy)
 app.set("trust proxy", 1);
 
-// Use memory store for sessions
-const MemoryStore = createMemoryStore(session);
+// Configure session store based on environment
+const isProduction = process.env.NODE_ENV === "production";
+let sessionStore: session.Store;
+
+if (isProduction && process.env.DATABASE_URL) {
+  // Use PostgreSQL store in production for multi-instance support
+  const PgStore = pgSession(session);
+  const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+  sessionStore = new PgStore({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+  });
+  log("Using PostgreSQL session store for production");
+} else {
+  // Use memory store for development
+  const MemoryStore = createMemoryStore(session);
+  sessionStore = new MemoryStore({
+    checkPeriod: 86400000,
+  });
+  log("Using memory session store for development");
+}
 
 app.use(
   session({
-    store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET || "default-secret-change-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction,
       sameSite: "lax",
     },
   })
