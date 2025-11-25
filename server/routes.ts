@@ -165,15 +165,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Email ou senha incorretos" });
       }
 
-      // Set session
+      // Set session and save it
       req.session.userId = user.id;
+      
+      // Save session before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Erro ao salvar sessão" });
+        }
 
-      // Don't send password hash to client
-      const { passwordHash: _, ...userWithoutPassword } = user;
+        // Don't send password hash to client
+        const { passwordHash: _, ...userWithoutPassword } = user;
 
-      return res.json({
-        message: "Login realizado com sucesso",
-        user: userWithoutPassword,
+        return res.json({
+          message: "Login realizado com sucesso",
+          user: userWithoutPassword,
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
