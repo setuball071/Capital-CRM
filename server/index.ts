@@ -7,6 +7,9 @@ import { seedDatabase } from "./seed";
 
 const app = express();
 
+// Trust proxy for production (Replit is behind a proxy)
+app.set("trust proxy", 1);
+
 // Use memory store for sessions
 const MemoryStore = createMemoryStore(session);
 
