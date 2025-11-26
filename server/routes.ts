@@ -406,6 +406,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== USERS ROUTES =====
   
   // Get users (hierarchical: master sees all, coordenador sees their team)
+  // REGRAS DE VISIBILIDADE:
+  // - Admin (master): Vê todos os usuários do sistema
+  // - Coordenador: Vê apenas ele mesmo + vendedores da sua equipe (managerId = coordenador.id)
+  //   NÃO vê outros admins, outros coordenadores, nem vendedores de outras equipes
   app.get("/api/users", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       let users: User[];
@@ -414,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Master sees all users
         users = await storage.getAllUsers();
       } else if (req.user!.role === "coordenacao") {
-        // Coordenador sees only their team (vendedores) + themselves
+        // Coordenador sees only their team (vendedores with managerId = this coordinator's id) + themselves
         const teamUsers = await storage.getUsersByManager(req.user!.id);
         users = [req.user!, ...teamUsers];
       } else {

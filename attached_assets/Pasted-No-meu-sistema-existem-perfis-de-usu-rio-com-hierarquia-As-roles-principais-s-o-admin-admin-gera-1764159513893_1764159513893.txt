@@ -1,0 +1,79 @@
+No meu sistema existem perfis de usuário com hierarquia. As roles principais são:
+
+admin (admin geral do sistema)
+
+coordenador
+
+vendedor (ou usuários operacionais abaixo da coordenação)
+
+Na tela de gestão de usuários, está acontecendo um problema:
+
+Usuários com perfil coordenador estão conseguindo visualizar todos os usuários do sistema, incluindo outros coordenadores, admin e vendedores de outras equipes.
+
+Regras de negócio corretas que quero implementar:
+
+Admin (admin)
+
+Pode visualizar, criar, editar e gerenciar todos os usuários do sistema.
+
+Coordenador (coordenador)
+
+Só pode visualizar:
+
+a si mesmo
+
+os usuários da sua própria equipe, ou seja, os usuários que estão “abaixo” dele na hierarquia.
+
+Não pode visualizar:
+
+outros admins
+
+outros coordenadores que não sejam ele
+
+vendedores de outras coordenações/equipes
+
+Só pode criar/editar usuários que pertençam à sua própria equipe (vendedores/operadores abaixo dele).
+
+Estrutura sugerida (se já não existir):
+
+Na tabela de usuários, garantir os campos:
+
+role (admin, coordenador, vendedor, etc.)
+
+coordenacao_id ou parent_id (id do coordenador responsável / equipe)
+
+O que preciso que você faça:
+
+Localizar no backend a rota/função responsável por listar usuários (por exemplo GET /users, listUsers, getUsers, etc.).
+
+Ajustar a lógica desta listagem para:
+
+Se o usuário logado tiver role === 'admin': retornar todos os usuários (sem filtro adicional).
+
+Se o usuário logado tiver role === 'coordenador':
+
+retornar apenas:
+
+ele mesmo
+
+usuários cuja coordenacao_id (ou parent_id) seja igual à coordenacao_id (ou id) do coordenador logado
+
+nunca incluir usuários com role === 'admin'
+
+nunca incluir outros usuários com role === 'coordenador' (exceto o próprio coordenador logado, se necessário).
+
+Garantir que essa regra de filtro esteja no backend (não só no frontend), para não haver brecha de segurança caso alguém chame a API direto.
+
+Opcional, mas importante:
+
+Na rota de criação de usuário, garantir que:
+
+se o usuário logado for coordenador, o novo usuário criado automaticamente receba coordenacao_id ligado a esse coordenador e não possa ser criado acima dele.
+
+Me mostre:
+
+a função atual de listagem de usuários
+
+a versão atualizada com esses filtros, com comentários explicando a lógica de permissão.
+
+Não altere outras regras de negócio, apenas o controle de visibilidade/listagem conforme descrito

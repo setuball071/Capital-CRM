@@ -85,6 +85,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/coordenadores"] });
       toast({
         title: "Usuário criado com sucesso!",
       });
@@ -106,6 +107,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/coordenadores"] });
       toast({
         title: "Usuário atualizado com sucesso!",
       });
