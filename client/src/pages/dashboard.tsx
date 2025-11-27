@@ -77,9 +77,26 @@ const ROLE_LABELS: Record<string, string> = {
   vendedor: "Vendedor",
 };
 
-// Admin view component that contains the stats query - only rendered for master users
-function DashboardAdminView() {
+// Role-specific dashboard titles
+const DASHBOARD_TITLES: Record<string, { title: string; subtitle: string }> = {
+  master: {
+    title: "Dashboard Administrativo",
+    subtitle: "Controle de uso e relatórios de todos os usuários",
+  },
+  coordenacao: {
+    title: "Dashboard da Equipe",
+    subtitle: "Acompanhe o desempenho da sua equipe",
+  },
+  vendedor: {
+    title: "Meu Dashboard",
+    subtitle: "Acompanhe suas simulações e desempenho",
+  },
+};
+
+// Dashboard view component that contains the stats query - works for all roles
+function DashboardView({ userRole }: { userRole: string }) {
   const [periodFilter, setPeriodFilter] = useState<string>("all");
+  const dashboardInfo = DASHBOARD_TITLES[userRole] || DASHBOARD_TITLES.vendedor;
 
   const { data: stats, isLoading, error } = useQuery<StatsResponse>({
     queryKey: ["/api/simulations/stats", periodFilter],
@@ -148,8 +165,8 @@ function DashboardAdminView() {
       <header className="border-b bg-background p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard Administrativo</h1>
-            <p className="text-sm text-muted-foreground">Controle de uso e relatórios</p>
+            <h1 className="text-2xl font-bold">{dashboardInfo.title}</h1>
+            <p className="text-sm text-muted-foreground">{dashboardInfo.subtitle}</p>
           </div>
         </div>
       </header>
@@ -447,7 +464,7 @@ function DashboardAdminView() {
   );
 }
 
-// Dashboard page shell - only renders admin view for master users
+// Dashboard page shell - renders appropriate view for each role
 export default function DashboardPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -460,15 +477,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Only render admin view for masters
-  if (user.role !== "master") {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-destructive">Você precisa ser administrador para acessar esta página.</div>
-      </div>
-    );
-  }
-
-  // Render the admin view - this component contains the stats query
-  return <DashboardAdminView />;
+  // Render dashboard view with user's role - API handles filtering
+  return <DashboardView userRole={user.role} />;
 }

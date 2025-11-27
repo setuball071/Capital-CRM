@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   users,
   agreements,
@@ -61,11 +61,12 @@ export interface IStorage {
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
   
   // Simulation Statistics
-  getRankingByBank(startDate?: string, endDate?: string): Promise<{ bank: string; count: number }[]>;
-  getRankingByAgreement(startDate?: string, endDate?: string): Promise<{ agreementName: string; count: number }[]>;
-  getRankingByTerm(startDate?: string, endDate?: string): Promise<{ termMonths: number; count: number }[]>;
-  getRankingByOperationType(startDate?: string, endDate?: string): Promise<{ operationType: string; count: number }[]>;
-  getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string): Promise<Array<Simulation & { userName: string }>>;
+  getRankingByBank(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ bank: string; count: number }[]>;
+  getRankingByAgreement(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ agreementName: string; count: number }[]>;
+  getRankingByTerm(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ termMonths: number; count: number }[]>;
+  getRankingByOperationType(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ operationType: string; count: number }[]>;
+  getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string, userIds?: number[]): Promise<Array<Simulation & { userName: string }>>;
+  getSimulationsByUserIds(userIds: number[]): Promise<Simulation[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -271,9 +272,9 @@ export class DbStorage implements IStorage {
 
   // ===== SIMULATION STATISTICS =====
   
-  async getRankingByBank(startDate?: string, endDate?: string): Promise<{ bank: string; count: number }[]> {
+  async getRankingByBank(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ bank: string; count: number }[]> {
     let query = `SELECT bank, COUNT(*)::int as count FROM simulations`;
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     const conditions: string[] = [];
     
     if (startDate) {
@@ -283,6 +284,11 @@ export class DbStorage implements IStorage {
     if (endDate) {
       params.push(endDate);
       conditions.push(`created_at <= $${params.length}`);
+    }
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      params.push(...userIds);
+      conditions.push(`user_id IN (${placeholders})`);
     }
     
     if (conditions.length > 0) {
@@ -295,9 +301,9 @@ export class DbStorage implements IStorage {
     return result.rows;
   }
 
-  async getRankingByAgreement(startDate?: string, endDate?: string): Promise<{ agreementName: string; count: number }[]> {
+  async getRankingByAgreement(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ agreementName: string; count: number }[]> {
     let query = `SELECT agreement_name as "agreementName", COUNT(*)::int as count FROM simulations`;
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     const conditions: string[] = [];
     
     if (startDate) {
@@ -307,6 +313,11 @@ export class DbStorage implements IStorage {
     if (endDate) {
       params.push(endDate);
       conditions.push(`created_at <= $${params.length}`);
+    }
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      params.push(...userIds);
+      conditions.push(`user_id IN (${placeholders})`);
     }
     
     if (conditions.length > 0) {
@@ -319,9 +330,9 @@ export class DbStorage implements IStorage {
     return result.rows;
   }
 
-  async getRankingByTerm(startDate?: string, endDate?: string): Promise<{ termMonths: number; count: number }[]> {
+  async getRankingByTerm(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ termMonths: number; count: number }[]> {
     let query = `SELECT term_months as "termMonths", COUNT(*)::int as count FROM simulations`;
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     const conditions: string[] = [];
     
     if (startDate) {
@@ -331,6 +342,11 @@ export class DbStorage implements IStorage {
     if (endDate) {
       params.push(endDate);
       conditions.push(`created_at <= $${params.length}`);
+    }
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      params.push(...userIds);
+      conditions.push(`user_id IN (${placeholders})`);
     }
     
     if (conditions.length > 0) {
@@ -343,9 +359,9 @@ export class DbStorage implements IStorage {
     return result.rows;
   }
 
-  async getRankingByOperationType(startDate?: string, endDate?: string): Promise<{ operationType: string; count: number }[]> {
+  async getRankingByOperationType(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ operationType: string; count: number }[]> {
     let query = `SELECT operation_type as "operationType", COUNT(*)::int as count FROM simulations`;
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     const conditions: string[] = [];
     
     if (startDate) {
@@ -355,6 +371,11 @@ export class DbStorage implements IStorage {
     if (endDate) {
       params.push(endDate);
       conditions.push(`created_at <= $${params.length}`);
+    }
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      params.push(...userIds);
+      conditions.push(`user_id IN (${placeholders})`);
     }
     
     if (conditions.length > 0) {
@@ -367,7 +388,7 @@ export class DbStorage implements IStorage {
     return result.rows;
   }
 
-  async getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string): Promise<Array<Simulation & { userName: string }>> {
+  async getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string, userIds?: number[]): Promise<Array<Simulation & { userName: string }>> {
     let query = `
       SELECT 
         s.id,
@@ -401,6 +422,11 @@ export class DbStorage implements IStorage {
       params.push(endDate);
       conditions.push(`s.created_at <= $${params.length}`);
     }
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      params.push(...userIds);
+      conditions.push(`s.user_id IN (${placeholders})`);
+    }
     
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
@@ -415,6 +441,13 @@ export class DbStorage implements IStorage {
     
     const result = await queryClient(query, params);
     return result.rows;
+  }
+
+  async getSimulationsByUserIds(userIds: number[]): Promise<Simulation[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    return await db.select().from(simulations).where(inArray(simulations.userId, userIds));
   }
 }
 

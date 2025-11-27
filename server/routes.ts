@@ -933,35 +933,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get statistics for admin dashboard (master only)
-  app.get("/api/simulations/stats", requireAuth, requireMaster, async (req, res) => {
+  // Get statistics for dashboard (hierarchical: master sees all, coordenador sees team, vendedor sees own)
+  // REGRAS DE VISIBILIDADE:
+  // - Admin (master): Vê estatísticas de TODOS os usuários
+  // - Coordenador: Vê estatísticas da sua equipe (ele + vendedores)
+  // - Vendedor: Vê apenas suas próprias estatísticas
+  app.get("/api/simulations/stats", requireAuth, async (req, res) => {
     try {
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
+      // Determine which userIds to include based on role
+      let userIds: number[] | undefined;
+      let relevantUsers: User[];
+
+      if (req.user!.role === "master") {
+        // Master sees all - no filter
+        userIds = undefined;
+        relevantUsers = await storage.getAllUsers();
+      } else if (req.user!.role === "coordenacao") {
+        // Coordenador sees their team (themselves + their vendedores)
+        const teamUsers = await storage.getUsersByManager(req.user!.id);
+        userIds = [req.user!.id, ...teamUsers.map(u => u.id)];
+        relevantUsers = [req.user!, ...teamUsers];
+      } else {
+        // Vendedor sees only their own stats
+        userIds = [req.user!.id];
+        relevantUsers = [req.user!];
+      }
+
       const [
         filteredSimulationsWithUser,
-        users,
         bankRanking,
         agreementRanking,
         termRanking,
         operationTypeRanking,
       ] = await Promise.all([
-        storage.getRecentSimulationsWithUser(undefined, startDate, endDate),
-        storage.getAllUsers(),
-        storage.getRankingByBank(startDate, endDate),
-        storage.getRankingByAgreement(startDate, endDate),
-        storage.getRankingByTerm(startDate, endDate),
-        storage.getRankingByOperationType(startDate, endDate),
+        storage.getRecentSimulationsWithUser(undefined, startDate, endDate, userIds),
+        storage.getRankingByBank(startDate, endDate, userIds),
+        storage.getRankingByAgreement(startDate, endDate, userIds),
+        storage.getRankingByTerm(startDate, endDate, userIds),
+        storage.getRankingByOperationType(startDate, endDate, userIds),
       ]);
 
       // Safety checks for undefined/null values
       const safeSimulations = filteredSimulationsWithUser || [];
-      const safeUsers = users || [];
 
       // Calculate stats by user using filtered simulations
-      const statsByUser = safeUsers.map(user => {
+      const statsByUser = relevantUsers.map(user => {
         const userSimulations = safeSimulations.filter(s => s.userId === user.id);
         
         // Convert string values to numbers for proper aggregation
