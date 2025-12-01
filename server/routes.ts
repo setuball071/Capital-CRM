@@ -901,9 +901,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a simulation
   app.post("/api/simulations", requireAuth, async (req, res) => {
     try {
+      console.log("[SIMULATION] Creating simulation for user:", req.user!.id, req.user!.email);
+      console.log("[SIMULATION] Request body:", JSON.stringify(req.body, null, 2));
+      
       const result = insertSimulationSchema.safeParse(req.body);
       
       if (!result.success) {
+        console.log("[SIMULATION] Validation failed:", result.error.errors);
         return res.status(400).json({
           message: "Dados inválidos",
           errors: result.error.errors,
@@ -915,9 +919,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user!.id,
       });
 
+      console.log("[SIMULATION] Created successfully:", simulation.id);
       return res.json(simulation);
     } catch (error) {
-      console.error("Create simulation error:", error);
+      console.error("[SIMULATION] Create error:", error);
       return res.status(500).json({ message: "Erro ao salvar simulação" });
     }
   });
@@ -940,9 +945,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // - Vendedor: Vê apenas suas próprias estatísticas
   app.get("/api/simulations/stats", requireAuth, async (req, res) => {
     try {
+      console.log("[STATS] Request from user:", req.user!.id, req.user!.email, "role:", req.user!.role);
+      
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+      console.log("[STATS] Filters - startDate:", startDate, "endDate:", endDate);
 
       // Determine which userIds to include based on role
       let userIds: number[] | undefined;
@@ -952,6 +961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Master sees all - no filter
         userIds = undefined;
         relevantUsers = await storage.getAllUsers();
+        console.log("[STATS] Master user - showing all users, total:", relevantUsers.length);
       } else if (req.user!.role === "coordenacao") {
         // Coordenador sees their team (themselves + their vendedores)
         const teamUsers = await storage.getUsersByManager(req.user!.id);
@@ -979,6 +989,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Safety checks for undefined/null values
       const safeSimulations = filteredSimulationsWithUser || [];
+      
+      console.log("[STATS] Found simulations:", safeSimulations.length);
+      if (safeSimulations.length > 0) {
+        console.log("[STATS] First simulation:", JSON.stringify(safeSimulations[0], null, 2));
+      }
 
       // Calculate stats by user using filtered simulations
       const statsByUser = relevantUsers.map(user => {

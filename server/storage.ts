@@ -298,7 +298,7 @@ export class DbStorage implements IStorage {
     query += ` GROUP BY bank ORDER BY count DESC`;
     
     const result = await queryClient(query, params);
-    return result.rows;
+    return result as { bank: string; count: number }[];
   }
 
   async getRankingByAgreement(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ agreementName: string; count: number }[]> {
@@ -327,7 +327,7 @@ export class DbStorage implements IStorage {
     query += ` GROUP BY agreement_name ORDER BY count DESC`;
     
     const result = await queryClient(query, params);
-    return result.rows;
+    return result as { agreementName: string; count: number }[];
   }
 
   async getRankingByTerm(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ termMonths: number; count: number }[]> {
@@ -356,7 +356,7 @@ export class DbStorage implements IStorage {
     query += ` GROUP BY term_months ORDER BY count DESC`;
     
     const result = await queryClient(query, params);
-    return result.rows;
+    return result as { termMonths: number; count: number }[];
   }
 
   async getRankingByOperationType(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ operationType: string; count: number }[]> {
@@ -385,7 +385,7 @@ export class DbStorage implements IStorage {
     query += ` GROUP BY operation_type ORDER BY count DESC`;
     
     const result = await queryClient(query, params);
-    return result.rows;
+    return result as { operationType: string; count: number }[];
   }
 
   async getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string, userIds?: number[]): Promise<Array<Simulation & { userName: string }>> {
@@ -439,8 +439,12 @@ export class DbStorage implements IStorage {
       query += ` LIMIT $${params.length}`;
     }
     
+    console.log("[STORAGE] getRecentSimulationsWithUser - Query:", query);
+    console.log("[STORAGE] getRecentSimulationsWithUser - Params:", params);
+    
     const result = await queryClient(query, params);
-    return result.rows;
+    console.log("[STORAGE] getRecentSimulationsWithUser - Result:", Array.isArray(result) ? result.length : 0);
+    return result as Array<Simulation & { userName: string }>;
   }
 
   async getSimulationsByUserIds(userIds: number[]): Promise<Simulation[]> {
