@@ -52,8 +52,12 @@ function HomePage() {
     return <Redirect to="/login" />;
   }
 
-  // All users go to dashboard - dashboard shows role-appropriate content
-  return <Redirect to="/dashboard" />;
+  // Only master goes to dashboard, others go to welcome page
+  if (user.role === "master") {
+    return <Redirect to="/dashboard" />;
+  }
+  
+  return <Redirect to="/welcome" />;
 }
 
 // Protected route that only allows master users
@@ -147,7 +151,10 @@ function Router() {
                 {() => <HomePage />}
               </Route>
               <Route path="/dashboard">
-                {() => <ProtectedRoute component={DashboardPage} />}
+                {() => <MasterRoute component={DashboardPage} />}
+              </Route>
+              <Route path="/welcome">
+                {() => <ProtectedRoute component={WelcomePage} />}
               </Route>
               <Route path="/simulador-compra">
                 {() => <ProtectedRoute component={CalculatorPage} />}
