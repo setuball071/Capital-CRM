@@ -135,10 +135,13 @@ function DashboardView({ userRole }: { userRole: string }) {
 
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) {
-        throw new Error("Failed to fetch stats");
+        const errorText = await response.text();
+        console.error("Dashboard API error:", response.status, errorText);
+        throw new Error(`Failed to fetch stats: ${response.status}`);
       }
       return response.json();
     },
+    retry: 1,
   });
 
   if (isLoading) {
@@ -150,9 +153,18 @@ function DashboardView({ userRole }: { userRole: string }) {
   }
 
   if (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-destructive">Erro ao carregar estatísticas.</div>
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <div className="text-destructive font-medium">Erro ao carregar estatísticas</div>
+        <div className="text-sm text-muted-foreground">{errorMessage}</div>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          data-testid="button-retry"
+        >
+          Tentar novamente
+        </button>
       </div>
     );
   }
