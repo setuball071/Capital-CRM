@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, User as UserIcon } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { ROLE_LABELS, type UserRole } from "@shared/schema";
 
 export default function ProfilePage() {
   const { user, checkAuth } = useAuth();
@@ -76,7 +77,7 @@ export default function ProfilePage() {
     return null;
   }
 
-  const roleLabel = user.role === "master" ? "Administrador" : "Vendedor";
+  const roleLabel = ROLE_LABELS[user.role as UserRole] || user.role;
 
   return (
     <div className="container max-w-4xl py-8 px-4">
