@@ -14,6 +14,7 @@ import LoginPage from "@/pages/login";
 import ProfilePage from "@/pages/profile";
 import UsersPage from "@/pages/users";
 import AgreementsPage from "@/pages/agreements";
+import BanksPage from "@/pages/banks";
 import CoefficientTablesPage from "@/pages/coefficient-tables";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
@@ -166,10 +167,13 @@ function Router() {
                 {() => <ProtectedRoute component={UsersPage} />}
               </Route>
               <Route path="/agreements">
-                {() => <ProtectedRoute component={AgreementsPage} />}
+                {() => <MasterRoute component={AgreementsPage} />}
+              </Route>
+              <Route path="/banks">
+                {() => <MasterRoute component={BanksPage} />}
               </Route>
               <Route path="/coefficient-tables">
-                {() => <ProtectedRoute component={CoefficientTablesPage} />}
+                {() => <MasterRoute component={CoefficientTablesPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

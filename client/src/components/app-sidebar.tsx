@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -38,6 +38,7 @@ export function AppSidebar() {
   // - vendedor: Simulator only
   
   const canAccessAgreements = isMaster || isAtendimento || isOperacional;
+  const canAccessBanks = isMaster; // Only master can manage banks
   const canAccessCoefficientTables = isMaster || isAtendimento || isOperacional;
   const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
 
@@ -59,6 +60,12 @@ export function AppSidebar() {
       url: "/agreements",
       icon: FileText,
       show: canAccessAgreements,
+    },
+    {
+      title: "Bancos",
+      url: "/banks",
+      icon: Landmark,
+      show: canAccessBanks,
     },
     {
       title: "Tabelas de Coeficientes",
@@ -133,7 +140,7 @@ export function AppSidebar() {
                 <div className="flex flex-col items-start text-left">
                   <span className="text-sm font-medium">{user.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    {user.role === "master" ? "Administrador" : user.role === "coordenacao" ? "Coordenador" : "Vendedor"}
+                    {ROLE_LABELS[userRole]}
                   </span>
                 </div>
               </button>
