@@ -399,12 +399,14 @@ export default function CalculatorPage() {
           pdf.setFontSize(10);
           pdf.setFont('helvetica', 'normal');
           pdf.setTextColor(100, 116, 139);
-          const ajusteLabel = ajusteSaldoPercentual > 0 ? `+${ajusteSaldoPercentual.toFixed(2)}%` : `${ajusteSaldoPercentual.toFixed(2)}%`;
-          pdf.text(`Saldo Final (Ajuste ${ajusteLabel})`, 15, yPos);
+          pdf.text('Saldo Final', 15, yPos);
+          pdf.setFontSize(8);
+          pdf.text('Ajuste aplicado conforme regras do banco', 15, yPos + 4);
+          pdf.setFontSize(10);
           pdf.setTextColor(0, 0, 0);
           pdf.setFont('helvetica', 'bold');
-          pdf.text(formatCurrency(result.saldoFinal), 15, yPos + 5);
-          yPos += 12;
+          pdf.text(formatCurrency(result.saldoFinal), 15, yPos + 9);
+          yPos += 16;
         }
 
         pdf.setFontSize(14);
@@ -921,10 +923,10 @@ export default function CalculatorPage() {
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-sm text-muted-foreground">
-                            Saldo Final (Ajuste de {ajusteSaldoPercentual > 0 ? '+' : ''}{ajusteSaldoPercentual.toFixed(2)}%)
+                            Saldo Final
                           </p>
                           <p className="text-xs text-muted-foreground/70">
-                            Saldo devedor ajustado conforme configuração do banco
+                            Ajuste aplicado conforme regras do banco
                           </p>
                         </div>
                         <p className="text-lg font-semibold font-mono text-foreground" data-testid="text-saldo-final">
