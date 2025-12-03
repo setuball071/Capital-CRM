@@ -13,6 +13,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ROLE_LABELS, type UserRole } from "@shared/schema";
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
@@ -20,9 +21,25 @@ export function AppSidebar() {
 
   if (!user) return null;
 
-  const isMaster = user.role === "master";
-  const isCoordinator = user.role === "coordenacao";
-  const hasManagerAccess = isMaster || isCoordinator;
+  const userRole = user.role as UserRole;
+  
+  // Permission checks based on new role hierarchy
+  const isAdmin = userRole === "admin";
+  const isAtendimento = userRole === "atendimento";
+  const isCoordenador = userRole === "coordenador";
+  const isOperacional = userRole === "operacional";
+  const isVendedor = userRole === "vendedor";
+  
+  // Access rules:
+  // - admin: all screens
+  // - atendimento: Simulator, Agreements, Coefficient Tables, Users
+  // - coordenador: Simulator, Users (restricted to their team)
+  // - operacional: Simulator, Agreements, Coefficient Tables
+  // - vendedor: Simulator only
+  
+  const canAccessAgreements = isAdmin || isAtendimento || isOperacional;
+  const canAccessCoefficientTables = isAdmin || isAtendimento || isOperacional;
+  const canAccessUsers = isAdmin || isAtendimento || isCoordenador;
 
   const menuItems = [
     {
@@ -41,19 +58,19 @@ export function AppSidebar() {
       title: "Convênios",
       url: "/agreements",
       icon: FileText,
-      show: isMaster,
+      show: canAccessAgreements,
     },
     {
       title: "Tabelas de Coeficientes",
       url: "/coefficient-tables",
       icon: Table,
-      show: isMaster,
+      show: canAccessCoefficientTables,
     },
     {
       title: "Usuários",
       url: "/users",
       icon: Users,
-      show: hasManagerAccess,
+      show: canAccessUsers,
     },
   ];
 
