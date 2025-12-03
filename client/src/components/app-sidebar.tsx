@@ -23,23 +23,23 @@ export function AppSidebar() {
 
   const userRole = user.role as UserRole;
   
-  // Permission checks based on new role hierarchy
-  const isAdmin = userRole === "admin";
+  // Permission checks based on role hierarchy
+  const isMaster = userRole === "master";
   const isAtendimento = userRole === "atendimento";
-  const isCoordenador = userRole === "coordenador";
+  const isCoordenacao = userRole === "coordenacao";
   const isOperacional = userRole === "operacional";
   const isVendedor = userRole === "vendedor";
   
   // Access rules:
-  // - admin: all screens
+  // - master: all screens
   // - atendimento: Simulator, Agreements, Coefficient Tables, Users
-  // - coordenador: Simulator, Users (restricted to their team)
+  // - coordenacao: Simulator, Users (restricted to their team)
   // - operacional: Simulator, Agreements, Coefficient Tables
   // - vendedor: Simulator only
   
-  const canAccessAgreements = isAdmin || isAtendimento || isOperacional;
-  const canAccessCoefficientTables = isAdmin || isAtendimento || isOperacional;
-  const canAccessUsers = isAdmin || isAtendimento || isCoordenador;
+  const canAccessAgreements = isMaster || isAtendimento || isOperacional;
+  const canAccessCoefficientTables = isMaster || isAtendimento || isOperacional;
+  const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
 
   const menuItems = [
     {

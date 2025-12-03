@@ -4,14 +4,14 @@ import { z } from "zod";
 
 // ===== DATABASE TABLES =====
 
-// User roles enum
-export const USER_ROLES = ["admin", "coordenador", "atendimento", "operacional", "vendedor"] as const;
+// User roles enum - includes legacy roles (master, coordenacao) and new roles (atendimento, operacional)
+export const USER_ROLES = ["master", "coordenacao", "atendimento", "operacional", "vendedor"] as const;
 export type UserRole = typeof USER_ROLES[number];
 
 // Role labels for display
 export const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Administrador",
-  coordenador: "Coordenador",
+  master: "Administrador",
+  coordenacao: "Coordenador",
   atendimento: "Atendimento",
   operacional: "Operacional",
   vendedor: "Vendedor",

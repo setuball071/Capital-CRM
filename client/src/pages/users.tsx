@@ -48,7 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2 } from "lucide-react";
-import type { User } from "@shared/schema";
+import { type User, USER_ROLES, ROLE_LABELS, type UserRole } from "@shared/schema";
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -61,21 +61,26 @@ export default function UsersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"vendedor" | "coordenacao" | "master">("vendedor");
+  const [role, setRole] = useState<UserRole>("vendedor");
   const [managerId, setManagerId] = useState<string>("");
 
-  const isMaster = currentUser?.role === "master";
-  const isCoordinator = currentUser?.role === "coordenacao";
+  const currentUserRole = currentUser?.role as UserRole;
+  const isMaster = currentUserRole === "master";
+  const isAtendimento = currentUserRole === "atendimento";
+  const isCoordenacao = currentUserRole === "coordenacao";
+  
+  // Roles that can manage users (for display and permissions)
+  const canManageAllUsers = isMaster || isAtendimento;
 
   // Fetch users
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
-  // Fetch coordenadores (only for master when creating vendedor)
+  // Fetch coordenadores (for master and atendimento when creating vendedor)
   const { data: coordenadores = [] } = useQuery<User[]>({
     queryKey: ["/api/users/coordenadores"],
-    enabled: isMaster,
+    enabled: canManageAllUsers,
   });
 
   // Create user mutation
@@ -182,7 +187,7 @@ export default function UsersPage() {
     setName("");
     setEmail("");
     setPassword("");
-    setRole(isCoordinator ? "vendedor" : "vendedor");
+    setRole("vendedor");
     setManagerId("");
     setIsDialogOpen(true);
   };
@@ -192,7 +197,7 @@ export default function UsersPage() {
     setName(user.name);
     setEmail(user.email);
     setPassword("");
-    setRole(user.role as "vendedor" | "coordenacao" | "master");
+    setRole(user.role as UserRole);
     setManagerId(user.managerId?.toString() || "");
     setIsDialogOpen(true);
   };
@@ -242,31 +247,50 @@ export default function UsersPage() {
       return false; // Cannot delete yourself
     }
     
+    const targetRole = user.role as UserRole;
+    
     if (isMaster) {
       return true; // Master can delete anyone except themselves
     }
     
-    if (isCoordinator) {
-      // Coordinator can ONLY delete vendedores from their own team
-      return user.role === "vendedor" && user.managerId === currentUser.id;
+    if (isAtendimento) {
+      // Atendimento can delete anyone except master
+      return targetRole !== "master";
     }
     
-    return false; // Vendedores cannot delete anyone
+    if (isCoordenacao) {
+      // Coordenacao can ONLY delete vendedores from their own team
+      return targetRole === "vendedor" && user.managerId === currentUser.id;
+    }
+    
+    return false; // Operacional and vendedores cannot delete anyone
   };
 
   const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      master: "Administrador",
-      coordenacao: "Coordenador",
-      vendedor: "Vendedor",
-    };
-    return labels[role] || role;
+    return ROLE_LABELS[role as UserRole] || role;
   };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
     if (role === "master") return "default";
-    if (role === "coordenacao") return "secondary";
+    if (role === "coordenacao" || role === "atendimento") return "secondary";
     return "outline";
+  };
+  
+  // Get available roles based on current user's role
+  const getAvailableRoles = (): UserRole[] => {
+    if (isMaster) {
+      // Master can create any role
+      return [...USER_ROLES];
+    }
+    if (isAtendimento) {
+      // Atendimento can create any role except master
+      return USER_ROLES.filter(r => r !== "master");
+    }
+    if (isCoordenacao) {
+      // Coordenacao can only create vendedor
+      return ["vendedor"];
+    }
+    return [];
   };
 
   if (isLoadingUsers) {
@@ -283,7 +307,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
           <p className="text-muted-foreground mt-1">
-            {isMaster
+            {canManageAllUsers
               ? "Gerencie todos os usuários do sistema"
               : "Gerencie sua equipe de vendedores"}
           </p>
@@ -303,7 +327,7 @@ export default function UsersPage() {
               <DialogDescription>
                 {editingUser
                   ? "Atualize as informações do usuário"
-                  : isCoordinator
+                  : isCoordenacao
                   ? "Crie um novo vendedor para sua equipe"
                   : "Preencha os dados do novo usuário"}
               </DialogDescription>
@@ -344,22 +368,24 @@ export default function UsersPage() {
                   data-testid="input-user-password"
                 />
               </div>
-              {!isCoordinator && (
+              {getAvailableRoles().length > 1 && (
                 <div className="space-y-2">
                   <Label htmlFor="role">Função</Label>
-                  <Select value={role} onValueChange={(v: any) => setRole(v)}>
+                  <Select value={role} onValueChange={(v: UserRole) => setRole(v)}>
                     <SelectTrigger id="role" data-testid="select-user-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="vendedor">Vendedor</SelectItem>
-                      <SelectItem value="coordenacao">Coordenador</SelectItem>
-                      <SelectItem value="master">Administrador</SelectItem>
+                      {getAvailableRoles().map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
-              {isMaster && role === "vendedor" && (
+              {canManageAllUsers && role === "vendedor" && (
                 <div className="space-y-2">
                   <Label htmlFor="manager">Coordenador (opcional)</Label>
                   <Select value={managerId || "none"} onValueChange={setManagerId}>
@@ -422,7 +448,7 @@ export default function UsersPage() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Função</TableHead>
-                {isMaster && <TableHead>Coordenador</TableHead>}
+                {canManageAllUsers && <TableHead>Coordenador</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -441,7 +467,7 @@ export default function UsersPage() {
                         {getRoleLabel(user.role)}
                       </Badge>
                     </TableCell>
-                    {isMaster && (
+                    {canManageAllUsers && (
                       <TableCell data-testid={`user-manager-${user.id}`}>
                         {manager ? manager.name : "-"}
                       </TableCell>
@@ -468,7 +494,7 @@ export default function UsersPage() {
                       >
                         Editar
                       </Button>
-                      {isMaster && user.id !== currentUser?.id && (
+                      {canManageAllUsers && user.id !== currentUser?.id && (
                         <Button
                           variant={user.isActive ? "destructive" : "default"}
                           size="sm"
@@ -494,7 +520,7 @@ export default function UsersPage() {
               })}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isMaster ? 6 : 5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={canManageAllUsers ? 6 : 5} className="text-center text-muted-foreground py-8">
                     Nenhum usuário encontrado
                   </TableCell>
                 </TableRow>
