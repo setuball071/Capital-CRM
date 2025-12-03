@@ -96,9 +96,9 @@ export const insertBankSchema = createInsertSchema(banks, {
   ajusteSaldoPercentual: z.string().refine(
     (val) => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 100;
+      return !isNaN(num) && num >= -100 && num <= 100;
     },
-    { message: "Ajuste de saldo deve ser entre 0% e 100%" }
+    { message: "Ajuste de saldo deve ser entre -100% e 100%" }
   ).default("0"),
 }).omit({ id: true, createdAt: true });
 
