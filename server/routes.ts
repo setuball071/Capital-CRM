@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import {
   loginSchema,
   registerSchema,
+  insertBankSchema,
   insertAgreementSchema,
   insertCoefficientTableSchema,
   insertSimulationSchema,
@@ -234,6 +235,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     const { passwordHash: _, ...userWithoutPassword } = req.user!;
     return res.json({ user: userWithoutPassword });
+  });
+
+  // ===== BANKS ROUTES =====
+  
+  // Get all active banks (public for calculator)
+  app.get("/api/banks", async (req, res) => {
+    try {
+      const bankList = await storage.getActiveBanks();
+      return res.json(bankList);
+    } catch (error) {
+      console.error("Get banks error:", error);
+      return res.status(500).json({ message: "Erro ao buscar bancos" });
+    }
+  });
+
+  // Get bank by name (public for calculator)
+  app.get("/api/banks/by-name/:name", async (req, res) => {
+    try {
+      const bank = await storage.getBankByName(req.params.name);
+      if (!bank) {
+        // If bank not found, return default config with 0% adjustment
+        return res.json({ 
+          name: req.params.name, 
+          ajusteSaldoPercentual: "0",
+          isActive: true 
+        });
+      }
+      return res.json(bank);
+    } catch (error) {
+      console.error("Get bank by name error:", error);
+      return res.status(500).json({ message: "Erro ao buscar banco" });
+    }
+  });
+
+  // Get all banks (master only)
+  app.get("/api/banks/all", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const bankList = await storage.getAllBanks();
+      return res.json(bankList);
+    } catch (error) {
+      console.error("Get all banks error:", error);
+      return res.status(500).json({ message: "Erro ao buscar bancos" });
+    }
+  });
+
+  // Create bank (master only)
+  app.post("/api/banks", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = insertBankSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      // Check if bank name already exists
+      const existing = await storage.getBankByName(result.data.name);
+      if (existing) {
+        return res.status(400).json({ message: "Já existe um banco com esse nome" });
+      }
+
+      const bank = await storage.createBank(result.data);
+      return res.status(201).json(bank);
+    } catch (error) {
+      console.error("Create bank error:", error);
+      return res.status(500).json({ message: "Erro ao criar banco" });
+    }
+  });
+
+  // Update bank (master only)
+  app.put("/api/banks/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertBankSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const bank = await storage.updateBank(id, result.data);
+      if (!bank) {
+        return res.status(404).json({ message: "Banco não encontrado" });
+      }
+
+      return res.json(bank);
+    } catch (error) {
+      console.error("Update bank error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar banco" });
+    }
+  });
+
+  // Delete bank (master only)
+  app.delete("/api/banks/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteBank(id);
+      return res.json({ message: "Banco deletado com sucesso" });
+    } catch (error) {
+      console.error("Delete bank error:", error);
+      return res.status(500).json({ message: "Erro ao deletar banco" });
+    }
   });
 
   // ===== AGREEMENTS ROUTES =====

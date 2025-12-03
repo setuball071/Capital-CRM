@@ -29,6 +29,16 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Banks table - stores bank-specific configurations
+export const banks = pgTable("banks", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  // Percentual de ajuste aplicado sobre o saldo devedor (ex: 2.5 = 2,5%)
+  ajusteSaldoPercentual: decimal("ajuste_saldo_percentual", { precision: 5, scale: 2 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Agreements table
 export const agreements = pgTable("agreements", {
   id: serial("id").primaryKey(),
@@ -81,6 +91,17 @@ export const insertUserSchema = createInsertSchema(users, {
   role: z.enum(USER_ROLES, { message: "Role inválido" }),
 }).omit({ id: true, createdAt: true });
 
+export const insertBankSchema = createInsertSchema(banks, {
+  name: z.string().min(1, { message: "Nome do banco é obrigatório" }),
+  ajusteSaldoPercentual: z.string().refine(
+    (val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    },
+    { message: "Ajuste de saldo deve ser entre 0% e 100%" }
+  ).default("0"),
+}).omit({ id: true, createdAt: true });
+
 export const insertAgreementSchema = createInsertSchema(agreements, {
   name: z.string().min(1, { message: "Nome é obrigatório" }),
 }).omit({ id: true, createdAt: true });
@@ -114,6 +135,9 @@ export const insertSimulationSchema = createInsertSchema(simulations, {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Bank = typeof banks.$inferSelect;
+export type InsertBank = z.infer<typeof insertBankSchema>;
 
 export type Agreement = typeof agreements.$inferSelect;
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;

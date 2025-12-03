@@ -1,0 +1,89 @@
+No meu simulador de operações, preciso implementar um ajuste de saldo devedor configurável por banco e exibir isso na interface para o usuário, parecido com o que já existe hoje na “Parcela Líquida”.
+
+Objetivo de negócio:
+
+Cada banco pode ter uma taxa de ajuste de saldo, em percentual, aplicada sobre o saldo devedor.
+
+Essa taxa é configurada por banco (não por tabela de coeficientes).
+
+No simulador, quero:
+
+o usuário digita o Saldo Devedor (R$) normal;
+
+o sistema calcula um Saldo Final (R$) = saldo + juros de ajuste;
+
+todas as contas (valor total do contrato, troco do cliente etc.) passam a usar o Saldo Final, e não o saldo original.
+
+o usuário consegue visualizar esse “Saldo Final (R$)” em um campo somente leitura, com uma descrição “Saldo + juros de ajuste”.
+
+1. Banco de dados / modelo de Banco
+
+Na tabela/model de bancos (onde ficam PH Tech, Neo etc.), adicionar um campo numérico, por exemplo:
+
+ajuste_saldo_percentual (padrão 0).
+
+Esse campo representa um percentual (%) a ser aplicado sobre o saldo devedor.
+
+Ex.: 2.5 → 2,5% de aumento no saldo.
+
+Criar a migration necessária para incluir esse campo.
+
+2. Backend – lógica de simulação
+
+Localizar a função que faz o cálculo da simulação (troco, valor total do contrato etc.), por exemplo calcularSimulacao, simulatePurchase ou equivalente.
+
+Hoje, essa função usa diretamente o Saldo Devedor informado pelo usuário.
+
+Quero que você altere a lógica para:
+
+const saldoDevedorBruto = saldoDevedor; // valor digitado
+let saldoFinal = saldoDevedorBruto;
+
+if (banco.ajuste_saldo_percentual && banco.ajuste_saldo_percentual > 0) {
+  const jurosExtra = saldoDevedorBruto * (banco.ajuste_saldo_percentual / 100);
+  saldoFinal = saldoDevedorBruto + jurosExtra;
+}
+
+
+A partir daí, todas as fórmulas que hoje usam saldoDevedor devem passar a usar saldoFinal.
+
+Para bancos com ajuste_saldo_percentual = 0 ou null, o comportamento deve ser idêntico ao atual (sem alteração).
+
+Se possível, extraia isso para uma função auxiliar clara:
+
+function calcularSaldoFinalComAjuste(
+  saldoDevedor: number,
+  ajustePercentual: number
+): number {
+  // implementação aqui
+}
+
+3. Frontend – tela do Simulador
+
+Na seção “Dados da Operação”, hoje tenho um campo Saldo Devedor (R$) e os campos de resultado.
+
+Quero adicionar um novo campo logo abaixo:
+
+Label: “Saldo Final (R$)”
+
+Campo de texto/valor somente leitura (desabilitado), preenchido com o valor calculado saldoFinal.
+
+Abaixo do campo, um texto pequeno e cinza com algo como:
+
+"Saldo + juros de ajuste" ou "Valor após aplicação da taxa de ajuste do saldo".
+
+Esse campo deve ser atualizado automaticamente quando o usuário alterar o Saldo Devedor ou trocar de banco (pois a taxa de ajuste varia por banco).
+
+O valor exibido no “Saldo Final” deve ser exatamente o mesmo saldoFinal que o backend está usando nos cálculos.
+
+4. Critérios de aceite
+
+Para um banco com ajuste_saldo_percentual = 2.5 e saldo devedor digitado de R$ 10.000,00, o “Saldo Final” deve mostrar R$ 10.250,00.
+
+Para um banco com ajuste_saldo_percentual = 0, o “Saldo Final” deve ser igual ao Saldo Devedor digitado.
+
+O troco e o valor total do contrato devem refletir o uso do saldoFinal.
+
+Não alterar a lógica da “Parcela Líquida” (margem de segurança); é uma regra separada.
+
+Me mostre as partes de código alteradas (model/migration do banco, função de simulação e componente do simulador onde o campo “Saldo Final (R$)” é renderizado), com comentários explicando a lógica do ajuste de saldo.

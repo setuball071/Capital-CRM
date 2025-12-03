@@ -3,11 +3,14 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { eq, and, inArray } from "drizzle-orm";
 import {
   users,
+  banks,
   agreements,
   coefficientTables,
   simulations,
   type User,
   type InsertUser,
+  type Bank,
+  type InsertBank,
   type Agreement,
   type InsertAgreement,
   type CoefficientTable,
@@ -30,6 +33,15 @@ export interface IStorage {
   getActiveUsers(): Promise<User[]>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<void>;
+  
+  // Banks
+  getAllBanks(): Promise<Bank[]>;
+  getActiveBanks(): Promise<Bank[]>;
+  getBank(id: number): Promise<Bank | undefined>;
+  getBankByName(name: string): Promise<Bank | undefined>;
+  createBank(bank: InsertBank): Promise<Bank>;
+  updateBank(id: number, data: Partial<InsertBank>): Promise<Bank | undefined>;
+  deleteBank(id: number): Promise<void>;
   
   // Agreements
   getAllAgreements(): Promise<Agreement[]>;
@@ -112,6 +124,46 @@ export class DbStorage implements IStorage {
 
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // ===== BANKS =====
+  
+  async getAllBanks(): Promise<Bank[]> {
+    return await db.select().from(banks);
+  }
+
+  async getActiveBanks(): Promise<Bank[]> {
+    return await db.select().from(banks).where(eq(banks.isActive, true));
+  }
+
+  async getBank(id: number): Promise<Bank | undefined> {
+    const [bank] = await db.select().from(banks).where(eq(banks.id, id));
+    return bank;
+  }
+
+  async getBankByName(name: string): Promise<Bank | undefined> {
+    const [bank] = await db.select().from(banks).where(eq(banks.name, name));
+    return bank;
+  }
+
+  async createBank(bank: InsertBank): Promise<Bank> {
+    const [newBank] = await db.insert(banks).values({
+      ...bank,
+      isActive: true,
+    }).returning();
+    return newBank;
+  }
+
+  async updateBank(id: number, data: Partial<InsertBank>): Promise<Bank | undefined> {
+    const [updated] = await db.update(banks)
+      .set(data)
+      .where(eq(banks.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBank(id: number): Promise<void> {
+    await db.delete(banks).where(eq(banks.id, id));
   }
 
   // ===== AGREEMENTS =====
