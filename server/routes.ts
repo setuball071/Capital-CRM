@@ -11,6 +11,8 @@ import {
   insertSimulationSchema,
   type User,
   type InsertCoefficientTable,
+  USER_ROLES,
+  type UserRole,
 } from "@shared/schema";
 
 // Schema for updating users
@@ -18,7 +20,7 @@ const updateUserSchema = z.object({
   name: z.string().min(3).optional(),
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
-  role: z.enum(["vendedor", "coordenacao", "master"]).optional(),
+  role: z.enum(USER_ROLES).optional(),
   managerId: z.number().int().nullable().optional(),
   isActive: z.boolean().optional(),
 }).strict(); // Reject extra fields
@@ -48,27 +50,48 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// Master role middleware
-function requireMaster(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== "master") {
+// Helper to check if user has one of the allowed roles
+function hasRole(user: User | undefined, allowedRoles: UserRole[]): boolean {
+  if (!user) return false;
+  return allowedRoles.includes(user.role as UserRole);
+}
+
+// Admin only middleware (full access)
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!hasRole(req.user, ["admin"])) {
     return res.status(403).json({ message: "Acesso negado - apenas administradores" });
   }
   next();
 }
 
-// Coordenacao or Master middleware
-function requireManagerAccess(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || (req.user.role !== "master" && req.user.role !== "coordenacao")) {
-    return res.status(403).json({ message: "Acesso negado - apenas coordenadores ou administradores" });
+// Admin or Atendimento middleware (can manage coefficient tables and agreements)
+function requireAdminOrAtendimento(req: Request, res: Response, next: NextFunction) {
+  if (!hasRole(req.user, ["admin", "atendimento", "operacional"])) {
+    return res.status(403).json({ message: "Acesso negado" });
   }
   next();
 }
 
+// Users management access middleware (admin, atendimento, coordenador)
+function requireUserManagementAccess(req: Request, res: Response, next: NextFunction) {
+  if (!hasRole(req.user, ["admin", "atendimento", "coordenador"])) {
+    return res.status(403).json({ message: "Acesso negado - você não tem permissão para gerenciar usuários" });
+  }
+  next();
+}
+
+// Legacy aliases for backward compatibility during migration
+const requireMaster = requireAdmin;
+const requireManagerAccess = requireUserManagementAccess;
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== AUTH ROUTES =====
   
-  // Create user (master creates all, coordenador creates only vendedor)
-  app.post("/api/users", requireAuth, requireManagerAccess, async (req, res) => {
+  // Create user with role-based permissions:
+  // - admin: can create any user
+  // - atendimento: can create any user EXCEPT admin
+  // - coordenador: can only create vendedor linked to themselves
+  app.post("/api/users", requireAuth, requireUserManagementAccess, async (req, res) => {
     try {
       const result = registerSchema.safeParse(req.body);
       
@@ -80,22 +103,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { name, email, password, role, managerId } = result.data;
+      const currentUserRole = req.user!.role as UserRole;
 
-      // Check permissions based on current user role
-      if (req.user!.role === "coordenacao") {
+      // Permission checks based on current user role
+      if (currentUserRole === "coordenador") {
         // Coordenador can only create vendedor
         if (role !== "vendedor") {
           return res.status(403).json({ 
-            message: "Coordenadores só podem criar usuários de venda" 
+            message: "Coordenadores só podem criar vendedores" 
           });
         }
-        // Vendedor must be linked to this coordenador
+        // Vendedor must be linked to this coordenador (or will be auto-linked)
         if (managerId && managerId !== req.user!.id) {
           return res.status(403).json({ 
             message: "Você só pode criar vendedores em sua equipe" 
           });
         }
+      } else if (currentUserRole === "atendimento") {
+        // Atendimento cannot create admin
+        if (role === "admin") {
+          return res.status(403).json({ 
+            message: "Você não tem permissão para criar administradores" 
+          });
+        }
       }
+      // admin has no restrictions
 
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -106,10 +138,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Determine managerId
+      // Determine managerId - auto-link vendedor to coordenador if created by coordenador
       let finalManagerId = managerId;
-      if (role === "vendedor" && req.user!.role === "coordenacao") {
-        // If coordenador is creating vendedor, link to themselves
+      if (role === "vendedor" && currentUserRole === "coordenador") {
         finalManagerId = req.user!.id;
       }
 
@@ -405,20 +436,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== USERS ROUTES =====
   
-  // Get users (hierarchical: master sees all, coordenador sees their team)
-  // REGRAS DE VISIBILIDADE:
-  // - Admin (master): Vê todos os usuários do sistema
-  // - Coordenador: Vê apenas ele mesmo + vendedores da sua equipe (managerId = coordenador.id)
-  //   NÃO vê outros admins, outros coordenadores, nem vendedores de outras equipes
-  app.get("/api/users", requireAuth, requireManagerAccess, async (req, res) => {
+  // Get users with role-based visibility:
+  // - admin: sees all users
+  // - atendimento: sees all users
+  // - coordenador: sees only themselves + vendedores whose managerId equals their id
+  // - operacional/vendedor: blocked (no access to user management)
+  app.get("/api/users", requireAuth, requireUserManagementAccess, async (req, res) => {
     try {
       let users: User[];
+      const currentUserRole = req.user!.role as UserRole;
       
-      if (req.user!.role === "master") {
-        // Master sees all users
+      if (currentUserRole === "admin" || currentUserRole === "atendimento") {
+        // Admin and atendimento see all users
         users = await storage.getAllUsers();
-      } else if (req.user!.role === "coordenacao") {
-        // Coordenador sees only their team (vendedores with managerId = this coordinator's id) + themselves
+      } else if (currentUserRole === "coordenador") {
+        // Coordenador sees only themselves + their vendedores
         const teamUsers = await storage.getUsersByManager(req.user!.id);
         users = [req.user!, ...teamUsers];
       } else {
@@ -435,10 +467,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all coordenadores (for selecting manager when creating vendedor)
-  app.get("/api/users/coordenadores", requireAuth, requireMaster, async (req, res) => {
+  // Accessible by admin and atendimento (they can assign vendedores to coordenadores)
+  app.get("/api/users/coordenadores", requireAuth, async (req, res) => {
     try {
+      const currentUserRole = req.user!.role as UserRole;
+      if (!hasRole(req.user, ["admin", "atendimento"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
       const allUsers = await storage.getAllUsers();
-      const coordenadores = allUsers.filter(u => u.role === "coordenacao" && u.isActive);
+      const coordenadores = allUsers.filter(u => u.role === "coordenador" && u.isActive);
       const withoutPasswords = coordenadores.map(({ passwordHash: _, ...user }) => user);
       return res.json(withoutPasswords);
     } catch (error) {
@@ -447,10 +485,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update user
-  app.put("/api/users/:id", requireAuth, requireManagerAccess, async (req, res) => {
+  // Update user with role-based permissions:
+  // - admin: can update any user
+  // - atendimento: can update any user EXCEPT admins
+  // - coordenador: can only update themselves or their vendedores (no role/managerId changes)
+  app.put("/api/users/:id", requireAuth, requireUserManagementAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const currentUserRole = req.user!.role as UserRole;
       
       // Validate input
       const validationResult = updateUserSchema.safeParse(req.body);
@@ -469,19 +511,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      // Check permissions
-      if (req.user!.role === "coordenacao") {
-        // Coordinators can only edit themselves or their direct reports
-        const canEdit = targetUser.id === req.user!.id || targetUser.managerId === req.user!.id;
+      const targetUserRole = targetUser.role as UserRole;
+
+      // Check permissions based on current user role
+      if (currentUserRole === "coordenador") {
+        // Coordenador can only edit themselves or their vendedores
+        const canEdit = targetUser.id === req.user!.id || 
+          (targetUserRole === "vendedor" && targetUser.managerId === req.user!.id);
         if (!canEdit) {
-          return res.status(403).json({ message: "Você só pode editar seu próprio perfil ou membros da sua equipe" });
+          return res.status(403).json({ message: "Você só pode editar seu próprio perfil ou vendedores da sua equipe" });
         }
         
-        // Coordinators cannot change role or managerId
+        // Coordenador cannot change role or managerId
         if (validatedData.role !== undefined || validatedData.managerId !== undefined) {
           return res.status(403).json({ message: "Você não pode alterar a função ou coordenador de usuários" });
         }
+      } else if (currentUserRole === "atendimento") {
+        // Atendimento cannot edit admins
+        if (targetUserRole === "admin") {
+          return res.status(403).json({ message: "Você não tem permissão para editar administradores" });
+        }
+        // Atendimento cannot change role to admin
+        if (validatedData.role === "admin") {
+          return res.status(403).json({ message: "Você não pode promover usuários a administrador" });
+        }
       }
+      // admin has no restrictions
 
       // Build update object from validated data
       let dataToUpdate: any = {};
@@ -489,8 +544,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (validatedData.email !== undefined) dataToUpdate.email = validatedData.email;
       if (validatedData.isActive !== undefined) dataToUpdate.isActive = validatedData.isActive;
       
-      // Only master can change role and managerId
-      if (req.user!.role === "master") {
+      // Only admin and atendimento can change role and managerId
+      if (currentUserRole === "admin" || currentUserRole === "atendimento") {
         if (validatedData.role !== undefined) dataToUpdate.role = validatedData.role;
         if (validatedData.managerId !== undefined) dataToUpdate.managerId = validatedData.managerId;
       }
@@ -519,10 +574,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete user
-  app.delete("/api/users/:id", requireAuth, requireManagerAccess, async (req, res) => {
+  // Delete user with role-based permissions:
+  // - admin: can delete any user (except themselves)
+  // - atendimento: can delete any user EXCEPT admins
+  // - coordenador: can only delete vendedores from their team
+  app.delete("/api/users/:id", requireAuth, requireUserManagementAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const currentUserRole = req.user!.role as UserRole;
       
       // Validate ID is a valid number
       if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
@@ -540,13 +599,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      // Check permissions
-      if (req.user!.role === "coordenacao") {
-        // Coordinators can only delete vendedores from their team
-        if (targetUser.role !== "vendedor" || targetUser.managerId !== req.user!.id) {
+      const targetUserRole = targetUser.role as UserRole;
+
+      // Check permissions based on current user role
+      if (currentUserRole === "coordenador") {
+        // Coordenador can only delete vendedores from their team
+        if (targetUserRole !== "vendedor" || targetUser.managerId !== req.user!.id) {
           return res.status(403).json({ message: "Você só pode excluir vendedores da sua equipe" });
         }
+      } else if (currentUserRole === "atendimento") {
+        // Atendimento cannot delete admins
+        if (targetUserRole === "admin") {
+          return res.status(403).json({ message: "Você não tem permissão para excluir administradores" });
+        }
       }
+      // admin has no restrictions (except self-delete which is already checked)
 
       // Delete user
       await storage.deleteUser(id);

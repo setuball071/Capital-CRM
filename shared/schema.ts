@@ -4,13 +4,26 @@ import { z } from "zod";
 
 // ===== DATABASE TABLES =====
 
+// User roles enum
+export const USER_ROLES = ["admin", "coordenador", "atendimento", "operacional", "vendedor"] as const;
+export type UserRole = typeof USER_ROLES[number];
+
+// Role labels for display
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Administrador",
+  coordenador: "Coordenador",
+  atendimento: "Atendimento",
+  operacional: "Operacional",
+  vendedor: "Vendedor",
+};
+
 // Users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: varchar("role", { length: 50 }).notNull().default("vendedor"), // 'vendedor', 'coordenacao', or 'master'
+  role: varchar("role", { length: 50 }).notNull().default("vendedor"), // 'admin', 'coordenador', 'atendimento', 'operacional', 'vendedor'
   managerId: integer("manager_id").references(() => users.id, { onDelete: "set null" }), // For vendedor -> coordenador hierarchy
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -65,7 +78,7 @@ export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email({ message: "Email inválido" }),
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
   passwordHash: z.string().min(6, { message: "Senha deve ter pelo menos 6 caracteres" }),
-  role: z.enum(["vendedor", "coordenacao", "master"], { message: "Role deve ser 'vendedor', 'coordenacao' ou 'master'" }),
+  role: z.enum(USER_ROLES, { message: "Role inválido" }),
 }).omit({ id: true, createdAt: true });
 
 export const insertAgreementSchema = createInsertSchema(agreements, {
@@ -124,7 +137,7 @@ export const registerSchema = z.object({
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
   email: z.string().email({ message: "Email inválido" }),
   password: z.string().min(6, { message: "Senha deve ter pelo menos 6 caracteres" }),
-  role: z.enum(["vendedor", "coordenacao", "master"], { message: "Role deve ser 'vendedor', 'coordenacao' ou 'master'" }),
+  role: z.enum(USER_ROLES, { message: "Role inválido" }),
   managerId: z.number().optional(),
 });
 

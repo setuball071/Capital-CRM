@@ -1,0 +1,111 @@
+No meu sistema de gestão de usuários, quero ajustar a hierarquia de permissões.
+
+Roles: admin, coordenador, atendimento, operacional, vendedor.
+
+Regras de negócio por role:
+
+Admin (admin)
+
+Pode ver todos os usuários.
+
+Pode criar/editar/excluir qualquer usuário, incluindo admin.
+
+Acessa todas as telas (Simulador, Convênios, Tabelas de Coeficientes, Usuários etc.).
+
+Atendimento (atendimento)
+
+Acessa: Simulador, Convênios, Tabelas de Coeficientes, Usuários.
+
+Pode visualizar todos os usuários.
+
+Pode criar/editar usuários com qualquer role, exceto admin.
+
+Coordenador (coordenador)
+
+Acessa apenas:
+
+Simulador
+
+Tela de Usuários (restrita à equipe de vendas dele)
+
+Na tela de usuários:
+
+só pode ver:
+
+ele mesmo
+
+usuários com role vendedor cujo coordenador_id (ou campo equivalente) seja o id dele.
+
+pode criar apenas usuários com role vendedor, já vinculando o coordenador_id ao próprio coordenador logado.
+
+não pode criar/editar usuários com roles admin, atendimento, operacional ou outros coordenador.
+
+Operacional (operacional)
+
+Acessa: Simulador, Convênios, Tabelas de Coeficientes.
+
+Não tem acesso à tela de Usuários (rotas devem ser bloqueadas no backend e menu não deve renderizar esse item).
+
+Não cria nem edita usuários.
+
+Vendedor (vendedor)
+
+Acesso operacional (ex.: Simulador).
+
+Não acessa tela de Usuários.
+
+Não cria nem edita usuários.
+
+O que implementar/ajustar:
+
+Model / enum de roles
+
+Garantir que atendimento e operacional estejam no enum/constant de roles.
+
+Backend – middleware de autorização e rotas de usuário
+
+Nas rotas de listagem/criação/edição/exclusão de usuários:
+
+admin: sem restrição.
+
+atendimento:
+
+pode listar todos os usuários.
+
+pode criar/editar qualquer usuário, exceto se a role do alvo for admin (nesse caso, retornar erro de permissão).
+
+coordenador:
+
+listagem: retornar apenas ele mesmo + usuários com role vendedor cujo coordenador_id seja igual ao id do coordenador logado.
+
+criação: permitir criar apenas usuários com role vendedor, sempre preenchendo coordenador_id com o id do coordenador logado.
+
+edição: permitir editar apenas esses vendedores da equipe dele; bloquear qualquer tentativa de alterar role para algo diferente de vendedor ou acessar outros usuários.
+
+operacional e vendedor: bloquear completamente acesso às rotas de gestão de usuários.
+
+Frontend – menu lateral
+
+admin e atendimento: veem todos os itens permitidos.
+
+coordenador: menu deve exibir somente:
+
+“Simulador”
+
+“Usuários”
+
+operacional e vendedor: não devem ver o item “Usuários”.
+
+Frontend – Tela “Gerenciar Usuários”
+
+No select de role:
+
+se logado como admin: mostrar todas as roles.
+
+se logado como atendimento: mostrar todas as roles exceto admin.
+
+se logado como coordenador: mostrar apenas a opção vendedor.
+
+Garantir que a lista exibida nessa tela respeite os filtros do backend (principalmente para coordenador).
+
+Mostre o código atualizado das partes principais (middleware de permissão, rotas de usuário, condições do menu e select de role) com comentários explicando a lógica de cada role.
