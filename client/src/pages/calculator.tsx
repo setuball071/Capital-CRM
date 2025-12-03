@@ -30,9 +30,10 @@ const OPERATION_TYPES = [
 ] as const;
 
 export default function CalculatorPage() {
-  const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number } | null>(null);
+  const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number; saldoFinal: number } | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [liquidPayment, setLiquidPayment] = useState<number>(0);
+  const [ajusteSaldoPercentual, setAjusteSaldoPercentual] = useState<number>(0);
   const simulatorRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -186,6 +187,32 @@ export default function CalculatorPage() {
     }
   }, [availableTables, form]);
 
+  // Fetch bank balance adjustment when bank changes
+  useEffect(() => {
+    async function fetchBankAdjustment() {
+      if (!watchBank) {
+        setAjusteSaldoPercentual(0);
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/banks/by-name/${encodeURIComponent(watchBank)}`);
+        if (res.ok) {
+          const bankData = await res.json();
+          const ajuste = parseFloat(bankData.ajusteSaldoPercentual || "0");
+          setAjusteSaldoPercentual(ajuste);
+        } else {
+          setAjusteSaldoPercentual(0);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar ajuste do banco:", error);
+        setAjusteSaldoPercentual(0);
+      }
+    }
+    
+    fetchBankAdjustment();
+  }, [watchBank]);
+
   // Calculate liquid payment when monthly payment or selected table changes
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -230,7 +257,8 @@ export default function CalculatorPage() {
           const simulationResult = calculateSimulation(
             liquidPayment,
             outstandingBalance,
-            coefficient
+            coefficient,
+            ajusteSaldoPercentual
           );
           setResult(simulationResult);
         }
@@ -240,7 +268,7 @@ export default function CalculatorPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, availableTables, liquidPayment]);
+  }, [form, availableTables, liquidPayment, ajusteSaldoPercentual]);
 
   async function handleSave(format: 'png' | 'jpeg' | 'pdf') {
     if (!result) {
@@ -365,6 +393,19 @@ export default function CalculatorPage() {
         pdf.setFontSize(8);
         pdf.text(selectedTable?.tableName || '', 150, yPos + 5);
         yPos += 15;
+
+        // Add Saldo Final if there's an adjustment
+        if (ajusteSaldoPercentual !== 0) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(100, 116, 139);
+          const ajusteLabel = ajusteSaldoPercentual > 0 ? `+${ajusteSaldoPercentual.toFixed(2)}%` : `${ajusteSaldoPercentual.toFixed(2)}%`;
+          pdf.text(`Saldo Final (Ajuste ${ajusteLabel})`, 15, yPos);
+          pdf.setTextColor(0, 0, 0);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(formatCurrency(result.saldoFinal), 15, yPos + 5);
+          yPos += 12;
+        }
 
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
@@ -872,6 +913,28 @@ export default function CalculatorPage() {
                 <h2 className="text-base font-semibold text-foreground mb-3">
                   Resultados da Simulação
                 </h2>
+                
+                {/* Show Saldo Final when there's an adjustment */}
+                {result && ajusteSaldoPercentual !== 0 && (
+                  <Card className="mb-4">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Saldo Final (Ajuste de {ajusteSaldoPercentual > 0 ? '+' : ''}{ajusteSaldoPercentual.toFixed(2)}%)
+                          </p>
+                          <p className="text-xs text-muted-foreground/70">
+                            Saldo devedor ajustado conforme configuração do banco
+                          </p>
+                        </div>
+                        <p className="text-lg font-semibold font-mono text-foreground" data-testid="text-saldo-final">
+                          {formatCurrency(result.saldoFinal)}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Card>
                     <CardContent className="pt-5 pb-6 text-center">

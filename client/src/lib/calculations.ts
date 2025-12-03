@@ -30,21 +30,42 @@ export function calcularParcelaComMargem(
 }
 
 /**
+ * Calcula o saldo final ajustado com base no percentual de ajuste do banco
+ * 
+ * @param saldoDevedor - Saldo devedor original informado pelo cliente
+ * @param ajustePercentual - Percentual de ajuste configurado para o banco (pode ser negativo ou positivo)
+ * @returns Saldo final ajustado
+ */
+export function calcularSaldoFinalAjustado(
+  saldoDevedor: number,
+  ajustePercentual: number
+): number {
+  // O ajuste pode ser positivo (aumentar saldo) ou negativo (diminuir saldo)
+  const ajuste = saldoDevedor * (ajustePercentual / 100);
+  const saldoFinal = saldoDevedor + ajuste;
+  
+  // O saldo final não pode ser negativo
+  return Math.max(0, saldoFinal);
+}
+
+/**
  * Calculate simulation result using coefficient from database
  * 
  * Formula:
  * - Principal (Total Contract Value) = Monthly Payment / Coefficient
- * - Client Refund = Principal - Outstanding Balance
+ * - Client Refund = Principal - Outstanding Balance (adjusted by bank's balance adjustment percentage)
  */
 export function calculateSimulation(
   monthlyPayment: number,
   outstandingBalance: number,
-  coefficient: number
+  coefficient: number,
+  ajusteSaldoPercentual: number = 0
 ) {
   if (coefficient === 0) {
     return {
       totalContractValue: 0,
       clientRefund: 0,
+      saldoFinal: outstandingBalance,
     };
   }
 
@@ -54,12 +75,16 @@ export function calculateSimulation(
   // Total contract value is the calculated principal
   const totalContractValue = principal;
   
-  // Client refund is the difference between principal and outstanding balance
-  const clientRefund = principal - outstandingBalance;
+  // Calculate adjusted final balance
+  const saldoFinal = calcularSaldoFinalAjustado(outstandingBalance, ajusteSaldoPercentual);
+  
+  // Client refund is the difference between principal and adjusted outstanding balance
+  const clientRefund = principal - saldoFinal;
 
   return {
     totalContractValue,
     clientRefund,
+    saldoFinal,
   };
 }
 
