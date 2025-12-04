@@ -7,6 +7,7 @@ import {
   agreements,
   coefficientTables,
   simulations,
+  roteirosBancarios,
   type User,
   type InsertUser,
   type Bank,
@@ -17,6 +18,8 @@ import {
   type InsertCoefficientTable,
   type Simulation,
   type InsertSimulation,
+  type RoteiroBancario,
+  type RoteiroImportItem,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -79,6 +82,14 @@ export interface IStorage {
   getRankingByOperationType(startDate?: string, endDate?: string, userIds?: number[]): Promise<{ operationType: string; count: number }[]>;
   getRecentSimulationsWithUser(limit?: number, startDate?: string, endDate?: string, userIds?: number[]): Promise<Array<Simulation & { userName: string }>>;
   getSimulationsByUserIds(userIds: number[]): Promise<Simulation[]>;
+  
+  // Roteiros Bancários
+  getActiveRoteiros(): Promise<RoteiroBancario[]>;
+  getRoteiro(id: number): Promise<RoteiroBancario | undefined>;
+  searchRoteiros(convenio?: string, tipoOperacao?: string, idade?: number): Promise<RoteiroBancario[]>;
+  importRoteiros(roteiros: RoteiroImportItem[]): Promise<{ created: number; combos: string[] }>;
+  getDistinctConvenios(): Promise<string[]>;
+  getDistinctTiposOperacao(): Promise<string[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -504,6 +515,109 @@ export class DbStorage implements IStorage {
       return [];
     }
     return await db.select().from(simulations).where(inArray(simulations.userId, userIds));
+  }
+
+  // ===== ROTEIROS BANCÁRIOS =====
+  
+  async getActiveRoteiros(): Promise<RoteiroBancario[]> {
+    return await db.select().from(roteirosBancarios).where(eq(roteirosBancarios.ativo, true));
+  }
+
+  async getRoteiro(id: number): Promise<RoteiroBancario | undefined> {
+    const [roteiro] = await db.select().from(roteirosBancarios).where(eq(roteirosBancarios.id, id));
+    return roteiro;
+  }
+
+  async searchRoteiros(convenio?: string, tipoOperacao?: string, idade?: number): Promise<RoteiroBancario[]> {
+    const conditions = [eq(roteirosBancarios.ativo, true)];
+    
+    if (convenio) {
+      conditions.push(eq(roteirosBancarios.convenio, convenio));
+    }
+    if (tipoOperacao) {
+      conditions.push(eq(roteirosBancarios.tipoOperacao, tipoOperacao));
+    }
+    
+    const roteiros = await db.select().from(roteirosBancarios).where(and(...conditions));
+    
+    // Filter by age if provided
+    if (idade !== undefined && idade !== null) {
+      return roteiros.filter(roteiro => {
+        const dados = roteiro.dados as any;
+        const faixasIdade = dados?.faixas_idade;
+        
+        // If no faixas_idade, consider age as accepted
+        if (!faixasIdade || !Array.isArray(faixasIdade) || faixasIdade.length === 0) {
+          return true;
+        }
+        
+        // Check if age falls within any faixa
+        return faixasIdade.some((faixa: any) => {
+          const idadeMin = faixa.idade_minima ?? 0;
+          const idadeMax = faixa.idade_maxima ?? 999;
+          return idade >= idadeMin && idade <= idadeMax;
+        });
+      });
+    }
+    
+    return roteiros;
+  }
+
+  async importRoteiros(roteiros: RoteiroImportItem[]): Promise<{ created: number; combos: string[] }> {
+    const combos: string[] = [];
+    let created = 0;
+    
+    for (const roteiro of roteiros) {
+      const combo = `${roteiro.banco}|${roteiro.convenio}|${roteiro.tipo_operacao}`;
+      
+      // Deactivate existing records with same combo
+      await db.update(roteirosBancarios)
+        .set({ ativo: false, updatedAt: new Date() })
+        .where(and(
+          eq(roteirosBancarios.banco, roteiro.banco),
+          eq(roteirosBancarios.convenio, roteiro.convenio),
+          eq(roteirosBancarios.tipoOperacao, roteiro.tipo_operacao)
+        ));
+      
+      // Extract dados from roteiro
+      const dados = {
+        publico_alvo: roteiro.publico_alvo || [],
+        publico_nao_atendido: roteiro.publico_nao_atendido || [],
+        faixas_idade: roteiro.faixas_idade || [],
+        limites_operacionais: roteiro.limites_operacionais || {},
+        documentacao_obrigatoria: roteiro.documentacao_obrigatoria || [],
+        portais_acesso: roteiro.portais_acesso || [],
+        regras_especiais: roteiro.regras_especiais || [],
+        detalhes_adicionais: roteiro.detalhes_adicionais || [],
+      };
+      
+      // Insert new record
+      await db.insert(roteirosBancarios).values({
+        banco: roteiro.banco,
+        convenio: roteiro.convenio,
+        segmento: roteiro.segmento || null,
+        tipoOperacao: roteiro.tipo_operacao,
+        dados: dados,
+        ativo: true,
+      });
+      
+      combos.push(combo);
+      created++;
+    }
+    
+    return { created, combos };
+  }
+
+  async getDistinctConvenios(): Promise<string[]> {
+    const roteiros = await db.select().from(roteirosBancarios).where(eq(roteirosBancarios.ativo, true));
+    const uniqueConvenios = [...new Set(roteiros.map(r => r.convenio))];
+    return uniqueConvenios.sort();
+  }
+
+  async getDistinctTiposOperacao(): Promise<string[]> {
+    const roteiros = await db.select().from(roteirosBancarios).where(eq(roteirosBancarios.ativo, true));
+    const uniqueTipos = [...new Set(roteiros.map(r => r.tipoOperacao))];
+    return uniqueTipos.sort();
   }
 }
 
