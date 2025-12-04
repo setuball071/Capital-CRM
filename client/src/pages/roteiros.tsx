@@ -87,10 +87,8 @@ export default function RoteirosPage() {
   const importMutation = useMutation({
     mutationFn: async (jsonData: string) => {
       const parsed = JSON.parse(jsonData);
-      return apiRequest("/api/roteiros/importar-json", {
-        method: "POST",
-        body: JSON.stringify(parsed),
-      });
+      const response = await apiRequest("POST", "/api/roteiros/importar-json", parsed);
+      return response.json();
     },
     onSuccess: (data: any) => {
       toast({
