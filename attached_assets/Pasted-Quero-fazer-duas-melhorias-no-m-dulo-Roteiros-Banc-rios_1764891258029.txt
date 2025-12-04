@@ -1,0 +1,283 @@
+Quero fazer duas melhorias no módulo Roteiros Bancários do meu CRM:
+
+Edição manual dos metadados do roteiro (banco, convênio, segmento, tipo de operação).
+
+Nova pesquisa inteligente usando IA da OpenAI apenas para interpretar a consulta (não usar IA para ler PDF ou importar JSON).
+
+O projeto já tem:
+
+Tabela roteiros_bancarios com colunas:
+
+id, banco, convenio, segmento, tipo_operacao, dados (JSONB), ativo, created_at, updated_at.
+
+Tela Roteiros Bancários → Lista com botão “Ver detalhes”.
+
+Tela Roteiros Bancários → Pesquisa com filtros engessados (convênio, tipo, idade).
+
+Endpoint para importar JSON de roteiros (não mexer nessa parte).
+
+Quero que você faça as alterações abaixo.
+
+1. Edição manual de metadados do roteiro
+1.1. Backend
+
+Criar um endpoint para atualizar os metadados de um roteiro já importado:
+
+Método: PUT ou PATCH
+
+Rota: /api/roteiros/:id
+
+Payload esperado (JSON):
+
+{
+  "banco": "NEO CRÉDITO LTDA.",
+  "convenio": "Governo Federal",
+  "segmento": "SIAPE",
+  "tipo_operacao": "cartao_beneficio"
+}
+
+
+Regras:
+
+Somente roles admin, atendimento e operacional podem chamar essa rota.
+
+:id é o ID do registro em roteiros_bancarios.
+
+Atualizar apenas os campos enviados no body (banco, convenio, segmento, tipo_operacao).
+
+Não alterar o campo dados (JSONB) nem ativo.
+
+Atualizar updated_at para NOW().
+
+Retornar o objeto atualizado.
+
+1.2. Frontend – Lista de Roteiros
+
+Na tela Roteiros Bancários → Lista:
+
+Ao lado de “Ver detalhes”, adicionar um botão/ação “Editar”.
+
+Ao clicar em “Editar”, abrir um modal ou página com formulário contendo:
+
+Banco (input texto)
+
+Convênio (input texto)
+
+Segmento (input texto)
+
+Tipo de Operação (select com valores fixos internos):
+
+credito_novo
+
+refin
+
+compra_divida
+
+compra_cartao_beneficio
+
+cartao_beneficio
+
+cartao_consignado
+
+nao_especificado (ou deixar vazio, se já existir esse padrão)
+
+Preencher os campos com os valores atuais do registro.
+
+Ao salvar, enviar PUT /api/roteiros/:id com os campos alterados.
+
+Atualizar a lista após salvar (sem precisar recarregar a página inteira).
+
+2. Pesquisa inteligente com IA da OpenAI (somente para interpretar consulta)
+
+Quero que a aba Pesquisa deixe de depender de 3 campos obrigatórios.
+Ela precisa funcionar com uma consulta em linguagem natural, usando a OpenAI apenas para interpretar a frase e transformar em filtros.
+
+2.1. Frontend – nova interface de pesquisa
+
+Na aba Roteiros Bancários → Pesquisa:
+
+Substituir os filtros engessados por:
+
+Um campo de texto livre: Consulta (placeholder: “Ex.: siape 60 anos cartão benefício spprev”).
+
+Botão “Pesquisar”.
+
+Opcional: se quiser manter Convênio e Tipo de Operação como selects, eles devem ser opcionais, nunca obrigatórios. A busca deve funcionar só com o texto também.
+
+Quando o usuário clicar em “Pesquisar”:
+
+Enviar requisição para um novo endpoint do backend (descrito abaixo), passando o texto da consulta.
+
+2.2. Backend – integração com OpenAI
+
+Usar a OpenAI somente para interpretar o texto em filtros.
+O banco de dados continua sendo consultado localmente.
+
+Assumo que o projeto é Node.js. Se ainda não tiver, criar um cliente OpenAI:
+
+// openaiClient.js
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export default client;
+
+
+A chave OPENAI_API_KEY será definida nas variáveis de ambiente do Replit (Secrets).
+
+Criar uma função utilitária interpretarConsulta(q) que:
+
+Recebe uma string q (texto digitado pelo usuário).
+
+Chama a API da OpenAI (modelo sugerido: gpt-4.1-mini) com o seguinte comportamento:
+
+system prompt: usar um interpretador de consulta como abaixo (sinta-se à vontade para encaixar no código):
+
+Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
+
+Receberá uma frase digitada pelo usuário (por exemplo:
+- "gov sp 60 anos cartão benefício"
+- "siape compra dívida 71 anos limite parcela 1600"
+- "portal spprev documentação")
+
+Sua função é transformar essa frase em um JSON de filtros para o backend.
+
+Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
+
+{
+  "convenio": null,
+  "segmento": null,
+  "tipo_operacao": null,
+  "idade": null,
+  "palavras_chave": []
+}
+
+Regras:
+
+1) "convenio":
+   - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
+   - Se encontrar "siape" -> "SIAPE".
+   - Se encontrar "inss" -> "INSS".
+   - Caso contrário, null.
+
+2) "segmento":
+   - Use somente se houver indicação clara de segmento específico (ex.: "SIAPE", "GOV SP").
+   - Caso contrário, null.
+
+3) "tipo_operacao":
+   - Valores possíveis:
+     - "credito_novo"
+     - "refin"
+     - "compra_divida"
+     - "compra_cartao_beneficio"
+     - "cartao_beneficio"
+     - "cartao_consignado"
+   - Mapear:
+     - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
+     - "refin", "refinanciamento" -> "refin"
+     - "compra de dívida", "compra divida", "compra de contratos" -> "compra_divida"
+     - "compra de cartão benefício" -> "compra_cartao_beneficio"
+     - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
+     - "cartão consignado", "cartao consignado" -> "cartao_consignado"
+   - Se não for possível saber, deixe null.
+
+4) "idade":
+   - Se houver um número que pareça uma idade (ex.: 60, 71, 74), coloque esse número.
+   - Senão, null.
+
+5) "palavras_chave":
+   - Liste palavras importantes para busca textual no banco de dados (ex.: "portal", "spprev", "documentacao", "limite parcela").
+   - Se não houver, [].
+
+Não escreva nada fora do JSON.
+
+
+user prompt: a string q.
+
+response_format: { type: "json_object" }.
+
+A função deve parsear a resposta e retornar um objeto JS:
+
+{
+  convenio: string | null,
+  segmento: string | null,
+  tipo_operacao: string | null,
+  idade: number | null,
+  palavras_chave: string[]
+}
+
+2.3. Backend – endpoint de pesquisa com IA
+
+Criar endpoint:
+
+GET /api/roteiros/ia-search?q=...
+
+Fluxo da rota:
+
+Ler q da query string (req.query.q).
+
+Se q estiver vazio, retornar erro 400.
+
+Chamar interpretarConsulta(q) para obter:
+
+const filtros = {
+  convenio,
+  segmento,
+  tipo_operacao,
+  idade,
+  palavras_chave
+};
+
+
+Buscar em roteiros_bancarios somente registros ativo = true, aplicando:
+
+Se convenio vier preenchido → filtrar por convenio (case-insensitive).
+
+Se segmento vier preenchido → filtrar por segmento.
+
+Se tipo_operacao vier preenchido → filtrar por tipo_operacao.
+
+Se idade vier preenchida:
+
+Ler o campo dados (JSONB) e verificar se a idade se encaixa em alguma faixa de faixas_idade dentro do JSON.
+
+Se não existirem faixas, considerar idade como aceita.
+
+Para palavras_chave:
+
+Fazer busca textual em dados (JSONB) usando ILIKE ou full text (por exemplo, converter dados para texto com ::text e usar ILIKE para cada palavra, ou to_tsvector se já estiver configurado).
+
+Se palavras_chave estiver vazio, pular essa parte.
+
+Montar o retorno como uma lista de roteiros com as principais informações:
+
+[
+  {
+    "id": 1,
+    "banco": "...",
+    "convenio": "...",
+    "segmento": "...",
+    "tipo_operacao": "...",
+    "updated_at": "...",
+    "resumo": {
+      "publico_alvo": [...primeiros itens...],
+      "faixas_idade": [...primeiras faixas...],
+      "portais": [...primeiros portais...]
+    }
+  }
+]
+
+
+O frontend da aba Pesquisa deve exibir esses resultados em cards ou tabela, com botão “Ver detalhes” reaproveitando a tela de detalhes já existente.
+
+3. Importante
+
+Não remover nem quebrar o endpoint atual de importação JSON de roteiros.
+
+Não usar OpenAI para ler PDF ou mexer em dados – a IA será usada somente na rota de pesquisa para interpretar a frase digitada.
+
+Garantir tratamento de erro na chamada da OpenAI (timeout, erro de rede, etc.) e retornar uma mensagem amigável para o usuário se a IA falhar.
+
+Faça todas essas alterações no backend e frontend, seguindo o padrão de código já existente no projeto.
