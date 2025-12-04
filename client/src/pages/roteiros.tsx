@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X } from "lucide-react";
+import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X, Pencil, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -47,15 +48,58 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { RoteiroBancario, RoteiroDados } from "@shared/schema";
 
+const TIPOS_OPERACAO = [
+  { value: "credito_novo", label: "Crédito Novo" },
+  { value: "refin", label: "Refinanciamento" },
+  { value: "compra_divida", label: "Compra de Dívida" },
+  { value: "compra_cartao_beneficio", label: "Compra de Cartão Benefício" },
+  { value: "cartao_beneficio", label: "Cartão Benefício" },
+  { value: "cartao_consignado", label: "Cartão Consignado" },
+  { value: "nao_especificado", label: "Não Especificado" },
+];
+
+interface IASearchResult {
+  id: number;
+  banco: string;
+  convenio: string;
+  segmento: string | null;
+  tipo_operacao: string;
+  updated_at: string;
+  resumo: {
+    publico_alvo: string[];
+    faixas_idade: any[];
+    portais: string[];
+  };
+}
+
+interface IASearchResponse {
+  query: string;
+  filters_interpreted: {
+    convenio: string | null;
+    segmento: string | null;
+    tipo_operacao: string | null;
+    idade: number | null;
+    palavras_chave: string[];
+  };
+  results: IASearchResult[];
+  total: number;
+}
+
 export default function RoteirosPage() {
   const { toast } = useToast();
   const [selectedRoteiro, setSelectedRoteiro] = useState<RoteiroBancario | null>(null);
+  const [editingRoteiro, setEditingRoteiro] = useState<RoteiroBancario | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [jsonInput, setJsonInput] = useState("");
-  const [searchConvenio, setSearchConvenio] = useState<string>("");
-  const [searchTipoOperacao, setSearchTipoOperacao] = useState<string>("");
-  const [searchIdade, setSearchIdade] = useState<string>("");
-  const [isSearchMode, setIsSearchMode] = useState(false);
+  
+  const [editBanco, setEditBanco] = useState("");
+  const [editConvenio, setEditConvenio] = useState("");
+  const [editSegmento, setEditSegmento] = useState("");
+  const [editTipoOperacao, setEditTipoOperacao] = useState("");
+  
+  const [iaQuery, setIaQuery] = useState("");
+  const [iaSearchResults, setIaSearchResults] = useState<IASearchResponse | null>(null);
+  const [isIaSearching, setIsIaSearching] = useState(false);
 
   const { data: roteiros = [], isLoading } = useQuery<RoteiroBancario[]>({
     queryKey: ["/api/roteiros"],
@@ -67,21 +111,6 @@ export default function RoteirosPage() {
 
   const { data: tiposOperacao = [] } = useQuery<string[]>({
     queryKey: ["/api/roteiros/filters/tipos-operacao"],
-  });
-
-  const searchQuery = useQuery<RoteiroBancario[]>({
-    queryKey: ["/api/roteiros/search", searchConvenio, searchTipoOperacao, searchIdade],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (searchConvenio && searchConvenio !== "all") params.set("convenio", searchConvenio);
-      if (searchTipoOperacao && searchTipoOperacao !== "all") params.set("tipoOperacao", searchTipoOperacao);
-      if (searchIdade) params.set("idade", searchIdade);
-      
-      const res = await fetch(`/api/roteiros/search?${params.toString()}`);
-      if (!res.ok) throw new Error("Erro ao pesquisar");
-      return res.json();
-    },
-    enabled: isSearchMode,
   });
 
   const importMutation = useMutation({
@@ -105,6 +134,30 @@ export default function RoteirosPage() {
       toast({
         title: "Erro na importação",
         description: error.message || "Erro ao importar JSON",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await apiRequest("PUT", `/api/roteiros/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Roteiro atualizado",
+        description: "Os metadados foram atualizados com sucesso",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros/filters/convenios"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros/filters/tipos-operacao"] });
+      setEditingRoteiro(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar",
+        description: error.message || "Erro ao atualizar roteiro",
         variant: "destructive",
       });
     },
@@ -144,19 +197,86 @@ export default function RoteirosPage() {
     }
   };
 
-  const handleSearch = () => {
-    setIsSearchMode(true);
-    searchQuery.refetch();
+  const openEditDialog = (roteiro: RoteiroBancario) => {
+    setEditingRoteiro(roteiro);
+    setEditBanco(roteiro.banco);
+    setEditConvenio(roteiro.convenio);
+    setEditSegmento(roteiro.segmento || "");
+    setEditTipoOperacao(roteiro.tipoOperacao);
   };
 
-  const clearSearch = () => {
-    setIsSearchMode(false);
-    setSearchConvenio("");
-    setSearchTipoOperacao("");
-    setSearchIdade("");
+  const handleUpdateRoteiro = () => {
+    if (!editingRoteiro) return;
+    
+    const data: any = {};
+    if (editBanco !== editingRoteiro.banco) data.banco = editBanco;
+    if (editConvenio !== editingRoteiro.convenio) data.convenio = editConvenio;
+    if (editSegmento !== (editingRoteiro.segmento || "")) data.segmento = editSegmento || null;
+    if (editTipoOperacao !== editingRoteiro.tipoOperacao) data.tipo_operacao = editTipoOperacao;
+    
+    if (Object.keys(data).length === 0) {
+      toast({
+        title: "Sem alterações",
+        description: "Nenhuma alteração foi feita",
+      });
+      setEditingRoteiro(null);
+      return;
+    }
+    
+    updateMutation.mutate({ id: editingRoteiro.id, data });
   };
 
-  const displayedRoteiros = isSearchMode ? (searchQuery.data || []) : roteiros;
+  const handleIASearch = async () => {
+    if (!iaQuery.trim()) {
+      toast({
+        title: "Consulta vazia",
+        description: "Digite uma consulta para pesquisar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsIaSearching(true);
+    setIaSearchResults(null);
+    
+    try {
+      const response = await fetch(`/api/roteiros/ia-search?q=${encodeURIComponent(iaQuery)}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erro na pesquisa");
+      }
+      
+      const data: IASearchResponse = await response.json();
+      setIaSearchResults(data);
+    } catch (error: any) {
+      toast({
+        title: "Erro na pesquisa",
+        description: error.message || "Erro ao pesquisar com IA",
+        variant: "destructive",
+      });
+    } finally {
+      setIsIaSearching(false);
+    }
+  };
+
+  const clearIASearch = () => {
+    setIaQuery("");
+    setIaSearchResults(null);
+  };
+
+  const handleViewFromIAResult = async (result: IASearchResult) => {
+    const roteiro = roteiros.find(r => r.id === result.id);
+    if (roteiro) {
+      setSelectedRoteiro(roteiro);
+    } else {
+      const response = await fetch(`/api/roteiros/${result.id}`);
+      if (response.ok) {
+        const fullRoteiro = await response.json();
+        setSelectedRoteiro(fullRoteiro);
+      }
+    }
+  };
 
   const getDados = (roteiro: RoteiroBancario): RoteiroDados => {
     return roteiro.dados as RoteiroDados;
@@ -229,7 +349,10 @@ export default function RoteirosPage() {
       <Tabs defaultValue="lista" className="space-y-4">
         <TabsList>
           <TabsTrigger value="lista" data-testid="tab-lista">Lista</TabsTrigger>
-          <TabsTrigger value="pesquisa" data-testid="tab-pesquisa">Pesquisa</TabsTrigger>
+          <TabsTrigger value="pesquisa" data-testid="tab-pesquisa">
+            <Sparkles className="w-4 h-4 mr-1" />
+            Pesquisa Inteligente
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="lista">
@@ -264,7 +387,7 @@ export default function RoteirosPage() {
                       <TableHead>Segmento</TableHead>
                       <TableHead>Tipo de Operação</TableHead>
                       <TableHead>Atualizado em</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -279,15 +402,26 @@ export default function RoteirosPage() {
                         <TableCell>
                           {format(new Date(roteiro.updatedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedRoteiro(roteiro)}
-                            data-testid={`button-view-${roteiro.id}`}
-                          >
-                            Ver detalhes
-                          </Button>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(roteiro)}
+                              data-testid={`button-edit-${roteiro.id}`}
+                            >
+                              <Pencil className="w-4 h-4 mr-1" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedRoteiro(roteiro)}
+                              data-testid={`button-view-${roteiro.id}`}
+                            >
+                              Ver detalhes
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -301,98 +435,125 @@ export default function RoteirosPage() {
         <TabsContent value="pesquisa" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Filtros de Pesquisa</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                Pesquisa Inteligente
+              </CardTitle>
+              <CardDescription>
+                Digite sua consulta em linguagem natural. Por exemplo: "siape 60 anos cartão benefício" ou "gov sp documentação portal"
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <Label>Convênio</Label>
-                  <Select value={searchConvenio} onValueChange={setSearchConvenio}>
-                    <SelectTrigger data-testid="select-convenio">
-                      <SelectValue placeholder="Todos os convênios" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os convênios</SelectItem>
-                      {convenios.map((conv) => (
-                        <SelectItem key={conv} value={conv}>{conv}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label>Tipo de Operação</Label>
-                  <Select value={searchTipoOperacao} onValueChange={setSearchTipoOperacao}>
-                    <SelectTrigger data-testid="select-tipo-operacao">
-                      <SelectValue placeholder="Todos os tipos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os tipos</SelectItem>
-                      {tiposOperacao.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label>Idade</Label>
+              <div className="flex gap-2">
+                <div className="flex-1">
                   <Input
-                    type="number"
-                    placeholder="Ex: 45"
-                    value={searchIdade}
-                    onChange={(e) => setSearchIdade(e.target.value)}
-                    data-testid="input-idade"
+                    placeholder="Ex.: siape 60 anos cartão benefício spprev"
+                    value={iaQuery}
+                    onChange={(e) => setIaQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleIASearch()}
+                    data-testid="input-ia-query"
+                    className="h-11"
                   />
                 </div>
-                
-                <div className="flex items-end gap-2">
-                  <Button onClick={handleSearch} data-testid="button-search">
-                    <Search className="w-4 h-4 mr-2" />
-                    Pesquisar
-                  </Button>
-                  {isSearchMode && (
-                    <Button variant="outline" onClick={clearSearch}>
-                      Limpar
-                    </Button>
+                <Button 
+                  onClick={handleIASearch} 
+                  disabled={isIaSearching}
+                  data-testid="button-ia-search"
+                  className="h-11"
+                >
+                  {isIaSearching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Pesquisando...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Pesquisar
+                    </>
                   )}
-                </div>
+                </Button>
+                {iaSearchResults && (
+                  <Button variant="outline" onClick={clearIASearch} className="h-11">
+                    Limpar
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {isSearchMode && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Resultados ({displayedRoteiros.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {searchQuery.isLoading ? (
-                  <p className="text-muted-foreground">Pesquisando...</p>
-                ) : displayedRoteiros.length === 0 ? (
-                  <div className="text-center py-8">
-                    <AlertCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Nenhum roteiro encontrado com os filtros selecionados</p>
+          {iaSearchResults && (
+            <>
+              <Card className="bg-muted/50">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Filtros interpretados pela IA:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {iaSearchResults.filters_interpreted.convenio && (
+                      <Badge variant="secondary">Convênio: {iaSearchResults.filters_interpreted.convenio}</Badge>
+                    )}
+                    {iaSearchResults.filters_interpreted.segmento && (
+                      <Badge variant="secondary">Segmento: {iaSearchResults.filters_interpreted.segmento}</Badge>
+                    )}
+                    {iaSearchResults.filters_interpreted.tipo_operacao && (
+                      <Badge variant="secondary">Tipo: {iaSearchResults.filters_interpreted.tipo_operacao}</Badge>
+                    )}
+                    {iaSearchResults.filters_interpreted.idade && (
+                      <Badge variant="secondary">Idade: {iaSearchResults.filters_interpreted.idade} anos</Badge>
+                    )}
+                    {iaSearchResults.filters_interpreted.palavras_chave?.length > 0 && (
+                      <Badge variant="outline">
+                        Palavras-chave: {iaSearchResults.filters_interpreted.palavras_chave.join(", ")}
+                      </Badge>
+                    )}
+                    {!iaSearchResults.filters_interpreted.convenio && 
+                     !iaSearchResults.filters_interpreted.segmento && 
+                     !iaSearchResults.filters_interpreted.tipo_operacao && 
+                     !iaSearchResults.filters_interpreted.idade && 
+                     iaSearchResults.filters_interpreted.palavras_chave?.length === 0 && (
+                      <span className="text-sm text-muted-foreground">Nenhum filtro específico identificado</span>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {displayedRoteiros.map((roteiro) => {
-                      const dados = getDados(roteiro);
-                      return (
-                        <Card key={roteiro.id} className="hover-elevate cursor-pointer" onClick={() => setSelectedRoteiro(roteiro)}>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Resultados ({iaSearchResults.total})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {iaSearchResults.results.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Nenhum roteiro encontrado com essa consulta</p>
+                      <p className="text-sm text-muted-foreground mt-2">Tente termos diferentes ou mais específicos</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {iaSearchResults.results.map((result) => (
+                        <Card key={result.id} className="hover-elevate cursor-pointer" onClick={() => handleViewFromIAResult(result)}>
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-semibold">{roteiro.banco}</h4>
+                              <div className="flex-1">
+                                <h4 className="font-semibold">{result.banco}</h4>
                                 <p className="text-sm text-muted-foreground">
-                                  {roteiro.convenio} • {roteiro.tipoOperacao}
+                                  {result.convenio} 
+                                  {result.segmento && ` • ${result.segmento}`}
+                                  {" • "}
+                                  <Badge variant="outline" className="ml-1">{result.tipo_operacao}</Badge>
                                 </p>
-                                {dados.publico_alvo && dados.publico_alvo.length > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Público: {dados.publico_alvo[0]}
-                                    {dados.publico_alvo.length > 1 && ` (+${dados.publico_alvo.length - 1})`}
+                                {result.resumo.publico_alvo.length > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Público: {result.resumo.publico_alvo.join(", ")}
+                                    {result.resumo.publico_alvo.length >= 3 && "..."}
+                                  </p>
+                                )}
+                                {result.resumo.faixas_idade.length > 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Faixas de idade: {result.resumo.faixas_idade.map((f: any) => 
+                                      `${f.idade_minima || 0}-${f.idade_maxima || '∞'} anos`
+                                    ).join(", ")}
                                   </p>
                                 )}
                               </div>
@@ -402,10 +563,23 @@ export default function RoteirosPage() {
                             </div>
                           </CardContent>
                         </Card>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {!iaSearchResults && !isIaSearching && (
+            <Card className="border-dashed">
+              <CardContent className="p-8 text-center">
+                <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold mb-2">Pesquisa Inteligente com IA</h3>
+                <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                  Digite uma consulta em linguagem natural e a IA irá interpretar e buscar os roteiros mais relevantes.
+                  Você pode mencionar convênios, tipos de operação, idades, bancos e palavras-chave.
+                </p>
               </CardContent>
             </Card>
           )}
@@ -427,6 +601,79 @@ export default function RoteirosPage() {
               <RoteiroDetails roteiro={selectedRoteiro} />
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingRoteiro} onOpenChange={() => setEditingRoteiro(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Metadados do Roteiro</DialogTitle>
+            <DialogDescription>
+              Altere as informações básicas do roteiro. O conteúdo detalhado (dados) não será alterado.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-banco">Banco</Label>
+              <Input
+                id="edit-banco"
+                value={editBanco}
+                onChange={(e) => setEditBanco(e.target.value)}
+                data-testid="input-edit-banco"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit-convenio">Convênio</Label>
+              <Input
+                id="edit-convenio"
+                value={editConvenio}
+                onChange={(e) => setEditConvenio(e.target.value)}
+                data-testid="input-edit-convenio"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit-segmento">Segmento</Label>
+              <Input
+                id="edit-segmento"
+                value={editSegmento}
+                onChange={(e) => setEditSegmento(e.target.value)}
+                placeholder="Opcional"
+                data-testid="input-edit-segmento"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit-tipo-operacao">Tipo de Operação</Label>
+              <Select value={editTipoOperacao} onValueChange={setEditTipoOperacao}>
+                <SelectTrigger data-testid="select-edit-tipo-operacao">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_OPERACAO.map((tipo) => (
+                    <SelectItem key={tipo.value} value={tipo.value}>
+                      {tipo.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRoteiro(null)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleUpdateRoteiro} 
+              disabled={updateMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {updateMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -590,10 +837,9 @@ function RoteiroDetails({ roteiro }: { roteiro: RoteiroBancario }) {
                       )}
                     </div>
                     {portal.link_portal && (
-                      <Button variant="outline" size="sm" asChild>
+                      <Button variant="ghost" size="sm" asChild>
                         <a href={portal.link_portal} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-4 h-4 mr-1" />
-                          Acessar
+                          <ExternalLink className="w-4 h-4" />
                         </a>
                       </Button>
                     )}
@@ -640,20 +886,24 @@ function CollapsibleSection({
   defaultOpen = false 
 }: { 
   title: string; 
-  children: React.ReactNode;
+  children: React.ReactNode; 
   defaultOpen?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" className="w-full justify-between px-2 h-10">
-          <span className="font-medium">{title}</span>
-          {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
+          <h4 className="font-semibold text-sm">{title}</h4>
+          {isOpen ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-2 pb-2">
+      <CollapsibleContent className="pt-2">
         {children}
       </CollapsibleContent>
     </Collapsible>

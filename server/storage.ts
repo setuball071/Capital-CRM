@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   users,
   banks,
@@ -88,6 +88,8 @@ export interface IStorage {
   getRoteiro(id: number): Promise<RoteiroBancario | undefined>;
   searchRoteiros(convenio?: string, tipoOperacao?: string, idade?: number): Promise<RoteiroBancario[]>;
   importRoteiros(roteiros: RoteiroImportItem[]): Promise<{ created: number; combos: string[] }>;
+  updateRoteiroMetadata(id: number, data: { banco?: string; convenio?: string; segmento?: string | null; tipoOperacao?: string }): Promise<RoteiroBancario | undefined>;
+  searchRoteirosIA(filters: { convenio?: string | null; segmento?: string | null; tipoOperacao?: string | null; idade?: number | null; palavrasChave?: string[] }): Promise<RoteiroBancario[]>;
   getDistinctConvenios(): Promise<string[]>;
   getDistinctTiposOperacao(): Promise<string[]>;
 }
@@ -623,6 +625,74 @@ export class DbStorage implements IStorage {
     const roteiros = await db.select().from(roteirosBancarios).where(eq(roteirosBancarios.ativo, true));
     const uniqueTipos = [...new Set(roteiros.map(r => r.tipoOperacao))];
     return uniqueTipos.sort();
+  }
+
+  async updateRoteiroMetadata(id: number, data: { banco?: string; convenio?: string; segmento?: string | null; tipoOperacao?: string }): Promise<RoteiroBancario | undefined> {
+    const updateData: any = { updatedAt: new Date() };
+    
+    if (data.banco !== undefined) updateData.banco = data.banco;
+    if (data.convenio !== undefined) updateData.convenio = data.convenio;
+    if (data.segmento !== undefined) updateData.segmento = data.segmento;
+    if (data.tipoOperacao !== undefined) updateData.tipoOperacao = data.tipoOperacao;
+    
+    const [updated] = await db.update(roteirosBancarios)
+      .set(updateData)
+      .where(eq(roteirosBancarios.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async searchRoteirosIA(filters: { convenio?: string | null; segmento?: string | null; tipoOperacao?: string | null; idade?: number | null; palavrasChave?: string[] }): Promise<RoteiroBancario[]> {
+    const conditions = [eq(roteirosBancarios.ativo, true)];
+    
+    if (filters.convenio) {
+      conditions.push(sql`LOWER(${roteirosBancarios.convenio}) LIKE LOWER(${'%' + filters.convenio + '%'})`);
+    }
+    if (filters.segmento) {
+      conditions.push(sql`LOWER(${roteirosBancarios.segmento}) LIKE LOWER(${'%' + filters.segmento + '%'})`);
+    }
+    if (filters.tipoOperacao) {
+      conditions.push(eq(roteirosBancarios.tipoOperacao, filters.tipoOperacao));
+    }
+    
+    let roteiros = await db.select().from(roteirosBancarios).where(and(...conditions));
+    
+    // Filter by age if provided
+    if (filters.idade !== undefined && filters.idade !== null) {
+      roteiros = roteiros.filter(roteiro => {
+        const dados = roteiro.dados as any;
+        const faixasIdade = dados?.faixas_idade;
+        
+        if (!faixasIdade || !Array.isArray(faixasIdade) || faixasIdade.length === 0) {
+          return true;
+        }
+        
+        return faixasIdade.some((faixa: any) => {
+          const idadeMin = faixa.idade_minima ?? 0;
+          const idadeMax = faixa.idade_maxima ?? 999;
+          return filters.idade! >= idadeMin && filters.idade! <= idadeMax;
+        });
+      });
+    }
+    
+    // Filter by keywords in dados JSONB field
+    if (filters.palavrasChave && filters.palavrasChave.length > 0) {
+      roteiros = roteiros.filter(roteiro => {
+        const dadosStr = JSON.stringify(roteiro.dados).toLowerCase();
+        const bancoStr = roteiro.banco.toLowerCase();
+        const convenioStr = roteiro.convenio.toLowerCase();
+        const segmentoStr = (roteiro.segmento || '').toLowerCase();
+        const tipoStr = roteiro.tipoOperacao.toLowerCase();
+        const fullText = `${bancoStr} ${convenioStr} ${segmentoStr} ${tipoStr} ${dadosStr}`;
+        
+        return filters.palavrasChave!.some(keyword => 
+          fullText.includes(keyword.toLowerCase())
+        );
+      });
+    }
+    
+    return roteiros;
   }
 }
 
