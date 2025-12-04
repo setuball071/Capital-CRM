@@ -16,6 +16,7 @@ import UsersPage from "@/pages/users";
 import AgreementsPage from "@/pages/agreements";
 import BanksPage from "@/pages/banks";
 import CoefficientTablesPage from "@/pages/coefficient-tables";
+import RoteirosPage from "@/pages/roteiros";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -78,6 +79,30 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
   }
 
   if (user.role !== "master") {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+// Protected route for roteiros (master, atendimento, operacional only)
+function RoteirosRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  const allowedRoles = ["master", "atendimento", "operacional"];
+  if (!allowedRoles.includes(user.role)) {
     return <Redirect to="/" />;
   }
 
@@ -174,6 +199,9 @@ function Router() {
               </Route>
               <Route path="/coefficient-tables">
                 {() => <MasterRoute component={CoefficientTablesPage} />}
+              </Route>
+              <Route path="/roteiros">
+                {() => <RoteirosRoute component={RoteirosPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
