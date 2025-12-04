@@ -1,0 +1,205 @@
+Quero implementar no meu CRM o módulo Roteiro Bancário Inteligente – Versão 1 (sem IA interna), seguindo estas regras:
+
+OBJETIVO
+
+Eu vou gerar arquivos JSON fora do CRM (usando IA externa) no formato abaixo, e o sistema só precisa:
+
+Importar esse JSON
+
+Salvar na tabela roteiros_bancarios
+
+Permitir listagem e pesquisa simples por banco / convênio / tipo de operação / idade.
+
+1. MODELO DE JSON DE IMPORTAÇÃO
+
+O endpoint de importação deve receber um JSON no formato:
+
+{
+  "roteiros": [
+    {
+      "banco": "",
+      "convenio": "",
+      "segmento": "",
+      "tipo_operacao": "",
+      "publico_alvo": [],
+      "publico_nao_atendido": [],
+      "faixas_idade": [
+        {
+          "idade_minima": null,
+          "idade_maxima": null,
+          "limite_parcela": null,
+          "observacoes": ""
+        }
+      ],
+      "limites_operacionais": {
+        "prazo_minimo_meses": null,
+        "prazo_maximo_meses": null,
+        "parcela_minima": null,
+        "valor_minimo_liberado": "",
+        "margem_especifica": "",
+        "margem_negativa_permitida": null,
+        "descricao_margem_negativa": ""
+      },
+      "documentacao_obrigatoria": [],
+      "portais_acesso": [
+        {
+          "orgao_ou_segmento": "",
+          "nome_portal": "",
+          "link_portal": "",
+          "instrucoes_acesso": "",
+          "observacoes": ""
+        }
+      ],
+      "regras_especiais": [],
+      "detalhes_adicionais": []
+    }
+  ]
+}
+
+2. TABELA NO BANCO (PostgreSQL)
+
+Crie uma tabela roteiros_bancarios com a estrutura:
+
+id SERIAL PRIMARY KEY,
+banco VARCHAR(100) NOT NULL,
+convenio VARCHAR(150) NOT NULL,
+segmento VARCHAR(50),
+tipo_operacao VARCHAR(50) NOT NULL,
+dados JSONB NOT NULL,
+ativo BOOLEAN NOT NULL DEFAULT TRUE,
+created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+
+
+Crie também um índice para busca:
+banco, convenio, tipo_operacao filtrando por ativo = TRUE.
+
+3. ENDPOINT DE IMPORTAÇÃO DE ROTEIROS (SEM IA)
+
+Criar um endpoint tipo POST /api/roteiros/importar-json que:
+
+aceito apenas para usuários com role admin, atendimento ou operacional.
+
+recebe o JSON acima no body.
+
+para cada item em roteiros:
+
+Valida campos obrigatórios: banco, convenio, tipo_operacao.
+
+Marca como ativo = false todos os registros existentes na tabela roteiros_bancarios com o mesmo banco, convenio, tipo_operacao.
+
+Insere um novo registro com:
+
+banco, convenio, segmento, tipo_operacao
+
+dados = objeto com todo o resto (publico_alvo, publico_nao_atendido, faixas_idade, etc.)
+
+ativo = true.
+
+Retornar um resumo da importação (quantos roteiros foram criados, quais combos banco+convênio+tipo_operação).
+
+4. PERMISSÕES
+
+Apenas roles admin, atendimento, operacional podem:
+
+acessar tela de Roteiros
+
+importar JSON
+
+pesquisar roteiros
+
+Roles coordenador e vendedor não veem esse módulo e não têm acesso às rotas (bloquear no backend).
+
+5. TELA DE LISTAGEM DE ROTEIROS
+
+Criar uma tela no frontend chamada “Roteiros Bancários” com:
+
+Tabela mostrando, para registros ativo = true:
+
+Banco
+
+Convênio
+
+Segmento
+
+Tipo de Operação
+
+Data da última atualização
+
+Botão “Importar JSON” que:
+
+permite colar o JSON em um textarea ou enviar um arquivo .json
+
+chama o endpoint POST /api/roteiros/importar-json.
+
+Ao clicar em um roteiro, abrir um painel com:
+
+Público-alvo (lista)
+
+Público não atendido (lista)
+
+Faixas de idade + limites de parcela
+
+Limites operacionais (prazo, parcela mínima, margem etc.)
+
+Documentação obrigatória
+
+Portais de acesso (exibir nome, órgão, link clicável e observações)
+
+Regras especiais
+
+Detalhes adicionais
+
+6. PESQUISA SIMPLES (1ª VERSÃO)
+
+Criar uma tela de pesquisa com:
+
+Filtros:
+
+Select Convênio
+
+Select Tipo de operação
+
+Campo Idade (número)
+
+Ao clicar em “Pesquisar”, o backend deve:
+
+Buscar todos os roteiros ativo = true que combinem com convênio + tipo de operação (se preenchidos).
+
+Se a idade for informada:
+
+Verificar se essa idade cai dentro de alguma faixa_idade em dados->'faixas_idade'.
+
+Se não houver faixas_idade, considerar que a idade é aceita (por enquanto).
+
+Retornar a lista de roteiros que “atendem”, com:
+
+Banco, Convênio, Tipo de operação
+
+Um resumo simples (ex.: primeira faixa de idade, primeira linha de público-alvo, primeira linha de documentação).
+
+No frontend, exibir resultados em cards ou tabela com botão “Ver detalhes” que abre a visão completa daquele roteiro (aproveitando a tela do item 5).
+
+7. IMPORTANTE
+
+Não implementar IA dentro do CRM neste momento.
+
+Toda a parte de IA (leitura de PDF → geração de JSON) será feita fora do sistema.
+
+O CRM só precisa aceitar o JSON no formato descrito, salvar na tabela, listar e permitir a pesquisa.
+
+Me entregue:
+
+migration/SQL da tabela roteiros_bancarios
+
+implementação do endpoint POST /api/roteiros/importar-json
+
+componentes de frontend para:
+
+listagem dos roteiros
+
+visualizar detalhes
+
+importar JSON
+
+pesquisar por convênio, tipo de operação e idade.

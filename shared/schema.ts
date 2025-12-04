@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, decimal, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, varchar, decimal, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -82,6 +82,19 @@ export const simulations = pgTable("simulations", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Roteiros Bancários - stores banking scripts/guides for operations
+export const roteirosBancarios = pgTable("roteiros_bancarios", {
+  id: serial("id").primaryKey(),
+  banco: varchar("banco", { length: 100 }).notNull(),
+  convenio: varchar("convenio", { length: 150 }).notNull(),
+  segmento: varchar("segmento", { length: 50 }),
+  tipoOperacao: varchar("tipo_operacao", { length: 50 }).notNull(),
+  dados: jsonb("dados").notNull(), // Stores all additional data as JSONB
+  ativo: boolean("ativo").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ===== INSERT SCHEMAS =====
 
 export const insertUserSchema = createInsertSchema(users, {
@@ -131,6 +144,71 @@ export const insertSimulationSchema = createInsertSchema(simulations, {
   outstandingBalance: z.string().refine((val) => parseFloat(val) > 0, { message: "Saldo deve ser positiva" }),
 }).omit({ id: true, createdAt: true });
 
+// Schema for faixa de idade in roteiro bancário
+export const faixaIdadeSchema = z.object({
+  idade_minima: z.number().nullable(),
+  idade_maxima: z.number().nullable(),
+  limite_parcela: z.number().nullable(),
+  observacoes: z.string().optional(),
+});
+
+// Schema for limites operacionais
+export const limitesOperacionaisSchema = z.object({
+  prazo_minimo_meses: z.number().nullable(),
+  prazo_maximo_meses: z.number().nullable(),
+  parcela_minima: z.number().nullable(),
+  valor_minimo_liberado: z.string().optional(),
+  margem_especifica: z.string().optional(),
+  margem_negativa_permitida: z.boolean().nullable(),
+  descricao_margem_negativa: z.string().optional(),
+});
+
+// Schema for portal de acesso
+export const portalAcessoSchema = z.object({
+  orgao_ou_segmento: z.string().optional(),
+  nome_portal: z.string().optional(),
+  link_portal: z.string().optional(),
+  instrucoes_acesso: z.string().optional(),
+  observacoes: z.string().optional(),
+});
+
+// Schema for dados field in roteiro bancário
+export const roteiroDadosSchema = z.object({
+  publico_alvo: z.array(z.string()).optional(),
+  publico_nao_atendido: z.array(z.string()).optional(),
+  faixas_idade: z.array(faixaIdadeSchema).optional(),
+  limites_operacionais: limitesOperacionaisSchema.optional(),
+  documentacao_obrigatoria: z.array(z.string()).optional(),
+  portais_acesso: z.array(portalAcessoSchema).optional(),
+  regras_especiais: z.array(z.string()).optional(),
+  detalhes_adicionais: z.array(z.string()).optional(),
+});
+
+// Schema for individual roteiro in import
+export const roteiroImportItemSchema = z.object({
+  banco: z.string().min(1, { message: "Banco é obrigatório" }),
+  convenio: z.string().min(1, { message: "Convênio é obrigatório" }),
+  segmento: z.string().optional(),
+  tipo_operacao: z.string().min(1, { message: "Tipo de operação é obrigatório" }),
+  publico_alvo: z.array(z.string()).optional(),
+  publico_nao_atendido: z.array(z.string()).optional(),
+  faixas_idade: z.array(faixaIdadeSchema).optional(),
+  limites_operacionais: limitesOperacionaisSchema.optional(),
+  documentacao_obrigatoria: z.array(z.string()).optional(),
+  portais_acesso: z.array(portalAcessoSchema).optional(),
+  regras_especiais: z.array(z.string()).optional(),
+  detalhes_adicionais: z.array(z.string()).optional(),
+});
+
+// Schema for import JSON request
+export const roteirosImportSchema = z.object({
+  roteiros: z.array(roteiroImportItemSchema).min(1, { message: "Pelo menos um roteiro é necessário" }),
+});
+
+export type RoteiroImportItem = z.infer<typeof roteiroImportItemSchema>;
+export type RoteirosImport = z.infer<typeof roteirosImportSchema>;
+export type RoteiroDados = z.infer<typeof roteiroDadosSchema>;
+
 // ===== SELECT TYPES =====
 
 export type User = typeof users.$inferSelect;
@@ -147,6 +225,8 @@ export type InsertCoefficientTable = z.infer<typeof insertCoefficientTableSchema
 
 export type Simulation = typeof simulations.$inferSelect;
 export type InsertSimulation = z.infer<typeof insertSimulationSchema>;
+
+export type RoteiroBancario = typeof roteirosBancarios.$inferSelect;
 
 // ===== AUTHENTICATION SCHEMAS =====
 
