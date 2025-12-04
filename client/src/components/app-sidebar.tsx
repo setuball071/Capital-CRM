@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -41,6 +41,7 @@ export function AppSidebar() {
   const canAccessBanks = isMaster; // Only master can manage banks
   const canAccessCoefficientTables = isMaster || isAtendimento || isOperacional;
   const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
+  const canAccessRoteiros = isMaster || isAtendimento || isOperacional;
 
   const menuItems = [
     {
@@ -72,6 +73,12 @@ export function AppSidebar() {
       url: "/coefficient-tables",
       icon: Table,
       show: canAccessCoefficientTables,
+    },
+    {
+      title: "Roteiros Bancários",
+      url: "/roteiros",
+      icon: Map,
+      show: canAccessRoteiros,
     },
     {
       title: "Usuários",
