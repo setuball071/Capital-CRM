@@ -1,0 +1,151 @@
+1. System prompt para o Interpretador de Consulta
+
+Guarda isso numa constante, tipo INTERPRETADOR_SYSTEM_PROMPT:
+
+const INTERPRETADOR_SYSTEM_PROMPT = `
+Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
+
+Receberá uma frase digitada pelo usuário (por exemplo):
+- "gov sp 60 anos cartão benefício"
+- "siape compra dívida 71 anos limite parcela 1600"
+- "portal spprev documentação"
+- "inss refin 74 anos margem"
+
+Sua função é transformar essa frase em um JSON de filtros para o backend.
+
+Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
+
+{
+  "convenio": null,
+  "segmento": null,
+  "tipo_operacao": null,
+  "idade": null,
+  "palavras_chave": []
+}
+
+Regras:
+
+1) "convenio":
+   - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
+   - Se encontrar "siape" -> "SIAPE".
+   - Se encontrar "inss" -> "INSS".
+   - Se encontrar "municipal" com alguma cidade, coloque o nome como aparecer.
+   - Caso não fique claro, use null.
+
+2) "segmento":
+   - Use se houver indicação clara de segmento (ex.: "SIAPE", "GOV SP", "INSS").
+   - Caso contrário, null.
+   - Se "convenio" já for algo como "SIAPE" ou "GOV SP", você pode repetir em "segmento" se fizer sentido.
+
+3) "tipo_operacao":
+   - Valores possíveis (sempre em minúsculas, snake_case):
+     - "credito_novo"
+     - "refin"
+     - "compra_divida"
+     - "compra_cartao_beneficio"
+     - "cartao_beneficio"
+     - "cartao_consignado"
+   - Mapear:
+     - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
+     - "refin", "refinanciamento" -> "refin"
+     - "compra de dívida", "compra divida", "compra de contratos", "compra de parcelas" -> "compra_divida"
+     - "compra de cartão benefício", "compra cartao beneficio" -> "compra_cartao_beneficio"
+     - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
+     - "cartão consignado", "cartao consignado", "cartão de crédito consignado" -> "cartao_consignado"
+   - Se não for possível saber, deixe null.
+
+4) "idade":
+   - Se houver um número que pareça idade (ex.: 60, 71, 74), coloque esse número.
+   - Se houver mais de um número, escolha aquele que mais se parece com idade (ex.: 60 em "60 anos, prazo 96x").
+   - Se não houver idade clara, use null.
+
+5) "palavras_chave":
+   - Liste outras palavras relevantes para busca textual no banco de dados, em minúsculas:
+     - Ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "pausa", "carencia", "averbacao".
+   - Você pode quebrar em termos simples (ex.: "portal", "spprev") ou pequenas expressões.
+   - Se não houver nada útil, devolva [].
+
+6) Formato:
+   - Sempre devolva exatamente um objeto JSON, sem texto antes ou depois.
+   - Não explique o que fez.
+   - Não coloque comentários.
+`;
+
+2. Função interpretarConsulta(q) usando a API de Respostas
+
+Aqui vai a função pronta para usar no backend (Node):
+
+import OpenAI from "openai";
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export async function interpretarConsulta(q) {
+  if (!q || !q.trim()) {
+    throw new Error("Consulta vazia");
+  }
+
+  const completion = await client.responses.create({
+    model: "gpt-4.1-mini",
+    response_format: { type: "json_object" },
+    input: [
+      {
+        role: "system",
+        content: INTERPRETADOR_SYSTEM_PROMPT
+      },
+      {
+        role: "user",
+        content: q
+      }
+    ]
+  });
+
+  // API de Respostas devolve o conteúdo em completion.output[0].content[0].text
+  const raw = completion.output[0].content[0].text;
+
+  let filtros;
+  try {
+    filtros = JSON.parse(raw);
+  } catch (e) {
+    // fallback bem simples: se der ruim no parse, volta tudo null
+    filtros = {
+      convenio: null,
+      segmento: null,
+      tipo_operacao: null,
+      idade: null,
+      palavras_chave: []
+    };
+  }
+
+  return filtros;
+}
+
+
+Depois, na rota de pesquisa:
+
+app.get("/api/roteiros/ia-search", async (req, res) => {
+  try {
+    const q = String(req.query.q || "");
+    const filtros = await interpretarConsulta(q);
+
+    // aqui você usa filtros.convenio, filtros.tipo_operacao, filtros.idade, filtros.palavras_chave
+    // para montar a query no Postgres e retornar os roteiros encontrados
+
+    // TODO: implementar busca no banco
+    // const resultados = await buscarRoteirosNoBanco(filtros);
+
+    res.json({ filtros /*, resultados*/ });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao interpretar consulta" });
+  }
+});
+
+
+Com isso você tem:
+
+API de Respostas configurada do jeito certo
+
+Prompt do agente de interpretação fechado
+
+Ponto de integração pronto para plugar na busca do CRM
+
+Se quiser, no próximo passo posso te ajudar a desenhar exatamente a função buscarRoteirosNoBanco(filtros) em cima do JSONB.

@@ -1420,12 +1420,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
       });
 
+      // System prompt for AI query interpreter
       const systemPrompt = `Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
 
-Receberá uma frase digitada pelo usuário (por exemplo:
+Receberá uma frase digitada pelo usuário (por exemplo):
 - "gov sp 60 anos cartão benefício"
 - "siape compra dívida 71 anos limite parcela 1600"
-- "portal spprev documentação")
+- "portal spprev documentação"
+- "inss refin 74 anos margem"
 
 Sua função é transformar essa frase em um JSON de filtros para o backend.
 
@@ -1445,14 +1447,16 @@ Regras:
    - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
    - Se encontrar "siape" -> "SIAPE".
    - Se encontrar "inss" -> "INSS".
-   - Caso contrário, null.
+   - Se encontrar "municipal" com alguma cidade, coloque o nome como aparecer.
+   - Caso não fique claro, use null.
 
 2) "segmento":
-   - Use somente se houver indicação clara de segmento específico (ex.: "SIAPE", "GOV SP", "SPPREV").
+   - Use se houver indicação clara de segmento (ex.: "SIAPE", "GOV SP", "INSS").
    - Caso contrário, null.
+   - Se "convenio" já for algo como "SIAPE" ou "GOV SP", você pode repetir em "segmento" se fizer sentido.
 
 3) "tipo_operacao":
-   - Valores possíveis:
+   - Valores possíveis (sempre em minúsculas, snake_case):
      - "credito_novo"
      - "refin"
      - "compra_divida"
@@ -1462,21 +1466,27 @@ Regras:
    - Mapear:
      - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
      - "refin", "refinanciamento" -> "refin"
-     - "compra de dívida", "compra divida", "compra de contratos" -> "compra_divida"
-     - "compra de cartão benefício" -> "compra_cartao_beneficio"
+     - "compra de dívida", "compra divida", "compra de contratos", "compra de parcelas" -> "compra_divida"
+     - "compra de cartão benefício", "compra cartao beneficio" -> "compra_cartao_beneficio"
      - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
-     - "cartão consignado", "cartao consignado" -> "cartao_consignado"
+     - "cartão consignado", "cartao consignado", "cartão de crédito consignado" -> "cartao_consignado"
    - Se não for possível saber, deixe null.
 
 4) "idade":
-   - Se houver um número que pareça uma idade (ex.: 60, 71, 74), coloque esse número.
-   - Senão, null.
+   - Se houver um número que pareça idade (ex.: 60, 71, 74), coloque esse número.
+   - Se houver mais de um número, escolha aquele que mais se parece com idade (ex.: 60 em "60 anos, prazo 96x").
+   - Se não houver idade clara, use null.
 
 5) "palavras_chave":
-   - Liste palavras importantes para busca textual no banco de dados (ex.: "portal", "spprev", "documentacao", "limite parcela", "neo", "daycoval").
-   - Se não houver, [].
+   - Liste outras palavras relevantes para busca textual no banco de dados, em minúsculas:
+     - Ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "pausa", "carencia", "averbacao".
+   - Você pode quebrar em termos simples (ex.: "portal", "spprev") ou pequenas expressões.
+   - Se não houver nada útil, devolva [].
 
-Não escreva nada fora do JSON.`;
+6) Formato:
+   - Sempre devolva exatamente um objeto JSON, sem texto antes ou depois.
+   - Não explique o que fez.
+   - Não coloque comentários.`;
 
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const response = await openai.chat.completions.create({
