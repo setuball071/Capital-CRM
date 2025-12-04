@@ -10,6 +10,7 @@ import {
   insertAgreementSchema,
   insertCoefficientTableSchema,
   insertSimulationSchema,
+  roteirosImportSchema,
   type User,
   type InsertCoefficientTable,
   USER_ROLES,
@@ -1222,6 +1223,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get stats error:", error);
       return res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
+  // ===== ROTEIROS BANCÁRIOS ROUTES =====
+  
+  // Middleware for roteiros access (master, atendimento, operacional only)
+  function requireRoteirosAccess(req: Request, res: Response, next: NextFunction) {
+    if (!hasRole(req.user, ["master", "atendimento", "operacional"])) {
+      return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar roteiros bancários" });
+    }
+    next();
+  }
+
+  // Get all active roteiros
+  app.get("/api/roteiros", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const roteiros = await storage.getActiveRoteiros();
+      return res.json(roteiros);
+    } catch (error) {
+      console.error("Get roteiros error:", error);
+      return res.status(500).json({ message: "Erro ao buscar roteiros bancários" });
+    }
+  });
+
+  // Get single roteiro by ID
+  app.get("/api/roteiros/:id", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const roteiro = await storage.getRoteiro(id);
+      if (!roteiro) {
+        return res.status(404).json({ message: "Roteiro não encontrado" });
+      }
+      
+      return res.json(roteiro);
+    } catch (error) {
+      console.error("Get roteiro error:", error);
+      return res.status(500).json({ message: "Erro ao buscar roteiro" });
+    }
+  });
+
+  // Search roteiros with filters
+  app.get("/api/roteiros/search", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const { convenio, tipoOperacao, idade } = req.query;
+      
+      const idadeNum = idade ? parseInt(idade as string) : undefined;
+      
+      const roteiros = await storage.searchRoteiros(
+        convenio as string | undefined,
+        tipoOperacao as string | undefined,
+        idadeNum
+      );
+      
+      return res.json(roteiros);
+    } catch (error) {
+      console.error("Search roteiros error:", error);
+      return res.status(500).json({ message: "Erro ao pesquisar roteiros" });
+    }
+  });
+
+  // Get distinct convenios for filter
+  app.get("/api/roteiros/filters/convenios", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const convenios = await storage.getDistinctConvenios();
+      return res.json(convenios);
+    } catch (error) {
+      console.error("Get convenios error:", error);
+      return res.status(500).json({ message: "Erro ao buscar convênios" });
+    }
+  });
+
+  // Get distinct tipos de operacao for filter
+  app.get("/api/roteiros/filters/tipos-operacao", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const tipos = await storage.getDistinctTiposOperacao();
+      return res.json(tipos);
+    } catch (error) {
+      console.error("Get tipos operacao error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tipos de operação" });
+    }
+  });
+
+  // Import roteiros from JSON
+  app.post("/api/roteiros/importar-json", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const result = roteirosImportSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "JSON inválido",
+          errors: result.error.errors,
+        });
+      }
+
+      const importResult = await storage.importRoteiros(result.data.roteiros);
+      
+      return res.json({
+        message: `Importação concluída: ${importResult.created} roteiro(s) criado(s)`,
+        created: importResult.created,
+        combos: importResult.combos,
+      });
+    } catch (error) {
+      console.error("Import roteiros error:", error);
+      return res.status(500).json({ message: "Erro ao importar roteiros" });
     }
   });
 
