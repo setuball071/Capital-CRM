@@ -189,7 +189,7 @@ export const roteiroImportItemSchema = z.object({
   banco: z.string().min(1, { message: "Banco é obrigatório" }),
   convenio: z.string().min(1, { message: "Convênio é obrigatório" }),
   segmento: z.string().optional(),
-  tipo_operacao: z.string().min(1, { message: "Tipo de operação é obrigatório" }),
+  tipo_operacao: z.string().optional().default("Não especificado"),
   publico_alvo: z.array(z.string()).optional(),
   publico_nao_atendido: z.array(z.string()).optional(),
   faixas_idade: z.array(faixaIdadeSchema).optional(),

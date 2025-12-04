@@ -568,7 +568,12 @@ export class DbStorage implements IStorage {
     let created = 0;
     
     for (const roteiro of roteiros) {
-      const combo = `${roteiro.banco}|${roteiro.convenio}|${roteiro.tipo_operacao}`;
+      // Handle empty tipo_operacao - use default value
+      const tipoOperacao = roteiro.tipo_operacao && roteiro.tipo_operacao.trim() !== "" 
+        ? roteiro.tipo_operacao 
+        : "Não especificado";
+      
+      const combo = `${roteiro.banco}|${roteiro.convenio}|${tipoOperacao}`;
       
       // Deactivate existing records with same combo
       await db.update(roteirosBancarios)
@@ -576,7 +581,7 @@ export class DbStorage implements IStorage {
         .where(and(
           eq(roteirosBancarios.banco, roteiro.banco),
           eq(roteirosBancarios.convenio, roteiro.convenio),
-          eq(roteirosBancarios.tipoOperacao, roteiro.tipo_operacao)
+          eq(roteirosBancarios.tipoOperacao, tipoOperacao)
         ));
       
       // Extract dados from roteiro
@@ -596,7 +601,7 @@ export class DbStorage implements IStorage {
         banco: roteiro.banco,
         convenio: roteiro.convenio,
         segmento: roteiro.segmento || null,
-        tipoOperacao: roteiro.tipo_operacao,
+        tipoOperacao: tipoOperacao,
         dados: dados,
         ativo: true,
       });
