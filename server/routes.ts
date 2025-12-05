@@ -1400,11 +1400,87 @@ Regras:
         };
       });
 
+      // Generate human-readable response using AI
+      const respondentePrompt = `Você é um especialista em crédito consignado que responde de forma CLARA, DIRETA e HUMANA sobre roteiros bancários.
+
+Você receberá:
+1) A consulta original do usuário (texto livre).
+2) Uma lista de roteiros bancários em JSON, com campos como banco, convenio, segmento, tipo_operacao e dados (faixas_idade, publico_alvo, etc.).
+
+Sua missão:
+- Explicar rapidamente o que É POSSÍVEL fazer para esse caso, usando SOMENTE as informações dos roteiros enviados.
+- Nunca invente banco, convênio, prazo ou regra que não estejam nos dados.
+- Se a informação não estiver clara nos roteiros, diga isso explicitamente.
+- Se não houver roteiros encontrados, sugira que o usuário refine a busca ou consulte outros convênios.
+
+Estilo da resposta:
+- Frases curtas, objetivas.
+- Tom de consultor humano e amigável.
+- Máximo de 3 parágrafos curtos.
+- Se faltar informação para cravar a resposta, peça uma especificação adicional (por exemplo: "me diga o convênio: GOV SP, SIAPE, INSS...").
+
+Exemplos de como responder:
+
+Exemplo 1 (consulta só com idade):
+Usuário: "60 anos"
+Resposta possível:
+"Com 60 anos, hoje consigo te atender nos bancos X e Y, dependendo do seu convênio. Pelos roteiros, não há nenhuma restrição específica de idade para esse intervalo. Me fala agora qual é o seu convênio (GOV SP, SIAPE, INSS...) para eu confirmar as regras certinhas."
+
+Exemplo 2 (consulta com idade + convênio):
+Usuário: "GOV SP 74 anos"
+Resposta possível:
+"Para GOV SP com 74 anos, os roteiros que encontrei limitam a parcela em R$ 1.600,00 e reduzem a quantidade de bancos disponíveis. Vejo aqui que os bancos X e Y ainda atendem esse perfil, com prazos e margens específicos. Se quiser, me detalha se é crédito novo, refin ou cartão benefício para eu afinar ainda mais."
+
+Nunca devolva JSON, apenas texto em português.`;
+
+      let respostaHumana = "";
+      try {
+        // Prepare roteiros data for AI (simplified version with key info)
+        const roteirosParaIA = roteiros.slice(0, 5).map(r => {
+          const dados = r.dados as any;
+          return {
+            banco: r.banco,
+            convenio: r.convenio,
+            segmento: r.segmento,
+            tipo_operacao: r.tipoOperacao,
+            faixas_idade: dados.faixas_idade || [],
+            publico_alvo: dados.publico_alvo || [],
+            limite_parcela: dados.limite_parcela,
+            margem: dados.margem,
+            prazos: dados.prazos || [],
+          };
+        });
+
+        const humanResponse = await openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          messages: [
+            { role: "system", content: respondentePrompt },
+            { 
+              role: "user", 
+              content: `Consulta do usuário: "${q.trim()}"
+
+Filtros interpretados: ${JSON.stringify(filters, null, 2)}
+
+Roteiros encontrados (${roteiros.length} total, mostrando até 5):
+${JSON.stringify(roteirosParaIA, null, 2)}`
+            }
+          ],
+          max_completion_tokens: 800,
+        });
+
+        respostaHumana = humanResponse.choices[0]?.message?.content || "";
+      } catch (humanError) {
+        console.error("Error generating human response:", humanError);
+        // Continue without human response if it fails
+        respostaHumana = "";
+      }
+
       return res.json({
         query: q,
         filters_interpreted: filters,
         results,
         total: results.length,
+        resposta: respostaHumana,
       });
     } catch (error: any) {
       console.error("AI search error:", error);

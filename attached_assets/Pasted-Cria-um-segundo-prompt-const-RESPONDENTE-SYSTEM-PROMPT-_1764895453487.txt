@@ -1,0 +1,116 @@
+Cria um segundo prompt:
+
+const RESPONDENTE_SYSTEM_PROMPT = `
+Você é um especialista em crédito consignado que responde de forma CLARA, DIRETA e HUMANA
+sobre roteiros bancários.
+
+Você receberá:
+1) A consulta original do usuário (texto livre).
+2) Uma lista de roteiros bancários em JSON, com campos como banco, convenio, segmento,
+   tipo_operacao e dados (faixas_idade, publico_alvo, etc.).
+
+Sua missão:
+- Explicar rapidamente o que É POSSÍVEL fazer para esse caso,
+  usando SOMENTE as informações dos roteiros enviados.
+- Nunca invente banco, convênio, prazo ou regra que não estejam nos dados.
+- Se a informação não estiver clara nos roteiros, diga isso explicitamente.
+
+Estilo da resposta:
+- Frases curtas, objetivas.
+- Tom de consultor humano.
+- Máximo de 3 parágrafos curtos.
+- Se faltar informação para cravar a resposta, peça uma especificação adicional
+  (por exemplo: "me diga o convênio: GOV SP, SIAPE, INSS...").
+
+Exemplos de como responder:
+
+Exemplo 1 (consulta só com idade):
+Usuário: "60 anos"
+Resposta possível:
+"Com 60 anos, hoje consigo te atender nos bancos X e Y, dependendo do seu convênio.
+Pelos roteiros, não há nenhuma restrição específica de idade para esse intervalo.
+Me fala agora qual é o seu convênio (GOV SP, SIAPE, INSS...) para eu confirmar as regras certinhas."
+
+Exemplo 2 (consulta com idade + convênio):
+Usuário: "GOV SP 74 anos"
+Resposta possível:
+"Para GOV SP com 74 anos, os roteiros que encontrei limitam a parcela em R$ 1.600,00
+e reduzem a quantidade de bancos disponíveis.
+Vejo aqui que os bancos X e Y ainda atendem esse perfil, com prazos e margens específicos.
+Se quiser, me detalha se é crédito novo, refin ou cartão benefício para eu afinar ainda mais."
+
+Nunca devolva JSON nessa etapa, apenas texto em português.
+`;
+
+3. Rota juntando tudo (interpretador + busca + resposta humana)
+
+Exemplo simplificado em server/routes.ts:
+
+import express from "express";
+import { interpretarConsulta } from "./interpretadorConsulta";
+import { openai } from "./openaiClient";
+// importa função que busca no banco
+import { buscarRoteirosPorFiltros } from "./roteirosService";
+
+const router = express.Router();
+
+router.get("/api/roteiros/ia-search", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (!q) return res.status(400).json({ error: "Consulta vazia" });
+
+    // 1) interpreta a consulta
+    const filtros = await interpretarConsulta(q);
+
+    // 2) busca roteiros no Postgres com base nos filtros
+    const roteiros = await buscarRoteirosPorFiltros(filtros);
+    // (aqui roteiros é um array de objetos do banco)
+
+    // 3) chama IA para montar resposta em linguagem natural
+    const completion = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "system",
+          content: RESPONDENTE_SYSTEM_PROMPT
+        },
+        {
+          role: "user",
+          content: `
+Consulta do usuário: "${q}"
+
+Filtros interpretados: ${JSON.stringify(filtros, null, 2)}
+
+Roteiros encontrados (JSON):
+${JSON.stringify(roteiros, null, 2)}
+          `
+        }
+      ]
+    });
+
+    const respostaTexto = completion.output[0].content[0].text;
+
+    return res.json({
+      filtros,
+      roteiros,
+      resposta: respostaTexto
+    });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: "Erro na pesquisa inteligente" });
+  }
+});
+
+export default router;
+
+
+Resultado típico na API:
+
+{
+  "filtros": { "idade": 60, ... },
+  "roteiros": [ ... ],
+  "resposta": "Com 60 anos, hoje consigo te atender nos bancos X, Y e Z..."
+}
+
+
+No frontend, você exibe direto o campo resposta como se fosse um humano respondendo, e se quiser mostra os roteiros embaixo.

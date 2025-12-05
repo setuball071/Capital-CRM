@@ -83,6 +83,7 @@ interface IASearchResponse {
   };
   results: IASearchResult[];
   total: number;
+  resposta: string;
 }
 
 export default function RoteirosPage() {
@@ -484,6 +485,23 @@ export default function RoteirosPage() {
 
           {iaSearchResults && (
             <>
+              {/* Human-readable AI Response */}
+              {iaSearchResults.resposta && (
+                <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      Resposta do Consultor IA
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap" data-testid="text-ia-response">
+                      {iaSearchResults.resposta}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="bg-muted/50">
                 <CardContent className="p-4">
                   <p className="text-sm text-muted-foreground mb-2">Filtros interpretados pela IA:</p>
