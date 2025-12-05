@@ -335,6 +335,8 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   margemBruta70: decimal("margem_bruta_70", { precision: 12, scale: 2 }),
   margemUtilizada70: decimal("margem_utilizada_70", { precision: 12, scale: 2 }),
   margemSaldo70: decimal("margem_saldo_70", { precision: 12, scale: 2 }),
+  margemCartaoCreditoSaldo: decimal("margem_cartao_credito_saldo", { precision: 12, scale: 2 }),
+  margemCartaoBeneficioSaldo: decimal("margem_cartao_beneficio_saldo", { precision: 12, scale: 2 }),
   creditos: decimal("creditos", { precision: 12, scale: 2 }),
   debitos: decimal("debitos", { precision: 12, scale: 2 }),
   liquido: decimal("liquido", { precision: 12, scale: 2 }),
@@ -422,13 +424,32 @@ export type InsertPedidoLista = z.infer<typeof insertPedidoListaSchema>;
 // ===== FILTROS PARA PEDIDOS LISTA =====
 
 export const filtrosPedidoListaSchema = z.object({
+  // Filtros de pessoa
   convenio: z.string().optional(),
   orgao: z.string().optional(),
   uf: z.string().optional(),
   idade_min: z.number().optional(),
   idade_max: z.number().optional(),
   sit_func: z.string().optional(),
-  margem_saldo_30_min: z.number().optional(),
+  // Filtros de margem 30%
+  margem_30_min: z.number().optional(),
+  margem_30_max: z.number().optional(),
+  // Filtros de margem 35%
+  margem_35_min: z.number().optional(),
+  margem_35_max: z.number().optional(),
+  // Filtros de margem 70%
+  margem_70_min: z.number().optional(),
+  margem_70_max: z.number().optional(),
+  // Filtros de margem cartão crédito (5%)
+  margem_cartao_credito_min: z.number().optional(),
+  margem_cartao_credito_max: z.number().optional(),
+  // Filtros de margem cartão benefício (5%)
+  margem_cartao_beneficio_min: z.number().optional(),
+  margem_cartao_beneficio_max: z.number().optional(),
+  // Filtros de contrato
+  banco: z.string().optional(),
+  parcela_min: z.number().optional(),
+  parcela_max: z.number().optional(),
 });
 
 export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;

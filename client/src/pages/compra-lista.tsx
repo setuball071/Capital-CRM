@@ -21,6 +21,21 @@ interface Filtros {
   idade_min?: number;
   idade_max?: number;
   sit_func?: string;
+  // Filtros de margem
+  margem_30_min?: number;
+  margem_30_max?: number;
+  margem_35_min?: number;
+  margem_35_max?: number;
+  margem_70_min?: number;
+  margem_70_max?: number;
+  margem_cartao_credito_min?: number;
+  margem_cartao_credito_max?: number;
+  margem_cartao_beneficio_min?: number;
+  margem_cartao_beneficio_max?: number;
+  // Filtros de contrato
+  banco?: string;
+  parcela_min?: number;
+  parcela_max?: number;
 }
 
 interface FiltrosDisponiveis {
@@ -176,6 +191,25 @@ export default function CompraLista() {
       parts.push(`Idade: ${f.idade_min || 0} - ${f.idade_max || 99}`);
     }
     if (f.sit_func) parts.push(`Situação: ${f.sit_func}`);
+    if (f.margem_30_min !== undefined || f.margem_30_max !== undefined) {
+      parts.push(`Margem 30%: ${f.margem_30_min || 0} - ${f.margem_30_max || "∞"}`);
+    }
+    if (f.margem_35_min !== undefined || f.margem_35_max !== undefined) {
+      parts.push(`Margem 35%: ${f.margem_35_min || 0} - ${f.margem_35_max || "∞"}`);
+    }
+    if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
+      parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
+    }
+    if (f.margem_cartao_credito_min !== undefined || f.margem_cartao_credito_max !== undefined) {
+      parts.push(`Margem Cart.Créd: ${f.margem_cartao_credito_min || 0} - ${f.margem_cartao_credito_max || "∞"}`);
+    }
+    if (f.margem_cartao_beneficio_min !== undefined || f.margem_cartao_beneficio_max !== undefined) {
+      parts.push(`Margem Cart.Benef: ${f.margem_cartao_beneficio_min || 0} - ${f.margem_cartao_beneficio_max || "∞"}`);
+    }
+    if (f.banco) parts.push(`Banco: ${f.banco}`);
+    if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
+      parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
+    }
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
   };
 
@@ -297,6 +331,185 @@ export default function CompraLista() {
                     onChange={(e) => setFiltros({ ...filtros, sit_func: e.target.value || undefined })}
                     data-testid="input-sit-func"
                   />
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Contrato</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="banco">Banco</Label>
+                    <Input
+                      id="banco"
+                      placeholder="Ex: BRADESCO, ITAU"
+                      value={filtros.banco || ""}
+                      onChange={(e) => setFiltros({ ...filtros, banco: e.target.value || undefined })}
+                      data-testid="input-banco"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="parcela_min">Parcela Mínima (R$)</Label>
+                    <Input
+                      id="parcela_min"
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="Ex: 100.00"
+                      value={filtros.parcela_min || ""}
+                      onChange={(e) => setFiltros({ ...filtros, parcela_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      data-testid="input-parcela-min"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="parcela_max">Parcela Máxima (R$)</Label>
+                    <Input
+                      id="parcela_max"
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="Ex: 500.00"
+                      value={filtros.parcela_max || ""}
+                      onChange={(e) => setFiltros({ ...filtros, parcela_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      data-testid="input-parcela-max"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Margem (Saldos)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Margem 30%</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Mín"
+                        value={filtros.margem_30_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_30_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-30-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Máx"
+                        value={filtros.margem_30_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_30_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-30-max"
+                        className="w-1/2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Margem 35%</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Mín"
+                        value={filtros.margem_35_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_35_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-35-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Máx"
+                        value={filtros.margem_35_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_35_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-35-max"
+                        className="w-1/2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Margem 70%</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Mín"
+                        value={filtros.margem_70_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_70_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-70-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Máx"
+                        value={filtros.margem_70_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_70_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-70-max"
+                        className="w-1/2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Cartão Crédito 5%</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Mín"
+                        value={filtros.margem_cartao_credito_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_cartao_credito_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-cartao-credito-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Máx"
+                        value={filtros.margem_cartao_credito_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_cartao_credito_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-cartao-credito-max"
+                        className="w-1/2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Cartão Benefício 5%</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Mín"
+                        value={filtros.margem_cartao_beneficio_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_cartao_beneficio_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-cartao-beneficio-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Máx"
+                        value={filtros.margem_cartao_beneficio_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_cartao_beneficio_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-cartao-beneficio-max"
+                        className="w-1/2"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

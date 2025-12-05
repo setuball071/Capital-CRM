@@ -786,29 +786,151 @@ export class DbStorage implements IStorage {
   }
 
   async searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }> {
-    const conditions: any[] = [];
+    // Check if we need folha or contrato joins
+    const needsFolhaJoin = !!(
+      filtros.margem_30_min !== undefined || filtros.margem_30_max !== undefined ||
+      filtros.margem_35_min !== undefined || filtros.margem_35_max !== undefined ||
+      filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
+      filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
+      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined
+    );
+    
+    const needsContratoJoin = !!(
+      filtros.banco || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined
+    );
+
+    // Build pessoa conditions
+    const pessoaConditions: any[] = [];
     
     if (filtros.convenio) {
-      conditions.push(ilike(clientesPessoa.convenio, `%${filtros.convenio}%`));
+      pessoaConditions.push(ilike(clientesPessoa.convenio, `%${filtros.convenio}%`));
     }
     if (filtros.orgao) {
-      conditions.push(ilike(clientesPessoa.orgaodesc, `%${filtros.orgao}%`));
+      pessoaConditions.push(ilike(clientesPessoa.orgaodesc, `%${filtros.orgao}%`));
     }
     if (filtros.uf) {
-      conditions.push(eq(clientesPessoa.uf, filtros.uf));
+      pessoaConditions.push(eq(clientesPessoa.uf, filtros.uf));
     }
     if (filtros.sit_func) {
-      conditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
+      pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
     }
-    
-    let clientes: ClientePessoa[];
-    if (conditions.length > 0) {
-      clientes = await db.select().from(clientesPessoa).where(and(...conditions));
+
+    // If we need joins, use parameterized SQL query for safety
+    if (needsFolhaJoin || needsContratoJoin) {
+      // Build parameterized query using Drizzle's sql tagged template
+      const folhaJoinSql = needsFolhaJoin ? sql`
+        INNER JOIN LATERAL (
+          SELECT * FROM clientes_folha_mes f
+          WHERE f.pessoa_id = p.id
+          ORDER BY f.competencia DESC
+          LIMIT 1
+        ) folha ON true
+      ` : sql``;
+      
+      const contratoJoinSql = needsContratoJoin ? sql`
+        INNER JOIN clientes_contratos c ON c.pessoa_id = p.id
+      ` : sql``;
+
+      // Build WHERE conditions using parameterized values (safe from SQL injection)
+      const whereConditions: ReturnType<typeof sql>[] = [];
+
+      // Pessoa conditions (parameterized)
+      if (filtros.convenio) {
+        whereConditions.push(sql`p.convenio ILIKE ${'%' + filtros.convenio + '%'}`);
+      }
+      if (filtros.orgao) {
+        whereConditions.push(sql`p.orgaodesc ILIKE ${'%' + filtros.orgao + '%'}`);
+      }
+      if (filtros.uf) {
+        whereConditions.push(sql`p.uf = ${filtros.uf}`);
+      }
+      if (filtros.sit_func) {
+        whereConditions.push(sql`p.sit_func ILIKE ${'%' + filtros.sit_func + '%'}`);
+      }
+
+      // Margem 30% conditions (parameterized)
+      if (filtros.margem_30_min !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_30 >= ${filtros.margem_30_min}`);
+      }
+      if (filtros.margem_30_max !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_30 <= ${filtros.margem_30_max}`);
+      }
+
+      // Margem 35% conditions (parameterized)
+      if (filtros.margem_35_min !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_35 >= ${filtros.margem_35_min}`);
+      }
+      if (filtros.margem_35_max !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_35 <= ${filtros.margem_35_max}`);
+      }
+
+      // Margem 70% conditions (parameterized)
+      if (filtros.margem_70_min !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_70 >= ${filtros.margem_70_min}`);
+      }
+      if (filtros.margem_70_max !== undefined) {
+        whereConditions.push(sql`folha.margem_saldo_70 <= ${filtros.margem_70_max}`);
+      }
+
+      // Margem cartão crédito conditions (parameterized)
+      if (filtros.margem_cartao_credito_min !== undefined) {
+        whereConditions.push(sql`folha.margem_cartao_credito_saldo >= ${filtros.margem_cartao_credito_min}`);
+      }
+      if (filtros.margem_cartao_credito_max !== undefined) {
+        whereConditions.push(sql`folha.margem_cartao_credito_saldo <= ${filtros.margem_cartao_credito_max}`);
+      }
+
+      // Margem cartão benefício conditions (parameterized)
+      if (filtros.margem_cartao_beneficio_min !== undefined) {
+        whereConditions.push(sql`folha.margem_cartao_beneficio_saldo >= ${filtros.margem_cartao_beneficio_min}`);
+      }
+      if (filtros.margem_cartao_beneficio_max !== undefined) {
+        whereConditions.push(sql`folha.margem_cartao_beneficio_saldo <= ${filtros.margem_cartao_beneficio_max}`);
+      }
+
+      // Contrato conditions (parameterized)
+      if (filtros.banco) {
+        whereConditions.push(sql`c.banco ILIKE ${'%' + filtros.banco + '%'}`);
+      }
+      if (filtros.parcela_min !== undefined) {
+        whereConditions.push(sql`c.valor_parcela >= ${filtros.parcela_min}`);
+      }
+      if (filtros.parcela_max !== undefined) {
+        whereConditions.push(sql`c.valor_parcela <= ${filtros.parcela_max}`);
+      }
+
+      // Combine WHERE conditions
+      let whereSql = sql``;
+      if (whereConditions.length > 0) {
+        whereSql = sql`WHERE ${whereConditions.reduce((acc, cond, i) => 
+          i === 0 ? cond : sql`${acc} AND ${cond}`
+        )}`;
+      }
+
+      // Build final query with all parameterized parts
+      const query = sql`
+        SELECT DISTINCT p.*
+        FROM clientes_pessoa p
+        ${folhaJoinSql}
+        ${contratoJoinSql}
+        ${whereSql}
+      `;
+
+      const result = await db.execute(query);
+      const clientes = result.rows as ClientePessoa[];
+      
+      return { clientes, total: clientes.length };
     } else {
-      clientes = await db.select().from(clientesPessoa);
+      // Simple query without joins using Drizzle's query builder
+      let clientes: ClientePessoa[];
+      if (pessoaConditions.length > 0) {
+        clientes = await db.select().from(clientesPessoa).where(and(...pessoaConditions));
+      } else {
+        clientes = await db.select().from(clientesPessoa);
+      }
+      
+      return { clientes, total: clientes.length };
     }
-    
-    return { clientes, total: clientes.length };
   }
 
   async getDistinctConveniosClientes(): Promise<string[]> {
