@@ -92,6 +92,7 @@ export interface IStorage {
   searchRoteirosIA(filters: { convenio?: string | null; segmento?: string | null; tipoOperacao?: string | null; idade?: number | null; palavrasChave?: string[] }): Promise<RoteiroBancario[]>;
   getDistinctConvenios(): Promise<string[]>;
   getDistinctTiposOperacao(): Promise<string[]>;
+  deleteRoteiro(id: number): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -693,6 +694,10 @@ export class DbStorage implements IStorage {
     }
     
     return roteiros;
+  }
+
+  async deleteRoteiro(id: number): Promise<void> {
+    await db.delete(roteirosBancarios).where(eq(roteirosBancarios.id, id));
   }
 }
 

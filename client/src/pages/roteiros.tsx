@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X, Pencil, Sparkles, Loader2 } from "lucide-react";
+import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X, Pencil, Sparkles, Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,16 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -72,6 +82,12 @@ interface IASearchResult {
   };
 }
 
+interface IAModulo {
+  id: string;
+  label: string;
+  confidence: number;
+}
+
 interface IASearchResponse {
   query: string;
   filters_interpreted: {
@@ -81,9 +97,11 @@ interface IASearchResponse {
     idade: number | null;
     palavras_chave: string[];
   };
+  modulo: IAModulo;
   results: IASearchResult[];
   total: number;
   resposta: string;
+  sugestoes: string[];
 }
 
 export default function RoteirosPage() {
@@ -101,6 +119,9 @@ export default function RoteirosPage() {
   const [iaQuery, setIaQuery] = useState("");
   const [iaSearchResults, setIaSearchResults] = useState<IASearchResponse | null>(null);
   const [isIaSearching, setIsIaSearching] = useState(false);
+  
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [roteiroToDelete, setRoteiroToDelete] = useState<RoteiroBancario | null>(null);
 
   const { data: roteiros = [], isLoading } = useQuery<RoteiroBancario[]>({
     queryKey: ["/api/roteiros"],
@@ -159,6 +180,31 @@ export default function RoteirosPage() {
       toast({
         title: "Erro ao atualizar",
         description: error.message || "Erro ao atualizar roteiro",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest("DELETE", `/api/roteiros/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Roteiro excluído",
+        description: "O roteiro foi excluído com sucesso",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros/filters/convenios"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/roteiros/filters/tipos-operacao"] });
+      setDeleteDialogOpen(false);
+      setRoteiroToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir",
+        description: error.message || "Erro ao excluir roteiro",
         variant: "destructive",
       });
     },
@@ -422,6 +468,19 @@ export default function RoteirosPage() {
                             >
                               Ver detalhes
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setRoteiroToDelete(roteiro);
+                                setDeleteDialogOpen(true);
+                              }}
+                              className="text-destructive hover:text-destructive"
+                              data-testid={`button-delete-${roteiro.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -502,9 +561,41 @@ export default function RoteirosPage() {
                 </Card>
               )}
 
+              {/* Suggestions for next queries */}
+              {iaSearchResults.sugestoes && iaSearchResults.sugestoes.length > 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground mb-3">Perguntas que você pode fazer agora:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {iaSearchResults.sugestoes.map((sugestao, idx) => (
+                        <Button
+                          key={idx}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setIaQuery(sugestao);
+                          }}
+                          className="text-left h-auto py-2 px-3"
+                          data-testid={`button-suggestion-${idx}`}
+                        >
+                          {sugestao}
+                        </Button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="bg-muted/50">
                 <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Filtros interpretados pela IA:</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-muted-foreground">Filtros interpretados pela IA:</p>
+                    {iaSearchResults.modulo && (
+                      <Badge variant="default" className="text-xs">
+                        {iaSearchResults.modulo.label}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {iaSearchResults.filters_interpreted.convenio && (
                       <Badge variant="secondary">Convênio: {iaSearchResults.filters_interpreted.convenio}</Badge>
@@ -694,6 +785,41 @@ export default function RoteirosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir permanentemente o roteiro 
+              <span className="font-semibold"> {roteiroToDelete?.banco}</span> - 
+              <span className="font-semibold"> {roteiroToDelete?.convenio}</span>?
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setRoteiroToDelete(null);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (roteiroToDelete) {
+                  deleteMutation.mutate(roteiroToDelete.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -28,7 +28,33 @@ The core algorithm is coefficient-based, supporting two safety margin models: pe
 
 ### Authentication and Authorization
 
-A full authentication and authorization system is implemented, featuring session-based authentication with `express-session` and `connect-pg-simple`, password hashing with `bcrypt`, and role-based access control (RBAC). Roles include Master, Coordenação, and Vendedor, each with hierarchical permissions for user and data management.
+A full authentication and authorization system is implemented, featuring session-based authentication with `express-session` and `connect-pg-simple`, password hashing with `bcrypt`, and role-based access control (RBAC). Roles include Master, Coordenação, Atendimento, Operacional, and Vendedor, each with hierarchical permissions for user and data management.
+
+### Roteiro Bancário Inteligente
+
+The banking roadmap module provides intelligent search and management of bank-specific procedures. Access is restricted to master, atendimento, and operacional roles. Features include:
+
+- **JSON Import**: Bulk import of banking roadmaps from structured JSON
+- **Metadata Editing**: Edit bank, agreement, segment, and operation type
+- **Delete Functionality**: Remove roadmaps with confirmation dialog
+- **AI-Powered Search**: Natural language search using OpenAI GPT-4.1-mini via Replit AI Integrations
+
+### AI Search with 7 Advanced Modules
+
+The AI search system uses a two-stage architecture:
+1. **Query Interpreter**: Extracts filters (agreement, segment, operation type, age, keywords) and detects which response module to activate
+2. **Module-Specific Responder**: Generates humanized responses tailored to the detected intent
+
+Available modules:
+- **modulo_1 (Comparação Bancos)**: Compares available banks for a profile
+- **modulo_2 (Explicação Regras)**: Explains specific rules and restrictions
+- **modulo_3 (Melhor Operação)**: Recommends the best operation type
+- **modulo_4 (Documentação)**: Lists required documents
+- **modulo_5 (Fluxo Operacional)**: Step-by-step operational flow
+- **modulo_6 (Inconsistências)**: Detects incomplete data in roadmaps
+- **modulo_7 (Resumo Geral)**: Provides a complete overview of agreement/bank
+
+The system also generates contextual suggestions for follow-up queries based on the detected filters and module.
 
 ### Component Architecture
 

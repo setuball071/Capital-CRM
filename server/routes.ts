@@ -1247,6 +1247,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to generate contextual suggestions for next queries
+  const generateSuggestions = (
+    topicos: string[], 
+    filters: { convenio: string | null; tipo_operacao: string | null; idade: number | null }, 
+    moduloId: string
+  ): string[] => {
+    const sugestoes: string[] = [];
+
+    // Base suggestions based on topics
+    const suggestionMap: Record<string, string[]> = {
+      "idade": [
+        filters.convenio ? `Qual o limite de parcela para ${filters.idade || "essa"} idade no ${filters.convenio}?` : "Qual o limite de parcela para essa idade?",
+        "Quais bancos têm o maior prazo?",
+      ],
+      "convenio": [
+        `Quais operações são permitidas no ${filters.convenio || "convênio"}?`,
+        `Algum banco tem regra especial para ${filters.convenio || "este convênio"}?`,
+        "Há limite de idade?",
+      ],
+      "operacao": [
+        "Quanto libera em média?",
+        "Pode fazer compra de dívida junto?",
+        "Quais bancos aceitam essa operação?",
+      ],
+      "portal": [
+        "Como acessar o portal oficial?",
+        "Onde consultar margem?",
+        "Como gerar autorização?",
+      ],
+      "documentacao": [
+        "Posso enviar documentos digitalizados?",
+        "Quais documentos são obrigatórios?",
+      ],
+    };
+
+    // Add suggestions based on topics
+    for (const topico of topicos) {
+      const topicoSugestoes = suggestionMap[topico.toLowerCase()] || [];
+      sugestoes.push(...topicoSugestoes);
+    }
+
+    // Add module-specific suggestions
+    switch (moduloId) {
+      case "modulo_1":
+        if (!filters.convenio) sugestoes.push("Me diga o convênio: GOV SP, SIAPE, INSS...");
+        if (!filters.tipo_operacao) sugestoes.push("Qual tipo de operação você precisa?");
+        break;
+      case "modulo_2":
+        sugestoes.push("Quais bancos ainda atendem esse perfil?");
+        break;
+      case "modulo_4":
+        sugestoes.push("Como faço para enviar os documentos?");
+        break;
+      case "modulo_7":
+        sugestoes.push("Qual a melhor operação para esse convênio?");
+        break;
+    }
+
+    // Limit to 3 unique suggestions
+    const uniqueSugestoes = [...new Set(sugestoes)];
+    return uniqueSugestoes.slice(0, 3);
+  };
+
   // AI-powered intelligent search for roteiros (MUST be before :id route)
   app.get("/api/roteiros/ia-search", requireAuth, requireRoteirosAccess, async (req, res) => {
     try {
@@ -1259,16 +1322,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use shared OpenAI client (Replit AI Integrations)
       const { openai } = await import("./openaiClient");
 
-      // System prompt for AI query interpreter
+      // System prompt for AI query interpreter with module detection
       const systemPrompt = `Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
 
-Receberá uma frase digitada pelo usuário (por exemplo):
-- "gov sp 60 anos cartão benefício"
-- "siape compra dívida 71 anos limite parcela 1600"
-- "portal spprev documentação"
-- "inss refin 74 anos margem"
+Receberá uma frase digitada pelo usuário e precisa:
+1) Extrair filtros de busca
+2) Detectar qual MÓDULO de resposta ativar
+3) Sugerir tópicos para próximas perguntas
 
-Sua função é transformar essa frase em um JSON de filtros para o backend.
+MÓDULOS DISPONÍVEIS (detecte baseado na consulta):
+- modulo_1: "comparacao_bancos" - Ativa quando: consulta só com idade, ou "quais bancos", ou "comparar bancos", ou busca genérica por perfil
+- modulo_2: "explicacao_regras" - Ativa quando: "por que", "motivo", "não atende", "por qual razão", "explique"
+- modulo_3: "melhor_operacao" - Ativa quando: "qual operação", "melhor operação", "o que é melhor", "crédito novo ou refin"
+- modulo_4: "documentacao" - Ativa quando: "documentação", "docs", "documentos", "quais documentos"
+- modulo_5: "fluxo_operacional" - Ativa quando: "como faz", "fluxo", "passo a passo", "como fazer operação"
+- modulo_6: "detectar_inconsistencias" - Sempre verificar automaticamente se roteiros encontrados estão incompletos
+- modulo_7: "resumo_geral" - Ativa quando: "resumo", "o que posso fazer", "quais operações", "visão geral"
 
 Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
 
@@ -1277,55 +1346,66 @@ Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
   "segmento": null,
   "tipo_operacao": null,
   "idade": null,
-  "palavras_chave": []
+  "palavras_chave": [],
+  "modulo": {
+    "id": "modulo_1",
+    "label": "Comparação entre bancos",
+    "confidence": 0.8
+  },
+  "sugestoes_topicos": []
 }
 
-Regras:
+REGRAS DE FILTROS:
 
 1) "convenio":
-   - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
-   - Se encontrar "siape" -> "SIAPE".
-   - Se encontrar "inss" -> "INSS".
-   - Se encontrar "municipal" com alguma cidade, coloque o nome como aparecer.
-   - Caso não fique claro, use null.
+   - "gov sp" / "governo de são paulo" / "spprev" -> "GOV SP"
+   - "siape" / "governo federal" / "federal" -> "SIAPE" ou "Governo Federal"
+   - "inss" / "aposentado" -> "INSS"
+   - Se não fique claro, use null
 
 2) "segmento":
-   - Use se houver indicação clara de segmento (ex.: "SIAPE", "GOV SP", "INSS").
-   - Caso contrário, null.
-   - Se "convenio" já for algo como "SIAPE" ou "GOV SP", você pode repetir em "segmento" se fizer sentido.
+   - Use se houver indicação clara
+   - Caso contrário, null
 
-3) "tipo_operacao":
-   - Valores possíveis (sempre em minúsculas, snake_case):
-     - "credito_novo"
-     - "refin"
-     - "compra_divida"
-     - "compra_cartao_beneficio"
-     - "cartao_beneficio"
-     - "cartao_consignado"
-   - Mapear:
-     - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
-     - "refin", "refinanciamento" -> "refin"
-     - "compra de dívida", "compra divida", "compra de contratos", "compra de parcelas" -> "compra_divida"
-     - "compra de cartão benefício", "compra cartao beneficio" -> "compra_cartao_beneficio"
-     - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
-     - "cartão consignado", "cartao consignado", "cartão de crédito consignado" -> "cartao_consignado"
-   - Se não for possível saber, deixe null.
+3) "tipo_operacao" (sempre snake_case minúsculas):
+   - "credito_novo" | "refin" | "compra_divida" | "compra_cartao_beneficio" | "cartao_beneficio" | "cartao_consignado"
+   - Se não possível saber, null
 
 4) "idade":
-   - Se houver um número que pareça idade (ex.: 60, 71, 74), coloque esse número.
-   - Se houver mais de um número, escolha aquele que mais se parece com idade (ex.: 60 em "60 anos, prazo 96x").
-   - Se não houver idade clara, use null.
+   - Número que pareça idade (ex.: 60, 71, 74)
+   - Se não houver, null
 
 5) "palavras_chave":
-   - Liste outras palavras relevantes para busca textual no banco de dados, em minúsculas:
-     - Ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "pausa", "carencia", "averbacao".
-   - Você pode quebrar em termos simples (ex.: "portal", "spprev") ou pequenas expressões.
-   - Se não houver nada útil, devolva [].
+   - Termos relevantes em minúsculas: "portal", "margem", "limite", "parcela", "averbacao", etc.
 
-6) Formato:
-   - Sempre devolva exatamente um objeto JSON, sem texto antes ou depois.
-   - Não explique o que fez.
-   - Não coloque comentários.`;
+REGRAS DE DETECÇÃO DE MÓDULO:
+
+6) "modulo":
+   - id: um dos valores modulo_1 a modulo_7
+   - label: descrição curta do módulo
+   - confidence: 0.0 a 1.0 (quão certo você está)
+   
+   Prioridade de detecção:
+   a) Se tem "por que", "motivo", "não atende" -> modulo_2 (explicacao_regras)
+   b) Se tem "documentação", "docs", "documentos" -> modulo_4 (documentacao)
+   c) Se tem "como faz", "fluxo", "passo a passo" -> modulo_5 (fluxo_operacional)
+   d) Se tem "qual operação", "melhor operação", "crédito novo ou refin" -> modulo_3 (melhor_operacao)
+   e) Se tem "resumo", "o que posso", "quais operações" -> modulo_7 (resumo_geral)
+   f) Se tem só idade ou "quais bancos" ou busca genérica -> modulo_1 (comparacao_bancos)
+   g) Se nenhum acima e há filtros -> modulo_1 (comparacao_bancos) como fallback
+
+7) "sugestoes_topicos" (para UI sugerir próximas perguntas):
+   - Se detectou idade: adicionar "idade"
+   - Se detectou convênio: adicionar "convenio"
+   - Se detectou tipo_operacao: adicionar "operacao"
+   - Se mencionou portal: adicionar "portal"
+   - Se é documentação: adicionar "documentacao"
+   - Máximo 3 tópicos
+
+FORMATO:
+- Devolva APENAS o JSON, sem texto antes ou depois
+- Não explique o que fez
+- Não coloque comentários`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4.1-mini",
@@ -1342,13 +1422,23 @@ Regras:
         return res.status(502).json({ message: "Erro ao interpretar consulta - resposta vazia da IA" });
       }
 
-      // Schema for validating AI response with safe defaults
+      // Schema for validating AI response with module detection
+      const moduloSchema = z.object({
+        id: z.string().default("modulo_1"),
+        label: z.string().default("Comparação entre bancos"),
+        confidence: z.union([z.number(), z.string().transform(v => parseFloat(v) || 0.5)]).default(0.5),
+      });
+
+      const defaultModulo = { id: "modulo_1", label: "Comparação entre bancos", confidence: 0.5 };
+
       const aiResponseSchema = z.object({
         convenio: z.string().nullable().optional().default(null),
         segmento: z.string().nullable().optional().default(null),
         tipo_operacao: z.string().nullable().optional().default(null),
-        idade: z.number().nullable().optional().default(null),
+        idade: z.union([z.number(), z.string().transform(v => parseInt(v) || null)]).nullable().optional().default(null),
         palavras_chave: z.array(z.string()).optional().default([]),
+        modulo: moduloSchema.optional().default(defaultModulo),
+        sugestoes_topicos: z.array(z.string()).optional().default([]),
       }).passthrough();
 
       let parsedContent: unknown;
@@ -1372,6 +1462,16 @@ Regras:
         idade: validationResult.data.idade ?? null,
         palavras_chave: validationResult.data.palavras_chave || [],
       };
+
+      // Ensure robust module fallback
+      const defaultModuloFallback = { id: "modulo_1", label: "Comparação entre bancos", confidence: 0.5 };
+      const rawModulo = validationResult.data.modulo;
+      const modulo = (rawModulo && rawModulo.id) ? rawModulo : defaultModuloFallback;
+      
+      // Normalize suggestion topics to lowercase
+      const sugestoes_topicos = (validationResult.data.sugestoes_topicos || [])
+        .map((t: string) => t.toLowerCase().trim())
+        .filter((t: string) => t.length > 0);
 
       // Search roteiros with interpreted filters
       const roteiros = await storage.searchRoteirosIA({
@@ -1400,38 +1500,142 @@ Regras:
         };
       });
 
-      // Generate human-readable response using AI
-      const respondentePrompt = `Você é um especialista em crédito consignado que responde de forma CLARA, DIRETA e HUMANA sobre roteiros bancários.
+      // Generate module-specific response prompt
+      const getRespondentePrompt = (moduloId: string) => {
+        const basePrompt = `Você é um especialista em crédito consignado que responde de forma CLARA, DIRETA e HUMANA sobre roteiros bancários.
 
 Você receberá:
 1) A consulta original do usuário (texto livre).
-2) Uma lista de roteiros bancários em JSON, com campos como banco, convenio, segmento, tipo_operacao e dados (faixas_idade, publico_alvo, etc.).
-
-Sua missão:
-- Explicar rapidamente o que É POSSÍVEL fazer para esse caso, usando SOMENTE as informações dos roteiros enviados.
-- Nunca invente banco, convênio, prazo ou regra que não estejam nos dados.
-- Se a informação não estiver clara nos roteiros, diga isso explicitamente.
-- Se não houver roteiros encontrados, sugira que o usuário refine a busca ou consulte outros convênios.
+2) Uma lista de roteiros bancários em JSON, com campos como banco, convenio, segmento, tipo_operacao e dados.
 
 Estilo da resposta:
 - Frases curtas, objetivas.
 - Tom de consultor humano e amigável.
-- Máximo de 3 parágrafos curtos.
-- Se faltar informação para cravar a resposta, peça uma especificação adicional (por exemplo: "me diga o convênio: GOV SP, SIAPE, INSS...").
+- Máximo de 3-4 parágrafos curtos.
+- Nunca invente informações que não estejam nos dados.
+- Nunca devolva JSON, apenas texto em português.
 
-Exemplos de como responder:
+`;
 
-Exemplo 1 (consulta só com idade):
-Usuário: "60 anos"
-Resposta possível:
-"Com 60 anos, hoje consigo te atender nos bancos X e Y, dependendo do seu convênio. Pelos roteiros, não há nenhuma restrição específica de idade para esse intervalo. Me fala agora qual é o seu convênio (GOV SP, SIAPE, INSS...) para eu confirmar as regras certinhas."
+        const modulePrompts: Record<string, string> = {
+          "modulo_1": basePrompt + `MÓDULO: COMPARAÇÃO ENTRE BANCOS
 
-Exemplo 2 (consulta com idade + convênio):
-Usuário: "GOV SP 74 anos"
-Resposta possível:
-"Para GOV SP com 74 anos, os roteiros que encontrei limitam a parcela em R$ 1.600,00 e reduzem a quantidade de bancos disponíveis. Vejo aqui que os bancos X e Y ainda atendem esse perfil, com prazos e margens específicos. Se quiser, me detalha se é crédito novo, refin ou cartão benefício para eu afinar ainda mais."
+Sua missão: Comparar os bancos disponíveis para o perfil do cliente.
 
-Nunca devolva JSON, apenas texto em português.`;
+O que incluir na resposta:
+- Liste os bancos que atendem o perfil (ex.: "Para esse perfil, os bancos NEO, BMG e PAN atendem.")
+- Compare brevemente: qual libera maior parcela, qual tem menos documentação, qual tem prazo mais alto
+- Se só tiver idade, peça o convênio para refinar a busca
+- Destaque diferenças relevantes entre os bancos
+
+Exemplo:
+"Para 60 anos no SIAPE, encontrei 3 bancos disponíveis: NEO, BMG e PAN. O NEO libera maior parcela, o BMG exige menos documentos e o PAN oferece o maior prazo. Me conta mais sobre o valor que você precisa para eu indicar o melhor."`,
+
+          "modulo_2": basePrompt + `MÓDULO: EXPLICAÇÃO DE REGRAS ESPECÍFICAS
+
+Sua missão: Explicar por que algo não atende ou quais são as regras específicas.
+
+O que incluir na resposta:
+- Explique a regra encontrada nos roteiros de forma clara
+- Se houver limite de idade, explique exatamente qual é
+- Se houver limite de parcela, mencione o valor
+- Se houver restrição de público, liste quem não é atendido
+- Se a informação não existir nos roteiros, diga claramente: "Não encontrei essa regra específica nos roteiros disponíveis."
+
+Exemplo:
+"No GOV SP, acima de 71 anos e 10 meses o limite de parcela cai para R$ 1.600,00 e muitos bancos não aceitam. Por isso esse perfil tem menos opções. Verifiquei aqui que apenas o banco X ainda atende, com algumas restrições."`,
+
+          "modulo_3": basePrompt + `MÓDULO: QUAL OPERAÇÃO É MELHOR (RECOMENDAÇÃO)
+
+Sua missão: Recomendar qual tipo de operação é mais vantajoso para o perfil.
+
+O que incluir na resposta:
+- Compare as operações disponíveis (crédito novo, refin, cartão benefício, etc.)
+- Considere: prazo, margem, idade, limites
+- Recomende a operação mais vantajosa com justificativa
+- Se faltar informação, peça mais detalhes sobre o objetivo do cliente
+
+Exemplo:
+"Para SIAPE com 60 anos, entre crédito novo e refin, o refin costuma liberar mais valor porque mantém o prazo original do contrato. Mas se você não tem contrato ativo, crédito novo é o caminho. Me conta: você já tem algum contrato de consignado?"`,
+
+          "modulo_4": basePrompt + `MÓDULO: CHECKLIST DE DOCUMENTAÇÃO
+
+Sua missão: Listar os documentos necessários para a operação.
+
+O que incluir na resposta:
+- Liste os documentos encontrados nos roteiros (campo documentacao_necessaria)
+- Organize em formato de lista simples
+- Mencione se há documentos específicos por banco
+- Se não encontrar documentação nos roteiros, diga: "Não encontrei a lista de documentos nos roteiros. Recomendo consultar diretamente o banco."
+
+Exemplo:
+"Para SIAPE refin, os documentos necessários são:
+• RG ou CNH (frente e verso)
+• Contracheque atualizado (últimos 3 meses)
+• Extrato de consignações
+• Termo digital de autorização"`,
+
+          "modulo_5": basePrompt + `MÓDULO: PASSO A PASSO / FLUXO OPERACIONAL
+
+Sua missão: Explicar o fluxo da operação passo a passo.
+
+O que incluir na resposta:
+- Descreva as etapas do fluxo operacional
+- Inclua: acesso ao portal, consulta de margem, geração de autorização, envio de docs, averbação
+- Use numeração para facilitar o entendimento
+- Mencione os portais de acesso se disponíveis nos roteiros
+
+Exemplo:
+"Para fazer a operação SIAPE cartão benefício:
+1. Acesse o portal SiapeNet
+2. Consulte a margem disponível do cliente
+3. Gere a autorização digital
+4. Anexe os documentos necessários
+5. Envie para averbação
+O prazo médio de liberação é de 3 a 5 dias úteis."`,
+
+          "modulo_6": basePrompt + `MÓDULO: DETECÇÃO DE INCONSISTÊNCIAS
+
+Sua missão: Identificar se os roteiros estão incompletos ou faltam informações importantes.
+
+O que incluir na resposta:
+- Verifique se os roteiros têm todas as informações necessárias
+- Liste quais campos estão faltando (ex.: sem faixas de idade, sem documentação, sem portais)
+- Sugira que o usuário revise o PDF original do banco
+- Seja construtivo, não apenas crítico
+
+Exemplo:
+"Encontrei algumas inconsistências nos roteiros:
+• O roteiro do banco X não tem regras de prazo definidas
+• O roteiro do banco Y não lista os documentos necessários
+• Não há informação sobre portais de acesso
+Recomendo revisar os PDFs originais desses bancos para completar as informações."`,
+
+          "modulo_7": basePrompt + `MÓDULO: RESUMO GERAL DO CONVÊNIO/BANCO
+
+Sua missão: Dar uma visão completa do que é possível fazer no convênio ou banco.
+
+O que incluir na resposta:
+- Quem é atendido (público-alvo)
+- Quem não é atendido
+- Tipos de operação disponíveis
+- Limites por idade (se houver)
+- Documentos necessários (resumo)
+- Portais oficiais
+
+Exemplo:
+"Para o convênio GOV SP, veja o resumo:
+• Público atendido: Servidores ativos e aposentados do Estado de SP
+• Não atendidos: Pensionistas menores, servidores em estágio probatório
+• Operações: Crédito novo, refin, cartão benefício
+• Limite de idade: Até 71 anos parcela normal, acima de 71 limite de R$ 1.600
+• Portal: SPPREV (spprev.sp.gov.br)"`
+        };
+
+        return modulePrompts[moduloId] || modulePrompts["modulo_1"];
+      };
+
+      const respondentePrompt = getRespondentePrompt(modulo.id);
 
       let respostaHumana = "";
       try {
@@ -1475,12 +1679,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         respostaHumana = "";
       }
 
+      // Generate suggestions based on topics and context
+      const sugestoes = generateSuggestions(sugestoes_topicos, filters, modulo.id);
+
       return res.json({
         query: q,
         filters_interpreted: filters,
+        modulo: modulo,
         results,
         total: results.length,
         resposta: respostaHumana,
+        sugestoes,
       });
     } catch (error: any) {
       console.error("AI search error:", error);
@@ -1649,6 +1858,28 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error) {
       console.error("Update roteiro error:", error);
       return res.status(500).json({ message: "Erro ao atualizar roteiro" });
+    }
+  });
+
+  // Delete roteiro (only master, atendimento, operacional can delete)
+  app.delete("/api/roteiros/:id", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const existingRoteiro = await storage.getRoteiro(id);
+      if (!existingRoteiro) {
+        return res.status(404).json({ message: "Roteiro não encontrado" });
+      }
+
+      await storage.deleteRoteiro(id);
+      
+      return res.json({ message: "Roteiro excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete roteiro error:", error);
+      return res.status(500).json({ message: "Erro ao excluir roteiro" });
     }
   });
 

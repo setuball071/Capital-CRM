@@ -1,0 +1,199 @@
+Os 7 MÓDULOS AVANÇADOS DE CONSULTA
+
+(Comportamentos que a IA pode ativar automaticamente após interpretar a pesquisa)
+
+⭐ + SUGESTÕES AUTOMÁTICAS para o usuário após cada pesquisa
+⭐ + Ajuste na LISTAGEM para incluir botão “Excluir Roteiro”
+
+Tudo pronto para você colar no Replit e evoluir o sistema.
+
+🚀 MÓDULO 1 — Comparação Inteligente Entre Bancos
+
+Objetivo: Quando o usuário faz consultas como “60 anos”, “servidor siape refin”, a IA compara automaticamente os bancos disponíveis.
+
+A IA responde algo como:
+
+“Para esse perfil, os bancos NEO, BMG e PAN atendem.
+NEO libera maior parcela, BMG tem menos documentação, PAN tem prazo mais alto.”
+
+Implementação:
+Após trazer os roteiros encontrados → enviar lista para a IA gerar comparação resumida.
+
+🚀 MÓDULO 2 — Explicação de Regras Específicas
+
+Quando o usuário pergunta algo como:
+
+“por que não atende 72 anos no gov sp?”
+
+“siape aceita margem negativa?”
+
+“cartão benefício tem limite?”
+
+A IA lê o JSON do roteiro e responde exatamente a regra encontrada.
+
+Exemplo:
+
+“No GOV SP acima de 71 anos e 10 meses o limite cai para R$ 1.600 e muitos bancos não aceitam. Por isso sua operação não é elegível.”
+
+🚀 MÓDULO 3 — Qual Operação é Melhor? (Recomendação de Estratégia)
+
+Se o usuário perguntar:
+
+“crédito novo ou refin para 60 anos siape?”
+
+“melhor operação para liberar valor para aposentado?”
+
+A IA compara:
+prazo, margem, idade, regras de compra dívida, limites…
+
+E responde:
+
+“Para SIAPE 60 anos, refin libera mais porque mantém prazo original. Crédito novo pode liberar valor menor.”
+
+🚀 MÓDULO 4 — Checklist Automático de Documentação
+
+Se o usuário digitar:
+
+“documentação siape refin”
+
+“docs gov sp compra divida”
+
+A IA lê o JSON e devolve:
+
+“Para SIAPE refin: RG ou CNH, contracheque atualizado, extrato de consignações, termo digital.”
+
+🚀 MÓDULO 5 — Passo a Passo da Operação (Fluxo Operacional)
+
+Consulta exemplo:
+
+“como faz operação siape?”
+
+“fluxo gov sp cartão benefício”
+
+A IA deve trazer:
+
+Acessar portal
+
+Consultar margem
+
+Gerar autorização
+
+Anexar docs
+
+Enviar para averbação
+
+Tudo baseado nos roteiros importados.
+
+🚀 MÓDULO 6 — Detecção de Inconsistências / Falta de Informação
+
+Quando o roteiro está incompleto, a IA identifica falhas.
+
+Exemplo:
+
+“Não encontrei regras de prazo para este convênio no banco X.
+Recomendo revisar o PDF desse banco.”
+
+Isso evita erros operacionais.
+
+🚀 MÓDULO 7 — Resumo Completo do Convênio / Banco
+
+Quando o usuário pergunta:
+
+“o que posso fazer no governo federal?”
+
+“que tipos de operações posso atender no siape?”
+
+A IA responde com:
+
+Quem é atendido
+
+Quem não é
+
+Tipos de operação
+
+Limites por idade
+
+Documentos
+
+Portais oficiais
+
+Baseado no JSON importado.
+
+⭐ Sugestões AUTOMÁTICAS após cada pesquisa
+
+Depois que a IA responde a pergunta principal, você pode exibir no frontend uma caixa:
+
+“Perguntas que você pode fazer agora:”
+
+Com sugestões dinâmicas baseadas no filtro encontrado.
+
+Exemplos:
+
+Se a consulta envolve idade:
+
+“Qual o limite de parcela para essa idade?”
+
+“Quais bancos têm o maior prazo?”
+
+“Que documentos são exigidos?”
+
+Se envolver convênio:
+
+“Quais operações são permitidas?”
+
+“Algum banco tem regra especial?”
+
+“Há limite de idade?”
+
+Se envolver tipo de operação:
+
+“Quanto libera em média?”
+
+“Pode fazer compra de dívida junto?”
+
+“Quais bancos aceitam essa operação?”
+
+Se envolver portais:
+
+“Como acessar o portal oficial?”
+
+“Onde consultar margem?”
+
+“Como gerar autorização?”
+
+Essas sugestões aumentam retenção, clareza e produção da equipe.
+
+🗂️ Botão “Excluir Roteiro” — Incluir na Lista
+Local:
+
+Na tela Roteiros Bancários → Lista, ao lado de Editar e Ver detalhes.
+
+Botão estilo:
+🗑️ Excluir
+
+Backend:
+
+Crie rota:
+
+DELETE /api/roteiros/:id
+
+Regra:
+
+Apenas admin, atendimento e operacional podem excluir.
+
+Mostrar modal:
+
+“Confirmar exclusão definitiva do roteiro?”
+
+Ao excluir:
+
+Remover registro da tabela roteiros_bancarios
+
+Atualizar lista automaticamente
+
+✔️ Resumindo — tudo que você pediu está aqui:
+
+✓ Os 7 módulos avançados
+✓ Sugestões inteligentes após pesquisa
+✓ Botão Excluir Roteiro na listagem, com regras de permissão
+✓ Tudo pronto para implementar no Replit sem confusão
