@@ -1,0 +1,117 @@
+Crie um arquivo:
+
+server/interpretadorConsulta.ts
+
+
+Com este conteúdo:
+
+// server/interpretadorConsulta.ts
+import { openai } from "./openaiClient";
+
+const INTERPRETADOR_SYSTEM_PROMPT = `
+Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
+
+Receberá uma frase digitada pelo usuário (por exemplo:
+- "gov sp 60 anos cartão benefício"
+- "siape compra dívida 71 anos limite parcela 1600"
+- "portal spprev documentação"
+)
+
+Sua função é transformar essa frase em um JSON de filtros para o backend.
+
+Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
+
+{
+  "convenio": null,
+  "segmento": null,
+  "tipo_operacao": null,
+  "idade": null,
+  "palavras_chave": []
+}
+
+Regras:
+
+1) "convenio":
+   - "gov sp" / "governo de são paulo" -> "GOV SP"
+   - "siape" -> "SIAPE"
+   - "inss" -> "INSS"
+   - caso contrário, null
+
+2) "segmento":
+   - pode repetir o convênio quando fizer sentido
+   - se não houver indicação clara, null
+
+3) "tipo_operacao":
+   - valores possíveis:
+     - "credito_novo"
+     - "refin"
+     - "compra_divida"
+     - "compra_cartao_beneficio"
+     - "cartao_beneficio"
+     - "cartao_consignado"
+   - mapear frases para esses valores
+   - se não identificar, null
+
+4) "idade":
+   - se houver um número que pareça idade (ex.: 60, 71, 74), retornar esse número
+   - se não houver, null
+
+5) "palavras_chave":
+   - termos para busca textual no banco, em minúsculas
+   - ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "averbacao"
+   - se não tiver nada relevante, []
+
+Não escreva nada fora do JSON.
+`;
+
+export async function interpretarConsulta(q: string) {
+  const completion = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    response_format: { type: "json_object" },
+    input: [
+      { role: "system", content: INTERPRETADOR_SYSTEM_PROMPT },
+      { role: "user", content: q }
+    ]
+  });
+
+  const raw = completion.output[0].content[0].text;
+  return JSON.parse(raw);
+}
+
+4. Usar isso na rota de pesquisa (server/routes.ts)
+
+No arquivo onde estão suas rotas (provavelmente server/routes.ts), importe o interpretador e cria a rota de teste / pesquisa.
+
+Exemplo simples:
+
+// server/routes.ts
+import express from "express";
+import { interpretarConsulta } from "./interpretadorConsulta";
+
+const router = express.Router();
+
+// ...outras rotas
+
+router.get("/api/roteiros/ia-search", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+
+    if (!q) {
+      return res.status(400).json({ error: "Consulta vazia" });
+    }
+
+    const filtros = await interpretarConsulta(q);
+
+    // POR ENQUANTO: só retorna os filtros pra você conferir
+    // Depois a gente pluga a busca no Postgres
+    return res.json({ filtros });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: "Erro ao interpretar consulta" });
+  }
+});
+
+export default router;
+
+
+Se o seu projeto já tinha um router criado, só encaixa essa rota nele.
