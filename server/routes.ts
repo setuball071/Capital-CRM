@@ -1247,6 +1247,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI-powered intelligent search for roteiros (MUST be before :id route)
+  app.get("/api/roteiros/ia-search", requireAuth, requireRoteirosAccess, async (req, res) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q || typeof q !== "string" || q.trim() === "") {
+        return res.status(400).json({ message: "Consulta não pode estar vazia" });
+      }
+
+      // Use shared OpenAI client (Replit AI Integrations)
+      const { openai } = await import("./openaiClient");
+
+      // System prompt for AI query interpreter
+      const systemPrompt = `Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
+
+Receberá uma frase digitada pelo usuário (por exemplo):
+- "gov sp 60 anos cartão benefício"
+- "siape compra dívida 71 anos limite parcela 1600"
+- "portal spprev documentação"
+- "inss refin 74 anos margem"
+
+Sua função é transformar essa frase em um JSON de filtros para o backend.
+
+Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
+
+{
+  "convenio": null,
+  "segmento": null,
+  "tipo_operacao": null,
+  "idade": null,
+  "palavras_chave": []
+}
+
+Regras:
+
+1) "convenio":
+   - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
+   - Se encontrar "siape" -> "SIAPE".
+   - Se encontrar "inss" -> "INSS".
+   - Se encontrar "municipal" com alguma cidade, coloque o nome como aparecer.
+   - Caso não fique claro, use null.
+
+2) "segmento":
+   - Use se houver indicação clara de segmento (ex.: "SIAPE", "GOV SP", "INSS").
+   - Caso contrário, null.
+   - Se "convenio" já for algo como "SIAPE" ou "GOV SP", você pode repetir em "segmento" se fizer sentido.
+
+3) "tipo_operacao":
+   - Valores possíveis (sempre em minúsculas, snake_case):
+     - "credito_novo"
+     - "refin"
+     - "compra_divida"
+     - "compra_cartao_beneficio"
+     - "cartao_beneficio"
+     - "cartao_consignado"
+   - Mapear:
+     - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
+     - "refin", "refinanciamento" -> "refin"
+     - "compra de dívida", "compra divida", "compra de contratos", "compra de parcelas" -> "compra_divida"
+     - "compra de cartão benefício", "compra cartao beneficio" -> "compra_cartao_beneficio"
+     - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
+     - "cartão consignado", "cartao consignado", "cartão de crédito consignado" -> "cartao_consignado"
+   - Se não for possível saber, deixe null.
+
+4) "idade":
+   - Se houver um número que pareça idade (ex.: 60, 71, 74), coloque esse número.
+   - Se houver mais de um número, escolha aquele que mais se parece com idade (ex.: 60 em "60 anos, prazo 96x").
+   - Se não houver idade clara, use null.
+
+5) "palavras_chave":
+   - Liste outras palavras relevantes para busca textual no banco de dados, em minúsculas:
+     - Ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "pausa", "carencia", "averbacao".
+   - Você pode quebrar em termos simples (ex.: "portal", "spprev") ou pequenas expressões.
+   - Se não houver nada útil, devolva [].
+
+6) Formato:
+   - Sempre devolva exatamente um objeto JSON, sem texto antes ou depois.
+   - Não explique o que fez.
+   - Não coloque comentários.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: q.trim() }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(502).json({ message: "Erro ao interpretar consulta - resposta vazia da IA" });
+      }
+
+      // Schema for validating AI response with safe defaults
+      const aiResponseSchema = z.object({
+        convenio: z.string().nullable().optional().default(null),
+        segmento: z.string().nullable().optional().default(null),
+        tipo_operacao: z.string().nullable().optional().default(null),
+        idade: z.number().nullable().optional().default(null),
+        palavras_chave: z.array(z.string()).optional().default([]),
+      }).passthrough();
+
+      let parsedContent: unknown;
+      try {
+        parsedContent = JSON.parse(content);
+      } catch {
+        console.error("AI response parse error:", content);
+        return res.status(502).json({ message: "Erro ao interpretar resposta da IA - JSON inválido" });
+      }
+
+      const validationResult = aiResponseSchema.safeParse(parsedContent);
+      if (!validationResult.success) {
+        console.error("AI response validation error:", validationResult.error, "Content:", parsedContent);
+        return res.status(502).json({ message: "Erro ao interpretar resposta da IA - formato inválido" });
+      }
+
+      const filters = {
+        convenio: validationResult.data.convenio || null,
+        segmento: validationResult.data.segmento || null,
+        tipo_operacao: validationResult.data.tipo_operacao || null,
+        idade: validationResult.data.idade ?? null,
+        palavras_chave: validationResult.data.palavras_chave || [],
+      };
+
+      // Search roteiros with interpreted filters
+      const roteiros = await storage.searchRoteirosIA({
+        convenio: filters.convenio,
+        segmento: filters.segmento,
+        tipoOperacao: filters.tipo_operacao,
+        idade: filters.idade,
+        palavrasChave: filters.palavras_chave || [],
+      });
+
+      // Return results with resumo for each roteiro
+      const results = roteiros.map(roteiro => {
+        const dados = roteiro.dados as any;
+        return {
+          id: roteiro.id,
+          banco: roteiro.banco,
+          convenio: roteiro.convenio,
+          segmento: roteiro.segmento,
+          tipo_operacao: roteiro.tipoOperacao,
+          updated_at: roteiro.updatedAt,
+          resumo: {
+            publico_alvo: (dados.publico_alvo || []).slice(0, 3),
+            faixas_idade: (dados.faixas_idade || []).slice(0, 2),
+            portais: (dados.portais_acesso || []).slice(0, 2).map((p: any) => p.nome_portal || "Portal"),
+          }
+        };
+      });
+
+      return res.json({
+        query: q,
+        filters_interpreted: filters,
+        results,
+        total: results.length,
+      });
+    } catch (error: any) {
+      console.error("AI search error:", error);
+      
+      // Handle specific OpenAI errors
+      if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
+        return res.status(429).json({ message: "Serviço de IA temporariamente indisponível. Tente novamente em alguns segundos." });
+      }
+      if (error?.message?.includes("timeout")) {
+        return res.status(504).json({ message: "Tempo limite excedido ao consultar IA. Tente novamente." });
+      }
+      
+      return res.status(500).json({ message: "Erro ao processar pesquisa inteligente" });
+    }
+  });
+
   // Get single roteiro by ID
   app.get("/api/roteiros/:id", requireAuth, requireRoteirosAccess, async (req, res) => {
     try {
@@ -1399,181 +1573,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Update roteiro error:", error);
       return res.status(500).json({ message: "Erro ao atualizar roteiro" });
-    }
-  });
-
-  // AI-powered intelligent search for roteiros
-  app.get("/api/roteiros/ia-search", requireAuth, requireRoteirosAccess, async (req, res) => {
-    try {
-      const { q } = req.query;
-      
-      if (!q || typeof q !== "string" || q.trim() === "") {
-        return res.status(400).json({ message: "Consulta não pode estar vazia" });
-      }
-
-      // Use shared OpenAI client (Replit AI Integrations)
-      const { openai } = await import("./openaiClient");
-
-      // System prompt for AI query interpreter
-      const systemPrompt = `Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
-
-Receberá uma frase digitada pelo usuário (por exemplo):
-- "gov sp 60 anos cartão benefício"
-- "siape compra dívida 71 anos limite parcela 1600"
-- "portal spprev documentação"
-- "inss refin 74 anos margem"
-
-Sua função é transformar essa frase em um JSON de filtros para o backend.
-
-Responda SEMPRE e SOMENTE com um JSON válido no seguinte formato:
-
-{
-  "convenio": null,
-  "segmento": null,
-  "tipo_operacao": null,
-  "idade": null,
-  "palavras_chave": []
-}
-
-Regras:
-
-1) "convenio":
-   - Se encontrar "gov sp" / "governo de são paulo" -> "GOV SP".
-   - Se encontrar "siape" -> "SIAPE".
-   - Se encontrar "inss" -> "INSS".
-   - Se encontrar "municipal" com alguma cidade, coloque o nome como aparecer.
-   - Caso não fique claro, use null.
-
-2) "segmento":
-   - Use se houver indicação clara de segmento (ex.: "SIAPE", "GOV SP", "INSS").
-   - Caso contrário, null.
-   - Se "convenio" já for algo como "SIAPE" ou "GOV SP", você pode repetir em "segmento" se fizer sentido.
-
-3) "tipo_operacao":
-   - Valores possíveis (sempre em minúsculas, snake_case):
-     - "credito_novo"
-     - "refin"
-     - "compra_divida"
-     - "compra_cartao_beneficio"
-     - "cartao_beneficio"
-     - "cartao_consignado"
-   - Mapear:
-     - "crédito novo", "novo empréstimo", "contrato novo" -> "credito_novo"
-     - "refin", "refinanciamento" -> "refin"
-     - "compra de dívida", "compra divida", "compra de contratos", "compra de parcelas" -> "compra_divida"
-     - "compra de cartão benefício", "compra cartao beneficio" -> "compra_cartao_beneficio"
-     - "cartão benefício", "cartao beneficio", "benefício 5%" -> "cartao_beneficio"
-     - "cartão consignado", "cartao consignado", "cartão de crédito consignado" -> "cartao_consignado"
-   - Se não for possível saber, deixe null.
-
-4) "idade":
-   - Se houver um número que pareça idade (ex.: 60, 71, 74), coloque esse número.
-   - Se houver mais de um número, escolha aquele que mais se parece com idade (ex.: 60 em "60 anos, prazo 96x").
-   - Se não houver idade clara, use null.
-
-5) "palavras_chave":
-   - Liste outras palavras relevantes para busca textual no banco de dados, em minúsculas:
-     - Ex.: "portal", "spprev", "documentacao", "limite parcela", "margem", "pausa", "carencia", "averbacao".
-   - Você pode quebrar em termos simples (ex.: "portal", "spprev") ou pequenas expressões.
-   - Se não houver nada útil, devolva [].
-
-6) Formato:
-   - Sempre devolva exatamente um objeto JSON, sem texto antes ou depois.
-   - Não explique o que fez.
-   - Não coloque comentários.`;
-
-      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-      const response = await openai.chat.completions.create({
-        model: "gpt-4.1-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: q.trim() }
-        ],
-        response_format: { type: "json_object" },
-        max_completion_tokens: 500,
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        return res.status(502).json({ message: "Erro ao interpretar consulta - resposta vazia da IA" });
-      }
-
-      // Schema for validating AI response with safe defaults
-      const aiResponseSchema = z.object({
-        convenio: z.string().nullable().optional().default(null),
-        segmento: z.string().nullable().optional().default(null),
-        tipo_operacao: z.string().nullable().optional().default(null),
-        idade: z.number().nullable().optional().default(null),
-        palavras_chave: z.array(z.string()).optional().default([]),
-      }).passthrough();
-
-      let parsedContent: unknown;
-      try {
-        parsedContent = JSON.parse(content);
-      } catch {
-        console.error("AI response parse error:", content);
-        return res.status(502).json({ message: "Erro ao interpretar resposta da IA - JSON inválido" });
-      }
-
-      const validationResult = aiResponseSchema.safeParse(parsedContent);
-      if (!validationResult.success) {
-        console.error("AI response validation error:", validationResult.error, "Content:", parsedContent);
-        return res.status(502).json({ message: "Erro ao interpretar resposta da IA - formato inválido" });
-      }
-
-      const filters = {
-        convenio: validationResult.data.convenio || null,
-        segmento: validationResult.data.segmento || null,
-        tipo_operacao: validationResult.data.tipo_operacao || null,
-        idade: validationResult.data.idade ?? null,
-        palavras_chave: validationResult.data.palavras_chave || [],
-      };
-
-      // Search roteiros with interpreted filters
-      const roteiros = await storage.searchRoteirosIA({
-        convenio: filters.convenio,
-        segmento: filters.segmento,
-        tipoOperacao: filters.tipo_operacao,
-        idade: filters.idade,
-        palavrasChave: filters.palavras_chave || [],
-      });
-
-      // Return results with resumo for each roteiro
-      const results = roteiros.map(roteiro => {
-        const dados = roteiro.dados as any;
-        return {
-          id: roteiro.id,
-          banco: roteiro.banco,
-          convenio: roteiro.convenio,
-          segmento: roteiro.segmento,
-          tipo_operacao: roteiro.tipoOperacao,
-          updated_at: roteiro.updatedAt,
-          resumo: {
-            publico_alvo: (dados.publico_alvo || []).slice(0, 3),
-            faixas_idade: (dados.faixas_idade || []).slice(0, 2),
-            portais: (dados.portais_acesso || []).slice(0, 2).map((p: any) => p.nome_portal || "Portal"),
-          }
-        };
-      });
-
-      return res.json({
-        query: q,
-        filters_interpreted: filters,
-        results,
-        total: results.length,
-      });
-    } catch (error: any) {
-      console.error("AI search error:", error);
-      
-      // Handle specific OpenAI errors
-      if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
-        return res.status(429).json({ message: "Serviço de IA temporariamente indisponível. Tente novamente em alguns segundos." });
-      }
-      if (error?.message?.includes("timeout")) {
-        return res.status(504).json({ message: "Tempo limite excedido ao consultar IA. Tente novamente." });
-      }
-      
-      return res.status(500).json({ message: "Erro ao processar pesquisa inteligente" });
     }
   });
 
