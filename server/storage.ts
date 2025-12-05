@@ -114,6 +114,8 @@ export interface IStorage {
   
   // Clientes Pessoa
   getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
+  getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
+  getClientesByCpf(cpf: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -123,9 +125,11 @@ export interface IStorage {
   
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
+  getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]>;
   
   // Clientes Contratos
   createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
+  getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]>;
   
   // Bases Importadas
   getAllBasesImportadas(): Promise<BaseImportada[]>;
@@ -754,6 +758,20 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
+  async getClientePessoaById(id: number): Promise<ClientePessoa | undefined> {
+    const [cliente] = await db.select().from(clientesPessoa).where(eq(clientesPessoa.id, id));
+    return cliente;
+  }
+
+  async getClientesByCpf(cpf: string): Promise<ClientePessoa[]> {
+    // Remove formatting from CPF (dots and dashes)
+    const cleanCpf = cpf.replace(/\D/g, "");
+    // Compare by removing non-digits from stored CPF as well (handles both formatted and unformatted storage)
+    return await db.select()
+      .from(clientesPessoa)
+      .where(sql`regexp_replace(${clientesPessoa.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`);
+  }
+
   async createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa> {
     const [newCliente] = await db.insert(clientesPessoa).values(data).returning();
     return newCliente;
@@ -817,10 +835,24 @@ export class DbStorage implements IStorage {
     return newFolha;
   }
 
+  async getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]> {
+    return await db.select()
+      .from(clientesFolhaMes)
+      .where(eq(clientesFolhaMes.pessoaId, pessoaId))
+      .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+  }
+
   // Clientes Contratos
   async createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato> {
     const [newContrato] = await db.insert(clientesContratos).values(data).returning();
     return newContrato;
+  }
+
+  async getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]> {
+    return await db.select()
+      .from(clientesContratos)
+      .where(eq(clientesContratos.pessoaId, pessoaId))
+      .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
 
   // Bases Importadas

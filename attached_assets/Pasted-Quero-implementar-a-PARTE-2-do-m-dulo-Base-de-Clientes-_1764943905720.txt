@@ -1,0 +1,380 @@
+Quero implementar a PARTE 2 do módulo “Base de Clientes”:
+a tela de consulta manual, onde qualquer usuário (vendedor, coordenador, master) pode digitar CPF ou matrícula e ver os dados da nossa base.
+
+Tecnologia do projeto:
+
+Backend: Node.js + Express (pasta server/)
+
+Banco: PostgreSQL (já com as tabelas da PARTE 1)
+
+Frontend: React (pasta client/)
+
+As tabelas já existentes (da Parte 1) e que devem ser usadas são:
+
+clientes_pessoa
+
+clientes_folha_mes
+
+clientes_contratos
+
+Não altere a estrutura delas, apenas use.
+
+🎯 OBJETIVO FUNCIONAL
+
+O usuário informa CPF ou matrícula.
+
+O sistema localiza a pessoa na base.
+
+A tela mostra, de forma organizada:
+
+Dados principais do cliente (uma única vez)
+
+Situação de folha (margens, líquido, etc.)
+
+Todos os contratos encontrados (agrupados por pessoa)
+
+Se o mesmo CPF tiver mais de uma matrícula, a tela deve permitir escolher qual matrícula visualizar.
+
+Não é para consultar API externa ainda (Lemit).
+Parte 3 será só higienização. Aqui é só base interna.
+
+1. BACKEND – ENDPOINTS DE CONSULTA
+
+Quero dois endpoints:
+
+1.1. GET /api/clientes/consulta
+
+Função: busca inicial por CPF ou matrícula, trazendo uma visão resumida para decisão.
+
+Query params:
+
+cpf (opcional)
+
+matricula (opcional)
+
+Regras:
+
+Se vier matricula, a busca é direta pela coluna clientes_pessoa.matricula.
+
+Se vier cpf, buscar todas as pessoas com esse CPF.
+
+Se vierem os dois, priorizar matrícula.
+
+Se não vier nenhum, retornar 400.
+
+Retorno esperado (JSON):
+
+{
+  "tipo_busca": "cpf" | "matricula",
+  "termo": "valor que o usuário digitou",
+  "resultados": [
+    {
+      "pessoa_id": 123,
+      "cpf": "00000000000",
+      "matricula": "1234567",
+      "nome": "NOME DO CLIENTE",
+      "convenio": "SIAPE",
+      "orgao": "ORGÃO XYZ",
+      "uf": "SP",
+      "municipio": "SÃO PAULO",
+      "sit_func": "ATIVO"
+    }
+  ]
+}
+
+
+Comportamento:
+
+Se não encontrar nada → resultados: []
+
+Se encontrar várias pessoas para o mesmo CPF → retornar todas no array (para o frontend deixar o usuário escolher qual matrícula abrir).
+
+Se encontrar uma só → mesmo assim retornar num array (frontend trata).
+
+1.2. GET /api/clientes/:pessoaId
+
+Função: busca detalhada de um cliente específico (após escolher matrícula ou vindo direto pela matrícula).
+
+Regras:
+
+Recebe pessoaId (id da tabela clientes_pessoa).
+
+Busca os dados em:
+
+clientes_pessoa (dados fixos)
+
+clientes_folha_mes (todas as competências, ordenadas da mais recente para a mais antiga)
+
+clientes_contratos (todos os contratos da pessoa)
+
+Montar um JSON detalhado assim:
+
+{
+  "pessoa": {
+    "id": 123,
+    "cpf": "00000000000",
+    "matricula": "1234567",
+    "nome": "NOME DO CLIENTE",
+    "convenio": "SIAPE",
+    "orgao": "ORGÃO XYZ",
+    "orgaocod": "0000",
+    "undpagadoradesc": "UNIDADE PAGADORA",
+    "undpagadoracod": "000000",
+    "natureza": "CIVIL",
+    "sit_func": "ATIVO",
+    "uf": "SP",
+    "municipio": "SÃO PAULO",
+    "telefones_base": [
+      "11999999999",
+      "1133334444"
+    ],
+    "base_tag_ultima": "SIAPE_11_2025",
+    "extras_pessoa": { ... }
+  },
+  "folha": {
+    "atual": {
+      "competencia": "2025-11-01",
+      "margem_bruta_30": 1000.00,
+      "margem_utilizada_30": 500.00,
+      "margem_saldo_30": 500.00,
+      "margem_bruta_35": 1200.00,
+      "margem_utilizada_35": 300.00,
+      "margem_saldo_35": 900.00,
+      "margem_bruta_70": 2000.00,
+      "margem_utilizada_70": 1000.00,
+      "margem_saldo_70": 1000.00,
+      "creditos": 5000.00,
+      "debitos": 3000.00,
+      "liquido": 2000.00,
+      "base_tag": "SIAPE_11_2025",
+      "extras_folha": { ... }
+    },
+    "historico": [
+      {
+        "competencia": "2025-10-01",
+        "margem_saldo_30": 450.00,
+        "liquido": 1900.00,
+        "base_tag": "SIAPE_10_2025"
+      }
+    ]
+  },
+  "contratos": [
+    {
+      "id": 1,
+      "tipo_contrato": "consignado",
+      "banco": "BANCO X",
+      "valor_parcela": 350.00,
+      "competencia": "2025-11-01",
+      "base_tag": "SIAPE_11_2025",
+      "dados_brutos": { ... }
+    },
+    {
+      "id": 2,
+      "tipo_contrato": "cartao",
+      "banco": "BANCO Y",
+      "valor_parcela": 200.00,
+      "competencia": "2025-11-01",
+      "base_tag": "SIAPE_11_2025",
+      "dados_brutos": { ... }
+    }
+  ],
+  "higienizacao": null
+}
+
+
+Observações importantes:
+
+Em folha.atual: considerar SEMPRE o registro de clientes_folha_mes com maior competência (mais recente).
+
+Em folha.historico: pode retornar um array com os demais registros, mas sem peso de performance exagerado (pode limitar a, por exemplo, últimos 12 meses).
+
+Campo "higienizacao" deve existir, mas pode ficar null por enquanto.
+
+Esse campo será preenchido na Parte 3 (higienização via Lemit).
+
+Deixe o campo preparado no JSON de resposta.
+
+Permissões:
+
+Vendedor, Coordenador e Master podem usar esses endpoints.
+
+Se já houver middleware de auth e roles, apenas permita os 3 tipos.
+
+2. FRONTEND – TELA DE CONSULTA MANUAL
+
+Quero uma tela em React na área do CRM chamada “Consulta de Cliente” com o seguinte comportamento:
+
+2.1. Parte superior – Barra de busca
+
+Campo para o usuário digitar:
+
+CPF (com máscara) ou
+
+Matrícula
+
+Pode ser:
+
+um campo com toggle “Buscar por CPF / Buscar por Matrícula”
+
+ou dois campos, mas SOMENTE um deles é enviado a cada busca.
+
+Botão: “Consultar”.
+
+Estados visuais:
+
+Enquanto chama /api/clientes/consulta, mostrar um loading (“Buscando cliente na base…”).
+
+Se não encontrar nada: mostrar mensagem clara:
+
+“Nenhum cliente encontrado para esse CPF/matrícula.”
+
+2.2. Caso 1 – Apenas 1 resultado
+
+Se resultados.length === 1 na resposta de /api/clientes/consulta:
+
+Disparar automaticamente uma nova requisição para /api/clientes/:pessoaId
+
+Abrir a visualização detalhada (descrita abaixo).
+
+2.3. Caso 2 – Vários resultados (CPF com múltiplas matrículas)
+
+Se resultados.length > 1:
+
+Mostrar uma lista / tabela com cartões resumidos:
+
+Nome
+
+CPF
+
+Matrícula
+
+Convênio
+
+Órgão
+
+Situação funcional
+
+Cada linha/card tem um botão “Ver detalhes”.
+
+Ao clicar em “Ver detalhes”, chamar /api/clientes/:pessoaId e exibir a visualização detalhada.
+
+2.4. Visualização Detalhada (após /api/clientes/:pessoaId)
+
+Organizar a tela em três blocos:
+
+Bloco 1 – Dados do Cliente
+
+Nome
+
+CPF
+
+Matrícula
+
+Convênio
+
+Órgão / Unidade Pagadora
+
+Natureza
+
+Situação funcional
+
+UF / Município
+
+Telefones da base (lista)
+
+Bloco 2 – Situação de Folha (Resumo)
+
+Usar folha.atual:
+
+Competência mais recente
+
+Margem 30 (bruta / utilizada / saldo)
+
+Margem 35 (bruta / utilizada / saldo)
+
+Margem 70 (bruta / utilizada / saldo)
+
+Créditos / Débitos / Líquido
+
+Se quiser, mostrar um pequeno histórico:
+
+Expandir uma seção “Ver histórico de folha” que lista folha.historico (competência x saldo x líquido).
+
+Bloco 3 – Contratos
+
+Tabela com todos os itens de contratos:
+
+Tipo do contrato
+
+Banco
+
+Valor da parcela
+
+Competência
+
+Base_tag (para saber de qual base veio)
+
+Esse bloco é justamente o agrupamento inteligente:
+mostra todos os contratos, sem repetir nome/CPF em cada linha.
+
+2.5. Espaço reservado para higienização (Parte 3)
+
+Na tela de detalhes, apenas prepare o layout (sem implementar ainda):
+
+Uma seção ou card chamado “Dados de Contato/Higienização” com:
+
+Mensagem: “Higienização ainda não configurada. (Parte 3 do projeto)”
+
+Botão desabilitado “Consultar dados externos (Lemit)”
+
+Isso vai ser ativado apenas na próxima fase.
+
+Não implemente chamada externa, não consuma API, apenas prepare o componente.
+
+3. REGRAS DE PERFORMANCE
+
+As consultas SEMPRE são por CPF ou matrícula, então:
+
+Use índices em clientes_pessoa.cpf e clientes_pessoa.matricula.
+
+As consultas detalhadas (/api/clientes/:pessoaId) vão trazer:
+
+1 registro de pessoa
+
+poucos registros em clientes_folha_mes (por pessoa)
+
+alguns registros em clientes_contratos (também por pessoa)
+
+Ou seja, é seguro carregar tudo num único endpoint sem paginação nesta fase.
+
+4. RESUMO DO QUE IMPLEMENTAR AGORA
+
+Endpoints:
+
+GET /api/clientes/consulta
+
+GET /api/clientes/:pessoaId
+
+Lógica de agrupamento:
+
+Pessoa única por matrícula
+
+Consolidação de folha e contratos por pessoa
+
+Telas React:
+
+“Consulta de Cliente” com:
+
+barra de busca (CPF / matrícula)
+
+lista de possíveis pessoas (quando houver mais de uma)
+
+visualização detalhada organizada em 3 blocos
+
+NÃO implementar ainda:
+
+Higienização
+
+Chamada ao Lemit
+
+Qualquer coisa de custos

@@ -2202,6 +2202,166 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET consulta de cliente por CPF ou matrícula - Todos os usuários autenticados
+  app.get("/api/clientes/consulta", requireAuth, async (req, res) => {
+    try {
+      const { cpf, matricula } = req.query;
+      
+      // Validate at least one parameter is provided
+      if (!cpf && !matricula) {
+        return res.status(400).json({ 
+          message: "Informe CPF ou matrícula para realizar a consulta" 
+        });
+      }
+      
+      let tipoBusca: "cpf" | "matricula";
+      let termo: string;
+      let resultados: any[] = [];
+      
+      // Priority: matricula > cpf
+      if (matricula) {
+        tipoBusca = "matricula";
+        termo = String(matricula).trim();
+        
+        const cliente = await storage.getClientePessoaByMatricula(termo);
+        if (cliente) {
+          resultados = [{
+            pessoa_id: cliente.id,
+            cpf: cliente.cpf,
+            matricula: cliente.matricula,
+            nome: cliente.nome,
+            convenio: cliente.convenio,
+            orgao: cliente.orgaodesc,
+            uf: cliente.uf,
+            municipio: cliente.municipio,
+            sit_func: cliente.sitFunc,
+          }];
+        }
+      } else if (cpf) {
+        tipoBusca = "cpf";
+        // Clean CPF (remove dots and dashes)
+        termo = String(cpf).replace(/\D/g, "");
+        
+        // Validate CPF has exactly 11 digits
+        if (termo.length !== 11) {
+          return res.status(400).json({ 
+            message: "CPF inválido. O CPF deve ter 11 dígitos." 
+          });
+        }
+        
+        const clientes = await storage.getClientesByCpf(termo);
+        resultados = clientes.map(cliente => ({
+          pessoa_id: cliente.id,
+          cpf: cliente.cpf,
+          matricula: cliente.matricula,
+          nome: cliente.nome,
+          convenio: cliente.convenio,
+          orgao: cliente.orgaodesc,
+          uf: cliente.uf,
+          municipio: cliente.municipio,
+          sit_func: cliente.sitFunc,
+        }));
+      } else {
+        return res.status(400).json({ message: "Parâmetro inválido" });
+      }
+      
+      return res.json({
+        tipo_busca: tipoBusca,
+        termo,
+        resultados,
+      });
+    } catch (error) {
+      console.error("Consulta cliente error:", error);
+      return res.status(500).json({ message: "Erro ao consultar cliente" });
+    }
+  });
+
+  // GET detalhes completos de um cliente - Todos os usuários autenticados
+  app.get("/api/clientes/:pessoaId", requireAuth, async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      
+      if (isNaN(pessoaId)) {
+        return res.status(400).json({ message: "ID de pessoa inválido" });
+      }
+      
+      // Get pessoa
+      const pessoa = await storage.getClientePessoaById(pessoaId);
+      if (!pessoa) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Get folha data (all competencias, ordered by most recent)
+      const folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+      
+      // Get contratos
+      const contratos = await storage.getContratosByPessoaId(pessoaId);
+      
+      // Build response
+      const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+      const folhaHistorico = folhaRegistros.slice(1, 13); // Last 12 months (excluding current)
+      
+      return res.json({
+        pessoa: {
+          id: pessoa.id,
+          cpf: pessoa.cpf,
+          matricula: pessoa.matricula,
+          nome: pessoa.nome,
+          convenio: pessoa.convenio,
+          orgao: pessoa.orgaodesc,
+          orgaocod: pessoa.orgaocod,
+          undpagadoradesc: pessoa.undpagadoradesc,
+          undpagadoracod: pessoa.undpagadoracod,
+          natureza: pessoa.natureza,
+          sit_func: pessoa.sitFunc,
+          uf: pessoa.uf,
+          municipio: pessoa.municipio,
+          telefones_base: pessoa.telefonesBase || [],
+          base_tag_ultima: pessoa.baseTagUltima,
+          extras_pessoa: pessoa.extrasPessoa,
+        },
+        folha: {
+          atual: folhaAtual ? {
+            competencia: folhaAtual.competencia,
+            margem_bruta_30: folhaAtual.margemBruta30 ? parseFloat(folhaAtual.margemBruta30) : null,
+            margem_utilizada_30: folhaAtual.margemUtilizada30 ? parseFloat(folhaAtual.margemUtilizada30) : null,
+            margem_saldo_30: folhaAtual.margemSaldo30 ? parseFloat(folhaAtual.margemSaldo30) : null,
+            margem_bruta_35: folhaAtual.margemBruta35 ? parseFloat(folhaAtual.margemBruta35) : null,
+            margem_utilizada_35: folhaAtual.margemUtilizada35 ? parseFloat(folhaAtual.margemUtilizada35) : null,
+            margem_saldo_35: folhaAtual.margemSaldo35 ? parseFloat(folhaAtual.margemSaldo35) : null,
+            margem_bruta_70: folhaAtual.margemBruta70 ? parseFloat(folhaAtual.margemBruta70) : null,
+            margem_utilizada_70: folhaAtual.margemUtilizada70 ? parseFloat(folhaAtual.margemUtilizada70) : null,
+            margem_saldo_70: folhaAtual.margemSaldo70 ? parseFloat(folhaAtual.margemSaldo70) : null,
+            creditos: folhaAtual.creditos ? parseFloat(folhaAtual.creditos) : null,
+            debitos: folhaAtual.debitos ? parseFloat(folhaAtual.debitos) : null,
+            liquido: folhaAtual.liquido ? parseFloat(folhaAtual.liquido) : null,
+            base_tag: folhaAtual.baseTag,
+            extras_folha: folhaAtual.extrasFolha,
+          } : null,
+          historico: folhaHistorico.map(f => ({
+            competencia: f.competencia,
+            margem_saldo_30: f.margemSaldo30 ? parseFloat(f.margemSaldo30) : null,
+            liquido: f.liquido ? parseFloat(f.liquido) : null,
+            base_tag: f.baseTag,
+          })),
+        },
+        contratos: contratos.map(c => ({
+          id: c.id,
+          tipo_contrato: c.tipoContrato,
+          banco: c.banco,
+          valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
+          competencia: c.competencia,
+          base_tag: c.baseTag,
+          dados_brutos: c.dadosBrutos,
+        })),
+        higienizacao: null, // Reserved for Part 3
+      });
+    } catch (error) {
+      console.error("Get cliente details error:", error);
+      return res.status(500).json({ message: "Erro ao buscar detalhes do cliente" });
+    }
+  });
+
   // POST simular pedido de lista - Coordenador or Master
   app.post("/api/pedidos-lista/simular", requireAuth, async (req, res) => {
     try {

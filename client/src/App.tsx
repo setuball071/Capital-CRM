@@ -19,6 +19,7 @@ import CoefficientTablesPage from "@/pages/coefficient-tables";
 import RoteirosPage from "@/pages/roteiros";
 import BasesClientesPage from "@/pages/bases-clientes";
 import CompraListaPage from "@/pages/compra-lista";
+import ConsultaClientePage from "@/pages/consulta-cliente";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -234,6 +235,9 @@ function Router() {
               </Route>
               <Route path="/compra-lista">
                 {() => <CompraListaRoute component={CompraListaPage} />}
+              </Route>
+              <Route path="/consulta-cliente">
+                {() => <ProtectedRoute component={ConsultaClientePage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

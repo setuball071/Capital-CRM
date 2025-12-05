@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -93,6 +93,12 @@ export function AppSidebar() {
       url: "/compra-lista",
       icon: ShoppingCart,
       show: canAccessCompraLista,
+    },
+    {
+      title: "Consulta Cliente",
+      url: "/consulta-cliente",
+      icon: UserSearch,
+      show: true, // All authenticated users can access
     },
     {
       title: "Usuários",
