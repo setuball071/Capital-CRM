@@ -537,12 +537,12 @@ export default function RoteirosPage() {
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <h4 className="font-semibold">{result.banco}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {result.convenio} 
-                                  {result.segmento && ` • ${result.segmento}`}
-                                  {" • "}
-                                  <Badge variant="outline" className="ml-1">{result.tipo_operacao}</Badge>
-                                </p>
+                                <div className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
+                                  <span>{result.convenio}</span>
+                                  {result.segmento && <span>• {result.segmento}</span>}
+                                  <span>•</span>
+                                  <Badge variant="outline">{result.tipo_operacao}</Badge>
+                                </div>
                                 {result.resumo.publico_alvo.length > 0 && (
                                   <p className="text-xs text-muted-foreground mt-2">
                                     Público: {result.resumo.publico_alvo.join(", ")}
