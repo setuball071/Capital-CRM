@@ -17,6 +17,8 @@ import AgreementsPage from "@/pages/agreements";
 import BanksPage from "@/pages/banks";
 import CoefficientTablesPage from "@/pages/coefficient-tables";
 import RoteirosPage from "@/pages/roteiros";
+import BasesClientesPage from "@/pages/bases-clientes";
+import CompraListaPage from "@/pages/compra-lista";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -102,6 +104,30 @@ function RoteirosRoute({ component: Component }: { component: React.ComponentTyp
   }
 
   const allowedRoles = ["master", "atendimento", "operacional"];
+  if (!allowedRoles.includes(user.role)) {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+// Protected route for compra lista (coordenacao and master only)
+function CompraListaRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  const allowedRoles = ["master", "coordenacao"];
   if (!allowedRoles.includes(user.role)) {
     return <Redirect to="/" />;
   }
@@ -202,6 +228,12 @@ function Router() {
               </Route>
               <Route path="/roteiros">
                 {() => <RoteirosRoute component={RoteirosPage} />}
+              </Route>
+              <Route path="/bases-clientes">
+                {() => <MasterRoute component={BasesClientesPage} />}
+              </Route>
+              <Route path="/compra-lista">
+                {() => <CompraListaRoute component={CompraListaPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

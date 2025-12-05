@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, ilike, gte, lte } from "drizzle-orm";
 import {
   users,
   banks,
@@ -8,6 +8,11 @@ import {
   coefficientTables,
   simulations,
   roteirosBancarios,
+  clientesPessoa,
+  clientesFolhaMes,
+  clientesContratos,
+  basesImportadas,
+  pedidosLista,
   type User,
   type InsertUser,
   type Bank,
@@ -20,6 +25,17 @@ import {
   type InsertSimulation,
   type RoteiroBancario,
   type RoteiroImportItem,
+  type ClientePessoa,
+  type InsertClientePessoa,
+  type ClienteFolhaMes,
+  type InsertClienteFolhaMes,
+  type ClienteContrato,
+  type InsertClienteContrato,
+  type BaseImportada,
+  type InsertBaseImportada,
+  type PedidoLista,
+  type InsertPedidoLista,
+  type FiltrosPedidoLista,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -93,6 +109,36 @@ export interface IStorage {
   getDistinctConvenios(): Promise<string[]>;
   getDistinctTiposOperacao(): Promise<string[]>;
   deleteRoteiro(id: number): Promise<void>;
+  
+  // ===== BASE DE CLIENTES =====
+  
+  // Clientes Pessoa
+  getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
+  createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
+  updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
+  searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
+  getDistinctConveniosClientes(): Promise<string[]>;
+  getDistinctOrgaosClientes(): Promise<string[]>;
+  getDistinctUfsClientes(): Promise<string[]>;
+  
+  // Clientes Folha Mês
+  createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
+  
+  // Clientes Contratos
+  createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
+  
+  // Bases Importadas
+  getAllBasesImportadas(): Promise<BaseImportada[]>;
+  getBaseImportada(id: number): Promise<BaseImportada | undefined>;
+  createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada>;
+  updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined>;
+  
+  // Pedidos Lista
+  getAllPedidosLista(): Promise<PedidoLista[]>;
+  getPedidosListaByUser(userId: number): Promise<PedidoLista[]>;
+  getPedidoLista(id: number): Promise<PedidoLista | undefined>;
+  createPedidoLista(data: InsertPedidoLista): Promise<PedidoLista>;
+  updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -698,6 +744,135 @@ export class DbStorage implements IStorage {
 
   async deleteRoteiro(id: number): Promise<void> {
     await db.delete(roteirosBancarios).where(eq(roteirosBancarios.id, id));
+  }
+
+  // ===== BASE DE CLIENTES =====
+
+  // Clientes Pessoa
+  async getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined> {
+    const [cliente] = await db.select().from(clientesPessoa).where(eq(clientesPessoa.matricula, matricula));
+    return cliente;
+  }
+
+  async createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa> {
+    const [newCliente] = await db.insert(clientesPessoa).values(data).returning();
+    return newCliente;
+  }
+
+  async updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined> {
+    const [updated] = await db.update(clientesPessoa)
+      .set({ ...data, atualizadoEm: new Date() })
+      .where(eq(clientesPessoa.id, id))
+      .returning();
+    return updated;
+  }
+
+  async searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }> {
+    const conditions: any[] = [];
+    
+    if (filtros.convenio) {
+      conditions.push(ilike(clientesPessoa.convenio, `%${filtros.convenio}%`));
+    }
+    if (filtros.orgao) {
+      conditions.push(ilike(clientesPessoa.orgaodesc, `%${filtros.orgao}%`));
+    }
+    if (filtros.uf) {
+      conditions.push(eq(clientesPessoa.uf, filtros.uf));
+    }
+    if (filtros.sit_func) {
+      conditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
+    }
+    
+    let clientes: ClientePessoa[];
+    if (conditions.length > 0) {
+      clientes = await db.select().from(clientesPessoa).where(and(...conditions));
+    } else {
+      clientes = await db.select().from(clientesPessoa);
+    }
+    
+    return { clientes, total: clientes.length };
+  }
+
+  async getDistinctConveniosClientes(): Promise<string[]> {
+    const result = await db.select({ convenio: clientesPessoa.convenio }).from(clientesPessoa);
+    const uniqueConvenios = [...new Set(result.map(r => r.convenio).filter(Boolean))];
+    return uniqueConvenios.sort() as string[];
+  }
+
+  async getDistinctOrgaosClientes(): Promise<string[]> {
+    const result = await db.select({ orgaodesc: clientesPessoa.orgaodesc }).from(clientesPessoa);
+    const uniqueOrgaos = [...new Set(result.map(r => r.orgaodesc).filter(Boolean))];
+    return uniqueOrgaos.sort() as string[];
+  }
+
+  async getDistinctUfsClientes(): Promise<string[]> {
+    const result = await db.select({ uf: clientesPessoa.uf }).from(clientesPessoa);
+    const uniqueUfs = [...new Set(result.map(r => r.uf).filter(Boolean))];
+    return uniqueUfs.sort() as string[];
+  }
+
+  // Clientes Folha Mês
+  async createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes> {
+    const [newFolha] = await db.insert(clientesFolhaMes).values(data).returning();
+    return newFolha;
+  }
+
+  // Clientes Contratos
+  async createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato> {
+    const [newContrato] = await db.insert(clientesContratos).values(data).returning();
+    return newContrato;
+  }
+
+  // Bases Importadas
+  async getAllBasesImportadas(): Promise<BaseImportada[]> {
+    return await db.select().from(basesImportadas).orderBy(sql`${basesImportadas.criadoEm} DESC`);
+  }
+
+  async getBaseImportada(id: number): Promise<BaseImportada | undefined> {
+    const [base] = await db.select().from(basesImportadas).where(eq(basesImportadas.id, id));
+    return base;
+  }
+
+  async createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada> {
+    const [newBase] = await db.insert(basesImportadas).values(data).returning();
+    return newBase;
+  }
+
+  async updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined> {
+    const [updated] = await db.update(basesImportadas)
+      .set({ ...data, atualizadoEm: new Date() })
+      .where(eq(basesImportadas.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Pedidos Lista
+  async getAllPedidosLista(): Promise<PedidoLista[]> {
+    return await db.select().from(pedidosLista).orderBy(sql`${pedidosLista.criadoEm} DESC`);
+  }
+
+  async getPedidosListaByUser(userId: number): Promise<PedidoLista[]> {
+    return await db.select().from(pedidosLista)
+      .where(eq(pedidosLista.coordenadorId, userId))
+      .orderBy(sql`${pedidosLista.criadoEm} DESC`);
+  }
+
+  async getPedidoLista(id: number): Promise<PedidoLista | undefined> {
+    const [pedido] = await db.select().from(pedidosLista).where(eq(pedidosLista.id, id));
+    return pedido;
+  }
+
+  async createPedidoLista(data: InsertPedidoLista): Promise<PedidoLista> {
+    const [newPedido] = await db.insert(pedidosLista).values(data).returning();
+    return newPedido;
+  }
+
+  async updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined> {
+    const [updated] = await db.update(pedidosLista)
+      .set({ ...data, atualizadoEm: new Date() })
+      .where(eq(pedidosLista.id, id))
+      .returning();
+    return updated;
   }
 }
 

@@ -56,6 +56,25 @@ Available modules:
 
 The system also generates contextual suggestions for follow-up queries based on the detected filters and module.
 
+### Base de Clientes (CRM Module)
+
+The client database module provides comprehensive management for client bases. Access restrictions:
+- **Base Import**: Master only - import Excel/CSV files containing client data
+- **Purchase Lists**: Master + Coordenação - filter and request client list exports
+
+**Database Structure** (5 new tables):
+- `clientes_pessoa`: Core client information (matricula, nome, cpf, convenio, orgao, etc.)
+- `clientes_folha_mes`: Monthly payroll data (rubricas, descontos, liquido, margem)
+- `clientes_contratos`: Contract details (prazo, saldo, banco, data_contracao)
+- `bases_importadas`: Import tracking (nome, convenio, competencia, status)
+- `pedidos_lista`: List request management (filtros, quantidade, status)
+
+**Key Features**:
+- Excel/CSV import with base64 encoding
+- Filtering by convenio, orgao, UF, idade, situação funcional
+- Simulation preview before creating purchase requests
+- Status tracking for imports and requests
+
 ### Component Architecture
 
 The UI adheres to Atomic Design principles using shadcn/ui. Key pages include the Calculator Page for simulations (with dynamic filtering, real-time calculations, and multi-format export), and Coefficient Tables Management for CRUD operations, bulk CSV import/export, filtering, and hierarchical grouping. User experience features include dynamic dropdowns, clear validation, responsive design, and smart search.

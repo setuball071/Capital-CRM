@@ -11,11 +11,14 @@ import {
   insertCoefficientTableSchema,
   insertSimulationSchema,
   roteirosImportSchema,
+  filtrosPedidoListaSchema,
   type User,
   type InsertCoefficientTable,
   USER_ROLES,
   type UserRole,
+  type FiltrosPedidoLista,
 } from "@shared/schema";
+import * as XLSX from "xlsx";
 
 // Schema for updating users
 const updateUserSchema = z.object({
@@ -1880,6 +1883,430 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error) {
       console.error("Delete roteiro error:", error);
       return res.status(500).json({ message: "Erro ao excluir roteiro" });
+    }
+  });
+
+  // ===== BASE DE CLIENTES ROUTES =====
+
+  // Mapping SIAPE columns to database fields
+  const SIAPE_COLUMN_MAP: Record<string, string> = {
+    // Pessoa
+    "CPF": "cpf",
+    "MATRICULA": "matricula",
+    "NOME": "nome",
+    "ORGAODESC": "orgaodesc",
+    "ORGAO_DESC": "orgaodesc",
+    "ORGAOCOD": "orgaocod",
+    "ORGAO_COD": "orgaocod",
+    "UNDPAGADORADESC": "undpagadoradesc",
+    "UND_PAGADORA_DESC": "undpagadoradesc",
+    "UNDPAGADORACOD": "undpagadoracod",
+    "UND_PAGADORA_COD": "undpagadoracod",
+    "NATUREZA": "natureza",
+    "SITUACAO_FUNCIONAL": "sit_func",
+    "SIT_FUNC": "sit_func",
+    "SIT FUNC": "sit_func",
+    "CONVENIO": "convenio",
+    "UF": "uf",
+    "MUNICIPIO": "municipio",
+    // Margens
+    "BRUTA 30%": "margem_bruta_30",
+    "UTILZ 30%": "margem_utilizada_30",
+    "SALDO 30%": "margem_saldo_30",
+    "BRUTA 35%": "margem_bruta_35",
+    "UTILZ 35%": "margem_utilizada_35",
+    "SALDO 35%": "margem_saldo_35",
+    "BRUTA 70%": "margem_bruta_70",
+    "UTILZ 70%": "margem_utilizada_70",
+    "SALDO 70%": "margem_saldo_70",
+    "CREDITOS": "creditos",
+    "CRÉDITOS": "creditos",
+    "DEBITOS": "debitos",
+    "DÉBITOS": "debitos",
+    "LIQUIDO": "liquido",
+    "LÍQUIDO": "liquido",
+    // Telefones
+    "TELEFONE 1": "telefone_1",
+    "TELEFONE 2": "telefone_2",
+    "TELEFONE 3": "telefone_3",
+    "TELEFONE 4": "telefone_4",
+    "TELEFONE 5": "telefone_5",
+    // Contrato
+    "BANCO": "banco",
+    "VALOR_PARCELA": "valor_parcela",
+    "VALOR PARCELA": "valor_parcela",
+  };
+
+  // Normalize column name for matching
+  function normalizeColumnName(col: string): string {
+    return col.toUpperCase().trim().replace(/\s+/g, " ");
+  }
+
+  // Parse decimal value from string
+  function parseDecimal(value: any): string | null {
+    if (value === null || value === undefined || value === "") return null;
+    const str = String(value).replace(/[^\d,.-]/g, "").replace(",", ".");
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num.toFixed(2);
+  }
+
+  // Process import job asynchronously
+  async function processImportJob(
+    baseId: number,
+    data: any[],
+    convenio: string,
+    competencia: Date,
+    baseTag: string
+  ) {
+    let totalLinhas = 0;
+    
+    try {
+      // Get header mapping
+      const headers = data[0] ? Object.keys(data[0]) : [];
+      const headerMap: Record<string, string> = {};
+      
+      for (const header of headers) {
+        const normalized = normalizeColumnName(header);
+        if (SIAPE_COLUMN_MAP[normalized]) {
+          headerMap[header] = SIAPE_COLUMN_MAP[normalized];
+        }
+      }
+
+      // Process each row
+      for (const row of data) {
+        try {
+          // Extract matricula (required)
+          let matricula: string | null = null;
+          for (const [col, field] of Object.entries(headerMap)) {
+            if (field === "matricula") {
+              matricula = String(row[col] || "").trim();
+              break;
+            }
+          }
+          
+          if (!matricula) continue; // Skip rows without matricula
+          
+          // Build pessoa data
+          const pessoaData: Record<string, any> = {
+            matricula,
+            convenio,
+            baseTagUltima: baseTag,
+          };
+          
+          // Build folha data
+          const folhaData: Record<string, any> = {
+            competencia,
+            baseTag,
+          };
+          
+          // Build telefones array
+          const telefones: string[] = [];
+          
+          // Build extras
+          const extrasPessoa: Record<string, any> = {};
+          const extrasFolha: Record<string, any> = {};
+          
+          // Map row values to data structures
+          for (const [col, value] of Object.entries(row)) {
+            const field = headerMap[col];
+            
+            if (field) {
+              // Pessoa fields
+              if (["cpf", "nome", "orgaodesc", "orgaocod", "undpagadoradesc", "undpagadoracod", "natureza", "sit_func", "uf", "municipio"].includes(field)) {
+                pessoaData[field === "sit_func" ? "sitFunc" : field] = String(value || "").trim() || null;
+              }
+              // Folha fields (margens)
+              else if (field.startsWith("margem_") || ["creditos", "debitos", "liquido"].includes(field)) {
+                const dbField = field.replace(/_/g, "").replace("margem", "margem");
+                const camelField = field.split("_").map((w, i) => i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
+                folhaData[camelField] = parseDecimal(value);
+              }
+              // Telefones
+              else if (field.startsWith("telefone_")) {
+                const tel = String(value || "").trim();
+                if (tel) telefones.push(tel);
+              }
+            } else {
+              // Extra fields
+              extrasPessoa[col] = value;
+            }
+          }
+          
+          pessoaData.telefonesBase = telefones;
+          pessoaData.extrasPessoa = extrasPessoa;
+          folhaData.extrasFolha = extrasFolha;
+          
+          // Upsert pessoa (find by matricula, create or update)
+          let pessoa = await storage.getClientePessoaByMatricula(matricula);
+          
+          if (pessoa) {
+            // Update existing
+            pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
+          } else {
+            // Create new
+            pessoa = await storage.createClientePessoa(pessoaData as any);
+          }
+          
+          if (pessoa) {
+            // Create folha record
+            await storage.createClienteFolhaMes({
+              pessoaId: pessoa.id,
+              competencia,
+              margemBruta30: folhaData.margemBruta30,
+              margemUtilizada30: folhaData.margemUtilizada30,
+              margemSaldo30: folhaData.margemSaldo30,
+              margemBruta35: folhaData.margemBruta35,
+              margemUtilizada35: folhaData.margemUtilizada35,
+              margemSaldo35: folhaData.margemSaldo35,
+              margemBruta70: folhaData.margemBruta70,
+              margemUtilizada70: folhaData.margemUtilizada70,
+              margemSaldo70: folhaData.margemSaldo70,
+              creditos: folhaData.creditos,
+              debitos: folhaData.debitos,
+              liquido: folhaData.liquido,
+              sitFuncNoMes: pessoaData.sitFunc || null,
+              baseTag,
+              extrasFolha: folhaData.extrasFolha,
+            } as any);
+            
+            // Create contrato record (each row is a contract)
+            let banco: string | null = null;
+            let valorParcela: string | null = null;
+            
+            for (const [col, field] of Object.entries(headerMap)) {
+              if (field === "banco") banco = String(row[col] || "").trim() || null;
+              if (field === "valor_parcela") valorParcela = parseDecimal(row[col]);
+            }
+            
+            await storage.createClienteContrato({
+              pessoaId: pessoa.id,
+              tipoContrato: "desconhecido",
+              banco,
+              valorParcela,
+              competencia,
+              baseTag,
+              dadosBrutos: row,
+            } as any);
+            
+            totalLinhas++;
+          }
+        } catch (rowError) {
+          console.error("[Import] Row error:", rowError);
+        }
+      }
+      
+      // Update base status
+      await storage.updateBaseImportada(baseId, {
+        totalLinhas,
+        status: "concluida",
+      });
+      
+      console.log(`[Import] Base ${baseId} completed with ${totalLinhas} rows`);
+    } catch (error) {
+      console.error("[Import] Job error:", error);
+      await storage.updateBaseImportada(baseId, {
+        status: "erro",
+      });
+    }
+  }
+
+  // GET bases importadas - Master only
+  app.get("/api/bases", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const bases = await storage.getAllBasesImportadas();
+      return res.json(bases);
+    } catch (error) {
+      console.error("Get bases error:", error);
+      return res.status(500).json({ message: "Erro ao buscar bases" });
+    }
+  });
+
+  // POST importar base - Master only
+  app.post("/api/bases/importar", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { arquivo, convenio, competencia, nome_base } = req.body;
+      
+      if (!arquivo || !convenio || !competencia) {
+        return res.status(400).json({ 
+          message: "Arquivo, convênio e competência são obrigatórios" 
+        });
+      }
+
+      // Parse competencia to date (format: YYYY-MM)
+      const [year, month] = competencia.split("-");
+      const competenciaDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      
+      // Generate base tag
+      const baseTag = `${convenio.toUpperCase().replace(/\s+/g, "_")}_${competencia}`;
+      
+      // Create base record with status "processando"
+      const base = await storage.createBaseImportada({
+        nome: nome_base || `Importação ${convenio} - ${competencia}`,
+        baseTag,
+        convenio,
+        competencia: competenciaDate,
+        status: "processando",
+      });
+      
+      // Parse file (base64 encoded)
+      let data: any[] = [];
+      
+      try {
+        // Decode base64
+        const buffer = Buffer.from(arquivo, "base64");
+        
+        // Read workbook
+        const workbook = XLSX.read(buffer, { type: "buffer" });
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+        
+        // Convert to JSON
+        data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      } catch (parseError) {
+        console.error("Parse error:", parseError);
+        await storage.updateBaseImportada(base.id, { status: "erro" });
+        return res.status(400).json({ message: "Erro ao processar arquivo" });
+      }
+      
+      if (data.length === 0) {
+        await storage.updateBaseImportada(base.id, { status: "erro" });
+        return res.status(400).json({ message: "Arquivo vazio" });
+      }
+      
+      // Start async processing
+      processImportJob(base.id, data, convenio, competenciaDate, baseTag);
+      
+      return res.json({
+        message: "Importação iniciada",
+        baseId: base.id,
+        baseTag,
+        totalLinhas: data.length,
+      });
+    } catch (error) {
+      console.error("Import error:", error);
+      return res.status(500).json({ message: "Erro ao importar base" });
+    }
+  });
+
+  // GET filtros disponíveis para clientes
+  app.get("/api/clientes/filtros", requireAuth, async (req, res) => {
+    try {
+      const convenios = await storage.getDistinctConveniosClientes();
+      const orgaos = await storage.getDistinctOrgaosClientes();
+      const ufs = await storage.getDistinctUfsClientes();
+      
+      return res.json({ convenios, orgaos, ufs });
+    } catch (error) {
+      console.error("Get filtros error:", error);
+      return res.status(500).json({ message: "Erro ao buscar filtros" });
+    }
+  });
+
+  // POST simular pedido de lista - Coordenador or Master
+  app.post("/api/pedidos-lista/simular", requireAuth, async (req, res) => {
+    try {
+      // Only coordenacao and master can access
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Filtros inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const filtros = result.data;
+      const { clientes, total } = await storage.searchClientesPessoa(filtros);
+      
+      // Return preview (first 10) and total
+      return res.json({
+        total,
+        preview: clientes.slice(0, 10).map(c => ({
+          matricula: c.matricula,
+          nome: c.nome,
+          cpf: c.cpf ? `***${c.cpf.slice(-4)}` : null, // Mask CPF
+          convenio: c.convenio,
+          orgao: c.orgaodesc,
+          uf: c.uf,
+          sit_func: c.sitFunc,
+        })),
+      });
+    } catch (error) {
+      console.error("Simulate pedido error:", error);
+      return res.status(500).json({ message: "Erro ao simular pedido" });
+    }
+  });
+
+  // POST criar pedido de lista - Coordenador or Master
+  app.post("/api/pedidos-lista", requireAuth, async (req, res) => {
+    try {
+      // Only coordenacao and master can access
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Filtros inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const filtros = result.data;
+      const { total } = await storage.searchClientesPessoa(filtros);
+      
+      // Create pedido
+      const pedido = await storage.createPedidoLista({
+        coordenadorId: req.user!.id,
+        filtrosUsados: filtros,
+        quantidadeRegistros: total,
+        tipo: "exportacao_base",
+        status: "pendente",
+      });
+      
+      return res.json({
+        message: "Pedido criado com sucesso",
+        pedido: {
+          id: pedido.id,
+          quantidade: total,
+          status: pedido.status,
+          criadoEm: pedido.criadoEm,
+        },
+      });
+    } catch (error) {
+      console.error("Create pedido error:", error);
+      return res.status(500).json({ message: "Erro ao criar pedido" });
+    }
+  });
+
+  // GET pedidos de lista
+  app.get("/api/pedidos-lista", requireAuth, async (req, res) => {
+    try {
+      // Only coordenacao and master can access
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      let pedidos;
+      
+      if (req.user!.role === "master") {
+        // Master sees all
+        pedidos = await storage.getAllPedidosLista();
+      } else {
+        // Coordenador sees only their own
+        pedidos = await storage.getPedidosListaByUser(req.user!.id);
+      }
+      
+      return res.json(pedidos);
+    } catch (error) {
+      console.error("Get pedidos error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pedidos" });
     }
   });
 

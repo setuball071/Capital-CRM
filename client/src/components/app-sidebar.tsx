@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -42,6 +42,8 @@ export function AppSidebar() {
   const canAccessCoefficientTables = isMaster || isAtendimento || isOperacional;
   const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
   const canAccessRoteiros = isMaster || isAtendimento || isOperacional;
+  const canAccessBasesClientes = isMaster; // Only master can import bases
+  const canAccessCompraLista = isMaster || isCoordenacao; // Master and coordenacao can buy lists
 
   const menuItems = [
     {
@@ -79,6 +81,18 @@ export function AppSidebar() {
       url: "/roteiros",
       icon: Map,
       show: canAccessRoteiros,
+    },
+    {
+      title: "Base de Clientes",
+      url: "/bases-clientes",
+      icon: Database,
+      show: canAccessBasesClientes,
+    },
+    {
+      title: "Compra de Lista",
+      url: "/compra-lista",
+      icon: ShoppingCart,
+      show: canAccessCompraLista,
     },
     {
       title: "Usuários",

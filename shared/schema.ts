@@ -289,3 +289,146 @@ export interface SimulationResult {
   clientRefund: number;
   coefficient: number;
 }
+
+// ===== BASE DE CLIENTES TABLES =====
+
+// Status for bases importadas
+export const BASE_STATUS = ["processando", "concluida", "erro"] as const;
+export type BaseStatus = typeof BASE_STATUS[number];
+
+// Status for pedidos lista
+export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
+export type PedidoStatus = typeof PEDIDO_STATUS[number];
+
+// 1) clientes_pessoa - Dados fixos do indivíduo (1 pessoa = 1 matrícula)
+export const clientesPessoa = pgTable("clientes_pessoa", {
+  id: serial("id").primaryKey(),
+  cpf: varchar("cpf", { length: 14 }),
+  matricula: varchar("matricula", { length: 50 }).notNull().unique(),
+  nome: varchar("nome", { length: 255 }),
+  orgaodesc: varchar("orgaodesc", { length: 255 }),
+  orgaocod: varchar("orgaocod", { length: 50 }),
+  undpagadoradesc: varchar("undpagadoradesc", { length: 255 }),
+  undpagadoracod: varchar("undpagadoracod", { length: 50 }),
+  natureza: varchar("natureza", { length: 100 }),
+  sitFunc: varchar("sit_func", { length: 100 }), // ativo, pensionista, aposentado etc.
+  convenio: varchar("convenio", { length: 100 }),
+  uf: varchar("uf", { length: 2 }),
+  municipio: varchar("municipio", { length: 150 }),
+  telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array
+  baseTagUltima: varchar("base_tag_ultima", { length: 100 }),
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+  extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
+});
+
+// 2) clientes_folha_mes - Dados agregados da folha por competência
+export const clientesFolhaMes = pgTable("clientes_folha_mes", {
+  id: serial("id").primaryKey(),
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  competencia: timestamp("competencia").notNull(), // Ex: 2025-11-01
+  margemBruta30: decimal("margem_bruta_30", { precision: 12, scale: 2 }),
+  margemUtilizada30: decimal("margem_utilizada_30", { precision: 12, scale: 2 }),
+  margemSaldo30: decimal("margem_saldo_30", { precision: 12, scale: 2 }),
+  margemBruta35: decimal("margem_bruta_35", { precision: 12, scale: 2 }),
+  margemUtilizada35: decimal("margem_utilizada_35", { precision: 12, scale: 2 }),
+  margemSaldo35: decimal("margem_saldo_35", { precision: 12, scale: 2 }),
+  margemBruta70: decimal("margem_bruta_70", { precision: 12, scale: 2 }),
+  margemUtilizada70: decimal("margem_utilizada_70", { precision: 12, scale: 2 }),
+  margemSaldo70: decimal("margem_saldo_70", { precision: 12, scale: 2 }),
+  creditos: decimal("creditos", { precision: 12, scale: 2 }),
+  debitos: decimal("debitos", { precision: 12, scale: 2 }),
+  liquido: decimal("liquido", { precision: 12, scale: 2 }),
+  sitFuncNoMes: varchar("sit_func_no_mes", { length: 100 }),
+  baseTag: varchar("base_tag", { length: 100 }),
+  extrasFolha: jsonb("extras_folha"),
+});
+
+// 3) clientes_contratos - Cada linha de contrato/cartão/margem
+export const clientesContratos = pgTable("clientes_contratos", {
+  id: serial("id").primaryKey(),
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  tipoContrato: varchar("tipo_contrato", { length: 50 }), // "consignado", "cartao", "outro", etc.
+  banco: varchar("banco", { length: 100 }),
+  valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
+  competencia: timestamp("competencia"),
+  baseTag: varchar("base_tag", { length: 100 }),
+  dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
+});
+
+// 4) bases_importadas - Controle de importações
+export const basesImportadas = pgTable("bases_importadas", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }),
+  baseTag: varchar("base_tag", { length: 100 }).notNull(),
+  convenio: varchar("convenio", { length: 100 }),
+  competencia: timestamp("competencia"),
+  totalLinhas: integer("total_linhas").default(0),
+  status: varchar("status", { length: 20 }).notNull().default("processando"), // processando, concluida, erro
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+});
+
+// 5) pedidos_lista - Pedidos de exportação de lista
+export const pedidosLista = pgTable("pedidos_lista", {
+  id: serial("id").primaryKey(),
+  coordenadorId: integer("coordenador_id").references(() => users.id, { onDelete: "set null" }),
+  filtrosUsados: jsonb("filtros_usados"),
+  quantidadeRegistros: integer("quantidade_registros").default(0),
+  tipo: varchar("tipo", { length: 50 }).default("exportacao_base"),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente, aprovado, processando, concluido, cancelado
+  custoEstimado: decimal("custo_estimado", { precision: 12, scale: 2 }),
+  custoFinal: decimal("custo_final", { precision: 12, scale: 2 }),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+});
+
+// ===== INSERT SCHEMAS FOR BASE DE CLIENTES =====
+
+export const insertClientePessoaSchema = createInsertSchema(clientesPessoa, {
+  matricula: z.string().min(1, { message: "Matrícula é obrigatória" }),
+}).omit({ id: true, atualizadoEm: true });
+
+export const insertClienteFolhaMesSchema = createInsertSchema(clientesFolhaMes, {
+  pessoaId: z.number().positive({ message: "Pessoa é obrigatória" }),
+}).omit({ id: true });
+
+export const insertClienteContratoSchema = createInsertSchema(clientesContratos, {
+  pessoaId: z.number().positive({ message: "Pessoa é obrigatória" }),
+}).omit({ id: true });
+
+export const insertBaseImportadaSchema = createInsertSchema(basesImportadas, {
+  baseTag: z.string().min(1, { message: "Tag da base é obrigatória" }),
+}).omit({ id: true, criadoEm: true, atualizadoEm: true });
+
+export const insertPedidoListaSchema = createInsertSchema(pedidosLista, {}).omit({ id: true, criadoEm: true, atualizadoEm: true });
+
+// ===== SELECT TYPES FOR BASE DE CLIENTES =====
+
+export type ClientePessoa = typeof clientesPessoa.$inferSelect;
+export type InsertClientePessoa = z.infer<typeof insertClientePessoaSchema>;
+
+export type ClienteFolhaMes = typeof clientesFolhaMes.$inferSelect;
+export type InsertClienteFolhaMes = z.infer<typeof insertClienteFolhaMesSchema>;
+
+export type ClienteContrato = typeof clientesContratos.$inferSelect;
+export type InsertClienteContrato = z.infer<typeof insertClienteContratoSchema>;
+
+export type BaseImportada = typeof basesImportadas.$inferSelect;
+export type InsertBaseImportada = z.infer<typeof insertBaseImportadaSchema>;
+
+export type PedidoLista = typeof pedidosLista.$inferSelect;
+export type InsertPedidoLista = z.infer<typeof insertPedidoListaSchema>;
+
+// ===== FILTROS PARA PEDIDOS LISTA =====
+
+export const filtrosPedidoListaSchema = z.object({
+  convenio: z.string().optional(),
+  orgao: z.string().optional(),
+  uf: z.string().optional(),
+  idade_min: z.number().optional(),
+  idade_max: z.number().optional(),
+  sit_func: z.string().optional(),
+  margem_saldo_30_min: z.number().optional(),
+});
+
+export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;

@@ -1,0 +1,395 @@
+Quero implementar a PARTE 1 do módulo “Base de Clientes” no meu CRM.
+Esse módulo será usado para:
+
+Master importar bases grandes (SIAPE, INSS, estaduais etc).
+
+Coordenador aplicar filtros e gerar pedidos de exportação (“comprar lista”).
+
+A tecnologia do projeto é:
+
+Backend: Node.js + Express (pasta server/)
+
+Banco: PostgreSQL já conectado
+
+Frontend: React (pasta client/)
+
+==================================================================
+
+1. ESTRUTURA DE BANCO – 3 NÍVEIS DE INFORMAÇÃO
+
+==================================================================
+
+Quero criar três tabelas principais, garantindo:
+
+Campos críticos (margens, situação funcional, líquido) ficam em colunas próprias.
+
+Toda a linha original da planilha também deve ser salva em JSON (flexibilidade total).
+
+A identificação única da pessoa será matrícula (e CPF quando existir).
+
+A importação será flexível, aceitando colunas extras.
+
+1) clientes_pessoa
+
+Representa dados fixos do indivíduo (1 pessoa = 1 matrícula).
+
+Campos:
+
+id (PK)
+
+cpf (string)
+
+matricula (string, UNIQUE)
+
+nome (string)
+
+orgaodesc (string)
+
+orgaocod (string)
+
+undpagadoradesc (string)
+
+undpagadoracod (string)
+
+natureza (string)
+
+sit_func (string) // ativo, pensionista, aposentado etc.
+
+convenio (string)
+
+uf (string)
+
+municipio (string)
+
+telefones_base (JSONB) // TELEFONE 1..5 em array
+
+base_tag_ultima (string)
+
+atualizado_em (timestamp)
+
+extras_pessoa (JSONB) // tudo que não for mapeado diretamente
+
+Índices obrigatórios:
+
+cpf
+
+matricula
+
+convenio
+
+2) clientes_folha_mes
+
+Dados agregados da folha por competência (SIAPE, INSS etc).
+
+Campos:
+
+id (PK)
+
+pessoa_id (FK clientes_pessoa.id)
+
+competencia (date) // Ex: 2025-11-01
+
+margem_bruta_30
+
+margem_utilizada_30
+
+margem_saldo_30
+
+margem_bruta_35
+
+margem_utilizada_35
+
+margem_saldo_35
+
+margem_bruta_70
+
+margem_utilizada_70
+
+margem_saldo_70
+
+creditos
+
+debitos
+
+liquido
+
+sit_func_no_mes (string)
+
+base_tag (string)
+
+extras_folha (JSONB)
+
+3) clientes_contratos
+
+Cada linha de contrato/cartão/margem dentro da base.
+
+Campos:
+
+id (PK)
+
+pessoa_id (FK)
+
+tipo_contrato (string) — “consignado”, “cartao”, “outro”, etc.
+
+banco (string)
+
+valor_parcela (numeric)
+
+competencia (date)
+
+base_tag (string)
+
+dados_brutos (JSONB) // linha completa da planilha para essa parcela
+
+4) bases_importadas
+
+Campos:
+
+id
+
+nome
+
+base_tag
+
+convenio
+
+competencia
+
+total_linhas
+
+status (“processando”, “concluida”, “erro”)
+
+criado_em
+
+atualizado_em
+
+5) pedidos_lista
+
+Campos:
+
+id
+
+coordenador_id
+
+filtros_usados (JSONB)
+
+quantidade_registros
+
+tipo (“exportacao_base”)
+
+status (“pendente”, “aprovado”, “processando”, “concluido”, “cancelado”)
+
+custo_estimado (numeric)
+
+custo_final (numeric)
+
+criado_em
+
+atualizado_em
+
+==================================================================
+
+2. IMPORTAÇÃO DE BASE (MASTER) – REGRAS COMPLETAS
+
+==================================================================
+
+Criar endpoint:
+
+POST /api/bases/importar
+
+Permissão: apenas MASTER.
+
+Corpo:
+
+arquivo .xlsx ou .csv
+
+convenio (string)
+
+competencia (mês/ano) → salvar como 2025-11-01
+
+nome_base (opcional, para exibir depois)
+
+Ao receber:
+
+Criar registro em bases_importadas com status = “processando”.
+
+Enviar arquivo para um JOB assíncrono.
+
+JOB deve processar linha a linha (streaming, sem carregar arquivo inteiro na memória).
+
+LÓGICA DO JOB DE IMPORTAÇÃO
+
+Para cada linha:
+
+1. Identificar pessoa pela matrícula
+
+Se matrícula existir em clientes_pessoa:
+→ Atualizar dados da pessoa e telefones, atualizar base_tag_ultima.
+
+Se matrícula não existir:
+→ Criar um novo registro.
+
+2. Inserir registro de folha no mês (clientes_folha_mes)
+
+Deve mapear explicitamente para SIAPE:
+
+“Bruta 30%” → margem_bruta_30
+
+“Utilz 30%” → margem_utilizada_30
+
+“Saldo 30%” → margem_saldo_30
+
+“Bruta 35%”, “Utilz 35%”, “Saldo 35%”
+
+“Bruta 70%”, “Utilz 70%”, “Saldo 70%”
+
+“Créditos”, “Débitos”, “Líquido”
+
+Todos os demais campos manter em extras_folha.
+
+3. Inserir registro de contrato (clientes_contratos)
+
+Cada linha da planilha representa um contrato/cartão/margem.
+
+Salvar:
+
+pessoa_id
+
+tipo_contrato (por enquanto pode ser “desconhecido” ou heurística simples)
+
+banco
+
+valor_parcela (quando existir)
+
+competencia
+
+base_tag
+
+dados_brutos (linha inteira em JSON)
+
+4. No final do JOB
+
+Atualizar bases_importadas com:
+
+total_linhas
+
+status “concluida”
+
+==================================================================
+
+3. COMPRA DE LISTAS (COORDENADOR)
+
+==================================================================
+
+Criar endpoint:
+
+POST /api/pedidos-lista
+
+Permissão: Coordenador ou Master.
+
+Entrada:
+
+{
+  "filtros": {
+    "convenio": "...",
+    "orgao": "...",
+    "uf": "...",
+    "idade_min": 30,
+    "idade_max": 75
+  }
+}
+
+
+Lógica:
+
+Aplicar filtros em clientes_pessoa
+
+Contar quantos registros serão retornados
+
+Criar registro em pedidos_lista com:
+
+coordenador_id
+
+filtros_usados
+
+quantidade_registros
+
+status “pendente”
+
+tipo “exportacao_base”
+
+Retornar os dados do pedido.
+
+Endpoint GET /api/pedidos-lista
+
+Coordenador vê apenas seus pedidos
+
+Master vê todos
+
+==================================================================
+
+4. FRONTEND NECESSÁRIO
+
+==================================================================
+
+Tela 1 – Bases de Clientes (MASTER)
+
+Listar bases_importadas
+
+Botão “Importar Base”:
+
+Upload do arquivo
+
+Campo “convênio”
+
+Campo “competência” (mês/ano)
+
+Após envio:
+
+Mostrar “importação iniciada”
+
+Atualização automática via GET /api/bases
+
+Tela 2 – Compra de Lista (COORDENADOR e MASTER)
+
+Filtros:
+
+Convênio
+
+Órgão
+
+UF
+
+Faixa de idade
+
+Botões:
+
+Simular → mostra quantidade + preview dos primeiros registros
+
+Gerar Pedido de Lista → cria em pedidos_lista
+
+==================================================================
+
+INSTRUÇÃO FINAL PARA O REPLIT
+
+==================================================================
+
+Implemente tudo acima, criando:
+
+migrations das tabelas
+
+serviços de importação
+
+endpoints Express
+
+componentes React necessários
+
+lógica do job assíncrono de importação
+
+mapeamento SIAPE conforme descrito
+
+fallback de dados extras em JSON
+
+Esse é o início oficial da Fase 2, Parte 1.
+Nada além disso deve ser implementado agora.
+Somente a estrutura e funcionamento descritos aqui.
