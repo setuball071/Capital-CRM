@@ -1411,14 +1411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Consulta não pode estar vazia" });
       }
 
-      // Import OpenAI client dynamically to avoid issues if not configured
-      const OpenAI = (await import("openai")).default;
-      
-      // This is using Replit's AI Integrations service
-      const openai = new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
-      });
+      // Use shared OpenAI client (Replit AI Integrations)
+      const { openai } = await import("./openaiClient");
 
       // System prompt for AI query interpreter
       const systemPrompt = `Você é um interpretador de consultas para um sistema de ROTEIROS BANCÁRIOS de crédito consignado.
