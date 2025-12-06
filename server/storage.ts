@@ -143,6 +143,8 @@ export interface IStorage {
   getPedidoLista(id: number): Promise<PedidoLista | undefined>;
   createPedidoLista(data: InsertPedidoLista): Promise<PedidoLista>;
   updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined>;
+  getAllPedidosListaWithUser(): Promise<Array<PedidoLista & { coordenadorNome: string; coordenadorEmail: string }>>;
+  updatePedidoListaStatus(id: number, status: string): Promise<PedidoLista | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -1024,6 +1026,39 @@ export class DbStorage implements IStorage {
   async updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined> {
     const [updated] = await db.update(pedidosLista)
       .set({ ...data, atualizadoEm: new Date() })
+      .where(eq(pedidosLista.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAllPedidosListaWithUser(): Promise<Array<PedidoLista & { coordenadorNome: string; coordenadorEmail: string }>> {
+    const result = await db
+      .select({
+        id: pedidosLista.id,
+        coordenadorId: pedidosLista.coordenadorId,
+        filtrosUsados: pedidosLista.filtrosUsados,
+        quantidadeRegistros: pedidosLista.quantidadeRegistros,
+        tipo: pedidosLista.tipo,
+        status: pedidosLista.status,
+        criadoEm: pedidosLista.criadoEm,
+        atualizadoEm: pedidosLista.atualizadoEm,
+        coordenadorNome: users.name,
+        coordenadorEmail: users.email,
+      })
+      .from(pedidosLista)
+      .leftJoin(users, eq(pedidosLista.coordenadorId, users.id))
+      .orderBy(sql`${pedidosLista.criadoEm} DESC`);
+    
+    return result.map(r => ({
+      ...r,
+      coordenadorNome: r.coordenadorNome || 'Desconhecido',
+      coordenadorEmail: r.coordenadorEmail || '',
+    }));
+  }
+
+  async updatePedidoListaStatus(id: number, status: string): Promise<PedidoLista | undefined> {
+    const [updated] = await db.update(pedidosLista)
+      .set({ status, atualizadoEm: new Date() })
       .where(eq(pedidosLista.id, id))
       .returning();
     return updated;

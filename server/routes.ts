@@ -2478,6 +2478,104 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
+  
+  // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador
+  app.get("/api/pedidos-lista/admin", requireAuth, async (req, res) => {
+    try {
+      // Only master can access admin view
+      if (!hasRole(req.user, ["master"])) {
+        return res.status(403).json({ message: "Acesso negado - apenas master" });
+      }
+
+      const pedidos = await storage.getAllPedidosListaWithUser();
+      
+      return res.json(pedidos.map(p => ({
+        id: p.id,
+        coordenador_id: p.coordenadorId,
+        coordenador_nome: p.coordenadorNome,
+        coordenador_email: p.coordenadorEmail,
+        filtros_usados: p.filtrosUsados,
+        quantidade_registros: p.quantidadeRegistros,
+        tipo: p.tipo,
+        status: p.status,
+        criado_em: p.criadoEm,
+        atualizado_em: p.atualizadoEm,
+      })));
+    } catch (error) {
+      console.error("Get pedidos admin error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pedidos" });
+    }
+  });
+
+  // POST /api/pedidos-lista/:id/aprovar - Aprovar pedido (MASTER only)
+  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, async (req, res) => {
+    try {
+      // Only master can approve
+      if (!hasRole(req.user, ["master"])) {
+        return res.status(403).json({ message: "Acesso negado - apenas master" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const pedido = await storage.getPedidoLista(id);
+      if (!pedido) {
+        return res.status(404).json({ message: "Pedido não encontrado" });
+      }
+
+      if (pedido.status !== "pendente") {
+        return res.status(400).json({ message: `Pedido já está com status: ${pedido.status}` });
+      }
+
+      const updated = await storage.updatePedidoListaStatus(id, "aprovado");
+      
+      return res.json({
+        message: "Pedido aprovado com sucesso",
+        pedido: updated,
+      });
+    } catch (error) {
+      console.error("Approve pedido error:", error);
+      return res.status(500).json({ message: "Erro ao aprovar pedido" });
+    }
+  });
+
+  // POST /api/pedidos-lista/:id/rejeitar - Rejeitar pedido (MASTER only)
+  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, async (req, res) => {
+    try {
+      // Only master can reject
+      if (!hasRole(req.user, ["master"])) {
+        return res.status(403).json({ message: "Acesso negado - apenas master" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const pedido = await storage.getPedidoLista(id);
+      if (!pedido) {
+        return res.status(404).json({ message: "Pedido não encontrado" });
+      }
+
+      if (pedido.status !== "pendente") {
+        return res.status(400).json({ message: `Pedido já está com status: ${pedido.status}` });
+      }
+
+      const updated = await storage.updatePedidoListaStatus(id, "rejeitado");
+      
+      return res.json({
+        message: "Pedido rejeitado com sucesso",
+        pedido: updated,
+      });
+    } catch (error) {
+      console.error("Reject pedido error:", error);
+      return res.status(500).json({ message: "Erro ao rejeitar pedido" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
