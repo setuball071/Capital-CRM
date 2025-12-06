@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -99,6 +99,12 @@ export function AppSidebar() {
       url: "/consulta-cliente",
       icon: UserSearch,
       show: true, // All authenticated users can access
+    },
+    {
+      title: "Admin Pedidos",
+      url: "/admin-pedidos-lista",
+      icon: ShieldCheck,
+      show: isMaster, // Only master can access admin panel
     },
     {
       title: "Usuários",

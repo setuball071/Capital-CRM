@@ -20,6 +20,7 @@ import RoteirosPage from "@/pages/roteiros";
 import BasesClientesPage from "@/pages/bases-clientes";
 import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
+import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -238,6 +239,9 @@ function Router() {
               </Route>
               <Route path="/consulta-cliente">
                 {() => <ProtectedRoute component={ConsultaClientePage} />}
+              </Route>
+              <Route path="/admin-pedidos-lista">
+                {() => <MasterRoute component={AdminPedidosListaPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
