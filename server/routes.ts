@@ -2478,6 +2478,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET convênios disponíveis para consulta de clientes
+  app.get("/api/clientes/filtros/convenios", requireAuth, async (req, res) => {
+    try {
+      const convenios = await storage.getDistinctConveniosClientes();
+      return res.json(convenios);
+    } catch (error) {
+      console.error("Get convenios error:", error);
+      return res.status(500).json({ message: "Erro ao buscar convênios" });
+    }
+  });
+
   // GET consulta de cliente por CPF ou matrícula - Todos os usuários autenticados
   app.get("/api/clientes/consulta", requireAuth, async (req, res) => {
     try {
