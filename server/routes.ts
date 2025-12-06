@@ -2213,9 +2213,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // GET consulta de cliente por CPF ou matrícula - Todos os usuários autenticados
   app.get("/api/clientes/consulta", requireAuth, async (req, res) => {
     try {
-      const { cpf, matricula } = req.query;
+      const { cpf, matricula, convenio } = req.query;
       
-      // Validate at least one parameter is provided
+      // Validate at least one search parameter is provided
       if (!cpf && !matricula) {
         return res.status(400).json({ 
           message: "Informe CPF ou matrícula para realizar a consulta" 
@@ -2225,26 +2225,26 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       let tipoBusca: "cpf" | "matricula";
       let termo: string;
       let resultados: any[] = [];
+      const convenioFiltro = convenio ? String(convenio).trim() : null;
       
       // Priority: matricula > cpf
       if (matricula) {
         tipoBusca = "matricula";
         termo = String(matricula).trim();
         
-        const cliente = await storage.getClientePessoaByMatricula(termo);
-        if (cliente) {
-          resultados = [{
-            pessoa_id: cliente.id,
-            cpf: cliente.cpf,
-            matricula: cliente.matricula,
-            nome: cliente.nome,
-            convenio: cliente.convenio,
-            orgao: cliente.orgaodesc,
-            uf: cliente.uf,
-            municipio: cliente.municipio,
-            sit_func: cliente.sitFunc,
-          }];
-        }
+        // Use new method that supports convenio filter and returns array
+        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined);
+        resultados = clientes.map(cliente => ({
+          pessoa_id: cliente.id,
+          cpf: cliente.cpf,
+          matricula: cliente.matricula,
+          nome: cliente.nome,
+          convenio: cliente.convenio,
+          orgao: cliente.orgaodesc,
+          uf: cliente.uf,
+          municipio: cliente.municipio,
+          sit_func: cliente.sitFunc,
+        }));
       } else if (cpf) {
         tipoBusca = "cpf";
         // Clean CPF (remove dots and dashes)
@@ -2257,7 +2257,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           });
         }
         
-        const clientes = await storage.getClientesByCpf(termo);
+        // Pass convenio filter if provided
+        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -2276,6 +2277,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       return res.json({
         tipo_busca: tipoBusca,
         termo,
+        convenio_filtro: convenioFiltro,
         resultados,
       });
     } catch (error) {

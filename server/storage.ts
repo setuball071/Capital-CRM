@@ -114,8 +114,9 @@ export interface IStorage {
   
   // Clientes Pessoa
   getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
+  getClientesByMatricula(matricula: string, convenio?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
-  getClientesByCpf(cpf: string): Promise<ClientePessoa[]>;
+  getClientesByCpf(cpf: string, convenio?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -760,15 +761,31 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
+  async getClientesByMatricula(matricula: string, convenio?: string): Promise<ClientePessoa[]> {
+    const conditions = [eq(clientesPessoa.matricula, matricula)];
+    if (convenio) {
+      conditions.push(ilike(clientesPessoa.convenio, convenio));
+    }
+    return await db.select().from(clientesPessoa).where(and(...conditions));
+  }
+
   async getClientePessoaById(id: number): Promise<ClientePessoa | undefined> {
     const [cliente] = await db.select().from(clientesPessoa).where(eq(clientesPessoa.id, id));
     return cliente;
   }
 
-  async getClientesByCpf(cpf: string): Promise<ClientePessoa[]> {
+  async getClientesByCpf(cpf: string, convenio?: string): Promise<ClientePessoa[]> {
     // Remove formatting from CPF (dots and dashes)
     const cleanCpf = cpf.replace(/\D/g, "");
     // Compare by removing non-digits from stored CPF as well (handles both formatted and unformatted storage)
+    if (convenio) {
+      return await db.select()
+        .from(clientesPessoa)
+        .where(and(
+          sql`regexp_replace(${clientesPessoa.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
+          ilike(clientesPessoa.convenio, convenio)
+        ));
+    }
     return await db.select()
       .from(clientesPessoa)
       .where(sql`regexp_replace(${clientesPessoa.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`);
