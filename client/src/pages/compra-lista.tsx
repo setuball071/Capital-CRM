@@ -191,14 +191,11 @@ export default function CompraLista() {
       parts.push(`Idade: ${f.idade_min || 0} - ${f.idade_max || 99}`);
     }
     if (f.sit_func) parts.push(`Situação: ${f.sit_func}`);
-    if (f.margem_30_min !== undefined || f.margem_30_max !== undefined) {
-      parts.push(`Margem 30%: ${f.margem_30_min || 0} - ${f.margem_30_max || "∞"}`);
+    if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
+      parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
     }
     if (f.margem_35_min !== undefined || f.margem_35_max !== undefined) {
       parts.push(`Margem 35%: ${f.margem_35_min || 0} - ${f.margem_35_max || "∞"}`);
-    }
-    if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
-      parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
     }
     if (f.margem_cartao_credito_min !== undefined || f.margem_cartao_credito_max !== undefined) {
       parts.push(`Margem Cart.Créd: ${f.margem_cartao_credito_min || 0} - ${f.margem_cartao_credito_max || "∞"}`);
@@ -380,18 +377,18 @@ export default function CompraLista() {
 
               <div className="border-t pt-4 mt-4">
                 <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Margem (Saldos)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs">Margem 30%</Label>
+                    <Label className="text-xs">Margem 70%</Label>
                     <div className="flex gap-2">
                       <Input
                         type="number"
                         min={0}
                         step={0.01}
                         placeholder="Mín"
-                        value={filtros.margem_30_min || ""}
-                        onChange={(e) => setFiltros({ ...filtros, margem_30_min: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        data-testid="input-margem-30-min"
+                        value={filtros.margem_70_min || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_70_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-70-min"
                         className="w-1/2"
                       />
                       <Input
@@ -399,9 +396,9 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Máx"
-                        value={filtros.margem_30_max || ""}
-                        onChange={(e) => setFiltros({ ...filtros, margem_30_max: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        data-testid="input-margem-30-max"
+                        value={filtros.margem_70_max || ""}
+                        onChange={(e) => setFiltros({ ...filtros, margem_70_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        data-testid="input-margem-70-max"
                         className="w-1/2"
                       />
                     </div>
@@ -428,32 +425,6 @@ export default function CompraLista() {
                         value={filtros.margem_35_max || ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_35_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-35-max"
-                        className="w-1/2"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs">Margem 70%</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        placeholder="Mín"
-                        value={filtros.margem_70_min || ""}
-                        onChange={(e) => setFiltros({ ...filtros, margem_70_min: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        data-testid="input-margem-70-min"
-                        className="w-1/2"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        placeholder="Máx"
-                        value={filtros.margem_70_max || ""}
-                        onChange={(e) => setFiltros({ ...filtros, margem_70_max: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        data-testid="input-margem-70-max"
                         className="w-1/2"
                       />
                     </div>
