@@ -40,7 +40,7 @@ const upload = multer({
     },
   }),
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
+    fileSize: 800 * 1024 * 1024, // 800MB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".xlsx", ".xls", ".csv"];
@@ -2163,7 +2163,20 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST importar base - Master only (Multipart upload for large files)
-  app.post("/api/bases/importar", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+  app.post("/api/bases/importar", requireAuth, requireMaster, (req, res, next) => {
+    // Wrap multer to handle file size errors gracefully
+    upload.single("arquivo")(req, res, (err: any) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({ 
+            message: "O arquivo excede o limite de tamanho permitido (máximo 800MB)" 
+          });
+        }
+        return res.status(400).json({ message: err.message || "Erro no upload do arquivo" });
+      }
+      next();
+    });
+  }, async (req, res) => {
     try {
       const file = req.file;
       const { convenio, competencia, nome_base } = req.body;
@@ -2173,6 +2186,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         if (file) fs.unlinkSync(file.path);
         return res.status(400).json({ 
           message: "Arquivo, convênio e competência são obrigatórios" 
+        });
+      }
+
+      // Check if there's already a base being processed
+      const existingProcessing = await storage.getBaseByStatus("processando");
+      if (existingProcessing) {
+        // Clean up uploaded file
+        fs.unlinkSync(file.path);
+        return res.status(409).json({ 
+          message: "Já existe uma base em processamento. Aguarde a conclusão antes de iniciar uma nova importação." 
         });
       }
 

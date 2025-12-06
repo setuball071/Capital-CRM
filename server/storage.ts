@@ -135,6 +135,7 @@ export interface IStorage {
   // Bases Importadas
   getAllBasesImportadas(): Promise<BaseImportada[]>;
   getBaseImportada(id: number): Promise<BaseImportada | undefined>;
+  getBaseByStatus(status: string): Promise<BaseImportada | undefined>;
   createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada>;
   updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined>;
   
@@ -1003,6 +1004,11 @@ export class DbStorage implements IStorage {
 
   async getBaseImportada(id: number): Promise<BaseImportada | undefined> {
     const [base] = await db.select().from(basesImportadas).where(eq(basesImportadas.id, id));
+    return base;
+  }
+
+  async getBaseByStatus(status: string): Promise<BaseImportada | undefined> {
+    const [base] = await db.select().from(basesImportadas).where(eq(basesImportadas.status, status));
     return base;
   }
 
