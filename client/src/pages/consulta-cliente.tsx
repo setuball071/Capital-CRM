@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, 
@@ -44,6 +45,7 @@ interface ConsultaResultado {
 interface ConsultaResponse {
   tipo_busca: "cpf" | "matricula";
   termo: string;
+  convenio_filtro: string | null;
   resultados: ConsultaResultado[];
 }
 
@@ -136,9 +138,14 @@ export default function ConsultaCliente() {
   const { toast } = useToast();
   const [searchType, setSearchType] = useState<"cpf" | "matricula">("cpf");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedConvenio, setSelectedConvenio] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<ConsultaResultado[] | null>(null);
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
+
+  const { data: conveniosDisponiveis } = useQuery<string[]>({
+    queryKey: ["/api/clientes/filtros/convenios"],
+  });
 
   const { data: clienteDetalhado, isLoading: isLoadingDetails } = useQuery<ClienteDetalhado>({
     queryKey: ["/api/clientes", selectedPessoaId],
@@ -156,13 +163,33 @@ export default function ConsultaCliente() {
       return;
     }
 
+    // For matricula search, convenio is required (and must not be "__all__")
+    const convenioValue = selectedConvenio && selectedConvenio !== "__all__" ? selectedConvenio : "";
+    if (searchType === "matricula" && !convenioValue) {
+      toast({
+        title: "Convênio obrigatório",
+        description: "Para buscar por matrícula, selecione o convênio.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSearching(true);
     setSearchResults(null);
     setSelectedPessoaId(null);
 
     try {
-      const queryParam = searchType === "cpf" ? `cpf=${encodeURIComponent(term)}` : `matricula=${encodeURIComponent(term)}`;
-      const response = await fetch(`/api/clientes/consulta?${queryParam}`, {
+      const queryParams = new URLSearchParams();
+      if (searchType === "cpf") {
+        queryParams.set("cpf", term);
+      } else {
+        queryParams.set("matricula", term);
+      }
+      if (convenioValue) {
+        queryParams.set("convenio", convenioValue);
+      }
+
+      const response = await fetch(`/api/clientes/consulta?${queryParams.toString()}`, {
         credentials: "include",
       });
 
@@ -177,9 +204,10 @@ export default function ConsultaCliente() {
       if (data.resultados.length === 1) {
         setSelectedPessoaId(data.resultados[0].pessoa_id);
       } else if (data.resultados.length === 0) {
+        const convenioMsg = data.convenio_filtro ? ` no convênio ${data.convenio_filtro}` : "";
         toast({
           title: "Nenhum cliente encontrado",
-          description: `Não encontramos clientes com ${searchType === "cpf" ? "o CPF" : "a matrícula"} informado.`,
+          description: `Não encontramos clientes com ${searchType === "cpf" ? "o CPF" : "a matrícula"} informado${convenioMsg}.`,
         });
       }
     } catch (error: any) {
@@ -205,6 +233,7 @@ export default function ConsultaCliente() {
     setSearchResults(null);
     setSelectedPessoaId(null);
     setSearchTerm("");
+    setSelectedConvenio("");
   };
 
   return (
@@ -227,40 +256,60 @@ export default function ConsultaCliente() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="search-type">Tipo de Busca</Label>
-              <Tabs value={searchType} onValueChange={(v) => setSearchType(v as "cpf" | "matricula")} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="cpf" data-testid="tab-cpf">
-                    Buscar por CPF
-                  </TabsTrigger>
-                  <TabsTrigger value="matricula" data-testid="tab-matricula">
-                    Buscar por Matrícula
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="search-type">Tipo de Busca</Label>
+                <Tabs value={searchType} onValueChange={(v) => setSearchType(v as "cpf" | "matricula")} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="cpf" data-testid="tab-cpf">
+                      Buscar por CPF
+                    </TabsTrigger>
+                    <TabsTrigger value="matricula" data-testid="tab-matricula">
+                      Buscar por Matrícula
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="convenio">
+                  Convênio {searchType === "matricula" ? "(obrigatório)" : "(opcional)"}
+                </Label>
+                <Select value={selectedConvenio} onValueChange={setSelectedConvenio}>
+                  <SelectTrigger data-testid="select-convenio">
+                    <SelectValue placeholder="Selecione o convênio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todos os convênios</SelectItem>
+                    {conveniosDisponiveis?.map((conv) => (
+                      <SelectItem key={conv} value={conv}>{conv}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="search-term">
-                {searchType === "cpf" ? "CPF" : "Matrícula"}
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="search-term"
-                  placeholder={searchType === "cpf" ? "000.000.000-00" : "Digite a matrícula"}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  data-testid="input-search-term"
-                />
-                <Button onClick={handleSearch} disabled={isSearching} data-testid="button-search">
-                  {isSearching ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Search className="w-4 h-4" />
-                  )}
-                </Button>
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="search-term">
+                  {searchType === "cpf" ? "CPF" : "Matrícula"}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="search-term"
+                    placeholder={searchType === "cpf" ? "000.000.000-00" : "Digite a matrícula"}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    data-testid="input-search-term"
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching} data-testid="button-search">
+                    {isSearching ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
