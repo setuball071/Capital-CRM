@@ -39,13 +39,22 @@ export default function BasesClientes() {
   });
 
   const importMutation = useMutation({
-    mutationFn: async (data: { arquivo: string; convenio: string; competencia: string; nome_base?: string }) => {
-      return await apiRequest("POST", "/api/bases/importar", data);
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/bases/importar", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao importar");
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Importação iniciada",
-        description: "O arquivo está sendo processado em segundo plano.",
+        description: "O arquivo está sendo processado em segundo plano. Isso pode levar alguns minutos para arquivos grandes.",
       });
       setIsDialogOpen(false);
       setFile(null);
@@ -79,17 +88,15 @@ export default function BasesClientes() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = (e.target?.result as string).split(",")[1];
-      importMutation.mutate({
-        arquivo: base64,
-        convenio,
-        competencia,
-        nome_base: nomeBase || undefined,
-      });
-    };
-    reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append("arquivo", file);
+    formData.append("convenio", convenio);
+    formData.append("competencia", competencia);
+    if (nomeBase) {
+      formData.append("nome_base", nomeBase);
+    }
+    
+    importMutation.mutate(formData);
   };
 
   const getStatusBadge = (status: string) => {

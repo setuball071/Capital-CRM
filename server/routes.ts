@@ -19,6 +19,39 @@ import {
   type FiltrosPedidoLista,
 } from "@shared/schema";
 import * as XLSX from "xlsx";
+import multer from "multer";
+import ExcelJS from "exceljs";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+
+// Configure multer for large file uploads
+const uploadDir = path.join(os.tmpdir(), "goldcard-uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `import-${uniqueSuffix}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: {
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = [".xlsx", ".xls", ".csv"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido. Use .xlsx, .xls ou .csv"));
+    }
+  },
+});
 
 // Schema for updating users
 const updateUserSchema = z.object({
@@ -2129,16 +2162,21 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST importar base - Master only
-  app.post("/api/bases/importar", requireAuth, requireMaster, async (req, res) => {
+  // POST importar base - Master only (Multipart upload for large files)
+  app.post("/api/bases/importar", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
     try {
-      const { arquivo, convenio, competencia, nome_base } = req.body;
+      const file = req.file;
+      const { convenio, competencia, nome_base } = req.body;
       
-      if (!arquivo || !convenio || !competencia) {
+      if (!file || !convenio || !competencia) {
+        // Clean up file if exists
+        if (file) fs.unlinkSync(file.path);
         return res.status(400).json({ 
           message: "Arquivo, convênio e competência são obrigatórios" 
         });
       }
+
+      console.log(`[Import] Received file: ${file.originalname}, size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
 
       // Parse competencia to date (format: YYYY-MM)
       const [year, month] = competencia.split("-");
@@ -2156,45 +2194,252 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         status: "processando",
       });
       
-      // Parse file (base64 encoded)
-      let data: any[] = [];
-      
-      try {
-        // Decode base64
-        const buffer = Buffer.from(arquivo, "base64");
-        
-        // Read workbook
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        const firstSheet = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheet];
-        
-        // Convert to JSON
-        data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-      } catch (parseError) {
-        console.error("Parse error:", parseError);
-        await storage.updateBaseImportada(base.id, { status: "erro" });
-        return res.status(400).json({ message: "Erro ao processar arquivo" });
-      }
-      
-      if (data.length === 0) {
-        await storage.updateBaseImportada(base.id, { status: "erro" });
-        return res.status(400).json({ message: "Arquivo vazio" });
-      }
-      
-      // Start async processing
-      processImportJob(base.id, data, convenio, competenciaDate, baseTag);
+      // Start async streaming processing (fire-and-forget with error handling)
+      processStreamingImportJob(base.id, file.path, convenio, competenciaDate, baseTag).catch(async (err) => {
+        console.error("[Import] Unhandled error in streaming job:", err);
+        try {
+          await storage.updateBaseImportada(base.id, { status: "erro" });
+        } catch (e) {
+          console.error("[Import] Failed to update base status on error:", e);
+        }
+      });
       
       return res.json({
         message: "Importação iniciada",
         baseId: base.id,
         baseTag,
-        totalLinhas: data.length,
+        fileName: file.originalname,
+        fileSize: file.size,
       });
     } catch (error) {
       console.error("Import error:", error);
+      // Clean up file on error
+      if (req.file) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
       return res.status(500).json({ message: "Erro ao importar base" });
     }
   });
+
+  // Streaming import processor for large files
+  async function processStreamingImportJob(
+    baseId: number,
+    filePath: string,
+    convenio: string,
+    competencia: Date,
+    baseTag: string
+  ) {
+    let totalLinhas = 0;
+    let processedRows = 0;
+    
+    try {
+      console.log(`[Import] Starting streaming import for base ${baseId}`);
+      
+      const ext = path.extname(filePath).toLowerCase();
+      
+      if (ext === ".csv") {
+        // Use XLSX for CSV (still in-memory but CSVs are smaller)
+        const workbook = XLSX.readFile(filePath);
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+        const data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+        
+        // Process with existing function
+        await processImportJob(baseId, data, convenio, competencia, baseTag);
+      } else {
+        // Use ExcelJS streaming for Excel files
+        const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+          sharedStrings: "cache",
+          hyperlinks: "ignore",
+          worksheets: "emit",
+          styles: "ignore",
+        });
+        
+        let headers: string[] = [];
+        let headerMap: Record<string, string> = {};
+        let isFirstRow = true;
+        
+        for await (const worksheetReader of workbookReader) {
+          console.log(`[Import] Processing worksheet: ${(worksheetReader as any).name || "Sheet"}`);
+          
+          for await (const row of worksheetReader) {
+            if (isFirstRow) {
+              // First row contains headers
+              const rowValues = (row.values as any[]) || [];
+              headers = rowValues.slice(1).map((v: any) => String(v || ""));
+              
+              for (const header of headers) {
+                const normalized = normalizeColumnName(header);
+                if (SIAPE_COLUMN_MAP[normalized]) {
+                  headerMap[header] = SIAPE_COLUMN_MAP[normalized];
+                }
+              }
+              
+              isFirstRow = false;
+              continue;
+            }
+            
+            try {
+              // Get row values (skip first element as it's undefined)
+              const rowValues = (row.values as any[]) || [];
+              const values = rowValues.slice(1);
+              
+              // Build row object
+              const rowData: Record<string, any> = {};
+              headers.forEach((header, index) => {
+                rowData[header] = values[index];
+              });
+              
+              // Extract matricula (required)
+              let matricula: string | null = null;
+              for (const [col, field] of Object.entries(headerMap)) {
+                if (field === "matricula") {
+                  matricula = String(rowData[col] || "").trim();
+                  break;
+                }
+              }
+              
+              if (!matricula) continue; // Skip rows without matricula
+              
+              // Build pessoa data
+              const pessoaData: Record<string, any> = {
+                matricula,
+                convenio,
+                baseTagUltima: baseTag,
+              };
+              
+              // Build folha data
+              const folhaData: Record<string, any> = {
+                competencia,
+                baseTag,
+              };
+              
+              // Build telefones array
+              const telefones: string[] = [];
+              const extrasPessoa: Record<string, any> = {};
+              const extrasFolha: Record<string, any> = {};
+              
+              // Map row values to data structures
+              for (const [col, value] of Object.entries(rowData)) {
+                const field = headerMap[col];
+                
+                if (field) {
+                  // Pessoa fields
+                  if (["cpf", "nome", "orgaodesc", "orgaocod", "undpagadoradesc", "undpagadoracod", "natureza", "sit_func", "uf", "municipio"].includes(field)) {
+                    pessoaData[field === "sit_func" ? "sitFunc" : field] = String(value || "").trim() || null;
+                  }
+                  // Folha fields (margens)
+                  else if (field.startsWith("margem_") || ["creditos", "debitos", "liquido"].includes(field)) {
+                    const camelField = field.split("_").map((w, i) => i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
+                    folhaData[camelField] = parseDecimal(value);
+                  }
+                  // Telefones
+                  else if (field.startsWith("telefone_")) {
+                    const tel = String(value || "").trim();
+                    if (tel) telefones.push(tel);
+                  }
+                } else {
+                  extrasPessoa[col] = value;
+                }
+              }
+              
+              pessoaData.telefonesBase = telefones;
+              pessoaData.extrasPessoa = extrasPessoa;
+              folhaData.extrasFolha = extrasFolha;
+              
+              // Upsert pessoa
+              let pessoa = await storage.getClientePessoaByMatricula(matricula);
+              
+              if (pessoa) {
+                pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
+              } else {
+                pessoa = await storage.createClientePessoa(pessoaData as any);
+              }
+              
+              if (pessoa) {
+                // Create folha record
+                await storage.createClienteFolhaMes({
+                  pessoaId: pessoa.id,
+                  competencia,
+                  margemBruta30: folhaData.margemBruta30,
+                  margemUtilizada30: folhaData.margemUtilizada30,
+                  margemSaldo30: folhaData.margemSaldo30,
+                  margemBruta35: folhaData.margemBruta35,
+                  margemUtilizada35: folhaData.margemUtilizada35,
+                  margemSaldo35: folhaData.margemSaldo35,
+                  margemBruta70: folhaData.margemBruta70,
+                  margemUtilizada70: folhaData.margemUtilizada70,
+                  margemSaldo70: folhaData.margemSaldo70,
+                  margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+                  margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+                  creditos: folhaData.creditos,
+                  debitos: folhaData.debitos,
+                  liquido: folhaData.liquido,
+                  sitFuncNoMes: pessoaData.sitFunc || null,
+                  baseTag,
+                  extrasFolha: folhaData.extrasFolha,
+                } as any);
+                
+                // Create contrato record
+                let banco: string | null = null;
+                let valorParcela: string | null = null;
+                
+                for (const [col, field] of Object.entries(headerMap)) {
+                  if (field === "banco") banco = String(rowData[col] || "").trim() || null;
+                  if (field === "valor_parcela") valorParcela = parseDecimal(rowData[col]);
+                }
+                
+                await storage.createClienteContrato({
+                  pessoaId: pessoa.id,
+                  tipoContrato: "desconhecido",
+                  banco,
+                  valorParcela,
+                  competencia,
+                  baseTag,
+                  dadosBrutos: rowData,
+                } as any);
+                
+                totalLinhas++;
+              }
+              
+              processedRows++;
+              
+              // Log progress every 1000 rows
+              if (processedRows % 1000 === 0) {
+                console.log(`[Import] Base ${baseId}: Processed ${processedRows} rows, imported ${totalLinhas}`);
+              }
+            } catch (rowError) {
+              console.error("[Import] Row error:", rowError);
+            }
+          }
+          
+          // Only process first worksheet
+          break;
+        }
+      }
+      
+      // Update base status
+      await storage.updateBaseImportada(baseId, {
+        totalLinhas,
+        status: "concluida",
+      });
+      
+      console.log(`[Import] Base ${baseId} completed with ${totalLinhas} rows`);
+    } catch (error) {
+      console.error("[Import] Streaming job error:", error);
+      await storage.updateBaseImportada(baseId, {
+        status: "erro",
+      });
+    } finally {
+      // Clean up temp file
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[Import] Cleaned up temp file: ${filePath}`);
+      } catch (e) {
+        console.error("[Import] Failed to clean up temp file:", e);
+      }
+    }
+  }
 
   // GET filtros disponíveis para clientes
   app.get("/api/clientes/filtros", requireAuth, async (req, res) => {
