@@ -1,0 +1,81 @@
+Quero implementar um modelo de precificação inteligente para pedidos de lista, com:
+
+1) Tela de configuração de preços no admin
+2) Cálculo de preço proporcional ao volume, com duas âncoras:
+   - preço para 1 registro
+   - preço para N registros (ex: 1.000.000)
+
+### 1. Configuração de preços
+
+Criar uma tabela (ou model) chamada pricing_settings (ou configuracoes_precos) com campos:
+
+- id
+- preco_ancora_min (numeric)        // preço total para a menor âncora (normalmente 1 registro)
+- qtd_ancora_min (integer)          // normalmente 1
+- preco_ancora_max (numeric)        // preço total para a maior âncora (ex: preço para 1 milhão de registros)
+- qtd_ancora_max (integer)          // ex: 1000000
+- atualizado_em
+
+Seed inicial (pode ser):
+- qtd_ancora_min = 1
+- preco_ancora_min = 1.00
+- qtd_ancora_max = 1000000
+- preco_ancora_max = 2000.00
+
+Frontend:
+- Criar uma tela no admin chamada "Configuração de Preços".
+- Essa tela carrega o registro único de pricing_settings e permite editar:
+  - Preço por 1 registro (preco_ancora_min)
+  - Quantidade da âncora máxima (qtd_ancora_max)
+  - Preço total para essa quantidade (preco_ancora_max)
+- Ao salvar, enviar para um endpoint tipo PUT /api/pricing-settings.
+
+Opcional: na mesma tela, exibir uma pequena tabela de exemplo com quantidades fixas (1, 10, 100, 1000, 10000, 100000, qtd_ancora_max) e o preço calculado para cada uma usando a fórmula descrita abaixo.
+
+### 2. Função de cálculo de preço
+
+Criar um serviço/função utilitária, ex: calculateListPrice(qtdRegistros, pricingSettings), com a seguinte regra:
+
+Dados:
+- q1 = pricingSettings.qtd_ancora_min
+- p1 = pricingSettings.preco_ancora_min   // preço total para q1 registros
+- q2 = pricingSettings.qtd_ancora_max
+- p2 = pricingSettings.preco_ancora_max   // preço total para q2 registros
+
+Regras:
+
+- Se qtdRegistros <= q1:
+    precoTotal = (p1 / q1) * qtdRegistros   // proporcional à âncora mínima
+
+- Se q1 < qtdRegistros <= q2:
+    // interpolação linear no preço total
+    t = (qtdRegistros - q1) / (q2 - q1)
+    precoTotal = p1 + t * (p2 - p1)
+
+- Se qtdRegistros > q2:
+    // preço igual a p2 até q2 registros + resto com o mesmo preço unitário de q2
+    precoUnitarioMax = p2 / q2
+    precoTotal = p2 + (qtdRegistros - q2) * precoUnitarioMax
+
+A função deve retornar:
+- precoTotal
+- precoUnitario = precoTotal / qtdRegistros
+
+### 3. Integração com pedidos de lista
+
+Ao criar um pedido em pedidos_lista:
+
+- Carregar pricing_settings atual.
+- Calcular o preço usando calculateListPrice(quantidade_registros, pricingSettings).
+- Gravar no pedido:
+    - preco_unitario = precoUnitario
+    - custo_estimado = precoTotal
+    - custo_final = precoTotal (inicialmente)
+
+Na tela "Meus Pedidos":
+- Mostrar uma coluna "Valor Estimado" usando custo_estimado.
+
+Na tela "Admin Pedidos":
+- Mostrar "Valor Estimado" e, futuramente, permitir edição manual de custo_final se necessário.
+
+Não alterar o fluxo de aprovação e geração de arquivo, apenas enriquecer os pedidos com essas informações de preço.

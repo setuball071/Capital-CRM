@@ -390,6 +390,16 @@ export const pedidosLista = pgTable("pedidos_lista", {
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
 });
 
+// 6) pricing_settings - Configuração de preços para pedidos de lista
+export const pricingSettings = pgTable("pricing_settings", {
+  id: serial("id").primaryKey(),
+  precoAncoraMin: decimal("preco_ancora_min", { precision: 12, scale: 4 }).notNull().default("1.0000"), // preço total para qtd_ancora_min registros
+  qtdAncoraMin: integer("qtd_ancora_min").notNull().default(1), // normalmente 1
+  precoAncoraMax: decimal("preco_ancora_max", { precision: 12, scale: 2 }).notNull().default("2000.00"), // preço total para qtd_ancora_max registros
+  qtdAncoraMax: integer("qtd_ancora_max").notNull().default(1000000), // ex: 1.000.000
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+});
+
 // ===== INSERT SCHEMAS FOR BASE DE CLIENTES =====
 
 export const insertClientePessoaSchema = createInsertSchema(clientesPessoa, {
@@ -410,6 +420,13 @@ export const insertBaseImportadaSchema = createInsertSchema(basesImportadas, {
 
 export const insertPedidoListaSchema = createInsertSchema(pedidosLista, {}).omit({ id: true, criadoEm: true, atualizadoEm: true });
 
+export const insertPricingSettingsSchema = createInsertSchema(pricingSettings, {
+  precoAncoraMin: z.string().or(z.number()).transform(v => String(v)),
+  precoAncoraMax: z.string().or(z.number()).transform(v => String(v)),
+  qtdAncoraMin: z.number().int().positive(),
+  qtdAncoraMax: z.number().int().positive(),
+}).omit({ id: true, atualizadoEm: true });
+
 // ===== SELECT TYPES FOR BASE DE CLIENTES =====
 
 export type ClientePessoa = typeof clientesPessoa.$inferSelect;
@@ -426,6 +443,9 @@ export type InsertBaseImportada = z.infer<typeof insertBaseImportadaSchema>;
 
 export type PedidoLista = typeof pedidosLista.$inferSelect;
 export type InsertPedidoLista = z.infer<typeof insertPedidoListaSchema>;
+
+export type PricingSettings = typeof pricingSettings.$inferSelect;
+export type InsertPricingSettings = z.infer<typeof insertPricingSettingsSchema>;
 
 // ===== FILTROS PARA PEDIDOS LISTA =====
 

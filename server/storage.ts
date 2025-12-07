@@ -13,6 +13,7 @@ import {
   clientesContratos,
   basesImportadas,
   pedidosLista,
+  pricingSettings,
   type User,
   type InsertUser,
   type Bank,
@@ -36,6 +37,8 @@ import {
   type PedidoLista,
   type InsertPedidoLista,
   type FiltrosPedidoLista,
+  type PricingSettings,
+  type InsertPricingSettings,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -147,6 +150,10 @@ export interface IStorage {
   updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined>;
   getAllPedidosListaWithUser(): Promise<Array<PedidoLista & { coordenadorNome: string; coordenadorEmail: string }>>;
   updatePedidoListaStatus(id: number, status: string): Promise<PedidoLista | undefined>;
+  
+  // Pricing Settings
+  getPricingSettings(): Promise<PricingSettings | undefined>;
+  updatePricingSettings(data: Partial<InsertPricingSettings>): Promise<PricingSettings>;
 }
 
 export class DbStorage implements IStorage {
@@ -1091,6 +1098,38 @@ export class DbStorage implements IStorage {
       .where(eq(pedidosLista.id, id))
       .returning();
     return updated;
+  }
+
+  // ===== PRICING SETTINGS =====
+
+  async getPricingSettings(): Promise<PricingSettings | undefined> {
+    const [settings] = await db.select().from(pricingSettings).limit(1);
+    return settings;
+  }
+
+  async updatePricingSettings(data: Partial<InsertPricingSettings>): Promise<PricingSettings> {
+    // Check if settings exist
+    const existing = await this.getPricingSettings();
+    
+    if (existing) {
+      // Update existing
+      const [updated] = await db.update(pricingSettings)
+        .set({ ...data, atualizadoEm: new Date() })
+        .where(eq(pricingSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new with defaults
+      const [created] = await db.insert(pricingSettings)
+        .values({
+          precoAncoraMin: data.precoAncoraMin || "1.0000",
+          qtdAncoraMin: data.qtdAncoraMin || 1,
+          precoAncoraMax: data.precoAncoraMax || "2000.00",
+          qtdAncoraMax: data.qtdAncoraMax || 1000000,
+        })
+        .returning();
+      return created;
+    }
   }
 }
 
