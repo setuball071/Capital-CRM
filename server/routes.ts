@@ -2710,6 +2710,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { total } = await storage.searchClientesPessoa(filtros);
       
+      // Preço por registro (pode ser configurado via env var no futuro)
+      const PRECO_POR_REGISTRO = 0.05; // R$ 0,05 por registro
+      const custoEstimado = total * PRECO_POR_REGISTRO;
+      
       // Create pedido
       const pedido = await storage.createPedidoLista({
         coordenadorId: req.user!.id,
@@ -2717,6 +2721,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidadeRegistros: total,
         tipo: "exportacao_base",
         status: "pendente",
+        precoUnitario: String(PRECO_POR_REGISTRO),
+        custoEstimado: String(custoEstimado),
+        statusFinanceiro: "pendente",
       });
       
       return res.json({
@@ -2780,6 +2787,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidade_registros: p.quantidadeRegistros,
         tipo: p.tipo,
         status: p.status,
+        preco_unitario: p.precoUnitario,
+        custo_estimado: p.custoEstimado,
+        custo_final: p.custoFinal,
+        status_financeiro: p.statusFinanceiro,
+        arquivo_path: p.arquivoPath,
+        arquivo_gerado_em: p.arquivoGeradoEm,
         criado_em: p.criadoEm,
         atualizado_em: p.atualizadoEm,
       })));
@@ -2811,15 +2824,154 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(400).json({ message: `Pedido já está com status: ${pedido.status}` });
       }
 
-      const updated = await storage.updatePedidoListaStatus(id, "aprovado");
+      // Update status to "aprovado" first
+      await storage.updatePedidoListaStatus(id, "aprovado");
+      
+      // Start async file generation (fire-and-forget)
+      generatePedidoListaFile(id, pedido).catch(async (err) => {
+        console.error("[PedidoLista] Error generating file:", err);
+        try {
+          await storage.updatePedidoLista(id, { status: "erro" });
+        } catch (e) {
+          console.error("[PedidoLista] Failed to update status on error:", e);
+        }
+      });
       
       return res.json({
-        message: "Pedido aprovado com sucesso",
-        pedido: updated,
+        message: "Pedido aprovado com sucesso. O arquivo está sendo gerado.",
+        pedido: { id, status: "aprovado" },
       });
     } catch (error) {
       console.error("Approve pedido error:", error);
       return res.status(500).json({ message: "Erro ao aprovar pedido" });
+    }
+  });
+
+  // Function to generate CSV file for approved pedido
+  async function generatePedidoListaFile(pedidoId: number, pedido: any) {
+    console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId}`);
+    
+    try {
+      // Ensure exports directory exists
+      const exportsDir = path.join(os.tmpdir(), "exports");
+      if (!fs.existsSync(exportsDir)) {
+        fs.mkdirSync(exportsDir, { recursive: true });
+      }
+      
+      // Get filtered clients using stored filters
+      const filtros = pedido.filtrosUsados || {};
+      const { clientes } = await storage.searchClientesPessoa(filtros);
+      
+      console.log(`[PedidoLista] Found ${clientes.length} clients for pedido ${pedidoId}`);
+      
+      // Get folha data for each client
+      const clientesComFolha = await Promise.all(
+        clientes.map(async (cliente) => {
+          const folhas = await storage.getFolhaMesByPessoaId(cliente.id);
+          const folhaAtual = folhas.length > 0 ? folhas[0] : null;
+          return { ...cliente, folhaAtual };
+        })
+      );
+      
+      // Generate CSV content
+      const headers = [
+        "CPF", "Matricula", "Nome", "Convenio", "Orgao", "UF", "Municipio",
+        "Situacao Funcional", "Telefones",
+        "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
+        "Liquido"
+      ];
+      
+      const rows = clientesComFolha.map(c => [
+        c.cpf || "",
+        c.matricula || "",
+        c.nome || "",
+        c.convenio || "",
+        c.orgaodesc || "",
+        c.uf || "",
+        c.municipio || "",
+        c.sitFunc || "",
+        (c.telefonesBase || []).join("; "),
+        c.folhaAtual?.margemSaldo70 || "",
+        c.folhaAtual?.margemSaldo35 || "",
+        c.folhaAtual?.margemCartaoCredito5 || "",
+        c.folhaAtual?.margemCartaoBeneficio5 || "",
+        c.folhaAtual?.liquido || "",
+      ]);
+      
+      // Create CSV string
+      const csvContent = [
+        headers.join(";"),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
+      ].join("\n");
+      
+      // Write file
+      const fileName = `lista-clientes-${pedidoId}-${Date.now()}.csv`;
+      const filePath = path.join(exportsDir, fileName);
+      fs.writeFileSync(filePath, "\ufeff" + csvContent, "utf-8"); // BOM for Excel compatibility
+      
+      console.log(`[PedidoLista] File generated: ${filePath}`);
+      
+      // Update pedido with file info
+      await storage.updatePedidoLista(pedidoId, {
+        arquivoPath: filePath,
+        arquivoGeradoEm: new Date(),
+        status: "processado",
+        custoFinal: pedido.custoEstimado, // Set custo_final = custo_estimado by default
+      });
+      
+      console.log(`[PedidoLista] Pedido ${pedidoId} updated with file path`);
+      
+      // TODO: Implement cleanup routine for files older than 30 days
+      
+    } catch (error) {
+      console.error(`[PedidoLista] Error generating file for pedido ${pedidoId}:`, error);
+      await storage.updatePedidoLista(pedidoId, { status: "erro" });
+      throw error;
+    }
+  }
+
+  // GET /api/pedidos-lista/:id/download - Download generated file
+  app.get("/api/pedidos-lista/:id/download", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const pedido = await storage.getPedidoLista(id);
+      if (!pedido) {
+        return res.status(404).json({ message: "Pedido não encontrado" });
+      }
+
+      // Check access: owner (coordenador) or master
+      const isOwner = pedido.coordenadorId === req.user!.id;
+      const isMaster = hasRole(req.user, ["master"]);
+      
+      if (!isOwner && !isMaster) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      // Check if file is ready
+      if (pedido.status !== "processado" || !pedido.arquivoPath) {
+        return res.status(400).json({ 
+          message: pedido.status === "aprovado" 
+            ? "O arquivo ainda está sendo gerado. Aguarde alguns instantes."
+            : "Arquivo não disponível para download" 
+        });
+      }
+
+      // Check if file exists
+      if (!fs.existsSync(pedido.arquivoPath)) {
+        return res.status(404).json({ message: "Arquivo não encontrado no servidor" });
+      }
+
+      // Send file
+      const fileName = `lista-clientes-${id}.csv`;
+      res.download(pedido.arquivoPath, fileName);
+      
+    } catch (error) {
+      console.error("Download pedido error:", error);
+      return res.status(500).json({ message: "Erro ao baixar arquivo" });
     }
   });
 
