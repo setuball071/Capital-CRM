@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -105,6 +105,12 @@ export function AppSidebar() {
       url: "/admin-pedidos-lista",
       icon: ShieldCheck,
       show: isMaster, // Only master can access admin panel
+    },
+    {
+      title: "Config. Preços",
+      url: "/config-precos",
+      icon: DollarSign,
+      show: isMaster, // Only master can configure pricing
     },
     {
       title: "Usuários",

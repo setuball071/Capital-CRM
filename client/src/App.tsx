@@ -21,6 +21,7 @@ import BasesClientesPage from "@/pages/bases-clientes";
 import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
 import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
+import ConfigPrecosPage from "@/pages/config-precos";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -242,6 +243,9 @@ function Router() {
               </Route>
               <Route path="/admin-pedidos-lista">
                 {() => <MasterRoute component={AdminPedidosListaPage} />}
+              </Route>
+              <Route path="/config-precos">
+                {() => <MasterRoute component={ConfigPrecosPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

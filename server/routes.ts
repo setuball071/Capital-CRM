@@ -131,32 +131,46 @@ interface PricingResult {
 }
 
 /**
- * Calcula o preço de uma lista de registros com interpolação linear
+ * Calcula o preço de uma lista de registros com interpolação linear no preço unitário
+ * 
+ * Modelo de precificação:
+ * - V1 (qtdAncoraMin) registros custam P1 (precoAncoraMin) por registro
+ * - V2 (qtdAncoraMax) registros custam P2 (precoAncoraMax) por registro
+ * - Para quantidades entre V1 e V2: interpolação linear no preço unitário
+ * - Para quantidades <= V1: usa preço unitário P1
+ * - Para quantidades > V2: usa preço unitário P2
+ * 
+ * Fórmula: precoUnitario = P1 - ((V - V1) / (V2 - V1)) * (P1 - P2)
+ * 
  * @param qtdRegistros - Quantidade de registros
- * @param settings - Configurações de preço com âncoras
+ * @param settings - Configurações de preço com âncoras (P1, P2 são preços unitários)
  */
 function calculateListPrice(qtdRegistros: number, settings: PricingSettings): PricingResult {
-  const q1 = settings.qtdAncoraMin;
-  const p1 = parseFloat(settings.precoAncoraMin);
-  const q2 = settings.qtdAncoraMax;
-  const p2 = parseFloat(settings.precoAncoraMax);
-  
-  let precoTotal: number;
-  
-  if (qtdRegistros <= q1) {
-    // Proporcional à âncora mínima
-    precoTotal = (p1 / q1) * qtdRegistros;
-  } else if (qtdRegistros <= q2) {
-    // Interpolação linear no preço total
-    const t = (qtdRegistros - q1) / (q2 - q1);
-    precoTotal = p1 + t * (p2 - p1);
-  } else {
-    // Preço igual a p2 até q2 registros + resto com o mesmo preço unitário de q2
-    const precoUnitarioMax = p2 / q2;
-    precoTotal = p2 + (qtdRegistros - q2) * precoUnitarioMax;
+  if (qtdRegistros <= 0) {
+    return { precoTotal: 0, precoUnitario: 0 };
   }
   
-  const precoUnitario = qtdRegistros > 0 ? precoTotal / qtdRegistros : 0;
+  const q1 = settings.qtdAncoraMin;
+  const p1 = parseFloat(settings.precoAncoraMin); // Preço UNITÁRIO para q1 registros
+  const q2 = settings.qtdAncoraMax;
+  const p2 = parseFloat(settings.precoAncoraMax); // Preço UNITÁRIO para q2 registros
+  
+  let precoUnitario: number;
+  
+  if (qtdRegistros <= q1) {
+    // Usa o preço unitário da âncora mínima
+    precoUnitario = p1;
+  } else if (qtdRegistros <= q2) {
+    // Interpolação linear no preço UNITÁRIO entre as âncoras
+    // Fórmula: precoUnitario = P1 - ((V - V1) / (V2 - V1)) * (P1 - P2)
+    precoUnitario = p1 - ((qtdRegistros - q1) / (q2 - q1)) * (p1 - p2);
+  } else {
+    // Usa o preço unitário da âncora máxima para quantidades acima de q2
+    precoUnitario = p2;
+  }
+  
+  // Calcula o preço total = quantidade * preço unitário
+  const precoTotal = qtdRegistros * precoUnitario;
   
   return {
     precoTotal: Math.round(precoTotal * 100) / 100, // Round to 2 decimals
@@ -165,11 +179,12 @@ function calculateListPrice(qtdRegistros: number, settings: PricingSettings): Pr
 }
 
 // Default pricing settings (used when no settings exist in DB)
+// Preços unitários: P1=R$0.20 para V1=100 registros, P2=R$0.10 para V2=1000 registros
 const DEFAULT_PRICING_SETTINGS = {
-  qtdAncoraMin: 1,
-  precoAncoraMin: "1.0000",
-  qtdAncoraMax: 1000000,
-  precoAncoraMax: "2000.00",
+  qtdAncoraMin: 100,
+  precoAncoraMin: "0.2000", // R$0.20 por registro
+  qtdAncoraMax: 1000,
+  precoAncoraMax: "0.1000", // R$0.10 por registro
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
