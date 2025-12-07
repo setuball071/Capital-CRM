@@ -1,0 +1,88 @@
+Quero evoluir o módulo de "Compra de Lista" com duas funcionalidades:
+
+1) Precificação do pedido
+2) Geração de arquivo para download após aprovação
+
+### 1. Precificação
+
+Na tabela pedidos_lista, adicionar os campos:
+
+- preco_unitario numeric
+- custo_estimado numeric
+- custo_final numeric
+- status_financeiro (string opcional, ex: "pendente", "confirmado")
+
+Regra de cálculo:
+
+- Definir uma constante ou variável de ambiente, por exemplo:
+  PRICE_POR_REGISTRO_BASE = 0.05 (R$ 0,05 por registro)
+- Quando o coordenador criar um novo pedido de lista:
+  - calcular custo_estimado = quantidade_registros * PRICE_POR_REGISTRO_BASE
+  - salvar preco_unitario e custo_estimado no registro
+- O custo_final pode começar igual ao custo_estimado. No futuro posso ajustar manualmente, então deixe o campo pronto.
+
+Exibição:
+
+- Na tela "Meus Pedidos", mostrar uma coluna "Valor Estimado" com custo_estimado.
+- Na tela "Admin Pedidos", mostrar:
+  - quantidade_registros
+  - custo_estimado
+  - e, quando preenchido, custo_final.
+
+### 2. Geração de arquivo e download
+
+Quero que, ao APROVAR um pedido, o sistema gere automaticamente um arquivo com a lista de clientes filtrados e disponibilize para download.
+
+Mudanças necessárias:
+
+- Na tabela pedidos_lista, adicionar:
+  - arquivo_path (string)
+  - arquivo_gerado_em (timestamp)
+
+Fluxo ao aprovar:
+
+- Hoje já existe o endpoint de aprovação do pedido.
+- Ajustar esse fluxo para:
+
+  1. Manter o status do pedido como "aprovado".
+  2. Disparar uma função/serviço assíncrono que:
+     - Reaplica os filtros armazenados em pedidos_lista.filtros_usados.
+     - Busca os clientes correspondentes na base (clientes_pessoa + clientes_folha_mes + clientes_contratos, conforme o filtro).
+     - Gera um arquivo CSV (ou XLSX simples) com as colunas principais, por exemplo:
+       - cpf, matricula, nome, convenio, orgao, uf, municipio, sit_func, telefones, margens principais, etc.
+     - Salva esse arquivo em um diretório temporário do servidor, ex: /tmp/exports.
+     - Atualiza o pedido_lista com:
+       - arquivo_path = caminho completo do arquivo
+       - arquivo_gerado_em = now()
+       - status = "processado" (ou "concluido")
+       - custo_final (se ainda estiver null, copiar custo_estimado)
+
+- Garantir que a geração do arquivo não bloqueie a requisição de aprovação.
+  - A aprovação deve responder rápido.
+  - A geração pode rodar em background (por exemplo, usando setImmediate, setTimeout ou um job simples no próprio processo).
+
+Endpoint de download:
+
+- Criar endpoint: GET /api/pedidos-lista/:id/download
+  - Verifica se o usuário é dono do pedido (coordenador) ou MASTER.
+  - Verifica se existe arquivo_path e se o status do pedido é "processado"/"concluido".
+  - Se ok, faz res.download(arquivo_path, 'lista-clientes-<id>.csv').
+
+Frontend:
+
+- Na tela "Admin Pedidos":
+  - Quando o status estiver "aprovado" mas ainda sem arquivo_gerado_em, exibir algo como "Aprovado (gerando arquivo)".
+  - Quando arquivo_gerado_em estiver preenchido, status deve aparecer como "Processado".
+
+- Na tela "Compra de Lista" -> "Meus Pedidos":
+  - Manter as colunas já existentes.
+  - Adicionar:
+    - coluna "Valor Estimado"
+    - coluna "Ações":
+      - Se o pedido estiver "processado" e tiver arquivo_gerado_em, exibir botão "Baixar lista" que chama o endpoint /api/pedidos-lista/:id/download.
+      - Nos outros status, exibir apenas um texto (Pendente, Aprovado, etc).
+
+Cuidados:
+
+- Não apagar o arquivo imediatamente após download, para o usuário poder baixar mais de uma vez.
+- Se possível, deixar um TODO/comentário para no futuro implementarmos uma rotina de limpeza de arquivos antigos (ex.: mais de 30 dias).
