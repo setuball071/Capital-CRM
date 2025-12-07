@@ -12,11 +12,13 @@ import {
   insertSimulationSchema,
   roteirosImportSchema,
   filtrosPedidoListaSchema,
+  insertPricingSettingsSchema,
   type User,
   type InsertCoefficientTable,
   USER_ROLES,
   type UserRole,
   type FiltrosPedidoLista,
+  type PricingSettings,
 } from "@shared/schema";
 import * as XLSX from "xlsx";
 import multer from "multer";
@@ -120,6 +122,55 @@ function requireUserManagementAccess(req: Request, res: Response, next: NextFunc
 
 // Legacy alias for backward compatibility
 const requireManagerAccess = requireUserManagementAccess;
+
+// ===== PRICING CALCULATION =====
+
+interface PricingResult {
+  precoTotal: number;
+  precoUnitario: number;
+}
+
+/**
+ * Calcula o preço de uma lista de registros com interpolação linear
+ * @param qtdRegistros - Quantidade de registros
+ * @param settings - Configurações de preço com âncoras
+ */
+function calculateListPrice(qtdRegistros: number, settings: PricingSettings): PricingResult {
+  const q1 = settings.qtdAncoraMin;
+  const p1 = parseFloat(settings.precoAncoraMin);
+  const q2 = settings.qtdAncoraMax;
+  const p2 = parseFloat(settings.precoAncoraMax);
+  
+  let precoTotal: number;
+  
+  if (qtdRegistros <= q1) {
+    // Proporcional à âncora mínima
+    precoTotal = (p1 / q1) * qtdRegistros;
+  } else if (qtdRegistros <= q2) {
+    // Interpolação linear no preço total
+    const t = (qtdRegistros - q1) / (q2 - q1);
+    precoTotal = p1 + t * (p2 - p1);
+  } else {
+    // Preço igual a p2 até q2 registros + resto com o mesmo preço unitário de q2
+    const precoUnitarioMax = p2 / q2;
+    precoTotal = p2 + (qtdRegistros - q2) * precoUnitarioMax;
+  }
+  
+  const precoUnitario = qtdRegistros > 0 ? precoTotal / qtdRegistros : 0;
+  
+  return {
+    precoTotal: Math.round(precoTotal * 100) / 100, // Round to 2 decimals
+    precoUnitario: Math.round(precoUnitario * 10000) / 10000, // Round to 4 decimals
+  };
+}
+
+// Default pricing settings (used when no settings exist in DB)
+const DEFAULT_PRICING_SETTINGS = {
+  qtdAncoraMin: 1,
+  precoAncoraMin: "1.0000",
+  qtdAncoraMax: 1000000,
+  precoAncoraMax: "2000.00",
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== AUTH ROUTES =====
@@ -2651,6 +2702,86 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // ===== PRICING SETTINGS ENDPOINTS =====
+
+  // GET pricing settings - Master only
+  app.get("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
+    try {
+      let settings = await storage.getPricingSettings();
+      
+      // If no settings exist, create default ones
+      if (!settings) {
+        settings = await storage.updatePricingSettings({
+          precoAncoraMin: DEFAULT_PRICING_SETTINGS.precoAncoraMin,
+          qtdAncoraMin: DEFAULT_PRICING_SETTINGS.qtdAncoraMin,
+          precoAncoraMax: DEFAULT_PRICING_SETTINGS.precoAncoraMax,
+          qtdAncoraMax: DEFAULT_PRICING_SETTINGS.qtdAncoraMax,
+        });
+      }
+      
+      // Generate example prices for display
+      const exampleQuantities = [1, 10, 100, 1000, 10000, 100000, settings.qtdAncoraMax];
+      const examples = exampleQuantities.map(qty => ({
+        quantidade: qty,
+        ...calculateListPrice(qty, settings!),
+      }));
+      
+      return res.json({
+        settings: {
+          precoAncoraMin: settings.precoAncoraMin,
+          qtdAncoraMin: settings.qtdAncoraMin,
+          precoAncoraMax: settings.precoAncoraMax,
+          qtdAncoraMax: settings.qtdAncoraMax,
+          atualizadoEm: settings.atualizadoEm,
+        },
+        examples,
+      });
+    } catch (error) {
+      console.error("Get pricing settings error:", error);
+      return res.status(500).json({ message: "Erro ao buscar configurações de preços" });
+    }
+  });
+
+  // PUT pricing settings - Master only
+  app.put("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = insertPricingSettingsSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+      
+      const settings = await storage.updatePricingSettings(result.data);
+      
+      // Generate example prices for display
+      const exampleQuantities = [1, 10, 100, 1000, 10000, 100000, settings.qtdAncoraMax];
+      const examples = exampleQuantities.map(qty => ({
+        quantidade: qty,
+        ...calculateListPrice(qty, settings),
+      }));
+      
+      return res.json({
+        message: "Configurações atualizadas com sucesso",
+        settings: {
+          precoAncoraMin: settings.precoAncoraMin,
+          qtdAncoraMin: settings.qtdAncoraMin,
+          precoAncoraMax: settings.precoAncoraMax,
+          qtdAncoraMax: settings.qtdAncoraMax,
+          atualizadoEm: settings.atualizadoEm,
+        },
+        examples,
+      });
+    } catch (error) {
+      console.error("Update pricing settings error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar configurações de preços" });
+    }
+  });
+
+  // ===== PEDIDOS LISTA ENDPOINTS =====
+
   // POST simular pedido de lista - Coordenador or Master
   app.post("/api/pedidos-lista/simular", requireAuth, async (req, res) => {
     try {
@@ -2671,9 +2802,19 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { clientes, total } = await storage.searchClientesPessoa(filtros);
       
-      // Return preview (first 10) and total
+      // Get pricing settings for cost calculation
+      let settings = await storage.getPricingSettings();
+      if (!settings) {
+        settings = await storage.updatePricingSettings(DEFAULT_PRICING_SETTINGS);
+      }
+      
+      const pricing = calculateListPrice(total, settings);
+      
+      // Return preview (first 10), total, and pricing
       return res.json({
         total,
+        custoEstimado: pricing.precoTotal,
+        precoUnitario: pricing.precoUnitario,
         preview: clientes.slice(0, 10).map(c => ({
           matricula: c.matricula,
           nome: c.nome,
@@ -2710,9 +2851,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { total } = await storage.searchClientesPessoa(filtros);
       
-      // Preço por registro (pode ser configurado via env var no futuro)
-      const PRECO_POR_REGISTRO = 0.05; // R$ 0,05 por registro
-      const custoEstimado = total * PRECO_POR_REGISTRO;
+      // Get pricing settings for dynamic cost calculation
+      let settings = await storage.getPricingSettings();
+      if (!settings) {
+        settings = await storage.updatePricingSettings(DEFAULT_PRICING_SETTINGS);
+      }
+      
+      const pricing = calculateListPrice(total, settings);
       
       // Create pedido
       const pedido = await storage.createPedidoLista({
@@ -2721,8 +2866,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidadeRegistros: total,
         tipo: "exportacao_base",
         status: "pendente",
-        precoUnitario: String(PRECO_POR_REGISTRO),
-        custoEstimado: String(custoEstimado),
+        precoUnitario: String(pricing.precoUnitario),
+        custoEstimado: String(pricing.precoTotal),
         statusFinanceiro: "pendente",
       });
       
