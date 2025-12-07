@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -64,8 +64,12 @@ interface PedidoLista {
   quantidadeRegistros: number;
   tipo: string;
   status: string;
+  precoUnitario: string | null;
   custoEstimado: string | null;
   custoFinal: string | null;
+  statusFinanceiro: string | null;
+  arquivoPath: string | null;
+  arquivoGeradoEm: string | null;
   criadoEm: string;
   atualizadoEm: string;
 }
@@ -625,8 +629,10 @@ export default function CompraLista() {
                       <TableHead>ID</TableHead>
                       <TableHead>Filtros</TableHead>
                       <TableHead>Quantidade</TableHead>
+                      <TableHead>Valor Estimado</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Criado em</TableHead>
+                      <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -637,9 +643,32 @@ export default function CompraLista() {
                           {formatFiltros(pedido.filtrosUsados)}
                         </TableCell>
                         <TableCell>{pedido.quantidadeRegistros?.toLocaleString("pt-BR") || 0}</TableCell>
+                        <TableCell>
+                          {pedido.custoEstimado 
+                            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(pedido.custoEstimado))
+                            : "-"
+                          }
+                        </TableCell>
                         <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                         <TableCell>
                           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        </TableCell>
+                        <TableCell>
+                          {pedido.status === "processado" && pedido.arquivoGeradoEm ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`/api/pedidos-lista/${pedido.id}/download`, "_blank")}
+                              data-testid={`button-download-${pedido.id}`}
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Baixar
+                            </Button>
+                          ) : pedido.status === "aprovado" ? (
+                            <span className="text-sm text-muted-foreground">Gerando...</span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

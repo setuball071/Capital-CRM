@@ -29,6 +29,12 @@ interface PedidoAdmin {
   quantidade_registros: number;
   tipo: string;
   status: string;
+  preco_unitario: string | null;
+  custo_estimado: string | null;
+  custo_final: string | null;
+  status_financeiro: string | null;
+  arquivo_path: string | null;
+  arquivo_gerado_em: string | null;
   criado_em: string;
   atualizado_em: string;
 }
@@ -83,19 +89,28 @@ export default function AdminPedidosLista() {
     },
   });
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, arquivoGeradoEm: string | null) => {
     switch (status) {
       case "pendente":
         return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
       case "aprovado":
-        return <Badge className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Aprovado</Badge>;
+        return <Badge className="gap-1 bg-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Gerando arquivo...</Badge>;
+      case "processado":
+        return <Badge className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Processado</Badge>;
       case "rejeitado":
         return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Rejeitado</Badge>;
       case "cancelado":
         return <Badge variant="secondary" className="gap-1"><AlertCircle className="h-3 w-3" /> Cancelado</Badge>;
+      case "erro":
+        return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const formatCurrency = (value: string | null) => {
+    if (!value) return "-";
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(value));
   };
 
   const extractConvenio = (filtros: Record<string, any>) => {
@@ -195,6 +210,7 @@ export default function AdminPedidosLista() {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Convênio</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
+                  <TableHead className="text-right">Custo Estimado</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -218,7 +234,10 @@ export default function AdminPedidosLista() {
                     <TableCell className="text-right font-medium">
                       {pedido.quantidade_registros.toLocaleString("pt-BR")}
                     </TableCell>
-                    <TableCell>{getStatusBadge(pedido.status)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(pedido.custo_estimado)}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(pedido.status, pedido.arquivo_gerado_em)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -268,6 +287,8 @@ export default function AdminPedidosLista() {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Convênio</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
+                  <TableHead className="text-right">Custo Estimado</TableHead>
+                  <TableHead className="text-right">Custo Final</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -288,7 +309,13 @@ export default function AdminPedidosLista() {
                     <TableCell className="text-right font-medium">
                       {pedido.quantidade_registros.toLocaleString("pt-BR")}
                     </TableCell>
-                    <TableCell>{getStatusBadge(pedido.status)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(pedido.custo_estimado)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(pedido.custo_final)}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(pedido.status, pedido.arquivo_gerado_em)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
