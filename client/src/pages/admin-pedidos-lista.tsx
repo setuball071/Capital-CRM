@@ -89,14 +89,16 @@ export default function AdminPedidosLista() {
     },
   });
 
-  const getStatusBadge = (status: string, arquivoGeradoEm: string | null) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "pendente":
         return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
       case "aprovado":
+        return <Badge className="gap-1 bg-blue-600"><CheckCircle className="h-3 w-3" /> Aprovado</Badge>;
+      case "processando":
         return <Badge className="gap-1 bg-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Gerando arquivo...</Badge>;
-      case "processado":
-        return <Badge className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Processado</Badge>;
+      case "concluido":
+        return <Badge className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Concluído</Badge>;
       case "rejeitado":
         return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Rejeitado</Badge>;
       case "cancelado":
@@ -237,7 +239,7 @@ export default function AdminPedidosLista() {
                     <TableCell className="text-right font-medium">
                       {formatCurrency(pedido.custo_estimado)}
                     </TableCell>
-                    <TableCell>{getStatusBadge(pedido.status, pedido.arquivo_gerado_em)}</TableCell>
+                    <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -315,7 +317,7 @@ export default function AdminPedidosLista() {
                     <TableCell className="text-right font-medium">
                       {formatCurrency(pedido.custo_final)}
                     </TableCell>
-                    <TableCell>{getStatusBadge(pedido.status, pedido.arquivo_gerado_em)}</TableCell>
+                    <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -654,7 +654,7 @@ export default function CompraLista() {
                           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                         </TableCell>
                         <TableCell>
-                          {pedido.status === "processado" && pedido.arquivoGeradoEm ? (
+                          {pedido.status === "concluido" && pedido.arquivoGeradoEm ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -664,8 +664,13 @@ export default function CompraLista() {
                               <Download className="w-4 h-4 mr-1" />
                               Baixar
                             </Button>
+                          ) : pedido.status === "processando" ? (
+                            <span className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Gerando...
+                            </span>
                           ) : pedido.status === "aprovado" ? (
-                            <span className="text-sm text-muted-foreground">Gerando...</span>
+                            <span className="text-sm text-muted-foreground">Aguardando...</span>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
