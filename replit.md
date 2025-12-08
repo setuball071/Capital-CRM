@@ -75,6 +75,19 @@ The client database module provides comprehensive management for client bases. A
 - Simulation preview before creating purchase requests
 - Status tracking for imports and requests
 
+**Pricing Model** (Package-based):
+The system uses a fixed PACKAGE-based pricing model instead of per-record pricing:
+- 100 records: R$37.90
+- 500 records: R$97.90
+- 1000 records: R$197.90
+- 2000 records: R$297.90
+- 5000 records: R$597.90
+- 8000 records: R$797.90
+- 10000 records: R$897.90
+- 15000 records: R$997.90
+
+The `calculatePackagePrice()` function selects the appropriate package based on record quantity. Orders above 15,000 records use the largest package. Package configuration is defined in the `PACOTES_PRECO` constant in server/routes.ts.
+
 ### Component Architecture
 
 The UI adheres to Atomic Design principles using shadcn/ui. Key pages include the Calculator Page for simulations (with dynamic filtering, real-time calculations, and multi-format export), and Coefficient Tables Management for CRUD operations, bulk CSV import/export, filtering, and hierarchical grouping. User experience features include dynamic dropdowns, clear validation, responsive design, and smart search.
