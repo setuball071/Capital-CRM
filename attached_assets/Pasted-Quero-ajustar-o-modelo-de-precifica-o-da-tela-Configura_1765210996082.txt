@@ -1,0 +1,126 @@
+Quero ajustar o modelo de precificação da tela “Configuração de Preços” (Configuração de Preços para compra de listas de clientes).
+
+1. Objetivo geral
+
+Manter o modelo de duas âncoras com interpolação linear do preço unitário, mas com novos parâmetros padrão e algumas regras de negócio:
+
+Lote mínimo: 100 registros
+
+100 registros devem custar R$ 50,00
+
+A partir daí, o preço unitário precisa cair de forma agressiva, de modo que:
+
+cerca de 1.000 registros fiquem próximos de R$ 200,00
+
+lotes maiores (10k, 20k, 50k) tenham preço por registro bem mais baixo
+
+Não quero mudar a ideia de interpolação linear, apenas ajustar as âncoras e impor regras.
+
+2. Ajustes nas âncoras (valores padrão)
+
+Na tela de configuração de preços, defina como valores padrão:
+
+Âncora Mínima (V1, P1):
+
+Quantidade (V1) = 100
+
+Preço unitário (P1) = 0.50
+(ou seja, 100 registros → R$ 50,00)
+
+Âncora Máxima (V2, P2):
+
+Quantidade (V2) = 50000
+
+Preço unitário (P2) = 0.03
+
+A interpolação linear entre essas duas âncoras deve continuar funcionando exatamente como hoje, só que com esses novos valores padrão.
+
+Mantém-se a lógica:
+
+Até V1 → usa P1
+
+Entre V1 e V2 → interpolação linear entre P1 e P2
+
+Acima de V2 → usa P2
+
+3. Regra de lote mínimo
+
+Implementar a regra de lote mínimo de 100 registros em toda a aplicação:
+
+Na tela de Configuração de Preços, deixar claro que o cálculo considera mínimo de 100.
+
+Na geração de pedidos de lista (tela de “Compra de Lista” / pedidos aprovados), qualquer cálculo de preço:
+
+se a quantidade total de registros do pedido for menor que 100, considerar 100 como quantidade mínima para cálculo de preço.
+
+Exemplo: se o filtro retornou 61 registros, o valor cobrado deve ser o equivalente a 100 registros (R$ 50,00 com o modelo atual).
+
+4. Atualizar tabela de exemplos (“Tabela de Preços”)
+
+Na tabela de exemplos que aparece ao lado do modelo, atualizar para refletir os novos padrões.
+
+Quero que a tabela de exemplos mostre pelo menos estes pontos (usando a função real de cálculo, não valores fixos):
+
+100 registros
+
+500 registros
+
+1.000 registros
+
+2.000 registros
+
+3.000 registros
+
+5.000 registros
+
+10.000 registros
+
+20.000 registros
+
+50.000 registros
+
+A tabela deve mostrar:
+
+Quantidade
+
+Preço Total
+
+Preço/Registro
+
+Assim consigo comparar rapidamente com o mercado.
+
+5. Conferência de consistência
+
+Garantir que:
+
+A mesma função de cálculo de preço unitário/total usada na tela de Configuração de Preços seja reutilizada:
+
+na tela de Administração de Pedidos (quando o admin aprova um pedido)
+
+na tela Meus Pedidos (quando o usuário vê o valor do pedido aprovado)
+
+Não deixar nenhuma lógica duplicada de cálculo de preço. Centralizar o cálculo em um helper ou serviço compartilhado (no backend) e reutilizar em todos os pontos.
+
+6. Explicação na UI (opcional, mas importante)
+
+Na seção “Como funciona o cálculo”:
+
+Atualize o texto para refletir os novos valores padrão (100 registros como mínimo).
+
+Deixe claro:
+
+Lote mínimo de 100 registros.
+
+Interpolação linear entre as âncoras.
+
+Acima de V2, usa preço unitário da âncora máxima.
+
+Use o código atual da tela de Configuração de Preços e das rotas de pedidos como base, apenas ajustando:
+
+valores padrão das âncoras
+
+regra de mínimo 100 registros
+
+tabela de exemplos
+
+reaproveitamento da função de cálculo em todos os pontos de uso.

@@ -130,10 +130,14 @@ interface PricingResult {
   precoUnitario: number;
 }
 
+// Lote mínimo para cálculo de preço
+const LOTE_MINIMO = 100;
+
 /**
  * Calcula o preço de uma lista de registros com interpolação linear no preço unitário
  * 
  * Modelo de precificação:
+ * - Lote mínimo de 100 registros (cobra-se 100 mesmo que o filtro retorne menos)
  * - V1 (qtdAncoraMin) registros custam P1 (precoAncoraMin) por registro
  * - V2 (qtdAncoraMax) registros custam P2 (precoAncoraMax) por registro
  * - Para quantidades entre V1 e V2: interpolação linear no preço unitário
@@ -144,11 +148,15 @@ interface PricingResult {
  * 
  * @param qtdRegistros - Quantidade de registros
  * @param settings - Configurações de preço com âncoras (P1, P2 são preços unitários)
+ * @param applyMinimum - Se true, aplica o lote mínimo de 100 registros (default: true)
  */
-function calculateListPrice(qtdRegistros: number, settings: PricingSettings): PricingResult {
+function calculateListPrice(qtdRegistros: number, settings: PricingSettings, applyMinimum: boolean = true): PricingResult {
   if (qtdRegistros <= 0) {
     return { precoTotal: 0, precoUnitario: 0 };
   }
+  
+  // Aplica lote mínimo para cálculo de preço
+  const qtdParaCalculo = applyMinimum ? Math.max(qtdRegistros, LOTE_MINIMO) : qtdRegistros;
   
   const q1 = settings.qtdAncoraMin;
   const p1 = parseFloat(settings.precoAncoraMin); // Preço UNITÁRIO para q1 registros
@@ -157,20 +165,20 @@ function calculateListPrice(qtdRegistros: number, settings: PricingSettings): Pr
   
   let precoUnitario: number;
   
-  if (qtdRegistros <= q1) {
+  if (qtdParaCalculo <= q1) {
     // Usa o preço unitário da âncora mínima
     precoUnitario = p1;
-  } else if (qtdRegistros <= q2) {
+  } else if (qtdParaCalculo <= q2) {
     // Interpolação linear no preço UNITÁRIO entre as âncoras
     // Fórmula: precoUnitario = P1 - ((V - V1) / (V2 - V1)) * (P1 - P2)
-    precoUnitario = p1 - ((qtdRegistros - q1) / (q2 - q1)) * (p1 - p2);
+    precoUnitario = p1 - ((qtdParaCalculo - q1) / (q2 - q1)) * (p1 - p2);
   } else {
     // Usa o preço unitário da âncora máxima para quantidades acima de q2
     precoUnitario = p2;
   }
   
-  // Calcula o preço total = quantidade * preço unitário
-  const precoTotal = qtdRegistros * precoUnitario;
+  // Calcula o preço total = quantidade para cálculo * preço unitário
+  const precoTotal = qtdParaCalculo * precoUnitario;
   
   return {
     precoTotal: Math.round(precoTotal * 100) / 100, // Round to 2 decimals
@@ -179,12 +187,13 @@ function calculateListPrice(qtdRegistros: number, settings: PricingSettings): Pr
 }
 
 // Default pricing settings (used when no settings exist in DB)
-// Preços unitários: P1=R$0.20 para V1=100 registros, P2=R$0.10 para V2=1000 registros
+// Preços unitários: P1=R$0.50 para V1=100 registros, P2=R$0.03 para V2=50000 registros
+// Lote mínimo de 100 registros = R$50,00
 const DEFAULT_PRICING_SETTINGS = {
   qtdAncoraMin: 100,
-  precoAncoraMin: "0.2000", // R$0.20 por registro
-  qtdAncoraMax: 1000,
-  precoAncoraMax: "0.1000", // R$0.10 por registro
+  precoAncoraMin: "0.5000", // R$0.50 por registro (100 registros = R$50,00)
+  qtdAncoraMax: 50000,
+  precoAncoraMax: "0.0300", // R$0.03 por registro
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2735,10 +2744,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
       
       // Generate example prices for display
-      const exampleQuantities = [1, 10, 100, 1000, 10000, 100000, settings.qtdAncoraMax];
+      // Quantities requested: 100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000
+      const exampleQuantities = [100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000];
       const examples = exampleQuantities.map(qty => ({
         quantidade: qty,
-        ...calculateListPrice(qty, settings!),
+        ...calculateListPrice(qty, settings!, false), // false = don't apply minimum for examples table
       }));
       
       return res.json({
@@ -2750,6 +2760,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           atualizadoEm: settings.atualizadoEm,
         },
         examples,
+        loteMinimo: LOTE_MINIMO,
       });
     } catch (error) {
       console.error("Get pricing settings error:", error);
@@ -2772,10 +2783,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const settings = await storage.updatePricingSettings(result.data);
       
       // Generate example prices for display
-      const exampleQuantities = [1, 10, 100, 1000, 10000, 100000, settings.qtdAncoraMax];
+      const exampleQuantities = [100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000];
       const examples = exampleQuantities.map(qty => ({
         quantidade: qty,
-        ...calculateListPrice(qty, settings),
+        ...calculateListPrice(qty, settings, false), // false = don't apply minimum for examples table
       }));
       
       return res.json({
@@ -2788,6 +2799,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           atualizadoEm: settings.atualizadoEm,
         },
         examples,
+        loteMinimo: LOTE_MINIMO,
       });
     } catch (error) {
       console.error("Update pricing settings error:", error);

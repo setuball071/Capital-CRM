@@ -50,6 +50,7 @@ interface PricingSettingsResponse {
     atualizadoEm: string;
   };
   examples: PricingExample[];
+  loteMinimo: number;
 }
 
 export default function ConfigPrecosPage() {
@@ -63,9 +64,9 @@ export default function ConfigPrecosPage() {
     resolver: zodResolver(pricingFormSchema),
     defaultValues: {
       qtdAncoraMin: 100,
-      precoAncoraMin: "0.2000",
-      qtdAncoraMax: 1000,
-      precoAncoraMax: "0.1000",
+      precoAncoraMin: "0.5000",
+      qtdAncoraMax: 50000,
+      precoAncoraMax: "0.0300",
     },
     values: data?.settings ? {
       qtdAncoraMin: data.settings.qtdAncoraMin,
@@ -331,6 +332,15 @@ export default function ConfigPrecosPage() {
           <CardTitle>Como funciona o cálculo</CardTitle>
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none">
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 mb-4">
+            <p className="text-sm font-medium text-primary m-0">
+              Lote mínimo: {data?.loteMinimo || 100} registros
+            </p>
+            <p className="text-xs text-muted-foreground m-0 mt-1">
+              Pedidos com menos de {data?.loteMinimo || 100} registros são cobrados como se fossem {data?.loteMinimo || 100}.
+            </p>
+          </div>
+          
           <p>
             O sistema usa <strong>interpolação linear no preço unitário</strong> entre as duas âncoras:
           </p>
@@ -349,7 +359,7 @@ export default function ConfigPrecosPage() {
             Fórmula para V entre V1 e V2: Preço Unitário = P1 - ((V - V1) / (V2 - V1)) × (P1 - P2)
           </p>
           <p className="text-muted-foreground">
-            O preço total é sempre: Quantidade × Preço Unitário
+            O preço total é sempre: Quantidade (mín. {data?.loteMinimo || 100}) × Preço Unitário
           </p>
         </CardContent>
       </Card>
