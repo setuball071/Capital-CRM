@@ -1070,7 +1070,7 @@ export class DbStorage implements IStorage {
         quantidadeRegistros: pedidosLista.quantidadeRegistros,
         tipo: pedidosLista.tipo,
         status: pedidosLista.status,
-        precoUnitario: pedidosLista.precoUnitario,
+        nomePacote: pedidosLista.nomePacote,
         custoEstimado: pedidosLista.custoEstimado,
         custoFinal: pedidosLista.custoFinal,
         statusFinanceiro: pedidosLista.statusFinanceiro,

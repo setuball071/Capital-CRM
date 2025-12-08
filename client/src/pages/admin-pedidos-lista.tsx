@@ -29,7 +29,7 @@ interface PedidoAdmin {
   quantidade_registros: number;
   tipo: string;
   status: string;
-  preco_unitario: string | null;
+  nome_pacote: string | null;
   custo_estimado: string | null;
   custo_final: string | null;
   status_financeiro: string | null;

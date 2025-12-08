@@ -123,78 +123,74 @@ function requireUserManagementAccess(req: Request, res: Response, next: NextFunc
 // Legacy alias for backward compatibility
 const requireManagerAccess = requireUserManagementAccess;
 
-// ===== PRICING CALCULATION =====
+// ===== PRICING CALCULATION - MODELO DE PACOTES =====
+
+interface PacotePreco {
+  quantidadeMaxima: number;
+  nomePacote: string;
+  preco: number;
+}
 
 interface PricingResult {
   precoTotal: number;
-  precoUnitario: number;
+  nomePacote: string;
+  quantidadePacote: number;
 }
 
-// Lote mínimo para cálculo de preço
-const LOTE_MINIMO = 100;
+// Tabela de pacotes com preços fixos por faixa
+// Cada pacote atende até sua quantidade máxima
+const PACOTES_PRECO: PacotePreco[] = [
+  { quantidadeMaxima: 100,    nomePacote: "Pacote 100",    preco: 37.90 },
+  { quantidadeMaxima: 300,    nomePacote: "Pacote 300",    preco: 67.90 },
+  { quantidadeMaxima: 500,    nomePacote: "Pacote 500",    preco: 97.90 },
+  { quantidadeMaxima: 1000,   nomePacote: "Pacote 1000",   preco: 187.90 },
+  { quantidadeMaxima: 2000,   nomePacote: "Pacote 2000",   preco: 297.90 },
+  { quantidadeMaxima: 3000,   nomePacote: "Pacote 3000",   preco: 397.90 },
+  { quantidadeMaxima: 5000,   nomePacote: "Pacote 5000",   preco: 597.90 },
+  { quantidadeMaxima: 10000,  nomePacote: "Pacote 10000",  preco: 997.90 },
+];
 
 /**
- * Calcula o preço de uma lista de registros com interpolação linear no preço unitário
+ * Calcula o preço de uma lista usando o modelo de PACOTES
  * 
- * Modelo de precificação:
- * - Lote mínimo de 100 registros (cobra-se 100 mesmo que o filtro retorne menos)
- * - V1 (qtdAncoraMin) registros custam P1 (precoAncoraMin) por registro
- * - V2 (qtdAncoraMax) registros custam P2 (precoAncoraMax) por registro
- * - Para quantidades entre V1 e V2: interpolação linear no preço unitário
- * - Para quantidades <= V1: usa preço unitário P1
- * - Para quantidades > V2: usa preço unitário P2
+ * Regra:
+ * 1. Se Q <= 0: não permite gerar pedido
+ * 2. Encontra o primeiro pacote onde Q <= quantidade_maxima
+ * 3. Retorna o preço fixo desse pacote
+ * 4. Se Q > maior pacote: usa o maior pacote (pode ser ajustado depois)
  * 
- * Fórmula: precoUnitario = P1 - ((V - V1) / (V2 - V1)) * (P1 - P2)
- * 
- * @param qtdRegistros - Quantidade de registros
- * @param settings - Configurações de preço com âncoras (P1, P2 são preços unitários)
- * @param applyMinimum - Se true, aplica o lote mínimo de 100 registros (default: true)
+ * @param qtdRegistros - Quantidade real de registros
  */
-function calculateListPrice(qtdRegistros: number, settings: PricingSettings, applyMinimum: boolean = true): PricingResult {
+function calculatePackagePrice(qtdRegistros: number): PricingResult {
   if (qtdRegistros <= 0) {
-    return { precoTotal: 0, precoUnitario: 0 };
+    return { precoTotal: 0, nomePacote: "", quantidadePacote: 0 };
   }
   
-  // Aplica lote mínimo para cálculo de preço
-  const qtdParaCalculo = applyMinimum ? Math.max(qtdRegistros, LOTE_MINIMO) : qtdRegistros;
-  
-  const q1 = settings.qtdAncoraMin;
-  const p1 = parseFloat(settings.precoAncoraMin); // Preço UNITÁRIO para q1 registros
-  const q2 = settings.qtdAncoraMax;
-  const p2 = parseFloat(settings.precoAncoraMax); // Preço UNITÁRIO para q2 registros
-  
-  let precoUnitario: number;
-  
-  if (qtdParaCalculo <= q1) {
-    // Usa o preço unitário da âncora mínima
-    precoUnitario = p1;
-  } else if (qtdParaCalculo <= q2) {
-    // Interpolação linear no preço UNITÁRIO entre as âncoras
-    // Fórmula: precoUnitario = P1 - ((V - V1) / (V2 - V1)) * (P1 - P2)
-    precoUnitario = p1 - ((qtdParaCalculo - q1) / (q2 - q1)) * (p1 - p2);
-  } else {
-    // Usa o preço unitário da âncora máxima para quantidades acima de q2
-    precoUnitario = p2;
+  // Encontra o primeiro pacote que atende a quantidade
+  for (const pacote of PACOTES_PRECO) {
+    if (qtdRegistros <= pacote.quantidadeMaxima) {
+      return {
+        precoTotal: pacote.preco,
+        nomePacote: pacote.nomePacote,
+        quantidadePacote: pacote.quantidadeMaxima,
+      };
+    }
   }
   
-  // Calcula o preço total = quantidade para cálculo * preço unitário
-  const precoTotal = qtdParaCalculo * precoUnitario;
-  
+  // Se exceder todos os pacotes, usa o maior pacote
+  // TODO: Pode ser ajustado para repetir o maior pacote em blocos
+  const maiorPacote = PACOTES_PRECO[PACOTES_PRECO.length - 1];
   return {
-    precoTotal: Math.round(precoTotal * 100) / 100, // Round to 2 decimals
-    precoUnitario: Math.round(precoUnitario * 10000) / 10000, // Round to 4 decimals
+    precoTotal: maiorPacote.preco,
+    nomePacote: maiorPacote.nomePacote,
+    quantidadePacote: maiorPacote.quantidadeMaxima,
   };
 }
 
-// Default pricing settings (used when no settings exist in DB)
-// Preços unitários: P1=R$0.50 para V1=100 registros, P2=R$0.03 para V2=50000 registros
-// Lote mínimo de 100 registros = R$50,00
-const DEFAULT_PRICING_SETTINGS = {
-  qtdAncoraMin: 100,
-  precoAncoraMin: "0.5000", // R$0.50 por registro (100 registros = R$50,00)
-  qtdAncoraMax: 50000,
-  precoAncoraMax: "0.0300", // R$0.03 por registro
-};
+// Função para obter todos os pacotes (para exibição na tela de config)
+function getPacotesPreco(): PacotePreco[] {
+  return PACOTES_PRECO;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== AUTH ROUTES =====
@@ -2726,41 +2722,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // ===== PRICING SETTINGS ENDPOINTS =====
+  // ===== PRICING SETTINGS ENDPOINTS (MODELO DE PACOTES) =====
 
-  // GET pricing settings - Master only
+  // GET pricing settings - Master only - Retorna tabela de pacotes
   app.get("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
     try {
-      let settings = await storage.getPricingSettings();
-      
-      // If no settings exist, create default ones
-      if (!settings) {
-        settings = await storage.updatePricingSettings({
-          precoAncoraMin: DEFAULT_PRICING_SETTINGS.precoAncoraMin,
-          qtdAncoraMin: DEFAULT_PRICING_SETTINGS.qtdAncoraMin,
-          precoAncoraMax: DEFAULT_PRICING_SETTINGS.precoAncoraMax,
-          qtdAncoraMax: DEFAULT_PRICING_SETTINGS.qtdAncoraMax,
-        });
-      }
-      
-      // Generate example prices for display
-      // Quantities requested: 100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000
-      const exampleQuantities = [100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000];
-      const examples = exampleQuantities.map(qty => ({
-        quantidade: qty,
-        ...calculateListPrice(qty, settings!, false), // false = don't apply minimum for examples table
-      }));
+      const pacotes = getPacotesPreco();
       
       return res.json({
-        settings: {
-          precoAncoraMin: settings.precoAncoraMin,
-          qtdAncoraMin: settings.qtdAncoraMin,
-          precoAncoraMax: settings.precoAncoraMax,
-          qtdAncoraMax: settings.qtdAncoraMax,
-          atualizadoEm: settings.atualizadoEm,
-        },
-        examples,
-        loteMinimo: LOTE_MINIMO,
+        pacotes,
+        message: "Modelo de precificação por PACOTES. Para editar os valores, atualize a constante PACOTES_PRECO no código.",
       });
     } catch (error) {
       console.error("Get pricing settings error:", error);
@@ -2768,42 +2739,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // PUT pricing settings - Master only
-  app.put("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
+  // GET pacotes para exibição pública (usado na tela de compra)
+  app.get("/api/pacotes-preco", requireAuth, async (req, res) => {
     try {
-      const result = insertPricingSettingsSchema.partial().safeParse(req.body);
-      
-      if (!result.success) {
-        return res.status(400).json({
-          message: "Dados inválidos",
-          errors: result.error.errors,
-        });
-      }
-      
-      const settings = await storage.updatePricingSettings(result.data);
-      
-      // Generate example prices for display
-      const exampleQuantities = [100, 500, 1000, 2000, 3000, 5000, 10000, 20000, 50000];
-      const examples = exampleQuantities.map(qty => ({
-        quantidade: qty,
-        ...calculateListPrice(qty, settings, false), // false = don't apply minimum for examples table
-      }));
-      
-      return res.json({
-        message: "Configurações atualizadas com sucesso",
-        settings: {
-          precoAncoraMin: settings.precoAncoraMin,
-          qtdAncoraMin: settings.qtdAncoraMin,
-          precoAncoraMax: settings.precoAncoraMax,
-          qtdAncoraMax: settings.qtdAncoraMax,
-          atualizadoEm: settings.atualizadoEm,
-        },
-        examples,
-        loteMinimo: LOTE_MINIMO,
-      });
+      return res.json(getPacotesPreco());
     } catch (error) {
-      console.error("Update pricing settings error:", error);
-      return res.status(500).json({ message: "Erro ao atualizar configurações de preços" });
+      console.error("Get pacotes error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pacotes" });
     }
   });
 
@@ -2829,22 +2771,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { clientes, total } = await storage.searchClientesPessoa(filtros);
       
-      // Get pricing settings for cost calculation
-      let settings = await storage.getPricingSettings();
-      if (!settings) {
-        settings = await storage.updatePricingSettings(DEFAULT_PRICING_SETTINGS);
-      }
-      
-      const pricing = calculateListPrice(total, settings);
-      const quantidadeCobrada = Math.max(total, LOTE_MINIMO);
+      // Calcula preço usando modelo de pacotes
+      const pricing = calculatePackagePrice(total);
       
       // Return preview (first 10), total, and pricing
       return res.json({
         total,
-        quantidadeCobrada,
-        loteMinimo: LOTE_MINIMO,
-        custoEstimado: pricing.precoTotal,
-        precoUnitario: pricing.precoUnitario,
+        nomePacote: pricing.nomePacote,
+        quantidadePacote: pricing.quantidadePacote,
+        precoTotal: pricing.precoTotal,
+        pacotes: getPacotesPreco(), // Envia lista de pacotes para exibição
         preview: clientes.slice(0, 10).map(c => ({
           matricula: c.matricula,
           nome: c.nome,
@@ -2881,22 +2817,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { total } = await storage.searchClientesPessoa(filtros);
       
-      // Get pricing settings for dynamic cost calculation
-      let settings = await storage.getPricingSettings();
-      if (!settings) {
-        settings = await storage.updatePricingSettings(DEFAULT_PRICING_SETTINGS);
-      }
+      // Calcula preço usando modelo de pacotes
+      const pricing = calculatePackagePrice(total);
       
-      const pricing = calculateListPrice(total, settings);
-      
-      // Create pedido
+      // Create pedido com informações do pacote
       const pedido = await storage.createPedidoLista({
         coordenadorId: req.user!.id,
         filtrosUsados: filtros,
         quantidadeRegistros: total,
         tipo: "exportacao_base",
         status: "pendente",
-        precoUnitario: String(pricing.precoUnitario),
+        nomePacote: pricing.nomePacote,
         custoEstimado: String(pricing.precoTotal),
         statusFinanceiro: "pendente",
       });
@@ -2962,7 +2893,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidade_registros: p.quantidadeRegistros,
         tipo: p.tipo,
         status: p.status,
-        preco_unitario: p.precoUnitario,
+        nome_pacote: p.nomePacote,
         custo_estimado: p.custoEstimado,
         custo_final: p.custoFinal,
         status_financeiro: p.statusFinanceiro,

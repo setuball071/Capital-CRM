@@ -44,12 +44,18 @@ interface FiltrosDisponiveis {
   ufs: string[];
 }
 
+interface PacotePreco {
+  quantidadeMaxima: number;
+  nomePacote: string;
+  preco: number;
+}
+
 interface SimulacaoResult {
   total: number;
-  quantidadeCobrada: number;
-  loteMinimo: number;
-  custoEstimado: number;
-  precoUnitario: number;
+  nomePacote: string;
+  quantidadePacote: number;
+  precoTotal: number;
+  pacotes: PacotePreco[];
   preview: Array<{
     matricula: string;
     nome: string;
@@ -68,7 +74,7 @@ interface PedidoLista {
   quantidadeRegistros: number;
   tipo: string;
   status: string;
-  precoUnitario: string | null;
+  nomePacote: string | null;
   custoEstimado: string | null;
   custoFinal: string | null;
   statusFinanceiro: string | null;
@@ -553,33 +559,45 @@ export default function CompraLista() {
                   </div>
                 ) : (
                   <>
-                    {/* Banner de lote mínimo */}
-                    <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-blue-900 dark:text-blue-100">
-                          Lote mínimo: {simulacao.loteMinimo} registros
-                        </p>
-                        <p className="text-sm text-blue-700 dark:text-blue-300">
-                          Pedidos com menos de {simulacao.loteMinimo} registros serão cobrados como {simulacao.loteMinimo} nomes.
-                        </p>
+                    {/* Pacote selecionado */}
+                    <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                      <ShoppingCart className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-green-900 dark:text-green-100 text-lg">
+                              {simulacao.nomePacote}
+                            </p>
+                            <p className="text-sm text-green-700 dark:text-green-300">
+                              Atende até {simulacao.quantidadePacote.toLocaleString("pt-BR")} registros
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                              {formatCurrency(simulacao.precoTotal)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Resumo do valor */}
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Valor estimado do pedido:</p>
-                        <p className="text-2xl font-bold text-primary">{formatCurrency(simulacao.custoEstimado)}</p>
-                        {simulacao.total < simulacao.loteMinimo && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ({simulacao.total} registros encontrados, cobrando como {simulacao.quantidadeCobrada})
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Preço por registro:</p>
-                        <p className="text-lg font-medium">{formatCurrency(simulacao.precoUnitario)}</p>
+                    {/* Tabela de pacotes disponíveis */}
+                    <div className="p-4 bg-muted/30 rounded-lg">
+                      <p className="text-sm font-medium mb-3">Tabela de pacotes:</p>
+                      <div className="grid grid-cols-4 gap-2 text-xs">
+                        {simulacao.pacotes.map((p) => (
+                          <div 
+                            key={p.nomePacote} 
+                            className={`p-2 rounded text-center ${
+                              p.nomePacote === simulacao.nomePacote 
+                                ? "bg-green-100 dark:bg-green-900/50 border border-green-400" 
+                                : "bg-background border"
+                            }`}
+                          >
+                            <p className="font-medium">{p.nomePacote}</p>
+                            <p className="text-muted-foreground">{formatCurrency(p.preco)}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -632,7 +650,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Pedido de Lista ({simulacao.total.toLocaleString("pt-BR")} registros – {formatCurrency(simulacao.custoEstimado)})
+                            Gerar Pedido ({simulacao.total.toLocaleString("pt-BR")} registros – {simulacao.nomePacote} – {formatCurrency(simulacao.precoTotal)})
                           </>
                         )}
                       </Button>

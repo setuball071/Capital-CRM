@@ -378,8 +378,8 @@ export const pedidosLista = pgTable("pedidos_lista", {
   quantidadeRegistros: integer("quantidade_registros").default(0),
   tipo: varchar("tipo", { length: 50 }).default("exportacao_base"),
   status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente, aprovado, processando, concluido, cancelado
-  // Precificação
-  precoUnitario: decimal("preco_unitario", { precision: 12, scale: 4 }),
+  // Precificação por PACOTES
+  nomePacote: varchar("nome_pacote", { length: 100 }), // ex: "Pacote 2000"
   custoEstimado: decimal("custo_estimado", { precision: 12, scale: 2 }),
   custoFinal: decimal("custo_final", { precision: 12, scale: 2 }),
   statusFinanceiro: varchar("status_financeiro", { length: 20 }), // pendente, confirmado
