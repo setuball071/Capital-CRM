@@ -2836,10 +2836,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
       
       const pricing = calculateListPrice(total, settings);
+      const quantidadeCobrada = Math.max(total, LOTE_MINIMO);
       
       // Return preview (first 10), total, and pricing
       return res.json({
         total,
+        quantidadeCobrada,
+        loteMinimo: LOTE_MINIMO,
         custoEstimado: pricing.precoTotal,
         precoUnitario: pricing.precoUnitario,
         preview: clientes.slice(0, 10).map(c => ({

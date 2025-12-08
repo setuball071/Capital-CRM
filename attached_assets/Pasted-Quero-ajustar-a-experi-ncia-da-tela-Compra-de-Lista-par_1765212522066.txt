@@ -1,0 +1,148 @@
+Quero ajustar a experiência da tela “Compra de Lista” para que o usuário:
+
+Saiba claramente que existe lote mínimo de 100 registros
+
+Veja quanto vai custar o pedido ANTES de enviar
+
+Ajustes em duas camadas: frontend e backend.
+
+1. Banner de aviso de lote mínimo na tela de Compra de Lista
+
+Tela: Compra de Lista (filtros + resultados + botão “Gerar Pedido de Lista”).
+
+Adicionar, logo acima da tabela de resultados ou logo acima do botão, um aviso parecido com o da tela de configuração, mas voltado para o usuário final:
+
+Estilo: card/badge informativo (cor neutra/azul claro, ícone de info).
+
+Texto sugerido:
+
+Lote mínimo: 100 registros
+Pedidos com menos de 100 registros serão cobrados como 100 nomes.
+
+Esse texto deve ser exibido sempre que houver resultados filtrados (quando a tabela aparece).
+
+2. Mostrar o valor do pedido diretamente no botão
+
+Hoje o botão está algo como:
+
+Gerar Pedido de Lista (61 registros)
+
+Quero mudar para mostrar quantidade + valor, já considerando o lote mínimo e a precificação configurada.
+
+Exemplo de como deveria ficar:
+
+Se o filtro retornou 61 registros → botão mostra:
+Gerar Pedido de Lista (61 registros – R$ 50,00)
+
+Se o filtro retornou 430 registros e o cálculo resultar em R$ 110,00 →
+Gerar Pedido de Lista (430 registros – R$ 110,00)
+
+Regras:
+
+A quantidade exibida é sempre a quantidade real de registros filtrados.
+
+O valor exibido deve ser calculado com:
+
+lote mínimo = 100 registros
+
+preço unitário baseado no modelo de precificação configurado em Config. Preços
+
+mesma função de cálculo usada nos pedidos aprovados (evitar duplicar lógica).
+
+3. Endpoint/backend para cálculo de preço
+
+Criar ou reutilizar uma função de backend para calcular o preço de um pedido com base em:
+
+quantidade real de registros retornados (Q)
+
+configuração atual de preços:
+
+V1, P1 (âncora mínima)
+
+V2, P2 (âncora máxima)
+
+regra de lote mínimo (100)
+
+Sugestão de endpoint:
+
+GET /api/pedidos/simular-preco?quantidade=Q
+
+Esse endpoint deve:
+
+Ler as configurações atuais de preço (tabela/config que já existe).
+
+Aplicar a regra:
+
+quantidade_cobrada = max(Q, 100)
+
+Calcular o preço unitário usando a interpolação linear já implementada:
+
+até V1 → P1
+
+entre V1 e V2 → interpolação linear entre P1 e P2
+
+acima de V2 → P2
+
+Retornar um JSON assim:
+
+{
+  "quantidadeEncontrada": 61,
+  "quantidadeCobrada": 100,
+  "precoUnitario": 0.5,
+  "precoTotal": 50.0,
+  "moeda": "BRL"
+}
+
+
+Essa mesma função/serviço deve ser reutilizada quando o admin aprovar o pedido (para garantir que o valor é exatamente o mesmo que o usuário viu na simulação).
+
+4. Integração na UI da Compra de Lista
+
+Fluxo desejado:
+
+Usuário aplica os filtros.
+
+O sistema busca os resultados (como já faz hoje).
+
+Quando terminar de carregar a tabela, o frontend:
+
+conta a quantidade de registros exibidos (Q)
+
+chama o endpoint de simulação: /api/pedidos/simular-preco?quantidade=Q
+
+O resultado da simulação é usado para:
+
+atualizar o texto do botão:
+Gerar Pedido de Lista (Q registros – R$ XX,XX)
+
+opcional: exibir um texto logo abaixo do botão, pequeno:
+
+Valor estimado do pedido: R$ XX,XX (lote mínimo de 100 registros)
+
+Caso não haja nenhum resultado (Q = 0):
+
+desabilitar o botão
+
+texto do botão: Nenhum registro para gerar pedido
+
+não chamar o endpoint de simulação.
+
+5. Consistência com a tela de Config. Preços
+
+Garantir que:
+
+A função de cálculo usada no endpoint de simulação seja a mesma utilizada na:
+
+tela de “Config. Preços” (tabela de exemplos)
+
+geração real de pedidos quando o admin aprova
+
+Se hoje a lógica está duplicada, refatorar para usar um helper/serviço único (por exemplo, calculatePriceForQuantity(quantidade, config)).
+
+Com esses ajustes, o usuário passa a:
+
+saber do lote mínimo no momento certo (na compra)
+
+ver claramente quanto vai pagar antes de clicar para gerar o pedido
+
+ter a mesma base de cálculo em toda a aplicação.

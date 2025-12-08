@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download } from "lucide-react";
+import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download, Info } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -46,6 +46,10 @@ interface FiltrosDisponiveis {
 
 interface SimulacaoResult {
   total: number;
+  quantidadeCobrada: number;
+  loteMinimo: number;
+  custoEstimado: number;
+  precoUnitario: number;
   preview: Array<{
     matricula: string;
     nome: string;
@@ -212,6 +216,15 @@ export default function CompraLista() {
       parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
     }
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
   };
 
   return (
@@ -540,6 +553,36 @@ export default function CompraLista() {
                   </div>
                 ) : (
                   <>
+                    {/* Banner de lote mínimo */}
+                    <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-blue-900 dark:text-blue-100">
+                          Lote mínimo: {simulacao.loteMinimo} registros
+                        </p>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          Pedidos com menos de {simulacao.loteMinimo} registros serão cobrados como {simulacao.loteMinimo} nomes.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Resumo do valor */}
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Valor estimado do pedido:</p>
+                        <p className="text-2xl font-bold text-primary">{formatCurrency(simulacao.custoEstimado)}</p>
+                        {simulacao.total < simulacao.loteMinimo && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ({simulacao.total} registros encontrados, cobrando como {simulacao.quantidadeCobrada})
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Preço por registro:</p>
+                        <p className="text-lg font-medium">{formatCurrency(simulacao.precoUnitario)}</p>
+                      </div>
+                    </div>
+
                     <div className="text-sm text-muted-foreground mb-4">
                       Mostrando prévia dos primeiros {Math.min(10, simulacao.preview.length)} registros:
                     </div>
@@ -578,6 +621,7 @@ export default function CompraLista() {
                       <Button
                         onClick={handleCriarPedido}
                         disabled={criarPedidoMutation.isPending}
+                        size="lg"
                         data-testid="button-criar-pedido"
                       >
                         {criarPedidoMutation.isPending ? (
@@ -588,7 +632,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Pedido de Lista ({simulacao.total.toLocaleString("pt-BR")} registros)
+                            Gerar Pedido de Lista ({simulacao.total.toLocaleString("pt-BR")} registros – {formatCurrency(simulacao.custoEstimado)})
                           </>
                         )}
                       </Button>
