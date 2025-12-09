@@ -25,8 +25,12 @@ import {
   AlertCircle,
   Wallet,
   Calendar,
-  Lock
+  Lock,
+  Landmark,
+  Copy,
+  Check
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -64,6 +68,10 @@ interface ClienteDetalhadoPessoa {
   uf: string | null;
   municipio: string | null;
   telefones_base: string[] | null;
+  // Dados bancários do cliente (onde recebe salário)
+  banco_codigo: string | null;
+  agencia: string | null;
+  conta: string | null;
   base_tag_ultima: string | null;
   extras_pessoa: any;
 }
@@ -96,8 +104,11 @@ interface FolhaHistorico {
 interface Contrato {
   id: number;
   tipo_contrato: string | null;
-  banco: string | null;
+  banco: string | null; // BANCO_DO_EMPRESTIMO
   valor_parcela: number | null;
+  saldo_devedor: number | null;
+  parcelas_restantes: number | null; // prazo remanescente exato da planilha
+  numero_contrato: string | null;
   competencia: string | null;
   base_tag: string | null;
   dados_brutos: any;
@@ -134,6 +145,57 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
+// Componente para dados copiáveis com tooltip - não usa hooks internos
+function CopyableField({ 
+  value, 
+  displayValue, 
+  label,
+  onCopy 
+}: { 
+  value: string | null | undefined; 
+  displayValue?: string;
+  label?: string;
+  onCopy?: (text: string, label?: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      if (onCopy) onCopy(value, label);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+  
+  if (!value) return <span className="text-muted-foreground">-</span>;
+  
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span 
+          className="cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors inline-flex items-center gap-1"
+          onClick={handleCopy}
+          data-testid={`copyable-${label?.toLowerCase().replace(/\s/g, "-") || "field"}`}
+        >
+          {displayValue || value}
+          {copied ? (
+            <Check className="w-3 h-3 text-green-500" />
+          ) : (
+            <Copy className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+          )}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{copied ? "Copiado!" : "Clique para copiar"}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function ConsultaCliente() {
   const { toast } = useToast();
   const [searchType, setSearchType] = useState<"cpf" | "matricula">("cpf");
@@ -142,6 +204,14 @@ export default function ConsultaCliente() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<ConsultaResultado[] | null>(null);
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
+
+  // Handler para notificar quando algo é copiado
+  const handleCopy = (text: string, label?: string) => {
+    toast({
+      title: "Copiado!",
+      description: label ? `${label} copiado para a área de transferência.` : "Copiado para a área de transferência.",
+    });
+  };
 
   const { data: conveniosDisponiveis } = useQuery<string[]>({
     queryKey: ["/api/clientes/filtros/convenios"],
@@ -400,17 +470,28 @@ export default function ConsultaCliente() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="space-y-1">
+                    <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium" data-testid="text-nome">{clienteDetalhado.pessoa.nome || "-"}</p>
+                      <p className="font-medium" data-testid="text-nome">
+                        <CopyableField value={clienteDetalhado.pessoa.nome} label="Nome" onCopy={handleCopy} />
+                      </p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">CPF</p>
-                      <p className="font-mono" data-testid="text-cpf">{formatCPF(clienteDetalhado.pessoa.cpf)}</p>
+                      <p className="font-mono" data-testid="text-cpf">
+                        <CopyableField 
+                          value={clienteDetalhado.pessoa.cpf} 
+                          displayValue={formatCPF(clienteDetalhado.pessoa.cpf)} 
+                          label="CPF" 
+                          onCopy={handleCopy}
+                        />
+                      </p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">Matrícula</p>
-                      <p className="font-mono" data-testid="text-matricula">{clienteDetalhado.pessoa.matricula}</p>
+                      <p className="font-mono" data-testid="text-matricula">
+                        <CopyableField value={clienteDetalhado.pessoa.matricula} label="Matrícula" onCopy={handleCopy} />
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Convênio</p>
@@ -450,21 +531,52 @@ export default function ConsultaCliente() {
                         {[clienteDetalhado.pessoa.municipio, clienteDetalhado.pessoa.uf].filter(Boolean).join(" - ") || "-"}
                       </p>
                     </div>
-                    <div className="space-y-1 md:col-span-2">
+                    
+                    {/* Telefones - empilhados verticalmente */}
+                    <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Phone className="w-4 h-4" />
-                        Telefones da Base
+                        Telefones
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-1">
                         {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
                           clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
-                            <Badge key={idx} variant="outline">{tel}</Badge>
+                            <div key={idx} className="group">
+                              <CopyableField value={tel} label={`Telefone ${idx + 1}`} onCopy={handleCopy} />
+                            </div>
                           ))
                         ) : (
-                          <span className="text-muted-foreground">Nenhum telefone cadastrado</span>
+                          <span className="text-muted-foreground text-sm">Nenhum telefone</span>
                         )}
                       </div>
                     </div>
+                    
+                    {/* Dados Bancários do cliente (onde recebe salário) */}
+                    <div className="space-y-1 md:col-span-2">
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Landmark className="w-4 h-4" />
+                        Dados Bancários
+                      </p>
+                      {clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.agencia || clienteDetalhado.pessoa.conta ? (
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="group">
+                            <span className="text-muted-foreground">Banco: </span>
+                            <CopyableField value={clienteDetalhado.pessoa.banco_codigo} label="Banco" onCopy={handleCopy} />
+                          </div>
+                          <div className="group">
+                            <span className="text-muted-foreground">Ag: </span>
+                            <CopyableField value={clienteDetalhado.pessoa.agencia} label="Agência" onCopy={handleCopy} />
+                          </div>
+                          <div className="group">
+                            <span className="text-muted-foreground">Conta: </span>
+                            <CopyableField value={clienteDetalhado.pessoa.conta} label="Conta" onCopy={handleCopy} />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Dados bancários não informados</p>
+                      )}
+                    </div>
+                    
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Última Base</p>
                       <Badge>{clienteDetalhado.pessoa.base_tag_ultima || "-"}</Badge>
@@ -629,10 +741,12 @@ export default function ConsultaCliente() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Tipo</TableHead>
-                          <TableHead>Banco</TableHead>
+                          <TableHead>Banco do Empréstimo</TableHead>
+                          <TableHead>Nº Contrato</TableHead>
                           <TableHead>Valor Parcela</TableHead>
+                          <TableHead>Saldo Devedor</TableHead>
+                          <TableHead>Parcelas Restantes</TableHead>
                           <TableHead>Competência</TableHead>
-                          <TableHead>Base</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -643,12 +757,36 @@ export default function ConsultaCliente() {
                                 {contrato.tipo_contrato || "N/D"}
                               </Badge>
                             </TableCell>
-                            <TableCell>{contrato.banco || "-"}</TableCell>
-                            <TableCell>{formatCurrency(contrato.valor_parcela)}</TableCell>
-                            <TableCell>{formatDate(contrato.competencia)}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="text-xs">{contrato.base_tag || "-"}</Badge>
+                            <TableCell className="group">
+                              <CopyableField value={contrato.banco} label="Banco do Empréstimo" onCopy={handleCopy} />
                             </TableCell>
+                            <TableCell className="group font-mono text-sm">
+                              <CopyableField value={contrato.numero_contrato} label="Número do Contrato" onCopy={handleCopy} />
+                            </TableCell>
+                            <TableCell className="group">
+                              <CopyableField 
+                                value={contrato.valor_parcela?.toString()} 
+                                displayValue={formatCurrency(contrato.valor_parcela)}
+                                label="Valor da Parcela" 
+                                onCopy={handleCopy}
+                              />
+                            </TableCell>
+                            <TableCell className="group">
+                              <CopyableField 
+                                value={contrato.saldo_devedor?.toString()} 
+                                displayValue={formatCurrency(contrato.saldo_devedor)}
+                                label="Saldo Devedor" 
+                                onCopy={handleCopy}
+                              />
+                            </TableCell>
+                            <TableCell className="group text-center">
+                              <CopyableField 
+                                value={contrato.parcelas_restantes?.toString()} 
+                                label="Parcelas Restantes" 
+                                onCopy={handleCopy}
+                              />
+                            </TableCell>
+                            <TableCell>{formatDate(contrato.competencia)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

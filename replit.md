@@ -63,11 +63,27 @@ The client database module provides comprehensive management for client bases. A
 - **Purchase Lists**: Master + Coordenação - filter and request client list exports
 
 **Database Structure** (5 new tables):
-- `clientes_pessoa`: Core client information (matricula, nome, cpf, convenio, orgao, etc.)
-- `clientes_folha_mes`: Monthly payroll data (rubricas, descontos, liquido, margem)
-- `clientes_contratos`: Contract details (prazo, saldo, banco, data_contracao)
+- `clientes_pessoa`: Core client information (matricula, nome, cpf, convenio, orgao, banco_codigo, agencia, conta, etc.)
+- `clientes_folha_mes`: Monthly payroll data (rubricas, descontos, liquido, margem with exact values from spreadsheet)
+- `clientes_contratos`: Contract details (banco, numero_contrato, valor_parcela, saldo_devedor, parcelas_restantes)
 - `bases_importadas`: Import tracking (nome, convenio, competencia, status)
 - `pedidos_lista`: List request management (filtros, quantidade, status)
+
+**Column Mapping** (SIAPE Import):
+- `BANCO` → `banco_codigo` (client's bank where salary is deposited)
+- `AGENCIA` → `agencia` (client's bank branch)
+- `CONTA` → `conta` (client's bank account)
+- `BANCO_DO_EMPRESTIMO` / `BANCO DO EMPRESTIMO` → `banco` in contracts (lender bank)
+- `SALDO_DEVEDOR` → `saldo_devedor` (outstanding balance)
+- `PRAZO_REMANESCENTE` → `parcelas_restantes` (exact remaining installments from spreadsheet)
+- `NUMERO_CONTRATO` → `numero_contrato` (contract identifier)
+- `TIPO_OPERACAO` → `tipo_contrato` (operation type: consignado, cartão, etc.)
+
+**Contract Deduplication**: Composite key = CPF + matrícula + convênio + banco_emprestimo + numero_contrato
+
+**Fallback Logic for Legacy Spreadsheets**:
+- When `BANCO_DO_EMPRESTIMO` is present: `BANCO` goes to client banking data (banco_codigo), `BANCO_DO_EMPRESTIMO` goes to contract (banco)
+- When only `BANCO` is present with contract data (valor_parcela, saldo_devedor, numero_contrato): `BANCO` is used for BOTH client banking data AND contract banco (fallback for legacy SIAPE exports)
 
 **Key Features**:
 - Excel/CSV import with base64 encoding

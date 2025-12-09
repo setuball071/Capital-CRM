@@ -1,0 +1,195 @@
+Quero atualizar o módulo de importação de bases e o módulo de consulta manual com as regras abaixo. Estas instruções substituem completamente as anteriores.
+
+====================================================================
+1. CORREÇÕES DO IMPORTADOR (IMPORTAÇÃO DA PLANILHA)
+====================================================================
+
+1.1. Corrigir mapeamento das colunas de banco da planilha:
+
+A planilha possui duas colunas diferentes e elas não podem ser confundidas:
+
+A) "BANCO"  
+   - Representa o banco dos DADOS BANCÁRIOS do cliente (banco onde recebe salário).  
+   - Fica acompanhado de “AGENCIA” e “CONTA”.  
+   - Deve ser salvo na tabela de clientes (clientes_pessoa) como:
+       - banco_codigo
+       - agencia
+       - conta
+
+B) "BANCO_DO_EMPRESTIMO"  
+   - Representa o banco dos contratos (descontos em folha).  
+   - Deve ser salvo na tabela clientes_contratos.
+
+Hoje o sistema está usando a coluna errada. Corrigir o mapeamento imediatamente.
+
+--------------------------------------------------------
+
+1.2. Evitar duplicação de contratos.
+
+Durante a importação, alguns clientes tiveram contratos duplicados.  
+Criar regra de agrupamento para considerar contrato único por:
+
+- CPF  
+- Matrícula  
+- Convênio  
+- BANCO_DO_EMPRESTIMO  
+- Identificador do contrato (se houver)  
+- Códigos internos usados na planilha para separar linhas de parcelas
+
+Se duas linhas representarem o mesmo contrato, consolidar corretamente.
+
+--------------------------------------------------------
+
+1.3. Margens — usar exatamente o que vem na planilha.
+
+Cada convênio tem suas margens específicas.  
+Não assumir margem 30% para SIAPE.  
+O SIAPE usa:
+
+- 70% (compulsória)
+- 35% consignado
+- 5% cartão crédito
+- 5% cartão benefício
+
+A importação deve:
+
+- importar os valores EXATOS da planilha  
+- salvar os nomes originais  
+- no frontend, apresentar as margens na ordem: 70, 35, 5, 5
+
+Nunca gerar margens artificiais.
+
+--------------------------------------------------------
+
+1.4. Prazo remanescente (IMPORTANTE)
+
+A planilha traz o campo **"prazo remanescente"**, que representa quantas parcelas faltam pagar.
+
+Regras:
+
+- Salvar exatamente este valor em clientes_contratos.parcelas_restantes  
+- Não calcular prazo total  
+- Não calcular parcelas pagas  
+- Não calcular parcelas restantes por lógica  
+- Nunca inferir prazo original (este dado não existe)
+
+O único dado oficial é o prazo remanescente.
+
+--------------------------------------------------------
+
+1.5. Reprocessar contratos com o mapeamento correto
+
+Depois de corrigir o mapeamento de bancos e duplicações, garantir que:
+
+- quantidade de contratos esteja correta  
+- margens estejam corretas  
+- dados bancários estejam corretos  
+- bancos dos contratos estejam corretos  
+- prazos remanescentes estejam corretos  
+
+====================================================================
+2. AJUSTES NA CONSULTA MANUAL
+====================================================================
+
+2.1. Busca com CPF e Matrícula com convênio como filtro.
+
+Regras:
+
+- Tipo de busca = CPF ou Matrícula
+- Campo Convênio:
+  - obrigatório quando a busca for por Matrícula  
+  - opcional quando busca for por CPF
+
+Se busca por CPF sem convênio retornar múltiplos convênios, retornar lista de perfis para o usuário escolher.
+
+--------------------------------------------------------
+
+2.2. Estrutura de resposta (backend)
+
+Quando houver múltiplos perfis:
+
+{
+  "tipo": "multi_match",
+  "resultados": [
+    {
+      "pessoa_id": ...,
+      "cpf": "...",
+      "matricula": "...",
+      "convenio": "...",
+      "orgao": "...",
+      "uf": "...",
+      "municipio": "...",
+      "sit_func": "ATIVO"
+    }
+  ]
+}
+
+Quando houver um cliente único:
+
+{
+  "tipo": "single",
+  "cliente": {
+    dados pessoais...
+    dados bancarios...
+  },
+  "margens": {
+    margem_70: ...,
+    margem_35: ...,
+    margem_cartao_credito: ...,
+    margem_cartao_beneficio: ...
+  },
+  "contratos": [
+    {
+      banco: "...",
+      valor_parcela: ...,
+      saldo_devedor: ...,
+      parcelas_restantes: ...,     // direto da planilha
+      tipo_operacao: "...",
+      mes_referencia: "...",
+    }
+  ]
+}
+
+--------------------------------------------------------
+
+2.3. Exibir DADOS BANCÁRIOS na consulta
+
+Adicionar bloco:
+
+"DADOS BANCÁRIOS"
+- Banco (código e nome se possível)
+- Agência
+- Conta
+
+--------------------------------------------------------
+
+2.4. Melhorias de UX na consulta
+
+- Telefones devem aparecer **um embaixo do outro**, alinhados à direita.
+- Disposição geral do card deve ser organizada visualmente.
+- Contratos devem ser exibidos de forma clara e agrupada.
+
+--------------------------------------------------------
+
+2.5. Clique para copiar
+
+Ao clicar em qualquer dado, copiar automaticamente para área de transferência:
+
+- CPF  
+- Matrícula  
+- Nome  
+- Telefone  
+- Banco do empréstimo  
+- Agência / Conta  
+- Número de contrato  
+- Valor da parcela  
+- Saldo  
+- Parcelas restantes  
+
+Tooltip:  
+- ao passar o mouse → “Clique para copiar”  
+- ao clicar → “Copiado!”
+
+====================================================================
+3. NADA MAIS DEVE SER ALTERADO ALÉM DESTES PONTOS.
+====================================================================

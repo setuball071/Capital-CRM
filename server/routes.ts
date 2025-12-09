@@ -2013,7 +2013,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "CONVENIO": "convenio",
     "UF": "uf",
     "MUNICIPIO": "municipio",
-    // Margens
+    // Dados bancários do cliente (onde recebe salário) - BANCO + AGENCIA + CONTA
+    "BANCO": "banco_codigo", // banco dos dados bancários do cliente
+    "AGENCIA": "agencia",
+    "CONTA": "conta",
+    // Margens - usar valores exatos da planilha
     "BRUTA 30%": "margem_bruta_30",
     "UTILZ 30%": "margem_utilizada_30",
     "SALDO 30%": "margem_saldo_30",
@@ -2043,10 +2047,23 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "TELEFONE 3": "telefone_3",
     "TELEFONE 4": "telefone_4",
     "TELEFONE 5": "telefone_5",
-    // Contrato
-    "BANCO": "banco",
+    // Contrato - BANCO_DO_EMPRESTIMO é o banco do contrato
+    "BANCO_DO_EMPRESTIMO": "banco_emprestimo",
+    "BANCO DO EMPRESTIMO": "banco_emprestimo",
+    "BANCO_EMPRESTIMO": "banco_emprestimo",
     "VALOR_PARCELA": "valor_parcela",
     "VALOR PARCELA": "valor_parcela",
+    "SALDO_DEVEDOR": "saldo_devedor",
+    "SALDO DEVEDOR": "saldo_devedor",
+    "PRAZO_REMANESCENTE": "prazo_remanescente",
+    "PRAZO REMANESCENTE": "prazo_remanescente",
+    "PARCELAS_RESTANTES": "prazo_remanescente",
+    "NUMERO_CONTRATO": "numero_contrato",
+    "NUMERO CONTRATO": "numero_contrato",
+    "NR_CONTRATO": "numero_contrato",
+    "TIPO_OPERACAO": "tipo_operacao",
+    "TIPO OPERACAO": "tipo_operacao",
+    "TIPO_CONTRATO": "tipo_operacao",
   };
 
   // Normalize column name for matching
@@ -2118,6 +2135,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           const extrasPessoa: Record<string, any> = {};
           const extrasFolha: Record<string, any> = {};
           
+          // Build contrato data
+          const contratoData: Record<string, any> = {
+            competencia,
+            baseTag,
+          };
+          
           // Map row values to data structures
           for (const [col, value] of Object.entries(row)) {
             const field = headerMap[col];
@@ -2127,9 +2150,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               if (["cpf", "nome", "orgaodesc", "orgaocod", "undpagadoradesc", "undpagadoracod", "natureza", "sit_func", "uf", "municipio"].includes(field)) {
                 pessoaData[field === "sit_func" ? "sitFunc" : field] = String(value || "").trim() || null;
               }
-              // Folha fields (margens)
+              // Dados bancários do cliente (BANCO, AGENCIA, CONTA)
+              else if (["banco_codigo", "agencia", "conta"].includes(field)) {
+                pessoaData[field === "banco_codigo" ? "bancoCodigo" : field] = String(value || "").trim() || null;
+              }
+              // Folha fields (margens) - usar valores exatos da planilha
               else if (field.startsWith("margem_") || ["creditos", "debitos", "liquido"].includes(field)) {
-                const dbField = field.replace(/_/g, "").replace("margem", "margem");
                 const camelField = field.split("_").map((w, i) => i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
                 folhaData[camelField] = parseDecimal(value);
               }
@@ -2137,6 +2163,26 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               else if (field.startsWith("telefone_")) {
                 const tel = String(value || "").trim();
                 if (tel) telefones.push(tel);
+              }
+              // Contrato fields (BANCO_DO_EMPRESTIMO e outros)
+              else if (field === "banco_emprestimo") {
+                contratoData.banco = String(value || "").trim() || null;
+              }
+              else if (field === "valor_parcela") {
+                contratoData.valorParcela = parseDecimal(value);
+              }
+              else if (field === "saldo_devedor") {
+                contratoData.saldoDevedor = parseDecimal(value);
+              }
+              else if (field === "prazo_remanescente") {
+                const prazo = parseInt(String(value || "0"), 10);
+                contratoData.parcelasRestantes = isNaN(prazo) ? null : prazo;
+              }
+              else if (field === "numero_contrato") {
+                contratoData.numeroContrato = String(value || "").trim() || null;
+              }
+              else if (field === "tipo_operacao") {
+                contratoData.tipoContrato = String(value || "").trim() || null;
               }
             } else {
               // Extra fields
@@ -2147,6 +2193,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           pessoaData.telefonesBase = telefones;
           pessoaData.extrasPessoa = extrasPessoa;
           folhaData.extrasFolha = extrasFolha;
+          
+          // Fallback: se não temos BANCO_DO_EMPRESTIMO mas temos BANCO nos dados bancários,
+          // e temos dados de contrato (valor_parcela, saldo_devedor, etc), usar BANCO para contrato
+          if (!contratoData.banco && pessoaData.bancoCodigo && 
+              (contratoData.valorParcela || contratoData.saldoDevedor || contratoData.numeroContrato)) {
+            contratoData.banco = pessoaData.bancoCodigo;
+          }
           
           // Upsert pessoa (find by matricula, create or update)
           let pessoa = await storage.getClientePessoaByMatricula(matricula);
@@ -2160,7 +2213,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           }
           
           if (pessoa) {
-            // Create folha record
+            // Create folha record - usar valores exatos da planilha
             await storage.createClienteFolhaMes({
               pessoaId: pessoa.id,
               competencia,
@@ -2173,6 +2226,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               margemBruta70: folhaData.margemBruta70,
               margemUtilizada70: folhaData.margemUtilizada70,
               margemSaldo70: folhaData.margemSaldo70,
+              margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+              margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
               creditos: folhaData.creditos,
               debitos: folhaData.debitos,
               liquido: folhaData.liquido,
@@ -2181,24 +2236,33 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               extrasFolha: folhaData.extrasFolha,
             } as any);
             
-            // Create contrato record (each row is a contract)
-            let banco: string | null = null;
-            let valorParcela: string | null = null;
-            
-            for (const [col, field] of Object.entries(headerMap)) {
-              if (field === "banco") banco = String(row[col] || "").trim() || null;
-              if (field === "valor_parcela") valorParcela = parseDecimal(row[col]);
+            // Create contrato record if has bank info (deduplicação por chave composta)
+            if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
+              // Chave de deduplicação: CPF + matrícula + convênio + banco_emprestimo + numero_contrato
+              const contratoKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${contratoData.banco || ""}_${contratoData.numeroContrato || ""}`;
+              
+              // Verificar se contrato já existe para evitar duplicação
+              const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
+              const contratoExiste = contratosExistentes.some(c => {
+                const existingKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${c.banco || ""}_${c.numeroContrato || ""}`;
+                return existingKey === contratoKey;
+              });
+              
+              if (!contratoExiste) {
+                await storage.createClienteContrato({
+                  pessoaId: pessoa.id,
+                  tipoContrato: contratoData.tipoContrato || "desconhecido",
+                  banco: contratoData.banco,
+                  valorParcela: contratoData.valorParcela,
+                  saldoDevedor: contratoData.saldoDevedor,
+                  parcelasRestantes: contratoData.parcelasRestantes,
+                  numeroContrato: contratoData.numeroContrato,
+                  competencia,
+                  baseTag,
+                  dadosBrutos: row,
+                } as any);
+              }
             }
-            
-            await storage.createClienteContrato({
-              pessoaId: pessoa.id,
-              tipoContrato: "desconhecido",
-              banco,
-              valorParcela,
-              competencia,
-              baseTag,
-              dadosBrutos: row,
-            } as any);
             
             totalLinhas++;
           }
@@ -2677,6 +2741,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           uf: pessoa.uf,
           municipio: pessoa.municipio,
           telefones_base: pessoa.telefonesBase || [],
+          // Dados bancários do cliente (onde recebe salário)
+          banco_codigo: pessoa.bancoCodigo || null,
+          agencia: pessoa.agencia || null,
+          conta: pessoa.conta || null,
           base_tag_ultima: pessoa.baseTagUltima,
           extras_pessoa: pessoa.extrasPessoa,
         },
@@ -2708,8 +2776,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         contratos: contratos.map(c => ({
           id: c.id,
           tipo_contrato: c.tipoContrato,
-          banco: c.banco,
+          banco: c.banco, // BANCO_DO_EMPRESTIMO
           valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
+          saldo_devedor: c.saldoDevedor ? parseFloat(c.saldoDevedor) : null,
+          parcelas_restantes: c.parcelasRestantes || null, // prazo remanescente exato da planilha
+          numero_contrato: c.numeroContrato || null,
           competencia: c.competencia,
           base_tag: c.baseTag,
           dados_brutos: c.dadosBrutos,

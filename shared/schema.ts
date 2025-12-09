@@ -316,6 +316,10 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   uf: varchar("uf", { length: 2 }),
   municipio: varchar("municipio", { length: 150 }),
   telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array
+  // Dados bancários do cliente (banco onde recebe salário)
+  bancoCodigo: varchar("banco_codigo", { length: 20 }),
+  agencia: varchar("agencia", { length: 20 }),
+  conta: varchar("conta", { length: 30 }),
   baseTagUltima: varchar("base_tag_ultima", { length: 100 }),
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
@@ -350,8 +354,11 @@ export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
   tipoContrato: varchar("tipo_contrato", { length: 50 }), // "consignado", "cartao", "outro", etc.
-  banco: varchar("banco", { length: 100 }),
+  banco: varchar("banco", { length: 100 }), // BANCO_DO_EMPRESTIMO da planilha
   valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
+  saldoDevedor: decimal("saldo_devedor", { precision: 12, scale: 2 }),
+  parcelasRestantes: integer("parcelas_restantes"), // prazo remanescente da planilha
+  numeroContrato: varchar("numero_contrato", { length: 100 }), // identificador do contrato
   competencia: timestamp("competencia"),
   baseTag: varchar("base_tag", { length: 100 }),
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
