@@ -8,10 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import * as XLSX from "xlsx";
 
 interface BaseImportada {
   id: number;
@@ -25,13 +28,84 @@ interface BaseImportada {
   atualizadoEm: string;
 }
 
+const MODELO_COLUNAS = {
+  identificacao: [
+    { nome: "cpf", descricao: "CPF do cliente" },
+    { nome: "matricula", descricao: "Matrícula no órgão/convênio" },
+    { nome: "convenio", descricao: "Ex: SIAPE, GOV_SP, INSS" },
+    { nome: "orgao", descricao: "Nome do órgão/secretaria" },
+    { nome: "uf", descricao: "Estado do vínculo" },
+    { nome: "municipio", descricao: "Município (se existir)" },
+    { nome: "situacao_funcional", descricao: "ATIVO, APOSENTADO, PENSIONISTA" },
+    { nome: "data_nascimento", descricao: "Data de nascimento (opcional)" },
+  ],
+  contatos: [
+    { nome: "telefone_1", descricao: "Telefone principal" },
+    { nome: "telefone_2", descricao: "Telefone alternativo" },
+    { nome: "telefone_3", descricao: "Telefone alternativo 2" },
+    { nome: "email", descricao: "E-mail do cliente" },
+  ],
+  dadosBancarios: [
+    { nome: "banco_salario", descricao: "Código/nome do banco onde recebe salário" },
+    { nome: "agencia_salario", descricao: "Agência do banco" },
+    { nome: "conta_salario", descricao: "Número da conta" },
+  ],
+  folhaMargens: [
+    { nome: "competencia_folha", descricao: "Mês da folha (ex: 2025-10)" },
+    { nome: "margem_70_bruta", descricao: "Margem 70% bruta" },
+    { nome: "margem_70_utilizada", descricao: "Margem 70% utilizada" },
+    { nome: "margem_70_saldo", descricao: "Margem 70% disponível" },
+    { nome: "margem_35_bruta", descricao: "Margem 35% bruta" },
+    { nome: "margem_35_utilizada", descricao: "Margem 35% utilizada" },
+    { nome: "margem_35_saldo", descricao: "Margem 35% disponível" },
+    { nome: "margem_cartao_credito_bruta", descricao: "Margem cartão crédito bruta" },
+    { nome: "margem_cartao_credito_utilizada", descricao: "Margem cartão crédito utilizada" },
+    { nome: "margem_cartao_credito_saldo", descricao: "Margem cartão crédito disponível" },
+    { nome: "margem_cartao_beneficio_bruta", descricao: "Margem cartão benefício bruta" },
+    { nome: "margem_cartao_beneficio_utilizada", descricao: "Margem cartão benefício utilizada" },
+    { nome: "margem_cartao_beneficio_saldo", descricao: "Margem cartão benefício disponível" },
+  ],
+  contratos: [
+    { nome: "banco_emprestimo", descricao: "Banco do contrato (BMG, PAN, etc.)" },
+    { nome: "tipo_produto", descricao: "consignado, cartao_credito, cartao_beneficio" },
+    { nome: "valor_parcela", descricao: "Valor da parcela mensal" },
+    { nome: "prazo_remanescente", descricao: "Parcelas restantes" },
+    { nome: "saldo_devedor", descricao: "Saldo devedor (opcional)" },
+    { nome: "numero_contrato", descricao: "Número do contrato (opcional)" },
+    { nome: "situacao_contrato", descricao: "ATIVO, QUITADO, SUSPENSO (opcional)" },
+  ],
+};
+
 export default function BasesClientes() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isModeloOpen, setIsModeloOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [convenio, setConvenio] = useState("");
   const [competencia, setCompetencia] = useState("");
   const [nomeBase, setNomeBase] = useState("");
+
+  const handleDownloadModelo = () => {
+    const headers = [
+      ...MODELO_COLUNAS.identificacao.map((c) => c.nome),
+      ...MODELO_COLUNAS.contatos.map((c) => c.nome),
+      ...MODELO_COLUNAS.dadosBancarios.map((c) => c.nome),
+      ...MODELO_COLUNAS.folhaMargens.map((c) => c.nome),
+      ...MODELO_COLUNAS.contratos.map((c) => c.nome),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Modelo");
+    
+    ws["!cols"] = headers.map(() => ({ wch: 25 }));
+
+    XLSX.writeFile(wb, "modelo_importacao_base.xlsx");
+    toast({
+      title: "Modelo baixado",
+      description: "Use este arquivo como base para sua planilha de importação.",
+    });
+  };
 
   const { data: bases = [], isLoading, refetch } = useQuery<BaseImportada[]>({
     queryKey: ["/api/bases"],
@@ -129,20 +203,108 @@ export default function BasesClientes() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold" data-testid="text-page-title">Base de Clientes</h1>
           <p className="text-muted-foreground">
             Importe e gerencie bases de clientes (SIAPE, INSS, estaduais)
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-import-base">
-              <Upload className="w-4 h-4 mr-2" />
-              Importar Base
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Dialog open={isModeloOpen} onOpenChange={setIsModeloOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-view-modelo">
+                <HelpCircle className="w-4 h-4 mr-2" />
+                Ver modelo de planilha
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
+              <DialogHeader>
+                <DialogTitle>Modelo de Planilha para Importação</DialogTitle>
+                <DialogDescription>
+                  Sua planilha precisa conter uma linha de cabeçalho com os nomes exatos das colunas abaixo.
+                  Nem todas são obrigatórias, mas quanto mais campos você preencher, mais completa será a consulta.
+                </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Identificação (obrigatórios)</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.identificacao.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Contatos (opcionais)</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.contatos.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Dados Bancários do Salário</h3>
+                    <p className="text-xs text-muted-foreground mb-2">Onde o cliente recebe o salário (diferente do banco do empréstimo)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.dadosBancarios.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Folha / Margens</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.folhaMargens.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Contratos / Descontos em Folha</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.contratos.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+              <DialogFooter>
+                <Button onClick={handleDownloadModelo} data-testid="button-download-modelo">
+                  <Download className="w-4 h-4 mr-2" />
+                  Baixar modelo Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-import-base">
+                <Upload className="w-4 h-4 mr-2" />
+                Importar Base
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Importar Base de Clientes</DialogTitle>
@@ -225,6 +387,7 @@ export default function BasesClientes() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>

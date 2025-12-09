@@ -1,0 +1,186 @@
+1. Onde mostrar essa lista na tela
+
+Na tela Base de Clientes, eu faria assim:
+
+Ao lado do botão “Importar Base”, colocar:
+
+um link/botão secundário: “Ver modelo de planilha”
+
+e/ou “Campos esperados”
+
+Quando clicar:
+
+abre um modal com:
+
+título: Modelo de Planilha para Importação
+
+subtítulo curto explicando que a planilha precisa ter esses cabeçalhos
+
+blocos organizados por categoria (Identificação, Contato, Folha, Contratos)
+
+botão no final: “Baixar modelo em Excel” (um arquivo .xlsx com esses headers na primeira linha)
+
+Assim você resolve 3 coisas:
+
+o sistema documenta o que ele espera
+
+o usuário não precisa decorar nada
+
+você pode mandar o modelo pro fornecedor da base
+
+2. Lista de campos que o sistema deve mostrar
+🔹 Sessão 1 – Identificação do Cliente
+
+Obrigatórios (mínimo para operar):
+
+cpf – CPF do cliente
+
+matricula – matrícula no órgão/convênio
+
+convenio – ex: SIAPE, GOV_SP, INSS
+
+orgao – nome do órgão/secretaria/autarquia
+
+uf – estado do vínculo
+
+municipio – município (se existir)
+
+situacao_funcional – ATIVO, APOSENTADO, PENSIONISTA, CLT etc.
+
+Opcionais:
+
+data_nascimento
+
+🔹 Sessão 2 – Contatos
+
+Opcionais, mas muito úteis:
+
+telefone_1
+
+telefone_2
+
+telefone_3
+
+email
+
+🔹 Sessão 3 – Dados Bancários (onde recebe salário)
+
+banco_salario – código ou nome curto do banco
+
+agencia_salario
+
+conta_salario
+
+Obs.: isso é diferente do banco do empréstimo. Aqui é onde cai o salário.
+
+🔹 Sessão 4 – Situação de Folha / Margens
+
+Para SIAPE (e convênios com margens similares):
+
+competencia_folha – ex: 2025-10
+
+margem_70_bruta
+
+margem_70_utilizada
+
+margem_70_saldo
+
+margem_35_bruta
+
+margem_35_utilizada
+
+margem_35_saldo
+
+margem_cartao_credito_bruta
+
+margem_cartao_credito_utilizada
+
+margem_cartao_credito_saldo
+
+margem_cartao_beneficio_bruta
+
+margem_cartao_beneficio_utilizada
+
+margem_cartao_beneficio_saldo
+
+Para outros convênios que usem 30% em vez de 35%, você pode ter colunas margem_30_*. O importador deve ignorar o que não existir.
+
+🔹 Sessão 5 – Contratos / Descontos em folha
+
+Esses são os campos que alimentam o bloco de Contratos na consulta:
+
+Fortemente recomendados:
+
+banco_emprestimo – nome do banco do contrato (BMG, PAN, BRADESCO…)
+
+tipo_produto – consignado, cartao_credito, cartao_beneficio etc.
+
+valor_parcela – valor da parcela naquele mês
+
+prazo_remanescente – quantidade de parcelas que ainda faltam pagar
+
+competencia_contrato – mês da folha (ex: 2025-10)
+
+Opcionais:
+
+saldo_devedor
+
+numero_contrato
+
+situacao_contrato – ATIVO, QUITADO, SUSPENSO etc.
+
+3. Texto pronto para colocar no sistema (ajuda pro usuário)
+
+Você pode usar esse texto no modal:
+
+Como deve ser a planilha de importação
+
+Sua planilha precisa conter uma linha de cabeçalho com os nomes exatos das colunas abaixo.
+Nem todas são obrigatórias, mas quanto mais campos você preencher, mais completa será a consulta.
+
+Identificação (obrigatórios)
+
+cpf, matricula, convenio, orgao, uf, municipio, situacao_funcional
+
+Contatos (opcionais)
+
+telefone_1, telefone_2, telefone_3, email
+
+Dados bancários do salário
+
+banco_salario, agencia_salario, conta_salario
+
+Folha / Margens
+
+competencia_folha
+
+margem_70_bruta, margem_70_utilizada, margem_70_saldo
+
+margem_35_bruta, margem_35_utilizada, margem_35_saldo
+
+margem_cartao_credito_bruta, margem_cartao_credito_utilizada, margem_cartao_credito_saldo
+
+margem_cartao_beneficio_bruta, margem_cartao_beneficio_utilizada, margem_cartao_beneficio_saldo
+
+Contratos / Descontos em folha
+
+banco_emprestimo, tipo_produto, valor_parcela, prazo_remanescente, competencia_contrato
+
+opcionais: saldo_devedor, numero_contrato, situacao_contrato
+
+E embaixo um botão:
+[ Baixar modelo Excel ]
+
+4. Prompt rápido pro Replit criar essa ajuda na UI
+
+Se quiser mandar isso para o Ghostwriter agora, pode usar:
+
+“Na página Base de Clientes, ao lado do botão Importar Base, crie um botão secundário Ver modelo de planilha.
+Ao clicar, abrir um modal Modelo de Planilha para Importação com:
+
+texto explicando que a planilha precisa ter cabeçalho padrão
+
+lista das colunas por grupo (use exatamente os nomes e textos abaixo)
+
+botão Baixar modelo Excel que baixa um arquivo .xlsx com esses cabeçalhos na primeira linha.
+O importador já está sendo ajustado para ler pelos nomes dessas colunas.”
