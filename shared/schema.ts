@@ -313,7 +313,7 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   natureza: varchar("natureza", { length: 100 }),
   sitFunc: varchar("sit_func", { length: 100 }), // ativo, pensionista, aposentado etc.
   convenio: varchar("convenio", { length: 100 }),
-  uf: varchar("uf", { length: 2 }),
+  uf: varchar("uf", { length: 100 }),
   municipio: varchar("municipio", { length: 150 }),
   telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array
   // Dados bancários do cliente (banco onde recebe salário)
