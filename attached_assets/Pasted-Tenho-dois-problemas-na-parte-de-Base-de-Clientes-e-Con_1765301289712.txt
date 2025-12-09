@@ -1,0 +1,106 @@
+Tenho dois problemas na parte de "Base de Clientes" e "Consulta Cliente" que preciso corrigir agora:
+
+========================
+1) MARGENS NA TELA DE CONSULTA
+========================
+
+Contexto:
+- Para o convênio SIAPE, NÃO existe margem de 30%.
+- As margens corretas de SIAPE são:
+  - 70% (compulsória)
+  - 35% consignado
+  - 5% cartão de crédito
+  - 5% cartão benefício
+
+Hoje, na tela de "Consulta Cliente", ainda está aparecendo um bloco "Margem 30%" e isso confunde tudo.
+
+O que preciso que você faça:
+
+1.1. Ajustar a lógica de exibição das margens na tela de consulta:
+
+- Usar as colunas que já definimos no template de importação:
+  - margem_70_bruta / utilizada / saldo
+  - margem_35_bruta / utilizada / saldo
+  - margem_cartao_credito_* 
+  - margem_cartao_beneficio_*
+
+- Para SIAPE:
+  - NÃO exibir "Margem 30%" em lugar nenhum.
+  - Exibir os cards de margem nesta ordem:
+    1) Margem 70%
+    2) Margem 35%
+    3) Cartão de crédito
+    4) Cartão benefício
+
+- Se em algum outro convênio futuramente existirem campos de margem_30_*, aí sim podemos exibir um card "Margem 30%".
+  - Regra sugerida:
+    - Se existir margem_30_bruta/… nos dados do cliente → exibe card "Margem 30%".
+    - Caso contrário, não exibe.
+
+1.2. Conferir se os valores mostrados em cada card estão vindo das colunas corretas:
+- Card "Margem 70%": usar apenas margem_70_*.
+- Card "Margem 35%": usar apenas margem_35_*.
+- Cartões: usar apenas os campos de cartão, nunca misturar.
+
+Se hoje algum card estiver usando valores de outra coluna (ex: 30% em vez de 35%), corrigir.
+
+========================
+2) DUPLICAÇÃO DE CONTRATOS NA IMPORTAÇÃO
+========================
+
+Contexto:
+- Estou importando a mesma base (ex: SIAPE out/2025) várias vezes para teste.
+- Cada importação nova está CRIANDO NOVAS LINHAS de contratos para um cliente, em vez de reaproveitar as existentes.
+- Na planilha, já existe um campo que representa o número único de contrato (ID do contrato). No template, chamamos isso de `numero_contrato`.
+
+Regra de negócio que preciso implementar:
+
+2.1. Ao importar contratos, o sistema deve tratar como **UPSERT**, não como insert cego.
+
+- Para cada linha de contrato da planilha:
+  - identificar o cliente (provavelmente por cpf + convenio ou pelo client_id já associado).
+  - identificar o contrato de forma única pelo `numero_contrato` (e se fizer sentido também pela base/competência).
+
+Sugestão de chave única para o contrato:
+- (cliente_id, numero_contrato)
+ou
+- (cpf, convenio, numero_contrato)
+— você escolhe a que encaixa melhor com o modelo atual, mas o importante é não duplicar.
+
+2.2. Lógica de importação de contrato:
+
+Pseudo-regra:
+- Buscar na tabela de contratos se já existe um registro para aquele cliente com o mesmo `numero_contrato`.
+  - SE existir:
+    - ATUALIZAR os campos:
+      - valor_parcela
+      - saldo_devedor (se existir)
+      - prazo_remanescente
+      - competencia_contrato
+      - tipo_produto
+      - banco_emprestimo
+      - situacao_contrato (se existir)
+    - NÃO criar novo contrato.
+  - SE NÃO existir:
+    - Criar um novo registro de contrato normalmente.
+
+2.3. Importante:
+- Isso é especialmente crítico porque todo mês vou importar uma base nova (mesmo convênio/competência mais recente).
+- O prazo_remanescente é justamente o campo que muda (vai diminuindo), então preciso que a importação atualize esse valor no mesmo contrato, em vez de gerar 3, 4, 5 linhas duplicadas.
+
+2.4. Quando eu importar a mesma planilha 3 vezes seguidas:
+- O número de contratos do cliente deve continuar o mesmo.
+- Apenas os dados desses contratos devem ser sobrescritos com as últimas informações.
+
+========================
+3) O QUE NÃO PRECISA MEXER AGORA
+========================
+
+- Não precisa implementar lógica de "contrato sumiu na base nova → marcar como quitado". Podemos ver isso depois.
+- Foca apenas em:
+  - Corrigir exibição das margens (não mostrar mais 30% para SIAPE e usar as colunas certas).
+  - Implementar o UPSERT de contratos usando `numero_contrato` como chave.
+
+Depois que terminar:
+- Reimporte uma base de teste 2 ou 3 vezes para garantir que as parcelas NÃO sifam duplicadas.
+- E cheque na tela de “Consulta Cliente” se as margens estão exibindo 70 / 35 / cartão crédito / cartão benefício corretamente.

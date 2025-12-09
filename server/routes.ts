@@ -2343,16 +2343,33 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               baseTag,
             } as any);
             
-            // Create contrato record if has data (with deduplication)
+            // UPSERT contrato: atualiza se existir (mesmo numero_contrato), senão cria novo
             if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
-              // Check for existing contract with same bank+numero to avoid duplicates
               const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
-              const contratoJaExiste = contratosExistentes.some(c => 
-                c.banco === contratoData.banco && 
-                c.numeroContrato === contratoData.numeroContrato
+              
+              // Busca contrato existente pelo numero_contrato (chave única por pessoa)
+              const contratoExistente = contratosExistentes.find(c => 
+                c.numeroContrato === contratoData.numeroContrato && contratoData.numeroContrato
               );
               
-              if (!contratoJaExiste) {
+              if (contratoExistente) {
+                // ATUALIZAR contrato existente com novos dados (preserva pessoaId, atualiza só campos relevantes)
+                const updateData: Record<string, any> = {
+                  baseTag,
+                  dadosBrutos: row,
+                };
+                // Só atualiza campos se tiverem valores na planilha
+                if (contratoData.tipoContrato) updateData.tipoContrato = contratoData.tipoContrato;
+                if (contratoData.banco) updateData.banco = contratoData.banco;
+                if (contratoData.valorParcela !== null) updateData.valorParcela = contratoData.valorParcela;
+                if (contratoData.saldoDevedor !== null) updateData.saldoDevedor = contratoData.saldoDevedor;
+                if (contratoData.parcelasRestantes !== null) updateData.parcelasRestantes = contratoData.parcelasRestantes;
+                // Atualiza competência só se for mais recente
+                updateData.competencia = competenciaDate;
+                
+                await storage.updateClienteContrato(contratoExistente.id, updateData as any);
+              } else {
+                // CRIAR novo contrato
                 await storage.createClienteContrato({
                   pessoaId: pessoa.id,
                   tipoContrato: contratoData.tipoContrato || "consignado",
@@ -2563,6 +2580,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             margem_bruta_70: folhaAtual.margemBruta70 ? parseFloat(folhaAtual.margemBruta70) : null,
             margem_utilizada_70: folhaAtual.margemUtilizada70 ? parseFloat(folhaAtual.margemUtilizada70) : null,
             margem_saldo_70: folhaAtual.margemSaldo70 ? parseFloat(folhaAtual.margemSaldo70) : null,
+            margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo ? parseFloat(folhaAtual.margemCartaoCreditoSaldo) : null,
+            margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo ? parseFloat(folhaAtual.margemCartaoBeneficioSaldo) : null,
             creditos: folhaAtual.creditos ? parseFloat(folhaAtual.creditos) : null,
             debitos: folhaAtual.debitos ? parseFloat(folhaAtual.debitos) : null,
             liquido: folhaAtual.liquido ? parseFloat(folhaAtual.liquido) : null,
@@ -2572,6 +2591,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           historico: folhaHistorico.map(f => ({
             competencia: f.competencia,
             margem_saldo_30: f.margemSaldo30 ? parseFloat(f.margemSaldo30) : null,
+            margem_saldo_35: f.margemSaldo35 ? parseFloat(f.margemSaldo35) : null,
+            margem_saldo_70: f.margemSaldo70 ? parseFloat(f.margemSaldo70) : null,
             liquido: f.liquido ? parseFloat(f.liquido) : null,
             base_tag: f.baseTag,
           })),

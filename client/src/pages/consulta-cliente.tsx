@@ -87,6 +87,8 @@ interface FolhaAtual {
   margem_bruta_70: number | null;
   margem_utilizada_70: number | null;
   margem_saldo_70: number | null;
+  margem_cartao_credito_saldo: number | null;
+  margem_cartao_beneficio_saldo: number | null;
   creditos: number | null;
   debitos: number | null;
   liquido: number | null;
@@ -97,6 +99,8 @@ interface FolhaAtual {
 interface FolhaHistorico {
   competencia: string;
   margem_saldo_30: number | null;
+  margem_saldo_35: number | null;
+  margem_saldo_70: number | null;
   liquido: number | null;
   base_tag: string | null;
 }
@@ -601,8 +605,93 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card className="bg-muted/50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Margem 70% - Compulsória (SIAPE) - só exibe se tiver dados */}
+                        {(clienteDetalhado.folha.atual.margem_bruta_70 !== null || 
+                          clienteDetalhado.folha.atual.margem_utilizada_70 !== null || 
+                          clienteDetalhado.folha.atual.margem_saldo_70 !== null) && (
+                          <Card className="bg-muted/50">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Margem 70%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_70)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_70)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_70)}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Margem 35% - Consignado - só exibe se tiver dados */}
+                        {(clienteDetalhado.folha.atual.margem_bruta_35 !== null || 
+                          clienteDetalhado.folha.atual.margem_utilizada_35 !== null || 
+                          clienteDetalhado.folha.atual.margem_saldo_35 !== null) && (
+                          <Card className="bg-muted/50">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Margem 35%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_35)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_35)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_35)}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Cartão de Crédito (5%) - só exibe se tiver dados */}
+                        {clienteDetalhado.folha.atual.margem_cartao_credito_saldo !== null && (
+                          <Card className="bg-muted/50">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Cartão Crédito</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo Disponível:</span>
+                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_cartao_credito_saldo)}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Cartão Benefício (5%) - só exibe se tiver dados */}
+                        {clienteDetalhado.folha.atual.margem_cartao_beneficio_saldo !== null && (
+                          <Card className="bg-muted/50">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Cartão Benefício</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo Disponível:</span>
+                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_cartao_beneficio_saldo)}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+
+                      {/* Margem 30% - Só mostrar se existir dados (outros convênios) */}
+                      {(clienteDetalhado.folha.atual.margem_bruta_30 !== null || 
+                        clienteDetalhado.folha.atual.margem_utilizada_30 !== null || 
+                        clienteDetalhado.folha.atual.margem_saldo_30 !== null) && (
+                        <Card className="bg-muted/50 max-w-sm">
                           <CardContent className="p-4">
                             <p className="text-sm font-medium mb-2">Margem 30%</p>
                             <div className="space-y-1 text-sm">
@@ -621,45 +710,7 @@ export default function ConsultaCliente() {
                             </div>
                           </CardContent>
                         </Card>
-                        <Card className="bg-muted/50">
-                          <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Margem 35%</p>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_35)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_35)}</span>
-                              </div>
-                              <div className="flex justify-between font-medium">
-                                <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_35)}</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/50">
-                          <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Margem 70%</p>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_70)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_70)}</span>
-                              </div>
-                              <div className="flex justify-between font-medium">
-                                <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_70)}</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
+                      )}
 
                       <Separator />
 
@@ -690,7 +741,8 @@ export default function ConsultaCliente() {
                                 <TableHeader>
                                   <TableRow>
                                     <TableHead>Competência</TableHead>
-                                    <TableHead>Saldo 30%</TableHead>
+                                    <TableHead>Saldo 70%</TableHead>
+                                    <TableHead>Saldo 35%</TableHead>
                                     <TableHead>Líquido</TableHead>
                                     <TableHead>Base</TableHead>
                                   </TableRow>
@@ -699,7 +751,8 @@ export default function ConsultaCliente() {
                                   {clienteDetalhado.folha.historico.map((f, idx) => (
                                     <TableRow key={idx}>
                                       <TableCell>{formatDate(f.competencia)}</TableCell>
-                                      <TableCell>{formatCurrency(f.margem_saldo_30)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_70)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_35)}</TableCell>
                                       <TableCell>{formatCurrency(f.liquido)}</TableCell>
                                       <TableCell>
                                         <Badge variant="outline" className="text-xs">{f.base_tag}</Badge>

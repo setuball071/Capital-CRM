@@ -133,6 +133,7 @@ export interface IStorage {
   
   // Clientes Contratos
   createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
+  updateClienteContrato(id: number, data: Partial<InsertClienteContrato>): Promise<ClienteContrato | undefined>;
   getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]>;
   
   // Bases Importadas
@@ -995,6 +996,14 @@ export class DbStorage implements IStorage {
   async createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato> {
     const [newContrato] = await db.insert(clientesContratos).values(data).returning();
     return newContrato;
+  }
+
+  async updateClienteContrato(id: number, data: Partial<InsertClienteContrato>): Promise<ClienteContrato | undefined> {
+    const [updated] = await db.update(clientesContratos)
+      .set(data)
+      .where(eq(clientesContratos.id, id))
+      .returning();
+    return updated;
   }
 
   async getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]> {
