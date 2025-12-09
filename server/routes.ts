@@ -31,22 +31,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-// Configure multer for large file uploads
-const uploadDir = path.join(os.tmpdir(), "goldcard-uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
+// Configure multer for file uploads using memory storage
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: uploadDir,
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, `import-${uniqueSuffix}${path.extname(file.originalname)}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 800 * 1024 * 1024, // 800MB limit
+    fileSize: 100 * 1024 * 1024, // 100MB limit for memory storage
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".xlsx", ".xls", ".csv"];
@@ -2023,13 +2012,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== BASE DE CLIENTES ROUTES =====
 
-  // ===== TEMPLATE OFICIAL DE CABEÇALHOS =====
-  // Mapeamento padronizado de colunas para campos do banco de dados
-  // Suporta tanto o template oficial quanto variações de planilhas legadas
-  const SIAPE_COLUMN_MAP: Record<string, string> = {
-    // ==========================================
-    // IDENTIFICAÇÃO DO CLIENTE (TEMPLATE OFICIAL)
-    // ==========================================
+  // Simple column mapping for import
+  const COLUMN_MAP: Record<string, string> = {
     "CPF": "cpf",
     "MATRICULA": "matricula",
     "CONVENIO": "convenio",
@@ -2037,372 +2021,47 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "UF": "uf",
     "MUNICIPIO": "municipio",
     "SITUACAO_FUNCIONAL": "sit_func",
-    "DATA_NASCIMENTO": "data_nascimento",
-    // Variações legadas de identificação
-    "NOME": "nome",
-    "ORGAODESC": "orgaodesc",
-    "ORGAO_DESC": "orgaodesc",
-    "ORGAOCOD": "orgaocod",
-    "ORGAO_COD": "orgaocod",
-    "UNDPAGADORADESC": "undpagadoradesc",
-    "UND_PAGADORA_DESC": "undpagadoradesc",
-    "UNDPAGADORACOD": "undpagadoracod",
-    "UND_PAGADORA_COD": "undpagadoracod",
-    "NATUREZA": "natureza",
     "SIT_FUNC": "sit_func",
-    "SIT FUNC": "sit_func",
-    
-    // ==========================================
-    // CONTATO (TEMPLATE OFICIAL)
-    // ==========================================
+    "NOME": "nome",
     "TELEFONE_1": "telefone_1",
     "TELEFONE_2": "telefone_2",
     "TELEFONE_3": "telefone_3",
     "EMAIL": "email",
-    // Variações legadas de contato
-    "TELEFONE 1": "telefone_1",
-    "TELEFONE 2": "telefone_2",
-    "TELEFONE 3": "telefone_3",
-    "TELEFONE 4": "telefone_4",
-    "TELEFONE 5": "telefone_5",
-    
-    // ==========================================
-    // DADOS BANCÁRIOS DO SALÁRIO (TEMPLATE OFICIAL)
-    // ==========================================
     "BANCO_SALARIO": "banco_salario",
+    "BANCO": "banco_salario",
     "AGENCIA_SALARIO": "agencia_salario",
-    "CONTA_SALARIO": "conta_salario",
-    // Variações legadas de dados bancários (planilhas antigas)
-    "BANCO": "banco_salario", // banco onde recebe salário
     "AGENCIA": "agencia_salario",
+    "CONTA_SALARIO": "conta_salario",
     "CONTA": "conta_salario",
-    
-    // ==========================================
-    // MARGENS SIAPE / FOLHA (TEMPLATE OFICIAL)
-    // ==========================================
-    // Margem 70% (compulsória)
     "MARGEM_70_BRUTA": "margem_70_bruta",
     "MARGEM_70_UTILIZADA": "margem_70_utilizada",
     "MARGEM_70_SALDO": "margem_70_saldo",
-    // Variações legadas 70%
-    "BRUTA 70%": "margem_70_bruta",
-    "UTILZ 70%": "margem_70_utilizada",
-    "SALDO 70%": "margem_70_saldo",
-    
-    // Margem 35% (consignado)
     "MARGEM_35_BRUTA": "margem_35_bruta",
     "MARGEM_35_UTILIZADA": "margem_35_utilizada",
     "MARGEM_35_SALDO": "margem_35_saldo",
-    // Variações legadas 35%
-    "BRUTA 35%": "margem_35_bruta",
-    "UTILZ 35%": "margem_35_utilizada",
-    "SALDO 35%": "margem_35_saldo",
-    // Alias para 30% (algumas planilhas usam 30%)
-    "BRUTA 30%": "margem_35_bruta",
-    "UTILZ 30%": "margem_35_utilizada",
-    "SALDO 30%": "margem_35_saldo",
-    
-    // Margem Cartão Crédito (5%)
     "MARGEM_CARTAO_CREDITO_BRUTA": "margem_cartao_credito_bruta",
     "MARGEM_CARTAO_CREDITO_UTILIZADA": "margem_cartao_credito_utilizada",
     "MARGEM_CARTAO_CREDITO_SALDO": "margem_cartao_credito_saldo",
-    // Variações legadas cartão crédito
-    "MARGEM CARTAO CREDITO SALDO": "margem_cartao_credito_saldo",
-    "MARGEM CARTAO CREDITO": "margem_cartao_credito_saldo",
-    "SALDO CARTAO CREDITO": "margem_cartao_credito_saldo",
-    "MARGEM 5% CREDITO": "margem_cartao_credito_saldo",
-    
-    // Margem Cartão Benefício (5%)
     "MARGEM_CARTAO_BENEFICIO_BRUTA": "margem_cartao_beneficio_bruta",
     "MARGEM_CARTAO_BENEFICIO_UTILIZADA": "margem_cartao_beneficio_utilizada",
     "MARGEM_CARTAO_BENEFICIO_SALDO": "margem_cartao_beneficio_saldo",
-    // Variações legadas cartão benefício
-    "MARGEM CARTAO BENEFICIO SALDO": "margem_cartao_beneficio_saldo",
-    "MARGEM CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
-    "SALDO CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
-    "MARGEM 5% BENEFICIO": "margem_cartao_beneficio_saldo",
-    
-    // Competência da folha
-    "COMPETENCIA_FOLHA": "competencia_folha",
-    
-    // Folha - valores agregados
-    "CREDITOS": "creditos",
-    "CRÉDITOS": "creditos",
-    "DEBITOS": "debitos",
-    "DÉBITOS": "debitos",
-    "LIQUIDO": "liquido",
-    "LÍQUIDO": "liquido",
-    
-    // ==========================================
-    // CONTRATOS / DESCONTOS EM FOLHA (TEMPLATE OFICIAL)
-    // ==========================================
-    // banco_emprestimo é o banco do contrato (BMG, PAN, etc)
     "BANCO_EMPRESTIMO": "banco_emprestimo",
-    "BANCO_DO_EMPRESTIMO": "banco_emprestimo",
-    "BANCO DO EMPRESTIMO": "banco_emprestimo",
-    
-    "TIPO_PRODUTO": "tipo_produto",
-    "TIPO PRODUTO": "tipo_produto",
-    // Variações legadas para tipo
-    "TIPO_OPERACAO": "tipo_produto",
-    "TIPO OPERACAO": "tipo_produto",
-    "TIPO_CONTRATO": "tipo_produto",
-    
     "VALOR_PARCELA": "valor_parcela",
-    "VALOR PARCELA": "valor_parcela",
-    
     "SALDO_DEVEDOR": "saldo_devedor",
-    "SALDO DEVEDOR": "saldo_devedor",
-    
-    // prazo_remanescente = número de parcelas que ainda faltam pagar
     "PRAZO_REMANESCENTE": "prazo_remanescente",
-    "PRAZO REMANESCENTE": "prazo_remanescente",
-    "PARCELAS_RESTANTES": "prazo_remanescente",
-    
-    "COMPETENCIA_CONTRATO": "competencia_contrato",
-    
     "NUMERO_CONTRATO": "numero_contrato",
-    "NUMERO CONTRATO": "numero_contrato",
-    "NR_CONTRATO": "numero_contrato",
-    
-    "SITUACAO_CONTRATO": "situacao_contrato",
-    "SITUACAO CONTRATO": "situacao_contrato",
+    "TIPO_PRODUTO": "tipo_produto",
   };
 
-  // Normalize column name for matching
-  function normalizeColumnName(col: string): string {
-    return col.toUpperCase().trim().replace(/\s+/g, " ");
+  function normalizeCol(col: string): string {
+    return col.toUpperCase().trim().replace(/\s+/g, "_");
   }
 
-  // Parse decimal value from string
-  function parseDecimal(value: any): string | null {
+  function parseNum(value: any): string | null {
     if (value === null || value === undefined || value === "") return null;
     const str = String(value).replace(/[^\d,.-]/g, "").replace(",", ".");
     const num = parseFloat(str);
     return isNaN(num) ? null : num.toFixed(2);
-  }
-
-  // Process import job asynchronously
-  async function processImportJob(
-    baseId: number,
-    data: any[],
-    convenio: string,
-    competencia: Date,
-    baseTag: string
-  ) {
-    let totalLinhas = 0;
-    
-    try {
-      // Get header mapping
-      const headers = data[0] ? Object.keys(data[0]) : [];
-      const headerMap: Record<string, string> = {};
-      
-      for (const header of headers) {
-        const normalized = normalizeColumnName(header);
-        if (SIAPE_COLUMN_MAP[normalized]) {
-          headerMap[header] = SIAPE_COLUMN_MAP[normalized];
-        }
-      }
-
-      // Process each row
-      for (const row of data) {
-        try {
-          // Extract matricula (required)
-          let matricula: string | null = null;
-          for (const [col, field] of Object.entries(headerMap)) {
-            if (field === "matricula") {
-              matricula = String(row[col] || "").trim();
-              break;
-            }
-          }
-          
-          if (!matricula) continue; // Skip rows without matricula
-          
-          // Build pessoa data
-          const pessoaData: Record<string, any> = {
-            matricula,
-            convenio,
-            baseTagUltima: baseTag,
-          };
-          
-          // Build folha data
-          const folhaData: Record<string, any> = {
-            competencia,
-            baseTag,
-          };
-          
-          // Build telefones array
-          const telefones: string[] = [];
-          
-          // Build extras
-          const extrasPessoa: Record<string, any> = {};
-          const extrasFolha: Record<string, any> = {};
-          
-          // Build contrato data
-          const contratoData: Record<string, any> = {
-            competencia,
-            baseTag,
-          };
-          
-          // Map row values to data structures
-          for (const [col, value] of Object.entries(row)) {
-            const field = headerMap[col];
-            
-            if (field) {
-              // ===== PESSOA FIELDS =====
-              if (["cpf", "nome", "orgaodesc", "orgaocod", "undpagadoradesc", "undpagadoracod", "natureza", "sit_func", "uf", "municipio", "data_nascimento", "email"].includes(field)) {
-                pessoaData[field === "sit_func" ? "sitFunc" : field] = String(value || "").trim() || null;
-              }
-              // Dados bancários do cliente (banco_salario, agencia_salario, conta_salario)
-              else if (field === "banco_salario") {
-                pessoaData.bancoCodigo = String(value || "").trim() || null;
-              }
-              else if (field === "agencia_salario") {
-                pessoaData.agencia = String(value || "").trim() || null;
-              }
-              else if (field === "conta_salario") {
-                pessoaData.conta = String(value || "").trim() || null;
-              }
-              
-              // ===== FOLHA FIELDS (margens) =====
-              else if (field.startsWith("margem_") || ["creditos", "debitos", "liquido"].includes(field)) {
-                // Converter snake_case para camelCase
-                const camelField = field.split("_").map((w, i) => i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
-                folhaData[camelField] = parseDecimal(value);
-              }
-              
-              // ===== TELEFONES =====
-              else if (field.startsWith("telefone_")) {
-                const tel = String(value || "").trim();
-                if (tel) telefones.push(tel);
-              }
-              
-              // ===== CONTRATO FIELDS =====
-              // banco_emprestimo é o banco do contrato (BMG, PAN, etc)
-              else if (field === "banco_emprestimo") {
-                contratoData.banco = String(value || "").trim() || null;
-              }
-              else if (field === "valor_parcela") {
-                contratoData.valorParcela = parseDecimal(value);
-              }
-              else if (field === "saldo_devedor") {
-                contratoData.saldoDevedor = parseDecimal(value);
-              }
-              // prazo_remanescente = número de parcelas que ainda faltam pagar (usar valor exato)
-              else if (field === "prazo_remanescente") {
-                const prazo = parseInt(String(value || "0"), 10);
-                contratoData.parcelasRestantes = isNaN(prazo) ? null : prazo;
-              }
-              else if (field === "numero_contrato") {
-                contratoData.numeroContrato = String(value || "").trim() || null;
-              }
-              // tipo_produto = consignado, cartao_credito, cartao_beneficio...
-              else if (field === "tipo_produto") {
-                contratoData.tipoContrato = String(value || "").trim() || null;
-              }
-              else if (field === "situacao_contrato") {
-                contratoData.situacaoContrato = String(value || "").trim() || null;
-              }
-            } else {
-              // Extra fields (colunas não mapeadas)
-              extrasPessoa[col] = value;
-            }
-          }
-          
-          pessoaData.telefonesBase = telefones;
-          pessoaData.extrasPessoa = extrasPessoa;
-          folhaData.extrasFolha = extrasFolha;
-          
-          // Fallback: se não temos BANCO_DO_EMPRESTIMO mas temos BANCO nos dados bancários,
-          // e temos dados de contrato (valor_parcela, saldo_devedor, etc), usar BANCO para contrato
-          if (!contratoData.banco && pessoaData.bancoCodigo && 
-              (contratoData.valorParcela || contratoData.saldoDevedor || contratoData.numeroContrato)) {
-            contratoData.banco = pessoaData.bancoCodigo;
-          }
-          
-          // Upsert pessoa (find by matricula, create or update)
-          let pessoa = await storage.getClientePessoaByMatricula(matricula);
-          
-          if (pessoa) {
-            // Update existing
-            pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
-          } else {
-            // Create new
-            pessoa = await storage.createClientePessoa(pessoaData as any);
-          }
-          
-          if (pessoa) {
-            // Create folha record - usar valores exatos da planilha
-            await storage.createClienteFolhaMes({
-              pessoaId: pessoa.id,
-              competencia,
-              margemBruta30: folhaData.margemBruta30,
-              margemUtilizada30: folhaData.margemUtilizada30,
-              margemSaldo30: folhaData.margemSaldo30,
-              margemBruta35: folhaData.margemBruta35,
-              margemUtilizada35: folhaData.margemUtilizada35,
-              margemSaldo35: folhaData.margemSaldo35,
-              margemBruta70: folhaData.margemBruta70,
-              margemUtilizada70: folhaData.margemUtilizada70,
-              margemSaldo70: folhaData.margemSaldo70,
-              margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
-              margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
-              creditos: folhaData.creditos,
-              debitos: folhaData.debitos,
-              liquido: folhaData.liquido,
-              sitFuncNoMes: pessoaData.sitFunc || null,
-              baseTag,
-              extrasFolha: folhaData.extrasFolha,
-            } as any);
-            
-            // Create contrato record if has bank info (deduplicação por chave composta)
-            if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
-              // Chave de deduplicação: CPF + matrícula + convênio + banco_emprestimo + numero_contrato
-              const contratoKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${contratoData.banco || ""}_${contratoData.numeroContrato || ""}`;
-              
-              // Verificar se contrato já existe para evitar duplicação
-              const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
-              const contratoExiste = contratosExistentes.some(c => {
-                const existingKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${c.banco || ""}_${c.numeroContrato || ""}`;
-                return existingKey === contratoKey;
-              });
-              
-              if (!contratoExiste) {
-                await storage.createClienteContrato({
-                  pessoaId: pessoa.id,
-                  tipoContrato: contratoData.tipoContrato || "desconhecido",
-                  banco: contratoData.banco,
-                  valorParcela: contratoData.valorParcela,
-                  saldoDevedor: contratoData.saldoDevedor,
-                  parcelasRestantes: contratoData.parcelasRestantes,
-                  numeroContrato: contratoData.numeroContrato,
-                  competencia,
-                  baseTag,
-                  dadosBrutos: row,
-                } as any);
-              }
-            }
-            
-            totalLinhas++;
-          }
-        } catch (rowError) {
-          console.error("[Import] Row error:", rowError);
-        }
-      }
-      
-      // Update base status
-      await storage.updateBaseImportada(baseId, {
-        totalLinhas,
-        status: "concluida",
-      });
-      
-      console.log(`[Import] Base ${baseId} completed with ${totalLinhas} rows`);
-    } catch (error) {
-      console.error("[Import] Job error:", error);
-      await storage.updateBaseImportada(baseId, {
-        status: "erro",
-      });
-    }
   }
 
   // GET bases importadas - Master only
@@ -2416,40 +2075,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST importar base - Master only (Multipart upload for large files)
-  app.post("/api/bases/importar", requireAuth, requireMaster, (req, res, next) => {
-    // Wrap multer to handle file size errors gracefully
-    upload.single("arquivo")(req, res, (err: any) => {
-      if (err) {
-        if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(413).json({ 
-            message: "O arquivo excede o limite de tamanho permitido (máximo 800MB)" 
-          });
-        }
-        return res.status(400).json({ message: err.message || "Erro no upload do arquivo" });
-      }
-      next();
-    });
-  }, async (req, res) => {
+  // POST importar base - Master only - Simple synchronous import
+  app.post("/api/bases/import", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
     try {
       const file = req.file;
       const { convenio, competencia, nome_base } = req.body;
       
       if (!file || !convenio || !competencia) {
-        // Clean up file if exists
-        if (file) fs.unlinkSync(file.path);
         return res.status(400).json({ 
           message: "Arquivo, convênio e competência são obrigatórios" 
-        });
-      }
-
-      // Check if there's already a base being processed
-      const existingProcessing = await storage.getBaseByStatus("processando");
-      if (existingProcessing) {
-        // Clean up uploaded file
-        fs.unlinkSync(file.path);
-        return res.status(409).json({ 
-          message: "Já existe uma base em processamento. Aguarde a conclusão antes de iniciar uma nova importação." 
         });
       }
 
@@ -2470,308 +2104,202 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         competencia: competenciaDate,
         status: "processando",
       });
-      
-      // Start async streaming processing (fire-and-forget with error handling)
-      processStreamingImportJob(base.id, file.path, convenio, competenciaDate, baseTag).catch(async (err) => {
-        console.error("[Import] Unhandled error in streaming job:", err);
-        try {
-          await storage.updateBaseImportada(base.id, { status: "erro" });
-        } catch (e) {
-          console.error("[Import] Failed to update base status on error:", e);
-        }
-      });
-      
-      return res.json({
-        message: "Importação iniciada",
-        baseId: base.id,
-        baseTag,
-        fileName: file.originalname,
-        fileSize: file.size,
-      });
-    } catch (error) {
-      console.error("Import error:", error);
-      // Clean up file on error
-      if (req.file) {
-        try { fs.unlinkSync(req.file.path); } catch (e) {}
-      }
-      return res.status(500).json({ message: "Erro ao importar base" });
-    }
-  });
 
-  // Streaming import processor for large files
-  async function processStreamingImportJob(
-    baseId: number,
-    filePath: string,
-    convenio: string,
-    competencia: Date,
-    baseTag: string
-  ) {
-    let totalLinhas = 0;
-    let processedRows = 0;
-    
-    try {
-      console.log(`[Import] Starting streaming import for base ${baseId}`);
+      console.log(`[Import] Created base ${base.id} with tag ${baseTag}`);
       
-      const ext = path.extname(filePath).toLowerCase();
+      // Parse file with XLSX (works for xlsx, xls, csv)
+      const workbook = XLSX.read(file.buffer, { type: "buffer" });
+      const firstSheet = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheet];
+      const data: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      console.log(`[Import] Parsed ${data.length} rows from ${firstSheet}`);
+
+      // Build header mapping
+      const headers = data[0] ? Object.keys(data[0]) : [];
+      const headerMap: Record<string, string> = {};
       
-      if (ext === ".csv") {
-        // Use XLSX for CSV (still in-memory but CSVs are smaller)
-        const workbook = XLSX.readFile(filePath);
-        const firstSheet = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheet];
-        const data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-        
-        // Process with existing function
-        await processImportJob(baseId, data, convenio, competencia, baseTag);
-      } else {
-        // Use ExcelJS streaming for Excel files
-        const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
-          sharedStrings: "cache",
-          hyperlinks: "ignore",
-          worksheets: "emit",
-          styles: "ignore",
-        });
-        
-        let headers: string[] = [];
-        let headerMap: Record<string, string> = {};
-        let isFirstRow = true;
-        
-        for await (const worksheetReader of workbookReader) {
-          console.log(`[Import] Processing worksheet: ${(worksheetReader as any).name || "Sheet"}`);
-          
-          for await (const row of worksheetReader) {
-            if (isFirstRow) {
-              // First row contains headers
-              const rowValues = (row.values as any[]) || [];
-              headers = rowValues.slice(1).map((v: any) => String(v || ""));
-              
-              for (const header of headers) {
-                const normalized = normalizeColumnName(header);
-                if (SIAPE_COLUMN_MAP[normalized]) {
-                  headerMap[header] = SIAPE_COLUMN_MAP[normalized];
-                }
-              }
-              
-              isFirstRow = false;
-              continue;
-            }
-            
-            try {
-              // Get row values (skip first element as it's undefined)
-              const rowValues = (row.values as any[]) || [];
-              const values = rowValues.slice(1);
-              
-              // Build row object
-              const rowData: Record<string, any> = {};
-              headers.forEach((header, index) => {
-                rowData[header] = values[index];
-              });
-              
-              // Extract matricula (required)
-              let matricula: string | null = null;
-              for (const [col, field] of Object.entries(headerMap)) {
-                if (field === "matricula") {
-                  matricula = String(rowData[col] || "").trim();
-                  break;
-                }
-              }
-              
-              if (!matricula) continue; // Skip rows without matricula
-              
-              // Build pessoa data
-              const pessoaData: Record<string, any> = {
-                matricula,
-                convenio,
-                baseTagUltima: baseTag,
-              };
-              
-              // Build folha data
-              const folhaData: Record<string, any> = {
-                competencia,
-                baseTag,
-              };
-              
-              // Build telefones array
-              const telefones: string[] = [];
-              const extrasPessoa: Record<string, any> = {};
-              const extrasFolha: Record<string, any> = {};
-              
-              // Build contrato data
-              const contratoData: Record<string, any> = {
-                competencia,
-                baseTag,
-              };
-              
-              // Map row values to data structures (mesma lógica do processImportJob)
-              for (const [col, value] of Object.entries(rowData)) {
-                const field = headerMap[col];
-                
-                if (field) {
-                  // ===== PESSOA FIELDS =====
-                  if (["cpf", "nome", "orgaodesc", "orgaocod", "undpagadoradesc", "undpagadoracod", "natureza", "sit_func", "uf", "municipio", "data_nascimento", "email"].includes(field)) {
-                    pessoaData[field === "sit_func" ? "sitFunc" : field] = String(value || "").trim() || null;
-                  }
-                  // Dados bancários do cliente (banco_salario, agencia_salario, conta_salario)
-                  else if (field === "banco_salario") {
-                    pessoaData.bancoCodigo = String(value || "").trim() || null;
-                  }
-                  else if (field === "agencia_salario") {
-                    pessoaData.agencia = String(value || "").trim() || null;
-                  }
-                  else if (field === "conta_salario") {
-                    pessoaData.conta = String(value || "").trim() || null;
-                  }
-                  
-                  // ===== FOLHA FIELDS (margens) =====
-                  else if (field.startsWith("margem_") || ["creditos", "debitos", "liquido"].includes(field)) {
-                    const camelField = field.split("_").map((w, i) => i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
-                    folhaData[camelField] = parseDecimal(value);
-                  }
-                  
-                  // ===== TELEFONES =====
-                  else if (field.startsWith("telefone_")) {
-                    const tel = String(value || "").trim();
-                    if (tel) telefones.push(tel);
-                  }
-                  
-                  // ===== CONTRATO FIELDS =====
-                  else if (field === "banco_emprestimo") {
-                    contratoData.banco = String(value || "").trim() || null;
-                  }
-                  else if (field === "valor_parcela") {
-                    contratoData.valorParcela = parseDecimal(value);
-                  }
-                  else if (field === "saldo_devedor") {
-                    contratoData.saldoDevedor = parseDecimal(value);
-                  }
-                  else if (field === "prazo_remanescente") {
-                    const prazo = parseInt(String(value || "0"), 10);
-                    contratoData.parcelasRestantes = isNaN(prazo) ? null : prazo;
-                  }
-                  else if (field === "numero_contrato") {
-                    contratoData.numeroContrato = String(value || "").trim() || null;
-                  }
-                  else if (field === "tipo_produto") {
-                    contratoData.tipoContrato = String(value || "").trim() || null;
-                  }
-                  else if (field === "situacao_contrato") {
-                    contratoData.situacaoContrato = String(value || "").trim() || null;
-                  }
-                } else {
-                  extrasPessoa[col] = value;
-                }
-              }
-              
-              pessoaData.telefonesBase = telefones;
-              pessoaData.extrasPessoa = extrasPessoa;
-              folhaData.extrasFolha = extrasFolha;
-              
-              // Fallback: se não temos banco_emprestimo mas temos banco_salario e dados de contrato
-              if (!contratoData.banco && pessoaData.bancoCodigo && 
-                  (contratoData.valorParcela || contratoData.saldoDevedor || contratoData.numeroContrato)) {
-                contratoData.banco = pessoaData.bancoCodigo;
-              }
-              
-              // Upsert pessoa
-              let pessoa = await storage.getClientePessoaByMatricula(matricula);
-              
-              if (pessoa) {
-                pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
-              } else {
-                pessoa = await storage.createClientePessoa(pessoaData as any);
-              }
-              
-              if (pessoa) {
-                // Create folha record
-                await storage.createClienteFolhaMes({
-                  pessoaId: pessoa.id,
-                  competencia,
-                  margemBruta30: folhaData.margemBruta30,
-                  margemUtilizada30: folhaData.margemUtilizada30,
-                  margemSaldo30: folhaData.margemSaldo30,
-                  margemBruta35: folhaData.margemBruta35,
-                  margemUtilizada35: folhaData.margemUtilizada35,
-                  margemSaldo35: folhaData.margemSaldo35,
-                  margemBruta70: folhaData.margemBruta70,
-                  margemUtilizada70: folhaData.margemUtilizada70,
-                  margemSaldo70: folhaData.margemSaldo70,
-                  margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
-                  margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
-                  creditos: folhaData.creditos,
-                  debitos: folhaData.debitos,
-                  liquido: folhaData.liquido,
-                  sitFuncNoMes: pessoaData.sitFunc || null,
-                  baseTag,
-                  extrasFolha: folhaData.extrasFolha,
-                } as any);
-                
-                // Create contrato record if has bank info (deduplicação por chave composta)
-                if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
-                  const contratoKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${contratoData.banco || ""}_${contratoData.numeroContrato || ""}`;
-                  
-                  const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
-                  const contratoExiste = contratosExistentes.some(c => {
-                    const existingKey = `${pessoaData.cpf || ""}_${matricula}_${convenio}_${c.banco || ""}_${c.numeroContrato || ""}`;
-                    return existingKey === contratoKey;
-                  });
-                  
-                  if (!contratoExiste) {
-                    await storage.createClienteContrato({
-                      pessoaId: pessoa.id,
-                      tipoContrato: contratoData.tipoContrato || "desconhecido",
-                      banco: contratoData.banco,
-                      valorParcela: contratoData.valorParcela,
-                      saldoDevedor: contratoData.saldoDevedor,
-                      parcelasRestantes: contratoData.parcelasRestantes,
-                      numeroContrato: contratoData.numeroContrato,
-                      competencia,
-                      baseTag,
-                      dadosBrutos: rowData,
-                    } as any);
-                  }
-                }
-                
-                totalLinhas++;
-              }
-              
-              processedRows++;
-              
-              // Log progress every 1000 rows
-              if (processedRows % 1000 === 0) {
-                console.log(`[Import] Base ${baseId}: Processed ${processedRows} rows, imported ${totalLinhas}`);
-              }
-            } catch (rowError) {
-              console.error("[Import] Row error:", rowError);
+      for (const header of headers) {
+        const normalized = normalizeCol(header);
+        if (COLUMN_MAP[normalized]) {
+          headerMap[header] = COLUMN_MAP[normalized];
+        }
+      }
+
+      console.log(`[Import] Mapped columns:`, Object.keys(headerMap).length);
+
+      let totalLinhas = 0;
+
+      // Process each row
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        try {
+          // Extract matricula (required)
+          let matricula: string | null = null;
+          for (const [col, field] of Object.entries(headerMap)) {
+            if (field === "matricula") {
+              matricula = String(row[col] || "").trim();
+              break;
             }
           }
           
-          // Only process first worksheet
-          break;
+          if (!matricula) continue;
+          
+          // Build pessoa data
+          const pessoaData: Record<string, any> = {
+            matricula,
+            convenio,
+            baseTagUltima: baseTag,
+          };
+          
+          // Build folha data
+          const folhaData: Record<string, any> = {
+            competencia: competenciaDate,
+            baseTag,
+          };
+          
+          // Build telefones array
+          const telefones: string[] = [];
+          
+          // Build contrato data
+          const contratoData: Record<string, any> = {
+            competencia: competenciaDate,
+            baseTag,
+          };
+          
+          // Map row values
+          for (const [col, value] of Object.entries(row)) {
+            const field = headerMap[col];
+            
+            if (!field) continue;
+            
+            // PESSOA FIELDS
+            if (["cpf", "nome", "orgaodesc", "sit_func", "uf", "municipio", "email"].includes(field)) {
+              const key = field === "sit_func" ? "sitFunc" : field;
+              pessoaData[key] = String(value || "").trim() || null;
+            }
+            else if (field === "banco_salario") {
+              pessoaData.bancoCodigo = String(value || "").trim() || null;
+            }
+            else if (field === "agencia_salario") {
+              pessoaData.agencia = String(value || "").trim() || null;
+            }
+            else if (field === "conta_salario") {
+              pessoaData.conta = String(value || "").trim() || null;
+            }
+            // FOLHA FIELDS (margens)
+            else if (field.startsWith("margem_")) {
+              const parts = field.split("_");
+              let camelField = parts[0];
+              for (let j = 1; j < parts.length; j++) {
+                camelField += parts[j].charAt(0).toUpperCase() + parts[j].slice(1);
+              }
+              folhaData[camelField] = parseNum(value);
+            }
+            // TELEFONES
+            else if (field.startsWith("telefone_")) {
+              const tel = String(value || "").trim();
+              if (tel) telefones.push(tel);
+            }
+            // CONTRATO FIELDS
+            else if (field === "banco_emprestimo") {
+              contratoData.banco = String(value || "").trim() || null;
+            }
+            else if (field === "valor_parcela") {
+              contratoData.valorParcela = parseNum(value);
+            }
+            else if (field === "saldo_devedor") {
+              contratoData.saldoDevedor = parseNum(value);
+            }
+            else if (field === "prazo_remanescente") {
+              const prazo = parseInt(String(value || "0"), 10);
+              contratoData.parcelasRestantes = isNaN(prazo) ? null : prazo;
+            }
+            else if (field === "numero_contrato") {
+              contratoData.numeroContrato = String(value || "").trim() || null;
+            }
+            else if (field === "tipo_produto") {
+              contratoData.tipoContrato = String(value || "").trim() || null;
+            }
+          }
+          
+          pessoaData.telefonesBase = telefones;
+          
+          // Upsert pessoa
+          let pessoa = await storage.getClientePessoaByMatricula(matricula);
+          
+          if (pessoa) {
+            pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
+          } else {
+            pessoa = await storage.createClientePessoa(pessoaData as any);
+          }
+          
+          if (pessoa) {
+            // Create folha record
+            await storage.createClienteFolhaMes({
+              pessoaId: pessoa.id,
+              competencia: competenciaDate,
+              margemBruta70: folhaData.margem70Bruta,
+              margemUtilizada70: folhaData.margem70Utilizada,
+              margemSaldo70: folhaData.margem70Saldo,
+              margemBruta35: folhaData.margem35Bruta,
+              margemUtilizada35: folhaData.margem35Utilizada,
+              margemSaldo35: folhaData.margem35Saldo,
+              margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+              margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+              sitFuncNoMes: pessoaData.sitFunc || null,
+              baseTag,
+            } as any);
+            
+            // Create contrato record if has data
+            if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
+              await storage.createClienteContrato({
+                pessoaId: pessoa.id,
+                tipoContrato: contratoData.tipoContrato || "consignado",
+                banco: contratoData.banco,
+                valorParcela: contratoData.valorParcela,
+                saldoDevedor: contratoData.saldoDevedor,
+                parcelasRestantes: contratoData.parcelasRestantes,
+                numeroContrato: contratoData.numeroContrato,
+                competencia: competenciaDate,
+                baseTag,
+                dadosBrutos: row,
+              } as any);
+            }
+            
+            totalLinhas++;
+          }
+          
+          // Log progress every 500 rows
+          if ((i + 1) % 500 === 0) {
+            console.log(`[Import] Processed ${i + 1}/${data.length} rows, imported ${totalLinhas}`);
+          }
+        } catch (rowError) {
+          console.error("[Import] Row error:", rowError);
         }
       }
       
-      // Update base status
-      await storage.updateBaseImportada(baseId, {
+      // Update base status to completed
+      await storage.updateBaseImportada(base.id, {
         totalLinhas,
         status: "concluida",
       });
       
-      console.log(`[Import] Base ${baseId} completed with ${totalLinhas} rows`);
-    } catch (error) {
-      console.error("[Import] Streaming job error:", error);
-      await storage.updateBaseImportada(baseId, {
-        status: "erro",
+      console.log(`[Import] Base ${base.id} completed with ${totalLinhas} rows`);
+      
+      return res.json({
+        message: "Importação concluída",
+        baseId: base.id,
+        baseTag,
+        totalLinhas,
+        fileName: file.originalname,
       });
-    } finally {
-      // Clean up temp file
-      try {
-        fs.unlinkSync(filePath);
-        console.log(`[Import] Cleaned up temp file: ${filePath}`);
-      } catch (e) {
-        console.error("[Import] Failed to clean up temp file:", e);
-      }
+    } catch (error) {
+      console.error("Import error:", error);
+      return res.status(500).json({ message: "Erro ao importar base" });
     }
-  }
+  });
+
 
   // GET filtros disponíveis para clientes
   app.get("/api/clientes/filtros", requireAuth, async (req, res) => {

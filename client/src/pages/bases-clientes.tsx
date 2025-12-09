@@ -114,7 +114,7 @@ export default function BasesClientes() {
 
   const importMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch("/api/bases/importar", {
+      const response = await fetch("/api/bases/import", {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -125,10 +125,10 @@ export default function BasesClientes() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { message: string; totalLinhas: number; baseTag: string }) => {
       toast({
-        title: "Importação iniciada",
-        description: "O arquivo está sendo processado em segundo plano. Isso pode levar alguns minutos para arquivos grandes.",
+        title: "Importação concluída",
+        description: `${data.totalLinhas} registros importados com sucesso para a base ${data.baseTag}.`,
       });
       setIsDialogOpen(false);
       setFile(null);
