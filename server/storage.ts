@@ -43,7 +43,7 @@ import {
 
 // Use neon-http for serverless/edge environments
 const queryClient = neon(process.env.DATABASE_URL!);
-const db = drizzle(queryClient);
+export const db = drizzle(queryClient);
 
 export interface IStorage {
   // Users

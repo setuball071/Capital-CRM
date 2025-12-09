@@ -1,0 +1,145 @@
+Quero padronizar de vez o importador de bases de clientes.  
+A partir de agora, vou adaptar minhas planilhas para um TEMPLATE OFICIAL de cabeçalhos.  
+Seu trabalho é: ajustar o código de importação para ler EXCLUSIVAMENTE por nome de coluna (header), nunca mais por índice.
+
+### 1. TEMPLATE OFICIAL DE CABEÇALHOS
+
+Vou garantir que as planilhas tenham, sempre que possível, os seguintes nomes de coluna:
+
+[IDENTIFICAÇÃO DO CLIENTE]
+- cpf
+- matricula
+- convenio          // ex: "SIAPE", "GOV_SP"
+- orgao             // secretaria / ministério / autarquia
+- uf
+- municipio
+- situacao_funcional
+- data_nascimento   // se existir
+
+[CONTATO]
+- telefone_1
+- telefone_2
+- telefone_3
+- email
+
+[DADOS BANCÁRIOS DO SALÁRIO]
+- banco_salario     // código ou nome curto do banco onde recebe
+- agencia_salario
+- conta_salario
+
+[MARGENS SIAPE / FOLHA]
+- margem_70_bruta
+- margem_70_utilizada
+- margem_70_saldo
+
+- margem_35_bruta
+- margem_35_utilizada
+- margem_35_saldo
+
+- margem_cartao_credito_bruta
+- margem_cartao_credito_utilizada
+- margem_cartao_credito_saldo
+
+- margem_cartao_beneficio_bruta
+- margem_cartao_beneficio_utilizada
+- margem_cartao_beneficio_saldo
+
+- competencia_folha    // ex: "2025-10"
+
+[CONTRATOS / DESCONTOS EM FOLHA]
+- banco_emprestimo        // AQUI É O BANCO DO CONTRATO (BMG, PAN etc.)
+- tipo_produto            // consignado, cartao_credito, cartao_beneficio...
+- valor_parcela
+- saldo_devedor           // se existir
+- prazo_remanescente      // número de parcelas que ainda faltam pagar
+- competencia_contrato    // mês da folha daquela informação
+- numero_contrato         // se existir
+- situacao_contrato       // ATIVO, QUITADO etc., se existir
+
+Nem todas as colunas vão existir em todas as bases, mas estes são os nomes que você deve considerar.
+
+### 2. COMO O IMPORTADOR DEVE FUNCIONAR
+
+2.1. Ler sempre o HEADER da planilha
+- Na primeira linha da planilha, leia todos os cabeçalhos.
+- Normalize: transforme em minúsculas e remova espaços/acentos se precisar.
+- Monte um mapa: { "cpf": índice, "matricula": índice, "banco_emprestimo": índice, ... }
+
+2.2. Nunca usar índice “na mão”
+- Nada de código tipo `row.getCell(5)` assumindo que a coluna 5 é banco.
+- Sempre usar o mapa de header:
+  - `const cpf = row.getCell(headers["cpf"]).value` (se existir)
+  - `const bancoEmprestimo = row.getCell(headers["banco_emprestimo"]).value` (se existir)
+
+2.3. Mapear cada grupo para as tabelas certas
+
+[CLIENTE (tabela de pessoas/base)]
+- cpf
+- matricula
+- convenio
+- orgao
+- uf
+- municipio
+- situacao_funcional
+- data_nascimento
+- telefone_1, telefone_2, telefone_3, email
+- banco_salario, agencia_salario, conta_salario
+
+[FOLHA / MARGENS]
+- competencia_folha
+- margens de 70, 35, cartão crédito, cartão benefício (bruta/utilizada/saldo)
+
+Importante: para SIAPE, a ordem de exibição que vamos usar depois é:
+- 70% (compulsória)
+- 35% consignado
+- 5% cartão crédito
+- 5% cartão benefício
+
+Mas aqui na importação, basta salvar os campos corretos.
+
+[CONTRATOS]
+- banco_emprestimo  -> deve ser salvo como o NOME DO BANCO DO EMPRÉSTIMO
+- tipo_produto
+- valor_parcela
+- saldo_devedor
+- prazo_remanescente  -> salvar exatamente esse valor, sem cálculos
+- competencia_contrato
+- numero_contrato
+- situacao_contrato
+
+2.4. Campos opcionais
+- Se alguma coluna do template não existir na planilha, ignore silenciosamente.
+- Não quebre a importação se faltar telefone_2, por exemplo.
+- O que não veio, fica null/undefined na base.
+
+### 3. REGRA ESPECIAL PRA BANCO
+
+Hoje tínhamos um problema sério:
+- o sistema usava a coluna errada como banco do empréstimo.
+
+Com o novo template:
+
+- banco_salario → vai para os dados bancários do cliente (onde recebe salário).
+- banco_emprestimo → vai para o contrato (banco que desconta em folha).
+
+Garanta no código que:
+- qualquer uso de banco do contrato venha de `banco_emprestimo`
+- qualquer uso de banco de salário venha de `banco_salario`
+
+### 4. PRAZO REMANESCENTE
+
+- Usar exclusivamente `prazo_remanescente` da planilha.
+- Salvar este valor em contratos.parcelas_restantes.
+- Não calcular prazo total, não inferir parcelas pagas, nada disso.
+
+### 5. IMPLEMENTAÇÃO
+
+- Localize o código atual de importação (Excel/streaming).
+- Adapte para:
+  - ler o header,
+  - construir o mapa de cabeçalhos,
+  - e acessar todas as células via nome de coluna.
+- Adicione logs de debug opcionais (comentados) para eu poder ver os headers detectados, se necessário.
+
+Não mexa na parte de consulta agora, foque APENAS no importador seguindo esse template de cabeçalhos.
+A partir daqui, eu vou ajustar minhas planilhas para bater exatamente com esses nomes.

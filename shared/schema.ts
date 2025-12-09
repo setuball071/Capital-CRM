@@ -397,7 +397,7 @@ export const pedidosLista = pgTable("pedidos_lista", {
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
 });
 
-// 6) pricing_settings - Configuração de preços para pedidos de lista
+// 6) pricing_settings - Configuração de preços para pedidos de lista (legado)
 export const pricingSettings = pgTable("pricing_settings", {
   id: serial("id").primaryKey(),
   precoAncoraMin: decimal("preco_ancora_min", { precision: 12, scale: 4 }).notNull().default("1.0000"), // preço total para qtd_ancora_min registros
@@ -405,6 +405,17 @@ export const pricingSettings = pgTable("pricing_settings", {
   precoAncoraMax: decimal("preco_ancora_max", { precision: 12, scale: 2 }).notNull().default("2000.00"), // preço total para qtd_ancora_max registros
   qtdAncoraMax: integer("qtd_ancora_max").notNull().default(1000000), // ex: 1.000.000
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+});
+
+// 7) pacotes_preco - Tabela de pacotes de preços editáveis
+export const pacotesPreco = pgTable("pacotes_preco", {
+  id: serial("id").primaryKey(),
+  quantidadeMaxima: integer("quantidade_maxima").notNull(),
+  nomePacote: varchar("nome_pacote", { length: 100 }).notNull(),
+  preco: decimal("preco", { precision: 10, scale: 2 }).notNull(),
+  ordem: integer("ordem").notNull().default(0),
+  ativo: boolean("ativo").notNull().default(true),
+  atualizadoEm: timestamp("atualizado_em").defaultNow(),
 });
 
 // ===== INSERT SCHEMAS FOR BASE DE CLIENTES =====
@@ -434,6 +445,22 @@ export const insertPricingSettingsSchema = createInsertSchema(pricingSettings, {
   qtdAncoraMax: z.number().int().positive(),
 }).omit({ id: true, atualizadoEm: true });
 
+export const insertPacotePrecoSchema = createInsertSchema(pacotesPreco, {
+  quantidadeMaxima: z.number().int().positive(),
+  nomePacote: z.string().min(1),
+  preco: z.string().or(z.number()).transform(v => String(v)),
+  ordem: z.number().int().optional(),
+  ativo: z.boolean().optional(),
+}).omit({ id: true, atualizadoEm: true });
+
+export const updatePacotePrecoSchema = z.object({
+  quantidadeMaxima: z.number().int().positive().optional(),
+  nomePacote: z.string().min(1).optional(),
+  preco: z.number().positive().optional(),
+  ordem: z.number().int().optional(),
+  ativo: z.boolean().optional(),
+});
+
 // ===== SELECT TYPES FOR BASE DE CLIENTES =====
 
 export type ClientePessoa = typeof clientesPessoa.$inferSelect;
@@ -453,6 +480,10 @@ export type InsertPedidoLista = z.infer<typeof insertPedidoListaSchema>;
 
 export type PricingSettings = typeof pricingSettings.$inferSelect;
 export type InsertPricingSettings = z.infer<typeof insertPricingSettingsSchema>;
+
+export type PacotePreco = typeof pacotesPreco.$inferSelect;
+export type InsertPacotePreco = z.infer<typeof insertPacotePrecoSchema>;
+export type UpdatePacotePreco = z.infer<typeof updatePacotePrecoSchema>;
 
 // ===== FILTROS PARA PEDIDOS LISTA =====
 

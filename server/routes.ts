@@ -13,6 +13,8 @@ import {
   roteirosImportSchema,
   filtrosPedidoListaSchema,
   insertPricingSettingsSchema,
+  updatePacotePrecoSchema,
+  pacotesPreco,
   type User,
   type InsertCoefficientTable,
   USER_ROLES,
@@ -20,6 +22,8 @@ import {
   type FiltrosPedidoLista,
   type PricingSettings,
 } from "@shared/schema";
+import { db } from "./storage";
+import { eq, asc } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -125,7 +129,7 @@ const requireManagerAccess = requireUserManagementAccess;
 
 // ===== PRICING CALCULATION - MODELO DE PACOTES =====
 
-interface PacotePreco {
+interface PacotePrecoData {
   quantidadeMaxima: number;
   nomePacote: string;
   preco: number;
@@ -137,9 +141,8 @@ interface PricingResult {
   quantidadePacote: number;
 }
 
-// Tabela de pacotes com preços fixos por faixa
-// Cada pacote atende até sua quantidade máxima
-const PACOTES_PRECO: PacotePreco[] = [
+// Fallback pacotes caso o banco de dados não tenha dados
+const PACOTES_PRECO_DEFAULT: PacotePrecoData[] = [
   { quantidadeMaxima: 100,    nomePacote: "Pacote 100",    preco: 37.90 },
   { quantidadeMaxima: 300,    nomePacote: "Pacote 300",    preco: 67.90 },
   { quantidadeMaxima: 500,    nomePacote: "Pacote 500",    preco: 97.90 },
@@ -151,6 +154,32 @@ const PACOTES_PRECO: PacotePreco[] = [
 ];
 
 /**
+ * Busca pacotes do banco de dados (com fallback para default)
+ */
+async function fetchPacotesFromDb(): Promise<PacotePrecoData[]> {
+  try {
+    const result = await db
+      .select()
+      .from(pacotesPreco)
+      .where(eq(pacotesPreco.ativo, true))
+      .orderBy(asc(pacotesPreco.ordem), asc(pacotesPreco.quantidadeMaxima));
+    
+    if (result.length === 0) {
+      return PACOTES_PRECO_DEFAULT;
+    }
+    
+    return result.map(p => ({
+      quantidadeMaxima: p.quantidadeMaxima,
+      nomePacote: p.nomePacote,
+      preco: parseFloat(p.preco),
+    }));
+  } catch (error) {
+    console.error("Error fetching pacotes from db:", error);
+    return PACOTES_PRECO_DEFAULT;
+  }
+}
+
+/**
  * Calcula o preço de uma lista usando o modelo de PACOTES
  * 
  * Regra:
@@ -160,14 +189,17 @@ const PACOTES_PRECO: PacotePreco[] = [
  * 4. Se Q > maior pacote: usa o maior pacote (pode ser ajustado depois)
  * 
  * @param qtdRegistros - Quantidade real de registros
+ * @param pacotes - Lista de pacotes (opcional, busca do banco se não fornecido)
  */
-function calculatePackagePrice(qtdRegistros: number): PricingResult {
+async function calculatePackagePrice(qtdRegistros: number, pacotes?: PacotePrecoData[]): Promise<PricingResult> {
   if (qtdRegistros <= 0) {
     return { precoTotal: 0, nomePacote: "", quantidadePacote: 0 };
   }
   
+  const pacotesAtivos = pacotes || await fetchPacotesFromDb();
+  
   // Encontra o primeiro pacote que atende a quantidade
-  for (const pacote of PACOTES_PRECO) {
+  for (const pacote of pacotesAtivos) {
     if (qtdRegistros <= pacote.quantidadeMaxima) {
       return {
         precoTotal: pacote.preco,
@@ -178,8 +210,7 @@ function calculatePackagePrice(qtdRegistros: number): PricingResult {
   }
   
   // Se exceder todos os pacotes, usa o maior pacote
-  // TODO: Pode ser ajustado para repetir o maior pacote em blocos
-  const maiorPacote = PACOTES_PRECO[PACOTES_PRECO.length - 1];
+  const maiorPacote = pacotesAtivos[pacotesAtivos.length - 1];
   return {
     precoTotal: maiorPacote.preco,
     nomePacote: maiorPacote.nomePacote,
@@ -188,8 +219,8 @@ function calculatePackagePrice(qtdRegistros: number): PricingResult {
 }
 
 // Função para obter todos os pacotes (para exibição na tela de config)
-function getPacotesPreco(): PacotePreco[] {
-  return PACOTES_PRECO;
+async function getPacotesPreco(): Promise<PacotePrecoData[]> {
+  return fetchPacotesFromDb();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2798,11 +2829,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // GET pricing settings - Master only - Retorna tabela de pacotes
   app.get("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
     try {
-      const pacotes = getPacotesPreco();
+      const pacotes = await getPacotesPreco();
       
       return res.json({
         pacotes,
-        message: "Modelo de precificação por PACOTES. Para editar os valores, atualize a constante PACOTES_PRECO no código.",
+        message: "Modelo de precificação por PACOTES. Os valores podem ser editados pelo administrador.",
       });
     } catch (error) {
       console.error("Get pricing settings error:", error);
@@ -2813,10 +2844,64 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // GET pacotes para exibição pública (usado na tela de compra)
   app.get("/api/pacotes-preco", requireAuth, async (req, res) => {
     try {
-      return res.json(getPacotesPreco());
+      return res.json(await getPacotesPreco());
     } catch (error) {
       console.error("Get pacotes error:", error);
       return res.status(500).json({ message: "Erro ao buscar pacotes" });
+    }
+  });
+
+  // GET all pacotes from database (for admin editing)
+  app.get("/api/pacotes-preco/all", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = await db
+        .select()
+        .from(pacotesPreco)
+        .orderBy(asc(pacotesPreco.ordem), asc(pacotesPreco.quantidadeMaxima));
+      return res.json(result);
+    } catch (error) {
+      console.error("Get all pacotes error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pacotes" });
+    }
+  });
+
+  // PUT update a pacote - Master only
+  app.put("/api/pacotes-preco/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const result = updatePacotePrecoSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const updateData: Record<string, any> = { atualizadoEm: new Date() };
+      if (result.data.quantidadeMaxima !== undefined) updateData.quantidadeMaxima = result.data.quantidadeMaxima;
+      if (result.data.nomePacote !== undefined) updateData.nomePacote = result.data.nomePacote;
+      if (result.data.preco !== undefined) updateData.preco = String(result.data.preco);
+      if (result.data.ordem !== undefined) updateData.ordem = result.data.ordem;
+      if (result.data.ativo !== undefined) updateData.ativo = result.data.ativo;
+
+      const [updated] = await db
+        .update(pacotesPreco)
+        .set(updateData)
+        .where(eq(pacotesPreco.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Pacote não encontrado" });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update pacote error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar pacote" });
     }
   });
 
@@ -2843,7 +2928,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const { clientes, total } = await storage.searchClientesPessoa(filtros);
       
       // Calcula preço usando modelo de pacotes
-      const pricing = calculatePackagePrice(total);
+      const pricing = await calculatePackagePrice(total);
       
       // Return preview (first 10), total, and pricing
       return res.json({
@@ -2851,7 +2936,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         nomePacote: pricing.nomePacote,
         quantidadePacote: pricing.quantidadePacote,
         precoTotal: pricing.precoTotal,
-        pacotes: getPacotesPreco(), // Envia lista de pacotes para exibição
+        pacotes: await getPacotesPreco(), // Envia lista de pacotes para exibição
         preview: clientes.slice(0, 10).map(c => ({
           matricula: c.matricula,
           nome: c.nome,
@@ -2889,7 +2974,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const { total } = await storage.searchClientesPessoa(filtros);
       
       // Calcula preço usando modelo de pacotes
-      const pricing = calculatePackagePrice(total);
+      const pricing = await calculatePackagePrice(total);
       
       // Create pedido com informações do pacote
       const pedido = await storage.createPedidoLista({
