@@ -29,15 +29,18 @@ interface BaseImportada {
 }
 
 const MODELO_COLUNAS = {
-  identificacao: [
-    { nome: "cpf", descricao: "CPF do cliente" },
-    { nome: "matricula", descricao: "Matrícula no órgão/convênio" },
-    { nome: "convenio", descricao: "Ex: SIAPE, GOV_SP, INSS" },
-    { nome: "orgao", descricao: "Nome do órgão/secretaria" },
-    { nome: "uf", descricao: "Estado do vínculo" },
+  identificacaoObrigatorios: [
+    { nome: "cpf", descricao: "CPF do cliente", obrigatorio: true },
+    { nome: "matricula", descricao: "Matrícula no órgão/convênio", obrigatorio: true },
+    { nome: "nome", descricao: "Nome completo do cliente", obrigatorio: true },
+  ],
+  identificacaoOpcionais: [
+    { nome: "orgao", descricao: "Nome do órgão/secretaria/autarquia" },
+    { nome: "uf", descricao: "Estado do vínculo (opcional)" },
     { nome: "municipio", descricao: "Município (se existir)" },
-    { nome: "situacao_funcional", descricao: "ATIVO, APOSENTADO, PENSIONISTA" },
-    { nome: "data_nascimento", descricao: "Data de nascimento (opcional)" },
+    { nome: "situacao_funcional", descricao: "ATIVO, APOSENTADO, PENSIONISTA, CLT" },
+    { nome: "data_nascimento", descricao: "Data de nascimento" },
+    { nome: "idade", descricao: "Idade já calculada (se vier na planilha)" },
   ],
   contatos: [
     { nome: "telefone_1", descricao: "Telefone principal" },
@@ -49,6 +52,12 @@ const MODELO_COLUNAS = {
     { nome: "banco_salario", descricao: "Código/nome do banco onde recebe salário" },
     { nome: "agencia_salario", descricao: "Agência do banco" },
     { nome: "conta_salario", descricao: "Número da conta" },
+    { nome: "upag", descricao: "Unidade pagadora (se existir)" },
+  ],
+  rendimentos: [
+    { nome: "salario_bruto", descricao: "Valor bruto da folha" },
+    { nome: "descontos_brutos", descricao: "Total de descontos" },
+    { nome: "salario_liquido", descricao: "Valor líquido do salário" },
   ],
   folhaMargens: [
     { nome: "competencia_folha", descricao: "Mês da folha (ex: 2025-10)" },
@@ -67,12 +76,13 @@ const MODELO_COLUNAS = {
   ],
   contratos: [
     { nome: "banco_emprestimo", descricao: "Banco do contrato (BMG, PAN, etc.)" },
-    { nome: "tipo_produto", descricao: "consignado, cartao_credito, cartao_beneficio" },
+    { nome: "tipo_produto", descricao: "consignado, cartao_credito, cartao_beneficio (opcional)" },
     { nome: "valor_parcela", descricao: "Valor da parcela mensal" },
-    { nome: "prazo_remanescente", descricao: "Parcelas restantes" },
     { nome: "saldo_devedor", descricao: "Saldo devedor (opcional)" },
-    { nome: "numero_contrato", descricao: "Número do contrato (opcional)" },
-    { nome: "situacao_contrato", descricao: "ATIVO, QUITADO, SUSPENSO (opcional)" },
+    { nome: "prazo_remanescente", descricao: "Parcelas restantes" },
+    { nome: "numero_contrato", descricao: "ID do contrato (chave única)" },
+    { nome: "situacao_contrato", descricao: "ATIVO, QUITADO (opcional)" },
+    { nome: "competencia_contrato", descricao: "Mês da folha (opcional)" },
   ],
 };
 
@@ -87,9 +97,11 @@ export default function BasesClientes() {
 
   const handleDownloadModelo = () => {
     const headers = [
-      ...MODELO_COLUNAS.identificacao.map((c) => c.nome),
+      ...MODELO_COLUNAS.identificacaoObrigatorios.map((c) => c.nome),
+      ...MODELO_COLUNAS.identificacaoOpcionais.map((c) => c.nome),
       ...MODELO_COLUNAS.contatos.map((c) => c.nome),
       ...MODELO_COLUNAS.dadosBancarios.map((c) => c.nome),
+      ...MODELO_COLUNAS.rendimentos.map((c) => c.nome),
       ...MODELO_COLUNAS.folhaMargens.map((c) => c.nome),
       ...MODELO_COLUNAS.contratos.map((c) => c.nome),
     ];
@@ -230,8 +242,22 @@ export default function BasesClientes() {
                 <div className="space-y-6">
                   <div>
                     <h3 className="text-sm font-semibold text-primary mb-2">Identificação (obrigatórios)</h3>
+                    <p className="text-xs text-muted-foreground mb-2">Estes campos são obrigatórios para cada linha</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.identificacao.map((col) => (
+                      {MODELO_COLUNAS.identificacaoObrigatorios.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-primary/20 px-1.5 py-0.5 rounded text-xs font-mono font-bold">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 italic">O convênio é informado na tela de importação, não precisa estar na planilha.</p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Identificação (opcionais)</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.identificacaoOpcionais.map((col) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>
@@ -266,6 +292,18 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Rendimentos (opcionais)</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODELO_COLUNAS.rendimentos.map((col) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
                     <h3 className="text-sm font-semibold text-primary mb-2">Folha / Margens</h3>
                     <div className="grid grid-cols-2 gap-2">
                       {MODELO_COLUNAS.folhaMargens.map((col) => (
@@ -279,6 +317,7 @@ export default function BasesClientes() {
                   <Separator />
                   <div>
                     <h3 className="text-sm font-semibold text-primary mb-2">Contratos / Descontos em Folha</h3>
+                    <p className="text-xs text-muted-foreground mb-2">Nem toda base terá todos os campos. O número do contrato é usado como chave única para evitar duplicação.</p>
                     <div className="grid grid-cols-2 gap-2">
                       {MODELO_COLUNAS.contratos.map((col) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">

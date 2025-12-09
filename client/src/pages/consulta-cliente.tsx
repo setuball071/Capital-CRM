@@ -63,10 +63,12 @@ interface ClienteDetalhadoPessoa {
   orgaocod: string | null;
   undpagadoradesc: string | null;
   undpagadoracod: string | null;
+  upag: string | null;
   natureza: string | null;
   sit_func: string | null;
   uf: string | null;
   municipio: string | null;
+  data_nascimento: string | null;
   telefones_base: string[] | null;
   // Dados bancários do cliente (onde recebe salário)
   banco_codigo: string | null;
@@ -89,6 +91,9 @@ interface FolhaAtual {
   margem_saldo_70: number | null;
   margem_cartao_credito_saldo: number | null;
   margem_cartao_beneficio_saldo: number | null;
+  salario_bruto: number | null;
+  descontos_brutos: number | null;
+  salario_liquido: number | null;
   creditos: number | null;
   debitos: number | null;
   liquido: number | null;
@@ -146,6 +151,47 @@ function formatDate(dateStr: string | null): string {
     return format(new Date(dateStr), "MMM/yyyy", { locale: ptBR });
   } catch {
     return "-";
+  }
+}
+
+function formatDateFull(dateStr: string | null): string {
+  if (!dateStr) return "-";
+  try {
+    return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+  } catch {
+    return "-";
+  }
+}
+
+function calcularIdade(dataNascimento: string | null): number | null {
+  if (!dataNascimento) return null;
+  try {
+    const nascimento = new Date(dataNascimento);
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const mesAtual = hoje.getMonth();
+    const mesNascimento = nascimento.getMonth();
+    const diaAtual = hoje.getDate();
+    const diaNascimento = nascimento.getDate();
+    
+    // Ajusta se ainda não fez aniversário este ano
+    if (mesAtual < mesNascimento || (mesAtual === mesNascimento && diaAtual < diaNascimento)) {
+      idade--;
+    }
+    return idade >= 0 ? idade : null;
+  } catch {
+    return null;
+  }
+}
+
+function verificarAniversarioNoMes(dataNascimento: string | null): boolean {
+  if (!dataNascimento) return false;
+  try {
+    const nascimento = new Date(dataNascimento);
+    const hoje = new Date();
+    return nascimento.getMonth() === hoje.getMonth();
+  } catch {
+    return false;
   }
 }
 
@@ -509,6 +555,29 @@ export default function ConsultaCliente() {
                       <p className="text-sm text-muted-foreground">Natureza</p>
                       <p>{clienteDetalhado.pessoa.natureza || "-"}</p>
                     </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        Nascimento / Idade
+                      </p>
+                      <div className="flex items-center gap-2" data-testid="text-nascimento-idade">
+                        <span>{formatDateFull(clienteDetalhado.pessoa.data_nascimento)}</span>
+                        {calcularIdade(clienteDetalhado.pessoa.data_nascimento) !== null && (
+                          <Badge variant="secondary" data-testid="badge-idade">
+                            {calcularIdade(clienteDetalhado.pessoa.data_nascimento)} anos
+                          </Badge>
+                        )}
+                        {verificarAniversarioNoMes(clienteDetalhado.pessoa.data_nascimento) && (
+                          <Badge variant="default" className="bg-yellow-500 text-black" data-testid="badge-aniversario">
+                            Aniversariante do Mês
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">UPAG</p>
+                      <p>{clienteDetalhado.pessoa.upag || "-"}</p>
+                    </div>
                     <div className="space-y-1 md:col-span-2">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Building2 className="w-4 h-4" />
@@ -681,6 +750,37 @@ export default function ConsultaCliente() {
                                   <span>Saldo Disponível:</span>
                                   <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_cartao_beneficio_saldo)}</span>
                                 </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Rendimentos - só exibe se tiver dados */}
+                        {(clienteDetalhado.folha.atual.salario_bruto !== null ||
+                          clienteDetalhado.folha.atual.descontos_brutos !== null ||
+                          clienteDetalhado.folha.atual.salario_liquido !== null) && (
+                          <Card className="bg-blue-50 dark:bg-blue-950/30" data-testid="card-rendimentos">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Rendimentos</p>
+                              <div className="space-y-1 text-sm">
+                                {clienteDetalhado.folha.atual.salario_bruto !== null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruto:</span>
+                                    <span>{formatCurrency(clienteDetalhado.folha.atual.salario_bruto)}</span>
+                                  </div>
+                                )}
+                                {clienteDetalhado.folha.atual.descontos_brutos !== null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Descontos:</span>
+                                    <span className="text-red-600">{formatCurrency(clienteDetalhado.folha.atual.descontos_brutos)}</span>
+                                  </div>
+                                )}
+                                {clienteDetalhado.folha.atual.salario_liquido !== null && (
+                                  <div className="flex justify-between font-medium">
+                                    <span>Líquido:</span>
+                                    <span className="text-blue-600">{formatCurrency(clienteDetalhado.folha.atual.salario_liquido)}</span>
+                                  </div>
+                                )}
                               </div>
                             </CardContent>
                           </Card>

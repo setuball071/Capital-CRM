@@ -2068,6 +2068,21 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "CONTA_SALARIO": "conta_salario",
     "CONTA SALARIO": "conta_salario",
     "CONTA": "conta_salario",
+    "UPAG": "upag",
+    "UNIDADE_PAGADORA": "upag",
+    "UNIDADE PAGADORA": "upag",
+    // IDADE
+    "IDADE": "idade",
+    // RENDIMENTOS
+    "SALARIO_BRUTO": "salario_bruto",
+    "SALARIO BRUTO": "salario_bruto",
+    "BRUTO": "salario_bruto",
+    "DESCONTOS_BRUTOS": "descontos_brutos",
+    "DESCONTOS BRUTOS": "descontos_brutos",
+    "TOTAL_DESCONTOS": "descontos_brutos",
+    "TOTAL DESCONTOS": "descontos_brutos",
+    "SALARIO_LIQUIDO": "salario_liquido",
+    "SALARIO LIQUIDO": "salario_liquido",
     // MARGENS 70%
     "MARGEM_70_BRUTA": "margem_70_bruta",
     "MARGEM 70 BRUTA": "margem_70_bruta",
@@ -2153,6 +2168,37 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     const str = String(value).replace(/[^\d,.-]/g, "").replace(",", ".");
     const num = parseFloat(str);
     return isNaN(num) ? null : num.toFixed(2);
+  }
+
+  // Função para normalizar valores monetários - preserva vazios como null
+  function normalizeMoney(value: any): string | null {
+    if (value === null || value === undefined || value === "") return null;
+    const str = String(value).trim().replace(/[^\d,.-]/g, "").replace(",", ".");
+    if (str === "" || str === "." || str === "-") return null;
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num.toFixed(2);
+  }
+
+  // Função para parsear data de nascimento
+  function parseDate(value: any): Date | null {
+    if (value === null || value === undefined || value === "") return null;
+    // Tenta vários formatos comuns
+    const str = String(value).trim();
+    // Formato DD/MM/YYYY
+    const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (brMatch) {
+      const [, day, month, year] = brMatch;
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    // Formato YYYY-MM-DD
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch;
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    // Tenta parsing padrão
+    const date = new Date(str);
+    return isNaN(date.getTime()) ? null : date;
   }
 
   // GET bases importadas - Master only
@@ -2278,7 +2324,27 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             else if (field === "conta_salario") {
               pessoaData.conta = String(value || "").trim() || null;
             }
-            // FOLHA FIELDS (margens)
+            else if (field === "upag") {
+              pessoaData.upag = String(value || "").trim() || null;
+            }
+            else if (field === "data_nascimento") {
+              pessoaData.dataNascimento = parseDate(value);
+            }
+            else if (field === "idade") {
+              // Idade ignorada para persistência (calculamos a partir da data de nascimento)
+              // Mas podemos salvar no extras_pessoa se quisermos
+            }
+            // RENDIMENTOS (campos monetários - usam normalizeMoney)
+            else if (field === "salario_bruto") {
+              folhaData.salarioBruto = normalizeMoney(value);
+            }
+            else if (field === "descontos_brutos") {
+              folhaData.descontosBrutos = normalizeMoney(value);
+            }
+            else if (field === "salario_liquido") {
+              folhaData.salarioLiquido = normalizeMoney(value);
+            }
+            // FOLHA FIELDS (margens) - usam parseNum para permitir nulos
             else if (field.startsWith("margem_")) {
               const parts = field.split("_");
               let camelField = parts[0];
@@ -2339,6 +2405,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               margemSaldo35: folhaData.margem35Saldo,
               margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
               margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+              salarioBruto: folhaData.salarioBruto || null,
+              descontosBrutos: folhaData.descontosBrutos || null,
+              salarioLiquido: folhaData.salarioLiquido || null,
               sitFuncNoMes: pessoaData.sitFunc || null,
               baseTag,
             } as any);
@@ -2556,10 +2625,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           orgaocod: pessoa.orgaocod,
           undpagadoradesc: pessoa.undpagadoradesc,
           undpagadoracod: pessoa.undpagadoracod,
+          upag: pessoa.upag || null,
           natureza: pessoa.natureza,
           sit_func: pessoa.sitFunc,
           uf: pessoa.uf,
           municipio: pessoa.municipio,
+          data_nascimento: pessoa.dataNascimento || null,
           telefones_base: pessoa.telefonesBase || [],
           // Dados bancários do cliente (onde recebe salário)
           banco_codigo: pessoa.bancoCodigo || null,
@@ -2582,6 +2653,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             margem_saldo_70: folhaAtual.margemSaldo70 ? parseFloat(folhaAtual.margemSaldo70) : null,
             margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo ? parseFloat(folhaAtual.margemCartaoCreditoSaldo) : null,
             margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo ? parseFloat(folhaAtual.margemCartaoBeneficioSaldo) : null,
+            salario_bruto: folhaAtual.salarioBruto ? parseFloat(folhaAtual.salarioBruto) : null,
+            descontos_brutos: folhaAtual.descontosBrutos ? parseFloat(folhaAtual.descontosBrutos) : null,
+            salario_liquido: folhaAtual.salarioLiquido ? parseFloat(folhaAtual.salarioLiquido) : null,
             creditos: folhaAtual.creditos ? parseFloat(folhaAtual.creditos) : null,
             debitos: folhaAtual.debitos ? parseFloat(folhaAtual.debitos) : null,
             liquido: folhaAtual.liquido ? parseFloat(folhaAtual.liquido) : null,

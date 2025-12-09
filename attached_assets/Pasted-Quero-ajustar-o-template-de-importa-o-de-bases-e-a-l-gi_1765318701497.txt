@@ -1,0 +1,160 @@
+Quero ajustar o template de importação de bases e a lógica de importação de forma mais flexível e alinhada com a realidade das minhas planilhas.
+
+### 1) AJUSTAR TEMPLATE MOSTRADO NO MODAL “MODELO DE PLANILHA”
+
+Atualize o conteúdo do modal para refletir o seguinte:
+
+1.1. Identificação (obrigatórios)
+
+- `cpf` – CPF do cliente
+- `matricula` – Matrícula no órgão/convênio
+- `nome` – Nome completo do cliente
+
+Observações importantes:
+- O campo `convenio` NÃO será obrigatório na planilha, pois o convênio será informado na tela de importação (campo “Convênio” do formulário).  
+- Se a planilha tiver a coluna `convenio`, pode ser usada como informação complementar, mas não obrigatória.
+
+1.2. Identificação (opcionais)
+
+- `orgao` – Nome do órgão/secretaria/autarquia
+- `uf` – Estado do vínculo (opcional, nem toda base terá)
+- `municipio` – Município (se existir)
+- `situacao_funcional` – ATIVO, APOSENTADO, PENSIONISTA, CLT etc.
+- `data_nascimento` – Data de nascimento
+- `idade` – Idade já calculada (se vier na planilha)
+
+1.3. Contatos (opcionais)
+
+- `telefone_1`
+- `telefone_2`
+- `telefone_3`
+- `email`
+
+1.4. Dados Bancários do Salário
+
+- `banco_salario` – Código/nome do banco onde recebe salário
+- `agencia_salario`
+- `conta_salario`
+- `upag` – Unidade pagadora (se existir na base)
+
+1.5. Rendimentos (opcionais, mas importantes)
+
+- `salario_bruto` – Valor bruto da folha
+- `descontos_brutos` – Total de descontos
+- `salario_liquido` – Valor líquido do salário
+
+1.6. Folha / Margens
+
+Manter as colunas já configuradas:
+
+- `competencia_folha`
+- `margem_70_bruta`, `margem_70_utilizada`, `margem_70_saldo`
+- `margem_35_bruta`, `margem_35_utilizada`, `margem_35_saldo`
+- `margem_cartao_credito_bruta`, `margem_cartao_credito_utilizada`, `margem_cartao_credito_saldo`
+- `margem_cartao_beneficio_bruta`, `margem_cartao_beneficio_utilizada`, `margem_cartao_beneficio_saldo`
+
+1.7. Contratos / Descontos em Folha
+
+Nem toda base terá todos os campos. Considere como:
+
+- `banco_emprestimo` – Banco do contrato (BMG, PAN etc.)
+- `tipo_produto` – consignado, cartao_credito, cartao_beneficio (opcional, algumas bases não terão)
+- `valor_parcela`
+- `saldo_devedor` (opcional)
+- `prazo_remanescente` – parcelas restantes
+- `numero_contrato` – ID do contrato (usado como chave única)
+- `situacao_contrato` – ATIVO, QUITADO etc. (opcional)
+- `competencia_contrato` – mês da folha
+
+Ajuste os textos do modal para deixar claro o que é obrigatório e o que é opcional, conforme acima.
+
+
+### 2) AJUSTAR IMPORTAÇÃO PARA TRATAR CAMPOS OPCIONAIS E NOVOS CAMPOS
+
+2.1. Convenio vindo da tela, não da planilha
+
+- O campo “Convênio” do formulário de importação deve ser usado como convênio padrão para TODAS as linhas da base.
+- Mesmo que a planilha tenha uma coluna `convenio`, o valor da tela deve prevalecer como convênio da base.
+- Durante a importação, associe cada cliente/contrato ao convênio selecionado no formulário.
+
+2.2. Campos opcionais
+
+- `tipo_produto`, `uf`, `orgao`, `municipio`, `upag`, `salario_bruto`, `descontos_brutos`, `salario_liquido`, `situacao_contrato`, `idade` etc. são opcionais.
+- Se a coluna não existir no header, ignore silenciosamente.
+- Não deve quebrar a importação se esses campos não existirem.
+
+2.3. Nome do cliente
+
+- Passar a ler a coluna `nome` da planilha e salvar no cadastro do cliente.
+- No modal, destacar `nome` como campo obrigatório junto com `cpf` e `matricula`.
+- Se a planilha vier sem `nome`, considere erro de dados (não precisa bloquear agora, mas pelo menos logue/prepare para validação futura).
+
+2.4. Campos monetários vazios → zero
+
+Qualquer coluna que represente valor monetário deve ser tratada assim:
+
+- Se a célula estiver vazia, nula ou com string vazia → considerar como `0`.
+- Exemplos de colunas a tratar:
+  - `valor_parcela`
+  - `saldo_devedor`
+  - `margem_70_bruta`, `margem_70_utilizada`, `margem_70_saldo`
+  - `margem_35_*`
+  - `margem_cartao_credito_*`
+  - `margem_cartao_beneficio_*`
+  - `salario_bruto`, `descontos_brutos`, `salario_liquido`
+- Faça uma função utilitária do tipo `normalizeMoney(value)` que:
+  - se for número, retorna o próprio número
+  - se for string vazia, undefined ou null, retorna 0
+  - se for string numérica, converte para número
+
+Use essa função em todos os pontos da importação que lidam com valores monetários.
+
+2.5. Data de nascimento e idade
+
+- Se a planilha trouxer `data_nascimento`, salve normalmente.
+- Se a planilha trouxer também `idade`, salve como auxiliar se fizer sentido (pode ser um campo separado ou apenas ignorado na persistência e usado se necessário).
+- Não dependa da coluna `idade` para calcular nada – ela pode ou não existir.
+
+### 3) AJUSTES NA TELA DE CONSULTA DO CLIENTE
+
+3.1. Exibir rendimentos
+
+Na tela de “Consulta Cliente” (visualização individual):
+
+- Adicionar um bloco na parte superior (junto com Situação de Folha) com os rendimentos, quando existirem:
+  - Salário bruto
+  - Total de descontos
+  - Salário líquido
+  - UPAG (unidade pagadora)
+- Se algum desses campos for nulo, não exibir ou exibir como R$ 0,00, conforme padrão atual da UI.
+
+3.2. Uso de data de nascimento / idade
+
+- Se `data_nascimento` existir:
+  - Calcular idade atual no momento da consulta.
+  - Exibir idade ao lado do nome ou em um campo de “Dados do cliente”.
+- Se além da data existir a coluna `idade`, você pode usá-la apenas como conferência, mas a idade exibida deve ser calculada a partir da data, para ficar sempre atualizada.
+
+3.3. “Aniversário neste mês”
+
+- Com base em `data_nascimento` e na competência da base ou na data atual, exibir uma informação:
+  - Se o mês da data de nascimento == mês atual OU mês da competência da base:
+    - Mostrar um label ou texto do tipo: “Faz aniversário neste mês”.
+  - Caso contrário, não mostrar nada.
+- Isso pode ser um pequeno badge ao lado da idade ou em algum lugar de “Dados do cliente”.
+
+### 4) O QUE NÃO MEXER
+
+- Manter a lógica já combinada de:
+  - NÃO usar margem de 30% para SIAPE, e sim 70/35/5/5.
+  - Escolher contratos por `numero_contrato` para evitar duplicação (lógica de upsert que já pedimos).
+- NÃO alterar regras de negócio de compra de listas ou precificação neste ajuste.
+
+Resumo:
+- Atualizar o modal de modelo de planilha com os campos novos e obrigatórios/opcionais.
+- Atualizar o importador para:
+  - não exigir `convenio` na planilha (usar o da tela),
+  - aceitar campos opcionais,
+  - tratar valores vazios como 0,
+  - ler e salvar `nome`, rendimentos e upag,
+  - usar data_nascimento/idade para mostrar idade e aniversário na tela de consulta.

@@ -310,11 +310,13 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   orgaocod: varchar("orgaocod", { length: 50 }),
   undpagadoradesc: varchar("undpagadoradesc", { length: 255 }),
   undpagadoracod: varchar("undpagadoracod", { length: 50 }),
+  upag: varchar("upag", { length: 100 }), // unidade pagadora
   natureza: varchar("natureza", { length: 100 }),
   sitFunc: varchar("sit_func", { length: 100 }), // ativo, pensionista, aposentado etc.
   convenio: varchar("convenio", { length: 100 }),
   uf: varchar("uf", { length: 100 }),
   municipio: varchar("municipio", { length: 150 }),
+  dataNascimento: timestamp("data_nascimento"), // data de nascimento do cliente
   telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array
   // Dados bancários do cliente (banco onde recebe salário)
   bancoCodigo: varchar("banco_codigo", { length: 20 }),
@@ -341,6 +343,10 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   margemSaldo70: decimal("margem_saldo_70", { precision: 12, scale: 2 }),
   margemCartaoCreditoSaldo: decimal("margem_cartao_credito_saldo", { precision: 12, scale: 2 }),
   margemCartaoBeneficioSaldo: decimal("margem_cartao_beneficio_saldo", { precision: 12, scale: 2 }),
+  // Rendimentos
+  salarioBruto: decimal("salario_bruto", { precision: 12, scale: 2 }),
+  descontosBrutos: decimal("descontos_brutos", { precision: 12, scale: 2 }),
+  salarioLiquido: decimal("salario_liquido", { precision: 12, scale: 2 }),
   creditos: decimal("creditos", { precision: 12, scale: 2 }),
   debitos: decimal("debitos", { precision: 12, scale: 2 }),
   liquido: decimal("liquido", { precision: 12, scale: 2 }),
