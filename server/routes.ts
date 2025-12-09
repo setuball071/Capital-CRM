@@ -35,7 +35,7 @@ import * as os from "os";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit for memory storage
+    fileSize: 500 * 1024 * 1024, // 500MB limit for large base imports
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".xlsx", ".xls", ".csv"];
