@@ -2012,49 +2012,140 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== BASE DE CLIENTES ROUTES =====
 
-  // Simple column mapping for import
+  // Complete column mapping for import (includes official template + legacy aliases)
   const COLUMN_MAP: Record<string, string> = {
+    // IDENTIFICAÇÃO (template oficial + legado)
     "CPF": "cpf",
     "MATRICULA": "matricula",
+    "MATRÍCULA": "matricula",
     "CONVENIO": "convenio",
+    "CONVÊNIO": "convenio",
     "ORGAO": "orgaodesc",
+    "ÓRGÃO": "orgaodesc",
+    "ORGAODESC": "orgaodesc",
+    "ORGAO_DESC": "orgaodesc",
+    "ORGÃO_DESC": "orgaodesc",
     "UF": "uf",
+    "ESTADO": "uf",
     "MUNICIPIO": "municipio",
+    "MUNICÍPIO": "municipio",
     "SITUACAO_FUNCIONAL": "sit_func",
+    "SITUAÇÃO_FUNCIONAL": "sit_func",
     "SIT_FUNC": "sit_func",
+    "SIT FUNC": "sit_func",
+    "SITUACAO FUNCIONAL": "sit_func",
+    "SITUAÇÃO FUNCIONAL": "sit_func",
     "NOME": "nome",
+    "NOME_COMPLETO": "nome",
+    "NOME COMPLETO": "nome",
+    "DATA_NASCIMENTO": "data_nascimento",
+    "DATA NASCIMENTO": "data_nascimento",
+    "DT_NASCIMENTO": "data_nascimento",
+    // CONTATO
     "TELEFONE_1": "telefone_1",
+    "TELEFONE 1": "telefone_1",
+    "TELEFONE1": "telefone_1",
     "TELEFONE_2": "telefone_2",
+    "TELEFONE 2": "telefone_2",
+    "TELEFONE2": "telefone_2",
     "TELEFONE_3": "telefone_3",
+    "TELEFONE 3": "telefone_3",
+    "TELEFONE3": "telefone_3",
+    "TELEFONE_4": "telefone_4",
+    "TELEFONE 4": "telefone_4",
+    "TELEFONE_5": "telefone_5",
+    "TELEFONE 5": "telefone_5",
     "EMAIL": "email",
+    "E-MAIL": "email",
+    // DADOS BANCÁRIOS DO SALÁRIO
     "BANCO_SALARIO": "banco_salario",
+    "BANCO SALARIO": "banco_salario",
     "BANCO": "banco_salario",
     "AGENCIA_SALARIO": "agencia_salario",
+    "AGENCIA SALARIO": "agencia_salario",
     "AGENCIA": "agencia_salario",
+    "AGÊNCIA": "agencia_salario",
     "CONTA_SALARIO": "conta_salario",
+    "CONTA SALARIO": "conta_salario",
     "CONTA": "conta_salario",
+    // MARGENS 70%
     "MARGEM_70_BRUTA": "margem_70_bruta",
+    "MARGEM 70 BRUTA": "margem_70_bruta",
+    "BRUTA 70%": "margem_70_bruta",
     "MARGEM_70_UTILIZADA": "margem_70_utilizada",
+    "MARGEM 70 UTILIZADA": "margem_70_utilizada",
+    "UTILZ 70%": "margem_70_utilizada",
     "MARGEM_70_SALDO": "margem_70_saldo",
+    "MARGEM 70 SALDO": "margem_70_saldo",
+    "SALDO 70%": "margem_70_saldo",
+    // MARGENS 35%
     "MARGEM_35_BRUTA": "margem_35_bruta",
+    "MARGEM 35 BRUTA": "margem_35_bruta",
+    "BRUTA 35%": "margem_35_bruta",
+    "BRUTA 30%": "margem_35_bruta",
     "MARGEM_35_UTILIZADA": "margem_35_utilizada",
+    "MARGEM 35 UTILIZADA": "margem_35_utilizada",
+    "UTILZ 35%": "margem_35_utilizada",
+    "UTILZ 30%": "margem_35_utilizada",
     "MARGEM_35_SALDO": "margem_35_saldo",
+    "MARGEM 35 SALDO": "margem_35_saldo",
+    "SALDO 35%": "margem_35_saldo",
+    "SALDO 30%": "margem_35_saldo",
+    // MARGEM CARTÃO CRÉDITO
     "MARGEM_CARTAO_CREDITO_BRUTA": "margem_cartao_credito_bruta",
+    "MARGEM CARTAO CREDITO BRUTA": "margem_cartao_credito_bruta",
     "MARGEM_CARTAO_CREDITO_UTILIZADA": "margem_cartao_credito_utilizada",
+    "MARGEM CARTAO CREDITO UTILIZADA": "margem_cartao_credito_utilizada",
     "MARGEM_CARTAO_CREDITO_SALDO": "margem_cartao_credito_saldo",
+    "MARGEM CARTAO CREDITO SALDO": "margem_cartao_credito_saldo",
+    "MARGEM CARTAO CREDITO": "margem_cartao_credito_saldo",
+    "SALDO CARTAO CREDITO": "margem_cartao_credito_saldo",
+    "MARGEM 5% CREDITO": "margem_cartao_credito_saldo",
+    // MARGEM CARTÃO BENEFÍCIO
     "MARGEM_CARTAO_BENEFICIO_BRUTA": "margem_cartao_beneficio_bruta",
+    "MARGEM CARTAO BENEFICIO BRUTA": "margem_cartao_beneficio_bruta",
     "MARGEM_CARTAO_BENEFICIO_UTILIZADA": "margem_cartao_beneficio_utilizada",
+    "MARGEM CARTAO BENEFICIO UTILIZADA": "margem_cartao_beneficio_utilizada",
     "MARGEM_CARTAO_BENEFICIO_SALDO": "margem_cartao_beneficio_saldo",
+    "MARGEM CARTAO BENEFICIO SALDO": "margem_cartao_beneficio_saldo",
+    "MARGEM CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
+    "SALDO CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
+    "MARGEM 5% BENEFICIO": "margem_cartao_beneficio_saldo",
+    // FOLHA AGREGADOS
+    "CREDITOS": "creditos",
+    "CRÉDITOS": "creditos",
+    "DEBITOS": "debitos",
+    "DÉBITOS": "debitos",
+    "LIQUIDO": "liquido",
+    "LÍQUIDO": "liquido",
+    // CONTRATOS
     "BANCO_EMPRESTIMO": "banco_emprestimo",
+    "BANCO EMPRESTIMO": "banco_emprestimo",
+    "BANCO DO EMPRESTIMO": "banco_emprestimo",
+    "BANCO_DO_EMPRESTIMO": "banco_emprestimo",
     "VALOR_PARCELA": "valor_parcela",
+    "VALOR PARCELA": "valor_parcela",
     "SALDO_DEVEDOR": "saldo_devedor",
+    "SALDO DEVEDOR": "saldo_devedor",
     "PRAZO_REMANESCENTE": "prazo_remanescente",
+    "PRAZO REMANESCENTE": "prazo_remanescente",
+    "PARCELAS_RESTANTES": "prazo_remanescente",
+    "PARCELAS RESTANTES": "prazo_remanescente",
     "NUMERO_CONTRATO": "numero_contrato",
+    "NUMERO CONTRATO": "numero_contrato",
+    "NR_CONTRATO": "numero_contrato",
     "TIPO_PRODUTO": "tipo_produto",
+    "TIPO PRODUTO": "tipo_produto",
+    "TIPO_OPERACAO": "tipo_produto",
+    "TIPO OPERACAO": "tipo_produto",
+    "TIPO_CONTRATO": "tipo_produto",
+    "SITUACAO_CONTRATO": "situacao_contrato",
+    "SITUACAO CONTRATO": "situacao_contrato",
   };
 
   function normalizeCol(col: string): string {
-    return col.toUpperCase().trim().replace(/\s+/g, "_");
+    // Normaliza para maiúsculas mas mantém espaços para permitir matching com aliases que usam espaço
+    return col.toUpperCase().trim().replace(/\s+/g, " ");
   }
 
   function parseNum(value: any): string | null {
@@ -2225,8 +2316,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           
           pessoaData.telefonesBase = telefones;
           
-          // Upsert pessoa
-          let pessoa = await storage.getClientePessoaByMatricula(matricula);
+          // Upsert pessoa - busca por matrícula + convênio (chave composta)
+          const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
+          let pessoa = pessoasEncontradas[0];
           
           if (pessoa) {
             pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
@@ -2251,20 +2343,29 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               baseTag,
             } as any);
             
-            // Create contrato record if has data
+            // Create contrato record if has data (with deduplication)
             if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
-              await storage.createClienteContrato({
-                pessoaId: pessoa.id,
-                tipoContrato: contratoData.tipoContrato || "consignado",
-                banco: contratoData.banco,
-                valorParcela: contratoData.valorParcela,
-                saldoDevedor: contratoData.saldoDevedor,
-                parcelasRestantes: contratoData.parcelasRestantes,
-                numeroContrato: contratoData.numeroContrato,
-                competencia: competenciaDate,
-                baseTag,
-                dadosBrutos: row,
-              } as any);
+              // Check for existing contract with same bank+numero to avoid duplicates
+              const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
+              const contratoJaExiste = contratosExistentes.some(c => 
+                c.banco === contratoData.banco && 
+                c.numeroContrato === contratoData.numeroContrato
+              );
+              
+              if (!contratoJaExiste) {
+                await storage.createClienteContrato({
+                  pessoaId: pessoa.id,
+                  tipoContrato: contratoData.tipoContrato || "consignado",
+                  banco: contratoData.banco,
+                  valorParcela: contratoData.valorParcela,
+                  saldoDevedor: contratoData.saldoDevedor,
+                  parcelasRestantes: contratoData.parcelasRestantes,
+                  numeroContrato: contratoData.numeroContrato,
+                  competencia: competenciaDate,
+                  baseTag,
+                  dadosBrutos: row,
+                } as any);
+              }
             }
             
             totalLinhas++;
