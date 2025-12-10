@@ -2201,6 +2201,219 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     return isNaN(date.getTime()) ? null : date;
   }
 
+  // Background import processor for large files
+  async function processImportInBackground(
+    data: any[],
+    baseId: number,
+    baseTag: string,
+    convenio: string,
+    competenciaDate: Date
+  ) {
+    console.log(`[Import-BG] Starting background processing for base ${baseId}, ${data.length} rows`);
+    
+    const headers = data[0] ? Object.keys(data[0]) : [];
+    const headerMap: Record<string, string> = {};
+    
+    for (const header of headers) {
+      const normalized = normalizeCol(header);
+      if (COLUMN_MAP[normalized]) {
+        headerMap[header] = COLUMN_MAP[normalized];
+      }
+    }
+
+    console.log(`[Import-BG] Mapped columns:`, Object.keys(headerMap).length);
+
+    let totalLinhas = 0;
+    const BATCH_SIZE = 100;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      try {
+        let matricula: string | null = null;
+        for (const [col, field] of Object.entries(headerMap)) {
+          if (field === "matricula") {
+            matricula = String(row[col] || "").trim();
+            break;
+          }
+        }
+        
+        if (!matricula) continue;
+        
+        const pessoaData: Record<string, any> = {
+          matricula,
+          convenio,
+          baseTagUltima: baseTag,
+        };
+        
+        const folhaData: Record<string, any> = {
+          competencia: competenciaDate,
+          baseTag,
+        };
+        
+        const telefones: string[] = [];
+        
+        const contratoData: Record<string, any> = {
+          competencia: competenciaDate,
+          baseTag,
+        };
+        
+        for (const [col, value] of Object.entries(row)) {
+          const field = headerMap[col];
+          
+          if (!field) continue;
+          
+          if (["cpf", "nome", "orgaodesc", "sit_func", "uf", "municipio", "email"].includes(field)) {
+            const key = field === "sit_func" ? "sitFunc" : field;
+            pessoaData[key] = String(value || "").trim() || null;
+          }
+          else if (field === "banco_salario") {
+            pessoaData.bancoCodigo = String(value || "").trim() || null;
+          }
+          else if (field === "agencia_salario") {
+            pessoaData.agencia = String(value || "").trim() || null;
+          }
+          else if (field === "conta_salario") {
+            pessoaData.conta = String(value || "").trim() || null;
+          }
+          else if (field === "upag") {
+            pessoaData.upag = String(value || "").trim() || null;
+          }
+          else if (field === "data_nascimento") {
+            pessoaData.dataNascimento = parseDate(value);
+          }
+          else if (field === "salario_bruto") {
+            folhaData.salarioBruto = normalizeMoney(value);
+          }
+          else if (field === "descontos_brutos") {
+            folhaData.descontosBrutos = normalizeMoney(value);
+          }
+          else if (field === "salario_liquido") {
+            folhaData.salarioLiquido = normalizeMoney(value);
+          }
+          else if (field.startsWith("margem_")) {
+            const parts = field.split("_");
+            let camelField = parts[0];
+            for (let j = 1; j < parts.length; j++) {
+              camelField += parts[j].charAt(0).toUpperCase() + parts[j].slice(1);
+            }
+            folhaData[camelField] = parseNum(value);
+          }
+          else if (field.startsWith("telefone_")) {
+            const tel = String(value || "").trim();
+            if (tel) telefones.push(tel);
+          }
+          else if (field === "banco_emprestimo") {
+            contratoData.banco = String(value || "").trim() || null;
+          }
+          else if (field === "valor_parcela") {
+            contratoData.valorParcela = parseNum(value);
+          }
+          else if (field === "saldo_devedor") {
+            contratoData.saldoDevedor = parseNum(value);
+          }
+          else if (field === "prazo_remanescente") {
+            const prazo = parseInt(String(value || "0"), 10);
+            contratoData.parcelasRestantes = isNaN(prazo) ? null : prazo;
+          }
+          else if (field === "numero_contrato") {
+            contratoData.numeroContrato = String(value || "").trim() || null;
+          }
+          else if (field === "tipo_produto") {
+            contratoData.tipoContrato = String(value || "").trim() || null;
+          }
+        }
+        
+        pessoaData.telefonesBase = telefones;
+        
+        const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
+        let pessoa = pessoasEncontradas[0];
+        
+        if (pessoa) {
+          pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
+        } else {
+          pessoa = await storage.createClientePessoa(pessoaData as any);
+        }
+        
+        if (pessoa) {
+          await storage.createClienteFolhaMes({
+            pessoaId: pessoa.id,
+            competencia: competenciaDate,
+            margemBruta70: folhaData.margem70Bruta,
+            margemUtilizada70: folhaData.margem70Utilizada,
+            margemSaldo70: folhaData.margem70Saldo,
+            margemBruta35: folhaData.margem35Bruta,
+            margemUtilizada35: folhaData.margem35Utilizada,
+            margemSaldo35: folhaData.margem35Saldo,
+            margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+            margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+            salarioBruto: folhaData.salarioBruto || null,
+            descontosBrutos: folhaData.descontosBrutos || null,
+            salarioLiquido: folhaData.salarioLiquido || null,
+            sitFuncNoMes: pessoaData.sitFunc || null,
+            baseTag,
+          } as any);
+          
+          if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
+            const contratosExistentes = await storage.getContratosByPessoaId(pessoa.id);
+            
+            const contratoExistente = contratosExistentes.find(c => 
+              c.numeroContrato === contratoData.numeroContrato && contratoData.numeroContrato
+            );
+            
+            if (contratoExistente) {
+              const updateData: Record<string, any> = {
+                baseTag,
+                dadosBrutos: row,
+              };
+              if (contratoData.tipoContrato) updateData.tipoContrato = contratoData.tipoContrato;
+              if (contratoData.banco) updateData.banco = contratoData.banco;
+              if (contratoData.valorParcela !== null) updateData.valorParcela = contratoData.valorParcela;
+              if (contratoData.saldoDevedor !== null) updateData.saldoDevedor = contratoData.saldoDevedor;
+              if (contratoData.parcelasRestantes !== null) updateData.parcelasRestantes = contratoData.parcelasRestantes;
+              updateData.competencia = competenciaDate;
+              
+              await storage.updateClienteContrato(contratoExistente.id, updateData as any);
+            } else {
+              await storage.createClienteContrato({
+                pessoaId: pessoa.id,
+                tipoContrato: contratoData.tipoContrato || "consignado",
+                banco: contratoData.banco,
+                valorParcela: contratoData.valorParcela,
+                saldoDevedor: contratoData.saldoDevedor,
+                parcelasRestantes: contratoData.parcelasRestantes,
+                numeroContrato: contratoData.numeroContrato,
+                competencia: competenciaDate,
+                baseTag,
+                dadosBrutos: row,
+              } as any);
+            }
+          }
+          
+          totalLinhas++;
+        }
+        
+        // Log progress every 1000 rows for large files
+        if ((i + 1) % 1000 === 0) {
+          console.log(`[Import-BG] Processed ${i + 1}/${data.length} rows, imported ${totalLinhas}`);
+          // Update base with partial progress
+          await storage.updateBaseImportada(baseId, {
+            totalLinhas,
+          });
+        }
+      } catch (rowError) {
+        console.error("[Import-BG] Row error:", rowError);
+      }
+    }
+    
+    // Update base status to completed
+    await storage.updateBaseImportada(baseId, {
+      totalLinhas,
+      status: "concluida",
+    });
+    
+    console.log(`[Import-BG] Base ${baseId} completed with ${totalLinhas} rows`);
+  }
+
   // GET bases importadas - Master only
   app.get("/api/bases", requireAuth, requireMaster, async (req, res) => {
     try {
@@ -2212,7 +2425,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST importar base - Master only - Simple synchronous import
+  // POST importar base - Master only - Background processing for large files
   app.post("/api/bases/import", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
     try {
       const file = req.file;
@@ -2224,7 +2437,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         });
       }
 
-      console.log(`[Import] Received file: ${file.originalname}, size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+      const fileSizeMB = file.size / 1024 / 1024;
+      console.log(`[Import] Received file: ${file.originalname}, size: ${fileSizeMB.toFixed(2)} MB`);
 
       // Parse competencia to date (format: YYYY-MM)
       const [year, month] = competencia.split("-");
@@ -2251,6 +2465,31 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const data: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
       console.log(`[Import] Parsed ${data.length} rows from ${firstSheet}`);
+
+      // For large files (>50k rows), process in background and return immediately
+      const isLargeFile = data.length > 50000;
+      
+      if (isLargeFile) {
+        console.log(`[Import] Large file detected (${data.length} rows), processing in background...`);
+        
+        // Return immediately for large files
+        res.json({
+          message: "Importação iniciada em segundo plano",
+          baseId: base.id,
+          baseTag,
+          status: "processando",
+          totalRows: data.length,
+          fileName: file.originalname,
+          isBackground: true,
+        });
+        
+        // Process in background (don't await)
+        processImportInBackground(data, base.id, baseTag, convenio, competenciaDate).catch(err => {
+          console.error(`[Import] Background processing error:`, err);
+        });
+        
+        return;
+      }
 
       // Build header mapping
       const headers = data[0] ? Object.keys(data[0]) : [];
