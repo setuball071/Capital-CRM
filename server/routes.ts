@@ -30,6 +30,7 @@ import ExcelJS from "exceljs";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import Papa from "papaparse";
 
 // Configure multer for file uploads using memory storage
 const upload = multer({
@@ -2458,13 +2459,30 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
       console.log(`[Import] Created base ${base.id} with tag ${baseTag}`);
       
-      // Parse file with XLSX (works for xlsx, xls, csv)
-      const workbook = XLSX.read(file.buffer, { type: "buffer" });
-      const firstSheet = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheet];
-      const data: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      // Parse file - use PapaParse for CSV (much faster for large files)
+      const ext = path.extname(file.originalname).toLowerCase();
+      let data: any[] = [];
+      
+      if (ext === ".csv") {
+        console.log(`[Import] Parsing CSV with PapaParse...`);
+        const csvString = file.buffer.toString("utf-8");
+        const parsed = Papa.parse(csvString, { 
+          header: true,
+          skipEmptyLines: true,
+          delimiter: "", // auto-detect
+        });
+        data = parsed.data as any[];
+        console.log(`[Import] CSV parsed: ${data.length} rows`);
+      } else {
+        console.log(`[Import] Parsing Excel with XLSX...`);
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+        data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+        console.log(`[Import] Excel parsed: ${data.length} rows`);
+      }
 
-      console.log(`[Import] Parsed ${data.length} rows from ${firstSheet}`);
+      console.log(`[Import] Parsed ${data.length} rows from file`);
 
       // For large files (>50k rows), process in background and return immediately
       const isLargeFile = data.length > 50000;
