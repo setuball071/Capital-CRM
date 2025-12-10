@@ -142,6 +142,7 @@ export interface IStorage {
   getBaseByStatus(status: string): Promise<BaseImportada | undefined>;
   createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada>;
   updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined>;
+  deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedPessoas: number }>;
   
   // Pedidos Lista
   getAllPedidosLista(): Promise<PedidoLista[]>;
@@ -1039,6 +1040,58 @@ export class DbStorage implements IStorage {
       .where(eq(basesImportadas.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedPessoas: number }> {
+    console.log(`[Storage] Deleting base ${id} with tag ${baseTag}`);
+    
+    // 1. Delete folhas with this baseTag
+    const folhasResult = await db.delete(clientesFolhaMes)
+      .where(eq(clientesFolhaMes.baseTag, baseTag))
+      .returning({ id: clientesFolhaMes.id });
+    const deletedFolhas = folhasResult.length;
+    console.log(`[Storage] Deleted ${deletedFolhas} folhas`);
+    
+    // 2. Delete contratos with this baseTag
+    const contratosResult = await db.delete(clientesContratos)
+      .where(eq(clientesContratos.baseTag, baseTag))
+      .returning({ id: clientesContratos.id });
+    const deletedContratos = contratosResult.length;
+    console.log(`[Storage] Deleted ${deletedContratos} contratos`);
+    
+    // 3. Delete orphaned pessoas - those whose last base was this one AND have no remaining folhas/contratos
+    // First get IDs of pessoas to delete (avoid subquery issues)
+    const pessoasToCheck = await db.select({ id: clientesPessoa.id })
+      .from(clientesPessoa)
+      .where(eq(clientesPessoa.baseTagUltima, baseTag));
+    
+    let deletedPessoas = 0;
+    for (const pessoa of pessoasToCheck) {
+      // Check if this pessoa has any remaining folhas or contratos
+      const [hasData] = await db.select({ count: sql<number>`count(*)` })
+        .from(clientesFolhaMes)
+        .where(eq(clientesFolhaMes.pessoaId, pessoa.id));
+      
+      const [hasContratos] = await db.select({ count: sql<number>`count(*)` })
+        .from(clientesContratos)
+        .where(eq(clientesContratos.pessoaId, pessoa.id));
+      
+      // Convert to number (Neon returns strings)
+      const folhaCount = Number(hasData?.count) || 0;
+      const contratoCount = Number(hasContratos?.count) || 0;
+      
+      if (folhaCount === 0 && contratoCount === 0) {
+        await db.delete(clientesPessoa).where(eq(clientesPessoa.id, pessoa.id));
+        deletedPessoas++;
+      }
+    }
+    console.log(`[Storage] Deleted ${deletedPessoas} orphaned pessoas`);
+    
+    // 4. Delete the base record itself
+    await db.delete(basesImportadas).where(eq(basesImportadas.id, id));
+    console.log(`[Storage] Deleted base record ${id}`);
+    
+    return { deletedFolhas, deletedContratos, deletedPessoas };
   }
 
   // Pedidos Lista

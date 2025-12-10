@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
@@ -88,12 +90,17 @@ const MODELO_COLUNAS = {
 
 export default function BasesClientes() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isMaster = user?.role === "master";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isModeloOpen, setIsModeloOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [convenio, setConvenio] = useState("");
   const [competencia, setCompetencia] = useState("");
   const [nomeBase, setNomeBase] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [baseToDelete, setBaseToDelete] = useState<BaseImportada | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const handleDownloadModelo = () => {
     const headers = [
@@ -184,6 +191,52 @@ export default function BasesClientes() {
     
     importMutation.mutate(formData);
   };
+
+  const deleteMutation = useMutation({
+    mutationFn: async (baseId: number) => {
+      const response = await apiRequest("DELETE", `/api/bases/${baseId}`);
+      return response.json();
+    },
+    onSuccess: (data: { message: string; deletedFolhas: number; deletedContratos: number; deletedPessoas: number }) => {
+      toast({
+        title: "Base excluída com sucesso",
+        description: `Todos os dados vinculados foram removidos: ${data.deletedFolhas} folhas, ${data.deletedContratos} contratos, ${data.deletedPessoas} clientes.`,
+      });
+      setDeleteDialogOpen(false);
+      setBaseToDelete(null);
+      setDeleteConfirmText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir base",
+        description: error.message || "Ocorreu um erro ao excluir a base.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteClick = (base: BaseImportada) => {
+    setBaseToDelete(base);
+    setDeleteConfirmText("");
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (baseToDelete) {
+      const isValidConfirmation = 
+        deleteConfirmText === "EXCLUIR" || 
+        deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase();
+      if (isValidConfirmation) {
+        deleteMutation.mutate(baseToDelete.id);
+      }
+    }
+  };
+
+  const isDeleteConfirmValid = baseToDelete && (
+    deleteConfirmText === "EXCLUIR" || 
+    deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase()
+  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -460,6 +513,7 @@ export default function BasesClientes() {
                   <TableHead>Linhas</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Importado em</TableHead>
+                  {isMaster && <TableHead className="text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -479,6 +533,20 @@ export default function BasesClientes() {
                     <TableCell>
                       {format(new Date(base.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                     </TableCell>
+                    {isMaster && (
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick(base)}
+                          disabled={base.status === "processando"}
+                          title={base.status === "processando" ? "Aguarde a conclusão" : "Excluir base"}
+                          data-testid={`button-delete-base-${base.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -486,6 +554,79 @@ export default function BasesClientes() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[500px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Excluir base de clientes
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <div className="font-semibold text-destructive">
+                  Tem certeza que deseja excluir esta base? Todos os dados vinculados 
+                  (clientes, folhas e contratos desta base) serão removidos permanentemente 
+                  e não poderão ser recuperados.
+                </div>
+                
+                {baseToDelete && (
+                  <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
+                    <div><strong>Nome:</strong> {baseToDelete.nome}</div>
+                    <div><strong>Convênio:</strong> {baseToDelete.convenio}</div>
+                    <div><strong>Competência:</strong> {baseToDelete.competencia 
+                      ? format(new Date(baseToDelete.competencia), "MMM/yyyy", { locale: ptBR }) 
+                      : "-"}</div>
+                    <div><strong>Total de linhas:</strong> {baseToDelete.totalLinhas?.toLocaleString("pt-BR") || 0}</div>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    Para confirmar, digite <strong className="text-destructive">EXCLUIR</strong> ou o <strong>nome da base</strong> no campo abaixo:
+                  </div>
+                  <Input
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="Digite EXCLUIR ou o nome da base"
+                    data-testid="input-confirm-delete"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setBaseToDelete(null);
+                setDeleteConfirmText("");
+              }}
+              data-testid="button-cancel-delete"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={!isDeleteConfirmValid || deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir definitivamente
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

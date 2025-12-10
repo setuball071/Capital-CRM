@@ -1,0 +1,82 @@
+Quero adicionar a funcionalidade de EXCLUSÃO de uma base de clientes já importada.
+
+### 1) REQUISITOS DE PERMISSÃO
+
+- Somente usuários com perfil **Administrador / Master** podem excluir uma base.
+- Usuários Coordenador / Vendedor não podem ver nem usar a opção de exclusão.
+
+### 2) AJUSTES NA LISTAGEM DE BASES
+
+Na tela "Base de Clientes" (lista de bases importadas):
+
+- Para cada linha da base, adicionar um botão de ação "Excluir" (ícone de lixeira) na coluna de ações.
+- Esse botão só deve aparecer para usuários com permissão de administrador.
+
+Comportamento ao clicar em "Excluir":
+
+- Abrir um modal de confirmação com:
+  - Título: "Excluir base de clientes"
+  - Texto de alerta forte, por exemplo:
+    - "Tem certeza que deseja excluir esta base? Todos os dados vinculados (clientes e contratos desta base) serão removidos e não poderão ser recuperados."
+  - Mostrar informações da base: Nome, Convênio, Competência, Qtde de linhas.
+  - Campo para o usuário digitar o nome da base ou a palavra "EXCLUIR" para confirmar (para evitar exclusão acidental).
+  - Botões: "Cancelar" e "Excluir definitivamente".
+
+### 3) BACKEND – LÓGICA DE EXCLUSÃO
+
+Preciso de uma exclusão segura e consistente, pensando que uma base pode ter centenas de milhares de registros.
+
+Estrutura provável (ajuste conforme estiver no código):
+
+- Tabela `bases_clientes` (ou equivalente) – registro da base importada.
+- Clientes e contratos vinculados à base:
+  - Clientes provavelmente estão ligados à base por algum campo `base_id` ou similar, ou
+  - Contratos estão ligados à base, e clientes têm relacionamento separado.
+
+Regra desejada:
+
+Quando eu excluir uma base, quero:
+
+- Remover todos os dados vinculados **apenas daquela base**, sem afetar clientes de outras bases.
+- Se o modelo atual associa clientes diretamente à base (ex: cliente criado exclusivamente a partir da base X):
+  - Pode deletar os clientes vinculados à base, junto com os contratos.
+- Se o modelo compartilha clientes entre bases (menos provável):
+  - Remover somente os contratos e vínculos daquela base, tomando cuidado para não quebrar outras bases.
+
+Sugestão de implementação (ajuste ao modelo existente):
+
+1. Criar uma rota no backend:  
+   - `DELETE /api/bases-clientes/:id`
+2. Na rota:
+   - Validar permissão do usuário (apenas admin).
+   - Iniciar transação no banco.
+   - Remover os registros em ordem correta, por exemplo:
+     - Deletar contratos que tenham `base_id = :id`
+     - Deletar clientes que tenham `base_id = :id` (se for esse o vínculo atual)
+     - Deletar o registro da base em `bases_clientes`.
+   - Commit na transação.
+3. Retornar status 200 e uma mensagem de sucesso.
+4. Tratar erros com mensagem clara se algo der errado.
+
+Se o volume for muito alto, você pode optar por uma exclusão em background, mas por enquanto pode ser síncrono – o foco é garantir consistência.
+
+### 4) FRONTEND – ATUALIZAÇÃO DA LISTA APÓS EXCLUSÃO
+
+Depois da exclusão bem-sucedida:
+
+- Fechar o modal.
+- Remover a base da lista na tela ou recarregar a lista de bases.
+- Exibir uma notificação tipo toast:
+  - "Base excluída com sucesso. Todos os dados vinculados foram removidos."
+
+### 5) REGRAS IMPORTANTES
+
+- Não permitir exclusão se a base estiver com status "Processando" (se houver esse status) – só depois de concluída.
+- Não precisa versionar ou arquivar – exclusão é definitiva.
+- Logar a operação (se já existir sistema de logs): usuário, data/hora, base excluída.
+
+Resumo:
+- Botão "Excluir" na listagem (apenas Admin).
+- Modal de confirmação forte com texto + campo de confirmação.
+- Endpoint DELETE que remove base + dados vinculados usando transação no banco.
+- Atualizar UI após exclusão e mostrar mensagem de sucesso.

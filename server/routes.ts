@@ -2426,6 +2426,48 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE base importada - Master only
+  app.delete("/api/bases/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      // Get the base to check status and get baseTag
+      const base = await storage.getBaseImportada(id);
+      
+      if (!base) {
+        return res.status(404).json({ message: "Base não encontrada" });
+      }
+      
+      // Don't allow deletion if still processing
+      if (base.status === "processando") {
+        return res.status(400).json({ 
+          message: "Não é possível excluir uma base em processamento. Aguarde a conclusão." 
+        });
+      }
+      
+      console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome}`);
+      
+      // Delete base and all related data
+      const result = await storage.deleteBaseImportada(id, base.baseTag);
+      
+      console.log(`[Delete Base] Completed: ${result.deletedFolhas} folhas, ${result.deletedContratos} contratos, ${result.deletedPessoas} pessoas removed`);
+      
+      return res.json({
+        message: "Base excluída com sucesso",
+        deletedFolhas: result.deletedFolhas,
+        deletedContratos: result.deletedContratos,
+        deletedPessoas: result.deletedPessoas,
+      });
+    } catch (error) {
+      console.error("Delete base error:", error);
+      return res.status(500).json({ message: "Erro ao excluir base" });
+    }
+  });
+
   // POST importar base - Master only - Background processing for large files
   app.post("/api/bases/import", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
     try {
