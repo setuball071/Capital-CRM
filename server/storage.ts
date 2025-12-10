@@ -1060,31 +1060,14 @@ export class DbStorage implements IStorage {
     console.log(`[Storage] Deleted ${deletedContratos} contratos`);
     
     // 3. Delete orphaned pessoas - those whose last base was this one AND have no remaining folhas/contratos
-    // First get IDs of pessoas to delete (avoid subquery issues)
-    const pessoasToCheck = await db.select({ id: clientesPessoa.id })
-      .from(clientesPessoa)
-      .where(eq(clientesPessoa.baseTagUltima, baseTag));
-    
-    let deletedPessoas = 0;
-    for (const pessoa of pessoasToCheck) {
-      // Check if this pessoa has any remaining folhas or contratos
-      const [hasData] = await db.select({ count: sql<number>`count(*)` })
-        .from(clientesFolhaMes)
-        .where(eq(clientesFolhaMes.pessoaId, pessoa.id));
-      
-      const [hasContratos] = await db.select({ count: sql<number>`count(*)` })
-        .from(clientesContratos)
-        .where(eq(clientesContratos.pessoaId, pessoa.id));
-      
-      // Convert to number (Neon returns strings)
-      const folhaCount = Number(hasData?.count) || 0;
-      const contratoCount = Number(hasContratos?.count) || 0;
-      
-      if (folhaCount === 0 && contratoCount === 0) {
-        await db.delete(clientesPessoa).where(eq(clientesPessoa.id, pessoa.id));
-        deletedPessoas++;
-      }
-    }
+    // Use a single efficient query with NOT EXISTS subqueries
+    const pessoasOrfasResult = await db.execute(sql`
+      DELETE FROM clientes_pessoa 
+      WHERE base_tag_ultima = ${baseTag}
+        AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
+        AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
+    `);
+    const deletedPessoas = Number(pessoasOrfasResult.rowCount) || 0;
     console.log(`[Storage] Deleted ${deletedPessoas} orphaned pessoas`);
     
     // 4. Delete the base record itself
