@@ -3475,7 +3475,7 @@ MODOS DE OPERAÇÃO (campo "modo" na requisição):
         });
       }
 
-      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId, avaliarResposta } = result.data;
+      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId, avaliarResposta, tom, cenario } = result.data;
       const userId = req.user!.id;
 
       // Import OpenAI client
@@ -3486,16 +3486,30 @@ MODOS DE OPERAÇÃO (campo "modo" na requisição):
 
       // Build user message based on mode
       if (modo === "roleplay_cliente") {
-        if (!falaCorretor) {
-          return res.status(400).json({ message: "falaCorretor é obrigatório para roleplay_cliente" });
+        // Se há cenário mas não fala, inicia o roleplay com cenário
+        if (!falaCorretor && !cenario) {
+          return res.status(400).json({ message: "falaCorretor ou cenario é obrigatório para roleplay_cliente" });
         }
-        userMessage = `modo: roleplay_cliente
+        
+        if (cenario && !falaCorretor) {
+          // Inicia roleplay direto no cenário
+          userMessage = `modo: roleplay_cliente
+nível_atual: ${nivelAtual}
+cenario_inicial: "${cenario}"
+${historicoResumido ? `historico_resumido: ${historicoResumido}` : ""}
+${contexto ? `contexto: ${contexto}` : ""}
+
+IMPORTANTE: O roleplay deve COMEÇAR já dentro desse cenário, sem saudações, sem apresentação. Responda exatamente como o cliente daquele cenário reagiria. Responda APENAS como cliente, com 1 a 3 frases naturais.`;
+        } else {
+          userMessage = `modo: roleplay_cliente
 nível_atual: ${nivelAtual}
 fala_corretor: "${falaCorretor}"
+${cenario ? `cenario: "${cenario}"` : ""}
 ${historicoResumido ? `historico_resumido: ${historicoResumido}` : ""}
 ${contexto ? `contexto: ${contexto}` : ""}
 
 Responda APENAS como cliente, com 1 a 3 frases naturais.`;
+        }
         responseFormat = "text";
 
       } else if (modo === "avaliacao_roleplay") {
@@ -3514,11 +3528,25 @@ Avalie a fala do corretor e responda EXCLUSIVAMENTE em JSON válido com as notas
         if (!canal || !tipoCliente || !produtoFoco) {
           return res.status(400).json({ message: "canal, tipoCliente e produtoFoco são obrigatórios para abordagem_ia" });
         }
+        
+        // Descrição detalhada do tom
+        const tomDescricao = tom ? {
+          consultiva_acolhedora: "Tom humano, empático, sem pressão. Perguntas abertas, validação de sentimentos. Para clientes sensíveis, negativados ou desconfiados.",
+          direta_objetiva: "Linha reta, focada em benefício prático. Sem rodeios, objetivo claro. Para clientes ocupados ou servidores públicos pragmáticos.",
+          persuasiva_profissional: "Usa prova social, ancoragem, autoridade. Tom de especialista que domina o assunto. Gatilhos: escassez moderada, reciprocidade.",
+          alta_conversao: "Ataca dor real, cria urgência saudável. Gatilhos fortes: medo de perda, oportunidade única, tempo limitado. Para clientes indecisos que precisam de empurrão.",
+          ultra_premium: "Tom consultor premium, estilo 'private banker'. Linguagem sofisticada, exclusividade. Para servidores antigos com salário alto.",
+        }[tom] : null;
+        
         userMessage = `modo: abordagem_ia
 canal: ${canal}
 tipo_cliente: ${tipoCliente}
 produto_foco: ${produtoFoco}
+${tom ? `tom_abordagem: ${tom}
+estilo_tom: ${tomDescricao}` : ""}
 ${contexto ? `contexto: ${contexto}` : ""}
+
+IMPORTANTE: Respeite o tom solicitado. O tom define estrutura, força persuasiva, velocidade da abordagem e gatilhos mentais apropriados.
 
 Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos especificados.`;
         responseFormat = "json";

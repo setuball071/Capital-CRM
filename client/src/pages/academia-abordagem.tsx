@@ -54,11 +54,20 @@ const PRODUTOS = [
   { value: "consignado", label: "Crédito Consignado" },
 ];
 
+const ESTILOS_TOM = [
+  { value: "consultiva_acolhedora", label: "Consultiva / Acolhedora", desc: "Tom empático, sem pressão. Para clientes sensíveis." },
+  { value: "direta_objetiva", label: "Direta / Objetiva", desc: "Foco em benefício prático. Para clientes ocupados." },
+  { value: "persuasiva_profissional", label: "Persuasiva Profissional", desc: "Com autoridade e prova social. Tom de especialista." },
+  { value: "alta_conversao", label: "Alta Conversão", desc: "Urgência saudável. Para clientes indecisos." },
+  { value: "ultra_premium", label: "Ultra Premium", desc: "Estilo consultor. Para servidores de alto salário." },
+];
+
 export default function AcademiaAbordagem() {
   const { toast } = useToast();
   const [canal, setCanal] = useState<string>("whatsapp");
   const [tipoCliente, setTipoCliente] = useState<string>("");
   const [produtoFoco, setProdutoFoco] = useState<string>("");
+  const [tom, setTom] = useState<string>("persuasiva_profissional");
   const [contexto, setContexto] = useState<string>("");
   const [abordagem, setAbordagem] = useState<AbordagemGerada | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -81,6 +90,7 @@ export default function AcademiaAbordagem() {
         canal,
         tipoCliente,
         produtoFoco,
+        tom,
         contexto: contexto || undefined,
       });
       return response.json();
@@ -237,6 +247,26 @@ export default function AcademiaAbordagem() {
                   {PRODUTOS.map((produto) => (
                     <SelectItem key={produto.value} value={produto.value}>
                       {produto.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Estilo da Abordagem (Tom) */}
+            <div className="space-y-2">
+              <Label>Estilo da Abordagem</Label>
+              <Select value={tom} onValueChange={setTom}>
+                <SelectTrigger data-testid="select-tom">
+                  <SelectValue placeholder="Selecione o tom da abordagem" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTILOS_TOM.map((estilo) => (
+                    <SelectItem key={estilo.value} value={estilo.value}>
+                      <div className="flex flex-col">
+                        <span>{estilo.label}</span>
+                        <span className="text-xs text-muted-foreground">{estilo.desc}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

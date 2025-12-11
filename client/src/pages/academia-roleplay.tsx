@@ -59,6 +59,8 @@ export default function AcademiaRoleplay() {
   const [avaliacaoFinal, setAvaliacaoFinal] = useState<AvaliacaoFinal | null>(null);
   const [modoAvaliacao, setModoAvaliacao] = useState(false);
   const [avaliacoesExpandidas, setAvaliacoesExpandidas] = useState<Set<number>>(new Set());
+  const [cenario, setCenario] = useState("");
+  const [cenarioIniciado, setCenarioIniciado] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
@@ -75,13 +77,20 @@ export default function AcademiaRoleplay() {
 
   const roleplayMutation = useMutation({
     mutationFn: async (falaCorretor: string) => {
+      // Include cenario context if this roleplay started with a scenario
+      const contextoBase = mensagens.map((m) => `${m.role}: ${m.content}`).join("\n");
+      const contextoCompleto = cenario 
+        ? `CENÁRIO INICIAL: ${cenario}\n\n${contextoBase}`
+        : contextoBase;
+      
       const response = await apiRequest("POST", "/api/treinador-consigone", {
         modo: "roleplay_cliente",
         falaCorretor,
         nivelAtual: parseInt(nivelSelecionado),
         sessaoId,
         avaliarResposta: true,
-        contexto: mensagens.map((m) => `${m.role}: ${m.content}`).join("\n"),
+        contexto: contextoCompleto,
+        cenario: cenario || undefined,
       });
       return response.json();
     },
@@ -171,6 +180,45 @@ export default function AcademiaRoleplay() {
     setAvaliacaoFinal(null);
     setModoAvaliacao(false);
     setAvaliacoesExpandidas(new Set());
+    setCenario("");
+    setCenarioIniciado(false);
+  };
+
+  const cenarioMutation = useMutation({
+    mutationFn: async (cenarioTexto: string) => {
+      const response = await apiRequest("POST", "/api/treinador-consigone", {
+        modo: "roleplay_cliente",
+        cenario: cenarioTexto,
+        nivelAtual: parseInt(nivelSelecionado),
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.sessaoId) {
+        setSessaoId(data.sessaoId);
+      }
+      setCenarioIniciado(true);
+      setMensagens([{ role: "cliente", content: data.falaCliente, timestamp: new Date() }]);
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível iniciar o cenário",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleIniciarCenario = () => {
+    if (!cenario.trim()) {
+      toast({
+        title: "Atenção",
+        description: "Descreva o cenário que deseja treinar",
+        variant: "destructive",
+      });
+      return;
+    }
+    cenarioMutation.mutate(cenario.trim());
   };
 
   const handleFinalizarSimulacao = () => {
@@ -292,12 +340,47 @@ export default function AcademiaRoleplay() {
           <CardContent className="pb-3">
             <ScrollArea className="h-96 pr-4" ref={scrollRef}>
               {mensagens.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <div className="text-center">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>Inicie a conversa com o cliente...</p>
-                    <p className="text-sm mt-1">Cada resposta será avaliada pela IA</p>
-                  </div>
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+                  {!cenarioIniciado ? (
+                    <div className="w-full max-w-md space-y-4">
+                      <div className="text-center mb-4">
+                        <Lightbulb className="h-10 w-10 mx-auto mb-2 text-yellow-500" />
+                        <p className="font-medium text-foreground">Treinar cenário específico?</p>
+                        <p className="text-sm">Descreva uma situação e a IA iniciará nesse contexto</p>
+                      </div>
+                      <Textarea
+                        placeholder='Ex: "cliente disse que vai pensar", "cliente reclama da taxa", "cliente quer saber a diferença do cartão"...'
+                        value={cenario}
+                        onChange={(e) => setCenario(e.target.value)}
+                        className="min-h-[80px] text-foreground"
+                        data-testid="textarea-cenario"
+                      />
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={handleIniciarCenario} 
+                          disabled={cenarioMutation.isPending || !cenario.trim()}
+                          className="flex-1"
+                          data-testid="button-iniciar-cenario"
+                        >
+                          {cenarioMutation.isPending ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Iniciando...</>
+                          ) : (
+                            <>Iniciar no Cenário</>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="text-center text-sm text-muted-foreground">
+                        <p>ou</p>
+                        <p className="mt-1">Inicie a conversa normalmente digitando abaixo</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Inicie a conversa com o cliente...</p>
+                      <p className="text-sm mt-1">Cada resposta será avaliada pela IA</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">

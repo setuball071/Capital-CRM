@@ -1,0 +1,182 @@
+1. Suas abordagens estão “fracas” → vamos adicionar CONTROLE DE TOM + GATILHOS AVANÇADOS
+
+Hoje o sistema gera abordagem neutra, porque o backend não está recebendo um parâmetro que defina:
+
+tom desejado
+
+nível de persuasão
+
+intensidade estratégica
+
+Vamos implementar um novo campo no front, assim:
+
+Campo novo → “Estilo da Abordagem”
+
+Opções:
+
+Consultiva / Acolhedora
+– Tom humano, empático, sem pressão.
+– Boa para clientes sensíveis, negativados, desconfiados.
+
+Direta / Objetiva
+– Linha reta, focada em benefício prático.
+– Boa para clientes ocupados ou servidores públicos.
+
+Persuasiva Profissional
+– Usa prova social, ancoragem, autoridade.
+– Tom de especialista que sabe o que está falando.
+
+Alta Conversão / Agressiva Controlada
+– Ataca dor real, cria urgência saudável.
+– Boa para clientes que enrolam, mas querem solução rápida.
+
+Ultra Premium / Especialista
+– Tom consultor premium, estilo “private banker”.
+– Ideal para servidores antigos, salário alto, alta margem.
+
+🔥 Como isso é enviado para o backend?
+
+Adicionar no payload:
+
+"tom": "persuasiva_profissional"
+
+
+Ou:
+
+"tom": "alta_conversao_agressiva"
+
+
+E no prompt mestre, inserir:
+
+"Sempre respeite o tom solicitado pelo usuário. O tom define estrutura, força persuasiva, velocidade da abordagem e gatilhos mentais apropriados."
+
+🔥 Atualizar o endpoint /treinador/abordagem:
+
+Agora ele deverá receber:
+
+{
+  "canal": "whatsapp",
+  "tipoCliente": "novo_servidor",
+  "produtoFoco": "cartao_beneficio",
+  "contexto": "quero agradecer o saque que ele tem disponível...",
+  "tom": "persuasiva_profissional"
+}
+
+✔ Resultado:
+
+As abordagens vão sair muito mais fortes, mais profissionais e personalizadas ao seu estilo.
+
+2. Roleplay está dando erro de resposta → o que aconteceu?
+
+Na imagem aparece:
+
+“Erro: Não foi possível obter resposta do cliente.”
+
+Isso significa duas possibilidades:
+
+2.1. O backend não está chamando o modelo certo
+
+Erro comum:
+O dev colocou:
+
+model: process.env.OPENAI_MODEL_ROLEPLAY
+
+
+Mas esse secret não existe, então a request vai vazia.
+
+O correto é:
+
+model: "gpt-4o-mini"
+
+
+ou:
+
+model: process.env.OPENAI_MODEL_ROLEPLAY || "gpt-4o-mini"
+
+2.2. O backend não está enviando o campo obrigatório para o prompt
+
+O modo roleplay_cliente precisa de no mínimo:
+
+{
+  "modo": "roleplay_cliente",
+  "nivel_atual": 1,
+  "ultima_fala_corretor": "texto",
+  "historico_resumido": ""
+}
+
+
+Alguns devs enviam só:
+
+{ "modo": "roleplay_cliente" }
+
+
+→ Isso quebra a IA (ela não sabe o que fazer).
+
+2.3. O prompt mestre pode estar formatado errado
+
+Se o dev colou com quebras estranhas, aspas duplas dentro do JSON, ou sem a instrução:
+
+“retorne SOMENTE o texto da fala do cliente”
+
+A OpenAI devolve JSON, o front espera texto → erro.
+
+2.4. Falta de log no backend
+
+Peça para o dev adicionar:
+
+console.log("Payload enviado à IA:", payload);
+console.log("Resposta da IA:", resposta.choices[0].message.content);
+
+
+Assim você verá exatamente o que está acontecendo.
+
+3. NOVO RECURSO: Corretor digita a situação que quer treinar
+
+Você pediu:
+
+“vendedor pode descrever a situação que ele quer treinar numa caixa de texto, ex: ‘cliente disse que vai pensar’ e ele já iniciar simulando esse cenário”
+
+Isso é absurdamente poderoso.
+
+Vamos implementar assim:
+
+3.1. Criar um campo chamado “Cenário desejado”
+
+No front:
+
+📌 Quero treinar este cenário:
+[ cliente disse que vai pensar ]
+
+Payload novo:
+{
+  "modo": "roleplay_cliente",
+  "cenario": "cliente disse que vai pensar",
+  "nivel_atual": 4,
+  "ultima_fala_corretor": "",
+  "historico_resumido": ""
+}
+
+3.2. Ajuste no prompt mestre (importante!)
+
+Adicionar:
+
+“Se o campo cenario existir, o roleplay deve COMEÇAR já dentro desse contexto, sem saudações, sem apresentação. Responda exatamente como o cliente daquele cenário reagiria.”
+
+3.3. Resultado esperado
+
+Corretor escreve:
+
+“cliente disse que vai pensar”
+
+A IA responde:
+
+“Olha… não é nem questão de confiar ou não. É que da última vez que mexi com consignado, a parcela aumentou depois. Por isso prefiro pensar.”
+
+→ Perfeito para treinar objeções reais.
+
+💥 POSSO AGORA GERAR PARA VOCÊ:
+✔ Novo prompt mestre completo com tom, cenários e abordagens reforçadas
+✔ Payloads corretos para cada endpoint
+✔ Mensagens de erro para o dev achar o bug do roleplay
+✔ Frases de persuasão profissionais para embutir no sistema
+✔ Sugestão de layout para campo “Estilo da abordagem”

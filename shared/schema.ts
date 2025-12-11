@@ -664,6 +664,17 @@ export type InsertAbordagemGerada = z.infer<typeof insertAbordagemGeradaSchema>;
 
 // ===== SCHEMAS DE REQUISIÇÃO TREINADOR IA =====
 
+// Estilos de tom para abordagem IA
+export const TOM_ABORDAGEM = {
+  consultiva_acolhedora: "Consultiva / Acolhedora - Tom humano, empático, sem pressão. Boa para clientes sensíveis, negativados, desconfiados.",
+  direta_objetiva: "Direta / Objetiva - Linha reta, focada em benefício prático. Boa para clientes ocupados ou servidores públicos.",
+  persuasiva_profissional: "Persuasiva Profissional - Usa prova social, ancoragem, autoridade. Tom de especialista que sabe o que está falando.",
+  alta_conversao: "Alta Conversão / Agressiva Controlada - Ataca dor real, cria urgência saudável. Boa para clientes que enrolam.",
+  ultra_premium: "Ultra Premium / Especialista - Tom consultor premium, estilo 'private banker'. Ideal para servidores antigos, salário alto.",
+} as const;
+
+export type TomAbordagem = keyof typeof TOM_ABORDAGEM;
+
 export const treinadorRequestSchema = z.object({
   modo: z.enum(["roleplay_cliente", "avaliacao_roleplay", "abordagem_ia"]),
   vendedorId: z.string().optional(),
@@ -677,6 +688,8 @@ export const treinadorRequestSchema = z.object({
   historicoResumido: z.string().optional(),
   sessaoId: z.number().optional(), // Para continuar roleplay existente
   avaliarResposta: z.boolean().optional(), // Para avaliação inline por resposta
+  tom: z.enum(["consultiva_acolhedora", "direta_objetiva", "persuasiva_profissional", "alta_conversao", "ultra_premium"]).optional(), // Estilo da abordagem
+  cenario: z.string().optional(), // Cenário específico para roleplay (ex: "cliente disse que vai pensar")
 });
 
 export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;
