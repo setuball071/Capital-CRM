@@ -117,15 +117,27 @@ export default function UsersPage() {
 
   // Update user mutation
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return apiRequest("PUT", `/api/users/${id}`, data);
+    mutationFn: async ({ id, data, showCredentials }: { id: number; data: any; showCredentials?: { name: string; email: string; password: string } }) => {
+      const result = await apiRequest("PUT", `/api/users/${id}`, data);
+      return { result, showCredentials };
     },
-    onSuccess: () => {
+    onSuccess: ({ showCredentials }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users/coordenadores"] });
-      toast({
-        title: "Usuário atualizado com sucesso!",
-      });
+      
+      if (showCredentials) {
+        // If password was changed, show credentials dialog
+        setCreatedCredentials(showCredentials);
+        setShowCredentialsDialog(true);
+        toast({
+          title: "Usuário atualizado com sucesso!",
+          description: "Copie as novas credenciais para compartilhar",
+        });
+      } else {
+        toast({
+          title: "Usuário atualizado com sucesso!",
+        });
+      }
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -239,7 +251,9 @@ export default function UsersPage() {
     }
 
     if (editingUser) {
-      updateUserMutation.mutate({ id: editingUser.id, data });
+      // Pass credentials info if password was changed
+      const showCredentials = password ? { name, email, password } : undefined;
+      updateUserMutation.mutate({ id: editingUser.id, data, showCredentials });
     } else {
       createUserMutation.mutate(data);
     }
