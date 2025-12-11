@@ -43,7 +43,8 @@ export function AppSidebar() {
   const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
   const canAccessRoteiros = isMaster || isAtendimento || isOperacional;
   const canAccessBasesClientes = isMaster; // Only master can import bases
-  const canAccessCompraLista = isMaster || isCoordenacao; // Master and coordenacao can buy lists
+  const canAccessCompraLista = isMaster; // Only master can access - restricted for publishing
+  const canAccessConsultaCliente = isMaster; // Only master can access - restricted for publishing
 
   const menuItems = [
     {
@@ -98,7 +99,7 @@ export function AppSidebar() {
       title: "Consulta Cliente",
       url: "/consulta-cliente",
       icon: UserSearch,
-      show: true, // All authenticated users can access
+      show: canAccessConsultaCliente, // Only master can access - restricted for publishing
     },
     {
       title: "Admin Pedidos",

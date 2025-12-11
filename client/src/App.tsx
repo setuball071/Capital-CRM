@@ -236,10 +236,10 @@ function Router() {
                 {() => <MasterRoute component={BasesClientesPage} />}
               </Route>
               <Route path="/compra-lista">
-                {() => <CompraListaRoute component={CompraListaPage} />}
+                {() => <MasterRoute component={CompraListaPage} />}
               </Route>
               <Route path="/consulta-cliente">
-                {() => <ProtectedRoute component={ConsultaClientePage} />}
+                {() => <MasterRoute component={ConsultaClientePage} />}
               </Route>
               <Route path="/admin-pedidos-lista">
                 {() => <MasterRoute component={AdminPedidosListaPage} />}

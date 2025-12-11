@@ -2787,8 +2787,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
 
-  // GET filtros disponíveis para clientes
-  app.get("/api/clientes/filtros", requireAuth, async (req, res) => {
+  // GET filtros disponíveis para clientes - MASTER ONLY
+  app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {
     try {
       const convenios = await storage.getDistinctConveniosClientes();
       const orgaos = await storage.getDistinctOrgaosClientes();
@@ -2801,8 +2801,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // GET convênios disponíveis para consulta de clientes
-  app.get("/api/clientes/filtros/convenios", requireAuth, async (req, res) => {
+  // GET convênios disponíveis para consulta de clientes - MASTER ONLY
+  app.get("/api/clientes/filtros/convenios", requireAuth, requireMaster, async (req, res) => {
     try {
       const convenios = await storage.getDistinctConveniosClientes();
       return res.json(convenios);
@@ -2812,8 +2812,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // GET consulta de cliente por CPF ou matrícula - Todos os usuários autenticados
-  app.get("/api/clientes/consulta", requireAuth, async (req, res) => {
+  // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
+  app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req, res) => {
     try {
       const { cpf, matricula, convenio } = req.query;
       
@@ -2888,8 +2888,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // GET detalhes completos de um cliente - Todos os usuários autenticados
-  app.get("/api/clientes/:pessoaId", requireAuth, async (req, res) => {
+  // GET detalhes completos de um cliente - MASTER ONLY
+  app.get("/api/clientes/:pessoaId", requireAuth, requireMaster, async (req, res) => {
     try {
       const pessoaId = parseInt(req.params.pessoaId);
       
@@ -3073,13 +3073,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== PEDIDOS LISTA ENDPOINTS =====
 
-  // POST simular pedido de lista - Coordenador or Master
-  app.post("/api/pedidos-lista/simular", requireAuth, async (req, res) => {
+  // POST simular pedido de lista - MASTER ONLY
+  app.post("/api/pedidos-lista/simular", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only coordenacao and master can access
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
       
@@ -3119,13 +3115,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST criar pedido de lista - Coordenador or Master
-  app.post("/api/pedidos-lista", requireAuth, async (req, res) => {
+  // POST criar pedido de lista - MASTER ONLY
+  app.post("/api/pedidos-lista", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only coordenacao and master can access
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
       
@@ -3169,23 +3161,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // GET pedidos de lista
-  app.get("/api/pedidos-lista", requireAuth, async (req, res) => {
+  // GET pedidos de lista - MASTER ONLY
+  app.get("/api/pedidos-lista", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only coordenacao and master can access
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-
-      let pedidos;
-      
-      if (req.user!.role === "master") {
-        // Master sees all
-        pedidos = await storage.getAllPedidosLista();
-      } else {
-        // Coordenador sees only their own
-        pedidos = await storage.getPedidosListaByUser(req.user!.id);
-      }
+      // Master sees all
+      const pedidos = await storage.getAllPedidosLista();
       
       return res.json(pedidos);
     } catch (error) {
@@ -3358,8 +3338,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   }
 
-  // GET /api/pedidos-lista/:id/download - Download generated file
-  app.get("/api/pedidos-lista/:id/download", requireAuth, async (req, res) => {
+  // GET /api/pedidos-lista/:id/download - Download generated file - MASTER ONLY
+  app.get("/api/pedidos-lista/:id/download", requireAuth, requireMaster, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -3369,14 +3349,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const pedido = await storage.getPedidoLista(id);
       if (!pedido) {
         return res.status(404).json({ message: "Pedido não encontrado" });
-      }
-
-      // Check access: owner (coordenador) or master
-      const isOwner = pedido.coordenadorId === req.user!.id;
-      const isMaster = hasRole(req.user, ["master"]);
-      
-      if (!isOwner && !isMaster) {
-        return res.status(403).json({ message: "Acesso negado" });
       }
 
       // Check if file is ready
