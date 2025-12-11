@@ -523,3 +523,141 @@ export const filtrosPedidoListaSchema = z.object({
 });
 
 export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;
+
+// ===== ACADEMIA CONSIGONE =====
+
+// Perfil do vendedor na Academia
+export const vendedoresAcademia = pgTable("vendedores_academia", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  nivelAtual: integer("nivel_atual").notNull().default(1), // 1-5
+  quizAprovado: boolean("quiz_aprovado").notNull().default(false),
+  quizAprovadoEm: timestamp("quiz_aprovado_em"),
+  totalSimulacoes: integer("total_simulacoes").notNull().default(0),
+  notaMediaGlobal: decimal("nota_media_global", { precision: 4, scale: 2 }),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
+});
+
+// Tentativas de quiz
+export const quizTentativas = pgTable("quiz_tentativas", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  respostas: jsonb("respostas").notNull(), // { perguntaId: respostaEscolhida }
+  acertos: integer("acertos").notNull(),
+  total: integer("total").notNull(),
+  aprovado: boolean("aprovado").notNull(),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+});
+
+// Sessões de roleplay
+export const roleplaySessoes = pgTable("roleplay_sessoes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  nivelTreinado: integer("nivel_treinado").notNull(), // Nível durante a sessão
+  status: varchar("status", { length: 20 }).notNull().default("ativa"), // ativa, finalizada
+  historicoConversa: jsonb("historico_conversa").notNull().default([]), // Array de mensagens
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  finalizadoEm: timestamp("finalizado_em"),
+});
+
+// Avaliações de roleplay pela IA
+export const roleplayAvaliacoes = pgTable("roleplay_avaliacoes", {
+  id: serial("id").primaryKey(),
+  sessaoId: integer("sessao_id").references(() => roleplaySessoes.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  falaCorretor: text("fala_corretor").notNull(),
+  notaGlobal: decimal("nota_global", { precision: 4, scale: 2 }).notNull(),
+  notaHumanizacao: decimal("nota_humanizacao", { precision: 4, scale: 2 }),
+  notaConsultivo: decimal("nota_consultivo", { precision: 4, scale: 2 }),
+  notaClareza: decimal("nota_clareza", { precision: 4, scale: 2 }),
+  notaVenda: decimal("nota_venda", { precision: 4, scale: 2 }),
+  comentarioGeral: text("comentario_geral"),
+  pontosFortes: jsonb("pontos_fortes").default([]), // Array de strings
+  pontosMelhorar: jsonb("pontos_melhorar").default([]), // Array de strings
+  nivelSugerido: integer("nivel_sugerido"),
+  aprovadoProximoNivel: boolean("aprovado_proximo_nivel").default(false),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+});
+
+// Abordagens geradas pela IA
+export const abordagensGeradas = pgTable("abordagens_geradas", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  canal: varchar("canal", { length: 20 }).notNull(), // whatsapp, ligacao
+  tipoCliente: varchar("tipo_cliente", { length: 50 }).notNull(), // cliente_negativado, cliente_antigo, novo_servidor, indicacao
+  produtoFoco: varchar("produto_foco", { length: 50 }).notNull(), // compra_divida, cartao, consignado
+  contexto: text("contexto"),
+  aberturaResumida: text("abertura_resumida"),
+  objetivoAbordagem: text("objetivo_abordagem"),
+  perguntasConsultivas: jsonb("perguntas_consultivas").default([]),
+  exploracaoDor: text("exploracao_dor"),
+  propostaValor: text("proposta_valor"),
+  gatilhosUsados: jsonb("gatilhos_usados").default([]),
+  scriptLigacao: text("script_ligacao"),
+  scriptWhatsapp: text("script_whatsapp"),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+});
+
+// ===== INSERT SCHEMAS ACADEMIA =====
+
+export const insertVendedorAcademiaSchema = createInsertSchema(vendedoresAcademia).omit({
+  id: true,
+  criadoEm: true,
+  atualizadoEm: true,
+});
+
+export const insertQuizTentativaSchema = createInsertSchema(quizTentativas).omit({
+  id: true,
+  criadoEm: true,
+});
+
+export const insertRoleplaySessaoSchema = createInsertSchema(roleplaySessoes).omit({
+  id: true,
+  criadoEm: true,
+});
+
+export const insertRoleplayAvaliacaoSchema = createInsertSchema(roleplayAvaliacoes).omit({
+  id: true,
+  criadoEm: true,
+});
+
+export const insertAbordagemGeradaSchema = createInsertSchema(abordagensGeradas).omit({
+  id: true,
+  criadoEm: true,
+});
+
+// ===== TYPES ACADEMIA =====
+
+export type VendedorAcademia = typeof vendedoresAcademia.$inferSelect;
+export type InsertVendedorAcademia = z.infer<typeof insertVendedorAcademiaSchema>;
+
+export type QuizTentativa = typeof quizTentativas.$inferSelect;
+export type InsertQuizTentativa = z.infer<typeof insertQuizTentativaSchema>;
+
+export type RoleplaySessao = typeof roleplaySessoes.$inferSelect;
+export type InsertRoleplaySessao = z.infer<typeof insertRoleplaySessaoSchema>;
+
+export type RoleplayAvaliacao = typeof roleplayAvaliacoes.$inferSelect;
+export type InsertRoleplayAvaliacao = z.infer<typeof insertRoleplayAvaliacaoSchema>;
+
+export type AbordagemGerada = typeof abordagensGeradas.$inferSelect;
+export type InsertAbordagemGerada = z.infer<typeof insertAbordagemGeradaSchema>;
+
+// ===== SCHEMAS DE REQUISIÇÃO TREINADOR IA =====
+
+export const treinadorRequestSchema = z.object({
+  modo: z.enum(["roleplay_cliente", "avaliacao_roleplay", "abordagem_ia"]),
+  vendedorId: z.string().optional(),
+  nomeVendedor: z.string().optional(),
+  nivelAtual: z.number().min(1).max(5).default(1),
+  contexto: z.string().optional(),
+  falaCorretor: z.string().optional(), // Para roleplay_cliente e avaliacao_roleplay
+  canal: z.enum(["whatsapp", "ligacao"]).optional(), // Para abordagem_ia
+  tipoCliente: z.enum(["cliente_negativado", "cliente_antigo", "novo_servidor", "indicacao"]).optional(),
+  produtoFoco: z.enum(["compra_divida", "cartao", "consignado"]).optional(),
+  historicoResumido: z.string().optional(),
+  sessaoId: z.number().optional(), // Para continuar roleplay existente
+});
+
+export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;

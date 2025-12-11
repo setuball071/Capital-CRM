@@ -15,6 +15,13 @@ import {
   insertPricingSettingsSchema,
   updatePacotePrecoSchema,
   pacotesPreco,
+  treinadorRequestSchema,
+  vendedoresAcademia,
+  quizTentativas,
+  roleplaySessoes,
+  roleplayAvaliacoes,
+  abordagensGeradas,
+  users,
   type User,
   type InsertCoefficientTable,
   USER_ROLES,
@@ -23,7 +30,7 @@ import {
   type PricingSettings,
 } from "@shared/schema";
 import { db } from "./storage";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -3394,6 +3401,601 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error) {
       console.error("Reject pedido error:", error);
       return res.status(500).json({ message: "Erro ao rejeitar pedido" });
+    }
+  });
+
+  // ===== ACADEMIA CONSIGONE ENDPOINTS =====
+
+  // Prompt mestre do treinador IA
+  const TREINADOR_SYSTEM_PROMPT = `Você é o TREINADOR IA da Academia ConsigOne, especializado em venda de crédito consignado, cartão consignado/cartão benefício e COMPRA DE DÍVIDA (refin estratégico).
+
+Seu objetivo é treinar corretores iniciantes de forma REALISTA e CONSULTIVA, simulando clientes e avaliando a qualidade do atendimento.
+
+REGRAS GERAIS:
+- Linguagem natural de cliente brasileiro, simples, direta e humana.
+- Atendimento HUMANIZADO e CONSULTIVO: entender o cenário antes de empurrar produto.
+- Foco em gerar VALOR REAL: organizar dívidas, melhorar fluxo de caixa, limpar nome, liberar fôlego.
+- A operação é da ConsigOne / Gold, com diferenciais:
+  - Análise profunda do cenário, comparação entre bancos e estratégias.
+  - Relacionamento de longo prazo com o cliente.
+  - Especialistas em operações fora do padrão (cartão, compra de dívida, clientes negativados).
+
+PRODUTOS PRINCIPAIS:
+1) Crédito consignado tradicional.
+2) Cartão consignado / cartão benefício (parte limite, parte saque, desconto mínimo em folha).
+3) Compra de dívida (refin estratégico):
+   - Trocar dívidas caras por condição mais estruturada.
+   - Muito usada para clientes negativados ou quando a portabilidade não resolve.
+   - Objetivo principal: liberar mais valor de forma sustentável.
+   - Redução de parcela só quando necessário para tirar o cliente do sufoco.
+
+NÍVEIS DE TREINAMENTO (1 a 5):
+1) Descoberta: acolhimento, perguntas iniciais, entender vínculo, margem, contratos e objetivo.
+2) Explicação: explicar produtos com clareza, especialmente compra de dívida e cartão, sem jargão técnico.
+3) Oferta: montar proposta com comparação "antes x depois", mostrando ganho real.
+4) Objeções: lidar com medo, histórico ruim com financeiras, desconfiança, "vou pensar".
+5) Fechamento: conduzir próximo passo com segurança, sem pressão burra.
+
+MODOS DE OPERAÇÃO (campo "modo" na requisição):
+
+1) modo = "roleplay_cliente"
+   - Agir SOMENTE como cliente humano.
+   - Recebe nível_atual, fala do corretor e, opcionalmente, um histórico resumido.
+   - Responder com 1 a 3 frases, variando humor e perfil do cliente.
+   - Não dar aula nem falar como consultor; é cliente conversando.
+
+2) modo = "avaliacao_roleplay"
+   - Recebe nível_atual, contexto e fala_corretor.
+   - Avalia a fala do corretor em: Humanização, Consultoria, Clareza, Venda.
+   - Para Nível 1, não exigir que o corretor pergunte tudo de uma vez. Ele pode perguntar por partes.
+   - Responder EXCLUSIVAMENTE em JSON no formato: {"nota_global": 8.5, "nota_humanizacao": 9, "nota_consultivo": 8, "nota_clareza": 8, "nota_venda": 9, "comentario_geral": "...", "pontos_fortes": ["..."], "pontos_melhorar": ["..."], "nivel_atual": 1, "nivel_sugerido": 1, "aprovado_para_proximo_nivel": false}
+
+3) modo = "abordagem_ia"
+   - Recebe canal, tipo_cliente, produto_foco e contexto.
+   - Gera abordagem inicial perfeita, natural e ética.
+   - Responder EXCLUSIVAMENTE em JSON com: abertura_resumida, objetivo_abordagem, perguntas_consultivas (array), exploracao_dor, proposta_valor, gatilhos_usados (array), script_pronto_ligacao, script_pronto_whatsapp.`;
+
+  // POST /api/treinador-consigone - Endpoint principal do treinador IA
+  app.post("/api/treinador-consigone", requireAuth, async (req, res) => {
+    try {
+      const result = treinadorRequestSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId } = result.data;
+      const userId = req.user!.id;
+
+      // Import OpenAI client
+      const { openai } = await import("./openaiClient");
+
+      let userMessage = "";
+      let responseFormat: "text" | "json" = "text";
+
+      // Build user message based on mode
+      if (modo === "roleplay_cliente") {
+        if (!falaCorretor) {
+          return res.status(400).json({ message: "falaCorretor é obrigatório para roleplay_cliente" });
+        }
+        userMessage = `modo: roleplay_cliente
+nível_atual: ${nivelAtual}
+fala_corretor: "${falaCorretor}"
+${historicoResumido ? `historico_resumido: ${historicoResumido}` : ""}
+${contexto ? `contexto: ${contexto}` : ""}
+
+Responda APENAS como cliente, com 1 a 3 frases naturais.`;
+        responseFormat = "text";
+
+      } else if (modo === "avaliacao_roleplay") {
+        if (!falaCorretor) {
+          return res.status(400).json({ message: "falaCorretor é obrigatório para avaliacao_roleplay" });
+        }
+        userMessage = `modo: avaliacao_roleplay
+nível_atual: ${nivelAtual}
+fala_corretor: "${falaCorretor}"
+${contexto ? `contexto: ${contexto}` : ""}
+
+Avalie a fala do corretor e responda EXCLUSIVAMENTE em JSON válido com as notas e feedback.`;
+        responseFormat = "json";
+
+      } else if (modo === "abordagem_ia") {
+        if (!canal || !tipoCliente || !produtoFoco) {
+          return res.status(400).json({ message: "canal, tipoCliente e produtoFoco são obrigatórios para abordagem_ia" });
+        }
+        userMessage = `modo: abordagem_ia
+canal: ${canal}
+tipo_cliente: ${tipoCliente}
+produto_foco: ${produtoFoco}
+${contexto ? `contexto: ${contexto}` : ""}
+
+Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos especificados.`;
+        responseFormat = "json";
+      }
+
+      console.log(`[Academia] Calling OpenAI for mode: ${modo}, user: ${userId}`);
+
+      // Call OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: TREINADOR_SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.7,
+        max_tokens: 1500,
+      });
+
+      const aiResponse = completion.choices[0]?.message?.content || "";
+      console.log(`[Academia] OpenAI response received, length: ${aiResponse.length}`);
+
+      // Process response based on mode
+      if (modo === "roleplay_cliente") {
+        // Get or create session
+        let sessao;
+        if (sessaoId) {
+          sessao = await db.select().from(roleplaySessoes).where(eq(roleplaySessoes.id, sessaoId)).limit(1);
+          if (sessao.length === 0) {
+            return res.status(404).json({ message: "Sessão não encontrada" });
+          }
+          sessao = sessao[0];
+        } else {
+          const [newSessao] = await db.insert(roleplaySessoes).values({
+            userId,
+            nivelTreinado: nivelAtual,
+            status: "ativa",
+            historicoConversa: [],
+          }).returning();
+          sessao = newSessao;
+        }
+
+        // Update conversation history
+        const historico = (sessao.historicoConversa as any[]) || [];
+        historico.push({ role: "corretor", content: falaCorretor, timestamp: new Date() });
+        historico.push({ role: "cliente", content: aiResponse, timestamp: new Date() });
+
+        await db.update(roleplaySessoes)
+          .set({ historicoConversa: historico })
+          .where(eq(roleplaySessoes.id, sessao.id));
+
+        return res.json({
+          falaCliente: aiResponse,
+          sessaoId: sessao.id,
+        });
+
+      } else if (modo === "avaliacao_roleplay") {
+        // Parse JSON response
+        let avaliacao;
+        try {
+          // Remove markdown code blocks if present
+          let cleanResponse = aiResponse.trim();
+          if (cleanResponse.startsWith("```json")) {
+            cleanResponse = cleanResponse.replace(/```json\n?/, "").replace(/```$/, "");
+          } else if (cleanResponse.startsWith("```")) {
+            cleanResponse = cleanResponse.replace(/```\n?/, "").replace(/```$/, "");
+          }
+          avaliacao = JSON.parse(cleanResponse);
+        } catch (e) {
+          console.error("[Academia] Failed to parse avaliacao JSON:", e);
+          return res.status(500).json({ message: "Erro ao processar avaliação da IA" });
+        }
+
+        // Save evaluation if we have a session
+        if (sessaoId) {
+          await db.insert(roleplayAvaliacoes).values({
+            sessaoId,
+            userId,
+            falaCorretor: falaCorretor!,
+            notaGlobal: String(avaliacao.nota_global || 0),
+            notaHumanizacao: String(avaliacao.nota_humanizacao || 0),
+            notaConsultivo: String(avaliacao.nota_consultivo || 0),
+            notaClareza: String(avaliacao.nota_clareza || 0),
+            notaVenda: String(avaliacao.nota_venda || 0),
+            comentarioGeral: avaliacao.comentario_geral,
+            pontosFortes: avaliacao.pontos_fortes || [],
+            pontosMelhorar: avaliacao.pontos_melhorar || [],
+            nivelSugerido: avaliacao.nivel_sugerido,
+            aprovadoProximoNivel: avaliacao.aprovado_para_proximo_nivel || false,
+          });
+
+          // Update user's average score
+          const avaliacoes = await db.select().from(roleplayAvaliacoes).where(eq(roleplayAvaliacoes.userId, userId));
+          if (avaliacoes.length > 0) {
+            const mediaGlobal = avaliacoes.reduce((acc, a) => acc + parseFloat(a.notaGlobal), 0) / avaliacoes.length;
+            await db.update(vendedoresAcademia)
+              .set({ 
+                notaMediaGlobal: String(mediaGlobal.toFixed(2)),
+                totalSimulacoes: avaliacoes.length,
+                atualizadoEm: new Date(),
+              })
+              .where(eq(vendedoresAcademia.userId, userId));
+          }
+        }
+
+        return res.json(avaliacao);
+
+      } else if (modo === "abordagem_ia") {
+        // Parse JSON response
+        let abordagem;
+        try {
+          let cleanResponse = aiResponse.trim();
+          if (cleanResponse.startsWith("```json")) {
+            cleanResponse = cleanResponse.replace(/```json\n?/, "").replace(/```$/, "");
+          } else if (cleanResponse.startsWith("```")) {
+            cleanResponse = cleanResponse.replace(/```\n?/, "").replace(/```$/, "");
+          }
+          abordagem = JSON.parse(cleanResponse);
+        } catch (e) {
+          console.error("[Academia] Failed to parse abordagem JSON:", e);
+          return res.status(500).json({ message: "Erro ao processar abordagem da IA" });
+        }
+
+        // Save generated approach
+        await db.insert(abordagensGeradas).values({
+          userId,
+          canal: canal!,
+          tipoCliente: tipoCliente!,
+          produtoFoco: produtoFoco!,
+          contexto,
+          aberturaResumida: abordagem.abertura_resumida,
+          objetivoAbordagem: abordagem.objetivo_abordagem,
+          perguntasConsultivas: abordagem.perguntas_consultivas || [],
+          exploracaoDor: abordagem.exploracao_dor,
+          propostaValor: abordagem.proposta_valor,
+          gatilhosUsados: abordagem.gatilhos_usados || [],
+          scriptLigacao: abordagem.script_pronto_ligacao,
+          scriptWhatsapp: abordagem.script_pronto_whatsapp,
+        });
+
+        return res.json(abordagem);
+      }
+
+    } catch (error) {
+      console.error("Treinador IA error:", error);
+      return res.status(500).json({ message: "Erro ao processar treinamento" });
+    }
+  });
+
+  // GET /api/academia/perfil - Perfil do vendedor na academia
+  app.get("/api/academia/perfil", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Get or create profile
+      let [perfil] = await db.select().from(vendedoresAcademia).where(eq(vendedoresAcademia.userId, userId)).limit(1);
+      
+      if (!perfil) {
+        [perfil] = await db.insert(vendedoresAcademia).values({
+          userId,
+          nivelAtual: 1,
+          quizAprovado: false,
+          totalSimulacoes: 0,
+        }).returning();
+      }
+
+      // Get recent evaluations
+      const avaliacoes = await db.select()
+        .from(roleplayAvaliacoes)
+        .where(eq(roleplayAvaliacoes.userId, userId))
+        .orderBy(sql`${roleplayAvaliacoes.criadoEm} DESC`)
+        .limit(10);
+
+      return res.json({
+        perfil,
+        avaliacoesRecentes: avaliacoes,
+      });
+    } catch (error) {
+      console.error("Get academia perfil error:", error);
+      return res.status(500).json({ message: "Erro ao buscar perfil" });
+    }
+  });
+
+  // Quiz perguntas (estáticas por enquanto)
+  const QUIZ_PERGUNTAS = [
+    {
+      id: 1,
+      pergunta: "Qual é o principal objetivo da COMPRA DE DÍVIDA (refin estratégico)?",
+      opcoes: [
+        "Apenas reduzir a parcela do cliente",
+        "Trocar dívidas caras por condição mais estruturada, liberando valor",
+        "Vender mais produtos ao cliente",
+        "Negativar o cliente no SPC",
+      ],
+      correta: 1,
+    },
+    {
+      id: 2,
+      pergunta: "Qual é a característica do cartão consignado/benefício?",
+      opcoes: [
+        "Desconto total da fatura em folha",
+        "Parte limite, parte saque, desconto mínimo em folha",
+        "Não tem limite de crédito",
+        "Só funciona para aposentados",
+      ],
+      correta: 1,
+    },
+    {
+      id: 3,
+      pergunta: "No atendimento consultivo, o que deve ser feito PRIMEIRO?",
+      opcoes: [
+        "Oferecer o produto com maior comissão",
+        "Pedir todos os documentos do cliente",
+        "Entender o cenário e objetivo do cliente",
+        "Fechar a venda rapidamente",
+      ],
+      correta: 2,
+    },
+    {
+      id: 4,
+      pergunta: "Quando a COMPRA DE DÍVIDA é mais indicada?",
+      opcoes: [
+        "Quando o cliente quer aumentar suas dívidas",
+        "Quando a portabilidade não resolve e/ou cliente está negativado",
+        "Apenas para clientes com nome limpo",
+        "Quando o cliente não tem margem",
+      ],
+      correta: 1,
+    },
+    {
+      id: 5,
+      pergunta: "Qual é o diferencial da ConsigOne/Gold no atendimento?",
+      opcoes: [
+        "Atendimento rápido sem perguntas",
+        "Análise profunda do cenário, comparação entre bancos e relacionamento de longo prazo",
+        "Menor taxa do mercado garantida",
+        "Atendimento apenas por WhatsApp",
+      ],
+      correta: 1,
+    },
+  ];
+
+  // GET /api/academia/quiz - Retorna perguntas do quiz
+  app.get("/api/academia/quiz", requireAuth, async (req, res) => {
+    try {
+      // Return questions without correct answers
+      const perguntas = QUIZ_PERGUNTAS.map(p => ({
+        id: p.id,
+        pergunta: p.pergunta,
+        opcoes: p.opcoes,
+      }));
+      
+      return res.json({ perguntas });
+    } catch (error) {
+      console.error("Get quiz error:", error);
+      return res.status(500).json({ message: "Erro ao buscar quiz" });
+    }
+  });
+
+  // POST /api/academia/quiz - Submeter respostas do quiz
+  app.post("/api/academia/quiz", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { respostas } = req.body; // { perguntaId: opcaoIndex }
+
+      if (!respostas || typeof respostas !== "object") {
+        return res.status(400).json({ message: "Respostas são obrigatórias" });
+      }
+
+      // Calculate score
+      let acertos = 0;
+      const total = QUIZ_PERGUNTAS.length;
+      const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+
+      for (const pergunta of QUIZ_PERGUNTAS) {
+        const respostaUsuario = respostas[pergunta.id];
+        const correto = respostaUsuario === pergunta.correta;
+        if (correto) acertos++;
+        resultados.push({
+          perguntaId: pergunta.id,
+          correto,
+          respostaCorreta: pergunta.correta,
+        });
+      }
+
+      const aprovado = acertos >= Math.ceil(total * 0.7); // 70% para passar
+
+      // Save attempt
+      await db.insert(quizTentativas).values({
+        userId,
+        respostas,
+        acertos,
+        total,
+        aprovado,
+      });
+
+      // Update profile if approved
+      if (aprovado) {
+        const [perfil] = await db.select().from(vendedoresAcademia).where(eq(vendedoresAcademia.userId, userId)).limit(1);
+        
+        if (perfil) {
+          await db.update(vendedoresAcademia)
+            .set({ 
+              quizAprovado: true,
+              quizAprovadoEm: new Date(),
+              atualizadoEm: new Date(),
+            })
+            .where(eq(vendedoresAcademia.userId, userId));
+        } else {
+          await db.insert(vendedoresAcademia).values({
+            userId,
+            nivelAtual: 1,
+            quizAprovado: true,
+            quizAprovadoEm: new Date(),
+            totalSimulacoes: 0,
+          });
+        }
+      }
+
+      return res.json({
+        acertos,
+        total,
+        percentual: Math.round((acertos / total) * 100),
+        aprovado,
+        resultados,
+        mensagem: aprovado 
+          ? "Parabéns! Você foi aprovado e pode acessar os módulos de IA."
+          : "Você não atingiu a pontuação mínima (70%). Revise o conteúdo e tente novamente.",
+      });
+    } catch (error) {
+      console.error("Submit quiz error:", error);
+      return res.status(500).json({ message: "Erro ao submeter quiz" });
+    }
+  });
+
+  // GET /api/academia/sessoes - Listar sessões de roleplay do usuário
+  app.get("/api/academia/sessoes", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      const sessoes = await db.select()
+        .from(roleplaySessoes)
+        .where(eq(roleplaySessoes.userId, userId))
+        .orderBy(sql`${roleplaySessoes.criadoEm} DESC`)
+        .limit(20);
+
+      return res.json(sessoes);
+    } catch (error) {
+      console.error("Get sessoes error:", error);
+      return res.status(500).json({ message: "Erro ao buscar sessões" });
+    }
+  });
+
+  // POST /api/academia/sessoes/:id/finalizar - Finalizar sessão de roleplay
+  app.post("/api/academia/sessoes/:id/finalizar", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const sessaoId = parseInt(req.params.id);
+
+      if (isNaN(sessaoId)) {
+        return res.status(400).json({ message: "ID de sessão inválido" });
+      }
+
+      const [sessao] = await db.select()
+        .from(roleplaySessoes)
+        .where(and(eq(roleplaySessoes.id, sessaoId), eq(roleplaySessoes.userId, userId)))
+        .limit(1);
+
+      if (!sessao) {
+        return res.status(404).json({ message: "Sessão não encontrada" });
+      }
+
+      await db.update(roleplaySessoes)
+        .set({ status: "finalizada", finalizadoEm: new Date() })
+        .where(eq(roleplaySessoes.id, sessaoId));
+
+      return res.json({ message: "Sessão finalizada com sucesso" });
+    } catch (error) {
+      console.error("Finalizar sessao error:", error);
+      return res.status(500).json({ message: "Erro ao finalizar sessão" });
+    }
+  });
+
+  // GET /api/academia/abordagens - Listar abordagens geradas pelo usuário
+  app.get("/api/academia/abordagens", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      const abordagens = await db.select()
+        .from(abordagensGeradas)
+        .where(eq(abordagensGeradas.userId, userId))
+        .orderBy(sql`${abordagensGeradas.criadoEm} DESC`)
+        .limit(20);
+
+      return res.json(abordagens);
+    } catch (error) {
+      console.error("Get abordagens error:", error);
+      return res.status(500).json({ message: "Erro ao buscar abordagens" });
+    }
+  });
+
+  // ===== ADMIN ACADEMIA ENDPOINTS (MASTER ONLY) =====
+
+  // GET /api/academia/admin/stats - Estatísticas gerais
+  app.get("/api/academia/admin/stats", requireAuth, requireMaster, async (req, res) => {
+    try {
+      // Total de vendedores na academia
+      const [totalVendedores] = await db.select({ count: sql`count(*)` }).from(vendedoresAcademia);
+      
+      // Total aprovados no quiz
+      const [quizAprovados] = await db.select({ count: sql`count(*)` })
+        .from(vendedoresAcademia)
+        .where(eq(vendedoresAcademia.quizAprovado, true));
+      
+      // Total de simulações
+      const [totalSimulacoes] = await db.select({ count: sql`count(*)` }).from(roleplaySessoes);
+      
+      // Total de abordagens geradas
+      const [totalAbordagens] = await db.select({ count: sql`count(*)` }).from(abordagensGeradas);
+      
+      // Média geral de notas
+      const [mediaNotas] = await db.select({ 
+        avg: sql`avg(cast(${roleplayAvaliacoes.notaGlobal} as decimal))` 
+      }).from(roleplayAvaliacoes);
+
+      return res.json({
+        totalVendedores: Number(totalVendedores?.count || 0),
+        quizAprovados: Number(quizAprovados?.count || 0),
+        totalSimulacoes: Number(totalSimulacoes?.count || 0),
+        totalAbordagens: Number(totalAbordagens?.count || 0),
+        mediaNotas: mediaNotas?.avg ? parseFloat(String(mediaNotas.avg)).toFixed(2) : "0.00",
+      });
+    } catch (error) {
+      console.error("Get academia stats error:", error);
+      return res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
+  // GET /api/academia/admin/vendedores - Listar todos os vendedores com progresso
+  app.get("/api/academia/admin/vendedores", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const vendedores = await db.select({
+        id: vendedoresAcademia.id,
+        userId: vendedoresAcademia.userId,
+        userName: users.name,
+        userEmail: users.email,
+        nivelAtual: vendedoresAcademia.nivelAtual,
+        quizAprovado: vendedoresAcademia.quizAprovado,
+        quizAprovadoEm: vendedoresAcademia.quizAprovadoEm,
+        totalSimulacoes: vendedoresAcademia.totalSimulacoes,
+        notaMediaGlobal: vendedoresAcademia.notaMediaGlobal,
+        criadoEm: vendedoresAcademia.criadoEm,
+      })
+        .from(vendedoresAcademia)
+        .leftJoin(users, eq(vendedoresAcademia.userId, users.id))
+        .orderBy(sql`${vendedoresAcademia.criadoEm} DESC`);
+
+      return res.json(vendedores);
+    } catch (error) {
+      console.error("Get vendedores academia error:", error);
+      return res.status(500).json({ message: "Erro ao buscar vendedores" });
+    }
+  });
+
+  // GET /api/academia/admin/quiz-tentativas - Listar tentativas de quiz
+  app.get("/api/academia/admin/quiz-tentativas", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const tentativas = await db.select({
+        id: quizTentativas.id,
+        userId: quizTentativas.userId,
+        userName: users.name,
+        userEmail: users.email,
+        acertos: quizTentativas.acertos,
+        total: quizTentativas.total,
+        aprovado: quizTentativas.aprovado,
+        criadoEm: quizTentativas.criadoEm,
+      })
+        .from(quizTentativas)
+        .leftJoin(users, eq(quizTentativas.userId, users.id))
+        .orderBy(sql`${quizTentativas.criadoEm} DESC`)
+        .limit(100);
+
+      return res.json(tentativas);
+    } catch (error) {
+      console.error("Get quiz tentativas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tentativas" });
     }
   });
 
