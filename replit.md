@@ -126,6 +126,36 @@ The system uses a fixed PACKAGE-based pricing model instead of per-record pricin
 
 The `calculatePackagePrice()` function selects the appropriate package based on record quantity. Orders above 15,000 records use the largest package. Package configuration is defined in the `PACOTES_PRECO` constant in server/routes.ts.
 
+### Academia ConsigOne (Training Module)
+
+The training module provides AI-powered sales training for credit consultants. Features include:
+
+**Database Structure** (5 tables):
+- `vendedores_academia`: Vendor training profiles (nivelAtual, quizAprovado, totalSimulacoes, notaMediaGlobal)
+- `quiz_tentativas`: Quiz attempt history (acertos, total, aprovado, respostas)
+- `roleplay_sessoes`: Roleplay session tracking (nivel, totalMensagens, iniciadoEm, finalizadoEm)
+- `roleplay_avaliacoes`: AI evaluation records (notaGlobal, notaHumanizacao, notaConsultivo, pontosFortes, pontosMelhorar)
+- `abordagens_geradas`: Generated approach scripts (canal, tipoCliente, produtoFoco, scriptLigacao, scriptWhatsapp)
+
+**Training Flow**:
+1. **Fundamentos** (/academia/fundamentos): Static training content covering 5 levels (Descoberta, Explicação, Oferta, Objeções, Fechamento)
+2. **Quiz** (/academia/quiz): Multiple choice quiz with 70% pass threshold - gates access to AI modules
+3. **Roleplay** (/academia/roleplay): AI-powered chat simulation with client personas; includes real-time evaluation
+4. **Abordagem** (/academia/abordagem): AI script generator for WhatsApp and phone calls
+5. **Admin** (/academia/admin): Dashboard for master users to monitor vendor progress
+
+**API Endpoint**: POST /api/treinador-consigone with modes:
+- `roleplay_cliente`: Generates client responses in sales simulation
+- `avaliacao_roleplay`: Evaluates vendor performance with detailed scoring (humanização, consultivo, clareza, venda)
+- `abordagem_ia`: Generates personalized sales scripts based on client type and product focus
+
+**Access Control**:
+- Fundamentos/Quiz: All authenticated users
+- Roleplay/Abordagem: Requires quiz approval (quizAprovado = true)
+- Admin: Master role only
+
+**AI Integration**: Uses OpenAI GPT-4.1-mini via Replit AI Integrations for roleplay simulation, evaluation, and script generation.
+
 ### Component Architecture
 
 The UI adheres to Atomic Design principles using shadcn/ui. Key pages include the Calculator Page for simulations (with dynamic filtering, real-time calculations, and multi-format export), and Coefficient Tables Management for CRUD operations, bulk CSV import/export, filtering, and hierarchical grouping. User experience features include dynamic dropdowns, clear validation, responsive design, and smart search.
