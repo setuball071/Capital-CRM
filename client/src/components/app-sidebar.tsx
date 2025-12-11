@@ -57,6 +57,7 @@ export function AppSidebar() {
   const canAccessBasesClientes = isMaster;
   const canAccessCompraLista = isMaster;
   const canAccessConsultaCliente = isMaster;
+  const canAccessAcademia = isMaster || isAtendimento || isOperacional;
 
   const menuSections: MenuSection[] = [
     {
@@ -102,12 +103,12 @@ export function AppSidebar() {
     {
       title: "Academia ConsigOne",
       icon: GraduationCap,
-      show: true,
+      show: canAccessAcademia,
       items: [
-        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, show: true },
-        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, show: true },
-        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, show: true },
-        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, show: true },
+        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, show: canAccessAcademia },
+        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, show: canAccessAcademia },
+        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, show: canAccessAcademia },
+        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, show: canAccessAcademia },
         { title: "Admin Academia", url: "/academia/admin", icon: Award, show: isMaster },
       ],
     },

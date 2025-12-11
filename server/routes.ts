@@ -124,6 +124,14 @@ function requireUserManagementAccess(req: Request, res: Response, next: NextFunc
 // Legacy alias for backward compatibility
 const requireManagerAccess = requireUserManagementAccess;
 
+// Academia access middleware (master, atendimento, operacional)
+function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) {
+  if (!hasRole(req.user, ["master", "atendimento", "operacional"])) {
+    return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar a Academia" });
+  }
+  next();
+}
+
 // ===== PRICING CALCULATION - MODELO DE PACOTES =====
 
 interface PacotePrecoData {
@@ -3456,7 +3464,7 @@ MODOS DE OPERAÇÃO (campo "modo" na requisição):
    - Responder EXCLUSIVAMENTE em JSON com: abertura_resumida, objetivo_abordagem, perguntas_consultivas (array), exploracao_dor, proposta_valor, gatilhos_usados (array), script_pronto_ligacao, script_pronto_whatsapp.`;
 
   // POST /api/treinador-consigone - Endpoint principal do treinador IA
-  app.post("/api/treinador-consigone", requireAuth, async (req, res) => {
+  app.post("/api/treinador-consigone", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const result = treinadorRequestSchema.safeParse(req.body);
       
@@ -3697,7 +3705,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/perfil - Perfil do vendedor na academia
-  app.get("/api/academia/perfil", requireAuth, async (req, res) => {
+  app.get("/api/academia/perfil", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       
@@ -3790,7 +3798,7 @@ Responda EXCLUSIVAMENTE em JSON:
   ];
 
   // GET /api/academia/niveis - Retorna estrutura de níveis e lições
-  app.get("/api/academia/niveis", requireAuth, async (req, res) => {
+  app.get("/api/academia/niveis", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const { NIVEIS_ACADEMIA } = await import("@shared/academia-conteudo");
       return res.json({ niveis: NIVEIS_ACADEMIA });
@@ -3801,7 +3809,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/progresso - Retorna progresso do usuário nas lições
-  app.get("/api/academia/progresso", requireAuth, async (req, res) => {
+  app.get("/api/academia/progresso", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       const progresso = await storage.getProgressoLicoesByUser(userId);
@@ -3819,7 +3827,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // POST /api/academia/licoes/concluir - Marcar lição como concluída
-  app.post("/api/academia/licoes/concluir", requireAuth, async (req, res) => {
+  app.post("/api/academia/licoes/concluir", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       const { licaoId, nivelId, respostasAtividade } = req.body;
@@ -3857,7 +3865,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/quiz - Retorna perguntas do quiz
-  app.get("/api/academia/quiz", requireAuth, async (req, res) => {
+  app.get("/api/academia/quiz", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       // Return questions without correct answers
       const perguntas = QUIZ_PERGUNTAS.map(p => ({
@@ -3874,7 +3882,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // POST /api/academia/quiz - Submeter respostas do quiz
-  app.post("/api/academia/quiz", requireAuth, async (req, res) => {
+  app.post("/api/academia/quiz", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       const { respostas } = req.body; // { perguntaId: opcaoIndex }
@@ -3950,7 +3958,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/sessoes - Listar sessões de roleplay do usuário
-  app.get("/api/academia/sessoes", requireAuth, async (req, res) => {
+  app.get("/api/academia/sessoes", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       
@@ -3968,7 +3976,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // POST /api/academia/sessoes/:id/finalizar - Finalizar sessão de roleplay
-  app.post("/api/academia/sessoes/:id/finalizar", requireAuth, async (req, res) => {
+  app.post("/api/academia/sessoes/:id/finalizar", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       const sessaoId = parseInt(req.params.id);
@@ -3998,7 +4006,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/abordagens - Listar abordagens geradas pelo usuário
-  app.get("/api/academia/abordagens", requireAuth, async (req, res) => {
+  app.get("/api/academia/abordagens", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
       const userId = req.user!.id;
       
