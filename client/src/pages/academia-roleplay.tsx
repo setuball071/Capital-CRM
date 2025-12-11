@@ -87,7 +87,7 @@ export default function AcademiaRoleplay() {
         modo: "roleplay_cliente",
         falaCorretor,
         nivelAtual: parseInt(nivelSelecionado),
-        sessaoId,
+        sessaoId: sessaoId || undefined, // Don't send null, send undefined
         avaliarResposta: true,
         contexto: contextoCompleto,
         cenario: cenario || undefined,
@@ -122,7 +122,8 @@ export default function AcademiaRoleplay() {
         }
       }
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("[Roleplay] Error getting client response:", error);
       toast({
         title: "Erro",
         description: "Não foi possível obter resposta do cliente",
@@ -142,7 +143,7 @@ export default function AcademiaRoleplay() {
         modo: "avaliacao_roleplay",
         falaCorretor: ultimaFalaCorretor.content,
         nivelAtual: parseInt(nivelSelecionado),
-        sessaoId,
+        sessaoId: sessaoId || undefined, // Don't send null, send undefined
         contexto: mensagens.map((m) => `${m.role}: ${m.content}`).join("\n"),
       });
       return response.json();
