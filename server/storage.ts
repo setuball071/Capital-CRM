@@ -14,6 +14,12 @@ import {
   basesImportadas,
   pedidosLista,
   pricingSettings,
+  progressoLicoes,
+  vendedoresAcademia,
+  quizTentativas,
+  roleplaySessoes,
+  roleplayAvaliacoes,
+  abordagensGeradas,
   type User,
   type InsertUser,
   type Bank,
@@ -39,6 +45,18 @@ import {
   type FiltrosPedidoLista,
   type PricingSettings,
   type InsertPricingSettings,
+  type ProgressoLicao,
+  type InsertProgressoLicao,
+  type VendedorAcademia,
+  type InsertVendedorAcademia,
+  type QuizTentativa,
+  type InsertQuizTentativa,
+  type RoleplaySessao,
+  type InsertRoleplaySessao,
+  type RoleplayAvaliacao,
+  type InsertRoleplayAvaliacao,
+  type AbordagemGerada,
+  type InsertAbordagemGerada,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -156,6 +174,37 @@ export interface IStorage {
   // Pricing Settings
   getPricingSettings(): Promise<PricingSettings | undefined>;
   updatePricingSettings(data: Partial<InsertPricingSettings>): Promise<PricingSettings>;
+  
+  // ===== ACADEMIA CONSIGONE =====
+  
+  // Progresso de Lições
+  getProgressoLicoesByUser(userId: number): Promise<ProgressoLicao[]>;
+  getProgressoLicao(userId: number, licaoId: string): Promise<ProgressoLicao | undefined>;
+  upsertProgressoLicao(data: InsertProgressoLicao): Promise<ProgressoLicao>;
+  countLicoesConcluidas(userId: number, nivelId: number): Promise<number>;
+  
+  // Vendedor Academia
+  getVendedorAcademia(userId: number): Promise<VendedorAcademia | undefined>;
+  upsertVendedorAcademia(data: InsertVendedorAcademia): Promise<VendedorAcademia>;
+  getAllVendedoresAcademia(): Promise<VendedorAcademia[]>;
+  
+  // Quiz
+  createQuizTentativa(data: InsertQuizTentativa): Promise<QuizTentativa>;
+  getQuizTentativasByUser(userId: number): Promise<QuizTentativa[]>;
+  
+  // Roleplay Sessões
+  createRoleplaySessao(data: InsertRoleplaySessao): Promise<RoleplaySessao>;
+  getRoleplaySessao(id: number): Promise<RoleplaySessao | undefined>;
+  updateRoleplaySessao(id: number, data: Partial<InsertRoleplaySessao>): Promise<RoleplaySessao | undefined>;
+  getRoleplaySessoesByUser(userId: number): Promise<RoleplaySessao[]>;
+  
+  // Roleplay Avaliações
+  createRoleplayAvaliacao(data: InsertRoleplayAvaliacao): Promise<RoleplayAvaliacao>;
+  getRoleplayAvaliacoesBySessao(sessaoId: number): Promise<RoleplayAvaliacao[]>;
+  
+  // Abordagens
+  createAbordagemGerada(data: InsertAbordagemGerada): Promise<AbordagemGerada>;
+  getAbordagensByUser(userId: number): Promise<AbordagemGerada[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1175,6 +1224,128 @@ export class DbStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // ===== ACADEMIA CONSIGONE =====
+
+  async getProgressoLicoesByUser(userId: number): Promise<ProgressoLicao[]> {
+    return await db.select().from(progressoLicoes).where(eq(progressoLicoes.userId, userId));
+  }
+
+  async getProgressoLicao(userId: number, licaoId: string): Promise<ProgressoLicao | undefined> {
+    const [progresso] = await db.select().from(progressoLicoes)
+      .where(and(eq(progressoLicoes.userId, userId), eq(progressoLicoes.licaoId, licaoId)));
+    return progresso;
+  }
+
+  async upsertProgressoLicao(data: InsertProgressoLicao): Promise<ProgressoLicao> {
+    const existing = await this.getProgressoLicao(data.userId, data.licaoId);
+    if (existing) {
+      const [updated] = await db.update(progressoLicoes)
+        .set({ ...data, concluidaEm: data.concluida ? new Date() : null })
+        .where(eq(progressoLicoes.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(progressoLicoes)
+        .values({ ...data, concluidaEm: data.concluida ? new Date() : null })
+        .returning();
+      return created;
+    }
+  }
+
+  async countLicoesConcluidas(userId: number, nivelId: number): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(progressoLicoes)
+      .where(and(
+        eq(progressoLicoes.userId, userId),
+        eq(progressoLicoes.nivelId, nivelId),
+        eq(progressoLicoes.concluida, true)
+      ));
+    return Number(result[0]?.count || 0);
+  }
+
+  async getVendedorAcademia(userId: number): Promise<VendedorAcademia | undefined> {
+    const [vendedor] = await db.select().from(vendedoresAcademia)
+      .where(eq(vendedoresAcademia.userId, userId));
+    return vendedor;
+  }
+
+  async upsertVendedorAcademia(data: InsertVendedorAcademia): Promise<VendedorAcademia> {
+    const existing = await this.getVendedorAcademia(data.userId);
+    if (existing) {
+      const [updated] = await db.update(vendedoresAcademia)
+        .set({ ...data, atualizadoEm: new Date() })
+        .where(eq(vendedoresAcademia.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(vendedoresAcademia)
+        .values(data)
+        .returning();
+      return created;
+    }
+  }
+
+  async getAllVendedoresAcademia(): Promise<VendedorAcademia[]> {
+    return await db.select().from(vendedoresAcademia);
+  }
+
+  async createQuizTentativa(data: InsertQuizTentativa): Promise<QuizTentativa> {
+    const [created] = await db.insert(quizTentativas).values(data).returning();
+    return created;
+  }
+
+  async getQuizTentativasByUser(userId: number): Promise<QuizTentativa[]> {
+    return await db.select().from(quizTentativas)
+      .where(eq(quizTentativas.userId, userId))
+      .orderBy(sql`${quizTentativas.criadoEm} DESC`);
+  }
+
+  async createRoleplaySessao(data: InsertRoleplaySessao): Promise<RoleplaySessao> {
+    const [created] = await db.insert(roleplaySessoes).values(data).returning();
+    return created;
+  }
+
+  async getRoleplaySessao(id: number): Promise<RoleplaySessao | undefined> {
+    const [sessao] = await db.select().from(roleplaySessoes).where(eq(roleplaySessoes.id, id));
+    return sessao;
+  }
+
+  async updateRoleplaySessao(id: number, data: Partial<InsertRoleplaySessao>): Promise<RoleplaySessao | undefined> {
+    const [updated] = await db.update(roleplaySessoes)
+      .set(data)
+      .where(eq(roleplaySessoes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getRoleplaySessoesByUser(userId: number): Promise<RoleplaySessao[]> {
+    return await db.select().from(roleplaySessoes)
+      .where(eq(roleplaySessoes.userId, userId))
+      .orderBy(sql`${roleplaySessoes.criadoEm} DESC`);
+  }
+
+  async createRoleplayAvaliacao(data: InsertRoleplayAvaliacao): Promise<RoleplayAvaliacao> {
+    const [created] = await db.insert(roleplayAvaliacoes).values(data).returning();
+    return created;
+  }
+
+  async getRoleplayAvaliacoesBySessao(sessaoId: number): Promise<RoleplayAvaliacao[]> {
+    return await db.select().from(roleplayAvaliacoes)
+      .where(eq(roleplayAvaliacoes.sessaoId, sessaoId))
+      .orderBy(sql`${roleplayAvaliacoes.criadoEm} DESC`);
+  }
+
+  async createAbordagemGerada(data: InsertAbordagemGerada): Promise<AbordagemGerada> {
+    const [created] = await db.insert(abordagensGeradas).values(data).returning();
+    return created;
+  }
+
+  async getAbordagensByUser(userId: number): Promise<AbordagemGerada[]> {
+    return await db.select().from(abordagensGeradas)
+      .where(eq(abordagensGeradas.userId, userId))
+      .orderBy(sql`${abordagensGeradas.criadoEm} DESC`);
   }
 }
 

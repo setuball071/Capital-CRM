@@ -1,0 +1,408 @@
+1. Visão geral do módulo
+
+Nome: Academia ConsigOne
+Objetivo: Treinamento digital de vendedores com 3 camadas:
+
+Teoria estruturada por níveis e lições
+
+Quiz de fundamentos
+
+Roleplay com IA + gerador de abordagens
+
+2. Arquitetura sugerida no Replit
+
+Backend: Node.js com Express
+
+Banco simples: pode ser SQLite, Prisma ou Firestore (tanto faz, desde que salve os dados abaixo)
+
+Frontend: React ou HTML+JS dentro do mesmo Replit (ele já tem parte da tela pronta)
+
+IA: OpenAI API
+
+Variáveis de ambiente
+
+No Replit configurar:
+
+OPENAI_API_KEY
+
+OPENAI_MODEL_ROLEPLAY = gpt-4o-mini
+
+OPENAI_MODEL_AVALIACAO = gpt-4o (pode usar gpt-4o-mini também se quiser baratear)
+
+3. Modelagem de dados
+
+Pode ser adaptado para qualquer banco. Estrutura base:
+
+3.1. Usuário / Vendedor
+Vendedor {
+  id: string
+  nome: string
+  email?: string
+  criadoEm: Date
+}
+
+3.2. Nível / Jornada
+
+Você pode deixar a definição fixa em código (não precisa salvar em banco) ou numa tabela.
+
+Nivel {
+  id: number       // 1..5
+  nome: string     // Descoberta, Explicação...
+  descricao: string
+}
+
+3.3. Lição
+
+Cada bullet que você viu na tela vira uma lição.
+
+Licao {
+  id: string       // ex: "1.1", "1.2"
+  nivelId: number  // 1..5
+  titulo: string   // "Apresentação cordial e criação de rapport"
+  resumo: string   // 1 linha
+  conteudo: string // markdown ou HTML
+}
+
+
+Sugestão: deixar as lições em um arquivo JSON ou TS fixo no backend e o front consome via API.
+
+3.4. Progresso de lição
+ProgressoLicao {
+  vendedorId: string
+  licaoId: string
+  concluida: boolean
+  respostasAtividade?: string  // se quiser guardar
+  concluidaEm?: Date
+}
+
+3.5. Resultado de quiz
+ResultadoQuiz {
+  vendedorId: string
+  nivelId: number
+  nota: number       // 0..100
+  aprovado: boolean
+  respostas: any     // salvar json do quiz
+  criadoEm: Date
+}
+
+3.6. Sessão de roleplay
+RoleplaySession {
+  id: string
+  vendedorId: string
+  nivel: number
+  historicoConversa: Mensagem[]
+  ultimaNota?: number
+  criadoEm: Date
+}
+
+Mensagem {
+  autor: "cliente" | "vendedor"
+  texto: string
+  timestamp: Date
+}
+
+3.7. Avaliação de roleplay
+AvaliacaoRoleplay {
+  id: string
+  vendedorId: string
+  sessionId: string
+  nivel: number
+  notaGlobal: number
+  notaHumanizacao: number
+  notaConsultivo: number
+  notaClareza: number
+  notaVenda: number
+  comentarioGeral: string
+  pontosFortes: string[]
+  pontosMelhorar: string[]
+  aprovadoParaProximoNivel: boolean
+  criadoEm: Date
+}
+
+3.8. Abordagens geradas pela IA
+AbordagemIA {
+  id: string
+  vendedorId: string
+  canal: "whatsapp" | "ligacao"
+  tipoCliente: string
+  produtoFoco: string
+  payload: any      // json enviado
+  resposta: any     // json da IA
+  criadoEm: Date
+}
+
+4. Fluxo de telas e regras de desbloqueio
+4.1. Jornada de Treinamento
+
+Tela que você já tem:
+
+Lista 5 níveis, cada um com resumo.
+
+Ao clicar no nível, expande e mostra as lições.
+
+4.2. Tela de lição
+
+Ao clicar em uma lição (ex: “Apresentação cordial e criação de rapport”):
+
+Mostrar:
+
+Título
+
+Conteúdo (texto com exemplos e frases)
+
+Uma pequena atividade (ex: “escreva sua abertura ideal”)
+
+Botão [Marcar como concluída]
+
+Quando o vendedor clica:
+
+Chamar POST /licoes/concluir com:
+
+vendedorId
+
+licaoId
+
+resposta da atividade (opcional)
+
+Regra de desbloqueio:
+
+Só libera o quiz do nível quando TODAS as lições daquele nível estiverem concluida = true.
+
+4.3. Tela de Quiz
+
+Após todas lições do nível X:
+
+Mostra quiz de 5 a 10 questões.
+
+Ao enviar, front chama POST /quiz/responder.
+
+Se aprovado = true, grava no banco e:
+
+Libera botão “Ir para Roleplay Nível X”.
+
+4.4. Tela de Roleplay
+
+Campos:
+
+Nome do vendedor (já logado)
+
+Nível atual da simulação
+
+Janela de chat (cliente x vendedor)
+
+Campo de texto para resposta
+
+Botão “Enviar resposta”
+
+Lógica ao enviar resposta:
+
+Front adiciona mensagem do vendedor no histórico.
+
+Chama backend:
+
+POST /treinador/avaliar
+
+Com:
+
+{
+  "modo": "avaliacao_roleplay",
+  "vendedorId": "abc",
+  "nivelAtual": 1,
+  "contexto": "simulação de atendimento consignado",
+  "falaCorretor": "texto da resposta"
+}
+
+
+Backend chama OpenAI e devolve o JSON de avaliação.
+
+Front mostra:
+
+Nota global
+
+Comentário geral
+
+Pontos fortes
+
+Pontos a melhorar
+
+Em seguida, front chama:
+
+POST /treinador/roleplay
+
+Com:
+
+{
+  "modo": "roleplay_cliente",
+  "nivelAtual": 1,
+  "vendedorId": "abc",
+  "falaCorretor": "texto da última resposta",
+  "historicoResumido": "resumo textual opcional"
+}
+
+
+Backend chama OpenAI e devolve falaCliente.
+
+Front mostra a resposta do cliente no chat.
+
+Regra de avanço de nível:
+
+Backend pode ter uma função que calcula a média das últimas avaliações daquele nível.
+
+Exemplo: média de notaGlobal >= 8 em 3 sessões → nivelTreinado do vendedor vira nivel + 1.
+
+5. Endpoints do backend
+5.1. Jornada e lições
+GET /niveis
+GET /niveis/:nivelId/licoes
+GET /licoes/:licaoId
+POST /licoes/concluir
+  body: { vendedorId, licaoId, respostasAtividade? }
+
+5.2. Quiz
+GET /quiz/:nivelId
+POST /quiz/responder
+  body: { vendedorId, nivelId, respostas: {...} }
+
+
+Backend calcula nota e retorna:
+
+{
+  "nota": 80,
+  "aprovado": true
+}
+
+5.3. Roleplay e IA
+POST /treinador/roleplay
+POST /treinador/avaliar
+POST /treinador/abordagem
+
+
+Esses três endpoints usam a OpenAI.
+
+6. Integração com OpenAI no Replit (backend)
+
+Exemplo em Node.js:
+
+import express from "express";
+import OpenAI from "openai";
+
+const app = express();
+app.use(express.json());
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const PROMPT_MESTRE_CONSIGONE = `
+(cola aqui o prompt mestre que combinamos)
+`;
+
+app.post("/treinador/avaliar", async (req, res) => {
+  try {
+    const { nivelAtual, contexto, falaCorretor } = req.body;
+
+    const payload = {
+      modo: "avaliacao_roleplay",
+      nivel_atual: nivelAtual,
+      contexto,
+      fala_corretor: falaCorretor
+    };
+
+    const resposta = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_AVALIACAO || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: PROMPT_MESTRE_CONSIGONE },
+        { role: "user", content: JSON.stringify(payload) }
+      ]
+    });
+
+    const conteudo = resposta.choices[0].message.content;
+    const json = JSON.parse(conteudo);
+
+    // aqui ele pode salvar no banco também
+    res.json(json);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao avaliar roleplay" });
+  }
+});
+
+app.post("/treinador/roleplay", async (req, res) => {
+  try {
+    const { nivelAtual, falaCorretor, historicoResumido } = req.body;
+
+    const payload = {
+      modo: "roleplay_cliente",
+      nivel_atual: nivelAtual,
+      ultima_fala_corretor: falaCorretor,
+      historico_resumido: historicoResumido || ""
+    };
+
+    const resposta = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_ROLEPLAY || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: PROMPT_MESTRE_CONSIGONE },
+        { role: "user", content: JSON.stringify(payload) }
+      ]
+    });
+
+    const falaCliente = resposta.choices[0].message.content;
+    res.json({ falaCliente });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao gerar fala do cliente" });
+  }
+});
+
+app.post("/treinador/abordagem", async (req, res) => {
+  try {
+    const { canal, tipoCliente, produtoFoco, contexto } = req.body;
+
+    const payload = {
+      modo: "abordagem_ia",
+      canal,
+      tipo_cliente: tipoCliente,
+      produto_foco: produtoFoco,
+      contexto
+    };
+
+    const resposta = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_ROLEPLAY || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: PROMPT_MESTRE_CONSIGONE },
+        { role: "user", content: JSON.stringify(payload) }
+      ]
+    });
+
+    const json = JSON.parse(resposta.choices[0].message.content);
+    res.json(json);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao gerar abordagem" });
+  }
+});
+
+app.listen(3000, () => {
+  console.log("API ConsigOne rodando na porta 3000");
+});
+
+
+Ele adapta esse código para o padrão que já está usando.
+
+7. Conteúdo mínimo por nível para o dev
+
+Para o dev conseguir subir rápido, você pode dizer:
+
+Nível 1: implemente com 5 lições (rapport, vínculo, margem, contratos, objetivo).
+
+Cada lição terá:
+
+titulo
+
+conteudoMarkdown (você depois edita o texto direto no JSON)
+
+uma caixa de texto "Escreva sua resposta"
+
+botão "Concluir lição"
+
+Depois que a estrutura estiver pronta, você só preenche o conteúdo.

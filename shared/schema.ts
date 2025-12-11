@@ -526,6 +526,17 @@ export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;
 
 // ===== ACADEMIA CONSIGONE =====
 
+// Progresso de lições do vendedor
+export const progressoLicoes = pgTable("progresso_licoes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  licaoId: varchar("licao_id", { length: 10 }).notNull(), // "1.1", "1.2", etc.
+  nivelId: integer("nivel_id").notNull(), // 1-5
+  concluida: boolean("concluida").notNull().default(false),
+  respostasAtividade: text("respostas_atividade"), // Resposta da atividade prática
+  concluidaEm: timestamp("concluida_em"),
+});
+
 // Perfil do vendedor na Academia
 export const vendedoresAcademia = pgTable("vendedores_academia", {
   id: serial("id").primaryKey(),
@@ -601,6 +612,10 @@ export const abordagensGeradas = pgTable("abordagens_geradas", {
 
 // ===== INSERT SCHEMAS ACADEMIA =====
 
+export const insertProgressoLicaoSchema = createInsertSchema(progressoLicoes).omit({
+  id: true,
+});
+
 export const insertVendedorAcademiaSchema = createInsertSchema(vendedoresAcademia).omit({
   id: true,
   criadoEm: true,
@@ -628,6 +643,9 @@ export const insertAbordagemGeradaSchema = createInsertSchema(abordagensGeradas)
 });
 
 // ===== TYPES ACADEMIA =====
+
+export type ProgressoLicao = typeof progressoLicoes.$inferSelect;
+export type InsertProgressoLicao = z.infer<typeof insertProgressoLicaoSchema>;
 
 export type VendedorAcademia = typeof vendedoresAcademia.$inferSelect;
 export type InsertVendedorAcademia = z.infer<typeof insertVendedorAcademiaSchema>;

@@ -3752,6 +3752,73 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos e
     },
   ];
 
+  // GET /api/academia/niveis - Retorna estrutura de níveis e lições
+  app.get("/api/academia/niveis", requireAuth, async (req, res) => {
+    try {
+      const { NIVEIS_ACADEMIA } = await import("@shared/academia-conteudo");
+      return res.json({ niveis: NIVEIS_ACADEMIA });
+    } catch (error) {
+      console.error("Get niveis error:", error);
+      return res.status(500).json({ message: "Erro ao buscar níveis" });
+    }
+  });
+
+  // GET /api/academia/progresso - Retorna progresso do usuário nas lições
+  app.get("/api/academia/progresso", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const progresso = await storage.getProgressoLicoesByUser(userId);
+      const perfil = await storage.getVendedorAcademia(userId);
+      
+      return res.json({ 
+        progresso,
+        quizAprovado: perfil?.quizAprovado || false,
+        nivelAtual: perfil?.nivelAtual || 1,
+      });
+    } catch (error) {
+      console.error("Get progresso error:", error);
+      return res.status(500).json({ message: "Erro ao buscar progresso" });
+    }
+  });
+
+  // POST /api/academia/licoes/concluir - Marcar lição como concluída
+  app.post("/api/academia/licoes/concluir", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { licaoId, nivelId, respostasAtividade } = req.body;
+
+      if (!licaoId || !nivelId) {
+        return res.status(400).json({ message: "licaoId e nivelId são obrigatórios" });
+      }
+
+      const progresso = await storage.upsertProgressoLicao({
+        userId,
+        licaoId,
+        nivelId,
+        concluida: true,
+        respostasAtividade: respostasAtividade || null,
+      });
+
+      // Count completed lessons for this level
+      const { NIVEIS_ACADEMIA } = await import("@shared/academia-conteudo");
+      const nivel = NIVEIS_ACADEMIA.find(n => n.id === nivelId);
+      const totalLicoes = nivel?.licoes.length || 0;
+      const licoesConcluidas = await storage.countLicoesConcluidas(userId, nivelId);
+      
+      const nivelCompleto = licoesConcluidas >= totalLicoes;
+
+      return res.json({ 
+        progresso,
+        licoesConcluidas,
+        totalLicoes,
+        nivelCompleto,
+      });
+    } catch (error) {
+      console.error("Concluir licao error:", error);
+      return res.status(500).json({ message: "Erro ao concluir lição" });
+    }
+  });
+
   // GET /api/academia/quiz - Retorna perguntas do quiz
   app.get("/api/academia/quiz", requireAuth, async (req, res) => {
     try {
