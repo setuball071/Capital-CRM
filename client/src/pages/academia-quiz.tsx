@@ -9,9 +9,30 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ClipboardCheck, CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, AlertCircle } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, AlertCircle, Lock, BookOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface Licao {
+  id: string;
+  titulo: string;
+  resumo: string;
+  conteudo: string;
+  atividadePratica: string;
+}
+
+interface Nivel {
+  id: number;
+  nome: string;
+  descricao: string;
+  icone: string;
+  licoes: Licao[];
+}
+
+interface ProgressoLicao {
+  licaoId: string;
+  concluida: boolean;
+}
 
 interface Pergunta {
   id: number;
@@ -45,9 +66,31 @@ export default function AcademiaQuiz() {
     queryKey: ["/api/academia/perfil"],
   });
 
+  // Get lesson progress to check if user can take quiz
+  const { data: progressoData } = useQuery<{ 
+    progresso: ProgressoLicao[]; 
+    quizAprovado: boolean;
+    nivelAtual: number;
+  }>({
+    queryKey: ["/api/academia/progresso"],
+  });
+
+  const { data: niveisData } = useQuery<{ niveis: Nivel[] }>({
+    queryKey: ["/api/academia/niveis"],
+  });
+
   const { data: quizData, isLoading } = useQuery<{ perguntas: Pergunta[] }>({
     queryKey: ["/api/academia/quiz"],
   });
+  
+  // Calculate total lessons and completed lessons
+  const niveis = niveisData?.niveis || [];
+  const progresso = progressoData?.progresso || [];
+  
+  // For now, require at least 1 level (5 lessons) to be completed
+  const totalLicoesNivel1 = niveis[0]?.licoes.length || 5;
+  const licoesConcluidas = progresso.filter(p => p.concluida && p.licaoId.startsWith("1.")).length;
+  const podeRealizarQuiz = licoesConcluidas >= totalLicoesNivel1;
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -101,7 +144,7 @@ export default function AcademiaQuiz() {
 
   const perguntas = quizData?.perguntas || [];
   const respondidas = Object.keys(respostas).length;
-  const progresso = perguntas.length > 0 ? (respondidas / perguntas.length) * 100 : 0;
+  const progressoQuiz = perguntas.length > 0 ? (respondidas / perguntas.length) * 100 : 0;
   const quizAprovado = perfilData?.perfil?.quizAprovado;
 
   if (isLoading) {
@@ -114,6 +157,36 @@ export default function AcademiaQuiz() {
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show locked message if lessons not completed
+  if (!podeRealizarQuiz && !quizAprovado && !resultado) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-3xl" data-testid="page-academia-quiz">
+        <Card className="text-center">
+          <CardContent className="pt-8 pb-8">
+            <Lock className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2" data-testid="text-quiz-bloqueado">Quiz Bloqueado</h2>
+            <p className="text-muted-foreground mb-4">
+              Complete todas as lições do Nível 1 (Descoberta) para liberar o quiz.
+            </p>
+            <div className="bg-muted p-4 rounded-lg mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm">Progresso do Nível 1</span>
+                <Badge variant="outline">{licoesConcluidas}/{totalLicoesNivel1}</Badge>
+              </div>
+              <Progress value={(licoesConcluidas / totalLicoesNivel1) * 100} className="h-2" />
+            </div>
+            <Link href="/academia/fundamentos">
+              <Button data-testid="button-ir-fundamentos">
+                <BookOpen className="h-4 w-4 mr-2" />
+                Ir para Fundamentos
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -252,9 +325,9 @@ export default function AcademiaQuiz() {
             <span className="text-sm text-muted-foreground">
               {respondidas} de {perguntas.length} respondidas
             </span>
-            <Badge variant="outline">{Math.round(progresso)}%</Badge>
+            <Badge variant="outline">{Math.round(progressoQuiz)}%</Badge>
           </div>
-          <Progress value={progresso} className="h-2" />
+          <Progress value={progressoQuiz} className="h-2" />
         </CardContent>
       </Card>
 

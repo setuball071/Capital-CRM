@@ -3467,7 +3467,7 @@ MODOS DE OPERAÇÃO (campo "modo" na requisição):
         });
       }
 
-      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId } = result.data;
+      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId, avaliarResposta } = result.data;
       const userId = req.user!.id;
 
       // Import OpenAI client
@@ -3561,9 +3561,46 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos e
           .set({ historicoConversa: historico })
           .where(eq(roleplaySessoes.id, sessao.id));
 
+        // If inline evaluation is requested, make a second call
+        let avaliacao = null;
+        if (avaliarResposta && falaCorretor) {
+          const avaliacaoPrompt = `Avalie esta fala do corretor de forma BREVE e DIRETA.
+Nível: ${nivelAtual}
+Contexto: ${contexto || "Início de conversa"}
+Fala do corretor: "${falaCorretor}"
+
+Responda EXCLUSIVAMENTE em JSON:
+{"nota": 7.5, "feedback": "Breve feedback de 1 frase", "pontoPositivo": "1 ponto positivo curto", "pontoMelhorar": "1 sugestão curta"}`;
+
+          try {
+            const avaliacaoCompletion = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: "Você é um avaliador de vendas consultivas. Seja conciso e direto. Sempre responda em JSON válido." },
+                { role: "user", content: avaliacaoPrompt },
+              ],
+              temperature: 0.5,
+              max_tokens: 300,
+            });
+
+            const avaliacaoRaw = avaliacaoCompletion.choices[0]?.message?.content || "";
+            let cleanAval = avaliacaoRaw.trim();
+            if (cleanAval.startsWith("```json")) {
+              cleanAval = cleanAval.replace(/```json\n?/, "").replace(/```$/, "");
+            } else if (cleanAval.startsWith("```")) {
+              cleanAval = cleanAval.replace(/```\n?/, "").replace(/```$/, "");
+            }
+            avaliacao = JSON.parse(cleanAval);
+          } catch (e) {
+            console.error("[Academia] Failed to parse inline avaliacao:", e);
+            // Continue without evaluation if it fails
+          }
+        }
+
         return res.json({
           falaCliente: aiResponse,
           sessaoId: sessao.id,
+          avaliacao,
         });
 
       } else if (modo === "avaliacao_roleplay") {

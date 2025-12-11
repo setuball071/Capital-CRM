@@ -8,10 +8,11 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { MessageSquare, Send, Star, RefreshCw, Lock, ArrowRight, User, Bot, Award } from "lucide-react";
+import { MessageSquare, Send, Star, RefreshCw, Lock, ArrowRight, User, Bot, Award, ThumbsUp, ThumbsDown, Lightbulb, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Perfil {
   perfil: {
@@ -22,13 +23,21 @@ interface Perfil {
   };
 }
 
+interface AvaliacaoResposta {
+  nota: number;
+  feedback: string;
+  pontoPositivo?: string;
+  pontoMelhorar?: string;
+}
+
 interface Mensagem {
   role: "corretor" | "cliente";
   content: string;
   timestamp?: Date;
+  avaliacao?: AvaliacaoResposta;
 }
 
-interface Avaliacao {
+interface AvaliacaoFinal {
   nota_global: number;
   nota_humanizacao: number;
   nota_consultivo: number;
@@ -47,8 +56,9 @@ export default function AcademiaRoleplay() {
   const [inputMensagem, setInputMensagem] = useState("");
   const [sessaoId, setSessaoId] = useState<number | null>(null);
   const [nivelSelecionado, setNivelSelecionado] = useState("1");
-  const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
+  const [avaliacaoFinal, setAvaliacaoFinal] = useState<AvaliacaoFinal | null>(null);
   const [modoAvaliacao, setModoAvaliacao] = useState(false);
+  const [avaliacoesExpandidas, setAvaliacoesExpandidas] = useState<Set<number>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
@@ -57,7 +67,6 @@ export default function AcademiaRoleplay() {
 
   const quizAprovado = perfilData?.perfil?.quizAprovado;
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -71,6 +80,8 @@ export default function AcademiaRoleplay() {
         falaCorretor,
         nivelAtual: parseInt(nivelSelecionado),
         sessaoId,
+        avaliarResposta: true,
+        contexto: mensagens.map((m) => `${m.role}: ${m.content}`).join("\n"),
       });
       return response.json();
     },
@@ -78,10 +89,29 @@ export default function AcademiaRoleplay() {
       if (data.sessaoId) {
         setSessaoId(data.sessaoId);
       }
-      setMensagens((prev) => [
-        ...prev,
-        { role: "cliente", content: data.falaCliente, timestamp: new Date() },
-      ]);
+      
+      setMensagens((prev) => {
+        const updated = [...prev];
+        const lastCorretorIndex = updated.findLastIndex((m) => m.role === "corretor");
+        if (lastCorretorIndex !== -1 && data.avaliacao) {
+          updated[lastCorretorIndex] = {
+            ...updated[lastCorretorIndex],
+            avaliacao: data.avaliacao,
+          };
+        }
+        return [
+          ...updated,
+          { role: "cliente", content: data.falaCliente, timestamp: new Date() },
+        ];
+      });
+      
+      if (data.avaliacao?.nota) {
+        const nota = data.avaliacao.nota;
+        const lastIndex = mensagens.length;
+        if (nota >= 8) {
+          setAvaliacoesExpandidas((prev) => new Set(prev).add(lastIndex));
+        }
+      }
     },
     onError: () => {
       toast({
@@ -92,9 +122,8 @@ export default function AcademiaRoleplay() {
     },
   });
 
-  const avaliacaoMutation = useMutation({
+  const avaliacaoFinalMutation = useMutation({
     mutationFn: async () => {
-      // Get the last corretor message for evaluation
       const ultimaFalaCorretor = [...mensagens].reverse().find((m) => m.role === "corretor");
       if (!ultimaFalaCorretor) {
         throw new Error("Nenhuma fala para avaliar");
@@ -110,13 +139,13 @@ export default function AcademiaRoleplay() {
       return response.json();
     },
     onSuccess: (data) => {
-      setAvaliacao(data);
+      setAvaliacaoFinal(data);
       queryClient.invalidateQueries({ queryKey: ["/api/academia/perfil"] });
     },
     onError: () => {
       toast({
         title: "Erro",
-        description: "Não foi possível obter avaliação",
+        description: "Não foi possível obter avaliação final",
         variant: "destructive",
       });
     },
@@ -139,21 +168,22 @@ export default function AcademiaRoleplay() {
   const handleNovaSimulacao = () => {
     setMensagens([]);
     setSessaoId(null);
-    setAvaliacao(null);
+    setAvaliacaoFinal(null);
     setModoAvaliacao(false);
+    setAvaliacoesExpandidas(new Set());
   };
 
-  const handleSolicitarAvaliacao = () => {
+  const handleFinalizarSimulacao = () => {
     if (mensagens.length === 0) {
       toast({
         title: "Atenção",
-        description: "Inicie uma conversa antes de solicitar avaliação",
+        description: "Inicie uma conversa antes de finalizar",
         variant: "destructive",
       });
       return;
     }
     setModoAvaliacao(true);
-    avaliacaoMutation.mutate();
+    avaliacaoFinalMutation.mutate();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -161,6 +191,24 @@ export default function AcademiaRoleplay() {
       e.preventDefault();
       handleEnviarMensagem();
     }
+  };
+
+  const toggleAvaliacao = (index: number) => {
+    setAvaliacoesExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const calcularMediaNotas = () => {
+    const avaliacoes = mensagens.filter((m) => m.avaliacao?.nota).map((m) => m.avaliacao!.nota);
+    if (avaliacoes.length === 0) return null;
+    return (avaliacoes.reduce((a, b) => a + b, 0) / avaliacoes.length).toFixed(1);
   };
 
   if (loadingPerfil) {
@@ -172,7 +220,6 @@ export default function AcademiaRoleplay() {
     );
   }
 
-  // Check quiz approval
   if (!quizAprovado) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-3xl" data-testid="page-academia-roleplay">
@@ -195,6 +242,8 @@ export default function AcademiaRoleplay() {
     );
   }
 
+  const mediaNotas = calcularMediaNotas();
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl" data-testid="page-academia-roleplay">
       <div className="mb-6">
@@ -204,12 +253,12 @@ export default function AcademiaRoleplay() {
             <div>
               <h1 className="text-2xl font-bold" data-testid="text-title">Roleplay com IA</h1>
               <p className="text-muted-foreground text-sm">
-                Pratique atendimento com clientes simulados
+                Avaliação em tempo real a cada resposta
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={nivelSelecionado} onValueChange={setNivelSelecionado}>
+            <Select value={nivelSelecionado} onValueChange={setNivelSelecionado} disabled={mensagens.length > 0}>
               <SelectTrigger className="w-40" data-testid="select-nivel">
                 <SelectValue placeholder="Nível" />
               </SelectTrigger>
@@ -230,7 +279,6 @@ export default function AcademiaRoleplay() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Chat Area */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -238,51 +286,104 @@ export default function AcademiaRoleplay() {
               Simulação de Atendimento
             </CardTitle>
             <CardDescription>
-              Você é o corretor. O cliente é simulado pela IA.
+              Cada resposta recebe feedback instantâneo da IA
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-3">
-            <ScrollArea className="h-80 pr-4" ref={scrollRef}>
+            <ScrollArea className="h-96 pr-4" ref={scrollRef}>
               {mensagens.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <p>Inicie a conversa com o cliente...</p>
+                  <div className="text-center">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>Inicie a conversa com o cliente...</p>
+                    <p className="text-sm mt-1">Cada resposta será avaliada pela IA</p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {mensagens.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`flex gap-3 ${msg.role === "corretor" ? "justify-end" : "justify-start"}`}
-                    >
-                      {msg.role === "cliente" && (
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                          <User className="h-4 w-4" />
+                    <div key={index}>
+                      <div className={`flex gap-3 ${msg.role === "corretor" ? "justify-end" : "justify-start"}`}>
+                        {msg.role === "cliente" && (
+                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                            msg.role === "corretor"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          }`}
+                          data-testid={`mensagem-${msg.role}-${index}`}
+                        >
+                          <p className="text-sm">{msg.content}</p>
                         </div>
-                      )}
-                      <div
-                        className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                          msg.role === "corretor"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                        data-testid={`mensagem-${msg.role}-${index}`}
-                      >
-                        <p className="text-sm">{msg.content}</p>
+                        {msg.role === "corretor" && (
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4 text-primary-foreground" />
+                          </div>
+                        )}
                       </div>
-                      {msg.role === "corretor" && (
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                          <User className="h-4 w-4 text-primary-foreground" />
-                        </div>
+                      
+                      {msg.role === "corretor" && msg.avaliacao && (
+                        <Collapsible 
+                          open={avaliacoesExpandidas.has(index)} 
+                          onOpenChange={() => toggleAvaliacao(index)}
+                          className="ml-11 mr-11 mt-2"
+                        >
+                          <CollapsibleTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full justify-between h-8 text-xs"
+                              data-testid={`toggle-avaliacao-${index}`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Star className="h-3 w-3 text-yellow-500" />
+                                Nota: {msg.avaliacao.nota}/10
+                              </span>
+                              <span className="text-muted-foreground">
+                                {avaliacoesExpandidas.has(index) ? "Ocultar" : "Ver feedback"}
+                              </span>
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="mt-2 p-3 bg-muted/50 rounded-lg text-sm space-y-2">
+                              <p className="text-muted-foreground">{msg.avaliacao.feedback}</p>
+                              {msg.avaliacao.pontoPositivo && (
+                                <div className="flex items-start gap-2 text-green-600 dark:text-green-400">
+                                  <ThumbsUp className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                  <span>{msg.avaliacao.pontoPositivo}</span>
+                                </div>
+                              )}
+                              {msg.avaliacao.pontoMelhorar && (
+                                <div className="flex items-start gap-2 text-orange-600 dark:text-orange-400">
+                                  <Lightbulb className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                  <span>{msg.avaliacao.pontoMelhorar}</span>
+                                </div>
+                              )}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       )}
                     </div>
                   ))}
                   {roleplayMutation.isPending && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                        <User className="h-4 w-4" />
+                    <div className="space-y-2">
+                      <div className="flex gap-3 justify-end">
+                        <div className="bg-primary/20 rounded-lg px-4 py-2 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm text-muted-foreground">Avaliando...</span>
+                        </div>
                       </div>
-                      <div className="bg-muted rounded-lg px-4 py-2">
-                        <p className="text-sm text-muted-foreground">Digitando...</p>
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div className="bg-muted rounded-lg px-4 py-2">
+                          <p className="text-sm text-muted-foreground">Cliente digitando...</p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -309,66 +410,90 @@ export default function AcademiaRoleplay() {
                 <Send className="h-4 w-4" />
               </Button>
             </div>
-            {mensagens.length > 0 && !modoAvaliacao && (
+            {mensagens.length >= 4 && !modoAvaliacao && (
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={handleSolicitarAvaliacao}
-                disabled={avaliacaoMutation.isPending}
-                data-testid="button-solicitar-avaliacao"
+                onClick={handleFinalizarSimulacao}
+                disabled={avaliacaoFinalMutation.isPending}
+                data-testid="button-finalizar-simulacao"
               >
                 <Star className="h-4 w-4 mr-2" />
-                {avaliacaoMutation.isPending ? "Avaliando..." : "Solicitar Avaliação da IA"}
+                {avaliacaoFinalMutation.isPending ? "Gerando avaliação final..." : "Finalizar e Ver Avaliação Completa"}
               </Button>
             )}
           </CardFooter>
         </Card>
 
-        {/* Stats and Evaluation */}
         <div className="space-y-6">
-          {/* Profile Stats */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Award className="h-5 w-5" />
-                Seu Progresso
+                Sessão Atual
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Simulações</span>
-                <Badge variant="outline" data-testid="text-total-simulacoes">
-                  {perfilData?.perfil?.totalSimulacoes || 0}
+                <span className="text-sm text-muted-foreground">Mensagens</span>
+                <Badge variant="outline" data-testid="text-total-mensagens">
+                  {mensagens.filter((m) => m.role === "corretor").length}
                 </Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Nota Média</span>
-                <Badge variant="outline" data-testid="text-nota-media">
-                  {perfilData?.perfil?.notaMediaGlobal || "N/A"}
+                <span className="text-sm text-muted-foreground">Média da Sessão</span>
+                <Badge 
+                  variant="outline" 
+                  className={mediaNotas ? (parseFloat(mediaNotas) >= 7 ? "text-green-600" : "text-orange-600") : ""}
+                  data-testid="text-media-sessao"
+                >
+                  {mediaNotas || "N/A"}
                 </Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Nível Atual</span>
+                <span className="text-sm text-muted-foreground">Nível</span>
                 <Badge data-testid="text-nivel-atual">
-                  Nível {perfilData?.perfil?.nivelAtual || 1}
+                  Nível {nivelSelecionado}
                 </Badge>
               </div>
             </CardContent>
           </Card>
 
-          {/* Evaluation Result */}
-          {avaliacao && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Star className="h-5 w-5" />
+                Seu Histórico
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Total Simulações</span>
+                <Badge variant="outline" data-testid="text-total-simulacoes">
+                  {perfilData?.perfil?.totalSimulacoes || 0}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Nota Média Global</span>
+                <Badge variant="outline" data-testid="text-nota-media">
+                  {perfilData?.perfil?.notaMediaGlobal || "N/A"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {avaliacaoFinal && (
             <Card className="border-primary/50">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Star className="h-5 w-5 text-yellow-500" />
-                  Avaliação da IA
+                  Avaliação Final
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-center">
                   <div className="text-4xl font-bold text-primary" data-testid="text-nota-global">
-                    {avaliacao.nota_global.toFixed(1)}
+                    {avaliacaoFinal.nota_global.toFixed(1)}
                   </div>
                   <p className="text-sm text-muted-foreground">Nota Global</p>
                 </div>
@@ -376,50 +501,50 @@ export default function AcademiaRoleplay() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Humanização</p>
-                    <p className="font-semibold">{avaliacao.nota_humanizacao}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_humanizacao}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Consultivo</p>
-                    <p className="font-semibold">{avaliacao.nota_consultivo}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_consultivo}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Clareza</p>
-                    <p className="font-semibold">{avaliacao.nota_clareza}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_clareza}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Venda</p>
-                    <p className="font-semibold">{avaliacao.nota_venda}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_venda}</p>
                   </div>
                 </div>
 
                 <div>
                   <p className="text-sm font-semibold mb-1">Comentário:</p>
-                  <p className="text-sm text-muted-foreground">{avaliacao.comentario_geral}</p>
+                  <p className="text-sm text-muted-foreground">{avaliacaoFinal.comentario_geral}</p>
                 </div>
 
-                {avaliacao.pontos_fortes?.length > 0 && (
+                {avaliacaoFinal.pontos_fortes?.length > 0 && (
                   <div>
                     <p className="text-sm font-semibold text-green-600 mb-1">Pontos Fortes:</p>
                     <ul className="text-sm space-y-1">
-                      {avaliacao.pontos_fortes.map((p, i) => (
+                      {avaliacaoFinal.pontos_fortes.map((p, i) => (
                         <li key={i} className="text-muted-foreground">• {p}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {avaliacao.pontos_melhorar?.length > 0 && (
+                {avaliacaoFinal.pontos_melhorar?.length > 0 && (
                   <div>
                     <p className="text-sm font-semibold text-orange-600 mb-1">A Melhorar:</p>
                     <ul className="text-sm space-y-1">
-                      {avaliacao.pontos_melhorar.map((p, i) => (
+                      {avaliacaoFinal.pontos_melhorar.map((p, i) => (
                         <li key={i} className="text-muted-foreground">• {p}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {avaliacao.aprovado_para_proximo_nivel && (
+                {avaliacaoFinal.aprovado_para_proximo_nivel && (
                   <Alert className="bg-green-50 border-green-200 dark:bg-green-900/20">
                     <AlertDescription className="text-green-700 dark:text-green-400">
                       Parabéns! Você está pronto para o próximo nível!

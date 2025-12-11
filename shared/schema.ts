@@ -676,6 +676,7 @@ export const treinadorRequestSchema = z.object({
   produtoFoco: z.enum(["compra_divida", "cartao", "consignado"]).optional(),
   historicoResumido: z.string().optional(),
   sessaoId: z.number().optional(), // Para continuar roleplay existente
+  avaliarResposta: z.boolean().optional(), // Para avaliação inline por resposta
 });
 
 export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;
