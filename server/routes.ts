@@ -21,6 +21,7 @@ import {
   roleplaySessoes,
   roleplayAvaliacoes,
   abordagensGeradas,
+  progressoLicoes,
   users,
   type User,
   type InsertCoefficientTable,
@@ -4136,6 +4137,236 @@ Responda EXCLUSIVAMENTE em JSON:
     } catch (error) {
       console.error("Get quiz tentativas error:", error);
       return res.status(500).json({ message: "Erro ao buscar tentativas" });
+    }
+  });
+
+  // POST /api/academia/admin/feedback-ia/:userId - Gerar feedback IA para um vendedor
+  app.post("/api/academia/admin/feedback-ia/:userId", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      // Buscar dados do vendedor
+      const [vendedor] = await db.select({
+        id: vendedoresAcademia.id,
+        userId: vendedoresAcademia.userId,
+        userName: users.name,
+        userEmail: users.email,
+        nivelAtual: vendedoresAcademia.nivelAtual,
+        quizAprovado: vendedoresAcademia.quizAprovado,
+        quizAprovadoEm: vendedoresAcademia.quizAprovadoEm,
+        totalSimulacoes: vendedoresAcademia.totalSimulacoes,
+        notaMediaGlobal: vendedoresAcademia.notaMediaGlobal,
+        criadoEm: vendedoresAcademia.criadoEm,
+      })
+        .from(vendedoresAcademia)
+        .leftJoin(users, eq(vendedoresAcademia.userId, users.id))
+        .where(eq(vendedoresAcademia.userId, userId))
+        .limit(1);
+      
+      if (!vendedor) {
+        return res.status(404).json({ message: "Vendedor não encontrado" });
+      }
+
+      // Buscar tentativas de quiz
+      const tentativasQuiz = await db.select()
+        .from(quizTentativas)
+        .where(eq(quizTentativas.userId, userId))
+        .orderBy(sql`${quizTentativas.criadoEm} DESC`);
+
+      // Buscar sessões de roleplay e avaliações
+      const sessoesRoleplay = await db.select()
+        .from(roleplaySessoes)
+        .where(eq(roleplaySessoes.userId, userId))
+        .orderBy(sql`${roleplaySessoes.criadoEm} DESC`)
+        .limit(20);
+
+      // Buscar avaliações de roleplay
+      const avaliacoesRoleplay = await db.select()
+        .from(roleplayAvaliacoes)
+        .where(eq(roleplayAvaliacoes.userId, userId))
+        .orderBy(sql`${roleplayAvaliacoes.criadoEm} DESC`)
+        .limit(50);
+
+      // Buscar abordagens geradas
+      const abordagens = await db.select()
+        .from(abordagensGeradas)
+        .where(eq(abordagensGeradas.userId, userId))
+        .orderBy(sql`${abordagensGeradas.criadoEm} DESC`)
+        .limit(20);
+
+      // Buscar progresso das lições
+      const progressoLicoesData = await db.select()
+        .from(progressoLicoes)
+        .where(eq(progressoLicoes.userId, userId));
+
+      // Calcular métricas agregadas
+      const totalTentativasQuiz = tentativasQuiz.length;
+      const quizAprovacoes = tentativasQuiz.filter(t => t.aprovado).length;
+      const taxaAprovacaoQuiz = totalTentativasQuiz > 0 ? (quizAprovacoes / totalTentativasQuiz) * 100 : 0;
+      
+      const notasRoleplay = avaliacoesRoleplay.map(a => parseFloat(a.notaGlobal as string)).filter(n => !isNaN(n));
+      const mediaNotaRoleplay = notasRoleplay.length > 0 ? notasRoleplay.reduce((a, b) => a + b, 0) / notasRoleplay.length : 0;
+      
+      const notasHumanizacao = avaliacoesRoleplay.map(a => a.notaHumanizacao ? parseFloat(a.notaHumanizacao as string) : 0).filter(n => n > 0);
+      const mediaHumanizacao = notasHumanizacao.length > 0 ? notasHumanizacao.reduce((a, b) => a + b, 0) / notasHumanizacao.length : 0;
+      
+      const notasConsultivo = avaliacoesRoleplay.map(a => a.notaConsultivo ? parseFloat(a.notaConsultivo as string) : 0).filter(n => n > 0);
+      const mediaConsultivo = notasConsultivo.length > 0 ? notasConsultivo.reduce((a, b) => a + b, 0) / notasConsultivo.length : 0;
+      
+      const notasVenda = avaliacoesRoleplay.map(a => a.notaVenda ? parseFloat(a.notaVenda as string) : 0).filter(n => n > 0);
+      const mediaVenda = notasVenda.length > 0 ? notasVenda.reduce((a, b) => a + b, 0) / notasVenda.length : 0;
+
+      // Pontos fortes e melhorar agregados das avaliações
+      const todosFortes: string[] = [];
+      const todosMelhorar: string[] = [];
+      avaliacoesRoleplay.forEach(a => {
+        if (Array.isArray(a.pontosFortes)) todosFortes.push(...(a.pontosFortes as string[]));
+        if (Array.isArray(a.pontosMelhorar)) todosMelhorar.push(...(a.pontosMelhorar as string[]));
+      });
+
+      // Frequência dos pontos fortes e melhorar
+      const contarFrequencia = (arr: string[]) => {
+        const freq: Record<string, number> = {};
+        arr.forEach(item => {
+          if (item) freq[item] = (freq[item] || 0) + 1;
+        });
+        return Object.entries(freq)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([ponto, count]) => ({ ponto, count }));
+      };
+
+      const pontosFortesMaisFrequentes = contarFrequencia(todosFortes);
+      const pontosMelhorarMaisFrequentes = contarFrequencia(todosMelhorar);
+
+      // Calcular recorrência de treino (últimos 30 dias)
+      const hoje = new Date();
+      const trintaDiasAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const sessoesUltimos30Dias = sessoesRoleplay.filter(s => new Date(s.criadoEm) >= trintaDiasAtras).length;
+      const abordagensUltimos30Dias = abordagens.filter(a => new Date(a.criadoEm) >= trintaDiasAtras).length;
+      
+      // Tipos de abordagem mais usados
+      const canaisUsados = abordagens.reduce((acc, a) => {
+        acc[a.canal] = (acc[a.canal] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const tiposClienteAbordados = abordagens.reduce((acc, a) => {
+        acc[a.tipoCliente] = (acc[a.tipoCliente] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Lições concluídas
+      const licoesConcluidas = progressoLicoesData.filter(p => p.concluida).length;
+      const totalLicoes = 25; // 5 níveis × 5 lições
+
+      // Preparar contexto para a IA
+      const contextoDados = {
+        vendedor: {
+          nome: vendedor.userName,
+          nivelAtual: vendedor.nivelAtual,
+          quizAprovado: vendedor.quizAprovado,
+          dataAprovacaoQuiz: vendedor.quizAprovadoEm,
+          totalSimulacoes: vendedor.totalSimulacoes,
+          notaMediaGlobal: vendedor.notaMediaGlobal,
+          dataInicio: vendedor.criadoEm,
+        },
+        quiz: {
+          totalTentativas: totalTentativasQuiz,
+          aprovacoes: quizAprovacoes,
+          taxaAprovacao: taxaAprovacaoQuiz.toFixed(1),
+        },
+        roleplay: {
+          totalSessoes: sessoesRoleplay.length,
+          sessoesUltimos30Dias,
+          totalAvaliacoes: avaliacoesRoleplay.length,
+          mediaNotaGlobal: mediaNotaRoleplay.toFixed(2),
+          mediaHumanizacao: mediaHumanizacao.toFixed(2),
+          mediaConsultivo: mediaConsultivo.toFixed(2),
+          mediaVenda: mediaVenda.toFixed(2),
+          pontosFortesMaisFrequentes,
+          pontosMelhorarMaisFrequentes,
+        },
+        abordagens: {
+          totalGeradas: abordagens.length,
+          abordagensUltimos30Dias,
+          canaisUsados,
+          tiposClienteAbordados,
+        },
+        fundamentos: {
+          licoesConcluidas,
+          totalLicoes,
+          percentualConclusao: ((licoesConcluidas / totalLicoes) * 100).toFixed(1),
+        },
+      };
+
+      // Gerar feedback com IA
+      const { openai } = await import("./openaiClient");
+
+      const systemPrompt = `Você é um analista de desempenho de vendas especializado em crédito consignado brasileiro.
+Sua função é analisar dados de treinamento de vendedores e fornecer feedback construtivo, personalizado e acionável.
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "resumoGeral": "Parágrafo resumindo o progresso geral do vendedor",
+  "recorrenciaTreino": "Avaliação da frequência e consistência de treinos",
+  "desempenhoQuiz": "Análise do desempenho nos quizzes de fundamentos",
+  "evolucaoRoleplay": "Análise da evolução nas simulações de atendimento",
+  "usoAbordagens": "Análise do uso do gerador de abordagens",
+  "pontosFortes": ["Lista de 3-5 pontos fortes identificados"],
+  "areasDesenvolvimento": ["Lista de 3-5 áreas para desenvolvimento"],
+  "recomendacoes": ["Lista de 3-5 recomendações práticas e específicas"],
+  "proximosPassos": "Sugestão de próximos passos prioritários",
+  "notaGeral": 8.5
+}
+
+CRITÉRIOS DE AVALIAÇÃO:
+- Recorrência: Ideal é treinar pelo menos 3x por semana
+- Quiz: Taxa de aprovação acima de 70% é bom
+- Roleplay: Notas acima de 7.0 indicam bom desempenho
+- Abordagens: Usar regularmente indica preparação para atendimentos
+
+Seja encorajador mas honesto. Forneça insights acionáveis.`;
+
+      const userMessage = `Analise os dados de treinamento deste vendedor e gere um feedback completo:
+
+${JSON.stringify(contextoDados, null, 2)}
+
+Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimento do vendedor. Seja específico e construtivo.`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+
+      const feedbackText = completion.choices[0]?.message?.content || "{}";
+      let feedback;
+      try {
+        feedback = JSON.parse(feedbackText);
+      } catch {
+        feedback = { resumoGeral: feedbackText, erro: "Formato inválido" };
+      }
+
+      return res.json({
+        vendedor: contextoDados.vendedor,
+        metricas: {
+          quiz: contextoDados.quiz,
+          roleplay: contextoDados.roleplay,
+          abordagens: contextoDados.abordagens,
+          fundamentos: contextoDados.fundamentos,
+        },
+        feedback,
+      });
+
+    } catch (error) {
+      console.error("Feedback IA error:", error);
+      return res.status(500).json({ message: "Erro ao gerar feedback" });
     }
   });
 

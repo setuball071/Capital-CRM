@@ -1,13 +1,19 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Users, ClipboardCheck, MessageSquare, Wand2, Award, TrendingUp } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { Users, ClipboardCheck, MessageSquare, Wand2, Award, TrendingUp, Brain, Loader2, Star, Target, Lightbulb, CheckCircle, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface AdminStats {
   totalVendedores: number;
@@ -41,7 +47,65 @@ interface QuizTentativa {
   criadoEm: string;
 }
 
+interface FeedbackIA {
+  vendedor: {
+    nome: string;
+    nivelAtual: number;
+    quizAprovado: boolean;
+    dataAprovacaoQuiz: string | null;
+    totalSimulacoes: number;
+    notaMediaGlobal: string | null;
+    dataInicio: string;
+  };
+  metricas: {
+    quiz: {
+      totalTentativas: number;
+      aprovacoes: number;
+      taxaAprovacao: string;
+    };
+    roleplay: {
+      totalSessoes: number;
+      sessoesUltimos30Dias: number;
+      totalAvaliacoes: number;
+      mediaNotaGlobal: string;
+      mediaHumanizacao: string;
+      mediaConsultivo: string;
+      mediaVenda: string;
+      pontosFortesMaisFrequentes: { ponto: string; count: number }[];
+      pontosMelhorarMaisFrequentes: { ponto: string; count: number }[];
+    };
+    abordagens: {
+      totalGeradas: number;
+      abordagensUltimos30Dias: number;
+      canaisUsados: Record<string, number>;
+      tiposClienteAbordados: Record<string, number>;
+    };
+    fundamentos: {
+      licoesConcluidas: number;
+      totalLicoes: number;
+      percentualConclusao: string;
+    };
+  };
+  feedback: {
+    resumoGeral: string;
+    recorrenciaTreino: string;
+    desempenhoQuiz: string;
+    evolucaoRoleplay: string;
+    usoAbordagens: string;
+    pontosFortes: string[];
+    areasDesenvolvimento: string[];
+    recomendacoes: string[];
+    proximosPassos: string;
+    notaGeral: number;
+  };
+}
+
 export default function AcademiaAdmin() {
+  const { toast } = useToast();
+  const [selectedVendedor, setSelectedVendedor] = useState<Vendedor | null>(null);
+  const [feedbackData, setFeedbackData] = useState<FeedbackIA | null>(null);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+
   const { data: stats, isLoading: loadingStats } = useQuery<AdminStats>({
     queryKey: ["/api/academia/admin/stats"],
   });
@@ -54,6 +118,30 @@ export default function AcademiaAdmin() {
     queryKey: ["/api/academia/admin/quiz-tentativas"],
   });
 
+  const feedbackMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest("POST", `/api/academia/admin/feedback-ia/${userId}`);
+      const data = await response.json();
+      return data as FeedbackIA;
+    },
+    onSuccess: (data) => {
+      setFeedbackData(data);
+      setShowFeedbackDialog(true);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao gerar feedback",
+        description: error.message || "Não foi possível gerar o feedback",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFeedbackClick = (vendedor: Vendedor) => {
+    setSelectedVendedor(vendedor);
+    feedbackMutation.mutate(vendedor.userId);
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
     try {
@@ -61,6 +149,12 @@ export default function AcademiaAdmin() {
     } catch {
       return "-";
     }
+  };
+
+  const getNotaColor = (nota: number) => {
+    if (nota >= 8) return "text-green-600";
+    if (nota >= 6) return "text-yellow-600";
+    return "text-red-600";
   };
 
   if (loadingStats) {
@@ -193,6 +287,7 @@ export default function AcademiaAdmin() {
                         <TableHead>Simulações</TableHead>
                         <TableHead>Nota Média</TableHead>
                         <TableHead>Cadastro</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -220,6 +315,24 @@ export default function AcademiaAdmin() {
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
                             {formatDate(v.criadoEm)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFeedbackClick(v)}
+                              disabled={feedbackMutation.isPending && selectedVendedor?.id === v.id}
+                              data-testid={`button-feedback-${v.id}`}
+                            >
+                              {feedbackMutation.isPending && selectedVendedor?.id === v.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Brain className="h-4 w-4 mr-1" />
+                                  Feedback IA
+                                </>
+                              )}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -290,6 +403,220 @@ export default function AcademiaAdmin() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Feedback IA Dialog */}
+      <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              Feedback IA - {feedbackData?.vendedor?.nome || selectedVendedor?.userName}
+            </DialogTitle>
+            <DialogDescription>
+              Análise completa do desempenho no treinamento
+            </DialogDescription>
+          </DialogHeader>
+
+          {feedbackData && (
+            <div className="space-y-6 py-4">
+              {/* Nota Geral */}
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Nota Geral</p>
+                  <p className={`text-4xl font-bold ${getNotaColor(feedbackData.feedback.notaGeral)}`}>
+                    {feedbackData.feedback.notaGeral?.toFixed(1) || "-"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Nível Atual</p>
+                  <Badge className="text-lg px-3 py-1">Nível {feedbackData.vendedor.nivelAtual}</Badge>
+                </div>
+              </div>
+
+              {/* Resumo Geral */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Star className="h-4 w-4" />
+                    Resumo Geral
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{feedbackData.feedback.resumoGeral}</p>
+                </CardContent>
+              </Card>
+
+              {/* Métricas Grid */}
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Quiz */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Quiz de Fundamentos</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Tentativas:</span>
+                      <span className="font-medium">{feedbackData.metricas.quiz.totalTentativas}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Taxa de Aprovação:</span>
+                      <span className="font-medium">{feedbackData.metricas.quiz.taxaAprovacao}%</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">{feedbackData.feedback.desempenhoQuiz}</p>
+                  </CardContent>
+                </Card>
+
+                {/* Roleplay */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Roleplay</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Sessões (30 dias):</span>
+                      <span className="font-medium">{feedbackData.metricas.roleplay.sessoesUltimos30Dias}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Nota Média:</span>
+                      <span className="font-medium">{feedbackData.metricas.roleplay.mediaNotaGlobal}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">{feedbackData.feedback.evolucaoRoleplay}</p>
+                  </CardContent>
+                </Card>
+
+                {/* Abordagens */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Abordagens</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Geradas (30 dias):</span>
+                      <span className="font-medium">{feedbackData.metricas.abordagens.abordagensUltimos30Dias}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Total:</span>
+                      <span className="font-medium">{feedbackData.metricas.abordagens.totalGeradas}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">{feedbackData.feedback.usoAbordagens}</p>
+                  </CardContent>
+                </Card>
+
+                {/* Fundamentos */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Fundamentos</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Lições:</span>
+                      <span className="font-medium">
+                        {feedbackData.metricas.fundamentos.licoesConcluidas}/{feedbackData.metricas.fundamentos.totalLicoes}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={parseFloat(feedbackData.metricas.fundamentos.percentualConclusao)} 
+                      className="h-2"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {feedbackData.metricas.fundamentos.percentualConclusao}% concluído
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recorrência */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Recorrência de Treino
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{feedbackData.feedback.recorrenciaTreino}</p>
+                </CardContent>
+              </Card>
+
+              {/* Pontos Fortes e Áreas de Desenvolvimento */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2 text-green-600">
+                      <CheckCircle className="h-4 w-4" />
+                      Pontos Fortes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {feedbackData.feedback.pontosFortes?.map((ponto, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <Star className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                          <span>{ponto}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2 text-yellow-600">
+                      <AlertTriangle className="h-4 w-4" />
+                      Áreas de Desenvolvimento
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {feedbackData.feedback.areasDesenvolvimento?.map((area, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <Target className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+                          <span>{area}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recomendações */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    Recomendações
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {feedbackData.feedback.recomendacoes?.map((rec, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0">
+                          {i + 1}
+                        </span>
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              {/* Próximos Passos */}
+              <Card className="border-primary">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary" />
+                    Próximos Passos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{feedbackData.feedback.proximosPassos}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
