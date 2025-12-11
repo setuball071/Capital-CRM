@@ -130,19 +130,27 @@ The `calculatePackagePrice()` function selects the appropriate package based on 
 
 The training module provides AI-powered sales training for credit consultants. Features include:
 
-**Database Structure** (5 tables):
+**Database Structure** (6 tables):
 - `vendedores_academia`: Vendor training profiles (nivelAtual, quizAprovado, totalSimulacoes, notaMediaGlobal)
 - `quiz_tentativas`: Quiz attempt history (acertos, total, aprovado, respostas)
-- `roleplay_sessoes`: Roleplay session tracking (nivel, totalMensagens, iniciadoEm, finalizadoEm)
+- `roleplay_sessoes`: Roleplay session tracking (nivel, totalMensagens, cenario, status, iniciadoEm, finalizadoEm)
 - `roleplay_avaliacoes`: AI evaluation records (notaGlobal, notaHumanizacao, notaConsultivo, pontosFortes, pontosMelhorar)
 - `abordagens_geradas`: Generated approach scripts (canal, tipoCliente, produtoFoco, scriptLigacao, scriptWhatsapp)
+- `feedbacks_ia_historico`: AI feedback history for admin reviews (notaGeral, resumo, pontosFortes, areasDesenvolvimento, recomendacoes)
 
 **Training Flow**:
 1. **Fundamentos** (/academia/fundamentos): Static training content covering 5 levels (Descoberta, Explicação, Oferta, Objeções, Fechamento)
 2. **Quiz** (/academia/quiz): Multiple choice quiz with 70% pass threshold - gates access to AI modules
-3. **Roleplay** (/academia/roleplay): AI-powered chat simulation with client personas; includes real-time evaluation
+3. **Roleplay** (/academia/roleplay): AI-powered chat simulation with client personas; includes real-time evaluation and 10-message limit per session
 4. **Abordagem** (/academia/abordagem): AI script generator for WhatsApp and phone calls
 5. **Admin** (/academia/admin): Dashboard for master users to monitor vendor progress
+
+**Roleplay Message Limit**:
+- Each roleplay session has a limit of 10 messages from the corretor
+- Counter displayed as "X/10" in the session panel
+- When limit is reached, session is automatically finalized and evaluation is triggered
+- Sessions can also be manually finalized via "Finalizar e Ver Avaliação Completa" button
+- `totalSimulacoes` is updated when session is finalized (either by limit or manually)
 
 **API Endpoint**: POST /api/treinador-consigone with modes:
 - `roleplay_cliente`: Generates client responses in sales simulation

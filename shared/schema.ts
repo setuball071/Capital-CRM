@@ -568,8 +568,25 @@ export const roleplaySessoes = pgTable("roleplay_sessoes", {
   nivelTreinado: integer("nivel_treinado").notNull(), // Nível durante a sessão
   status: varchar("status", { length: 20 }).notNull().default("ativa"), // ativa, finalizada
   historicoConversa: jsonb("historico_conversa").notNull().default([]), // Array de mensagens
+  cenario: text("cenario"), // Cenário customizado pelo usuário
+  totalMensagens: integer("total_mensagens").notNull().default(0), // Contador de mensagens do corretor
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   finalizadoEm: timestamp("finalizado_em"),
+});
+
+// Histórico de Feedbacks IA gerados pelo admin
+export const feedbacksIAHistorico = pgTable("feedbacks_ia_historico", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(), // Vendedor avaliado
+  geradoPorId: integer("gerado_por_id").references(() => users.id, { onDelete: "set null" }), // Admin que gerou
+  notaGeral: decimal("nota_geral", { precision: 4, scale: 2 }).notNull(),
+  resumo: text("resumo").notNull(),
+  pontosFortes: jsonb("pontos_fortes").notNull().default([]),
+  areasDesenvolvimento: jsonb("areas_desenvolvimento").notNull().default([]),
+  recomendacoes: jsonb("recomendacoes").notNull().default([]),
+  proximosPassos: jsonb("proximos_passos").notNull().default([]),
+  metricas: jsonb("metricas"), // Métricas coletadas no momento do feedback
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 
 // Avaliações de roleplay pela IA
@@ -642,6 +659,11 @@ export const insertAbordagemGeradaSchema = createInsertSchema(abordagensGeradas)
   criadoEm: true,
 });
 
+export const insertFeedbackIAHistoricoSchema = createInsertSchema(feedbacksIAHistorico).omit({
+  id: true,
+  criadoEm: true,
+});
+
 // ===== TYPES ACADEMIA =====
 
 export type ProgressoLicao = typeof progressoLicoes.$inferSelect;
@@ -661,6 +683,9 @@ export type InsertRoleplayAvaliacao = z.infer<typeof insertRoleplayAvaliacaoSche
 
 export type AbordagemGerada = typeof abordagensGeradas.$inferSelect;
 export type InsertAbordagemGerada = z.infer<typeof insertAbordagemGeradaSchema>;
+
+export type FeedbackIAHistorico = typeof feedbacksIAHistorico.$inferSelect;
+export type InsertFeedbackIAHistorico = z.infer<typeof insertFeedbackIAHistoricoSchema>;
 
 // ===== SCHEMAS DE REQUISIÇÃO TREINADOR IA =====
 

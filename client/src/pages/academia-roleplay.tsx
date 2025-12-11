@@ -61,6 +61,9 @@ export default function AcademiaRoleplay() {
   const [avaliacoesExpandidas, setAvaliacoesExpandidas] = useState<Set<number>>(new Set());
   const [cenario, setCenario] = useState("");
   const [cenarioIniciado, setCenarioIniciado] = useState(false);
+  const [mensagensEnviadas, setMensagensEnviadas] = useState(0);
+  const [limiteMensagens, setLimiteMensagens] = useState(10);
+  const [sessaoFinalizada, setSessaoFinalizada] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
@@ -99,6 +102,14 @@ export default function AcademiaRoleplay() {
         setSessaoId(data.sessaoId);
       }
       
+      // Atualizar contadores de mensagens
+      if (data.mensagensEnviadas !== undefined) {
+        setMensagensEnviadas(data.mensagensEnviadas);
+      }
+      if (data.limiteMensagens !== undefined) {
+        setLimiteMensagens(data.limiteMensagens);
+      }
+      
       setMensagens((prev) => {
         const updated = [...prev];
         const lastCorretorIndex = updated.findLastIndex((m) => m.role === "corretor");
@@ -121,14 +132,36 @@ export default function AcademiaRoleplay() {
           setAvaliacoesExpandidas((prev) => new Set(prev).add(lastIndex));
         }
       }
+      
+      // Verificar se sessão foi finalizada pelo limite
+      if (data.sessaoFinalizada) {
+        setSessaoFinalizada(true);
+        toast({
+          title: "Sessão Finalizada",
+          description: `Você atingiu o limite de ${data.limiteMensagens} mensagens. Solicite a avaliação final.`,
+        });
+        // Automaticamente solicitar avaliação final
+        setTimeout(() => {
+          avaliacaoFinalMutation.mutate();
+        }, 500);
+      }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("[Roleplay] Error getting client response:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível obter resposta do cliente",
-        variant: "destructive",
-      });
+      // Verificar se a sessão foi finalizada
+      if (error?.message?.includes("finalizada")) {
+        setSessaoFinalizada(true);
+        toast({
+          title: "Sessão Finalizada",
+          description: "Esta sessão já foi encerrada. Inicie uma nova simulação.",
+        });
+      } else {
+        toast({
+          title: "Erro",
+          description: "Não foi possível obter resposta do cliente",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -183,6 +216,9 @@ export default function AcademiaRoleplay() {
     setAvaliacoesExpandidas(new Set());
     setCenario("");
     setCenarioIniciado(false);
+    setMensagensEnviadas(0);
+    setSessaoFinalizada(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/academia/perfil"] });
   };
 
   const cenarioMutation = useMutation({
@@ -483,12 +519,12 @@ export default function AcademiaRoleplay() {
                 onChange={(e) => setInputMensagem(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="flex-1 min-h-[60px] resize-none"
-                disabled={roleplayMutation.isPending || modoAvaliacao}
+                disabled={roleplayMutation.isPending || modoAvaliacao || sessaoFinalizada}
                 data-testid="textarea-mensagem"
               />
               <Button
                 onClick={handleEnviarMensagem}
-                disabled={!inputMensagem.trim() || roleplayMutation.isPending || modoAvaliacao}
+                disabled={!inputMensagem.trim() || roleplayMutation.isPending || modoAvaliacao || sessaoFinalizada}
                 data-testid="button-enviar"
               >
                 <Send className="h-4 w-4" />
@@ -520,10 +556,21 @@ export default function AcademiaRoleplay() {
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Mensagens</span>
-                <Badge variant="outline" data-testid="text-total-mensagens">
-                  {mensagens.filter((m) => m.role === "corretor").length}
+                <Badge 
+                  variant="outline" 
+                  className={mensagensEnviadas >= limiteMensagens - 2 ? "text-orange-600" : ""}
+                  data-testid="text-total-mensagens"
+                >
+                  {mensagensEnviadas}/{limiteMensagens}
                 </Badge>
               </div>
+              {sessaoFinalizada && (
+                <div className="text-center py-2">
+                  <Badge variant="secondary" className="text-orange-600">
+                    Limite atingido
+                  </Badge>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Média da Sessão</span>
                 <Badge 

@@ -22,6 +22,7 @@ import {
   roleplayAvaliacoes,
   abordagensGeradas,
   progressoLicoes,
+  feedbacksIAHistorico,
   users,
   type User,
   type InsertCoefficientTable,
@@ -3570,6 +3571,8 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos e
       console.log(`[Academia] OpenAI response received, length: ${aiResponse.length}`);
 
       // Process response based on mode
+      const LIMITE_MENSAGENS_ROLEPLAY = 10; // Limite de mensagens do corretor por sessão
+      
       if (modo === "roleplay_cliente") {
         // Get or create session
         let sessao;
@@ -3579,24 +3582,76 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos e
             return res.status(404).json({ message: "Sessão não encontrada" });
           }
           sessao = sessao[0];
+          
+          // Verificar se sessão já foi finalizada
+          if (sessao.status === "finalizada") {
+            return res.status(400).json({ 
+              message: "Esta sessão já foi finalizada. Inicie uma nova sessão.",
+              sessaoFinalizada: true 
+            });
+          }
+          
+          // Verificar se já atingiu o limite ANTES de processar
+          if ((sessao.totalMensagens || 0) >= LIMITE_MENSAGENS_ROLEPLAY) {
+            // Marcar como finalizada se ainda não estiver
+            await db.update(roleplaySessoes)
+              .set({ status: "finalizada", finalizadoEm: new Date() })
+              .where(eq(roleplaySessoes.id, sessao.id));
+            
+            return res.status(400).json({ 
+              message: "Limite de mensagens atingido. Inicie uma nova sessão.",
+              sessaoFinalizada: true,
+              mensagensEnviadas: sessao.totalMensagens || 0,
+              limiteMensagens: LIMITE_MENSAGENS_ROLEPLAY
+            });
+          }
         } else {
           const [newSessao] = await db.insert(roleplaySessoes).values({
             userId,
             nivelTreinado: nivelAtual,
             status: "ativa",
             historicoConversa: [],
+            cenario: cenario || null,
+            totalMensagens: 0,
           }).returning();
           sessao = newSessao;
         }
 
+        // Incrementar contador de mensagens do corretor
+        const novoTotalMensagens = (sessao.totalMensagens || 0) + 1;
+        const atingiuLimite = novoTotalMensagens >= LIMITE_MENSAGENS_ROLEPLAY;
+        
         // Update conversation history
         const historico = (sessao.historicoConversa as any[]) || [];
         historico.push({ role: "corretor", content: falaCorretor, timestamp: new Date() });
         historico.push({ role: "cliente", content: aiResponse, timestamp: new Date() });
 
         await db.update(roleplaySessoes)
-          .set({ historicoConversa: historico })
+          .set({ 
+            historicoConversa: historico,
+            totalMensagens: novoTotalMensagens,
+            status: atingiuLimite ? "finalizada" : "ativa",
+            finalizadoEm: atingiuLimite ? new Date() : null,
+          })
           .where(eq(roleplaySessoes.id, sessao.id));
+        
+        // Se atingiu o limite, incrementar totalSimulacoes do vendedor
+        if (atingiuLimite) {
+          // Atualizar contagem de simulações finalizadas
+          const [sessoesFinalizadas] = await db.select({ count: sql`count(*)` })
+            .from(roleplaySessoes)
+            .where(and(
+              eq(roleplaySessoes.userId, userId),
+              eq(roleplaySessoes.status, "finalizada")
+            ));
+          
+          await db.update(vendedoresAcademia)
+            .set({ 
+              totalSimulacoes: Number(sessoesFinalizadas?.count || 0),
+              atualizadoEm: new Date(),
+            })
+            .where(eq(vendedoresAcademia.userId, userId));
+        }
 
         // If inline evaluation is requested, make a second call
         let avaliacao = null;
@@ -3638,6 +3693,9 @@ Responda EXCLUSIVAMENTE em JSON:
           falaCliente: aiResponse,
           sessaoId: sessao.id,
           avaliacao,
+          mensagensEnviadas: novoTotalMensagens,
+          limiteMensagens: LIMITE_MENSAGENS_ROLEPLAY,
+          sessaoFinalizada: atingiuLimite,
         });
 
       } else if (modo === "avaliacao_roleplay") {
@@ -3675,14 +3733,31 @@ Responda EXCLUSIVAMENTE em JSON:
             aprovadoProximoNivel: avaliacao.aprovado_para_proximo_nivel || false,
           });
 
-          // Update user's average score
+          // Marcar sessão como finalizada (se ainda não estiver)
+          await db.update(roleplaySessoes)
+            .set({ status: "finalizada", finalizadoEm: new Date() })
+            .where(and(
+              eq(roleplaySessoes.id, sessaoId),
+              eq(roleplaySessoes.status, "ativa")
+            ));
+
+          // Update user's average score from all evaluations
           const avaliacoes = await db.select().from(roleplayAvaliacoes).where(eq(roleplayAvaliacoes.userId, userId));
+          
+          // Count finalized sessions for totalSimulacoes
+          const [sessoesFinalizadas] = await db.select({ count: sql`count(*)` })
+            .from(roleplaySessoes)
+            .where(and(
+              eq(roleplaySessoes.userId, userId),
+              eq(roleplaySessoes.status, "finalizada")
+            ));
+          
           if (avaliacoes.length > 0) {
             const mediaGlobal = avaliacoes.reduce((acc, a) => acc + parseFloat(a.notaGlobal), 0) / avaliacoes.length;
             await db.update(vendedoresAcademia)
               .set({ 
                 notaMediaGlobal: String(mediaGlobal.toFixed(2)),
-                totalSimulacoes: avaliacoes.length,
+                totalSimulacoes: Number(sessoesFinalizadas?.count || 0),
                 atualizadoEm: new Date(),
               })
               .where(eq(vendedoresAcademia.userId, userId));
@@ -4352,6 +4427,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } catch {
         feedback = { resumoGeral: feedbackText, erro: "Formato inválido" };
       }
+
+      // Salvar feedback no histórico
+      const adminId = req.user!.id;
+      await db.insert(feedbacksIAHistorico).values({
+        userId,
+        geradoPorId: adminId,
+        notaGeral: String(feedback.notaGeral || 0),
+        resumo: feedback.resumoGeral || "",
+        pontosFortes: feedback.pontosFortes || [],
+        areasDesenvolvimento: feedback.areasDesenvolvimento || [],
+        recomendacoes: feedback.recomendacoes || [],
+        proximosPassos: feedback.proximosPassos ? [feedback.proximosPassos] : [],
+        metricas: contextoDados,
+      });
 
       return res.json({
         vendedor: contextoDados.vendedor,
