@@ -47,7 +47,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check } from "lucide-react";
 import { type User, USER_ROLES, ROLE_LABELS, type UserRole } from "@shared/schema";
 
 export default function UsersPage() {
@@ -56,6 +56,12 @@ export default function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Credentials dialog state (shown after creating user)
+  const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; name: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -88,13 +94,17 @@ export default function UsersPage() {
     mutationFn: async (data: { name: string; email: string; password: string; role: string; managerId?: number }) => {
       return apiRequest("POST", "/api/users", data);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users/coordenadores"] });
-      toast({
-        title: "Usuário criado com sucesso!",
+      // Save credentials for copying before closing dialog
+      setCreatedCredentials({
+        name: variables.name,
+        email: variables.email,
+        password: variables.password,
       });
       handleCloseDialog();
+      setShowCredentialsDialog(true);
     },
     onError: (error: any) => {
       toast({
@@ -270,6 +280,42 @@ export default function UsersPage() {
     return ROLE_LABELS[role as UserRole] || role;
   };
 
+  // Copy to clipboard helper
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+      toast({
+        title: "Copiado!",
+        description: `${field} copiado para a área de transferência`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar para a área de transferência",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyAllCredentials = () => {
+    if (!createdCredentials) return;
+    const text = `Login: ${createdCredentials.email}\nSenha: ${createdCredentials.password}`;
+    copyToClipboard(text, "Credenciais");
+  };
+
+  // Filter users based on search term
+  const filteredUsers = users.filter((user) => {
+    if (!searchTerm.trim()) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      user.name.toLowerCase().includes(search) ||
+      user.email.toLowerCase().includes(search) ||
+      getRoleLabel(user.role).toLowerCase().includes(search)
+    );
+  });
+
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
     if (role === "master") return "default";
     if (role === "coordenacao" || role === "atendimento") return "secondary";
@@ -436,10 +482,26 @@ export default function UsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuários</CardTitle>
-          <CardDescription>
-            {users.length} usuário{users.length !== 1 ? "s" : ""} cadastrado{users.length !== 1 ? "s" : ""}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Usuários</CardTitle>
+              <CardDescription>
+                {filteredUsers.length === users.length 
+                  ? `${users.length} usuário${users.length !== 1 ? "s" : ""} cadastrado${users.length !== 1 ? "s" : ""}`
+                  : `${filteredUsers.length} de ${users.length} usuário${users.length !== 1 ? "s" : ""}`}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por nome, email ou função..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-users"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -454,7 +516,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
+              {filteredUsers.map((user) => {
                 const manager = coordenadores.find((c) => c.id === user.managerId);
                 return (
                   <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
@@ -518,10 +580,10 @@ export default function UsersPage() {
                   </TableRow>
                 );
               })}
-              {users.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={canManageAllUsers ? 6 : 5} className="text-center text-muted-foreground py-8">
-                    Nenhum usuário encontrado
+                    {searchTerm.trim() ? "Nenhum usuário encontrado para esta pesquisa" : "Nenhum usuário cadastrado"}
                   </TableCell>
                 </TableRow>
               )}
@@ -559,6 +621,84 @@ export default function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Credentials Dialog - shown after creating user */}
+      <Dialog open={showCredentialsDialog} onOpenChange={setShowCredentialsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Usuário Criado com Sucesso!
+            </DialogTitle>
+            <DialogDescription>
+              Copie as credenciais abaixo para compartilhar com <strong>{createdCredentials?.name}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Login (Email)</Label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={createdCredentials?.email || ""} 
+                  readOnly 
+                  className="font-mono"
+                  data-testid="input-credential-email"
+                />
+                <Button 
+                  size="icon" 
+                  variant="outline"
+                  onClick={() => copyToClipboard(createdCredentials?.email || "", "Email")}
+                  data-testid="button-copy-email"
+                >
+                  {copiedField === "Email" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Senha</Label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={createdCredentials?.password || ""} 
+                  readOnly 
+                  className="font-mono"
+                  data-testid="input-credential-password"
+                />
+                <Button 
+                  size="icon" 
+                  variant="outline"
+                  onClick={() => copyToClipboard(createdCredentials?.password || "", "Senha")}
+                  data-testid="button-copy-password"
+                >
+                  {copiedField === "Senha" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col gap-2">
+            <Button 
+              onClick={copyAllCredentials}
+              className="w-full"
+              data-testid="button-copy-all-credentials"
+            >
+              {copiedField === "Credenciais" ? (
+                <><Check className="mr-2 h-4 w-4" /> Copiado!</>
+              ) : (
+                <><Copy className="mr-2 h-4 w-4" /> Copiar Login e Senha</>
+              )}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setShowCredentialsDialog(false)}
+              data-testid="button-close-credentials"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
