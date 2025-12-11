@@ -154,7 +154,14 @@ The training module provides AI-powered sales training for credit consultants. F
 - Roleplay/Abordagem: Requires quiz approval (quizAprovado = true)
 - Admin: Master role only
 
-**AI Integration**: Uses OpenAI GPT-4.1-mini via Replit AI Integrations for roleplay simulation, evaluation, and script generation.
+**Admin Feedback IA**:
+The admin dashboard includes AI-powered feedback generation for each vendedor:
+- **Endpoint**: POST /api/academia/admin/feedback-ia/:userId
+- **Metrics Collected**: Quiz attempts, roleplay sessions, abordagens, lesson progress
+- **Feedback Sections**: Nota Geral, Resumo, Pontos Fortes, Áreas de Desenvolvimento, Recomendações, Próximos Passos
+- **Response Time**: 5-10 seconds for AI generation
+
+**AI Integration**: Uses OpenAI GPT-4.1-mini via Replit AI Integrations for roleplay simulation, evaluation, script generation, and personalized training feedback.
 
 ### Component Architecture
 
