@@ -22,6 +22,11 @@ import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
 import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
 import ConfigPrecosPage from "@/pages/config-precos";
+import AcademiaFundamentosPage from "@/pages/academia-fundamentos";
+import AcademiaQuizPage from "@/pages/academia-quiz";
+import AcademiaRoleplayPage from "@/pages/academia-roleplay";
+import AcademiaAbordagemPage from "@/pages/academia-abordagem";
+import AcademiaAdminPage from "@/pages/academia-admin";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -246,6 +251,21 @@ function Router() {
               </Route>
               <Route path="/config-precos">
                 {() => <MasterRoute component={ConfigPrecosPage} />}
+              </Route>
+              <Route path="/academia/fundamentos">
+                {() => <ProtectedRoute component={AcademiaFundamentosPage} />}
+              </Route>
+              <Route path="/academia/quiz">
+                {() => <ProtectedRoute component={AcademiaQuizPage} />}
+              </Route>
+              <Route path="/academia/roleplay">
+                {() => <ProtectedRoute component={AcademiaRoleplayPage} />}
+              </Route>
+              <Route path="/academia/abordagem">
+                {() => <ProtectedRoute component={AcademiaAbordagemPage} />}
+              </Route>
+              <Route path="/academia/admin">
+                {() => <MasterRoute component={AcademiaAdminPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

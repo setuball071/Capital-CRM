@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, User as UserIcon, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -121,6 +121,40 @@ export function AppSidebar() {
     },
   ];
 
+  // Academia ConsigOne menu items - available to all logged in users
+  const academiaItems = [
+    {
+      title: "Fundamentos",
+      url: "/academia/fundamentos",
+      icon: BookOpen,
+      show: true,
+    },
+    {
+      title: "Quiz",
+      url: "/academia/quiz",
+      icon: ClipboardCheck,
+      show: true,
+    },
+    {
+      title: "Roleplay IA",
+      url: "/academia/roleplay",
+      icon: MessageSquare,
+      show: true,
+    },
+    {
+      title: "Abordagem IA",
+      url: "/academia/abordagem",
+      icon: Wand2,
+      show: true,
+    },
+    {
+      title: "Admin Academia",
+      url: "/academia/admin",
+      icon: Award,
+      show: isMaster,
+    },
+  ];
+
   const handleLogout = async () => {
     await logout();
     setLocation("/login");
@@ -150,6 +184,34 @@ export function AppSidebar() {
                       asChild
                       isActive={location === item.url}
                       data-testid={`sidebar-${item.url.replace("/", "") || "home"}`}
+                    >
+                      <button onClick={() => setLocation(item.url)} className="w-full">
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </button>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        
+        {/* Academia ConsigOne Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4" />
+            Academia ConsigOne
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {academiaItems
+                .filter((item) => item.show)
+                .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      data-testid={`sidebar-academia-${item.url.split("/").pop()}`}
                     >
                       <button onClick={() => setLocation(item.url)} className="w-full">
                         <item.icon className="h-4 w-4" />
