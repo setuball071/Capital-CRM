@@ -1,0 +1,269 @@
+Vou organizar em 4 partes:
+
+Visão geral do produto
+
+Arquitetura simples (o que fica onde)
+
+API que o sistema precisa ter
+
+Prompt mestre e formatos de resposta da IA
+
+1. Visão geral do produto
+
+Nome: Academia ConsigOne
+
+Módulos:
+
+Fundamentos (teoria)
+Conteúdo fixo (HTML / CMS). Sem IA.
+
+Quiz de fundamentos
+Perguntas de múltipla escolha, corrige local mesmo. Só libera o módulo de IA se o vendedor for aprovado.
+
+Roleplay com IA
+
+Cliente simulado pela IA.
+
+Cada resposta do corretor é avaliada pela IA (nota + pontos fortes + pontos a melhorar).
+
+Progressão de nível 1 a 5 de acordo com as notas.
+
+Abordagem IA (desbloqueia depois)
+
+Corretor escolhe: canal, tipo de cliente, produto foco.
+
+IA gera script de abordagem (ligação e WhatsApp), com gatilhos de persuasão.
+
+Painel Admin
+
+Lista de simulações (quem treinou, nível, nota, pontos fracos).
+
+Lista de quiz (quem passou / reprovou).
+
+2. Arquitetura simples
+
+Sugestão de stack (casa com o que você usa):
+
+Frontend:
+
+Sua página atual (HTML/JS) ou dentro do CRM.
+
+Backend (onde entra a IA):
+
+Firebase Functions (Node.js) ou uma API em Replit / Node / Express.
+
+Banco de dados:
+
+Firestore ou outro (ex: Mongo) para guardar:
+
+Vendedor
+
+Sessão de treino
+
+Avaliações da IA
+
+Abordagens geradas
+
+Fluxo de chamada
+
+Vendedor abre a Academia (front).
+
+Faz teoria → quiz (sem IA).
+
+Aprovado → front chama backend em um endpoint tipo:
+
+POST /treinador-consigone
+
+Backend recebe dados, chama OpenAI API, recebe resposta e devolve pro frontend.
+
+Backend também grava tudo no banco.
+
+IMPORTANTE:
+A chave da OpenAI deve ficar no backend, nunca no HTML.
+
+3. API – o que o backend precisa expor
+Endpoint principal
+
+POST /treinador-consigone
+
+Body (JSON):
+
+{
+  "modo": "roleplay_cliente | avaliacao_roleplay | abordagem_ia",
+  "vendedorId": "abc123",
+  "nomeVendedor": "Fabio Setubal",
+  "nivelAtual": 1,
+  "contexto": "texto livre opcional",
+  "falaCorretor": "Só quando modo = avaliacao_roleplay ou roleplay_cliente",
+  "canal": "whatsapp ou ligacao (apenas modo = abordagem_ia)",
+  "tipoCliente": "cliente_negativado | cliente_antigo | novo_servidor | indicacao",
+  "produtoFoco": "compra_divida | cartao | consignado",
+  "historicoResumido": "resumo da conversa até aqui (opcional)"
+}
+
+
+O backend:
+
+Monta a chamada para OpenAI usando o prompt mestre (abaixo).
+
+Passa esse body dentro da mensagem do usuário (role: "user").
+
+Recebe a resposta (texto ou JSON) e devolve para o frontend.
+
+Respostas esperadas por modo
+3.1. modo = "roleplay_cliente"
+
+IA retorna texto simples:
+
+"Cliente: Olha, eu até tenho interesse, mas já me enrolaram antes com consignado. Você consegue me explicar sem enrolação o que muda pra mim?"
+
+
+O backend devolve isso como:
+
+{
+  "falaCliente": "Cliente: Olha, eu até tenho interesse, mas já me enrolaram antes com consignado. Você consegue me explicar sem enrolação o que muda pra mim?"
+}
+
+
+Frontend: usa falaCliente e mostra na tela como mensagem do cliente.
+
+3.2. modo = "avaliacao_roleplay"
+
+IA retorna JSON nesse formato:
+
+{
+  "nota_global": 8.5,
+  "nota_humanizacao": 9,
+  "nota_consultivo": 8,
+  "nota_clareza": 8,
+  "nota_venda": 9,
+  "comentario_geral": "Boa acolhida e condução, mas faltou aprofundar o objetivo final do cliente.",
+  "pontos_fortes": [
+    "Mostrou empatia logo na abertura.",
+    "Fez pergunta sobre vínculo de forma natural."
+  ],
+  "pontos_melhorar": [
+    "Explorar melhor o objetivo financeiro do cliente.",
+    "Evitar pedir muitos dados logo na primeira resposta."
+  ],
+  "nivel_atual": 1,
+  "nivel_sugerido": 1,
+  "aprovado_para_proximo_nivel": false
+}
+
+
+Backend:
+
+Devolve isso pro frontend.
+
+Grava no banco em uma coleção tipo avaliacoes_roleplay.
+
+Frontend:
+
+Usa nota_global e listas para montar aquela caixinha de feedback.
+
+Pode chamar o backend depois para checar se nivel_atual subiu.
+
+Regra para promoção de nível (negócio, você define):
+
+Exemplo: média de nota_global ≥ 8 em 3 simulações → sobe nível.
+
+Isso pode ser calculado no backend.
+
+3.3. modo = "abordagem_ia"
+
+IA retorna JSON assim:
+
+{
+  "abertura_resumida": "Oi, tudo bem? Vi que você anda apertado com as parcelas e queria te mostrar uma forma de organizar isso sem te enrolar mais.",
+  "objetivo_abordagem": "Abrir conversa consultiva sobre compra de dívida, focando em organização e liberação de fôlego.",
+  "perguntas_consultivas": [
+    "Hoje qual é a dívida que mais te incomoda todo mês?",
+    "Você já tentou negociar ou portar alguma dessas dívidas?",
+    "O que seria mais importante pra você agora: limpar nome, diminuir parcela ou liberar um valor de troca?"
+  ],
+  "exploracao_dor": "Mostrar que a situação atual está cara e desorganizada, e que existe uma alternativa mais inteligente para limpar e concentrar as dívidas.",
+  "proposta_valor": "Trocar as dívidas caras por uma condição mais organizada, com foco em liberar um valor e, se necessário, ajustar parcelas para caber no bolso, sem enrolar.",
+  "gatilhos_usados": [
+    "prova_social",
+    "ancoragem",
+    "escassez_saudavel"
+  ],
+  "script_pronto_ligacao": "Oi, [nome], tudo bem? Aqui é o [seu_nome] da ConsigOne. Eu estou falando com alguns clientes que, assim como você, estão com várias dívidas caras ao mesmo tempo. A ideia não é te vender mais uma parcela, e sim te mostrar uma forma de juntar essas dívidas em uma condição mais leve, talvez até liberando um valor pra você. Hoje, qual é a parcela ou dívida que mais te aperta todo mês?",
+  "script_pronto_whatsapp": "Oi, [nome]! 😊 Aqui é o [seu_nome] da ConsigOne.\n\nEstou te chamando porque vi que dá pra gente revisar suas dívidas atuais e, em vez de só aumentar parcela, pensar numa troca inteligente: concentrar tudo num lugar só, com condição melhor e, se fizer sentido, ainda liberar um valor pra você.\n\nMe conta rapidinho: hoje qual é a dívida que mais te incomoda todo mês?"
+}
+
+
+Backend grava isso em algo como abordagens_geradas (para histórico) e devolve para o frontend.
+
+Frontend mostra bonitinho em abas:
+
+Versão ligação
+
+Versão WhatsApp
+
+Lista de perguntas consultivas
+
+4. Prompt mestre para o dev usar
+
+Esse texto vai em role: "system" na chamada da OpenAI:
+
+Você é o TREINADOR IA da Academia ConsigOne, especializado em venda de crédito consignado, cartão consignado/cartão benefício e COMPRA DE DÍVIDA (refin estratégico).
+
+Seu objetivo é treinar corretores iniciantes de forma REALISTA e CONSULTIVA, simulando clientes e avaliando a qualidade do atendimento.
+
+REGRAS GERAIS:
+- Linguagem natural de cliente brasileiro, simples, direta e humana.
+- Atendimento HUMANIZADO e CONSULTIVO: entender o cenário antes de empurrar produto.
+- Foco em gerar VALOR REAL: organizar dívidas, melhorar fluxo de caixa, limpar nome, liberar fôlego.
+- A operação é da ConsigOne / Gold, com diferenciais:
+  - Análise profunda do cenário, comparação entre bancos e estratégias.
+  - Relacionamento de longo prazo com o cliente.
+  - Especialistas em operações fora do padrão (cartão, compra de dívida, clientes negativados).
+
+PRODUTOS PRINCIPAIS:
+1) Crédito consignado tradicional.
+2) Cartão consignado / cartão benefício (parte limite, parte saque, desconto mínimo em folha).
+3) Compra de dívida (refin estratégico):
+   - Trocar dívidas caras por condição mais estruturada.
+   - Muito usada para clientes negativados ou quando a portabilidade não resolve.
+   - Objetivo principal: liberar mais valor de forma sustentável.
+   - Redução de parcela só quando necessário para tirar o cliente do sufoco.
+
+NÍVEIS DE TREINAMENTO (1 a 5):
+1) Descoberta: acolhimento, perguntas iniciais, entender vínculo, margem, contratos e objetivo.
+2) Explicação: explicar produtos com clareza, especialmente compra de dívida e cartão, sem jargão técnico.
+3) Oferta: montar proposta com comparação “antes x depois”, mostrando ganho real.
+4) Objeções: lidar com medo, histórico ruim com financeiras, desconfiança, “vou pensar”.
+5) Fechamento: conduzir próximo passo com segurança, sem pressão burra.
+
+MODOS DE OPERAÇÃO (campo "modo" na requisição):
+
+1) modo = "roleplay_cliente"
+   - Agir SOMENTE como cliente humano.
+   - Recebe nível_atual, fala do corretor e, opcionalmente, um histórico resumido.
+   - Responder com 1 a 3 frases, variando humor e perfil do cliente.
+   - Não dar aula nem falar como consultor; é cliente conversando.
+
+2) modo = "avaliacao_roleplay"
+   - Recebe nível_atual, contexto e fala_corretor.
+   - Avalia a fala do corretor em:
+     - Humanização,
+     - Consultoria,
+     - Clareza,
+     - Venda.
+   - Para Nível 1, não exigir que o corretor pergunte tudo de uma vez. Ele pode perguntar por partes.
+   - Responder EXCLUSIVAMENTE em JSON no formato especificado pelo usuário (nota_global, pontos_fortes etc.), sem texto fora do JSON.
+
+3) modo = "abordagem_ia"
+   - Recebe canal, tipo_cliente, produto_foco e contexto.
+   - Gera abordagem inicial perfeita, natural e ética.
+   - Responder EXCLUSIVAMENTE em JSON com:
+     - abertura_resumida,
+     - objetivo_abordagem,
+     - perguntas_consultivas,
+     - exploracao_dor,
+     - proposta_valor,
+     - gatilhos_usados,
+     - script_pronto_ligacao,
+     - script_pronto_whatsapp.

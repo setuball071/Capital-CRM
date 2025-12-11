@@ -3176,13 +3176,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
   
-  // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador
-  app.get("/api/pedidos-lista/admin", requireAuth, async (req, res) => {
+  // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY
+  app.get("/api/pedidos-lista/admin", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only master can access admin view
-      if (!hasRole(req.user, ["master"])) {
-        return res.status(403).json({ message: "Acesso negado - apenas master" });
-      }
 
       const pedidos = await storage.getAllPedidosListaWithUser();
       
@@ -3210,13 +3206,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST /api/pedidos-lista/:id/aprovar - Aprovar pedido (MASTER only)
-  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, async (req, res) => {
+  // POST /api/pedidos-lista/:id/aprovar - Aprovar pedido - MASTER ONLY
+  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only master can approve
-      if (!hasRole(req.user, ["master"])) {
-        return res.status(403).json({ message: "Acesso negado - apenas master" });
-      }
 
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -3375,13 +3367,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST /api/pedidos-lista/:id/rejeitar - Rejeitar pedido (MASTER only)
-  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, async (req, res) => {
+  // POST /api/pedidos-lista/:id/rejeitar - Rejeitar pedido - MASTER ONLY
+  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, requireMaster, async (req, res) => {
     try {
-      // Only master can reject
-      if (!hasRole(req.user, ["master"])) {
-        return res.status(403).json({ message: "Acesso negado - apenas master" });
-      }
 
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
