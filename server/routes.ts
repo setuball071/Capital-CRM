@@ -5530,6 +5530,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // GET /api/vendas/tags/:id/clientes - Get clients/leads by tag
+  app.get("/api/vendas/tags/:id/clientes", requireAuth, async (req, res) => {
+    try {
+      const tagId = parseInt(req.params.id);
+      if (isNaN(tagId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      const leads = await storage.getLeadsByTag(tagId);
+      return res.json(leads);
+    } catch (error) {
+      console.error("Get leads by tag error:", error);
+      return res.status(500).json({ message: "Erro ao buscar leads da tag" });
+    }
+  });
+
   // GET /api/vendas/atendimento/:assignmentId/tags - Get tags for an assignment
   app.get("/api/vendas/atendimento/:assignmentId/tags", requireAuth, async (req, res) => {
     try {

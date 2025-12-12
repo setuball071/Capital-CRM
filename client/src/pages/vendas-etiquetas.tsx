@@ -10,12 +10,32 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, Tag } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, Plus, Pencil, Trash2, Tag, Phone, User, Copy } from "lucide-react";
 import type { LeadTag } from "@shared/schema";
 
 interface TagUsage {
   tagId: number;
   count: number;
+}
+
+interface TagClient {
+  assignmentId: number;
+  nome: string | null;
+  cpf: string | null;
+  telefones: string[];
+}
+
+function formatPhone(phone: string | null | undefined): string {
+  if (!phone) return "-";
+  const clean = phone.replace(/\D/g, "");
+  if (clean.length === 11) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+  }
+  if (clean.length === 10) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+  }
+  return phone;
 }
 
 const COLOR_OPTIONS = [
@@ -33,6 +53,7 @@ export default function VendasEtiquetas() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showClientsDialog, setShowClientsDialog] = useState(false);
   const [selectedTag, setSelectedTag] = useState<LeadTag | null>(null);
   const [formData, setFormData] = useState({ nome: "", cor: "#3b82f6" });
 
@@ -44,8 +65,27 @@ export default function VendasEtiquetas() {
     queryKey: ["/api/vendas/tags/usage"],
   });
 
+  const { data: tagClients, isLoading: loadingClients } = useQuery<TagClient[]>({
+    queryKey: [`/api/vendas/tags/${selectedTag?.id}/clientes`],
+    enabled: !!selectedTag && showClientsDialog,
+  });
+
   const getUsageCount = (tagId: number): number => {
     return usage?.find((u) => u.tagId === tagId)?.count || 0;
+  };
+
+  const openClientsDialog = (tag: LeadTag) => {
+    setSelectedTag(tag);
+    setShowClientsDialog(true);
+  };
+
+  const handleCopyPhone = async (phone: string) => {
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast({ title: "Telefone copiado!" });
+    } catch {
+      toast({ title: "Erro ao copiar", variant: "destructive" });
+    }
   };
 
   const createMutation = useMutation({
@@ -196,7 +236,12 @@ export default function VendasEtiquetas() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary" data-testid={`usage-count-${tag.id}`}>
+                      <Badge 
+                        variant="secondary" 
+                        className={getUsageCount(tag.id) > 0 ? "cursor-pointer hover-elevate" : ""}
+                        onClick={() => getUsageCount(tag.id) > 0 && openClientsDialog(tag)}
+                        data-testid={`usage-count-${tag.id}`}
+                      >
                         {getUsageCount(tag.id)}
                       </Badge>
                     </TableCell>
@@ -374,6 +419,86 @@ export default function VendasEtiquetas() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showClientsDialog} onOpenChange={setShowClientsDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Clientes com etiqueta
+              {selectedTag && (
+                <Badge 
+                  style={{ backgroundColor: selectedTag.cor, color: "#fff" }}
+                  className="ml-2"
+                >
+                  {selectedTag.nome}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Lista de clientes marcados com esta etiqueta. Clique no telefone para copiar.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[400px]">
+            {loadingClients ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : !tagClients || tagClients.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhum cliente com esta etiqueta.
+              </div>
+            ) : (
+              <div className="space-y-3 p-1">
+                {tagClients.map((client) => (
+                  <div 
+                    key={client.assignmentId} 
+                    className="border rounded-lg p-3 space-y-2"
+                    data-testid={`client-card-${client.assignmentId}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{client.nome || "Nome não informado"}</span>
+                    </div>
+                    {client.telefones.length > 0 ? (
+                      <div className="space-y-1.5 ml-6">
+                        {client.telefones.map((tel, idx) => (
+                          <div key={idx} className="flex flex-col gap-0.5">
+                            <Badge 
+                              style={{ backgroundColor: selectedTag?.cor, color: "#fff" }}
+                              className="w-fit text-[10px] px-1.5 py-0"
+                            >
+                              {selectedTag?.nome}
+                            </Badge>
+                            <button
+                              onClick={() => handleCopyPhone(tel)}
+                              className="flex items-center gap-2 p-1.5 rounded hover:bg-muted transition-colors text-left group"
+                              data-testid={`button-copy-phone-${client.assignmentId}-${idx}`}
+                            >
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-mono">{formatPhone(tel)}</span>
+                              <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ml-6 text-sm text-muted-foreground">
+                        Sem telefones cadastrados
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClientsDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

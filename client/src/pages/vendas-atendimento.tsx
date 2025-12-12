@@ -547,74 +547,52 @@ export default function VendasAtendimento() {
                 </CardContent>
               </Card>
 
-              {/* Contato */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
+              {/* Parcelas por Banco - Resumo de empréstimos */}
+              {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      Contato
+                      <ShoppingCart className="h-4 w-4" />
+                      Parcelas por Banco
                     </CardTitle>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => setAddContactOpen(true)}
-                      data-testid="button-add-contact"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Adicionar
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Telefone 1</p>
-                      <p className="font-medium" data-testid="text-telefone-1">
-                        <CopyableField
-                          value={atendimentoAtual.lead.telefone1}
-                          displayValue={formatPhone(atendimentoAtual.lead.telefone1)}
-                          testId="button-copy-telefone1"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Telefone 2</p>
-                      <p className="font-medium" data-testid="text-telefone-2">
-                        <CopyableField
-                          value={atendimentoAtual.lead.telefone2}
-                          displayValue={formatPhone(atendimentoAtual.lead.telefone2)}
-                          testId="button-copy-telefone2"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Telefone 3</p>
-                      <p className="font-medium" data-testid="text-telefone-3">
-                        <CopyableField
-                          value={atendimentoAtual.lead.telefone3}
-                          displayValue={formatPhone(atendimentoAtual.lead.telefone3)}
-                          testId="button-copy-telefone3"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">E-mail</p>
-                      <p className="font-medium" data-testid="text-email">
-                        <CopyableField
-                          value={atendimentoAtual.lead.email}
-                          displayValue={atendimentoAtual.lead.email || "-"}
-                          testId="button-copy-email"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    <CardDescription>Resumo de descontos em folha por banco</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Banco</TableHead>
+                          <TableHead className="text-right">Total Parcela</TableHead>
+                          <TableHead className="text-right">Saldo Devedor</TableHead>
+                          <TableHead className="text-right">Qtd</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const porBanco: Record<string, { parcela: number; saldo: number; qtd: number }> = {};
+                          atendimentoAtual.contratos.forEach((c) => {
+                            const banco = c.banco || c.BANCO_DO_EMPRESTIMO || "Não Informado";
+                            if (!porBanco[banco]) {
+                              porBanco[banco] = { parcela: 0, saldo: 0, qtd: 0 };
+                            }
+                            porBanco[banco].parcela += (c.valor_parcela || c.valorParcela || 0);
+                            porBanco[banco].saldo += (c.saldo_devedor || c.saldoDevedor || 0);
+                            porBanco[banco].qtd += 1;
+                          });
+                          return Object.entries(porBanco).map(([banco, dados]) => (
+                            <TableRow key={banco}>
+                              <TableCell className="font-medium">{banco}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(dados.parcela)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(dados.saldo)}</TableCell>
+                              <TableCell className="text-right">{dados.qtd}</TableCell>
+                            </TableRow>
+                          ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Lotação */}
               <Card>

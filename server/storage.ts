@@ -273,6 +273,7 @@ export interface IStorage {
   removeTagFromLead(tagId: number, assignmentId: number): Promise<void>;
   getTagsForAssignment(assignmentId: number): Promise<LeadTag[]>;
   getTagUsageCounts(userId: number): Promise<{ tagId: number; count: number }[]>;
+  getLeadsByTag(tagId: number): Promise<{ assignmentId: number; nome: string | null; cpf: string | null; telefones: string[] }[]>;
   
   // Lead Schedules
   createSchedule(data: InsertLeadSchedule): Promise<LeadSchedule>;
@@ -1679,6 +1680,28 @@ export class DbStorage implements IStorage {
       .where(eq(leadTags.userId, userId))
       .groupBy(leadTagAssignments.tagId);
     return result;
+  }
+  
+  async getLeadsByTag(tagId: number): Promise<{ assignmentId: number; nome: string | null; cpf: string | null; telefones: string[] }[]> {
+    const result = await db.select({
+      assignmentId: salesLeadAssignments.id,
+      nome: salesLeads.nome,
+      cpf: salesLeads.cpf,
+      telefone1: salesLeads.telefone1,
+      telefone2: salesLeads.telefone2,
+      telefone3: salesLeads.telefone3,
+    })
+      .from(leadTagAssignments)
+      .innerJoin(salesLeadAssignments, eq(leadTagAssignments.assignmentId, salesLeadAssignments.id))
+      .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
+      .where(eq(leadTagAssignments.tagId, tagId));
+    
+    return result.map(r => ({
+      assignmentId: r.assignmentId,
+      nome: r.nome,
+      cpf: r.cpf,
+      telefones: [r.telefone1, r.telefone2, r.telefone3].filter((t): t is string => !!t)
+    }));
   }
   
   // ===== LEAD SCHEDULES =====
