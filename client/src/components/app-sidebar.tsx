@@ -26,6 +26,7 @@ interface MenuSection {
     url: string;
     icon: React.ComponentType<{ className?: string }>;
     module?: string;
+    masterOnly?: boolean;
   }[];
 }
 
@@ -78,8 +79,9 @@ export function AppSidebar() {
     return permission?.canView === true;
   };
 
-  const canShowMenuItem = (url: string): boolean => {
-    const module = getModuleForUrl(url);
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean }): boolean => {
+    if (item.masterOnly && !isMaster) return false;
+    const module = getModuleForUrl(item.url);
     if (!module) return true;
     return hasModulePermission(module);
   };
@@ -129,7 +131,7 @@ export function AppSidebar() {
         { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia" },
         { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia" },
         { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia" },
-        { title: "Admin Academia", url: "/academia/admin", icon: Award, module: "modulo_academia" },
+        { title: "Admin Academia", url: "/academia/admin", icon: Award, module: "modulo_academia", masterOnly: true },
       ],
     },
     {
@@ -169,10 +171,7 @@ export function AppSidebar() {
 
   const getFilteredSections = () => {
     return menuSections.map(section => {
-      const visibleItems = section.items.filter(item => {
-        if (!item.module) return true;
-        return hasModulePermission(item.module);
-      });
+      const visibleItems = section.items.filter(item => canShowMenuItem(item));
       return { ...section, items: visibleItems };
     }).filter(section => section.items.length > 0);
   };
