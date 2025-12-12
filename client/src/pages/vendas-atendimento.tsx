@@ -330,6 +330,7 @@ export default function VendasAtendimento() {
   const handleSalvarEProximo = async () => {
     try {
       await registrarMutation.mutateAsync(formData);
+      setDrawerOpen(false);
       proximoMutation.mutate(undefined);
     } catch {
       // Error already handled by mutation
@@ -1017,151 +1018,141 @@ export default function VendasAtendimento() {
         </div>
       </div>
 
-      {/* RODAPÉ FIXO - Drawer de Registrar Atendimento */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-primary shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
-        <div 
-          className="flex items-center justify-between px-6 py-4 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          onClick={() => setDrawerOpen(!drawerOpen)}
-          data-testid="drawer-toggle"
+      {/* BOTÃO FIXO - Registrar Atendimento */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          className="px-6 py-6 text-base font-bold shadow-lg"
+          onClick={() => setDrawerOpen(true)}
+          data-testid="button-registrar-atendimento"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-primary-foreground/20 rounded-md">
-              <MessageSquare className="h-5 w-5" />
-            </div>
-            <span className="font-bold text-base tracking-wide">Registrar Atendimento</span>
-            {currentLeadSchedule && (
-              <Badge variant="secondary" className="text-xs">
-                <Calendar className="h-3 w-3 mr-1" />
-                Retorno agendado
-              </Badge>
-            )}
-          </div>
-          {drawerOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-        </div>
-
-        {drawerOpen && (
-          <div className="px-6 pb-6 pt-2 border-t bg-card">
-            <div className="max-w-4xl mx-auto">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <Label className="text-sm">Tipo de Contato</Label>
-                  <Select
-                    value={formData.tipo}
-                    onValueChange={(v) => setFormData({ ...formData, tipo: v })}
-                  >
-                    <SelectTrigger data-testid="select-tipo-contato">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(TIPOS_CONTATO).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-sm">Status do Lead</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(v) => setFormData({ ...formData, status: v })}
-                  >
-                    <SelectTrigger data-testid="select-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(LEAD_STATUS).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label className="text-sm">Tags</Label>
-                  <div className="flex items-center gap-2 p-2 border rounded-md min-h-[40px] flex-wrap">
-                    {assignmentTags.map((tag) => (
-                      <Badge 
-                        key={tag.id} 
-                        className="text-white text-xs" 
-                        style={{ backgroundColor: tag.cor }}
-                      >
-                        {tag.nome}
-                      </Badge>
-                    ))}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-6 px-2">
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64" align="start">
-                        <div className="space-y-2 max-h-32 overflow-y-auto">
-                          {userTags.filter(t => !isTagAssigned(t.id)).map((tag) => (
-                            <div 
-                              key={tag.id} 
-                              className="flex items-center gap-2 p-1.5 rounded hover-elevate cursor-pointer text-sm"
-                              onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned: false })}
-                            >
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.cor }} />
-                              <span>{tag.nome}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-                <div className="md:col-span-4">
-                  <Label className="text-sm">Observações</Label>
-                  <Textarea
-                    value={formData.observacao}
-                    onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
-                    placeholder="Detalhes do atendimento..."
-                    rows={2}
-                    data-testid="textarea-observacao"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 mt-4 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={() => setScheduleDialogOpen(true)}
-                  data-testid="button-agendar-retorno"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Agendar Retorno
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleSalvar}
-                    disabled={registrarMutation.isPending}
-                    data-testid="button-salvar"
-                  >
-                    {registrarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    <Save className="h-4 w-4 mr-2" />
-                    Salvar
-                  </Button>
-                  <Button
-                    onClick={handleSalvarEProximo}
-                    disabled={registrarMutation.isPending || proximoMutation.isPending}
-                    data-testid="button-salvar-proximo"
-                  >
-                    {(registrarMutation.isPending || proximoMutation.isPending) && (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    )}
-                    <SkipForward className="h-4 w-4 mr-2" />
-                    Salvar e Próximo
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+          <MessageSquare className="h-5 w-5 mr-2" />
+          Registrar Atendimento
+        </Button>
       </div>
+
+      {/* Dialog Registrar Atendimento */}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Registrar Atendimento
+              {currentLeadSchedule && (
+                <Badge variant="secondary" className="text-xs ml-2">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Retorno agendado
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label className="text-sm">Tipo de Contato</Label>
+                <Select
+                  value={formData.tipo}
+                  onValueChange={(v) => setFormData({ ...formData, tipo: v })}
+                >
+                  <SelectTrigger data-testid="select-tipo-contato">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TIPOS_CONTATO).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm">Status do Lead</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(v) => setFormData({ ...formData, status: v })}
+                >
+                  <SelectTrigger data-testid="select-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(LEAD_STATUS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm">Tags</Label>
+              <div className="flex items-center gap-2 p-2 border rounded-md min-h-[40px] flex-wrap">
+                {assignmentTags.map((tag) => (
+                  <Badge 
+                    key={tag.id} 
+                    className="text-white text-xs" 
+                    style={{ backgroundColor: tag.cor }}
+                  >
+                    {tag.nome}
+                  </Badge>
+                ))}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="ghost" className="h-6 px-2">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64" align="start">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {userTags.filter(t => !isTagAssigned(t.id)).map((tag) => (
+                        <div 
+                          key={tag.id} 
+                          className="flex items-center gap-2 p-1.5 rounded hover-elevate cursor-pointer text-sm"
+                          onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned: false })}
+                        >
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.cor }} />
+                          <span>{tag.nome}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm">Observações</Label>
+              <Textarea
+                value={formData.observacao}
+                onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                placeholder="Detalhes do atendimento..."
+                rows={3}
+                data-testid="textarea-observacao"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setScheduleDialogOpen(true)}
+              data-testid="button-agendar-retorno"
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Agendar Retorno
+            </Button>
+            <div className="flex-1" />
+            <Button
+              onClick={handleSalvarEProximo}
+              disabled={registrarMutation.isPending || proximoMutation.isPending}
+              data-testid="button-salvar-proximo"
+            >
+              {(registrarMutation.isPending || proximoMutation.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              <SkipForward className="h-4 w-4 mr-2" />
+              Registrar e Próximo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog Agendar Retorno */}
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
