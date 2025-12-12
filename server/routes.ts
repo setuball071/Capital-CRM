@@ -961,6 +961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         module: z.string().refine(m => MODULE_LIST.includes(m as any), { message: "Módulo inválido" }),
         canView: z.boolean(),
         canEdit: z.boolean(),
+        canDelegate: z.boolean().optional().default(false),
       }));
 
       const result = permissionsSchema.safeParse(req.body);

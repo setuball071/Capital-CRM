@@ -867,6 +867,7 @@ export const userPermissions = pgTable("user_permissions", {
   module: varchar("module", { length: 100 }).notNull(),
   canView: boolean("can_view").notNull().default(false),
   canEdit: boolean("can_edit").notNull().default(false),
+  canDelegate: boolean("can_delegate").notNull().default(false),
 });
 
 export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({

@@ -64,7 +64,7 @@ const MODULE_TRANSLATIONS: Record<string, string> = {
   modulo_config_precos: "Config. Preços",
 };
 
-type PermissionState = { module: string; canView: boolean; canEdit: boolean };
+type PermissionState = { module: string; canView: boolean; canEdit: boolean; canDelegate: boolean };
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -122,12 +122,13 @@ export default function UsersPage() {
   useEffect(() => {
     if (editingUser && modules.length > 0) {
       const existingPermissions = userPermissions || [];
-      const permissionMap = new Map(existingPermissions.map(p => [p.module, { canView: p.canView, canEdit: p.canEdit }]));
+      const permissionMap = new Map(existingPermissions.map(p => [p.module, { canView: p.canView, canEdit: p.canEdit, canDelegate: p.canDelegate }]));
       
       const initialPermissions: PermissionState[] = modules.map(module => ({
         module,
         canView: permissionMap.get(module)?.canView ?? false,
         canEdit: permissionMap.get(module)?.canEdit ?? false,
+        canDelegate: permissionMap.get(module)?.canDelegate ?? false,
       }));
       
       setPermissions(initialPermissions);
@@ -330,7 +331,7 @@ export default function UsersPage() {
   };
 
   // Helper to update permission state
-  const updatePermission = (module: string, field: 'canView' | 'canEdit', value: boolean) => {
+  const updatePermission = (module: string, field: 'canView' | 'canEdit' | 'canDelegate', value: boolean) => {
     setPermissions(prev => prev.map(p => {
       if (p.module !== module) return p;
       if (field === 'canEdit' && value) {
@@ -338,12 +339,19 @@ export default function UsersPage() {
         return { ...p, canEdit: true, canView: true };
       }
       if (field === 'canView' && !value) {
-        // If disabling view, also disable edit
-        return { ...p, canView: false, canEdit: false };
+        // If disabling view, also disable edit and delegate
+        return { ...p, canView: false, canEdit: false, canDelegate: false };
+      }
+      if (field === 'canDelegate' && value) {
+        // If enabling delegate, also enable view
+        return { ...p, canDelegate: true, canView: true };
       }
       return { ...p, [field]: value };
     }));
   };
+
+  // Check if user has Config. Usuários permission with canEdit
+  const hasConfigUsuariosEdit = permissions.find(p => p.module === 'modulo_config_usuarios')?.canEdit ?? false;
 
   const toggleUserStatus = (user: User) => {
     toggleActiveMutation.mutate({
@@ -567,9 +575,12 @@ export default function UsersPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-[50%]">Módulo</TableHead>
+                              <TableHead className={hasConfigUsuariosEdit ? "w-[40%]" : "w-[50%]"}>Módulo</TableHead>
                               <TableHead className="text-center">Visualizar</TableHead>
                               <TableHead className="text-center">Editar</TableHead>
+                              {hasConfigUsuariosEdit && (
+                                <TableHead className="text-center">Pode Delegar</TableHead>
+                              )}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -592,6 +603,19 @@ export default function UsersPage() {
                                     data-testid={`checkbox-edit-${perm.module}`}
                                   />
                                 </TableCell>
+                                {hasConfigUsuariosEdit && (
+                                  <TableCell className="text-center">
+                                    {perm.module !== 'modulo_config_usuarios' ? (
+                                      <Checkbox
+                                        checked={perm.canDelegate}
+                                        onCheckedChange={(checked) => updatePermission(perm.module, 'canDelegate', !!checked)}
+                                        data-testid={`checkbox-delegate-${perm.module}`}
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">-</span>
+                                    )}
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                           </TableBody>

@@ -260,7 +260,7 @@ export interface IStorage {
   
   // User Permissions
   getUserPermissions(userId: number): Promise<UserPermission[]>;
-  setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean }[]): Promise<void>;
+  setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean; canDelegate?: boolean }[]): Promise<void>;
   hasModuleAccess(userId: number, module: string): Promise<boolean>;
   
   // Lead Tags
@@ -1604,11 +1604,11 @@ export class DbStorage implements IStorage {
       .where(eq(userPermissions.userId, userId));
   }
   
-  async setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean }[]): Promise<void> {
+  async setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean; canDelegate?: boolean }[]): Promise<void> {
     await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
     if (permissions.length > 0) {
       await db.insert(userPermissions).values(
-        permissions.map(p => ({ userId, module: p.module, canView: p.canView, canEdit: p.canEdit }))
+        permissions.map(p => ({ userId, module: p.module, canView: p.canView, canEdit: p.canEdit, canDelegate: p.canDelegate ?? false }))
       );
     }
   }
