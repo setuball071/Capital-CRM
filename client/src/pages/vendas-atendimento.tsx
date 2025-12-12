@@ -18,9 +18,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
-  Users, Clock, CheckCircle, ShoppingCart
+  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
 } from "lucide-react";
-import { LEAD_STATUS, TIPOS_CONTATO, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadTag, type LeadSchedule } from "@shared/schema";
+import { LEAD_STATUS, TIPOS_CONTATO, CONTACT_LABELS, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadTag, type LeadSchedule, type LeadContact } from "@shared/schema";
 
 const TAG_COLORS = [
   { value: "#22c55e", name: "Verde" },
@@ -168,7 +168,8 @@ export default function VendasAtendimento() {
   const [atendimentoAtual, setAtendimentoAtual] = useState<AtendimentoData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
-  const [newContact, setNewContact] = useState({ tipo: "telefone", valor: "", observacao: "" });
+  const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
+  const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
   const [formData, setFormData] = useState({
     tipo: "ligacao",
     resultado: "",
@@ -211,6 +212,83 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/atendimento", atendimentoAtual?.assignment?.id, "tags"],
     enabled: !!atendimentoAtual?.assignment?.id,
   });
+
+  const { data: leadContacts = [], isLoading: loadingContacts } = useQuery<LeadContact[]>({
+    queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"],
+    enabled: !!atendimentoAtual?.lead?.id,
+  });
+
+  const createContactMutation = useMutation({
+    mutationFn: async (data: { type: string; label: string; value: string }) => {
+      if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
+      return apiRequest("POST", `/api/crm/leads/${atendimentoAtual.lead.id}/contacts`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
+      toast({ title: "Contato salvo!" });
+      setAddContactOpen(false);
+      setNewContact({ tipo: "phone", valor: "", label: "" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao salvar contato", variant: "destructive" });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: number; type?: string; label?: string; value?: string }) => {
+      return apiRequest("PUT", `/api/crm/contacts/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
+      toast({ title: "Contato atualizado!" });
+      setEditingContact(null);
+      setAddContactOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar contato", variant: "destructive" });
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/crm/contacts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
+      toast({ title: "Contato removido!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao remover contato", variant: "destructive" });
+    },
+  });
+
+  const setPrimaryContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("POST", `/api/crm/contacts/${id}/primary`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
+      toast({ title: "Contato definido como principal!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao definir como principal", variant: "destructive" });
+    },
+  });
+
+  const handleCopyPhone = async (phone: string) => {
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast({ title: "Telefone copiado!" });
+    } catch {
+      toast({ title: "Erro ao copiar", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteContact = (contact: LeadContact) => {
+    if (window.confirm(`Tem certeza que deseja excluir este contato?\n${contact.value}`)) {
+      deleteContactMutation.mutate(contact.id);
+    }
+  };
 
   const [newTagNome, setNewTagNome] = useState("");
   const [newTagCor, setNewTagCor] = useState("#3b82f6");
@@ -342,9 +420,36 @@ export default function VendasAtendimento() {
       toast({ title: "Informe o valor do contato", variant: "destructive" });
       return;
     }
-    toast({ title: "Contato adicionado!", description: "Funcionalidade será persistida em breve." });
-    setAddContactOpen(false);
-    setNewContact({ tipo: "telefone", valor: "", observacao: "" });
+    if (!newContact.label) {
+      toast({ title: "Selecione uma etiqueta", variant: "destructive" });
+      return;
+    }
+    if (editingContact) {
+      updateContactMutation.mutate({
+        id: editingContact.id,
+        type: newContact.tipo,
+        label: newContact.label,
+        value: newContact.valor,
+      });
+    } else {
+      createContactMutation.mutate({
+        type: newContact.tipo,
+        label: newContact.label,
+        value: newContact.valor,
+      });
+    }
+  };
+
+  const openEditContact = (contact: LeadContact) => {
+    setEditingContact(contact);
+    setNewContact({ tipo: contact.type, valor: contact.value, label: contact.label });
+    setAddContactOpen(true);
+  };
+
+  const openNewContact = () => {
+    setEditingContact(null);
+    setNewContact({ tipo: "phone", valor: "", label: "" });
+    setAddContactOpen(true);
   };
 
   // Tela sem lead carregado
@@ -789,88 +894,91 @@ export default function VendasAtendimento() {
                         Endereço
                       </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="telefones" className="p-4 space-y-3">
-                      {atendimentoAtual.lead.telefone1 && (
-                        <div className="flex items-center justify-between p-2 border rounded hover-elevate">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Telefone 1</p>
-                            <p className="font-medium">{formatPhone(atendimentoAtual.lead.telefone1)}</p>
-                          </div>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(atendimentoAtual.lead.telefone1 || "");
-                              toast({ title: "Copiado!" });
-                            }}
-                            data-testid="button-copy-tel1-panel"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
+                    <TabsContent value="telefones" className="p-4 space-y-2">
+                      {loadingContacts ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
-                      )}
-                      {atendimentoAtual.lead.telefone2 && (
-                        <div className="flex items-center justify-between p-2 border rounded hover-elevate">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Telefone 2</p>
-                            <p className="font-medium">{formatPhone(atendimentoAtual.lead.telefone2)}</p>
-                          </div>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(atendimentoAtual.lead.telefone2 || "");
-                              toast({ title: "Copiado!" });
-                            }}
-                            data-testid="button-copy-tel2-panel"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
+                      ) : leadContacts.length === 0 && !atendimentoAtual.lead.telefone1 ? (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Sem contatos cadastrados
                         </div>
-                      )}
-                      {atendimentoAtual.lead.telefone3 && (
-                        <div className="flex items-center justify-between p-2 border rounded hover-elevate">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Telefone 3</p>
-                            <p className="font-medium">{formatPhone(atendimentoAtual.lead.telefone3)}</p>
-                          </div>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(atendimentoAtual.lead.telefone3 || "");
-                              toast({ title: "Copiado!" });
-                            }}
-                            data-testid="button-copy-tel3-panel"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
-                      {atendimentoAtual.lead.email && (
-                        <div className="flex items-center justify-between p-2 border rounded hover-elevate">
-                          <div>
-                            <p className="text-xs text-muted-foreground">E-mail</p>
-                            <p className="font-medium text-sm truncate max-w-[180px]">{atendimentoAtual.lead.email}</p>
-                          </div>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(atendimentoAtual.lead.email || "");
-                              toast({ title: "Copiado!" });
-                            }}
-                            data-testid="button-copy-email-panel"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      ) : (
+                        <>
+                          {leadContacts.map((contact) => (
+                            <div 
+                              key={contact.id} 
+                              className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                              data-testid={`contact-item-${contact.id}`}
+                            >
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                {contact.label}
+                              </Badge>
+                              <span className="font-medium flex-1 truncate">
+                                {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
+                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => handleCopyPhone(contact.value)}
+                                  data-testid={`button-copy-contact-${contact.id}`}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditContact(contact)}
+                                  data-testid={`button-edit-contact-${contact.id}`}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
+                                  onClick={() => setPrimaryContactMutation.mutate(contact.id)}
+                                  data-testid={`button-primary-contact-${contact.id}`}
+                                >
+                                  <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive"
+                                  onClick={() => handleDeleteContact(contact)}
+                                  data-testid={`button-delete-contact-${contact.id}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {atendimentoAtual.lead.telefone1 && leadContacts.length === 0 && (
+                            <div className="flex items-center gap-2 p-2 border rounded text-sm bg-muted/30">
+                              <Badge variant="outline" className="text-xs shrink-0">Original</Badge>
+                              <span className="font-medium flex-1">{formatPhone(atendimentoAtual.lead.telefone1)}</span>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => handleCopyPhone(atendimentoAtual.lead.telefone1 || "")}
+                                data-testid="button-copy-tel1-original"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </>
                       )}
                       <Button 
                         variant="outline" 
                         size="sm" 
                         className="w-full"
-                        onClick={() => setAddContactOpen(true)}
+                        onClick={openNewContact}
                         data-testid="button-novo-contato-panel"
                       >
                         <Plus className="h-3 w-3 mr-1" />
@@ -1214,11 +1322,17 @@ export default function VendasAtendimento() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Adicionar Contato */}
-      <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
+      {/* Dialog Adicionar/Editar Contato */}
+      <Dialog open={addContactOpen} onOpenChange={(open) => {
+        if (!open) {
+          setEditingContact(null);
+          setNewContact({ tipo: "phone", valor: "", label: "" });
+        }
+        setAddContactOpen(open);
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adicionar Contato</DialogTitle>
+            <DialogTitle>{editingContact ? "Editar Contato" : "Novo Contato"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
@@ -1231,27 +1345,34 @@ export default function VendasAtendimento() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="telefone">Telefone</SelectItem>
+                  <SelectItem value="phone">Telefone</SelectItem>
                   <SelectItem value="email">E-mail</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Valor</Label>
+              <Label>Etiqueta *</Label>
+              <Select
+                value={newContact.label}
+                onValueChange={(v) => setNewContact({ ...newContact, label: v })}
+              >
+                <SelectTrigger data-testid="select-contact-label">
+                  <SelectValue placeholder="Selecione uma etiqueta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTACT_LABELS.map((label) => (
+                    <SelectItem key={label} value={label}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Valor *</Label>
               <Input
                 value={newContact.valor}
                 onChange={(e) => setNewContact({ ...newContact, valor: e.target.value })}
-                placeholder={newContact.tipo === "telefone" ? "(00) 00000-0000" : "email@exemplo.com"}
+                placeholder={newContact.tipo === "phone" ? "(00) 00000-0000" : "email@exemplo.com"}
                 data-testid="input-contact-value"
-              />
-            </div>
-            <div>
-              <Label>Observação (opcional)</Label>
-              <Input
-                value={newContact.observacao}
-                onChange={(e) => setNewContact({ ...newContact, observacao: e.target.value })}
-                placeholder="Ex: Celular pessoal"
-                data-testid="input-contact-obs"
               />
             </div>
           </div>
@@ -1259,8 +1380,15 @@ export default function VendasAtendimento() {
             <Button variant="outline" onClick={() => setAddContactOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleAddContact} data-testid="button-save-contact">
-              Salvar Contato
+            <Button 
+              onClick={handleAddContact} 
+              disabled={createContactMutation.isPending || updateContactMutation.isPending}
+              data-testid="button-save-contact"
+            >
+              {(createContactMutation.isPending || updateContactMutation.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              {editingContact ? "Atualizar" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
