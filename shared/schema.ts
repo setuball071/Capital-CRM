@@ -922,3 +922,40 @@ export const insertLeadScheduleSchema = createInsertSchema(leadSchedules).omit({
 
 export type LeadSchedule = typeof leadSchedules.$inferSelect;
 export type InsertLeadSchedule = z.infer<typeof insertLeadScheduleSchema>;
+
+// ===== LEAD CONTACTS (CONTATOS DO LEAD) =====
+
+export const leadContacts = pgTable("lead_contacts", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => salesLeads.id, { onDelete: "cascade" }).notNull(),
+  type: varchar("type", { length: 20 }).notNull().default("phone"), // phone, email, address
+  label: varchar("label", { length: 100 }).notNull(), // WhatsApp, Esposa, Recado, Comercial, etc.
+  value: varchar("value", { length: 255 }).notNull(), // telefone/email/endereco
+  isPrimary: boolean("is_primary").notNull().default(false),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertLeadContactSchema = createInsertSchema(leadContacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type LeadContact = typeof leadContacts.$inferSelect;
+export type InsertLeadContact = z.infer<typeof insertLeadContactSchema>;
+
+// Labels de contato comuns
+export const CONTACT_LABELS = [
+  "WhatsApp",
+  "Ligação",
+  "Recado",
+  "Esposa",
+  "Esposo",
+  "Filho(a)",
+  "Comercial",
+  "Residencial",
+  "Urgente",
+  "Trabalho",
+] as const;

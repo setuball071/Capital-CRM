@@ -5687,6 +5687,146 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ===== LEAD CONTACTS ENDPOINTS =====
+  
+  // GET /api/crm/leads/:leadId/contacts - Get all contacts for a lead
+  app.get("/api/crm/leads/:leadId/contacts", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.leadId);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      const contacts = await storage.getContactsByLead(leadId);
+      return res.json(contacts);
+    } catch (error) {
+      console.error("Get contacts error:", error);
+      return res.status(500).json({ message: "Erro ao buscar contatos" });
+    }
+  });
+  
+  // POST /api/crm/leads/:leadId/contacts - Create a new contact
+  app.post("/api/crm/leads/:leadId/contacts", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.leadId);
+      const userId = req.user!.id;
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { type, label, value, isPrimary } = req.body;
+      
+      if (!label || typeof label !== "string" || label.trim().length === 0) {
+        return res.status(400).json({ message: "Etiqueta é obrigatória" });
+      }
+      if (!value || typeof value !== "string" || value.trim().length === 0) {
+        return res.status(400).json({ message: "Valor é obrigatório" });
+      }
+      
+      const contact = await storage.createContact({
+        leadId,
+        type: type || "phone",
+        label: label.trim(),
+        value: value.trim(),
+        isPrimary: isPrimary || false,
+        createdBy: userId,
+      });
+      
+      return res.json(contact);
+    } catch (error) {
+      console.error("Create contact error:", error);
+      return res.status(500).json({ message: "Erro ao criar contato" });
+    }
+  });
+  
+  // PUT /api/crm/contacts/:contactId - Update a contact
+  app.put("/api/crm/contacts/:contactId", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { label, value, isPrimary } = req.body;
+      const updateData: { label?: string; value?: string; isPrimary?: boolean } = {};
+      
+      if (label !== undefined) updateData.label = label.trim();
+      if (value !== undefined) updateData.value = value.trim();
+      if (isPrimary !== undefined) updateData.isPrimary = isPrimary;
+      
+      const contact = await storage.updateContact(contactId, updateData);
+      
+      if (!contact) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      
+      return res.json(contact);
+    } catch (error) {
+      console.error("Update contact error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar contato" });
+    }
+  });
+  
+  // DELETE /api/crm/contacts/:contactId - Delete a contact
+  app.delete("/api/crm/contacts/:contactId", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      await storage.deleteContact(contactId);
+      return res.json({ message: "Contato excluído" });
+    } catch (error) {
+      console.error("Delete contact error:", error);
+      return res.status(500).json({ message: "Erro ao excluir contato" });
+    }
+  });
+  
+  // POST /api/crm/contacts/:contactId/primary - Set contact as primary
+  app.post("/api/crm/contacts/:contactId/primary", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      const { leadId } = req.body;
+      
+      if (isNaN(contactId) || !leadId) {
+        return res.status(400).json({ message: "Dados inválidos" });
+      }
+      
+      await storage.setContactAsPrimary(contactId, leadId);
+      return res.json({ message: "Contato definido como principal" });
+    } catch (error) {
+      console.error("Set primary contact error:", error);
+      return res.status(500).json({ message: "Erro ao definir contato principal" });
+    }
+  });
+  
+  // GET /api/crm/contacts/labels - Get distinct contact labels
+  app.get("/api/crm/contacts/labels", requireAuth, async (req, res) => {
+    try {
+      const labels = await storage.getDistinctContactLabels();
+      return res.json(labels);
+    } catch (error) {
+      console.error("Get labels error:", error);
+      return res.status(500).json({ message: "Erro ao buscar etiquetas" });
+    }
+  });
+  
+  // GET /api/crm/contacts/by-label - Get contacts by label
+  app.get("/api/crm/contacts/by-label", requireAuth, async (req, res) => {
+    try {
+      const label = req.query.label as string;
+      if (!label) {
+        return res.status(400).json({ message: "Etiqueta é obrigatória" });
+      }
+      
+      const contacts = await storage.getContactsByLabel(label);
+      return res.json(contacts);
+    } catch (error) {
+      console.error("Get contacts by label error:", error);
+      return res.status(500).json({ message: "Erro ao buscar contatos por etiqueta" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

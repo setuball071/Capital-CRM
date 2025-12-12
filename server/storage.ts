@@ -28,6 +28,7 @@ import {
   leadTags,
   leadTagAssignments,
   leadSchedules,
+  leadContacts,
   type User,
   type InsertUser,
   type Bank,
@@ -80,6 +81,8 @@ import {
   type LeadTagAssignment,
   type LeadSchedule,
   type InsertLeadSchedule,
+  type LeadContact,
+  type InsertLeadContact,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -285,6 +288,15 @@ export interface IStorage {
   getDistributionStats(campaignId: number): Promise<{ userId: number; userName: string; total: number; novo: number; emAtendimento: number; concluido: number }[]>;
   returnLeadsToPool(assignmentIds: number[]): Promise<number>;
   transferLeads(fromUserId: number, toUserId: number, campaignId: number, quantidade: number): Promise<number>;
+  
+  // Lead Contacts
+  getContactsByLead(leadId: number): Promise<LeadContact[]>;
+  createContact(data: InsertLeadContact): Promise<LeadContact>;
+  updateContact(id: number, data: Partial<InsertLeadContact>): Promise<LeadContact | undefined>;
+  deleteContact(id: number): Promise<void>;
+  setContactAsPrimary(contactId: number, leadId: number): Promise<void>;
+  getDistinctContactLabels(): Promise<string[]>;
+  getContactsByLabel(label: string): Promise<{ leadId: number; leadNome: string; cpf: string | null; contactId: number; value: string; label: string }[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1803,6 +1815,66 @@ export class DbStorage implements IStorage {
     }
     
     return ids.length;
+  }
+  
+  // ===== LEAD CONTACTS =====
+  
+  async getContactsByLead(leadId: number): Promise<LeadContact[]> {
+    return await db.select().from(leadContacts).where(eq(leadContacts.leadId, leadId));
+  }
+  
+  async createContact(data: InsertLeadContact): Promise<LeadContact> {
+    // Se for principal, remove principal dos outros
+    if (data.isPrimary) {
+      await db.update(leadContacts)
+        .set({ isPrimary: false })
+        .where(and(eq(leadContacts.leadId, data.leadId), eq(leadContacts.isPrimary, true)));
+    }
+    const [created] = await db.insert(leadContacts).values(data).returning();
+    return created;
+  }
+  
+  async updateContact(id: number, data: Partial<InsertLeadContact>): Promise<LeadContact | undefined> {
+    const [updated] = await db.update(leadContacts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(leadContacts.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteContact(id: number): Promise<void> {
+    await db.delete(leadContacts).where(eq(leadContacts.id, id));
+  }
+  
+  async setContactAsPrimary(contactId: number, leadId: number): Promise<void> {
+    // Remove primary de todos do lead
+    await db.update(leadContacts)
+      .set({ isPrimary: false })
+      .where(eq(leadContacts.leadId, leadId));
+    // Define o novo como primary
+    await db.update(leadContacts)
+      .set({ isPrimary: true, updatedAt: new Date() })
+      .where(eq(leadContacts.id, contactId));
+  }
+  
+  async getDistinctContactLabels(): Promise<string[]> {
+    const result = await db.selectDistinct({ label: leadContacts.label }).from(leadContacts);
+    return result.map(r => r.label);
+  }
+  
+  async getContactsByLabel(label: string): Promise<{ leadId: number; leadNome: string; cpf: string | null; contactId: number; value: string; label: string }[]> {
+    const result = await db.select({
+      leadId: salesLeads.id,
+      leadNome: salesLeads.nome,
+      cpf: salesLeads.cpf,
+      contactId: leadContacts.id,
+      value: leadContacts.value,
+      label: leadContacts.label,
+    })
+      .from(leadContacts)
+      .innerJoin(salesLeads, eq(leadContacts.leadId, salesLeads.id))
+      .where(and(eq(leadContacts.type, "phone"), eq(leadContacts.label, label)));
+    return result;
   }
 }
 

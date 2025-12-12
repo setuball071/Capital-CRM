@@ -1,0 +1,121 @@
+1) BUG: “Contato adicionado! Funcionalidade será persistida em breve.”
+
+Hoje ao clicar em Novo Contato aparece esse toast e nada é salvo.
+
+Ajuste para funcionar de verdade:
+
+Implementar persistência no banco.
+
+Criar tabela/entidade lead_contacts (ou crm_lead_contacts) com:
+
+id
+
+lead_id (FK)
+
+type enum: phone | email | address
+
+label (string opcional) -> usado como etiqueta do contato (ex: WhatsApp, Esposa, Recado, Comercial)
+
+value (string) -> telefone/email
+
+is_primary (boolean default false)
+
+created_by (user id)
+
+created_at, updated_at
+
+Regras:
+
+Ao salvar um telefone novo, inserir registro nessa tabela e atualizar a UI imediatamente.
+
+Se marcar “principal”, garantir apenas 1 por lead com is_primary=true.
+
+2) Layout: telefones estão ocupando espaço demais
+
+Quero os telefones mais “compactos” e alinhados no canto, com layout de lista:
+
+Cada linha de telefone deve ter:
+
+À esquerda: label (etiqueta do telefone) em chip pequeno (ex: WhatsApp)
+
+No meio: número do telefone
+
+À direita: ícones compactos:
+
+copiar
+
+editar
+
+excluir
+
+marcar principal (estrela)
+
+O card deve ter menos padding vertical e não pode empurrar os outros blocos.
+
+3) Etiqueta deve ser por telefone (não geral do lead)
+
+Hoje existe “Tags” separadas. Remover a ideia de tag geral por lead.
+
+Quero:
+
+Cada telefone pode ter 1 etiqueta (label) ou mais de uma (se for simples, deixa 1 por enquanto).
+
+No modal “Novo Contato”, adicionar campo obrigatório:
+
+Etiqueta do telefone (select + criar nova)
+
+exemplos: WhatsApp, Ligação, Recado, Esposa, Filho, Comercial, Residencial, Urgente
+
+Salvar essa etiqueta no campo label do contato.
+
+4) Filtro por etiqueta deve listar nome + telefone marcado
+
+Criar uma tela/aba “Contatos por Etiqueta” (pode ser simples dentro do CRM Vendas ou na própria tela Atendimento em um modal “Filtrar por etiqueta”).
+
+Funcionamento:
+
+Usuário escolhe uma etiqueta
+
+Sistema lista resultados com:
+
+Nome do lead
+
+CPF (opcional)
+
+Telefone (apenas os telefones com aquela etiqueta)
+
+Botão “Abrir Lead” que leva para o atendimento/consulta desse lead
+
+Consulta deve ser feita em cima de lead_contacts:
+
+where type='phone' and label = selectedLabel
+
+5) Ajustes de UX
+
+Ao copiar telefone, mostrar toast curto “Telefone copiado”.
+
+Ao excluir telefone, confirmação.
+
+Se lead não tiver contatos, mostrar estado vazio “Sem contatos cadastrados”.
+
+6) Endpoints necessários
+
+Implementar no backend:
+
+GET /api/crm/leads/:leadId/contacts
+
+POST /api/crm/leads/:leadId/contacts
+
+PUT /api/crm/contacts/:contactId
+
+DELETE /api/crm/contacts/:contactId
+
+GET /api/crm/contacts/labels -> lista labels existentes (distinct)
+
+GET /api/crm/contacts/by-label?label=... -> retorna leads + telefones com aquela label
+
+7) Importante
+
+Não exibir mais o toast “Funcionalidade será persistida em breve”.
+
+Tudo deve funcionar com persistência real e refletir ao recarregar a página.
