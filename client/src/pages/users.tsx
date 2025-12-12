@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -109,13 +109,29 @@ export default function UsersPage() {
   // Fetch available modules for permissions
   const { data: modules = [] } = useQuery<string[]>({
     queryKey: ["/api/permissions/modules"],
-    enabled: isMaster,
   });
+
+  // Fetch current user's own permissions (for delegation)
+  const { data: myPermissions = [] } = useQuery<UserPermission[]>({
+    queryKey: ["/api/permissions/my"],
+    enabled: !isMaster, // Only non-master users need this
+  });
+
+  // Check if current user has Config. Usuários with canEdit
+  const hasConfigUsuariosPermission = isMaster || myPermissions.some(
+    p => p.module === "modulo_config_usuarios" && p.canEdit
+  );
+
+  // Get modules that current user can delegate (for non-master users) - memoized to prevent infinite loops
+  const delegatableModules = useMemo(() => {
+    if (isMaster) return modules;
+    return myPermissions.filter(p => p.canDelegate).map(p => p.module);
+  }, [isMaster, modules, myPermissions]);
 
   // Fetch user permissions when editing
   const { data: userPermissions, isLoading: isLoadingPermissions } = useQuery<UserPermission[]>({
     queryKey: ["/api/users", editingUser?.id, "permissions"],
-    enabled: !!editingUser && editingUser.role !== "master" && isMaster,
+    enabled: !!editingUser && editingUser.role !== "master" && hasConfigUsuariosPermission,
   });
 
   // Initialize permissions when user permissions are loaded or modules change
@@ -124,7 +140,10 @@ export default function UsersPage() {
       const existingPermissions = userPermissions || [];
       const permissionMap = new Map(existingPermissions.map(p => [p.module, { canView: p.canView, canEdit: p.canEdit, canDelegate: p.canDelegate }]));
       
-      const initialPermissions: PermissionState[] = modules.map(module => ({
+      // For non-master users, only show delegatable modules
+      const modulesToShow = isMaster ? modules : delegatableModules;
+      
+      const initialPermissions: PermissionState[] = modulesToShow.map(module => ({
         module,
         canView: permissionMap.get(module)?.canView ?? false,
         canEdit: permissionMap.get(module)?.canEdit ?? false,
@@ -133,7 +152,7 @@ export default function UsersPage() {
       
       setPermissions(initialPermissions);
     }
-  }, [editingUser, modules, userPermissions]);
+  }, [editingUser, modules, userPermissions, isMaster, delegatableModules]);
 
   // Create user mutation
   const createUserMutation = useMutation({
@@ -319,8 +338,8 @@ export default function UsersPage() {
       const showCredentials = password ? { name, email, password } : undefined;
       updateUserMutation.mutate({ id: editingUser.id, data, showCredentials }, {
         onSuccess: () => {
-          // Save permissions after user is updated (only for non-master users)
-          if (isMaster && editingUser.role !== "master" && permissions.length > 0) {
+          // Save permissions after user is updated (for users with Config. Usuários permission)
+          if (hasConfigUsuariosPermission && editingUser.role !== "master" && permissions.length > 0) {
             savePermissionsMutation.mutate({ userId: editingUser.id, permissions });
           }
         },
@@ -339,13 +358,10 @@ export default function UsersPage() {
         return { ...p, canEdit: true, canView: true };
       }
       if (field === 'canView' && !value) {
-        // If disabling view, also disable edit and delegate
-        return { ...p, canView: false, canEdit: false, canDelegate: false };
+        // If disabling view, also disable edit (but NOT canDelegate - delegation is independent)
+        return { ...p, canView: false, canEdit: false };
       }
-      if (field === 'canDelegate' && value) {
-        // If enabling delegate, also enable view
-        return { ...p, canDelegate: true, canView: true };
-      }
+      // canDelegate is independent - no automatic side effects
       return { ...p, [field]: value };
     }));
   };
@@ -558,13 +574,15 @@ export default function UsersPage() {
                 </div>
               )}
 
-              {isMaster && editingUser && editingUser.role !== "master" && (
+              {hasConfigUsuariosPermission && editingUser && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0) && (
                 <>
                   <Separator className="my-4" />
                   <div className="space-y-3">
                     <Label className="text-base font-semibold">Permissões de Acesso</Label>
                     <p className="text-sm text-muted-foreground">
-                      Configure quais módulos este usuário pode acessar e editar.
+                      {isMaster 
+                        ? "Configure quais módulos este usuário pode acessar e editar."
+                        : `Você pode delegar acesso aos seguintes módulos: ${delegatableModules.map(m => MODULE_TRANSLATIONS[m] || m).join(", ")}.`}
                     </p>
                     {isLoadingPermissions ? (
                       <div className="flex items-center justify-center py-4">
@@ -575,10 +593,10 @@ export default function UsersPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className={hasConfigUsuariosEdit ? "w-[40%]" : "w-[50%]"}>Módulo</TableHead>
+                              <TableHead className={isMaster && hasConfigUsuariosEdit ? "w-[40%]" : "w-[50%]"}>Módulo</TableHead>
                               <TableHead className="text-center">Visualizar</TableHead>
                               <TableHead className="text-center">Editar</TableHead>
-                              {hasConfigUsuariosEdit && (
+                              {isMaster && hasConfigUsuariosEdit && (
                                 <TableHead className="text-center">Pode Delegar</TableHead>
                               )}
                             </TableRow>
@@ -603,7 +621,7 @@ export default function UsersPage() {
                                     data-testid={`checkbox-edit-${perm.module}`}
                                   />
                                 </TableCell>
-                                {hasConfigUsuariosEdit && (
+                                {isMaster && hasConfigUsuariosEdit && (
                                   <TableCell className="text-center">
                                     {perm.module !== 'modulo_config_usuarios' ? (
                                       <Checkbox

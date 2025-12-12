@@ -126,12 +126,22 @@ function requireTableAccess(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// Users management access middleware (master, atendimento, coordenacao)
-function requireUserManagementAccess(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master", "atendimento", "coordenacao"])) {
-    return res.status(403).json({ message: "Acesso negado - você não tem permissão para gerenciar usuários" });
+// Users management access middleware (master, atendimento, coordenacao, or users with modulo_config_usuarios canEdit permission)
+async function requireUserManagementAccess(req: Request, res: Response, next: NextFunction) {
+  // Master, atendimento, coordenacao have access by role
+  if (hasRole(req.user, ["master", "atendimento", "coordenacao"])) {
+    return next();
   }
-  next();
+  
+  // Check if user has modulo_config_usuarios permission with canEdit
+  if (req.user) {
+    const hasConfigEditAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_config_usuarios");
+    if (hasConfigEditAccess) {
+      return next();
+    }
+  }
+  
+  return res.status(403).json({ message: "Acesso negado - você não tem permissão para gerenciar usuários" });
 }
 
 // Legacy alias for backward compatibility
@@ -720,10 +730,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== USERS ROUTES =====
   
   // Get users with role-based visibility:
-  // - admin: sees all users
+  // - master: sees all users
   // - atendimento: sees all users
   // - coordenador: sees only themselves + vendedores whose managerId equals their id
-  // - operacional/vendedor: blocked (no access to user management)
+  // - users with modulo_config_usuarios permission: sees all non-master users
   app.get("/api/users", requireAuth, requireUserManagementAccess, async (req, res) => {
     try {
       let users: User[];
@@ -737,7 +747,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const teamUsers = await storage.getUsersByManager(req.user!.id);
         users = [req.user!, ...teamUsers];
       } else {
-        return res.status(403).json({ message: "Acesso negado" });
+        // Users with modulo_config_usuarios permission can see all non-master users
+        const hasConfigEditAccess = await storage.hasModuleEditAccess(req.user!.id, "modulo_config_usuarios");
+        if (hasConfigEditAccess) {
+          const allUsers = await storage.getAllUsers();
+          // Filter out master users - non-master managers cannot see/manage masters
+          users = allUsers.filter(u => u.role !== "master");
+        } else {
+          return res.status(403).json({ message: "Acesso negado" });
+        }
       }
       
       // Remove password hashes
@@ -918,6 +936,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get current user's permissions (for delegation purposes)
+  app.get("/api/permissions/my", requireAuth, async (req, res) => {
+    try {
+      const permissions = await storage.getUserPermissions(req.user!.id);
+      return res.json(permissions);
+    } catch (error) {
+      console.error("Get my permissions error:", error);
+      return res.status(500).json({ message: "Erro ao buscar suas permissões" });
+    }
+  });
+
   // Get user permissions
   app.get("/api/users/:id/permissions", requireAuth, async (req, res) => {
     try {
@@ -941,10 +970,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Set user permissions (master only)
-  app.put("/api/users/:id/permissions", requireAuth, requireMaster, async (req, res) => {
+  // Set user permissions (master or users with modulo_config_usuarios + canEdit)
+  app.put("/api/users/:id/permissions", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const currentUserRole = req.user!.role as UserRole;
+      const isMaster = currentUserRole === "master";
       
       if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
         return res.status(400).json({ message: "ID de usuário inválido" });
@@ -972,7 +1003,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      await storage.setUserPermissions(id, result.data);
+      // For non-master users, check if they have Config. Usuários with canEdit
+      if (!isMaster) {
+        const currentUserPermissions = await storage.getUserPermissions(req.user!.id);
+        const configUsuariosPermission = currentUserPermissions.find(p => p.module === "modulo_config_usuarios");
+        
+        if (!configUsuariosPermission?.canEdit) {
+          return res.status(403).json({ message: "Acesso negado - você não tem permissão para editar usuários" });
+        }
+        
+        // Get modules that the current user can delegate
+        const delegatableModules = currentUserPermissions
+          .filter(p => p.canDelegate)
+          .map(p => p.module);
+        
+        // Filter permissions to only include delegatable modules (non-master users can't set canDelegate)
+        const filteredPermissions = result.data
+          .filter(p => delegatableModules.includes(p.module))
+          .map(p => ({ ...p, canDelegate: false })); // Non-master users can never grant canDelegate
+        
+        // Merge with existing permissions for non-delegatable modules
+        const existingPermissions = await storage.getUserPermissions(id);
+        const nonDelegatableExisting = existingPermissions
+          .filter(p => !delegatableModules.includes(p.module));
+        
+        const finalPermissions = [...nonDelegatableExisting, ...filteredPermissions];
+        await storage.setUserPermissions(id, finalPermissions);
+      } else {
+        // Master can set all permissions including canDelegate
+        await storage.setUserPermissions(id, result.data);
+      }
       
       // Return updated permissions
       const updatedPermissions = await storage.getUserPermissions(id);

@@ -262,6 +262,7 @@ export interface IStorage {
   getUserPermissions(userId: number): Promise<UserPermission[]>;
   setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean; canDelegate?: boolean }[]): Promise<void>;
   hasModuleAccess(userId: number, module: string): Promise<boolean>;
+  hasModuleEditAccess(userId: number, module: string): Promise<boolean>;
   
   // Lead Tags
   getTagsByUser(userId: number): Promise<LeadTag[]>;
@@ -1617,6 +1618,12 @@ export class DbStorage implements IStorage {
     const [perm] = await db.select().from(userPermissions)
       .where(and(eq(userPermissions.userId, userId), eq(userPermissions.module, module)));
     return perm?.canView === true;
+  }
+
+  async hasModuleEditAccess(userId: number, module: string): Promise<boolean> {
+    const [perm] = await db.select().from(userPermissions)
+      .where(and(eq(userPermissions.userId, userId), eq(userPermissions.module, module)));
+    return perm?.canEdit === true;
   }
   
   // ===== LEAD TAGS =====

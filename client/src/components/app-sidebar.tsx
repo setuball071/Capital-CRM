@@ -64,7 +64,7 @@ export function AppSidebar() {
   });
 
   const { data: permissions = [] } = useQuery<UserPermission[]>({
-    queryKey: [`/api/users/${user?.id}/permissions`],
+    queryKey: ["/api/permissions/my"],
     enabled: !!user && user.role !== "master",
   });
 
