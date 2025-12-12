@@ -42,7 +42,7 @@ import {
   type PricingSettings,
 } from "@shared/schema";
 import { db } from "./storage";
-import { eq, asc, and, sql } from "drizzle-orm";
+import { eq, asc, and, sql, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -4602,7 +4602,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         "observacoes": "observacoes", "obs": "observacoes", "observacao": "observacoes",
       };
       
-      const leads: InsertSalesLead[] = [];
+      // First pass: normalize all rows and collect CPFs
+      const normalizedRows: { normalized: Record<string, any>; cpfLimpo: string | null }[] = [];
       let skipped = 0;
       
       for (const row of rows) {
@@ -4614,40 +4615,56 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         }
         
-        // Nome é obrigatório
         if (!normalized.nome) {
           skipped++;
           continue;
         }
         
-        // Tentar encontrar cliente na base por CPF
-        let baseClienteId: number | null = null;
+        let cpfLimpo: string | null = null;
         if (normalized.cpf) {
-          const cpfLimpo = normalized.cpf.replace(/\D/g, "");
-          if (cpfLimpo.length === 11) {
-            const [cliente] = await db.select().from(clientesPessoa)
-              .where(eq(clientesPessoa.cpf, cpfLimpo))
-              .limit(1);
-            if (cliente) {
-              baseClienteId = cliente.id;
-            }
+          const cleaned = normalized.cpf.replace(/\D/g, "");
+          if (cleaned.length === 11) {
+            cpfLimpo = cleaned;
           }
         }
         
-        leads.push({
-          campaignId,
-          nome: normalized.nome,
-          cpf: normalized.cpf?.replace(/\D/g, "") || null,
-          telefone1: normalized.telefone1 || null,
-          telefone2: normalized.telefone2 || null,
-          telefone3: normalized.telefone3 || null,
-          email: normalized.email || null,
-          cidade: normalized.cidade || null,
-          uf: normalized.uf || null,
-          observacoes: normalized.observacoes || null,
-          baseClienteId,
-        });
+        normalizedRows.push({ normalized, cpfLimpo });
       }
+      
+      // Batch lookup: get all matching clients by CPF in one query
+      const allCpfs = normalizedRows
+        .map(r => r.cpfLimpo)
+        .filter((cpf): cpf is string => cpf !== null);
+      
+      const cpfToClienteId = new Map<string, number>();
+      if (allCpfs.length > 0) {
+        // Query in chunks of 1000 to avoid query size limits
+        const CHUNK_SIZE = 1000;
+        for (let i = 0; i < allCpfs.length; i += CHUNK_SIZE) {
+          const chunk = allCpfs.slice(i, i + CHUNK_SIZE);
+          const clientes = await db.select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
+            .from(clientesPessoa)
+            .where(inArray(clientesPessoa.cpf, chunk));
+          for (const c of clientes) {
+            if (c.cpf) cpfToClienteId.set(c.cpf, c.id);
+          }
+        }
+      }
+      
+      // Build leads array with cached client IDs
+      const leads: InsertSalesLead[] = normalizedRows.map(({ normalized, cpfLimpo }) => ({
+        campaignId,
+        nome: normalized.nome,
+        cpf: cpfLimpo,
+        telefone1: normalized.telefone1 || null,
+        telefone2: normalized.telefone2 || null,
+        telefone3: normalized.telefone3 || null,
+        email: normalized.email || null,
+        cidade: normalized.cidade || null,
+        uf: normalized.uf || null,
+        observacoes: normalized.observacoes || null,
+        baseClienteId: cpfLimpo ? cpfToClienteId.get(cpfLimpo) || null : null,
+      }));
       
       // Insert leads in bulk
       const inserted = await storage.createSalesLeadsBulk(leads);
