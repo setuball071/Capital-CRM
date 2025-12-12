@@ -844,3 +844,80 @@ export const TIPOS_CONTATO = {
 } as const;
 
 export type TipoContato = keyof typeof TIPOS_CONTATO;
+
+// ===== USER PERMISSIONS =====
+
+export const MODULE_LIST = [
+  "modulo_simulador",
+  "modulo_roteiros",
+  "modulo_base_clientes",
+  "modulo_compra_lista",
+  "modulo_crm_vendas_campanhas",
+  "modulo_crm_vendas_atendimento",
+  "modulo_academia",
+  "modulo_config_usuarios",
+  "modulo_config_precos",
+] as const;
+
+export type ModuleName = typeof MODULE_LIST[number];
+
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  module: varchar("module", { length: 100 }).notNull(),
+  canView: boolean("can_view").notNull().default(false),
+  canEdit: boolean("can_edit").notNull().default(false),
+});
+
+export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({
+  id: true,
+});
+
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
+
+// ===== LEAD TAGS (ETIQUETAS) =====
+
+export const leadTags = pgTable("lead_tags", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  cor: varchar("cor", { length: 20 }).notNull().default("#3b82f6"), // hex color
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const leadTagAssignments = pgTable("lead_tag_assignments", {
+  id: serial("id").primaryKey(),
+  tagId: integer("tag_id").references(() => leadTags.id, { onDelete: "cascade" }).notNull(),
+  assignmentId: integer("assignment_id").references(() => salesLeadAssignments.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertLeadTagSchema = createInsertSchema(leadTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type LeadTag = typeof leadTags.$inferSelect;
+export type InsertLeadTag = z.infer<typeof insertLeadTagSchema>;
+export type LeadTagAssignment = typeof leadTagAssignments.$inferSelect;
+
+// ===== LEAD SCHEDULES (AGENDAMENTOS) =====
+
+export const leadSchedules = pgTable("lead_schedules", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id").references(() => salesLeadAssignments.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  dataHora: timestamp("data_hora").notNull(),
+  observacao: text("observacao"),
+  status: varchar("status", { length: 30 }).notNull().default("pendente"), // pendente, realizado, cancelado
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertLeadScheduleSchema = createInsertSchema(leadSchedules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type LeadSchedule = typeof leadSchedules.$inferSelect;
+export type InsertLeadSchedule = z.infer<typeof insertLeadScheduleSchema>;

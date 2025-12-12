@@ -24,6 +24,10 @@ import {
   salesLeads,
   salesLeadAssignments,
   salesLeadEvents,
+  userPermissions,
+  leadTags,
+  leadTagAssignments,
+  leadSchedules,
   type User,
   type InsertUser,
   type Bank,
@@ -69,6 +73,13 @@ import {
   type InsertSalesLeadAssignment,
   type SalesLeadEvent,
   type InsertSalesLeadEvent,
+  type UserPermission,
+  type InsertUserPermission,
+  type LeadTag,
+  type InsertLeadTag,
+  type LeadTagAssignment,
+  type LeadSchedule,
+  type InsertLeadSchedule,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -246,6 +257,32 @@ export interface IStorage {
   // Events
   createSalesLeadEvent(data: InsertSalesLeadEvent): Promise<SalesLeadEvent>;
   getEventsByAssignment(assignmentId: number): Promise<SalesLeadEvent[]>;
+  
+  // User Permissions
+  getUserPermissions(userId: number): Promise<UserPermission[]>;
+  setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean }[]): Promise<void>;
+  hasModuleAccess(userId: number, module: string): Promise<boolean>;
+  
+  // Lead Tags
+  getTagsByUser(userId: number): Promise<LeadTag[]>;
+  createTag(data: InsertLeadTag): Promise<LeadTag>;
+  updateTag(id: number, data: Partial<InsertLeadTag>): Promise<LeadTag | undefined>;
+  deleteTag(id: number): Promise<void>;
+  assignTagToLead(tagId: number, assignmentId: number): Promise<void>;
+  removeTagFromLead(tagId: number, assignmentId: number): Promise<void>;
+  getTagsForAssignment(assignmentId: number): Promise<LeadTag[]>;
+  getTagUsageCounts(userId: number): Promise<{ tagId: number; count: number }[]>;
+  
+  // Lead Schedules
+  createSchedule(data: InsertLeadSchedule): Promise<LeadSchedule>;
+  getSchedulesByUser(userId: number, status?: string): Promise<LeadSchedule[]>;
+  updateSchedule(id: number, data: Partial<InsertLeadSchedule>): Promise<LeadSchedule | undefined>;
+  getScheduleWithLead(scheduleId: number): Promise<{ schedule: LeadSchedule; assignment: SalesLeadAssignment; lead: SalesLead; campaign: SalesCampaign } | undefined>;
+  
+  // Distribution stats
+  getDistributionStats(campaignId: number): Promise<{ userId: number; userName: string; total: number; novo: number; emAtendimento: number; concluido: number }[]>;
+  returnLeadsToPool(assignmentIds: number[]): Promise<number>;
+  transferLeads(fromUserId: number, toUserId: number, campaignId: number, quantidade: number): Promise<number>;
 }
 
 export class DbStorage implements IStorage {
@@ -1558,6 +1595,184 @@ export class DbStorage implements IStorage {
     return await db.select().from(salesLeadEvents)
       .where(eq(salesLeadEvents.assignmentId, assignmentId))
       .orderBy(sql`${salesLeadEvents.createdAt} DESC`);
+  }
+  
+  // ===== USER PERMISSIONS =====
+  
+  async getUserPermissions(userId: number): Promise<UserPermission[]> {
+    return await db.select().from(userPermissions)
+      .where(eq(userPermissions.userId, userId));
+  }
+  
+  async setUserPermissions(userId: number, permissions: { module: string; canView: boolean; canEdit: boolean }[]): Promise<void> {
+    await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+    if (permissions.length > 0) {
+      await db.insert(userPermissions).values(
+        permissions.map(p => ({ userId, module: p.module, canView: p.canView, canEdit: p.canEdit }))
+      );
+    }
+  }
+  
+  async hasModuleAccess(userId: number, module: string): Promise<boolean> {
+    const [perm] = await db.select().from(userPermissions)
+      .where(and(eq(userPermissions.userId, userId), eq(userPermissions.module, module)));
+    return perm?.canView === true;
+  }
+  
+  // ===== LEAD TAGS =====
+  
+  async getTagsByUser(userId: number): Promise<LeadTag[]> {
+    return await db.select().from(leadTags)
+      .where(eq(leadTags.userId, userId))
+      .orderBy(sql`${leadTags.nome} ASC`);
+  }
+  
+  async createTag(data: InsertLeadTag): Promise<LeadTag> {
+    const [created] = await db.insert(leadTags).values(data).returning();
+    return created;
+  }
+  
+  async updateTag(id: number, data: Partial<InsertLeadTag>): Promise<LeadTag | undefined> {
+    const [updated] = await db.update(leadTags).set(data).where(eq(leadTags.id, id)).returning();
+    return updated;
+  }
+  
+  async deleteTag(id: number): Promise<void> {
+    await db.delete(leadTags).where(eq(leadTags.id, id));
+  }
+  
+  async assignTagToLead(tagId: number, assignmentId: number): Promise<void> {
+    const existing = await db.select().from(leadTagAssignments)
+      .where(and(eq(leadTagAssignments.tagId, tagId), eq(leadTagAssignments.assignmentId, assignmentId)));
+    if (existing.length === 0) {
+      await db.insert(leadTagAssignments).values({ tagId, assignmentId });
+    }
+  }
+  
+  async removeTagFromLead(tagId: number, assignmentId: number): Promise<void> {
+    await db.delete(leadTagAssignments)
+      .where(and(eq(leadTagAssignments.tagId, tagId), eq(leadTagAssignments.assignmentId, assignmentId)));
+  }
+  
+  async getTagsForAssignment(assignmentId: number): Promise<LeadTag[]> {
+    const result = await db.select({ tag: leadTags })
+      .from(leadTagAssignments)
+      .innerJoin(leadTags, eq(leadTagAssignments.tagId, leadTags.id))
+      .where(eq(leadTagAssignments.assignmentId, assignmentId));
+    return result.map(r => r.tag);
+  }
+  
+  async getTagUsageCounts(userId: number): Promise<{ tagId: number; count: number }[]> {
+    const result = await db.select({
+      tagId: leadTagAssignments.tagId,
+      count: sql<number>`count(*)::int`
+    })
+      .from(leadTagAssignments)
+      .innerJoin(leadTags, eq(leadTagAssignments.tagId, leadTags.id))
+      .where(eq(leadTags.userId, userId))
+      .groupBy(leadTagAssignments.tagId);
+    return result;
+  }
+  
+  // ===== LEAD SCHEDULES =====
+  
+  async createSchedule(data: InsertLeadSchedule): Promise<LeadSchedule> {
+    const [created] = await db.insert(leadSchedules).values(data).returning();
+    return created;
+  }
+  
+  async getSchedulesByUser(userId: number, status?: string): Promise<LeadSchedule[]> {
+    if (status) {
+      return await db.select().from(leadSchedules)
+        .where(and(eq(leadSchedules.userId, userId), eq(leadSchedules.status, status)))
+        .orderBy(sql`${leadSchedules.dataHora} ASC`);
+    }
+    return await db.select().from(leadSchedules)
+      .where(eq(leadSchedules.userId, userId))
+      .orderBy(sql`${leadSchedules.dataHora} ASC`);
+  }
+  
+  async updateSchedule(id: number, data: Partial<InsertLeadSchedule>): Promise<LeadSchedule | undefined> {
+    const [updated] = await db.update(leadSchedules).set(data).where(eq(leadSchedules.id, id)).returning();
+    return updated;
+  }
+  
+  async getScheduleWithLead(scheduleId: number): Promise<{ schedule: LeadSchedule; assignment: SalesLeadAssignment; lead: SalesLead; campaign: SalesCampaign } | undefined> {
+    const [schedule] = await db.select().from(leadSchedules).where(eq(leadSchedules.id, scheduleId));
+    if (!schedule) return undefined;
+    
+    const [assignment] = await db.select().from(salesLeadAssignments).where(eq(salesLeadAssignments.id, schedule.assignmentId));
+    if (!assignment) return undefined;
+    
+    const [lead] = await db.select().from(salesLeads).where(eq(salesLeads.id, assignment.leadId));
+    if (!lead) return undefined;
+    
+    const [campaign] = await db.select().from(salesCampaigns).where(eq(salesCampaigns.id, assignment.campaignId));
+    if (!campaign) return undefined;
+    
+    return { schedule, assignment, lead, campaign };
+  }
+  
+  // ===== DISTRIBUTION STATS =====
+  
+  async getDistributionStats(campaignId: number): Promise<{ userId: number; userName: string; total: number; novo: number; emAtendimento: number; concluido: number }[]> {
+    const assignments = await db.select({
+      userId: salesLeadAssignments.userId,
+      status: salesLeadAssignments.status,
+    }).from(salesLeadAssignments)
+      .where(eq(salesLeadAssignments.campaignId, campaignId));
+    
+    const userIds = [...new Set(assignments.map(a => a.userId))];
+    if (userIds.length === 0) return [];
+    
+    const userList = await db.select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, userIds));
+    
+    const userMap = new Map(userList.map(u => [u.id, u.name]));
+    
+    const stats: Map<number, { userId: number; userName: string; total: number; novo: number; emAtendimento: number; concluido: number }> = new Map();
+    
+    for (const a of assignments) {
+      if (!stats.has(a.userId)) {
+        stats.set(a.userId, { userId: a.userId, userName: userMap.get(a.userId) || "Desconhecido", total: 0, novo: 0, emAtendimento: 0, concluido: 0 });
+      }
+      const s = stats.get(a.userId)!;
+      s.total++;
+      if (a.status === "novo") s.novo++;
+      else if (a.status === "em_atendimento") s.emAtendimento++;
+      else if (["vendido", "concluido", "descartado", "sem_interesse"].includes(a.status)) s.concluido++;
+    }
+    
+    return Array.from(stats.values());
+  }
+  
+  async returnLeadsToPool(assignmentIds: number[]): Promise<number> {
+    if (assignmentIds.length === 0) return 0;
+    await db.delete(salesLeadAssignments).where(inArray(salesLeadAssignments.id, assignmentIds));
+    return assignmentIds.length;
+  }
+  
+  async transferLeads(fromUserId: number, toUserId: number, campaignId: number, quantidade: number): Promise<number> {
+    const leadsToTransfer = await db.select().from(salesLeadAssignments)
+      .where(and(
+        eq(salesLeadAssignments.userId, fromUserId),
+        eq(salesLeadAssignments.campaignId, campaignId),
+        inArray(salesLeadAssignments.status, ["novo", "em_atendimento"])
+      ))
+      .limit(quantidade);
+    
+    if (leadsToTransfer.length === 0) return 0;
+    
+    const ids = leadsToTransfer.map(l => l.id);
+    let ordemFila = await this.getMaxOrdemFila(toUserId, campaignId);
+    
+    for (const id of ids) {
+      ordemFila++;
+      await db.update(salesLeadAssignments).set({ userId: toUserId, ordemFila }).where(eq(salesLeadAssignments.id, id));
+    }
+    
+    return ids.length;
   }
 }
 

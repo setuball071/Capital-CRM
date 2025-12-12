@@ -33,6 +33,7 @@ import {
   insertSalesLeadSchema,
   LEAD_STATUS,
   TIPOS_CONTATO,
+  MODULE_LIST,
   type User,
   type InsertCoefficientTable,
   type InsertSalesLead,
@@ -142,6 +143,26 @@ function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) 
     return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar a Academia" });
   }
   next();
+}
+
+// Module access middleware - checks if user has permission to access a specific module
+function requireModuleAccess(module: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    
+    // Master has access to all modules
+    if (req.user.role === "master") {
+      return next();
+    }
+    
+    const hasAccess = await storage.hasModuleAccess(req.user.id, module);
+    if (!hasAccess) {
+      return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar este módulo" });
+    }
+    next();
+  };
 }
 
 // ===== PRICING CALCULATION - MODELO DE PACOTES =====
@@ -882,6 +903,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete user error:", error);
       return res.status(500).json({ message: "Erro ao excluir usuário" });
+    }
+  });
+
+  // ===== USER PERMISSIONS ROUTES =====
+
+  // Get list of available modules
+  app.get("/api/permissions/modules", requireAuth, async (req, res) => {
+    try {
+      return res.json(MODULE_LIST);
+    } catch (error) {
+      console.error("Get modules error:", error);
+      return res.status(500).json({ message: "Erro ao buscar lista de módulos" });
+    }
+  });
+
+  // Get user permissions
+  app.get("/api/users/:id/permissions", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+
+      // Check if user exists
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const permissions = await storage.getUserPermissions(id);
+      return res.json(permissions);
+    } catch (error) {
+      console.error("Get user permissions error:", error);
+      return res.status(500).json({ message: "Erro ao buscar permissões do usuário" });
+    }
+  });
+
+  // Set user permissions (master only)
+  app.put("/api/users/:id/permissions", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+
+      // Check if user exists
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Validate request body
+      const permissionsSchema = z.array(z.object({
+        module: z.string().refine(m => MODULE_LIST.includes(m as any), { message: "Módulo inválido" }),
+        canView: z.boolean(),
+        canEdit: z.boolean(),
+      }));
+
+      const result = permissionsSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      await storage.setUserPermissions(id, result.data);
+      
+      // Return updated permissions
+      const updatedPermissions = await storage.getUserPermissions(id);
+      return res.json(updatedPermissions);
+    } catch (error) {
+      console.error("Set user permissions error:", error);
+      return res.status(500).json({ message: "Erro ao definir permissões do usuário" });
     }
   });
 

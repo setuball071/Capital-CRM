@@ -1,0 +1,415 @@
+1. Sistema de permissões flexível por usuário
+1.1. Modelo de dados
+
+Criar uma tabela (ou campos extras em users) para permissões granulares:
+
+users
+
+id
+
+nome
+
+email
+
+tipo_usuario (enum simples pra referência: admin, master, coordenador, vendedor, atendimento, etc.)
+
+user_permissions
+
+id
+
+user_id
+
+module (string)
+
+can_view (boolean)
+
+can_edit (boolean opcional)
+
+Sugestão de module (já pensando no futuro):
+
+modulo_simulador
+
+modulo_roteiros
+
+modulo_base_clientes
+
+modulo_compra_lista
+
+modulo_crm_vendas_campanhas
+
+modulo_crm_vendas_atendimento
+
+modulo_academia
+
+modulo_config_usuarios
+
+modulo_config_precos
+
+etc.
+
+1.2. Tela de gestão de usuários
+
+Na tela Administração > Usuários:
+
+Ao editar um usuário, adicionar uma seção: Permissões de Acesso.
+
+Mostrar uma lista de módulos com checkbox “Pode visualizar” (e se quiser, “Pode editar”).
+
+O tipo de usuário (admin, master, etc.) pode servir só como “preset inicial”, mas a regra real passa a ser o que está em user_permissions.
+
+1.3. Lógica de acesso
+
+Backend: criar um middleware/helper que receba userId + module e valide se pode acessar.
+
+Frontend: esconder itens do menu e telas inteiras se o usuário não tiver can_view naquele módulo.
+
+Para o que você pediu agora:
+
+CRM Vendas:
+
+modulo_crm_vendas_campanhas → só admin, master, atendimento (por enquanto).
+
+modulo_crm_vendas_atendimento → vendedores, coordenadores e quem mais você marcar.
+
+2. CRM Vendas – Campanhas (importação + distribuição + remanejamento)
+2.1. Distribuição por usuário (quantidade por usuário)
+
+Na tela CRM Vendas > Campanhas, ao clicar em uma campanha:
+
+Botão: Distribuir Leads
+
+Abrir um modal com:
+
+Select ou multiselect de usuários (apenas usuários que têm permissão de atendimento no CRM).
+
+Campo “Quantidade por usuário” (ex: 50).
+
+Mostrar o total disponível da campanha e quantos serão distribuídos.
+
+Ao confirmar:
+
+Para cada usuário selecionado, alocar X leads ainda “disponíveis”.
+
+Atualizar contadores: “Disponíveis” e “Distribuídos”.
+
+Modelo de dados (sugestão):
+
+campaigns
+
+id, nome, convenio, uf, status, total_leads, leads_disponiveis, leads_distribuidos
+
+campaign_leads
+
+id
+
+campaign_id
+
+cliente_id (ou referência à linha da base de clientes)
+
+assigned_user_id (nullable)
+
+status (disponivel, atribuido, em_atendimento, concluido, etc.)
+
+data_atribuicao
+
+data_ultimo_contato etc.
+
+2.2. Visão de “Distribuídos” e remanejamento
+
+Na listagem de campanhas (onde aparece “Total / Disponíveis / Distribuídos”):
+
+Transformar o número de Distribuídos em um link/botão.
+
+Ao clicar, abrir uma tela ou modal de Distribuição por usuário, mostrando:
+
+Tabela:
+
+Usuário
+
+Quantidade de leads atribuídos
+
+Quantos estão em:
+
+Não trabalhados
+
+Em atendimento
+
+Concluídos (opcional)
+
+Ações possíveis por linha:
+
+“Remover X leads deste usuário e devolver à base da campanha”
+
+“Transferir X leads deste usuário para outro usuário”
+
+Regra de negócio:
+
+Remanejar = atualizar assigned_user_id dos leads selecionados.
+
+Devolver pra base = assigned_user_id = null e status = 'disponivel'.
+
+3. Tela de atendimento do CRM Vendas (interface tipo “Consulta Cliente”)
+
+A ideia aqui é deixar a cara da tela de atendimento mais parecida com a tela de Consulta de Cliente da base.
+
+3.1. Card de dados do cliente
+
+Na tela CRM Vendas > Atendimento, ao clicar em “Próximo Cliente”:
+
+Usar os mesmos componentes/estrutura da tela de Consulta Cliente:
+
+Topo:
+
+Nome do cliente
+
+CPF
+
+Matrícula
+
+Convênio / Órgão
+
+Situação funcional
+
+Bloco de Telefones:
+
+Telefone 1
+
+Telefone 2
+
+Telefone 3
+
+Todos em coluna vertical, alinhados no lado direito.
+
+Bloco de Endereço / Cidade / UF.
+
+Bloco de Folha / Margens:
+
+Margem 70% (bruta, utilizada, saldo)
+
+Margem 35% (bruta, utilizada, saldo)
+
+Margem 5% crédito (bruta, utilizada, saldo)
+
+Margem 5% benefício (bruta, utilizada, saldo)
+
+Bloco de Contratos:
+
+Banco do empréstimo
+
+Tipo de produto
+
+Valor parcela
+
+Saldo devedor
+
+Parcelas restantes (prazo remanescente)
+
+Competência
+
+Reaproveitar ao máximo o mesmo componente de visualização já usado na Consulta Cliente (só mudando a origem dos dados: agora virão da campanha/base, mas o “card” pode ser o mesmo).
+
+3.2. Click-to-copy
+
+Para os campos:
+
+CPF
+
+Matrícula
+
+Telefones
+
+E-mail
+
+Número do contrato (se aparecer)
+
+Comportamento:
+
+Ao passar o mouse, mostrar ícone de “copiar”.
+
+Ao clicar, copiar o valor para a área de transferência e exibir um pequeno toast “Copiado”.
+
+3.3. Lado direito – Registrar atendimento
+
+Simplificar:
+
+Tipo de Contato (select curto: Ligação, WhatsApp, Áudio, Presencial, etc.)
+
+Status do Lead (select: Em Atendimento, Interessado, Sem Interesse, Não Atende, etc.)
+
+Etiquetas (tags):
+
+Campo de texto + botão “Adicionar etiqueta”.
+
+Cada etiqueta tem:
+
+Nome livre (ex: “potencial alto”, “agressivo”, “pede retorno com esposa”).
+
+Cor (padrão ou seleção rápida de 4–5 cores).
+
+Etiquetas ficam visíveis como chips coloridos na tela.
+
+Observações (textarea)
+
+Agendamento:
+
+Checkbox “Agendar retorno”
+
+Ao marcar, aparece:
+
+Data / hora do agendamento
+
+Campo “Observação do agendamento” (opcional)
+
+Botões:
+
+“Salvar”
+
+“Salvar e Próximo”
+
+“Próximo Cliente” (pula sem salvar, opcional ou confirm dialog)
+
+3.4. Gestão de etiquetas
+
+Criar uma tela em CRM Vendas > Etiquetas (ou dentro de Atendimento):
+
+Listar todas as etiquetas usadas pelo usuário (e/ou por time).
+
+Mostrar quantos leads estão marcados com cada etiqueta.
+
+Permitir renomear/alterar cor/remover etiqueta (remover apenas desassocia dos leads).
+
+3.5. Agenda do vendedor
+
+Nova tela/menu: CRM Vendas > Agenda:
+
+Lista de agendamentos do usuário logado:
+
+Data/hora
+
+Nome do cliente
+
+Campanha
+
+Situação (pendente, realizado)
+
+Permitir marcar como “Realizado” e abrir direto o atendimento daquele cliente.
+
+4. Criar campanhas a partir da base de clientes (reaproveitar “Compra de Lista”)
+
+Hoje você tem:
+
+Base de Clientes > Compra de Lista
+
+Filtros por convênio, órgão, UF, idade, situação funcional, etc.
+
+Geração de “lista vendida” para terceiros.
+
+Ideia:
+
+No mesmo lugar, adicionar um botão: “Criar campanha a partir deste filtro”.
+
+Fluxo:
+
+O admin entra em Compra de Lista, monta os filtros normalmente.
+
+Em vez (ou além) de “Simular / Comprar lista”, clica em Criar Campanha.
+
+Abre modal:
+
+Nome da campanha
+
+Convênio (preenchido pelo filtro)
+
+Observação (opcional)
+
+O backend:
+
+Salva um registro em campaigns com os parâmetros do filtro.
+
+Cria registros em campaign_leads apontando para os clientes da base que batem com o filtro (sem duplicar dados).
+
+Preenche total_leads, leads_disponiveis.
+
+Benefícios:
+
+Você não precisa ficar importando arquivo novo o tempo todo.
+
+Usa a mesma base única, com todas as margens, contratos, etc.
+
+Compra de lista e campanhas passam a ser “dois usos diferentes” da mesma base.
+
+5. Prompt para o dev no Replit
+
+Se quiser colar algo direto pro dev / agente do Replit, pode usar assim:
+
+Tarefa: Evolução do CRM de Vendas e Permissões
+
+Implementar um sistema de permissões por módulo:
+
+Criar tabela user_permissions com campos: id, user_id, module, can_view, can_edit.
+
+Adicionar seção “Permissões de Acesso” ao editar usuário, listando módulos (simulador, roteiros, base de clientes, compra de lista, CRM vendas – campanhas, CRM vendas – atendimento, academia, etc.).
+
+Backend: criar helper/middleware para validar acesso por módulo e usar isso nas rotas.
+
+Frontend: esconder itens de menu/telas se o usuário não tiver permissão.
+
+Para este momento, apenas admin, master e atendimento podem ver “CRM Vendas > Campanhas”. Vendedores podem ver “CRM Vendas > Atendimento”.
+
+Evoluir CRM Vendas > Campanhas:
+
+No detalhe da campanha, criar modal “Distribuir Leads” com:
+
+Seleção múltipla de usuários.
+
+Campo “quantidade por usuário”.
+
+Distribuir leads “disponíveis” entre os usuários selecionados.
+
+Implementar tabela campaign_leads com: id, campaign_id, cliente_id, assigned_user_id, status, data_atribuicao.
+
+Na coluna “Distribuídos” da campanha, transformar o número em link que abre tela/modal com:
+
+Usuário, quantidade de leads atribuídos (quebrando por status).
+
+Ações para:
+
+Remover X leads de um usuário e devolver para “disponíveis”.
+
+Transferir X leads de um usuário para outro.
+
+Evoluir CRM Vendas > Atendimento:
+
+Trocar o card de cliente para reutilizar o mesmo layout/estrutura da tela de “Base de Clientes > Consulta Cliente”:
+
+Nome, CPF, Matrícula, Convênio, Situação Funcional.
+
+Telefones em coluna, no lado direito.
+
+Cidade/UF.
+
+Bloco de Folha/Margens (70%, 35%, 5% crédito, 5% benefício).
+
+Bloco de Contratos (banco, tipo de produto, valor da parcela, saldo devedor, parcelas restantes, competência).
+
+Implementar click-to-copy em: CPF, matrícula, telefones, e-mail, número de contrato.
+
+Simplificar formulário de atendimento:
+
+Manter apenas: Tipo de Contato, Status do Lead, Etiquetas (tags com cor), Observações, Agendamento (data/hora + obs).
+
+Botões: “Salvar”, “Salvar e Próximo”, “Próximo Cliente”.
+
+Criar tela de “Etiquetas” para o usuário ver todas as tags dele e quantos leads estão em cada uma.
+
+Criar tela “CRM Vendas > Agenda” listando todos os agendamentos do usuário logado com link direto para o atendimento do cliente.
+
+Criar campanhas a partir da base de clientes:
+
+Em “Base de Clientes > Compra de Lista”, adicionar botão “Criar campanha”.
+
+Reutilizar exatamente os filtros usados na simulação de compra de lista.
+
+Ao confirmar, criar registro em campaigns e registros em campaign_leads referenciando os clientes resultantes do filtro, sem duplicar dados.
+
+Manter a possibilidade de importar campanhas via arquivo, mas priorizar o caminho de criação de campanha a partir dos filtros sobre a base já importada.
