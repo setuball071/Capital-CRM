@@ -718,3 +718,129 @@ export const treinadorRequestSchema = z.object({
 });
 
 export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;
+
+// ===== CRM DE VENDAS =====
+
+// Campanhas de vendas
+export const salesCampaigns = pgTable("sales_campaigns", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  origem: varchar("origem", { length: 100 }),
+  convenio: varchar("convenio", { length: 100 }),
+  uf: varchar("uf", { length: 10 }),
+  status: varchar("status", { length: 20 }).notNull().default("ativa"), // ativa, pausada, encerrada
+  totalLeads: integer("total_leads").notNull().default(0),
+  leadsDisponiveis: integer("leads_disponiveis").notNull().default(0),
+  leadsDistribuidos: integer("leads_distribuidos").notNull().default(0),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Leads brutos vinculados a campanhas
+export const salesLeads = pgTable("sales_leads", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => salesCampaigns.id, { onDelete: "cascade" }).notNull(),
+  cpf: varchar("cpf", { length: 14 }),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  telefone1: varchar("telefone_1", { length: 20 }),
+  telefone2: varchar("telefone_2", { length: 20 }),
+  telefone3: varchar("telefone_3", { length: 20 }),
+  email: varchar("email", { length: 255 }),
+  cidade: varchar("cidade", { length: 150 }),
+  uf: varchar("uf", { length: 10 }),
+  observacoes: text("observacoes"),
+  baseClienteId: integer("base_cliente_id").references(() => clientesPessoa.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Fila de atribuição de leads para vendedores
+export const salesLeadAssignments = pgTable("sales_lead_assignments", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => salesLeads.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  campaignId: integer("campaign_id").references(() => salesCampaigns.id, { onDelete: "cascade" }).notNull(),
+  status: varchar("status", { length: 30 }).notNull().default("novo"), // novo, em_atendimento, concluido, sem_contato, sem_interesse, vendido, descartado
+  ordemFila: integer("ordem_fila").notNull().default(0),
+  dataPrimeiroAtendimento: timestamp("data_primeiro_atendimento"),
+  dataUltimoAtendimento: timestamp("data_ultimo_atendimento"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Histórico de eventos/interações com o lead
+export const salesLeadEvents = pgTable("sales_lead_events", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id").references(() => salesLeadAssignments.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  tipo: varchar("tipo", { length: 30 }).notNull(), // ligacao, whatsapp, email, visita
+  resultado: varchar("resultado", { length: 50 }), // sem_resposta, agendado, proposta_enviada, fechou
+  observacao: text("observacao"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ===== INSERT SCHEMAS CRM VENDAS =====
+
+export const insertSalesCampaignSchema = createInsertSchema(salesCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSalesLeadSchema = createInsertSchema(salesLeads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSalesLeadAssignmentSchema = createInsertSchema(salesLeadAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSalesLeadEventSchema = createInsertSchema(salesLeadEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+// ===== TYPES CRM VENDAS =====
+
+export type SalesCampaign = typeof salesCampaigns.$inferSelect;
+export type InsertSalesCampaign = z.infer<typeof insertSalesCampaignSchema>;
+
+export type SalesLead = typeof salesLeads.$inferSelect;
+export type InsertSalesLead = z.infer<typeof insertSalesLeadSchema>;
+
+export type SalesLeadAssignment = typeof salesLeadAssignments.$inferSelect;
+export type InsertSalesLeadAssignment = z.infer<typeof insertSalesLeadAssignmentSchema>;
+
+export type SalesLeadEvent = typeof salesLeadEvents.$inferSelect;
+export type InsertSalesLeadEvent = z.infer<typeof insertSalesLeadEventSchema>;
+
+// Status do lead assignment
+export const LEAD_STATUS = {
+  novo: "Novo",
+  em_atendimento: "Em Atendimento",
+  sem_contato: "Sem Contato",
+  sem_interesse: "Sem Interesse",
+  agendar_retorno: "Agendar Retorno",
+  proposta_enviada: "Proposta Enviada",
+  vendido: "Vendido",
+  descartado: "Descartado",
+  concluido: "Concluído",
+} as const;
+
+export type LeadStatus = keyof typeof LEAD_STATUS;
+
+// Tipos de contato
+export const TIPOS_CONTATO = {
+  ligacao: "Ligação",
+  whatsapp: "WhatsApp",
+  email: "E-mail",
+  visita: "Visita",
+} as const;
+
+export type TipoContato = keyof typeof TIPOS_CONTATO;

@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -38,6 +38,7 @@ export function AppSidebar() {
     clientes: false,
     admin: false,
     academia: false,
+    crmvendas: false,
   });
 
   if (!user) return null;
@@ -58,6 +59,8 @@ export function AppSidebar() {
   const canAccessCompraLista = isMaster;
   const canAccessConsultaCliente = isMaster;
   const canAccessAcademia = isMaster || isAtendimento || isOperacional;
+  const canAccessCRMAdmin = isMaster || isAtendimento;
+  const canAccessCRMVendedor = true; // Todos os vendedores podem acessar
 
   const menuSections: MenuSection[] = [
     {
@@ -110,6 +113,15 @@ export function AppSidebar() {
         { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, show: canAccessAcademia },
         { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, show: canAccessAcademia },
         { title: "Admin Academia", url: "/academia/admin", icon: Award, show: isMaster },
+      ],
+    },
+    {
+      title: "CRM Vendas",
+      icon: Target,
+      show: canAccessCRMAdmin || canAccessCRMVendedor,
+      items: [
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, show: canAccessCRMAdmin },
+        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, show: canAccessCRMVendedor },
       ],
     },
   ];

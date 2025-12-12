@@ -1,0 +1,267 @@
+Quero ajustar o desenho do módulo de CRM de Vendas que você começou, com foco em duas partes:
+
+1) ADMIN/MANAGER: importação de campanhas e distribuição de leads para vendedores
+2) VENDEDOR: tela de atendimento (CRM) com “play/próximo cliente” mostrando ficha completa do cliente
+
+
+############################
+# 1. MODELAGEM – CAMPANHA, LEADS E FILA DO VENDEDOR
+############################
+
+Manter a ideia de `sales_campaigns` e `sales_leads`, mas adicionar um nível de “fila por usuário”.
+
+### 1.1. Tabela `sales_campaigns`  (se ainda não existir)
+
+Campos (se já existir, ajustar conforme abaixo):
+
+- id (uuid, PK)
+- nome (string)
+- descricao (text, opcional)
+- origem (string, opcional)
+- convenio (string, opcional)
+- uf (string, opcional)
+- status (string)  -- 'ativa', 'pausada', 'encerrada'
+- total_leads (integer, default 0)       -- leads importados na campanha
+- leads_disponiveis (integer, default 0) -- leads sem dono ainda
+- leads_distribuidos (integer, default 0)-- leads já atribuídos a algum vendedor
+- created_by (uuid -> users.id)
+- created_at, updated_at
+
+
+### 1.2. Tabela `sales_leads`
+
+Representa o lead “bruto”, vinculado à campanha.
+
+Campos:
+
+- id (uuid, PK)
+- campaign_id (uuid -> sales_campaigns.id)
+- cpf (string, opcional)
+- nome (string)                   -- obrigatório
+- telefone_1 (string, opcional)
+- telefone_2 (string, opcional)
+- telefone_3 (string, opcional)
+- email (string, opcional)
+- cidade (string, opcional)
+- uf (string, opcional)
+- observacoes (text, opcional)
+
+- base_cliente_id (uuid, opcional) -- referência para a Base de Clientes, se conseguirmos casar por CPF/convênio
+- created_at, updated_at
+
+Regra importante:
+- Na importação, tentar localizar o cliente na Base de Clientes por (cpf + convenio) ou cpf sozinho.
+- Se encontrar, preencher `base_cliente_id` para futuro uso na tela de atendimento.
+
+
+### 1.3. Tabela `sales_lead_assignments`  (fila do vendedor)
+
+Essa tabela representa a atribuição de um lead para um vendedor (um lead pode ser passado para um vendedor por vez; no futuro podemos ter histórico se precisar).
+
+Campos:
+
+- id (uuid, PK)
+- lead_id (uuid -> sales_leads.id)
+- user_id (uuid -> users.id)          -- vendedor
+- campaign_id (uuid -> sales_campaigns.id)  -- redundante para facilitar queries
+- status (string)                     -- 'novo', 'em_atendimento', 'concluido', 'sem_contato', 'sem_interesse', 'vendido', 'descartado', etc.
+- ordem_fila (integer)                -- ordem na fila do vendedor (usar auto-incremental por usuário e campanha)
+- data_primeiro_atendimento (timestamp, opcional)
+- data_ultimo_atendimento (timestamp, opcional)
+- created_at, updated_at
+
+Regras:
+
+- Quando um assignment é criado, status inicial = 'novo'.
+- O vendedor sempre consome o próximo assignment com status 'novo' da campanha/fila dele, ordenado por `ordem_fila` (ou created_at).
+- Ao registrar um atendimento, atualizar `status` e datas. Se o status final for algo como 'concluido', 'vendido', 'descartado', o lead sai da fila ativa (não deve ser puxado novamente).
+
+
+### 1.4. Tabela `sales_lead_events` (se ainda não existir)
+
+Mantém histórico das interações do vendedor com o lead:
+
+- id (uuid, PK)
+- assignment_id (uuid -> sales_lead_assignments.id)
+- user_id (uuid -> users.id)
+- tipo (string)        -- 'ligacao', 'whatsapp', 'email', 'visita', etc.
+- resultado (string)   -- 'sem_resposta', 'agendado', 'proposta_enviada', 'fechou', etc.
+- observacao (text, opcional)
+- created_at
+
+
+############################
+# 2. FLUXO ADMIN – CAMPANHAS E DISTRIBUIÇÃO DE LEADS
+############################
+
+### 2.1. Tela de Campanhas (Admin/Master/Atendimento)
+
+Na rota `/vendas/crm` (aba “Campanhas”):
+
+- Listar campanhas com:
+  - Nome
+  - Convênio / UF
+  - Status
+  - Total de leads
+  - Leads disponíveis (não atribuídos)
+  - Leads distribuídos
+- Ações:
+  - Criar nova campanha
+  - Importar leads
+  - Distribuir leads para vendedores
+  - Pausar / ativar / encerrar campanha
+
+### 2.2. Importar leads da campanha
+
+Ao clicar em “Importar Leads” para uma campanha:
+
+- Modal para upload de Excel/CSV usando o modelo:
+  - nome (obrigatório)
+  - cpf
+  - telefone_1 / telefone_2 / telefone_3
+  - email
+  - cidade
+  - uf
+  - observacoes
+
+Regras backend:
+
+- Endpoint: `POST /api/vendas/campanhas/:id/importar-leads`
+- Ler arquivo em streaming (aproveitar infra de importação grande que já existe).
+- Para cada linha:
+  - Criar (ou atualizar) `sales_leads`.
+  - Tentar casar com Base de Clientes (por CPF + convenio ou CPF):
+    - Se encontrar, preencher `base_cliente_id`.
+- Ao final, atualizar `sales_campaigns.total_leads` e `leads_disponiveis`.
+
+### 2.3. Distribuir leads para vendedores
+
+Na mesma tela de campanha, adicionar um botão **“Distribuir Leads”**.
+
+Fluxo:
+
+- Modal com:
+  - Select “Usuário (vendedor)”
+  - Número de leads a distribuir (ex: 50)
+  - (opcional) Filtros simples como UF ou cidade no futuro
+
+Regras backend:
+
+- Endpoint: `POST /api/vendas/campanhas/:id/distribuir-leads`
+- Selecionar `N` leads da campanha com `lead_id` que ainda **não possuam assignment ativo** (status em 'novo') para nenhum usuário.
+- Para cada lead selecionado, criar um registro em `sales_lead_assignments`:
+  - user_id = vendedor escolhido
+  - status = 'novo'
+  - ordem_fila = último ordem_fila daquele user + 1
+- Atualizar contadores `leads_disponiveis` e `leads_distribuidos` da campanha.
+
+No futuro podemos ter uma tela “Meus Pedidos de Campanha” para o coordenador, mas por enquanto basta esse modal.
+
+
+############################
+# 3. TELA DO VENDEDOR – CRM DE VENDAS (PLAY/PRÓXIMO CLIENTE)
+############################
+
+Criar uma aba/tela específica para o vendedor, por exemplo `/vendas/atendimento`:
+
+### 3.1. Resumo no topo
+
+- Cards com:
+  - Leads totais na fila dele (status 'novo' ou 'em_atendimento') 
+  - Leads concluídos hoje
+  - Leads vendidos
+- Select de campanha (caso o mesmo vendedor receba leads de mais de uma campanha) ou botão “Usar campanha padrão” se só houver uma.
+
+### 3.2. Botão “Iniciar / Próximo cliente”
+
+- Ao clicar, chamar endpoint:
+  - `POST /api/vendas/atendimento/proximo`
+  - Parâmetros:
+    - campaign_id (opcional; se não mandar, pegar qualquer campanha do usuário)
+- Backend deve:
+  - Buscar o **próximo assignment** do usuário com status 'novo', ordenado por `ordem_fila` (ou created_at).
+  - Se não houver 'novo', opcionalmente podemos oferecer 'em_atendimento' pendente ou avisar que não há mais leads.
+  - Atualizar o assignment para:
+    - status = 'em_atendimento'
+    - data_primeiro_atendimento = agora (se ainda não tiver)
+  - Montar um objeto de resposta com:
+    - Dados do lead (`sales_leads`)
+    - Dados do cliente na Base de Clientes (se `base_cliente_id` existir)
+      - margens 70 / 35 / 5 / 5
+      - contratos e bancos
+      - dados bancários
+    - Histórico de eventos (`sales_lead_events`)
+
+### 3.3. Layout da tela de atendimento
+
+Reaproveitar o visual da tela de “Consulta de Cliente”, mas adaptado para o vendedor:
+
+- Topo: Nome, CPF, Idade, Convênio, Campanha.
+- Cards de margens:
+  - Margem 70% (bruta, utilizada, saldo)
+  - Margem 35% (bruta, utilizada, saldo)
+  - Margem 5% crédito
+  - Margem 5% benefício
+- Sessão “Contratos”:
+  - Tabela com banco, tipo de produto, valor parcela, saldo, parcelas restantes, etc. (dados provenientes da Base de Clientes).
+- Sessão “Dados Cadastrais / Telefones / Dados Bancários”.
+- Sessão “Histórico de contatos deste lead”:
+  - Lista de `sales_lead_events`.
+
+À direita (ou na parte inferior):
+
+- Formulário de **Registro de atendimento**:
+  - Tipo de contato (ligação, whatsapp, etc.)
+  - Resultado / status do lead: 
+    - 'sem_contato', 'sem_interesse', 'agendar_retorno', 'proposta_enviada', 'vendido', 'descartado', etc.
+  - Observação (texto)
+  - Botões:
+    - “Salvar”
+    - “Salvar e Próximo”  → além de salvar, chama novamente o endpoint `/proximo` e troca o lead na tela.
+
+Regras:
+
+- Ao salvar, criar um registro em `sales_lead_events`.
+- Atualizar `sales_lead_assignments.status`:
+  - Se o status for:
+    - 'sem_contato', 'em_atendimento', 'agendar_retorno' → ainda permanece como lead ativo (não cai na contagem de concluídos).
+    - 'vendido', 'sem_interesse', 'descartado', 'concluido' → considerar como finalizado (não deve ser puxado de novo).
+- Atualizar `data_ultimo_atendimento`.
+- Para contadores do vendedor, podemos ter uma view ou consultas agregadas (não precisa tabela nova agora).
+
+
+############################
+# 4. PERMISSÕES
+############################
+
+- Manter a ideia de permissão por módulo (`modules` e `user_module_permissions`), com `module_key = 'crm_vendas'`.
+- Regra de acesso:
+  - Admin, Master e Atendimento:
+    - Podem acessar:
+      - Tela de Campanhas
+      - Importar leads
+      - Distribuir leads
+  - Vendedor comum:
+    - Só pode acessar a tela `/vendas/atendimento`, vendo **apenas assignments vinculados ao seu `user_id`**.
+
+Backend:
+
+- Criar middleware para verificar:
+  - Se usuário tem `can_view` para `crm_vendas`.
+  - E, para rotas administrativas, se é Admin/Master/Atendimento ou se tiver `can_manage` = true (podemos simplificar isso na primeira versão).
+
+Frontend:
+
+- Esconder/mostrar as abas:
+  - “Campanhas” só para perfis com permissão admin/manager.
+  - “Minha Fila / Atendimento” para todos com acesso a `crm_vendas`.
+
+
+############################
+# 5. IMPORTANTE
+############################
+
+- Reutilizar o máximo possível da estrutura visual e dos componentes da tela de "Consulta de Cliente" para montar a ficha do lead no CRM de Vendas.
+- Tomar cuidado para NUNCA misturar dados de outro usuário:
+  - O endpoint `/proximo` sempre deve limitar por `user_id` logado.
+- Manter o sistema performático, evitando carregar todos os leads de uma vez; trabalhar com paginação e buscas específicas quando necessário.

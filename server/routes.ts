@@ -24,8 +24,18 @@ import {
   progressoLicoes,
   feedbacksIAHistorico,
   users,
+  salesCampaigns,
+  salesLeads,
+  salesLeadAssignments,
+  salesLeadEvents,
+  clientesPessoa,
+  insertSalesCampaignSchema,
+  insertSalesLeadSchema,
+  LEAD_STATUS,
+  TIPOS_CONTATO,
   type User,
   type InsertCoefficientTable,
+  type InsertSalesLead,
   USER_ROLES,
   type UserRole,
   type FiltrosPedidoLista,
@@ -4456,6 +4466,489 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Feedback IA error:", error);
       return res.status(500).json({ message: "Erro ao gerar feedback" });
+    }
+  });
+
+  // ===== CRM DE VENDAS =====
+  
+  // Middleware para acesso ao CRM (master, atendimento)
+  function requireCRMAdmin(req: Request, res: Response, next: NextFunction) {
+    if (!hasRole(req.user, ["master", "atendimento"])) {
+      return res.status(403).json({ message: "Acesso negado - apenas administradores do CRM" });
+    }
+    next();
+  }
+  
+  // GET /api/vendas/campanhas - Listar campanhas
+  app.get("/api/vendas/campanhas", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.user!.role as UserRole;
+      
+      // Admin/Atendimento veem todas, vendedor não vê campanhas diretamente
+      if (!hasRole(req.user, ["master", "atendimento", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      const campanhas = await storage.getAllSalesCampaigns();
+      return res.json(campanhas);
+    } catch (error) {
+      console.error("Get campanhas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar campanhas" });
+    }
+  });
+  
+  // GET /api/vendas/campanhas/:id - Detalhes da campanha
+  app.get("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const campanha = await storage.getSalesCampaign(id);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      return res.json(campanha);
+    } catch (error) {
+      console.error("Get campanha error:", error);
+      return res.status(500).json({ message: "Erro ao buscar campanha" });
+    }
+  });
+  
+  // POST /api/vendas/campanhas - Criar campanha
+  app.post("/api/vendas/campanhas", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const parsed = insertSalesCampaignSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      }
+      
+      const campanha = await storage.createSalesCampaign({
+        ...parsed.data,
+        createdBy: req.user!.id,
+      });
+      return res.status(201).json(campanha);
+    } catch (error) {
+      console.error("Create campanha error:", error);
+      return res.status(500).json({ message: "Erro ao criar campanha" });
+    }
+  });
+  
+  // PATCH /api/vendas/campanhas/:id - Atualizar campanha
+  app.patch("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const campanha = await storage.updateSalesCampaign(id, req.body);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      return res.json(campanha);
+    } catch (error) {
+      console.error("Update campanha error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar campanha" });
+    }
+  });
+  
+  // DELETE /api/vendas/campanhas/:id - Excluir campanha
+  app.delete("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteSalesCampaign(id);
+      return res.json({ message: "Campanha excluída com sucesso" });
+    } catch (error) {
+      console.error("Delete campanha error:", error);
+      return res.status(500).json({ message: "Erro ao excluir campanha" });
+    }
+  });
+  
+  // POST /api/vendas/campanhas/:id/importar-leads - Importar leads para campanha
+  app.post("/api/vendas/campanhas/:id/importar-leads", requireAuth, requireCRMAdmin, upload.single("file"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const campanha = await storage.getSalesCampaign(campaignId);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "Arquivo não enviado" });
+      }
+      
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      let rows: any[] = [];
+      
+      // Parse file
+      if (ext === ".csv") {
+        const csvContent = req.file.buffer.toString("utf-8");
+        const parsed = Papa.parse(csvContent, { header: true, skipEmptyLines: true });
+        rows = parsed.data;
+      } else {
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      }
+      
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Arquivo vazio ou formato inválido" });
+      }
+      
+      // Map columns (case-insensitive)
+      const COLUMN_MAP: Record<string, string> = {
+        "nome": "nome",
+        "cpf": "cpf",
+        "telefone_1": "telefone1", "telefone1": "telefone1", "telefone 1": "telefone1", "fone1": "telefone1",
+        "telefone_2": "telefone2", "telefone2": "telefone2", "telefone 2": "telefone2", "fone2": "telefone2",
+        "telefone_3": "telefone3", "telefone3": "telefone3", "telefone 3": "telefone3", "fone3": "telefone3",
+        "email": "email", "e-mail": "email",
+        "cidade": "cidade", "municipio": "cidade",
+        "uf": "uf", "estado": "uf",
+        "observacoes": "observacoes", "obs": "observacoes", "observacao": "observacoes",
+      };
+      
+      const leads: InsertSalesLead[] = [];
+      let skipped = 0;
+      
+      for (const row of rows) {
+        const normalized: Record<string, any> = {};
+        for (const [key, value] of Object.entries(row)) {
+          const mappedKey = COLUMN_MAP[key.toLowerCase().trim()];
+          if (mappedKey) {
+            normalized[mappedKey] = String(value || "").trim();
+          }
+        }
+        
+        // Nome é obrigatório
+        if (!normalized.nome) {
+          skipped++;
+          continue;
+        }
+        
+        // Tentar encontrar cliente na base por CPF
+        let baseClienteId: number | null = null;
+        if (normalized.cpf) {
+          const cpfLimpo = normalized.cpf.replace(/\D/g, "");
+          if (cpfLimpo.length === 11) {
+            const [cliente] = await db.select().from(clientesPessoa)
+              .where(eq(clientesPessoa.cpf, cpfLimpo))
+              .limit(1);
+            if (cliente) {
+              baseClienteId = cliente.id;
+            }
+          }
+        }
+        
+        leads.push({
+          campaignId,
+          nome: normalized.nome,
+          cpf: normalized.cpf?.replace(/\D/g, "") || null,
+          telefone1: normalized.telefone1 || null,
+          telefone2: normalized.telefone2 || null,
+          telefone3: normalized.telefone3 || null,
+          email: normalized.email || null,
+          cidade: normalized.cidade || null,
+          uf: normalized.uf || null,
+          observacoes: normalized.observacoes || null,
+          baseClienteId,
+        });
+      }
+      
+      // Insert leads in bulk
+      const inserted = await storage.createSalesLeadsBulk(leads);
+      
+      // Update campaign counters
+      await storage.updateSalesCampaign(campaignId, {
+        totalLeads: (campanha.totalLeads || 0) + inserted,
+        leadsDisponiveis: (campanha.leadsDisponiveis || 0) + inserted,
+      });
+      
+      return res.json({
+        message: "Leads importados com sucesso",
+        total: rows.length,
+        importados: inserted,
+        ignorados: skipped,
+      });
+    } catch (error) {
+      console.error("Import leads error:", error);
+      return res.status(500).json({ message: "Erro ao importar leads" });
+    }
+  });
+  
+  // POST /api/vendas/campanhas/:id/distribuir-leads - Distribuir leads para vendedor
+  app.post("/api/vendas/campanhas/:id/distribuir-leads", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { userId, quantidade } = req.body;
+      
+      if (!userId || !quantidade || quantidade < 1) {
+        return res.status(400).json({ message: "Informe o vendedor e a quantidade de leads" });
+      }
+      
+      const campanha = await storage.getSalesCampaign(campaignId);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      
+      // Get unassigned leads
+      const leadsDisponiveis = await storage.getUnassignedLeads(campaignId, quantidade);
+      
+      if (leadsDisponiveis.length === 0) {
+        return res.status(400).json({ message: "Não há leads disponíveis para distribuição" });
+      }
+      
+      // Get current max ordem_fila for this user/campaign
+      let ordemFila = await storage.getMaxOrdemFila(userId, campaignId);
+      
+      // Create assignments
+      for (const lead of leadsDisponiveis) {
+        ordemFila++;
+        await storage.createSalesLeadAssignment({
+          leadId: lead.id,
+          userId,
+          campaignId,
+          status: "novo",
+          ordemFila,
+        });
+      }
+      
+      // Update campaign counters
+      await storage.updateSalesCampaign(campaignId, {
+        leadsDisponiveis: Math.max(0, (campanha.leadsDisponiveis || 0) - leadsDisponiveis.length),
+        leadsDistribuidos: (campanha.leadsDistribuidos || 0) + leadsDisponiveis.length,
+      });
+      
+      return res.json({
+        message: "Leads distribuídos com sucesso",
+        quantidade: leadsDisponiveis.length,
+      });
+    } catch (error) {
+      console.error("Distribute leads error:", error);
+      return res.status(500).json({ message: "Erro ao distribuir leads" });
+    }
+  });
+  
+  // GET /api/vendas/vendedores - Lista vendedores para distribuição
+  app.get("/api/vendas/vendedores", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      // Filter for vendedores or operacional
+      const vendedores = allUsers.filter(u => 
+        u.isActive && ["vendedor", "operacional"].includes(u.role)
+      ).map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      }));
+      return res.json(vendedores);
+    } catch (error) {
+      console.error("Get vendedores error:", error);
+      return res.status(500).json({ message: "Erro ao buscar vendedores" });
+    }
+  });
+  
+  // ===== ENDPOINTS DO VENDEDOR =====
+  
+  // GET /api/vendas/atendimento/resumo - Resumo do vendedor
+  app.get("/api/vendas/atendimento/resumo", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const statusCounts = await storage.countAssignmentsByStatus(userId);
+      
+      const novos = statusCounts.find(s => s.status === "novo")?.count || 0;
+      const emAtendimento = statusCounts.find(s => s.status === "em_atendimento")?.count || 0;
+      const vendidos = statusCounts.find(s => s.status === "vendido")?.count || 0;
+      const concluidos = statusCounts.filter(s => 
+        ["vendido", "sem_interesse", "descartado", "concluido"].includes(s.status)
+      ).reduce((acc, s) => acc + s.count, 0);
+      
+      return res.json({
+        leadsPendentes: novos + emAtendimento,
+        leadsNovos: novos,
+        emAtendimento,
+        vendidos,
+        concluidos,
+      });
+    } catch (error) {
+      console.error("Get resumo error:", error);
+      return res.status(500).json({ message: "Erro ao buscar resumo" });
+    }
+  });
+  
+  // POST /api/vendas/atendimento/proximo - Pegar próximo lead
+  app.post("/api/vendas/atendimento/proximo", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { campaignId } = req.body;
+      
+      // Get next assignment
+      const assignment = await storage.getNextAssignment(userId, campaignId);
+      
+      if (!assignment) {
+        return res.status(404).json({ message: "Não há mais leads na fila" });
+      }
+      
+      // Update to em_atendimento
+      const now = new Date();
+      await storage.updateSalesLeadAssignment(assignment.id, {
+        status: "em_atendimento",
+        dataPrimeiroAtendimento: assignment.dataPrimeiroAtendimento || now,
+        dataUltimoAtendimento: now,
+      });
+      
+      // Get lead data
+      const lead = await storage.getSalesLead(assignment.leadId);
+      if (!lead) {
+        return res.status(404).json({ message: "Lead não encontrado" });
+      }
+      
+      // Get base cliente data if available
+      let clienteBase = null;
+      if (lead.baseClienteId) {
+        const [pessoa] = await db.select().from(clientesPessoa)
+          .where(eq(clientesPessoa.id, lead.baseClienteId));
+        if (pessoa) {
+          clienteBase = await storage.getClientePessoaById(pessoa.id);
+        }
+      }
+      
+      // Get events history
+      const eventos = await storage.getEventsByAssignment(assignment.id);
+      
+      // Get campaign info
+      const campanha = await storage.getSalesCampaign(assignment.campaignId);
+      
+      return res.json({
+        assignment: { ...assignment, status: "em_atendimento" },
+        lead,
+        clienteBase,
+        eventos,
+        campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+      });
+    } catch (error) {
+      console.error("Proximo lead error:", error);
+      return res.status(500).json({ message: "Erro ao buscar próximo lead" });
+    }
+  });
+  
+  // GET /api/vendas/atendimento/:assignmentId - Detalhes do atendimento atual
+  app.get("/api/vendas/atendimento/:assignmentId", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const userId = req.user!.id;
+      
+      const result = await storage.getAssignmentWithLead(assignmentId);
+      if (!result) {
+        return res.status(404).json({ message: "Atendimento não encontrado" });
+      }
+      
+      // Verify ownership
+      if (result.assignment.userId !== userId && !hasRole(req.user, ["master", "atendimento"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      // Get base cliente data if available
+      let clienteBase = null;
+      let folhaAtual = null;
+      let contratos: any[] = [];
+      
+      if (result.lead.baseClienteId) {
+        clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
+        if (clienteBase) {
+          const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+          contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+        }
+      }
+      
+      // Get events history
+      const eventos = await storage.getEventsByAssignment(assignmentId);
+      
+      // Get campaign info
+      const campanha = await storage.getSalesCampaign(result.assignment.campaignId);
+      
+      return res.json({
+        assignment: result.assignment,
+        lead: result.lead,
+        clienteBase,
+        folhaAtual,
+        contratos,
+        eventos,
+        campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+      });
+    } catch (error) {
+      console.error("Get atendimento error:", error);
+      return res.status(500).json({ message: "Erro ao buscar atendimento" });
+    }
+  });
+  
+  // POST /api/vendas/atendimento/:assignmentId/registrar - Registrar atendimento
+  app.post("/api/vendas/atendimento/:assignmentId/registrar", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const userId = req.user!.id;
+      const { tipo, resultado, observacao, status } = req.body;
+      
+      const result = await storage.getAssignmentWithLead(assignmentId);
+      if (!result) {
+        return res.status(404).json({ message: "Atendimento não encontrado" });
+      }
+      
+      // Verify ownership
+      if (result.assignment.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      // Create event
+      await storage.createSalesLeadEvent({
+        assignmentId,
+        userId,
+        tipo: tipo || "ligacao",
+        resultado: resultado || null,
+        observacao: observacao || null,
+      });
+      
+      // Update assignment status
+      const newStatus = status || "em_atendimento";
+      await storage.updateSalesLeadAssignment(assignmentId, {
+        status: newStatus,
+        dataUltimoAtendimento: new Date(),
+      });
+      
+      return res.json({
+        message: "Atendimento registrado com sucesso",
+        status: newStatus,
+      });
+    } catch (error) {
+      console.error("Registrar atendimento error:", error);
+      return res.status(500).json({ message: "Erro ao registrar atendimento" });
+    }
+  });
+  
+  // GET /api/vendas/atendimento/campanhas-disponiveis - Campanhas com leads para o vendedor
+  app.get("/api/vendas/atendimento/campanhas-disponiveis", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Get campaigns where user has assignments
+      const assignments = await storage.getAssignmentsByUser(userId);
+      const campaignIds = [...new Set(assignments.map(a => a.campaignId))];
+      
+      const campanhas = [];
+      for (const id of campaignIds) {
+        const campanha = await storage.getSalesCampaign(id);
+        if (campanha && campanha.status === "ativa") {
+          const leadsPendentes = assignments.filter(a => 
+            a.campaignId === id && ["novo", "em_atendimento"].includes(a.status)
+          ).length;
+          campanhas.push({
+            id: campanha.id,
+            nome: campanha.nome,
+            leadsPendentes,
+          });
+        }
+      }
+      
+      return res.json(campanhas);
+    } catch (error) {
+      console.error("Get campanhas disponiveis error:", error);
+      return res.status(500).json({ message: "Erro ao buscar campanhas" });
     }
   });
 

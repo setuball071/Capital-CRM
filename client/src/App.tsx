@@ -27,6 +27,8 @@ import AcademiaQuizPage from "@/pages/academia-quiz";
 import AcademiaRoleplayPage from "@/pages/academia-roleplay";
 import AcademiaAbordagemPage from "@/pages/academia-abordagem";
 import AcademiaAdminPage from "@/pages/academia-admin";
+import VendasCampanhasPage from "@/pages/vendas-campanhas";
+import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -136,6 +138,30 @@ function CompraListaRoute({ component: Component }: { component: React.Component
   }
 
   const allowedRoles = ["master", "coordenacao"];
+  if (!allowedRoles.includes(user.role)) {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+// Protected route for CRM admin (master, atendimento only)
+function CRMAdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  const allowedRoles = ["master", "atendimento"];
   if (!allowedRoles.includes(user.role)) {
     return <Redirect to="/" />;
   }
@@ -266,6 +292,12 @@ function Router() {
               </Route>
               <Route path="/academia/admin">
                 {() => <MasterRoute component={AcademiaAdminPage} />}
+              </Route>
+              <Route path="/vendas/campanhas">
+                {() => <CRMAdminRoute component={VendasCampanhasPage} />}
+              </Route>
+              <Route path="/vendas/atendimento">
+                {() => <ProtectedRoute component={VendasAtendimentoPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

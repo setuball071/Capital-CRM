@@ -20,6 +20,10 @@ import {
   roleplaySessoes,
   roleplayAvaliacoes,
   abordagensGeradas,
+  salesCampaigns,
+  salesLeads,
+  salesLeadAssignments,
+  salesLeadEvents,
   type User,
   type InsertUser,
   type Bank,
@@ -57,6 +61,14 @@ import {
   type InsertRoleplayAvaliacao,
   type AbordagemGerada,
   type InsertAbordagemGerada,
+  type SalesCampaign,
+  type InsertSalesCampaign,
+  type SalesLead,
+  type InsertSalesLead,
+  type SalesLeadAssignment,
+  type InsertSalesLeadAssignment,
+  type SalesLeadEvent,
+  type InsertSalesLeadEvent,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -205,6 +217,35 @@ export interface IStorage {
   // Abordagens
   createAbordagemGerada(data: InsertAbordagemGerada): Promise<AbordagemGerada>;
   getAbordagensByUser(userId: number): Promise<AbordagemGerada[]>;
+  
+  // ===== CRM DE VENDAS =====
+  
+  // Campanhas
+  getAllSalesCampaigns(): Promise<SalesCampaign[]>;
+  getSalesCampaign(id: number): Promise<SalesCampaign | undefined>;
+  createSalesCampaign(data: InsertSalesCampaign): Promise<SalesCampaign>;
+  updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>): Promise<SalesCampaign | undefined>;
+  deleteSalesCampaign(id: number): Promise<void>;
+  
+  // Leads
+  getSalesLeadsByCampaign(campaignId: number): Promise<SalesLead[]>;
+  createSalesLead(data: InsertSalesLead): Promise<SalesLead>;
+  createSalesLeadsBulk(leads: InsertSalesLead[]): Promise<number>;
+  getSalesLead(id: number): Promise<SalesLead | undefined>;
+  getUnassignedLeads(campaignId: number, limit: number): Promise<SalesLead[]>;
+  
+  // Assignments
+  createSalesLeadAssignment(data: InsertSalesLeadAssignment): Promise<SalesLeadAssignment>;
+  getNextAssignment(userId: number, campaignId?: number): Promise<SalesLeadAssignment | undefined>;
+  updateSalesLeadAssignment(id: number, data: Partial<InsertSalesLeadAssignment>): Promise<SalesLeadAssignment | undefined>;
+  getAssignmentsByUser(userId: number, campaignId?: number): Promise<SalesLeadAssignment[]>;
+  getAssignmentWithLead(assignmentId: number): Promise<{ assignment: SalesLeadAssignment; lead: SalesLead } | undefined>;
+  countAssignmentsByStatus(userId: number): Promise<{ status: string; count: number }[]>;
+  getMaxOrdemFila(userId: number, campaignId: number): Promise<number>;
+  
+  // Events
+  createSalesLeadEvent(data: InsertSalesLeadEvent): Promise<SalesLeadEvent>;
+  getEventsByAssignment(assignmentId: number): Promise<SalesLeadEvent[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1346,6 +1387,177 @@ export class DbStorage implements IStorage {
     return await db.select().from(abordagensGeradas)
       .where(eq(abordagensGeradas.userId, userId))
       .orderBy(sql`${abordagensGeradas.criadoEm} DESC`);
+  }
+  
+  // ===== CRM DE VENDAS =====
+  
+  async getAllSalesCampaigns(): Promise<SalesCampaign[]> {
+    return await db.select().from(salesCampaigns)
+      .orderBy(sql`${salesCampaigns.createdAt} DESC`);
+  }
+  
+  async getSalesCampaign(id: number): Promise<SalesCampaign | undefined> {
+    const [campaign] = await db.select().from(salesCampaigns)
+      .where(eq(salesCampaigns.id, id));
+    return campaign;
+  }
+  
+  async createSalesCampaign(data: InsertSalesCampaign): Promise<SalesCampaign> {
+    const [created] = await db.insert(salesCampaigns).values(data).returning();
+    return created;
+  }
+  
+  async updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>): Promise<SalesCampaign | undefined> {
+    const [updated] = await db.update(salesCampaigns)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(salesCampaigns.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteSalesCampaign(id: number): Promise<void> {
+    await db.delete(salesCampaigns).where(eq(salesCampaigns.id, id));
+  }
+  
+  async getSalesLeadsByCampaign(campaignId: number): Promise<SalesLead[]> {
+    return await db.select().from(salesLeads)
+      .where(eq(salesLeads.campaignId, campaignId))
+      .orderBy(sql`${salesLeads.createdAt} DESC`);
+  }
+  
+  async createSalesLead(data: InsertSalesLead): Promise<SalesLead> {
+    const [created] = await db.insert(salesLeads).values(data).returning();
+    return created;
+  }
+  
+  async createSalesLeadsBulk(leads: InsertSalesLead[]): Promise<number> {
+    if (leads.length === 0) return 0;
+    const BATCH_SIZE = 500;
+    let inserted = 0;
+    for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+      const batch = leads.slice(i, i + BATCH_SIZE);
+      await db.insert(salesLeads).values(batch);
+      inserted += batch.length;
+    }
+    return inserted;
+  }
+  
+  async getSalesLead(id: number): Promise<SalesLead | undefined> {
+    const [lead] = await db.select().from(salesLeads).where(eq(salesLeads.id, id));
+    return lead;
+  }
+  
+  async getUnassignedLeads(campaignId: number, limit: number): Promise<SalesLead[]> {
+    // Leads that don't have an active assignment
+    const assignedLeadIds = db.select({ leadId: salesLeadAssignments.leadId })
+      .from(salesLeadAssignments)
+      .where(eq(salesLeadAssignments.campaignId, campaignId));
+    
+    return await db.select().from(salesLeads)
+      .where(and(
+        eq(salesLeads.campaignId, campaignId),
+        sql`${salesLeads.id} NOT IN (SELECT lead_id FROM sales_lead_assignments WHERE campaign_id = ${campaignId})`
+      ))
+      .limit(limit);
+  }
+  
+  async createSalesLeadAssignment(data: InsertSalesLeadAssignment): Promise<SalesLeadAssignment> {
+    const [created] = await db.insert(salesLeadAssignments).values(data).returning();
+    return created;
+  }
+  
+  async getNextAssignment(userId: number, campaignId?: number): Promise<SalesLeadAssignment | undefined> {
+    let query = db.select().from(salesLeadAssignments)
+      .where(and(
+        eq(salesLeadAssignments.userId, userId),
+        eq(salesLeadAssignments.status, "novo")
+      ))
+      .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`)
+      .limit(1);
+    
+    if (campaignId) {
+      query = db.select().from(salesLeadAssignments)
+        .where(and(
+          eq(salesLeadAssignments.userId, userId),
+          eq(salesLeadAssignments.campaignId, campaignId),
+          eq(salesLeadAssignments.status, "novo")
+        ))
+        .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`)
+        .limit(1);
+    }
+    
+    const [assignment] = await query;
+    return assignment;
+  }
+  
+  async updateSalesLeadAssignment(id: number, data: Partial<InsertSalesLeadAssignment>): Promise<SalesLeadAssignment | undefined> {
+    const [updated] = await db.update(salesLeadAssignments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(salesLeadAssignments.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getAssignmentsByUser(userId: number, campaignId?: number): Promise<SalesLeadAssignment[]> {
+    if (campaignId) {
+      return await db.select().from(salesLeadAssignments)
+        .where(and(
+          eq(salesLeadAssignments.userId, userId),
+          eq(salesLeadAssignments.campaignId, campaignId)
+        ))
+        .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`);
+    }
+    return await db.select().from(salesLeadAssignments)
+      .where(eq(salesLeadAssignments.userId, userId))
+      .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`);
+  }
+  
+  async getAssignmentWithLead(assignmentId: number): Promise<{ assignment: SalesLeadAssignment; lead: SalesLead } | undefined> {
+    const [assignment] = await db.select().from(salesLeadAssignments)
+      .where(eq(salesLeadAssignments.id, assignmentId));
+    
+    if (!assignment) return undefined;
+    
+    const [lead] = await db.select().from(salesLeads)
+      .where(eq(salesLeads.id, assignment.leadId));
+    
+    if (!lead) return undefined;
+    
+    return { assignment, lead };
+  }
+  
+  async countAssignmentsByStatus(userId: number): Promise<{ status: string; count: number }[]> {
+    const result = await db.select({
+      status: salesLeadAssignments.status,
+      count: sql<number>`count(*)::int`
+    })
+      .from(salesLeadAssignments)
+      .where(eq(salesLeadAssignments.userId, userId))
+      .groupBy(salesLeadAssignments.status);
+    return result;
+  }
+  
+  async getMaxOrdemFila(userId: number, campaignId: number): Promise<number> {
+    const [result] = await db.select({
+      maxOrdem: sql<number>`COALESCE(MAX(${salesLeadAssignments.ordemFila}), 0)::int`
+    })
+      .from(salesLeadAssignments)
+      .where(and(
+        eq(salesLeadAssignments.userId, userId),
+        eq(salesLeadAssignments.campaignId, campaignId)
+      ));
+    return result?.maxOrdem || 0;
+  }
+  
+  async createSalesLeadEvent(data: InsertSalesLeadEvent): Promise<SalesLeadEvent> {
+    const [created] = await db.insert(salesLeadEvents).values(data).returning();
+    return created;
+  }
+  
+  async getEventsByAssignment(assignmentId: number): Promise<SalesLeadEvent[]> {
+    return await db.select().from(salesLeadEvents)
+      .where(eq(salesLeadEvents.assignmentId, assignmentId))
+      .orderBy(sql`${salesLeadEvents.createdAt} DESC`);
   }
 }
 
