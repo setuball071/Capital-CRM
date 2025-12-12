@@ -20,17 +20,7 @@ import {
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
 } from "lucide-react";
-import { LEAD_STATUS, TIPOS_CONTATO, CONTACT_LABELS, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadTag, type LeadSchedule, type LeadContact } from "@shared/schema";
-
-const TAG_COLORS = [
-  { value: "#22c55e", name: "Verde" },
-  { value: "#3b82f6", name: "Azul" },
-  { value: "#ef4444", name: "Vermelho" },
-  { value: "#eab308", name: "Amarelo" },
-  { value: "#a855f7", name: "Roxo" },
-  { value: "#f97316", name: "Laranja" },
-  { value: "#ec4899", name: "Rosa" },
-];
+import { LEAD_STATUS, TIPOS_CONTATO, CONTACT_LABELS, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact } from "@shared/schema";
 
 interface AtendimentoData {
   assignment: SalesLeadAssignment;
@@ -204,14 +194,6 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"],
   });
 
-  const { data: userTags = [] } = useQuery<LeadTag[]>({
-    queryKey: ["/api/vendas/tags"],
-  });
-
-  const { data: assignmentTags = [] } = useQuery<LeadTag[]>({
-    queryKey: ["/api/vendas/atendimento", atendimentoAtual?.assignment?.id, "tags"],
-    enabled: !!atendimentoAtual?.assignment?.id,
-  });
 
   const { data: leadContacts = [], isLoading: loadingContacts } = useQuery<LeadContact[]>({
     queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"],
@@ -290,8 +272,8 @@ export default function VendasAtendimento() {
     }
   };
 
-  const [newTagNome, setNewTagNome] = useState("");
-  const [newTagCor, setNewTagCor] = useState("#3b82f6");
+  const [contactsByLabelOpen, setContactsByLabelOpen] = useState(false);
+  const [selectedLabelFilter, setSelectedLabelFilter] = useState<string>("");
   
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleData, setScheduleData] = useState({
@@ -299,39 +281,18 @@ export default function VendasAtendimento() {
     observacao: "",
   });
 
-  const createTagMutation = useMutation({
-    mutationFn: async (data: { nome: string; cor: string }) => {
-      return apiRequest("POST", "/api/vendas/tags", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vendas/tags"] });
-      setNewTagNome("");
-      toast({ title: "Tag criada!" });
-    },
-    onError: () => {
-      toast({ title: "Erro ao criar tag", variant: "destructive" });
-    },
+  const { data: contactsByLabel = [], isLoading: loadingContactsByLabel, refetch: refetchContactsByLabel } = useQuery<{
+    id: number;
+    leadId: number;
+    label: string;
+    type: string;
+    value: string;
+    leadName: string;
+    leadCpf: string | null;
+  }[]>({
+    queryKey: ["/api/crm/contacts/by-label", selectedLabelFilter],
+    enabled: !!selectedLabelFilter && contactsByLabelOpen,
   });
-
-  const toggleTagMutation = useMutation({
-    mutationFn: async ({ tagId, isAssigned }: { tagId: number; isAssigned: boolean }) => {
-      if (!atendimentoAtual) throw new Error("Nenhum atendimento ativo");
-      const assignmentId = atendimentoAtual.assignment.id;
-      if (isAssigned) {
-        return apiRequest("DELETE", `/api/vendas/atendimento/${assignmentId}/tags/${tagId}`);
-      } else {
-        return apiRequest("POST", `/api/vendas/atendimento/${assignmentId}/tags/${tagId}`);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento", atendimentoAtual?.assignment?.id, "tags"] });
-    },
-    onError: () => {
-      toast({ title: "Erro ao atualizar tag", variant: "destructive" });
-    },
-  });
-
-  const isTagAssigned = (tagId: number) => assignmentTags.some(t => t.id === tagId);
 
   const { data: pendingSchedules = [] } = useQuery<LeadSchedule[]>({
     queryKey: ["/api/vendas/agenda", { status: "pendente" }],
@@ -556,21 +517,6 @@ export default function VendasAtendimento() {
                   toast={toast}
                 />
               </div>
-              {assignmentTags.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Tag className="h-4 w-4 text-muted-foreground" />
-                  {assignmentTags.map((tag) => (
-                    <Badge 
-                      key={tag.id} 
-                      className="text-white text-xs" 
-                      style={{ backgroundColor: tag.cor }}
-                      data-testid={`badge-tag-${tag.id}`}
-                    >
-                      {tag.nome}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </div>
             <Button
               variant="outline"
@@ -1025,100 +971,25 @@ export default function VendasAtendimento() {
                 </CardContent>
               </Card>
 
-              {/* Tags */}
+              {/* Buscar Contatos por Etiqueta */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Tag className="h-4 w-4" />
-                    Tags
+                    Buscar por Etiqueta
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-2 flex-wrap mb-3">
-                    {assignmentTags.map((tag) => (
-                      <Badge 
-                        key={tag.id} 
-                        className="text-white text-xs cursor-pointer" 
-                        style={{ backgroundColor: tag.cor }}
-                        onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned: true })}
-                        data-testid={`badge-tag-remove-${tag.id}`}
-                      >
-                        {tag.nome}
-                        <X className="h-3 w-3 ml-1" />
-                      </Badge>
-                    ))}
-                  </div>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button size="sm" variant="outline" className="w-full" data-testid="button-manage-tags">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Gerenciar Tags
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="start">
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-sm">Gerenciar Tags</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {userTags.map((tag) => (
-                            <div 
-                              key={tag.id} 
-                              className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
-                              onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned: isTagAssigned(tag.id) })}
-                              data-testid={`tag-option-${tag.id}`}
-                            >
-                              <div 
-                                className="w-4 h-4 rounded-full flex-shrink-0" 
-                                style={{ backgroundColor: tag.cor }} 
-                              />
-                              <span className="flex-1 text-sm">{tag.nome}</span>
-                              {isTagAssigned(tag.id) && <Check className="h-4 w-4 text-green-600" />}
-                            </div>
-                          ))}
-                          {userTags.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-2">Nenhuma tag criada</p>
-                          )}
-                        </div>
-                        <Separator />
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">Criar nova tag:</p>
-                          <div className="flex gap-2">
-                            <Input 
-                              placeholder="Nome" 
-                              value={newTagNome}
-                              onChange={(e) => setNewTagNome(e.target.value)}
-                              className="h-8 text-sm"
-                              data-testid="input-new-tag-nome"
-                            />
-                            <Select value={newTagCor} onValueChange={setNewTagCor}>
-                              <SelectTrigger className="w-20 h-8" data-testid="select-new-tag-cor">
-                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: newTagCor }} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {TAG_COLORS.map((color) => (
-                                  <SelectItem key={color.value} value={color.value}>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: color.value }} />
-                                      <span>{color.name}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            className="w-full h-8"
-                            disabled={!newTagNome.trim() || createTagMutation.isPending}
-                            onClick={() => createTagMutation.mutate({ nome: newTagNome, cor: newTagCor })}
-                            data-testid="button-create-tag"
-                          >
-                            {createTagMutation.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                            Criar Tag
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setContactsByLabelOpen(true)}
+                    data-testid="button-buscar-por-etiqueta"
+                  >
+                    <Tag className="h-3 w-3 mr-1" />
+                    Buscar Contatos
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -1187,42 +1058,6 @@ export default function VendasAtendimento() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm">Tags</Label>
-              <div className="flex items-center gap-2 p-2 border rounded-md min-h-[40px] flex-wrap">
-                {assignmentTags.map((tag) => (
-                  <Badge 
-                    key={tag.id} 
-                    className="text-white text-xs" 
-                    style={{ backgroundColor: tag.cor }}
-                  >
-                    {tag.nome}
-                  </Badge>
-                ))}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button size="sm" variant="ghost" className="h-6 px-2">
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64" align="start">
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {userTags.filter(t => !isTagAssigned(t.id)).map((tag) => (
-                        <div 
-                          key={tag.id} 
-                          className="flex items-center gap-2 p-1.5 rounded hover-elevate cursor-pointer text-sm"
-                          onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned: false })}
-                        >
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.cor }} />
-                          <span>{tag.nome}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
               </div>
             </div>
 
@@ -1389,6 +1224,101 @@ export default function VendasAtendimento() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               {editingContact ? "Atualizar" : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Contatos por Etiqueta */}
+      <Dialog open={contactsByLabelOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedLabelFilter("");
+        }
+        setContactsByLabelOpen(open);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              Contatos por Etiqueta
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm">Selecione uma Etiqueta</Label>
+              <Select
+                value={selectedLabelFilter}
+                onValueChange={(v) => setSelectedLabelFilter(v)}
+              >
+                <SelectTrigger data-testid="select-filter-label">
+                  <SelectValue placeholder="Escolha uma etiqueta para filtrar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTACT_LABELS.map((label) => (
+                    <SelectItem key={label} value={label}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedLabelFilter && (
+              <div className="border rounded-lg">
+                <div className="p-3 border-b bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{selectedLabelFilter}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {loadingContactsByLabel ? "Carregando..." : `${contactsByLabel.length} contato(s) encontrado(s)`}
+                    </span>
+                  </div>
+                </div>
+                <ScrollArea className="h-64">
+                  {loadingContactsByLabel ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : contactsByLabel.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      Nenhum contato encontrado com esta etiqueta
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {contactsByLabel.map((contact) => (
+                        <div 
+                          key={contact.id} 
+                          className="flex items-center gap-3 p-3 hover-elevate"
+                          data-testid={`label-contact-item-${contact.id}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{contact.leadName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {contact.leadCpf ? formatCPF(contact.leadCpf) : "Sem CPF"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm">
+                              {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => handleCopyPhone(contact.value)}
+                              data-testid={`button-copy-label-contact-${contact.id}`}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setContactsByLabelOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
