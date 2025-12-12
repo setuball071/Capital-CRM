@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { Wand2, Lock, ArrowRight, Copy, Phone, MessageCircle, Check, Sparkles, History } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,6 +65,7 @@ const ESTILOS_TOM = [
 
 export default function AcademiaAbordagem() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [canal, setCanal] = useState<string>("whatsapp");
   const [tipoCliente, setTipoCliente] = useState<string>("");
   const [produtoFoco, setProdutoFoco] = useState<string>("");
@@ -72,16 +74,18 @@ export default function AcademiaAbordagem() {
   const [abordagem, setAbordagem] = useState<AbordagemGerada | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
 
+  const isMaster = user?.role === "master";
+
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],
   });
 
   const { data: historico } = useQuery<AbordagemHistorico[]>({
     queryKey: ["/api/academia/abordagens"],
-    enabled: !!perfilData?.perfil?.quizAprovado,
+    enabled: !!perfilData?.perfil?.quizAprovado || isMaster,
   });
 
-  const quizAprovado = perfilData?.perfil?.quizAprovado;
+  const quizAprovado = perfilData?.perfil?.quizAprovado || isMaster;
 
   const gerarMutation = useMutation({
     mutationFn: async () => {

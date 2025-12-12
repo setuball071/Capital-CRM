@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { MessageSquare, Send, Star, RefreshCw, Lock, ArrowRight, User, Bot, Award, ThumbsUp, ThumbsDown, Lightbulb, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,6 +53,7 @@ interface AvaliacaoFinal {
 
 export default function AcademiaRoleplay() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [inputMensagem, setInputMensagem] = useState("");
   const [sessaoId, setSessaoId] = useState<number | null>(null);
@@ -66,11 +68,13 @@ export default function AcademiaRoleplay() {
   const [sessaoFinalizada, setSessaoFinalizada] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const isMaster = user?.role === "master";
+
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],
   });
 
-  const quizAprovado = perfilData?.perfil?.quizAprovado;
+  const quizAprovado = perfilData?.perfil?.quizAprovado || isMaster;
 
   useEffect(() => {
     if (scrollRef.current) {
