@@ -1040,15 +1040,17 @@ export default function VendasAtendimento() {
       </div>
 
       {/* RODAPÉ FIXO - Drawer de Registrar Atendimento */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-primary shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
         <div 
-          className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+          className="flex items-center justify-between px-6 py-4 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           onClick={() => setDrawerOpen(!drawerOpen)}
           data-testid="drawer-toggle"
         >
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
-            <span className="font-semibold">Registrar Atendimento</span>
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 bg-primary-foreground/20 rounded-md">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <span className="font-bold text-base tracking-wide">Registrar Atendimento</span>
             {currentLeadSchedule && (
               <Badge variant="secondary" className="text-xs">
                 <Calendar className="h-3 w-3 mr-1" />
