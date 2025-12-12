@@ -1,0 +1,252 @@
+Quero que você refatore a tela CRM Vendas > Atendimento com foco em produtividade do vendedor e reaproveitamento do que já existe na tela de Base de Clientes > Consulta Cliente.
+
+1. Comportamento geral da tela
+
+Quando não tiver lead em atendimento, mantém exatamente a tela atual:
+
+Cards de resumo (Leads Pendentes, Novos, Em Atendimento, Vendidos).
+
+Botão grande “Iniciar / Próximo Cliente”.
+
+Quando o usuário clicar em “Iniciar / Próximo Cliente” e carregar um lead:
+
+Esconda os cards de resumo do topo.
+
+Use praticamente a tela toda para:
+
+Dados do cliente (cadastro, contato, lotação, dados bancários, margens, contratos).
+
+Painel de contato (telefones, e-mail, endereço).
+
+Barra fixa de “Registrar Atendimento” no rodapé.
+
+2. Layout da tela de atendimento (com lead carregado)
+
+Estrutura geral:
+
+Layout em 3 faixas verticais:
+
+Topo: cabeçalho do cliente.
+
+Corpo: colunas com informações.
+
+Rodapé fixo: formulário de registro do atendimento.
+
+2.1. Cabeçalho do cliente
+
+Crie um bloco no topo com:
+
+Nome do cliente (destacado, fonte maior).
+
+Tag com o nome da campanha.
+
+Botão/label “Em Atendimento”.
+
+CPF e Matrícula logo abaixo do nome.
+
+Ícones de copiar ao lado de CPF e Matrícula:
+
+Ao clicar, copia para a área de transferência.
+
+Mostra um pequeno toast “Copiado”.
+
+Importante: Reaproveite os estilos dos cards da tela de Consulta Cliente para manter identidade visual.
+
+2.2. Corpo – Colunas de informação
+
+Divida o corpo em 2 colunas principais:
+
+Coluna esquerda – Dados do cliente
+
+Agrupe em cards empilhados, seguindo o padrão visual da tela “Consulta Cliente”:
+
+Dados Pessoais
+
+CPF (com ícone de copiar).
+
+Matrícula (com ícone de copiar).
+
+Nome.
+
+Data de Nascimento.
+
+Situação Funcional.
+
+Convênio (pode vir da campanha ou da base).
+
+Contato
+
+Telefone 1
+
+Telefone 2
+
+Telefone 3
+
+E-mail
+Todos um embaixo do outro, NÃO lado a lado.
+
+Cada telefone/e-mail com ícone para copiar.
+
+Botão “+ Adicionar contato” que abre um modal simples para incluir:
+
+Tipo (telefone / e-mail)
+
+Valor
+
+Observação (opcional)
+
+Após salvar, o novo contato aparece na lista.
+
+Lotação
+
+Convênio
+
+Órgão
+
+UF
+
+Município
+
+Dados Bancários
+
+Banco salário
+
+Agência salário
+
+Conta salário
+
+(Campos só aparecem se vierem da base; caso contrário, mostrar “-” como já fazemos na Consulta Cliente.)
+
+Folha / Margens
+
+Reaproveitar a mesma lógica da tela “Consulta Cliente”, mas com as margens do convênio correto:
+
+Margem 70% (bruta, utilizada, saldo).
+
+Margem 35% (bruta, utilizada, saldo) – para SIAPE, por exemplo.
+
+Margem 5% cartão crédito (bruta, utilizada, saldo).
+
+Margem 5% cartão benefício (bruta, utilizada, saldo).
+
+Exibir em pequenos cards/resumo, lado a lado, mas sem ficar gigante, ocupando uma única seção.
+
+Contratos / Descontos em Folha
+
+Tabela similar à da Consulta Cliente:
+
+Tipo de produto.
+
+Banco do Empréstimo.
+
+Valor da Parcela.
+
+Parcelas Restantes (prazo remanescente).
+
+Competência.
+
+Esses dados já existem na base de clientes, é só reaproveitar o mesmo modelo de consulta, usando CPF + convênio do lead.
+
+Coluna direita – Painel de contato e extra
+
+Em vez de deixar “Registrar Atendimento” ocupando a lateral inteira:
+
+Use a coluna direita para um painel compacto de contato com abas:
+
+Aba “Telefones & E-mail”
+
+Lista de telefones (igual ao card de contato, mas com botões de ação:
+
+Copiar.
+
+“Marcar como principal” (opcional, se for simples).
+
+E-mail abaixo.
+
+Botão “+ Novo contato” (abre o mesmo modal citado acima).
+
+Aba “Endereço”
+
+Campos de endereço (se existirem na base futura).
+
+Por enquanto, deixar pronto para receber:
+
+Logradouro, número, complemento, bairro, cidade, UF, CEP.
+
+Essa coluna é mais para o vendedor ter facilidade de copiar dados rapidamente enquanto fala com o cliente ou preenche outro sistema.
+
+3. Barra fixa de “Registrar Atendimento”
+
+Crie um componente fixo no rodapé, sempre visível enquanto o lead está carregado:
+
+Quando fechado, mostrar apenas uma faixa com o título:
+
+“Registrar Atendimento” + ícone de setinha para cima.
+
+Ao clicar, ele expande para cima (tipo drawer) e exibe o formulário.
+
+Campos do formulário:
+
+Tipo de Contato (Ligação, WhatsApp, Presencial, etc.).
+
+Status do Lead (Novo, Em Atendimento, Retorno Agendado, Sem Interesse, Vendido, etc.).
+
+Tags (etiquetas):
+
+Campo multiselect onde o usuário pode:
+
+Selecionar tags existentes para esse usuário.
+
+Criar nova tag digitando e apertando Enter.
+
+Tags salvas devem aparecer chips no cabeçalho do cliente.
+
+Observações (texto livre).
+
+Botões:
+
+“Agendar Retorno” → campo de data/hora simples dentro do próprio drawer.
+
+“Salvar”.
+
+“Salvar e Próximo” → salva atendimento e já chama o próximo lead da fila.
+
+Regras importantes:
+
+O drawer não rola junto com a página, fica sempre fixo no rodapé.
+
+Quando expandido e a página tiver scroll, o conteúdo principal rola por trás, mas a área de registrar atendimento fica fixa.
+
+4. Reaproveitamento de dados da Base de Clientes
+
+Para CPF / Matrícula / Convênio do lead:
+
+O CRM de Vendas deve consultar a mesma estrutura de base de clientes usada em “Base de Clientes > Consulta Cliente”.
+
+Assim:
+
+Margens, contratos, dados bancários e demais informações vêm do mesmo lugar.
+
+Caso algum dado não exista na base (por exemplo, futura campanha só com nome + telefone):
+
+Mostrar “-” (como já fazemos na tela de consulta).
+
+5. Qualidade de vida do vendedor
+
+Em CPF, Matrícula, telefones e e-mail:
+
+Sempre mostrar ícone de copiar.
+
+Feedback visual curto (toast “Copiado”).
+
+Deixar a navegação fluida:
+
+Depois de “Salvar e Próximo”, carregar outro lead e reposicionar a tela no topo do cadastro.
+
+Implementa tudo isso apenas na parte de CRM Vendas > Atendimento, reaproveitando ao máximo:
+
+Estilos, componentes e hooks já usados na tela Base de Clientes > Consulta Cliente.
+
+O layout deve permanecer responsivo, priorizando desktop, mas sem quebrar em telas menores.
+
+Se precisar criar novos componentes, use TypeScript + React e o mesmo padrão utilizado no projeto atual.
