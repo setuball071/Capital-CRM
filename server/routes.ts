@@ -4654,6 +4654,67 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro ao excluir campanha" });
     }
   });
+
+  // POST /api/vendas/campanhas/criar-de-filtro - Criar campanha com leads a partir de filtros
+  app.post("/api/vendas/campanhas/criar-de-filtro", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const { nome, descricao, filtros } = req.body;
+
+      if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
+        return res.status(400).json({ message: "Nome da campanha é obrigatório" });
+      }
+
+      const filtrosResult = filtrosPedidoListaSchema.safeParse(filtros || {});
+      if (!filtrosResult.success) {
+        return res.status(400).json({ message: "Filtros inválidos", errors: filtrosResult.error.errors });
+      }
+
+      const validFiltros = filtrosResult.data;
+      const { clientes, total } = await storage.searchClientesPessoa(validFiltros);
+
+      if (total === 0) {
+        return res.status(400).json({ message: "Nenhum cliente encontrado com os filtros selecionados" });
+      }
+
+      const campanha = await storage.createSalesCampaign({
+        nome: nome.trim(),
+        descricao: descricao?.trim() || null,
+        origem: "compra_lista",
+        convenio: validFiltros.convenio || null,
+        uf: validFiltros.uf || null,
+        status: "ativa",
+        totalLeads: total,
+        leadsDisponiveis: total,
+        leadsDistribuidos: 0,
+        createdBy: req.user!.id,
+      });
+
+      const leads: InsertSalesLead[] = clientes.map((cliente) => ({
+        campaignId: campanha.id,
+        cpf: cliente.cpf || null,
+        nome: cliente.nome,
+        telefone1: cliente.telefonesBase?.[0] || null,
+        telefone2: cliente.telefonesBase?.[1] || null,
+        telefone3: cliente.telefonesBase?.[2] || null,
+        email: cliente.emailBase || null,
+        cidade: cliente.municipio || null,
+        uf: cliente.uf || null,
+        observacoes: `Convênio: ${cliente.convenio || "-"} | Órgão: ${cliente.orgaodesc || "-"} | Matrícula: ${cliente.matricula || "-"}`,
+        baseClienteId: cliente.id,
+      }));
+
+      const insertedCount = await storage.createSalesLeadsBulk(leads);
+
+      return res.status(201).json({
+        campanha,
+        leadsImportados: insertedCount,
+        message: `Campanha criada com ${insertedCount} leads`,
+      });
+    } catch (error) {
+      console.error("Create campanha from filter error:", error);
+      return res.status(500).json({ message: "Erro ao criar campanha a partir dos filtros" });
+    }
+  });
   
   // POST /api/vendas/campanhas/:id/importar-leads - Importar leads para campanha
   app.post("/api/vendas/campanhas/:id/importar-leads", requireAuth, requireCRMAdmin, upload.single("file"), async (req, res) => {
@@ -4837,6 +4898,190 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
+  // POST /api/vendas/campanhas/:id/distribuir-multi - Distribuir leads para múltiplos vendedores
+  app.post("/api/vendas/campanhas/:id/distribuir-multi", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { distributions } = req.body;
+      
+      if (!distributions || !Array.isArray(distributions) || distributions.length === 0) {
+        return res.status(400).json({ message: "Informe as distribuições de leads" });
+      }
+      
+      // Validate distributions
+      const totalRequested = distributions.reduce((acc: number, d: any) => acc + (d.quantidade || 0), 0);
+      if (totalRequested < 1) {
+        return res.status(400).json({ message: "A quantidade total deve ser maior que zero" });
+      }
+      
+      const campanha = await storage.getSalesCampaign(campaignId);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      
+      if (totalRequested > (campanha.leadsDisponiveis || 0)) {
+        return res.status(400).json({ 
+          message: `Quantidade solicitada (${totalRequested}) excede leads disponíveis (${campanha.leadsDisponiveis})` 
+        });
+      }
+      
+      let totalDistributed = 0;
+      const results: { userId: number; quantidade: number }[] = [];
+      
+      // Process each distribution
+      for (const dist of distributions) {
+        const { userId, quantidade } = dist;
+        
+        if (!userId || !quantidade || quantidade < 1) {
+          continue;
+        }
+        
+        // Get unassigned leads
+        const leadsDisponiveis = await storage.getUnassignedLeads(campaignId, quantidade);
+        
+        if (leadsDisponiveis.length === 0) {
+          break; // No more leads to distribute
+        }
+        
+        // Get current max ordem_fila for this user/campaign
+        let ordemFila = await storage.getMaxOrdemFila(userId, campaignId);
+        
+        // Create assignments
+        for (const lead of leadsDisponiveis) {
+          ordemFila++;
+          await storage.createSalesLeadAssignment({
+            leadId: lead.id,
+            userId,
+            campaignId,
+            status: "novo",
+            ordemFila,
+          });
+        }
+        
+        totalDistributed += leadsDisponiveis.length;
+        results.push({ userId, quantidade: leadsDisponiveis.length });
+      }
+      
+      // Update campaign counters
+      if (totalDistributed > 0) {
+        await storage.updateSalesCampaign(campaignId, {
+          leadsDisponiveis: Math.max(0, (campanha.leadsDisponiveis || 0) - totalDistributed),
+          leadsDistribuidos: (campanha.leadsDistribuidos || 0) + totalDistributed,
+        });
+      }
+      
+      return res.json({
+        message: "Leads distribuídos com sucesso",
+        totalDistribuido: totalDistributed,
+        distribuicoes: results,
+      });
+    } catch (error) {
+      console.error("Distribute multi leads error:", error);
+      return res.status(500).json({ message: "Erro ao distribuir leads" });
+    }
+  });
+  
+  // GET /api/vendas/campanhas/:id/distribuicao - Estatísticas de distribuição
+  app.get("/api/vendas/campanhas/:id/distribuicao", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const stats = await storage.getDistributionStats(campaignId);
+      return res.json(stats);
+    } catch (error) {
+      console.error("Get distribution stats error:", error);
+      return res.status(500).json({ message: "Erro ao buscar estatísticas de distribuição" });
+    }
+  });
+  
+  // POST /api/vendas/campanhas/:id/devolver-pool - Devolver leads ao pool
+  app.post("/api/vendas/campanhas/:id/devolver-pool", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { userId, quantidade } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "Informe o ID do usuário" });
+      }
+      
+      const campanha = await storage.getSalesCampaign(campaignId);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      
+      // Get assignments with status 'novo' for this user and campaign
+      const assignments = await db.select().from(salesLeadAssignments)
+        .where(and(
+          eq(salesLeadAssignments.userId, userId),
+          eq(salesLeadAssignments.campaignId, campaignId),
+          eq(salesLeadAssignments.status, "novo")
+        ));
+      
+      if (assignments.length === 0) {
+        return res.status(400).json({ message: "Nenhum lead com status 'novo' para devolver" });
+      }
+      
+      // Limit to quantidade if provided
+      const toReturn = quantidade ? assignments.slice(0, quantidade) : assignments;
+      const assignmentIds = toReturn.map(a => a.id);
+      
+      // Delete the assignments (returns leads to pool)
+      const returnedCount = await storage.returnLeadsToPool(assignmentIds);
+      
+      // Update campaign counters
+      await storage.updateSalesCampaign(campaignId, {
+        leadsDisponiveis: (campanha.leadsDisponiveis || 0) + returnedCount,
+        leadsDistribuidos: Math.max(0, (campanha.leadsDistribuidos || 0) - returnedCount),
+      });
+      
+      return res.json({
+        message: "Leads devolvidos ao pool com sucesso",
+        quantidade: returnedCount,
+      });
+    } catch (error) {
+      console.error("Return leads to pool error:", error);
+      return res.status(500).json({ message: "Erro ao devolver leads ao pool" });
+    }
+  });
+  
+  // POST /api/vendas/campanhas/:id/transferir - Transferir leads entre usuários
+  app.post("/api/vendas/campanhas/:id/transferir", requireAuth, requireCRMAdmin, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { fromUserId, toUserId, quantidade } = req.body;
+      
+      if (!fromUserId || !toUserId || !quantidade) {
+        return res.status(400).json({ message: "Informe origem, destino e quantidade" });
+      }
+      
+      if (fromUserId === toUserId) {
+        return res.status(400).json({ message: "Origem e destino não podem ser iguais" });
+      }
+      
+      if (quantidade < 1) {
+        return res.status(400).json({ message: "Quantidade deve ser maior que zero" });
+      }
+      
+      const campanha = await storage.getSalesCampaign(campaignId);
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      
+      const transferred = await storage.transferLeads(fromUserId, toUserId, campaignId, quantidade);
+      
+      if (transferred === 0) {
+        return res.status(400).json({ message: "Nenhum lead disponível para transferir" });
+      }
+      
+      return res.json({
+        message: "Leads transferidos com sucesso",
+        quantidade: transferred,
+      });
+    } catch (error) {
+      console.error("Transfer leads error:", error);
+      return res.status(500).json({ message: "Erro ao transferir leads" });
+    }
+  });
+  
   // GET /api/vendas/vendedores - Lista vendedores para distribuição
   app.get("/api/vendas/vendedores", requireAuth, requireCRMAdmin, async (req, res) => {
     try {
@@ -4941,6 +5186,72 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
+  // POST /api/vendas/atendimento/carregar - Load specific assignment for atendimento
+  app.post("/api/vendas/atendimento/carregar", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { assignmentId } = req.body;
+      
+      if (!assignmentId || isNaN(parseInt(assignmentId))) {
+        return res.status(400).json({ message: "Assignment ID inválido" });
+      }
+      
+      const result = await storage.getAssignmentWithLead(parseInt(assignmentId));
+      if (!result) {
+        return res.status(404).json({ message: "Atendimento não encontrado" });
+      }
+      
+      // Verify ownership
+      if (result.assignment.userId !== userId && !hasRole(req.user, ["master", "atendimento"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      // Update to em_atendimento if not already in a final status
+      const finalStatuses = ["vendido", "sem_interesse", "descartado", "concluido"];
+      if (!finalStatuses.includes(result.assignment.status)) {
+        const now = new Date();
+        await storage.updateSalesLeadAssignment(result.assignment.id, {
+          status: "em_atendimento",
+          dataPrimeiroAtendimento: result.assignment.dataPrimeiroAtendimento || now,
+          dataUltimoAtendimento: now,
+        });
+      }
+      
+      // Get base cliente data if available
+      let clienteBase = null;
+      let folhaAtual = null;
+      let contratos: any[] = [];
+      
+      if (result.lead.baseClienteId) {
+        clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
+        if (clienteBase) {
+          const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+          contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+        }
+      }
+      
+      // Get events history
+      const eventos = await storage.getEventsByAssignment(result.assignment.id);
+      
+      // Get campaign info
+      const campanha = await storage.getSalesCampaign(result.assignment.campaignId);
+      
+      return res.json({
+        assignment: { ...result.assignment, status: finalStatuses.includes(result.assignment.status) ? result.assignment.status : "em_atendimento" },
+        lead: result.lead,
+        clienteBase,
+        folhaAtual,
+        contratos,
+        eventos,
+        campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+      });
+    } catch (error) {
+      console.error("Carregar atendimento error:", error);
+      return res.status(500).json({ message: "Erro ao carregar atendimento" });
+    }
+  });
+
   // GET /api/vendas/atendimento/:assignmentId - Detalhes do atendimento atual
   app.get("/api/vendas/atendimento/:assignmentId", requireAuth, async (req, res) => {
     try {
@@ -5063,6 +5374,240 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Get campanhas disponiveis error:", error);
       return res.status(500).json({ message: "Erro ao buscar campanhas" });
+    }
+  });
+
+  // ===== LEAD TAGS ENDPOINTS =====
+
+  // GET /api/vendas/tags - Get all tags for the current user
+  app.get("/api/vendas/tags", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const tags = await storage.getTagsByUser(userId);
+      return res.json(tags);
+    } catch (error) {
+      console.error("Get tags error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tags" });
+    }
+  });
+
+  // POST /api/vendas/tags - Create a new tag
+  app.post("/api/vendas/tags", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { nome, cor } = req.body;
+      
+      if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
+        return res.status(400).json({ message: "Nome da tag é obrigatório" });
+      }
+      
+      const tag = await storage.createTag({ userId, nome: nome.trim(), cor: cor || "#3b82f6" });
+      return res.json(tag);
+    } catch (error) {
+      console.error("Create tag error:", error);
+      return res.status(500).json({ message: "Erro ao criar tag" });
+    }
+  });
+
+  // GET /api/vendas/tags/usage - Get usage counts for all tags
+  app.get("/api/vendas/tags/usage", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const usage = await storage.getTagUsageCounts(userId);
+      return res.json(usage);
+    } catch (error) {
+      console.error("Get tag usage error:", error);
+      return res.status(500).json({ message: "Erro ao buscar uso das tags" });
+    }
+  });
+
+  // PATCH /api/vendas/tags/:id - Update a tag
+  app.patch("/api/vendas/tags/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { nome, cor } = req.body;
+      const updateData: { nome?: string; cor?: string } = {};
+      
+      if (nome !== undefined) {
+        if (typeof nome !== "string" || nome.trim().length === 0) {
+          return res.status(400).json({ message: "Nome da tag é obrigatório" });
+        }
+        updateData.nome = nome.trim();
+      }
+      
+      if (cor !== undefined) {
+        updateData.cor = cor;
+      }
+      
+      const updated = await storage.updateTag(id, updateData);
+      if (!updated) {
+        return res.status(404).json({ message: "Tag não encontrada" });
+      }
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update tag error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar tag" });
+    }
+  });
+
+  // DELETE /api/vendas/tags/:id - Delete a tag
+  app.delete("/api/vendas/tags/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      await storage.deleteTag(id);
+      return res.json({ message: "Tag excluída com sucesso" });
+    } catch (error) {
+      console.error("Delete tag error:", error);
+      return res.status(500).json({ message: "Erro ao excluir tag" });
+    }
+  });
+
+  // GET /api/vendas/atendimento/:assignmentId/tags - Get tags for an assignment
+  app.get("/api/vendas/atendimento/:assignmentId/tags", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      if (isNaN(assignmentId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      const tags = await storage.getTagsForAssignment(assignmentId);
+      return res.json(tags);
+    } catch (error) {
+      console.error("Get assignment tags error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tags do lead" });
+    }
+  });
+
+  // POST /api/vendas/atendimento/:assignmentId/tags/:tagId - Assign tag to lead
+  app.post("/api/vendas/atendimento/:assignmentId/tags/:tagId", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const tagId = parseInt(req.params.tagId);
+      if (isNaN(assignmentId) || isNaN(tagId)) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      await storage.assignTagToLead(tagId, assignmentId);
+      return res.json({ message: "Tag atribuída com sucesso" });
+    } catch (error) {
+      console.error("Assign tag error:", error);
+      return res.status(500).json({ message: "Erro ao atribuir tag" });
+    }
+  });
+
+  // DELETE /api/vendas/atendimento/:assignmentId/tags/:tagId - Remove tag from lead
+  app.delete("/api/vendas/atendimento/:assignmentId/tags/:tagId", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const tagId = parseInt(req.params.tagId);
+      if (isNaN(assignmentId) || isNaN(tagId)) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      await storage.removeTagFromLead(tagId, assignmentId);
+      return res.json({ message: "Tag removida com sucesso" });
+    } catch (error) {
+      console.error("Remove tag error:", error);
+      return res.status(500).json({ message: "Erro ao remover tag" });
+    }
+  });
+
+  // ===== LEAD SCHEDULES (AGENDAMENTOS) =====
+
+  // GET /api/vendas/agenda/detalhado - Get all schedules with lead/campaign info
+  app.get("/api/vendas/agenda/detalhado", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const schedules = await storage.getSchedulesByUser(userId);
+      
+      const detailedSchedules = [];
+      for (const schedule of schedules) {
+        const data = await storage.getScheduleWithLead(schedule.id);
+        if (data) {
+          detailedSchedules.push(data);
+        }
+      }
+      
+      return res.json(detailedSchedules);
+    } catch (error) {
+      console.error("Get detailed schedules error:", error);
+      return res.status(500).json({ message: "Erro ao buscar agendamentos detalhados" });
+    }
+  });
+
+  // GET /api/vendas/agenda - Get all schedules for the current user
+  app.get("/api/vendas/agenda", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const status = req.query.status as string | undefined;
+      const schedules = await storage.getSchedulesByUser(userId, status);
+      return res.json(schedules);
+    } catch (error) {
+      console.error("Get schedules error:", error);
+      return res.status(500).json({ message: "Erro ao buscar agendamentos" });
+    }
+  });
+
+  // POST /api/vendas/atendimento/:assignmentId/agendar - Create a schedule
+  app.post("/api/vendas/atendimento/:assignmentId/agendar", requireAuth, async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const userId = req.user!.id;
+      
+      if (isNaN(assignmentId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { dataHora, observacao } = req.body;
+      
+      if (!dataHora) {
+        return res.status(400).json({ message: "Data e hora são obrigatórias" });
+      }
+      
+      const schedule = await storage.createSchedule({
+        userId,
+        assignmentId,
+        dataHora: new Date(dataHora),
+        observacao: observacao || null,
+        status: "pendente",
+      });
+      
+      return res.json(schedule);
+    } catch (error) {
+      console.error("Create schedule error:", error);
+      return res.status(500).json({ message: "Erro ao criar agendamento" });
+    }
+  });
+
+  // PATCH /api/vendas/agenda/:id - Update schedule status
+  app.patch("/api/vendas/agenda/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { status } = req.body;
+      
+      if (!status || !["pendente", "realizado", "cancelado"].includes(status)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+      
+      const schedule = await storage.updateSchedule(id, { status });
+      
+      if (!schedule) {
+        return res.status(404).json({ message: "Agendamento não encontrado" });
+      }
+      
+      return res.json(schedule);
+    } catch (error) {
+      console.error("Update schedule error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar agendamento" });
     }
   });
 

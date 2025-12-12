@@ -1,6 +1,7 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
   Sidebar,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ROLE_LABELS, type UserRole } from "@shared/schema";
+import { ROLE_LABELS, type UserRole, type UserPermission } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 interface MenuSection {
@@ -24,9 +25,29 @@ interface MenuSection {
     title: string;
     url: string;
     icon: React.ComponentType<{ className?: string }>;
-    show: boolean;
+    module?: string;
   }[];
-  show: boolean;
+}
+
+const MODULE_URL_MAPPING: Record<string, string[]> = {
+  modulo_simulador: ["/calculator", "/simulador-compra"],
+  modulo_roteiros: ["/roteiros"],
+  modulo_base_clientes: ["/bases-clientes"],
+  modulo_compra_lista: ["/compra-lista"],
+  modulo_crm_vendas_campanhas: ["/vendas/campanhas"],
+  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/etiquetas", "/vendas/agenda"],
+  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin"],
+  modulo_config_usuarios: ["/users"],
+  modulo_config_precos: ["/config-precos", "/pricing"],
+};
+
+function getModuleForUrl(url: string): string | undefined {
+  for (const [module, urls] of Object.entries(MODULE_URL_MAPPING)) {
+    if (urls.includes(url) || urls.some(u => url.startsWith(u + "/"))) {
+      return module;
+    }
+  }
+  return undefined;
 }
 
 export function AppSidebar() {
@@ -41,87 +62,84 @@ export function AppSidebar() {
     crmvendas: false,
   });
 
+  const { data: permissions = [] } = useQuery<UserPermission[]>({
+    queryKey: [`/api/users/${user?.id}/permissions`],
+    enabled: !!user && user.role !== "master",
+  });
+
   if (!user) return null;
 
   const userRole = user.role as UserRole;
-  
   const isMaster = userRole === "master";
-  const isAtendimento = userRole === "atendimento";
-  const isCoordenacao = userRole === "coordenacao";
-  const isOperacional = userRole === "operacional";
-  
-  const canAccessAgreements = isMaster || isAtendimento || isOperacional;
-  const canAccessBanks = isMaster;
-  const canAccessCoefficientTables = isMaster || isAtendimento || isOperacional;
-  const canAccessUsers = isMaster || isAtendimento || isCoordenacao;
-  const canAccessRoteiros = isMaster || isAtendimento || isOperacional;
-  const canAccessBasesClientes = isMaster;
-  const canAccessCompraLista = isMaster;
-  const canAccessConsultaCliente = isMaster;
-  const canAccessAcademia = isMaster || isAtendimento || isOperacional;
-  const canAccessCRMAdmin = isMaster || isAtendimento;
-  const canAccessCRMVendedor = true; // Todos os vendedores podem acessar
+
+  const hasModulePermission = (module: string): boolean => {
+    if (isMaster) return true;
+    const permission = permissions.find(p => p.module === module);
+    return permission?.canView === true;
+  };
+
+  const canShowMenuItem = (url: string): boolean => {
+    const module = getModuleForUrl(url);
+    if (!module) return true;
+    return hasModulePermission(module);
+  };
 
   const menuSections: MenuSection[] = [
     {
       title: "Principal",
       icon: Home,
-      show: true,
       items: [
-        { title: "Início", url: "/", icon: Home, show: true },
-        { title: "Simulador Compra", url: "/simulador-compra", icon: Calculator, show: true },
+        { title: "Início", url: "/", icon: Home },
+        { title: "Simulador Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador" },
       ],
     },
     {
       title: "Cadastros",
       icon: FileText,
-      show: canAccessAgreements || canAccessBanks || canAccessCoefficientTables || canAccessRoteiros,
       items: [
-        { title: "Convênios", url: "/agreements", icon: FileText, show: canAccessAgreements },
-        { title: "Bancos", url: "/banks", icon: Landmark, show: canAccessBanks },
-        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, show: canAccessCoefficientTables },
-        { title: "Roteiros Bancários", url: "/roteiros", icon: Map, show: canAccessRoteiros },
+        { title: "Convênios", url: "/agreements", icon: FileText },
+        { title: "Bancos", url: "/banks", icon: Landmark },
+        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table },
+        { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros" },
       ],
     },
     {
       title: "Base de Clientes",
       icon: Database,
-      show: canAccessBasesClientes || canAccessCompraLista || canAccessConsultaCliente,
       items: [
-        { title: "Importar Base", url: "/bases-clientes", icon: Database, show: canAccessBasesClientes },
-        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, show: canAccessCompraLista },
-        { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, show: canAccessConsultaCliente },
+        { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes" },
+        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_compra_lista" },
+        { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes" },
       ],
     },
     {
       title: "Administração",
       icon: Settings,
-      show: isMaster || canAccessUsers,
       items: [
-        { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, show: isMaster },
-        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, show: isMaster },
-        { title: "Usuários", url: "/users", icon: Users, show: canAccessUsers },
+        { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck },
+        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
+        { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
       ],
     },
     {
       title: "Academia ConsigOne",
       icon: GraduationCap,
-      show: canAccessAcademia,
       items: [
-        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, show: canAccessAcademia },
-        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, show: canAccessAcademia },
-        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, show: canAccessAcademia },
-        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, show: canAccessAcademia },
-        { title: "Admin Academia", url: "/academia/admin", icon: Award, show: isMaster },
+        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, module: "modulo_academia" },
+        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia" },
+        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia" },
+        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia" },
+        { title: "Admin Academia", url: "/academia/admin", icon: Award, module: "modulo_academia" },
       ],
     },
     {
       title: "CRM Vendas",
       icon: Target,
-      show: canAccessCRMAdmin || canAccessCRMVendedor,
       items: [
-        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, show: canAccessCRMAdmin },
-        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, show: canAccessCRMVendedor },
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_crm_vendas_campanhas" },
+        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_crm_vendas_atendimento" },
+        { title: "Etiquetas", url: "/vendas/etiquetas", icon: Tag, module: "modulo_crm_vendas_atendimento" },
+        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_crm_vendas_atendimento" },
       ],
     },
   ];
@@ -149,68 +167,75 @@ export function AppSidebar() {
       .substring(0, 2);
   };
 
+  const getFilteredSections = () => {
+    return menuSections.map(section => {
+      const visibleItems = section.items.filter(item => {
+        if (!item.module) return true;
+        return hasModulePermission(item.module);
+      });
+      return { ...section, items: visibleItems };
+    }).filter(section => section.items.length > 0);
+  };
+
+  const filteredSections = getFilteredSections();
+
   return (
     <Sidebar>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuSections
-                .filter((section) => section.show)
-                .map((section) => {
-                  const visibleItems = section.items.filter(item => item.show);
-                  if (visibleItems.length === 0) return null;
-                  
-                  const sectionKey = getSectionKey(section.title);
-                  const isOpen = openSections[sectionKey] ?? false;
-                  const hasActiveItem = visibleItems.some(item => location === item.url);
+              {filteredSections.map((section) => {
+                const sectionKey = getSectionKey(section.title);
+                const isOpen = openSections[sectionKey] ?? false;
+                const hasActiveItem = section.items.some(item => location === item.url);
 
-                  return (
-                    <Collapsible
-                      key={section.title}
-                      open={isOpen || hasActiveItem}
-                      onOpenChange={() => toggleSection(section.title)}
-                    >
-                      <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuButton
-                            className="w-full justify-between font-medium"
-                            data-testid={`sidebar-section-${sectionKey}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <section.icon className="h-4 w-4" />
-                              <span>{section.title}</span>
-                            </div>
-                            <ChevronDown 
-                              className={cn(
-                                "h-4 w-4 transition-transform duration-200",
-                                (isOpen || hasActiveItem) && "rotate-180"
-                              )} 
-                            />
-                          </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <SidebarMenu className="ml-4 mt-1 border-l border-border pl-2">
-                            {visibleItems.map((item) => (
-                              <SidebarMenuItem key={item.title}>
-                                <SidebarMenuButton
-                                  asChild
-                                  isActive={location === item.url}
-                                  data-testid={`sidebar-${item.url.replace(/\//g, '-').slice(1) || "home"}`}
-                                >
-                                  <button onClick={() => setLocation(item.url)} className="w-full">
-                                    <item.icon className="h-4 w-4" />
-                                    <span>{item.title}</span>
-                                  </button>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            ))}
-                          </SidebarMenu>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
-                  );
-                })}
+                return (
+                  <Collapsible
+                    key={section.title}
+                    open={isOpen || hasActiveItem}
+                    onOpenChange={() => toggleSection(section.title)}
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          className="w-full justify-between font-medium"
+                          data-testid={`sidebar-section-${sectionKey}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <section.icon className="h-4 w-4" />
+                            <span>{section.title}</span>
+                          </div>
+                          <ChevronDown 
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-200",
+                              (isOpen || hasActiveItem) && "rotate-180"
+                            )} 
+                          />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenu className="ml-4 mt-1 border-l border-border pl-2">
+                          {section.items.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={location === item.url}
+                                data-testid={`sidebar-${item.url.replace(/\//g, '-').slice(1) || "home"}`}
+                              >
+                                <button onClick={() => setLocation(item.url)} className="w-full">
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </button>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

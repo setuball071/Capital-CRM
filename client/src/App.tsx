@@ -29,6 +29,8 @@ import AcademiaAbordagemPage from "@/pages/academia-abordagem";
 import AcademiaAdminPage from "@/pages/academia-admin";
 import VendasCampanhasPage from "@/pages/vendas-campanhas";
 import VendasAtendimentoPage from "@/pages/vendas-atendimento";
+import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
+import VendasAgendaPage from "@/pages/vendas-agenda";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -298,6 +300,12 @@ function Router() {
               </Route>
               <Route path="/vendas/atendimento">
                 {() => <ProtectedRoute component={VendasAtendimentoPage} />}
+              </Route>
+              <Route path="/vendas/etiquetas">
+                {() => <ProtectedRoute component={VendasEtiquetasPage} />}
+              </Route>
+              <Route path="/vendas/agenda">
+                {() => <ProtectedRoute component={VendasAgendaPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

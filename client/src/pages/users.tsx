@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -48,7 +49,22 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check } from "lucide-react";
-import { type User, USER_ROLES, ROLE_LABELS, type UserRole } from "@shared/schema";
+import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission } from "@shared/schema";
+import { Separator } from "@/components/ui/separator";
+
+const MODULE_TRANSLATIONS: Record<string, string> = {
+  modulo_simulador: "Simulador GoldCard",
+  modulo_roteiros: "Roteiro Bancário",
+  modulo_base_clientes: "Base de Clientes",
+  modulo_compra_lista: "Compra de Lista",
+  modulo_crm_vendas_campanhas: "CRM Campanhas",
+  modulo_crm_vendas_atendimento: "CRM Atendimento",
+  modulo_academia: "Academia",
+  modulo_config_usuarios: "Config. Usuários",
+  modulo_config_precos: "Config. Preços",
+};
+
+type PermissionState = { module: string; canView: boolean; canEdit: boolean };
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -69,6 +85,7 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("vendedor");
   const [managerId, setManagerId] = useState<string>("");
+  const [permissions, setPermissions] = useState<PermissionState[]>([]);
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
@@ -88,6 +105,34 @@ export default function UsersPage() {
     queryKey: ["/api/users/coordenadores"],
     enabled: canManageAllUsers,
   });
+
+  // Fetch available modules for permissions
+  const { data: modules = [] } = useQuery<string[]>({
+    queryKey: ["/api/permissions/modules"],
+    enabled: isMaster,
+  });
+
+  // Fetch user permissions when editing
+  const { data: userPermissions, isLoading: isLoadingPermissions } = useQuery<UserPermission[]>({
+    queryKey: ["/api/users", editingUser?.id, "permissions"],
+    enabled: !!editingUser && editingUser.role !== "master" && isMaster,
+  });
+
+  // Initialize permissions when user permissions are loaded or modules change
+  useEffect(() => {
+    if (editingUser && modules.length > 0) {
+      const existingPermissions = userPermissions || [];
+      const permissionMap = new Map(existingPermissions.map(p => [p.module, { canView: p.canView, canEdit: p.canEdit }]));
+      
+      const initialPermissions: PermissionState[] = modules.map(module => ({
+        module,
+        canView: permissionMap.get(module)?.canView ?? false,
+        canEdit: permissionMap.get(module)?.canEdit ?? false,
+      }));
+      
+      setPermissions(initialPermissions);
+    }
+  }, [editingUser, modules, userPermissions]);
 
   // Create user mutation
   const createUserMutation = useMutation({
@@ -149,6 +194,23 @@ export default function UsersPage() {
     },
   });
 
+  // Save permissions mutation
+  const savePermissionsMutation = useMutation({
+    mutationFn: async ({ userId, permissions }: { userId: number; permissions: PermissionState[] }) => {
+      return apiRequest("PUT", `/api/users/${userId}/permissions`, permissions);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", variables.userId, "permissions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao salvar permissões",
+        description: error.message || "Não foi possível salvar as permissões",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
@@ -202,6 +264,7 @@ export default function UsersPage() {
     setPassword("");
     setRole("vendedor");
     setManagerId("");
+    setPermissions([]);
   };
 
   const handleOpenCreateDialog = () => {
@@ -253,10 +316,33 @@ export default function UsersPage() {
     if (editingUser) {
       // Pass credentials info if password was changed
       const showCredentials = password ? { name, email, password } : undefined;
-      updateUserMutation.mutate({ id: editingUser.id, data, showCredentials });
+      updateUserMutation.mutate({ id: editingUser.id, data, showCredentials }, {
+        onSuccess: () => {
+          // Save permissions after user is updated (only for non-master users)
+          if (isMaster && editingUser.role !== "master" && permissions.length > 0) {
+            savePermissionsMutation.mutate({ userId: editingUser.id, permissions });
+          }
+        },
+      });
     } else {
       createUserMutation.mutate(data);
     }
+  };
+
+  // Helper to update permission state
+  const updatePermission = (module: string, field: 'canView' | 'canEdit', value: boolean) => {
+    setPermissions(prev => prev.map(p => {
+      if (p.module !== module) return p;
+      if (field === 'canEdit' && value) {
+        // If enabling edit, also enable view
+        return { ...p, canEdit: true, canView: true };
+      }
+      if (field === 'canView' && !value) {
+        // If disabling view, also disable edit
+        return { ...p, canView: false, canEdit: false };
+      }
+      return { ...p, [field]: value };
+    }));
   };
 
   const toggleUserStatus = (user: User) => {
@@ -379,7 +465,7 @@ export default function UsersPage() {
               Novo Usuário
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingUser ? "Editar Usuário" : "Criar Novo Usuário"}
@@ -463,6 +549,59 @@ export default function UsersPage() {
                   </Select>
                 </div>
               )}
+
+              {isMaster && editingUser && editingUser.role !== "master" && (
+                <>
+                  <Separator className="my-4" />
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Permissões de Acesso</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Configure quais módulos este usuário pode acessar e editar.
+                    </p>
+                    {isLoadingPermissions ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="border rounded-md">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[50%]">Módulo</TableHead>
+                              <TableHead className="text-center">Visualizar</TableHead>
+                              <TableHead className="text-center">Editar</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {permissions.map((perm) => (
+                              <TableRow key={perm.module} data-testid={`permission-row-${perm.module}`}>
+                                <TableCell className="font-medium">
+                                  {MODULE_TRANSLATIONS[perm.module] || perm.module}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Checkbox
+                                    checked={perm.canView}
+                                    onCheckedChange={(checked) => updatePermission(perm.module, 'canView', !!checked)}
+                                    data-testid={`checkbox-view-${perm.module}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Checkbox
+                                    checked={perm.canEdit}
+                                    onCheckedChange={(checked) => updatePermission(perm.module, 'canEdit', !!checked)}
+                                    data-testid={`checkbox-edit-${perm.module}`}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
               <div className="flex justify-end gap-2 pt-4">
                 <Button
                   type="button"

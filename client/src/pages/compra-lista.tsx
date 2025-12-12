@@ -9,10 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download, Info } from "lucide-react";
+import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download, Info, Megaphone } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useLocation } from "wouter";
 
 interface Filtros {
   convenio?: string;
@@ -92,9 +95,13 @@ const UF_LIST = [
 
 export default function CompraLista() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [filtros, setFiltros] = useState<Filtros>({});
   const [simulacao, setSimulacao] = useState<SimulacaoResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [showCampanhaDialog, setShowCampanhaDialog] = useState(false);
+  const [campanhaName, setCampanhaName] = useState("");
+  const [campanhaDescricao, setCampanhaDescricao] = useState("");
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
@@ -144,6 +151,47 @@ export default function CompraLista() {
       });
     },
   });
+
+  const criarCampanhaMutation = useMutation({
+    mutationFn: async (data: { nome: string; descricao?: string; filtros: Filtros }) => {
+      const response = await apiRequest("POST", "/api/vendas/campanhas/criar-de-filtro", data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Campanha criada",
+        description: `Campanha "${data.campanha.nome}" criada com ${data.leadsImportados} leads.`,
+      });
+      setShowCampanhaDialog(false);
+      setCampanhaName("");
+      setCampanhaDescricao("");
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/campanhas"] });
+      navigate(`/vendas/campanhas`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao criar campanha",
+        description: error.message || "Ocorreu um erro ao criar a campanha.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCriarCampanha = () => {
+    if (!campanhaName.trim()) {
+      toast({
+        title: "Nome obrigatório",
+        description: "Por favor, informe o nome da campanha.",
+        variant: "destructive",
+      });
+      return;
+    }
+    criarCampanhaMutation.mutate({
+      nome: campanhaName,
+      descricao: campanhaDescricao || undefined,
+      filtros,
+    });
+  };
 
   const handleSimular = () => {
     setIsSimulating(true);
@@ -635,7 +683,17 @@ export default function CompraLista() {
                       </TableBody>
                     </Table>
 
-                    <div className="flex justify-end pt-4 border-t">
+                    <div className="flex justify-end gap-3 pt-4 border-t flex-wrap">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowCampanhaDialog(true)}
+                        disabled={criarCampanhaMutation.isPending}
+                        size="lg"
+                        data-testid="button-criar-campanha"
+                      >
+                        <Megaphone className="w-4 h-4 mr-2" />
+                        Criar Campanha CRM
+                      </Button>
                       <Button
                         onClick={handleCriarPedido}
                         disabled={criarPedidoMutation.isPending}
@@ -746,6 +804,65 @@ export default function CompraLista() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={showCampanhaDialog} onOpenChange={setShowCampanhaDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar Campanha CRM</DialogTitle>
+            <DialogDescription>
+              Crie uma nova campanha de vendas com {simulacao?.total.toLocaleString("pt-BR") || 0} leads baseados nos filtros atuais.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="campanha-nome">Nome da Campanha *</Label>
+              <Input
+                id="campanha-nome"
+                placeholder="Ex: Campanha SIAPE Janeiro 2025"
+                value={campanhaName}
+                onChange={(e) => setCampanhaName(e.target.value)}
+                data-testid="input-campanha-nome"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campanha-descricao">Descrição (opcional)</Label>
+              <Textarea
+                id="campanha-descricao"
+                placeholder="Descreva o objetivo da campanha..."
+                value={campanhaDescricao}
+                onChange={(e) => setCampanhaDescricao(e.target.value)}
+                data-testid="input-campanha-descricao"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCampanhaDialog(false)}
+              data-testid="button-cancelar-campanha"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCriarCampanha}
+              disabled={criarCampanhaMutation.isPending || !campanhaName.trim()}
+              data-testid="button-confirmar-campanha"
+            >
+              {criarCampanhaMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <Megaphone className="w-4 h-4 mr-2" />
+                  Criar Campanha
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
