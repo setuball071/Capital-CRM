@@ -30,6 +30,76 @@ The core algorithm is coefficient-based, supporting two safety margin models: pe
 
 A full authentication and authorization system is implemented, featuring session-based authentication with `express-session` and `connect-pg-simple`, password hashing with `bcrypt`, and role-based access control (RBAC). Roles include Master, Coordenação, Atendimento, Operacional, and Vendedor, each with hierarchical permissions for user and data management.
 
+### User Permissions System
+
+A flexible per-user module permission system allows granular access control beyond basic roles:
+
+**Database Structure**:
+- `user_permissions`: Per-user module permissions (userId, module, canView, canEdit)
+- Master users bypass permission checks and have access to all modules
+
+**Available Modules**:
+- modulo_simulador: Simulador GoldCard
+- modulo_roteiros: Roteiro Bancário
+- modulo_base_clientes: Base de Clientes
+- modulo_compra_lista: Compra de Lista
+- modulo_crm_vendas_campanhas: CRM Campanhas
+- modulo_crm_vendas_atendimento: CRM Atendimento
+- modulo_academia: Academia
+- modulo_config_usuarios: Config. Usuários
+- modulo_config_precos: Config. Preços
+
+**Features**:
+- Permission management in user edit dialog (master only)
+- Sidebar menu items filtered based on user permissions
+- Backend middleware `requireModuleAccess()` for API protection
+- Checkbox-based UI for canView and canEdit per module
+
+### CRM de Vendas (Sales CRM Module)
+
+Campaign-based lead management system for sales teams.
+
+**Database Structure** (4 additional tables):
+- `sales_campaigns`: Campaign management (nome, descricao, status, totalLeads, leadsDisponiveis, leadsDistribuidos)
+- `sales_leads`: Lead data (nome, cpf, telefone1/2/3, email, cidade, uf, observacoes, baseClienteId)
+- `sales_lead_assignments`: Lead-user assignments (leadId, userId, campaignId, status, ordemFila)
+- `sales_lead_events`: Contact history (assignmentId, tipo, resultado, observacao)
+- `lead_tags`: User-defined colored tags (userId, nome, cor)
+- `lead_tag_assignments`: Tag-lead associations (tagId, assignmentId)
+- `lead_schedules`: Scheduled callbacks (userId, assignmentId, dataHora, observacao, status)
+
+**Campaigns Page** (/vendas/campanhas):
+- Campaign list with lead statistics
+- Multi-user lead distribution modal with quantity per vendedor
+- Distribution stats modal showing leads per user with status breakdown
+- "Devolver ao Pool" - returns unworked leads to campaign pool
+- "Transferir" - transfers leads between vendedores
+- Create campaigns from Compra de Lista filter results
+
+**Atendimento Page** (/vendas/atendimento):
+- Queue-based lead processing interface
+- Organized lead details in card sections (Dados Pessoais, Contato, Lotação, Dados Bancários)
+- Click-to-copy for CPF, matrícula, telefones, email
+- Colored tag system for lead categorization
+- Scheduling system for follow-up callbacks
+- Status tracking (novo, em_atendimento, vendido, sem_interesse, descartado)
+- Contact registration with tipo, resultado, observação
+
+**Tag Management Page** (/vendas/etiquetas):
+- Create, edit, delete user-defined tags
+- 7 color options (green, blue, red, yellow, purple, orange, pink)
+- Usage count per tag
+
+**Agenda Page** (/vendas/agenda):
+- View all scheduled callbacks
+- Filter by status (pendente, realizado, cancelado)
+- Overdue highlighting for past-due schedules
+- Quick actions: Atender, Marcar Realizado, Cancelar
+
+**Integration with Compra de Lista**:
+- "Criar Campanha CRM" button on filter results
+- Creates campaign with leads matching current filter criteria
+
 ### Roteiro Bancário Inteligente
 
 The banking roadmap module provides intelligent search and management of bank-specific procedures. Access is restricted to master, atendimento, and operacional roles. Features include:
