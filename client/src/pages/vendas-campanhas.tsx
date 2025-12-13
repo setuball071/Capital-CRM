@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, Upload, Users, MoreVertical, Trash2, Pause, Play, Eye, RotateCcw, ArrowRightLeft } from "lucide-react";
+import { Loader2, Plus, Upload, Users, MoreVertical, Trash2, Pause, Play, Eye, RotateCcw, ArrowRightLeft, Tag } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { SalesCampaign } from "@shared/schema";
+import { LEAD_MARKER_LABELS, type LeadMarker } from "@shared/schema";
 
 interface Vendedor {
   id: number;
@@ -38,6 +39,11 @@ interface DistributionStat {
   concluido: number;
 }
 
+interface MarkerDistribution {
+  leadMarker: string;
+  count: number;
+}
+
 export default function VendasCampanhas() {
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -45,6 +51,8 @@ export default function VendasCampanhas() {
   const [showDistribuirDialog, setShowDistribuirDialog] = useState(false);
   const [showDistribuidosDialog, setShowDistribuidosDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showMarkerDistributionDialog, setShowMarkerDistributionDialog] = useState(false);
+  const [selectedMarkersForRepescagem, setSelectedMarkersForRepescagem] = useState<string[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<SalesCampaign | null>(null);
   const [selectedUserForTransfer, setSelectedUserForTransfer] = useState<DistributionStat | null>(null);
   const [newCampaign, setNewCampaign] = useState({ nome: "", descricao: "", convenio: "", uf: "" });
@@ -64,6 +72,11 @@ export default function VendasCampanhas() {
   const { data: distributionStats, refetch: refetchDistributionStats } = useQuery<DistributionStat[]>({
     queryKey: ["/api/vendas/campanhas", selectedCampaign?.id, "distribuicao"],
     enabled: !!selectedCampaign && showDistribuidosDialog,
+  });
+
+  const { data: markerDistribution, refetch: refetchMarkerDistribution, isLoading: isLoadingMarkers } = useQuery<MarkerDistribution[]>({
+    queryKey: ["/api/crm/campaigns", selectedCampaign?.id, "distribution"],
+    enabled: !!selectedCampaign && showMarkerDistributionDialog,
   });
 
   useEffect(() => {
@@ -229,6 +242,23 @@ export default function VendasCampanhas() {
     },
   });
 
+  const repescagemMutation = useMutation({
+    mutationFn: async ({ campaignId, leadMarkers }: { campaignId: number; leadMarkers: string[] }) => {
+      const res = await apiRequest("POST", `/api/crm/campaigns/${campaignId}/repescagem`, { leadMarkers });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/campanhas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/campaigns", selectedCampaign?.id, "distribution"] });
+      refetchMarkerDistribution();
+      toast({ title: `Repescagem realizada: ${data.leadsReset} leads devolvidos ao pool!` });
+      setSelectedMarkersForRepescagem([]);
+    },
+    onError: (error: any) => {
+      toast({ title: error?.message || "Erro ao realizar repescagem", variant: "destructive" });
+    },
+  });
+
   const handleDistribuirSubmit = () => {
     if (!selectedCampaign) return;
     
@@ -279,6 +309,41 @@ export default function VendasCampanhas() {
       toUserId: parseInt(transferToUserId),
       quantidade: transferQuantidade,
     });
+  };
+
+  const handleToggleMarkerForRepescagem = (marker: string) => {
+    setSelectedMarkersForRepescagem((prev) =>
+      prev.includes(marker) ? prev.filter((m) => m !== marker) : [...prev, marker]
+    );
+  };
+
+  const handleRepescagemSubmit = () => {
+    if (!selectedCampaign || selectedMarkersForRepescagem.length === 0) return;
+    
+    repescagemMutation.mutate({
+      campaignId: selectedCampaign.id,
+      leadMarkers: selectedMarkersForRepescagem,
+    });
+  };
+
+  const getMarkerBadgeVariant = (marker: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (marker) {
+      case "NOVO":
+        return "secondary";
+      case "EM_ATENDIMENTO":
+      case "INTERESSADO":
+      case "PROPOSTA_ENVIADA":
+        return "default";
+      case "VENDIDO":
+        return "default";
+      case "NAO_ATENDE":
+      case "TELEFONE_INVALIDO":
+      case "ENGANO":
+      case "SEM_INTERESSE":
+        return "destructive";
+      default:
+        return "outline";
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -420,6 +485,17 @@ export default function VendasCampanhas() {
                           >
                             <Eye className="h-4 w-4 mr-2" />
                             Ver Distribuídos
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedCampaign(campanha);
+                              setSelectedMarkersForRepescagem([]);
+                              setShowMarkerDistributionDialog(true);
+                            }}
+                            disabled={(campanha.totalLeads || 0) === 0}
+                          >
+                            <Tag className="h-4 w-4 mr-2" />
+                            Ver por Marcador
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -836,6 +912,100 @@ export default function VendasCampanhas() {
             >
               {transferirMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirmar Transferência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMarkerDistributionDialog} onOpenChange={(open) => {
+        setShowMarkerDistributionDialog(open);
+        if (!open) {
+          setSelectedCampaign(null);
+          setSelectedMarkersForRepescagem([]);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Distribuição por Marcador - {selectedCampaign?.nome}</DialogTitle>
+            <DialogDescription>
+              Visualize leads por marcador e realize repescagem dos leads selecionados
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingMarkers ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="border rounded-md max-h-96 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Selecionar</TableHead>
+                      <TableHead>Marcador</TableHead>
+                      <TableHead className="text-right">Quantidade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {markerDistribution?.map((dist) => {
+                      const isSelected = selectedMarkersForRepescagem.includes(dist.leadMarker);
+                      const label = LEAD_MARKER_LABELS[dist.leadMarker as LeadMarker] || dist.leadMarker;
+                      
+                      return (
+                        <TableRow key={dist.leadMarker} data-testid={`row-marker-${dist.leadMarker}`}>
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleMarkerForRepescagem(dist.leadMarker)}
+                              data-testid={`checkbox-marker-${dist.leadMarker}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getMarkerBadgeVariant(dist.leadMarker)}>
+                              {label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {dist.count}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {(!markerDistribution || markerDistribution.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          Nenhum lead nesta campanha
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {selectedMarkersForRepescagem.length > 0 && (
+                <div className="bg-muted p-3 rounded-md">
+                  <p className="text-sm">
+                    <span className="font-medium">{selectedMarkersForRepescagem.length}</span> marcador(es) selecionado(s) para repescagem.
+                    Os leads com esses marcadores serão devolvidos ao pool (marcador = NOVO) e terão suas atribuições removidas.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMarkerDistributionDialog(false)}>
+              Fechar
+            </Button>
+            <Button
+              onClick={handleRepescagemSubmit}
+              disabled={selectedMarkersForRepescagem.length === 0 || repescagemMutation.isPending}
+              data-testid="button-repescagem"
+            >
+              {repescagemMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Repescagem
             </Button>
           </DialogFooter>
         </DialogContent>
