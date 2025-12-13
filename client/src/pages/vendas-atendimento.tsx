@@ -20,7 +20,7 @@ import {
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
 } from "lucide-react";
-import { LEAD_STATUS, TIPOS_CONTATO, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact, type ContactTag } from "@shared/schema";
+import { LEAD_STATUS, TIPOS_CONTATO, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact, type ContactTag, type LeadTag } from "@shared/schema";
 
 interface AtendimentoData {
   assignment: SalesLeadAssignment;
@@ -200,9 +200,9 @@ export default function VendasAtendimento() {
     enabled: !!atendimentoAtual?.lead?.id,
   });
 
-  // Tag management queries
-  const { data: allContactTags = [] } = useQuery<ContactTag[]>({
-    queryKey: ["/api/crm/contact-tags"],
+  // Tag management queries - use the unified vendas tags system
+  const { data: allContactTags = [] } = useQuery<LeadTag[]>({
+    queryKey: ["/api/vendas/tags"],
   });
 
   const { data: contactsWithTags = [] } = useQuery<{ contactId: number; tagId: number }[]>({
@@ -217,7 +217,7 @@ export default function VendasAtendimento() {
   const [showNewTagForm, setShowNewTagForm] = useState(false);
 
   // Get tags for a specific contact
-  const getTagsForContact = (contactId: number): ContactTag[] => {
+  const getTagsForContact = (contactId: number): LeadTag[] => {
     const tagIds = contactsWithTags
       .filter(ct => ct.contactId === contactId)
       .map(ct => ct.tagId);
@@ -230,8 +230,8 @@ export default function VendasAtendimento() {
   };
 
   // Get all unique tags for the lead (across all contacts)
-  const getAllLeadTags = (): ContactTag[] => {
-    const uniqueTagIds = [...new Set(contactsWithTags.map(ct => ct.tagId))];
+  const getAllLeadTags = (): LeadTag[] => {
+    const uniqueTagIds = Array.from(new Set(contactsWithTags.map(ct => ct.tagId)));
     return allContactTags.filter(tag => uniqueTagIds.includes(tag.id));
   };
 
@@ -294,13 +294,13 @@ export default function VendasAtendimento() {
     },
   });
 
-  // Tag mutations
+  // Tag mutations - use unified vendas tags system
   const createTagMutation = useMutation({
-    mutationFn: async (data: { name: string; color: string }) => {
-      return apiRequest("POST", "/api/crm/contact-tags", data);
+    mutationFn: async (data: { nome: string; cor: string }) => {
+      return apiRequest("POST", "/api/vendas/tags", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/contact-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/tags"] });
       setNewTagName("");
       setNewTagColor("#3B82F6");
       setShowNewTagForm(false);
@@ -348,7 +348,7 @@ export default function VendasAtendimento() {
       toast({ title: "Informe o nome da etiqueta", variant: "destructive" });
       return;
     }
-    createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
+    createTagMutation.mutate({ nome: newTagName.trim(), cor: newTagColor });
   };
 
   const handleCopyPhone = async (phone: string) => {
@@ -580,17 +580,17 @@ export default function VendasAtendimento() {
                         variant="secondary"
                         className="text-xs"
                         style={{ 
-                          backgroundColor: `${tag.color}20`, 
-                          borderColor: tag.color,
-                          color: tag.color 
+                          backgroundColor: `${tag.cor}20`, 
+                          borderColor: tag.cor,
+                          color: tag.cor 
                         }}
                         data-testid={`badge-tag-${tag.id}`}
                       >
                         <div 
                           className="w-2 h-2 rounded-full mr-1.5"
-                          style={{ backgroundColor: tag.color }}
+                          style={{ backgroundColor: tag.cor }}
                         />
-                        {tag.name}
+                        {tag.nome}
                       </Badge>
                     ))}
                     {leadTags.length > 2 && (
@@ -959,8 +959,8 @@ export default function VendasAtendimento() {
                                       <div 
                                         key={tag.id}
                                         className="w-2 h-2 rounded-full"
-                                        style={{ backgroundColor: tag.color }}
-                                        title={tag.name}
+                                        style={{ backgroundColor: tag.cor }}
+                                        title={tag.nome}
                                       />
                                     ))}
                                     {contactTags.length > 3 && (
@@ -1013,9 +1013,9 @@ export default function VendasAtendimento() {
                                                 >
                                                   <div 
                                                     className="w-3 h-3 rounded-full shrink-0"
-                                                    style={{ backgroundColor: tag.color }}
+                                                    style={{ backgroundColor: tag.cor }}
                                                   />
-                                                  <span className="flex-1 text-left truncate">{tag.name}</span>
+                                                  <span className="flex-1 text-left truncate">{tag.nome}</span>
                                                   {contactHasTag(contact.id, tag.id) && (
                                                     <Check className="h-3 w-3 text-primary shrink-0" />
                                                   )}
