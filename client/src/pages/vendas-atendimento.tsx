@@ -229,6 +229,14 @@ export default function VendasAtendimento() {
     return contactsWithTags.some(ct => ct.contactId === contactId && ct.tagId === tagId);
   };
 
+  // Get all unique tags for the lead (across all contacts)
+  const getAllLeadTags = (): ContactTag[] => {
+    const uniqueTagIds = [...new Set(contactsWithTags.map(ct => ct.tagId))];
+    return allContactTags.filter(tag => uniqueTagIds.includes(tag.id));
+  };
+
+  const leadTags = getAllLeadTags();
+
   const createContactMutation = useMutation({
     mutationFn: async (data: { type: string; value: string }) => {
       if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
@@ -562,6 +570,35 @@ export default function VendasAtendimento() {
                   <Badge variant="outline" data-testid="badge-campanha">
                     {atendimentoAtual.campanha.nome}
                   </Badge>
+                )}
+                {/* Tag chips */}
+                {leadTags.length > 0 && (
+                  <>
+                    {leadTags.slice(0, 2).map(tag => (
+                      <Badge 
+                        key={tag.id}
+                        variant="secondary"
+                        className="text-xs"
+                        style={{ 
+                          backgroundColor: `${tag.color}20`, 
+                          borderColor: tag.color,
+                          color: tag.color 
+                        }}
+                        data-testid={`badge-tag-${tag.id}`}
+                      >
+                        <div 
+                          className="w-2 h-2 rounded-full mr-1.5"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </Badge>
+                    ))}
+                    {leadTags.length > 2 && (
+                      <Badge variant="outline" className="text-xs" data-testid="badge-more-tags">
+                        +{leadTags.length - 2}
+                      </Badge>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-4 text-sm">
