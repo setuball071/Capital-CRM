@@ -23,17 +23,29 @@ import {
   type LeadMarker,
 } from "@shared/schema";
 
+interface MarkerSummary {
+  count: number;
+  somaMargens: number;
+  somaPropostas: number;
+}
+
 interface UserSummary {
   userId: number;
   userName: string;
   totals: Record<LeadMarker, number>;
   totalLeads: number;
+  somaMargens: number;
+  somaPropostas: number;
 }
 
 interface PipelineOverview {
-  totals: Record<LeadMarker, number>;
+  totals: Record<LeadMarker, MarkerSummary>;
   byUser: UserSummary[];
   totalLeads: number;
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
 interface PipelineLead {
@@ -218,8 +230,20 @@ export default function VendasGestaoPipeline() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold" data-testid={`text-total-${marker}`}>
-                    {overview?.totals?.[marker] ?? 0}
+                    {overview?.totals?.[marker]?.count ?? 0}
                   </div>
+                  {overview?.totals?.[marker] && (overview.totals[marker].somaMargens > 0 || overview.totals[marker].somaPropostas > 0) && (
+                    <div className="mt-1 text-xs space-y-0.5">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Margens:</span>
+                        <span>{formatCurrency(overview.totals[marker].somaMargens)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Propostas:</span>
+                        <span>{formatCurrency(overview.totals[marker].somaPropostas)}</span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -249,11 +273,22 @@ export default function VendasGestaoPipeline() {
                         </TableHead>
                       ))}
                       <TableHead className="text-center">Total</TableHead>
+                      <TableHead className="text-center">Margens</TableHead>
+                      <TableHead className="text-center">Propostas</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {overview?.byUser?.map((userSummary) => (
-                      <TableRow key={userSummary.userId} data-testid={`row-user-${userSummary.userId}`}>
+                      <TableRow 
+                        key={userSummary.userId} 
+                        data-testid={`row-user-${userSummary.userId}`}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => {
+                          setFilterUserId(userSummary.userId.toString());
+                          setSelectedTab("leads");
+                        }}
+                      >
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
@@ -268,11 +303,20 @@ export default function VendasGestaoPipeline() {
                         <TableCell className="text-center font-bold">
                           {userSummary.totalLeads}
                         </TableCell>
+                        <TableCell className="text-center text-sm text-muted-foreground">
+                          {formatCurrency(userSummary.somaMargens || 0)}
+                        </TableCell>
+                        <TableCell className="text-center text-sm text-muted-foreground">
+                          {formatCurrency(userSummary.somaPropostas || 0)}
+                        </TableCell>
+                        <TableCell>
+                          <ChevronDown className="h-4 w-4 text-muted-foreground rotate-[-90deg]" />
+                        </TableCell>
                       </TableRow>
                     ))}
                     {(!overview?.byUser || overview.byUser.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                           Nenhum corretor com leads atribuídos
                         </TableCell>
                       </TableRow>

@@ -6146,12 +6146,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.get("/api/crm/pipeline/overview", requireAuth, async (req, res) => {
     try {
       const userRole = req.user!.role;
+      const currentUserId = req.user!.id;
       if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
         return res.status(403).json({ message: "Acesso negado" });
       }
 
-      const allAssignments = await db
+      let teamUserIds: number[] | null = null;
+      if (userRole !== "master") {
+        const teamMembers = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.managerId, currentUserId));
+        teamUserIds = [currentUserId, ...teamMembers.map(m => m.id)];
+      }
+
+      let assignmentsQuery = db
         .select({
+          leadId: salesLeadAssignments.leadId,
           leadMarker: salesLeads.leadMarker,
           userId: salesLeadAssignments.userId,
           userName: users.name,
@@ -6160,12 +6171,40 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
         .innerJoin(users, eq(salesLeadAssignments.userId, users.id));
 
-      const totals: Record<string, number> = {};
+      const allAssignments = teamUserIds 
+        ? await assignmentsQuery.where(inArray(salesLeadAssignments.userId, teamUserIds))
+        : await assignmentsQuery;
+
+      const leadIds = allAssignments.map(a => a.leadId);
+      const interactionsData = leadIds.length > 0 ? await db
+        .select({
+          leadId: leadInteractions.leadId,
+          leadMarker: leadInteractions.leadMarker,
+          margemValor: leadInteractions.margemValor,
+          propostaValorEstimado: leadInteractions.propostaValorEstimado,
+        })
+        .from(leadInteractions)
+        .where(inArray(leadInteractions.leadId, leadIds))
+      : [];
+
+      const totals: Record<string, { count: number; somaMargens: number; somaPropostas: number }> = {};
       for (const marker of LEAD_MARKERS) {
-        totals[marker] = allAssignments.filter(a => a.leadMarker === marker).length;
+        totals[marker] = { count: 0, somaMargens: 0, somaPropostas: 0 };
       }
 
-      const byUserMap: Record<number, { userId: number; userName: string; totals: Record<string, number>; totalLeads: number }> = {};
+      for (const a of allAssignments) {
+        totals[a.leadMarker].count++;
+      }
+
+      for (const i of interactionsData) {
+        const marker = i.leadMarker;
+        if (totals[marker]) {
+          totals[marker].somaMargens += parseFloat(i.margemValor || "0");
+          totals[marker].somaPropostas += parseFloat(i.propostaValorEstimado || "0");
+        }
+      }
+
+      const byUserMap: Record<number, { userId: number; userName: string; totals: Record<string, number>; totalLeads: number; somaMargens: number; somaPropostas: number }> = {};
       
       for (const assignment of allAssignments) {
         if (!byUserMap[assignment.userId]) {
@@ -6174,6 +6213,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             userName: assignment.userName,
             totals: {},
             totalLeads: 0,
+            somaMargens: 0,
+            somaPropostas: 0,
           };
           for (const marker of LEAD_MARKERS) {
             byUserMap[assignment.userId].totals[marker] = 0;
@@ -6181,6 +6222,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
         byUserMap[assignment.userId].totals[assignment.leadMarker]++;
         byUserMap[assignment.userId].totalLeads++;
+      }
+
+      const interactionsByLead: Record<number, { somaMargens: number; somaPropostas: number }> = {};
+      for (const i of interactionsData) {
+        if (!interactionsByLead[i.leadId]) {
+          interactionsByLead[i.leadId] = { somaMargens: 0, somaPropostas: 0 };
+        }
+        interactionsByLead[i.leadId].somaMargens += parseFloat(i.margemValor || "0");
+        interactionsByLead[i.leadId].somaPropostas += parseFloat(i.propostaValorEstimado || "0");
+      }
+
+      for (const a of allAssignments) {
+        if (interactionsByLead[a.leadId]) {
+          byUserMap[a.userId].somaMargens += interactionsByLead[a.leadId].somaMargens;
+          byUserMap[a.userId].somaPropostas += interactionsByLead[a.leadId].somaPropostas;
+        }
       }
 
       return res.json({
@@ -6198,11 +6255,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.get("/api/crm/pipeline/all-leads", requireAuth, async (req, res) => {
     try {
       const userRole = req.user!.role;
+      const currentUserId = req.user!.id;
       if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
         return res.status(403).json({ message: "Acesso negado" });
       }
 
-      const leads = await db
+      let teamUserIds: number[] | null = null;
+      if (userRole !== "master") {
+        const teamMembers = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.managerId, currentUserId));
+        teamUserIds = [currentUserId, ...teamMembers.map(m => m.id)];
+      }
+
+      let leadsQuery = db
         .select({
           id: salesLeads.id,
           nome: salesLeads.nome,
@@ -6219,6 +6286,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
         .innerJoin(users, eq(salesLeadAssignments.userId, users.id));
 
+      const leads = teamUserIds 
+        ? await leadsQuery.where(inArray(salesLeadAssignments.userId, teamUserIds))
+        : await leadsQuery;
+
       return res.json(leads);
     } catch (error) {
       console.error("Get all leads error:", error);
@@ -6229,11 +6300,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // GET /api/crm/team-members - Lista de membros da equipe para remanejamento
   app.get("/api/crm/team-members", requireAuth, async (req, res) => {
     try {
-      const members = await db
-        .select({ id: users.id, name: users.name })
-        .from(users)
-        .where(eq(users.isActive, true));
-      return res.json(members);
+      const userRole = req.user!.role;
+      const currentUserId = req.user!.id;
+
+      let membersQuery;
+      if (userRole === "master") {
+        membersQuery = await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(eq(users.isActive, true));
+      } else {
+        membersQuery = await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(and(eq(users.isActive, true), or(eq(users.id, currentUserId), eq(users.managerId, currentUserId))));
+      }
+      return res.json(membersQuery);
     } catch (error) {
       console.error("Get team members error:", error);
       return res.status(500).json({ message: "Erro ao buscar membros" });
