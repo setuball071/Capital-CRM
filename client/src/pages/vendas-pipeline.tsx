@@ -399,7 +399,7 @@ export default function VendasPipeline() {
       return;
     }
 
-    if (!contactId) {
+    if (leadContacts.length > 0 && !contactId) {
       toast({ title: "Selecione o contato utilizado", variant: "destructive" });
       return;
     }
@@ -421,7 +421,7 @@ export default function VendasPipeline() {
       observacao: observacao.trim() || undefined,
       motivo: motivo.trim() || undefined,
       retornoEm: retornoEm || undefined,
-      contactId: parseInt(contactId),
+      contactId: contactId ? parseInt(contactId) : undefined,
       margemValor,
       propostaValorEstimado,
     });

@@ -6065,9 +6065,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       // Validar campos obrigatórios para qualquer atendimento
-      if (!contactId) {
-        return res.status(400).json({ message: "Contato utilizado é obrigatório" });
-      }
+      // contactId é opcional (pode ser null se o lead não tem contatos cadastrados)
       if (margemValor === undefined || margemValor === null || margemValor === "") {
         return res.status(400).json({ message: "Margem é obrigatória" });
       }
@@ -6096,7 +6094,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         motivo: motivo || null,
         observacao: observacao || null,
         retornoEm: retornoEm ? new Date(retornoEm) : null,
-        contactId: parseInt(contactId),
+        contactId: contactId ? parseInt(contactId) : null,
         margemValor: String(margemValor),
         propostaValorEstimado: String(propostaValorEstimado),
       });

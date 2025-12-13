@@ -1,0 +1,172 @@
+(corrigir Pipeline de verdade)
+
+Contexto: O Pipeline está funcionando visualmente, mas está incompleto. Preciso que as informações de negociação (margem e proposta) sejam obrigatórias no “Registrar Interação” e que o Pipeline mostre SOMAS (margem e proposta) por coluna, não quantidade de cards. Também preciso que a tela de Gestão de Pipeline (admin/master) mostre as somas por marcador nas caixas superiores, e que a tabela “Distribuição por corretor” continue como antes (contagem), sem misturar somas ali.
+
+Objetivo 1: Registrar Interação com campos obrigatórios e persistência real
+
+Tela/Modal: “Registrar Interação”
+Requisitos:
+
+O select “Marcador do Lead” deve listar APENAS marcadores existentes no pipeline (as colunas válidas). Não pode ter “Novo”.
+
+Adicionar campos obrigatórios:
+
+margem_valor (R$) obrigatório
+
+proposta_valor (R$) obrigatório
+
+Adicionar “Contato utilizado” obrigatório:
+
+buscar contatos do lead (API já existe: GET /api/crm/leads/:leadId/contacts)
+
+usuário deve selecionar um contato (contactId)
+
+Observações continua.
+
+Ao salvar:
+
+Persistir em leadInteractions: marker, contactId, margem_valor, proposta_valor, observacoes, tipo_contato, data_retorno (se existir)
+
+Atualizar o lead.stage para o marcador selecionado
+
+Se qualquer obrigatório estiver vazio: bloquear salvar e mostrar erro.
+
+Aceite:
+
+Eu seleciono um lead, abro “Registrar Interação”, preencho marcador, seleciono contato, preencho margem e proposta.
+
+Ao salvar, eu vejo no banco (ou log do backend) que leadInteractions gravou margem_valor e proposta_valor, e o lead mudou de estágio.
+
+Objetivo 2: Meu Pipeline deve mostrar SOMAS por coluna (margem e proposta)
+
+Tela: Meu Pipeline (kanban)
+Requisitos:
+
+Remover coluna “Novo” do kanban. “Novo” existe só como estado de lead não trabalhado e não deve aparecer no pipeline.
+
+Em cada coluna do kanban, exibir:
+
+Soma das margens (R$) dos leads naquela coluna
+
+Soma das propostas (R$) dos leads naquela coluna
+
+Como calcular soma:
+
+Para cada lead na coluna, usar a interação mais recente daquele lead (última leadInteraction) e pegar margem_valor e proposta_valor dessa última interação.
+
+Se não tiver interação ainda, o lead não entra no pipeline (porque está em “Novo” e não aparece).
+
+O cabeçalho da coluna deve mostrar as duas somas. Não exibir contador de cards como métrica principal (pode até ficar pequeno secundário, mas o principal é margem/proposta).
+
+Aceite:
+
+Eu movo 2 leads para “Interessado” e em cada um registro margem e proposta.
+
+O topo da coluna “Interessado” mostra a soma correta das margens e a soma correta das propostas.
+
+Objetivo 3: Detalhes do Lead devem mostrar histórico completo da negociação
+
+Modal: Detalhes do Lead
+Requisitos:
+
+Além de nome, CPF, campanha e último contato, exibir:
+
+Últimas interações (lista)
+
+Cada interação deve mostrar: marcador, margem_valor, proposta_valor, contato usado, observações, data/hora, tipo de contato
+Aceite:
+
+Eu abro um lead e vejo exatamente o que foi preenchido no Registrar Interação.
+
+Objetivo 4: Gestão de Pipeline (Admin/Master/Gestores autorizados)
+
+Tela: Gestão de Pipeline
+Requisitos:
+
+Caixas superiores por marcador (ex: Em Atendimento, Interessado, etc):
+
+Exibir soma das margens daquele marcador
+
+E abaixo soma das propostas daquele marcador
+
+Exemplo: “Em Atendimento” mostra Margens: R$ 5.000,00 e Propostas: R$ 87.000,00
+
+A tabela “Distribuição por corretor” deve permanecer como antes (contagem por estágio).
+
+Não colocar somas dentro dela como principal.
+
+Ao clicar em um corretor na tabela, abrir o pipeline dele (drill-down) para análise detalhada.
+
+Objetivo 5: Permissões por equipe
+
+Requisitos:
+
+Master: vê tudo.
+
+Gestor autorizado: vê apenas equipe dele.
+
+Implementar filtragem no backend (não só no front) para impedir acesso fora da equipe.
+
+Implementação (onde mexer)
+
+shared/schema.ts: garantir colunas em leadInteractions:
+
+margem_valor NUMERIC NOT NULL
+
+proposta_valor NUMERIC NOT NULL
+
+contactId NOT NULL (fk leadContacts)
+
+server/routes.ts:
+
+endpoint de registrar interação deve validar obrigatórios e gravar tudo
+
+endpoints do pipeline devem retornar também os agregados por coluna (margem/proposta) calculados com base na última interação de cada lead
+
+client/src/pages/vendas-pipeline.tsx:
+
+modal com campos obrigatórios e seleção de contato
+
+kanban exibindo somas por coluna
+
+detalhes exibindo histórico
+
+client/src/pages/vendas-gestao-pipeline.tsx:
+
+caixas superiores com somas
+
+tabela por corretor mantém contagem
+
+drill-down
+
+Antes de finalizar
+
+Mostrar evidência: print/log do retorno da API contendo margem/proposta e print do kanban mostrando somas.
+
+Não marcar como concluído sem eu conseguir ver somas na UI.
+
+Por que hoje “não aparece” margem e proposta
+
+Pelo seu print, o modal atual ainda não tem os campos e/ou o backend não está retornando os agregados corretos. O Replit provavelmente:
+
+Alterou schema, mas não atualizou o form.
+
+Ou atualizou o form, mas não validou obrigatório.
+
+Ou salvou no banco, mas o kanban continua lendo “count” e não soma.
+
+Ou as somas foram jogadas na tabela errada (Distribuição por corretor) em vez das caixas de marcador.
+
+Esse prompt trava todos esses pontos de uma vez.
+
+Para não estourar custo no Replit enquanto corrige
+
+Você está gastando principalmente em “Agent Usage”. O controle prático:
+
+Trabalhe em blocos: 1 prompt grande com checklist (como acima) em vez de 10 prompts pequenos.
+
+Exigir “evidência antes de concluir” reduz retrabalho e mais chamadas.
+
+Defina limite de desligamento (shutdown) com valor real, tipo US$ 5 ou US$ 10 por dia enquanto está ajustando.
+
+Mantenha IA desativada para features não relacionadas. Só liga durante a correção e desliga em seguida.
