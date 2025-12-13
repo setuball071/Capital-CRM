@@ -200,6 +200,35 @@ export default function VendasAtendimento() {
     enabled: !!atendimentoAtual?.lead?.id,
   });
 
+  // Tag management queries
+  const { data: allContactTags = [] } = useQuery<ContactTag[]>({
+    queryKey: ["/api/crm/contact-tags"],
+  });
+
+  const { data: contactsWithTags = [] } = useQuery<{ contactId: number; tagId: number }[]>({
+    queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"],
+    enabled: !!atendimentoAtual?.lead?.id,
+  });
+
+  // Tag popover state
+  const [tagPopoverOpen, setTagPopoverOpen] = useState<number | null>(null);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3B82F6");
+  const [showNewTagForm, setShowNewTagForm] = useState(false);
+
+  // Get tags for a specific contact
+  const getTagsForContact = (contactId: number): ContactTag[] => {
+    const tagIds = contactsWithTags
+      .filter(ct => ct.contactId === contactId)
+      .map(ct => ct.tagId);
+    return allContactTags.filter(tag => tagIds.includes(tag.id));
+  };
+
+  // Check if contact has a specific tag
+  const contactHasTag = (contactId: number, tagId: number): boolean => {
+    return contactsWithTags.some(ct => ct.contactId === contactId && ct.tagId === tagId);
+  };
+
   const createContactMutation = useMutation({
     mutationFn: async (data: { type: string; value: string }) => {
       if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
@@ -256,6 +285,63 @@ export default function VendasAtendimento() {
       toast({ title: "Erro ao definir como principal", variant: "destructive" });
     },
   });
+
+  // Tag mutations
+  const createTagMutation = useMutation({
+    mutationFn: async (data: { name: string; color: string }) => {
+      return apiRequest("POST", "/api/crm/contact-tags", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contact-tags"] });
+      setNewTagName("");
+      setNewTagColor("#3B82F6");
+      setShowNewTagForm(false);
+      toast({ title: "Etiqueta criada!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao criar etiqueta", variant: "destructive" });
+    },
+  });
+
+  const assignTagMutation = useMutation({
+    mutationFn: async ({ contactId, tagId }: { contactId: number; tagId: number }) => {
+      return apiRequest("POST", `/api/crm/contacts/${contactId}/tags/${tagId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"] });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atribuir etiqueta", variant: "destructive" });
+    },
+  });
+
+  const removeTagMutation = useMutation({
+    mutationFn: async ({ contactId, tagId }: { contactId: number; tagId: number }) => {
+      return apiRequest("DELETE", `/api/crm/contacts/${contactId}/tags/${tagId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"] });
+    },
+    onError: () => {
+      toast({ title: "Erro ao remover etiqueta", variant: "destructive" });
+    },
+  });
+
+  const handleToggleTag = (contactId: number, tagId: number) => {
+    if (contactHasTag(contactId, tagId)) {
+      removeTagMutation.mutate({ contactId, tagId });
+    } else {
+      assignTagMutation.mutate({ contactId, tagId });
+    }
+  };
+
+  const handleCreateTag = () => {
+    if (!newTagName.trim()) {
+      toast({ title: "Informe o nome da etiqueta", variant: "destructive" });
+      return;
+    }
+    createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
+  };
 
   const handleCopyPhone = async (phone: string) => {
     try {
@@ -821,58 +907,186 @@ export default function VendasAtendimento() {
                         </div>
                       ) : (
                         <>
-                          {leadContacts.map((contact) => (
-                            <div 
-                              key={contact.id} 
-                              className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
-                              data-testid={`contact-item-${contact.id}`}
-                            >
-                              <Badge variant="secondary" className="text-xs shrink-0">
-                                {contact.label}
-                              </Badge>
-                              <span className="font-medium flex-1 truncate">
-                                {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
-                              </span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => handleCopyPhone(contact.value)}
-                                  data-testid={`button-copy-contact-${contact.id}`}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => openEditContact(contact)}
-                                  data-testid={`button-edit-contact-${contact.id}`}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
-                                  onClick={() => setPrimaryContactMutation.mutate(contact.id)}
-                                  data-testid={`button-primary-contact-${contact.id}`}
-                                >
-                                  <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteContact(contact)}
-                                  data-testid={`button-delete-contact-${contact.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
+                          {leadContacts.map((contact) => {
+                            const contactTags = getTagsForContact(contact.id);
+                            return (
+                              <div 
+                                key={contact.id} 
+                                className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                                data-testid={`contact-item-${contact.id}`}
+                              >
+                                {/* Tag indicators */}
+                                {contactTags.length > 0 && (
+                                  <div className="flex gap-0.5 shrink-0">
+                                    {contactTags.slice(0, 3).map(tag => (
+                                      <div 
+                                        key={tag.id}
+                                        className="w-2 h-2 rounded-full"
+                                        style={{ backgroundColor: tag.color }}
+                                        title={tag.name}
+                                      />
+                                    ))}
+                                    {contactTags.length > 3 && (
+                                      <span className="text-xs text-muted-foreground">+{contactTags.length - 3}</span>
+                                    )}
+                                  </div>
+                                )}
+                                <span className="font-medium flex-1 truncate">
+                                  {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Tag popover button */}
+                                  <Popover 
+                                    open={tagPopoverOpen === contact.id} 
+                                    onOpenChange={(open) => {
+                                      setTagPopoverOpen(open ? contact.id : null);
+                                      if (!open) {
+                                        setShowNewTagForm(false);
+                                        setNewTagName("");
+                                        setNewTagColor("#3B82F6");
+                                      }
+                                    }}
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost"
+                                        className={`h-7 w-7 ${contactTags.length > 0 ? "text-primary" : ""}`}
+                                        data-testid={`button-tag-contact-${contact.id}`}
+                                      >
+                                        <Tag className="h-3 w-3" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-2" align="end">
+                                      <div className="space-y-2">
+                                        <p className="text-sm font-medium px-1">Etiquetas</p>
+                                        <ScrollArea className="max-h-48">
+                                          <div className="space-y-1">
+                                            {allContactTags.length === 0 ? (
+                                              <p className="text-xs text-muted-foreground px-1 py-2">
+                                                Nenhuma etiqueta criada
+                                              </p>
+                                            ) : (
+                                              allContactTags.map(tag => (
+                                                <button
+                                                  key={tag.id}
+                                                  onClick={() => handleToggleTag(contact.id, tag.id)}
+                                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
+                                                  data-testid={`tag-option-${tag.id}`}
+                                                >
+                                                  <div 
+                                                    className="w-3 h-3 rounded-full shrink-0"
+                                                    style={{ backgroundColor: tag.color }}
+                                                  />
+                                                  <span className="flex-1 text-left truncate">{tag.name}</span>
+                                                  {contactHasTag(contact.id, tag.id) && (
+                                                    <Check className="h-3 w-3 text-primary shrink-0" />
+                                                  )}
+                                                </button>
+                                              ))
+                                            )}
+                                          </div>
+                                        </ScrollArea>
+                                        <Separator />
+                                        {showNewTagForm ? (
+                                          <div className="space-y-2 p-1">
+                                            <Input
+                                              value={newTagName}
+                                              onChange={(e) => setNewTagName(e.target.value)}
+                                              placeholder="Nome da etiqueta"
+                                              className="h-8 text-sm"
+                                              data-testid="input-new-tag-name"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                              <Label className="text-xs">Cor:</Label>
+                                              <input
+                                                type="color"
+                                                value={newTagColor}
+                                                onChange={(e) => setNewTagColor(e.target.value)}
+                                                className="w-8 h-6 rounded cursor-pointer border"
+                                                data-testid="input-new-tag-color"
+                                              />
+                                              <div className="flex-1" />
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => {
+                                                  setShowNewTagForm(false);
+                                                  setNewTagName("");
+                                                  setNewTagColor("#3B82F6");
+                                                }}
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                onClick={handleCreateTag}
+                                                disabled={createTagMutation.isPending}
+                                                data-testid="button-save-new-tag"
+                                              >
+                                                {createTagMutation.isPending ? (
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                  <Check className="h-3 w-3" />
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="w-full justify-start"
+                                            onClick={() => setShowNewTagForm(true)}
+                                            data-testid="button-create-new-tag"
+                                          >
+                                            <Plus className="h-3 w-3 mr-2" />
+                                            Criar nova etiqueta
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => handleCopyPhone(contact.value)}
+                                    data-testid={`button-copy-contact-${contact.id}`}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => openEditContact(contact)}
+                                    data-testid={`button-edit-contact-${contact.id}`}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
+                                    onClick={() => setPrimaryContactMutation.mutate(contact.id)}
+                                    data-testid={`button-primary-contact-${contact.id}`}
+                                  >
+                                    <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7 text-destructive"
+                                    onClick={() => handleDeleteContact(contact)}
+                                    data-testid={`button-delete-contact-${contact.id}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {atendimentoAtual.lead.telefone1 && leadContacts.length === 0 && (
                             <div className="flex items-center gap-2 p-2 border rounded text-sm bg-muted/30">
                               <Badge variant="outline" className="text-xs shrink-0">Original</Badge>
