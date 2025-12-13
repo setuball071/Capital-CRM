@@ -48,9 +48,28 @@ interface PipelineLead {
   assignmentId: number;
 }
 
+interface ColumnSummary {
+  count: number;
+  somaMargens: number;
+  somaPropostas: number;
+}
+
 interface PipelineData {
   leads: PipelineLead[];
-  summary: Record<LeadMarker, number>;
+  summary: Record<LeadMarker, ColumnSummary>;
+}
+
+interface LeadInteractionHistory {
+  id: number;
+  tipoContato: string;
+  leadMarker: string;
+  motivo: string | null;
+  observacao: string | null;
+  retornoEm: string | null;
+  margemValor: string | null;
+  propostaValorEstimado: string | null;
+  createdAt: string;
+  userName: string;
 }
 
 const MARKER_COLORS: Record<LeadMarker, string> = {
@@ -69,7 +88,6 @@ const MARKER_COLORS: Record<LeadMarker, string> = {
 };
 
 const KANBAN_COLUMNS: LeadMarker[] = [
-  "NOVO",
   "EM_ATENDIMENTO", 
   "INTERESSADO",
   "AGUARDANDO_RETORNO",
@@ -169,16 +187,21 @@ function LeadCard({ lead, onCardClick, onDragStart }: LeadCardProps) {
   );
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
 interface KanbanColumnProps {
   marker: LeadMarker;
   leads: PipelineLead[];
+  summary: ColumnSummary | undefined;
   onCardClick: (lead: PipelineLead) => void;
   onDragStart: (e: React.DragEvent, lead: PipelineLead) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, marker: LeadMarker) => void;
 }
 
-function KanbanColumn({ marker, leads, onCardClick, onDragStart, onDragOver, onDrop }: KanbanColumnProps) {
+function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDragOver, onDrop }: KanbanColumnProps) {
   return (
     <div 
       className="flex-shrink-0 w-72 flex flex-col bg-muted/30 rounded-lg"
@@ -187,12 +210,24 @@ function KanbanColumn({ marker, leads, onCardClick, onDragStart, onDragOver, onD
       data-testid={`column-${marker}`}
     >
       <div className="p-3 border-b">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <Badge className={MARKER_COLORS[marker]}>
             {LEAD_MARKER_LABELS[marker]}
           </Badge>
           <span className="text-sm font-medium text-muted-foreground">{leads.length}</span>
         </div>
+        {summary && (summary.somaMargens > 0 || summary.somaPropostas > 0) && (
+          <div className="mt-2 text-xs space-y-0.5">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Margens:</span>
+              <span className="font-medium text-foreground">{formatCurrency(summary.somaMargens)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Propostas:</span>
+              <span className="font-medium text-foreground">{formatCurrency(summary.somaPropostas)}</span>
+            </div>
+          </div>
+        )}
       </div>
       <ScrollArea className="flex-1 p-2">
         <div className="space-y-2">
@@ -233,6 +268,8 @@ export default function VendasPipeline() {
   const [margemValor, setMargemValor] = useState<string>("");
   const [propostaValorEstimado, setPropostaValorEstimado] = useState<string>("");
   const [leadContacts, setLeadContacts] = useState<LeadContact[]>([]);
+  const [leadInteractions, setLeadInteractions] = useState<LeadInteractionHistory[]>([]);
+  const [loadingInteractions, setLoadingInteractions] = useState(false);
 
   const { data: pipelineData, isLoading } = useQuery<PipelineData>({
     queryKey: ["/api/crm/pipeline"],
@@ -284,6 +321,19 @@ export default function VendasPipeline() {
     setPropostaValorEstimado("");
     setLeadContacts([]);
   };
+
+  useEffect(() => {
+    if (detailsOpen && selectedLead) {
+      setLoadingInteractions(true);
+      fetch(`/api/crm/leads/${selectedLead.id}/interactions`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setLeadInteractions(data))
+        .catch(() => setLeadInteractions([]))
+        .finally(() => setLoadingInteractions(false));
+    } else {
+      setLeadInteractions([]);
+    }
+  }, [detailsOpen, selectedLead]);
 
   const handleCardClick = (lead: PipelineLead) => {
     setSelectedLead(lead);
@@ -493,6 +543,7 @@ export default function VendasPipeline() {
               key={marker}
               marker={marker}
               leads={leadsByMarker[marker] || []}
+              summary={pipelineData?.summary?.[marker]}
               onCardClick={handleCardClick}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
@@ -507,6 +558,7 @@ export default function VendasPipeline() {
                   key={marker}
                   marker={marker}
                   leads={leadsByMarker[marker] || []}
+                  summary={pipelineData?.summary?.[marker]}
                   onCardClick={handleCardClick}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
@@ -590,6 +642,48 @@ export default function VendasPipeline() {
                   {selectedLead.ultimoTipoContato && ` (${selectedLead.ultimoTipoContato})`}
                 </div>
               )}
+
+              <Separator />
+              
+              <div>
+                <Label className="text-muted-foreground mb-2 block">Histórico de Interações</Label>
+                {loadingInteractions ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : leadInteractions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma interação registrada</p>
+                ) : (
+                  <ScrollArea className="h-40">
+                    <div className="space-y-2">
+                      {leadInteractions.map((interaction) => (
+                        <div key={interaction.id} className="text-xs border rounded p-2 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {LEAD_MARKER_LABELS[interaction.leadMarker as LeadMarker] || interaction.leadMarker}
+                            </Badge>
+                            <span className="text-muted-foreground">{formatDateTime(interaction.createdAt)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <span>{interaction.tipoContato}</span>
+                            <span>|</span>
+                            <span>{interaction.userName}</span>
+                          </div>
+                          {(interaction.margemValor || interaction.propostaValorEstimado) && (
+                            <div className="flex gap-3 text-muted-foreground">
+                              {interaction.margemValor && <span>Margem: {formatCurrency(parseFloat(interaction.margemValor))}</span>}
+                              {interaction.propostaValorEstimado && <span>Proposta: {formatCurrency(parseFloat(interaction.propostaValorEstimado))}</span>}
+                            </div>
+                          )}
+                          {interaction.observacao && (
+                            <p className="text-muted-foreground">{interaction.observacao}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter>

@@ -6002,9 +6002,44 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
         .where(eq(salesLeadAssignments.userId, userId));
 
-      const summary: Record<string, number> = {};
+      // Buscar somas de margens e propostas por lead da última interação
+      const interactions = await db
+        .select({
+          leadId: leadInteractions.leadId,
+          margemValor: leadInteractions.margemValor,
+          propostaValorEstimado: leadInteractions.propostaValorEstimado,
+        })
+        .from(leadInteractions)
+        .where(inArray(leadInteractions.leadId, assignments.map(a => a.id)));
+
+      // Agrupar interações por leadId (pegando a última - maior id)
+      const lastInteractionByLead: Record<number, { margem: number; proposta: number }> = {};
+      for (const i of interactions) {
+        if (!lastInteractionByLead[i.leadId] || i.leadId > (lastInteractionByLead[i.leadId] as any).id) {
+          lastInteractionByLead[i.leadId] = {
+            margem: parseFloat(i.margemValor || "0"),
+            proposta: parseFloat(i.propostaValorEstimado || "0"),
+          };
+        }
+      }
+
+      const summary: Record<string, { count: number; somaMargens: number; somaPropostas: number }> = {};
       for (const marker of LEAD_MARKERS) {
-        summary[marker] = assignments.filter(a => a.leadMarker === marker).length;
+        const leadsInMarker = assignments.filter(a => a.leadMarker === marker);
+        let somaMargens = 0;
+        let somaPropostas = 0;
+        for (const lead of leadsInMarker) {
+          const lastInt = lastInteractionByLead[lead.id];
+          if (lastInt) {
+            somaMargens += lastInt.margem;
+            somaPropostas += lastInt.proposta;
+          }
+        }
+        summary[marker] = {
+          count: leadsInMarker.length,
+          somaMargens,
+          somaPropostas,
+        };
       }
 
       return res.json({ leads: assignments, summary });
@@ -6070,6 +6105,40 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Update stage error:", error);
       return res.status(500).json({ message: "Erro ao atualizar estágio" });
+    }
+  });
+
+  // GET /api/crm/leads/:id/interactions - Histórico de interações do lead
+  app.get("/api/crm/leads/:id/interactions", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const interactions = await db
+        .select({
+          id: leadInteractions.id,
+          tipoContato: leadInteractions.tipoContato,
+          leadMarker: leadInteractions.leadMarker,
+          motivo: leadInteractions.motivo,
+          observacao: leadInteractions.observacao,
+          retornoEm: leadInteractions.retornoEm,
+          margemValor: leadInteractions.margemValor,
+          propostaValorEstimado: leadInteractions.propostaValorEstimado,
+          createdAt: leadInteractions.createdAt,
+          userName: users.name,
+        })
+        .from(leadInteractions)
+        .innerJoin(users, eq(leadInteractions.userId, users.id))
+        .where(eq(leadInteractions.leadId, leadId))
+        .orderBy(desc(leadInteractions.createdAt))
+        .limit(10);
+
+      return res.json(interactions);
+    } catch (error) {
+      console.error("Get interactions error:", error);
+      return res.status(500).json({ message: "Erro ao buscar histórico" });
     }
   });
 
