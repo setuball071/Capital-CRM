@@ -20,7 +20,7 @@ import {
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
 } from "lucide-react";
-import { LEAD_STATUS, TIPOS_CONTATO, CONTACT_LABELS, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact } from "@shared/schema";
+import { LEAD_STATUS, TIPOS_CONTATO, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact, type ContactTag } from "@shared/schema";
 
 interface AtendimentoData {
   assignment: SalesLeadAssignment;
@@ -159,7 +159,7 @@ export default function VendasAtendimento() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
-  const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
+  const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
   const [formData, setFormData] = useState({
     tipo: "ligacao",
     resultado: "",
@@ -201,7 +201,7 @@ export default function VendasAtendimento() {
   });
 
   const createContactMutation = useMutation({
-    mutationFn: async (data: { type: string; label: string; value: string }) => {
+    mutationFn: async (data: { type: string; value: string }) => {
       if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
       return apiRequest("POST", `/api/crm/leads/${atendimentoAtual.lead.id}/contacts`, data);
     },
@@ -209,7 +209,7 @@ export default function VendasAtendimento() {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
       toast({ title: "Contato salvo!" });
       setAddContactOpen(false);
-      setNewContact({ tipo: "phone", valor: "", label: "" });
+      setNewContact({ tipo: "phone", valor: "" });
     },
     onError: () => {
       toast({ title: "Erro ao salvar contato", variant: "destructive" });
@@ -272,26 +272,11 @@ export default function VendasAtendimento() {
     }
   };
 
-  const [contactsByLabelOpen, setContactsByLabelOpen] = useState(false);
-  const [selectedLabelFilter, setSelectedLabelFilter] = useState<string>("");
   
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleData, setScheduleData] = useState({
     dataHora: "",
     observacao: "",
-  });
-
-  const { data: contactsByLabel = [], isLoading: loadingContactsByLabel, refetch: refetchContactsByLabel } = useQuery<{
-    id: number;
-    leadId: number;
-    label: string;
-    type: string;
-    value: string;
-    leadName: string;
-    leadCpf: string | null;
-  }[]>({
-    queryKey: ["/api/crm/contacts/by-label", selectedLabelFilter],
-    enabled: !!selectedLabelFilter && contactsByLabelOpen,
   });
 
   const { data: pendingSchedules = [] } = useQuery<LeadSchedule[]>({
@@ -378,24 +363,18 @@ export default function VendasAtendimento() {
 
   const handleAddContact = () => {
     if (!newContact.valor.trim()) {
-      toast({ title: "Informe o valor do contato", variant: "destructive" });
-      return;
-    }
-    if (!newContact.label) {
-      toast({ title: "Selecione uma etiqueta", variant: "destructive" });
+      toast({ title: "Informe o telefone", variant: "destructive" });
       return;
     }
     if (editingContact) {
       updateContactMutation.mutate({
         id: editingContact.id,
         type: newContact.tipo,
-        label: newContact.label,
         value: newContact.valor,
       });
     } else {
       createContactMutation.mutate({
         type: newContact.tipo,
-        label: newContact.label,
         value: newContact.valor,
       });
     }
@@ -403,13 +382,13 @@ export default function VendasAtendimento() {
 
   const openEditContact = (contact: LeadContact) => {
     setEditingContact(contact);
-    setNewContact({ tipo: contact.type, valor: contact.value, label: contact.label });
+    setNewContact({ tipo: contact.type, valor: contact.value });
     setAddContactOpen(true);
   };
 
   const openNewContact = () => {
     setEditingContact(null);
-    setNewContact({ tipo: "phone", valor: "", label: "" });
+    setNewContact({ tipo: "phone", valor: "" });
     setAddContactOpen(true);
   };
 
@@ -962,27 +941,6 @@ export default function VendasAtendimento() {
                 </CardContent>
               </Card>
 
-              {/* Buscar Contatos por Etiqueta */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Tag className="h-4 w-4" />
-                    Buscar por Etiqueta
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setContactsByLabelOpen(true)}
-                    data-testid="button-buscar-por-etiqueta"
-                  >
-                    <Tag className="h-3 w-3 mr-1" />
-                    Buscar Contatos
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>
@@ -1152,7 +1110,7 @@ export default function VendasAtendimento() {
       <Dialog open={addContactOpen} onOpenChange={(open) => {
         if (!open) {
           setEditingContact(null);
-          setNewContact({ tipo: "phone", valor: "", label: "" });
+          setNewContact({ tipo: "phone", valor: "" });
         }
         setAddContactOpen(open);
       }}>
@@ -1162,42 +1120,11 @@ export default function VendasAtendimento() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label>Tipo</Label>
-              <Select
-                value={newContact.tipo}
-                onValueChange={(v) => setNewContact({ ...newContact, tipo: v })}
-              >
-                <SelectTrigger data-testid="select-contact-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="phone">Telefone</SelectItem>
-                  <SelectItem value="email">E-mail</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Etiqueta *</Label>
-              <Select
-                value={newContact.label}
-                onValueChange={(v) => setNewContact({ ...newContact, label: v })}
-              >
-                <SelectTrigger data-testid="select-contact-label">
-                  <SelectValue placeholder="Selecione uma etiqueta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTACT_LABELS.map((label) => (
-                    <SelectItem key={label} value={label}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Valor *</Label>
+              <Label>Telefone *</Label>
               <Input
                 value={newContact.valor}
                 onChange={(e) => setNewContact({ ...newContact, valor: e.target.value })}
-                placeholder={newContact.tipo === "phone" ? "(00) 00000-0000" : "email@exemplo.com"}
+                placeholder="(00) 00000-0000"
                 data-testid="input-contact-value"
               />
             </div>
@@ -1220,100 +1147,6 @@ export default function VendasAtendimento() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Contatos por Etiqueta */}
-      <Dialog open={contactsByLabelOpen} onOpenChange={(open) => {
-        if (!open) {
-          setSelectedLabelFilter("");
-        }
-        setContactsByLabelOpen(open);
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Tag className="h-5 w-5" />
-              Contatos por Etiqueta
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-sm">Selecione uma Etiqueta</Label>
-              <Select
-                value={selectedLabelFilter}
-                onValueChange={(v) => setSelectedLabelFilter(v)}
-              >
-                <SelectTrigger data-testid="select-filter-label">
-                  <SelectValue placeholder="Escolha uma etiqueta para filtrar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTACT_LABELS.map((label) => (
-                    <SelectItem key={label} value={label}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedLabelFilter && (
-              <div className="border rounded-lg">
-                <div className="p-3 border-b bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{selectedLabelFilter}</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {loadingContactsByLabel ? "Carregando..." : `${contactsByLabel.length} contato(s) encontrado(s)`}
-                    </span>
-                  </div>
-                </div>
-                <ScrollArea className="h-64">
-                  {loadingContactsByLabel ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : contactsByLabel.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      Nenhum contato encontrado com esta etiqueta
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {contactsByLabel.map((contact) => (
-                        <div 
-                          key={contact.id} 
-                          className="flex items-center gap-3 p-3 hover-elevate"
-                          data-testid={`label-contact-item-${contact.id}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{contact.leadName}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {contact.leadCpf ? formatCPF(contact.leadCpf) : "Sem CPF"}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm">
-                              {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
-                            </span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => handleCopyPhone(contact.value)}
-                              data-testid={`button-copy-label-contact-${contact.id}`}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setContactsByLabelOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
