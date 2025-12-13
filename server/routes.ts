@@ -5313,6 +5313,38 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // GET /api/vendas/atendimento/campanhas-disponiveis - Campanhas com leads para o vendedor
+  // IMPORTANT: This route MUST be before :assignmentId to avoid Express matching "campanhas-disponiveis" as an ID
+  app.get("/api/vendas/atendimento/campanhas-disponiveis", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Get campaigns where user has assignments
+      const assignments = await storage.getAssignmentsByUser(userId);
+      const campaignIds = [...new Set(assignments.map(a => a.campaignId))];
+      
+      const campanhas = [];
+      for (const id of campaignIds) {
+        const campanha = await storage.getSalesCampaign(id);
+        if (campanha && campanha.status === "ativa") {
+          const leadsPendentes = assignments.filter(a => 
+            a.campaignId === id && ["novo", "em_atendimento"].includes(a.status)
+          ).length;
+          campanhas.push({
+            id: campanha.id,
+            nome: campanha.nome,
+            leadsPendentes,
+          });
+        }
+      }
+      
+      return res.json(campanhas);
+    } catch (error) {
+      console.error("Get campanhas disponiveis error:", error);
+      return res.status(500).json({ message: "Erro ao buscar campanhas" });
+    }
+  });
+
   // GET /api/vendas/atendimento/:assignmentId - Detalhes do atendimento atual
   app.get("/api/vendas/atendimento/:assignmentId", requireAuth, async (req, res) => {
     try {
@@ -5407,37 +5439,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
-  // GET /api/vendas/atendimento/campanhas-disponiveis - Campanhas com leads para o vendedor
-  app.get("/api/vendas/atendimento/campanhas-disponiveis", requireAuth, async (req, res) => {
-    try {
-      const userId = req.user!.id;
-      
-      // Get campaigns where user has assignments
-      const assignments = await storage.getAssignmentsByUser(userId);
-      const campaignIds = [...new Set(assignments.map(a => a.campaignId))];
-      
-      const campanhas = [];
-      for (const id of campaignIds) {
-        const campanha = await storage.getSalesCampaign(id);
-        if (campanha && campanha.status === "ativa") {
-          const leadsPendentes = assignments.filter(a => 
-            a.campaignId === id && ["novo", "em_atendimento"].includes(a.status)
-          ).length;
-          campanhas.push({
-            id: campanha.id,
-            nome: campanha.nome,
-            leadsPendentes,
-          });
-        }
-      }
-      
-      return res.json(campanhas);
-    } catch (error) {
-      console.error("Get campanhas disponiveis error:", error);
-      return res.status(500).json({ message: "Erro ao buscar campanhas" });
-    }
-  });
-
   // ===== LEAD TAGS ENDPOINTS =====
 
   // GET /api/vendas/tags - Get all tags for the current user
