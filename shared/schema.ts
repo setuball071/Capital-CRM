@@ -844,8 +844,27 @@ export const leadInteractions = pgTable("lead_interactions", {
   motivo: varchar("motivo", { length: 255 }),
   observacao: text("observacao"),
   retornoEm: timestamp("retorno_em"),
+  contactId: integer("contact_id").references(() => leadContacts.id, { onDelete: "set null" }),
+  margemValor: decimal("margem_valor", { precision: 12, scale: 2 }),
+  propostaValorEstimado: decimal("proposta_valor_estimado", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Configurações de pipeline do usuário (ordem das colunas)
+export const userPipelineSettings = pgTable("user_pipeline_settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  columnOrder: jsonb("column_order"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserPipelineSettingsSchema = createInsertSchema(userPipelineSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type UserPipelineSettings = typeof userPipelineSettings.$inferSelect;
+export type InsertUserPipelineSettings = z.infer<typeof insertUserPipelineSettingsSchema>;
 
 export const insertLeadInteractionSchema = createInsertSchema(leadInteractions).omit({
   id: true,
