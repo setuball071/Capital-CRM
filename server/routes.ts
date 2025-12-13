@@ -5439,6 +5439,108 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
+  // ===== NOVO SISTEMA DE MARCADORES =====
+  
+  // GET /api/crm/queue/next - Próximo lead da fila
+  app.get("/api/crm/queue/next", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const campaignId = req.query.campaignId ? parseInt(req.query.campaignId as string) : undefined;
+      
+      const result = await storage.getNextLeadInQueue(userId, campaignId);
+      
+      if (!result) {
+        return res.json({ lead: null, message: "Nenhum lead na fila" });
+      }
+      
+      // Get interactions history
+      const interactions = await storage.getInteractionsByLead(result.lead.id);
+      
+      // Get client base data if available
+      let clienteBase = null;
+      if (result.lead.baseClienteId) {
+        clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
+      }
+      
+      return res.json({
+        lead: result.lead,
+        assignment: result.assignment,
+        campaign: result.campaign,
+        interactions,
+        clienteBase,
+      });
+    } catch (error) {
+      console.error("Get next lead error:", error);
+      return res.status(500).json({ message: "Erro ao buscar próximo lead" });
+    }
+  });
+  
+  // POST /api/crm/leads/:id/interaction - Registrar interação com lead
+  app.post("/api/crm/leads/:id/interaction", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { tipoContato, leadMarker, motivo, observacao, retornoEm } = req.body;
+      
+      if (!tipoContato || !leadMarker) {
+        return res.status(400).json({ message: "Tipo de contato e marcador são obrigatórios" });
+      }
+      
+      // Update lead marker
+      const retornoDate = retornoEm ? new Date(retornoEm) : undefined;
+      await storage.updateLeadMarker(leadId, leadMarker, motivo, retornoDate, tipoContato);
+      
+      // Create interaction record
+      const interaction = await storage.createLeadInteraction({
+        leadId,
+        userId,
+        tipoContato,
+        leadMarker,
+        motivo: motivo || null,
+        observacao: observacao || null,
+        retornoEm: retornoDate || null,
+      });
+      
+      // Update assignment status based on marker
+      const assignments = await storage.getAssignmentsByUser(userId);
+      const assignment = assignments.find(a => a.leadId === leadId);
+      
+      if (assignment) {
+        let newStatus = "em_atendimento";
+        if (["VENDIDO"].includes(leadMarker)) {
+          newStatus = "vendido";
+        } else if (["NAO_ATENDE", "TELEFONE_INVALIDO", "ENGANO", "SEM_INTERESSE"].includes(leadMarker)) {
+          newStatus = "descartado";
+        }
+        
+        await storage.updateSalesLeadAssignment(assignment.id, {
+          status: newStatus,
+          dataUltimoAtendimento: new Date(),
+        });
+      }
+      
+      return res.json({
+        message: "Interação registrada com sucesso",
+        interaction,
+      });
+    } catch (error) {
+      console.error("Create interaction error:", error);
+      return res.status(500).json({ message: "Erro ao registrar interação" });
+    }
+  });
+  
+  // GET /api/crm/leads/:id/interactions - Histórico de interações do lead
+  app.get("/api/crm/leads/:id/interactions", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const interactions = await storage.getInteractionsByLead(leadId);
+      return res.json(interactions);
+    } catch (error) {
+      console.error("Get interactions error:", error);
+      return res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+  
   // ===== LEAD SCHEDULES (AGENDAMENTOS) =====
 
   // GET /api/vendas/agenda/detalhado - Get all schedules with lead/campaign info

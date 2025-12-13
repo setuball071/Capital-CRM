@@ -27,6 +27,7 @@ import {
   userPermissions,
   leadSchedules,
   leadContacts,
+  leadInteractions,
   type User,
   type InsertUser,
   type Bank,
@@ -78,6 +79,8 @@ import {
   type InsertLeadSchedule,
   type LeadContact,
   type InsertLeadContact,
+  type LeadInteraction,
+  type InsertLeadInteraction,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -281,6 +284,14 @@ export interface IStorage {
   setContactAsPrimary(contactId: number, leadId: number): Promise<void>;
   getDistinctContactLabels(): Promise<string[]>;
   getContactsByLabel(label: string): Promise<{ leadId: number; leadNome: string; cpf: string | null; contactId: number; value: string; label: string }[]>;
+  
+  // Lead Interactions
+  createLeadInteraction(data: InsertLeadInteraction): Promise<LeadInteraction>;
+  getInteractionsByLead(leadId: number): Promise<LeadInteraction[]>;
+  
+  // Queue management
+  getNextLeadInQueue(userId: number, campaignId?: number): Promise<{ lead: SalesLead; assignment: SalesLeadAssignment; campaign: SalesCampaign } | undefined>;
+  updateLeadMarker(leadId: number, marker: string, motivo?: string, retornoEm?: Date, tipoContato?: string): Promise<SalesLead | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -1782,6 +1793,65 @@ export class DbStorage implements IStorage {
       .innerJoin(salesLeads, eq(leadContacts.leadId, salesLeads.id))
       .where(and(eq(leadContacts.type, "phone"), eq(leadContacts.label, label)));
     return result;
+  }
+  
+  // ===== LEAD INTERACTIONS =====
+  
+  async createLeadInteraction(data: InsertLeadInteraction): Promise<LeadInteraction> {
+    const [created] = await db.insert(leadInteractions).values(data).returning();
+    return created;
+  }
+  
+  async getInteractionsByLead(leadId: number): Promise<LeadInteraction[]> {
+    return await db.select().from(leadInteractions)
+      .where(eq(leadInteractions.leadId, leadId))
+      .orderBy(sql`${leadInteractions.createdAt} DESC`);
+  }
+  
+  // ===== QUEUE MANAGEMENT =====
+  
+  async getNextLeadInQueue(userId: number, campaignId?: number): Promise<{ lead: SalesLead; assignment: SalesLeadAssignment; campaign: SalesCampaign } | undefined> {
+    const conditions = [
+      eq(salesLeadAssignments.userId, userId),
+      inArray(salesLeadAssignments.status, ["novo", "em_atendimento"])
+    ];
+    
+    if (campaignId) {
+      conditions.push(eq(salesLeadAssignments.campaignId, campaignId));
+    }
+    
+    const [assignment] = await db.select().from(salesLeadAssignments)
+      .where(and(...conditions))
+      .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`)
+      .limit(1);
+    
+    if (!assignment) return undefined;
+    
+    const [lead] = await db.select().from(salesLeads).where(eq(salesLeads.id, assignment.leadId));
+    if (!lead) return undefined;
+    
+    const [campaign] = await db.select().from(salesCampaigns).where(eq(salesCampaigns.id, assignment.campaignId));
+    if (!campaign) return undefined;
+    
+    return { lead, assignment, campaign };
+  }
+  
+  async updateLeadMarker(leadId: number, marker: string, motivo?: string, retornoEm?: Date, tipoContato?: string): Promise<SalesLead | undefined> {
+    const updateData: any = {
+      leadMarker: marker,
+      ultimoContatoEm: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    if (motivo !== undefined) updateData.motivo = motivo;
+    if (retornoEm !== undefined) updateData.retornoEm = retornoEm;
+    if (tipoContato !== undefined) updateData.ultimoTipoContato = tipoContato;
+    
+    const [updated] = await db.update(salesLeads)
+      .set(updateData)
+      .where(eq(salesLeads.id, leadId))
+      .returning();
+    return updated;
   }
 }
 
