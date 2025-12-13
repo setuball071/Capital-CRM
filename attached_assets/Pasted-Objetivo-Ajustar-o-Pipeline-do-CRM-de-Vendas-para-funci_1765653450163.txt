@@ -1,0 +1,189 @@
+Objetivo: Ajustar o Pipeline do CRM de Vendas para funcionar baseado em Interações registradas, com métricas financeiras (margem e proposta), e gestão por níveis (corretor, gestor de equipe, master). Sem criar complexidade desnecessária.
+
+Regras gerais
+
+O Pipeline deve ser alimentado por dados do “Registro de Interação”.
+
+“Novo” não deve existir como coluna do Pipeline. Leads que nunca tiveram interação não aparecem no Pipeline.
+
+As colunas do Pipeline devem existir apenas para marcadores que existirem no sistema.
+
+O usuário deve poder reordenar as colunas (drag and drop da coluna inteira), e essa ordem deve persistir por usuário.
+
+1) Registro de Interação (modal)
+Ajustes obrigatórios
+
+A) Campo “Marcador do Lead”
+
+O dropdown deve listar apenas marcadores válidos do Pipeline que existam no banco.
+
+Remover itens hardcoded se houver.
+
+Não pode aparecer “Novo”.
+
+B) Campos obrigatórios novos
+
+margem_valor (obrigatório, numérico, moeda, default 0 só se vazio não for permitido, aqui é obrigatório então não pode vazio)
+
+proposta_valor_estimado (obrigatório, numérico, moeda)
+
+C) Seleção obrigatória de contato
+
+Deve existir um campo “Contato utilizado” obrigatório.
+
+Esse campo deve listar todos os contatos cadastrados para o lead (telefone, whatsapp, email, conforme existir).
+
+O usuário deve selecionar qual contato foi usado naquela interação.
+
+Se não existir contato cadastrado, o sistema deve exigir cadastrar um contato antes de permitir salvar interação.
+
+D) Observações
+
+Campo livre, opcional, salva junto na interação.
+
+Comportamento ao salvar
+
+Ao salvar interação, o lead deve ser movido para a coluna do marcador selecionado.
+
+Deve registrar data e hora do contato e o tipo de contato (WhatsApp/Ligação/etc).
+
+Deve salvar os dados financeiros (margem_valor e proposta_valor_estimado) vinculados à interação e ao estágio atual do lead.
+
+Critérios de aceite do Registro de Interação
+
+Se eu não selecionar marcador, não salva.
+
+Se eu não preencher margem, não salva.
+
+Se eu não preencher proposta, não salva.
+
+Se eu não selecionar contato utilizado, não salva.
+
+Ao salvar, o lead aparece no Pipeline na coluna correta.
+
+Os valores e observações aparecem depois em “Detalhes do Lead”.
+
+2) Meu Pipeline (tela do corretor)
+A) Somatórios por coluna
+
+Em cada coluna do pipeline deve aparecer:
+
+Soma das margens (margem_valor) dos cards naquela coluna
+
+Soma dos valores estimados de proposta (proposta_valor_estimado) dos cards naquela coluna
+
+Esses valores devem ser baseados no estágio atual do lead, preferencialmente usando os valores da última interação registrada no estágio atual. Se mover o lead de estágio, os números exibidos devem refletir o estágio atual.
+
+B) Remover coluna Novo
+
+A coluna “Novo” não aparece.
+
+Leads sem interação não aparecem no Pipeline.
+
+C) Ordenação de colunas (por usuário)
+
+O usuário pode arrastar colunas para reorganizar a ordem.
+
+Persistir a ordem em tabela ou configuração do usuário.
+
+Na próxima vez que abrir a tela, deve manter a ordem.
+
+D) Detalhes do Lead
+
+Ao abrir “Detalhes do Lead”, deve mostrar além do básico:
+
+Última interação: tipo de contato, contato utilizado, marcador, margem_valor, proposta_valor_estimado, observações, data/hora
+
+Histórico de interações (lista), pelo menos as últimas 10, com os mesmos campos
+
+Critérios de aceite do Meu Pipeline
+
+Não existe coluna Novo.
+
+Um lead só aparece no pipeline depois de ter ao menos 1 interação.
+
+Cada coluna mostra duas somas: margens e propostas.
+
+Arrastar coluna muda ordem e persiste.
+
+Detalhes do Lead mostra os dados financeiros e contato usado.
+
+3) Gestão de Pipeline (Master e Gestores)
+Níveis de acesso
+
+Usuário Master
+
+Enxerga gestão de pipeline de todos os usuários e todas as equipes.
+
+Gestores de equipe
+
+Só enxergam pipelines dos corretores da equipe deles.
+
+Isso deve respeitar a autorização no módulo de delegação/permissões.
+
+A) Cards de topo por marcador
+
+Na visão geral, em vez de quantidade, cada caixa do marcador deve mostrar:
+
+Soma das margens no marcador
+
+Soma das propostas no marcador
+
+Pode manter a contagem menor em texto secundário se quiser, mas o principal é soma de margens e soma de propostas.
+
+B) Distribuição por corretor
+
+Manter a tabela como está.
+
+Ao clicar em um corretor, abrir o pipeline daquele corretor para análise detalhada (visualização igual ao “Meu Pipeline”, mas read-only ou com permissões específicas se quiser).
+
+Critérios de aceite da Gestão
+
+Master vê tudo.
+
+Gestor vê apenas sua equipe.
+
+Caixas por marcador mostram soma de margens e soma de propostas.
+
+Clicar no corretor abre pipeline dele.
+
+4) Ajustes de dados e backend
+Estrutura sugerida (se já existir, adaptar sem quebrar)
+
+pipeline_markers (id, nome, cor opcional, ativo boolean)
+
+lead_interactions (id, lead_id, user_id, marker_id, contact_id, contact_type, margem_valor, proposta_valor_estimado, observacoes, created_at)
+
+lead_contacts (id, lead_id, tipo, valor, created_at)
+
+user_pipeline_settings (user_id, column_order json ou tabela de ordem por marker_id)
+
+Regras importantes
+
+Não duplicar dados ao mover lead. O estágio atual pode estar no lead ou derivado da última interação. Escolher 1 abordagem e manter consistente.
+
+Garantir que os somatórios usem os valores corretos (última interação do estágio atual).
+
+Se a IA estiver desativada, nenhuma rota do pipeline deve depender dela.
+
+5) Entregáveis
+
+Modal Registro de Interação atualizado com os campos obrigatórios e seleção de contato
+
+Meu Pipeline sem “Novo”, com somas por coluna e ordem de colunas persistida
+
+Detalhes do Lead com dados e histórico de interações
+
+Gestão de Pipeline com somas e drill-down por corretor
+
+Ajuste de permissões Master e Gestor de equipe
+
+Se você colar isso, ele vai ter que mexer em 3 lugares no front (registro, meu pipeline, gestão) e no back (interactions, markers, settings).
+
+Se ele ainda “não entender”, me manda o arquivo destes 3 componentes que ele está usando:
+
+client/src/pages/vendas-atendimento.tsx
+
+client/src/pages/vendas-agenda.tsx ou meu-pipeline (o nome real do arquivo do pipeline)
+
+client/src/pages/... da gestão do pipeline
