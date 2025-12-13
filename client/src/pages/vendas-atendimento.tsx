@@ -1012,7 +1012,12 @@ export default function VendasAtendimento() {
                                               allContactTags.map(tag => (
                                                 <button
                                                   key={tag.id}
-                                                  onClick={() => handleToggleTag(contact.id, tag.id)}
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleToggleTag(contact.id, tag.id);
+                                                  }}
                                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
                                                   data-testid={`tag-option-${tag.id}`}
                                                 >
