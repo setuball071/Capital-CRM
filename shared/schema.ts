@@ -929,7 +929,7 @@ export const leadContacts = pgTable("lead_contacts", {
   id: serial("id").primaryKey(),
   leadId: integer("lead_id").references(() => salesLeads.id, { onDelete: "cascade" }).notNull(),
   type: varchar("type", { length: 20 }).notNull().default("phone"), // phone, email, address
-  label: varchar("label", { length: 100 }).notNull(), // WhatsApp, Esposa, Recado, Comercial, etc.
+  label: varchar("label", { length: 100 }), // opcional - legado
   value: varchar("value", { length: 255 }).notNull(), // telefone/email/endereco
   isPrimary: boolean("is_primary").notNull().default(false),
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
@@ -946,7 +946,7 @@ export const insertLeadContactSchema = createInsertSchema(leadContacts).omit({
 export type LeadContact = typeof leadContacts.$inferSelect;
 export type InsertLeadContact = z.infer<typeof insertLeadContactSchema>;
 
-// Labels de contato comuns
+// Labels de contato comuns (legado - mantido para compatibilidade)
 export const CONTACT_LABELS = [
   "WhatsApp",
   "Ligação",
@@ -959,3 +959,38 @@ export const CONTACT_LABELS = [
   "Urgente",
   "Trabalho",
 ] as const;
+
+// ===== CONTACT TAGS (ETIQUETAS DE CONTATO) =====
+
+export const contactTags = pgTable("contact_tags", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  color: varchar("color", { length: 20 }).notNull().default("#3b82f6"), // hex color
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertContactTagSchema = createInsertSchema(contactTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContactTag = typeof contactTags.$inferSelect;
+export type InsertContactTag = z.infer<typeof insertContactTagSchema>;
+
+// ===== CONTACT TAG ASSIGNMENTS (VINCULO CONTATO-ETIQUETA) =====
+
+export const contactTagAssignments = pgTable("contact_tag_assignments", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").references(() => leadContacts.id, { onDelete: "cascade" }).notNull(),
+  tagId: integer("tag_id").references(() => contactTags.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertContactTagAssignmentSchema = createInsertSchema(contactTagAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContactTagAssignment = typeof contactTagAssignments.$inferSelect;
+export type InsertContactTagAssignment = z.infer<typeof insertContactTagAssignmentSchema>;

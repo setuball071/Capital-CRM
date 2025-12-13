@@ -12,7 +12,7 @@ export function calcularParcelaComMargem(
   valorParcelaBruta: number,
   tipoMargem: 'percentual' | 'fixo',
   margemSeguranca: number
-): number {
+): number {23
   let desconto: number;
   
   if (tipoMargem === 'fixo') {

@@ -1,0 +1,166 @@
+Objetivo
+Ajustar o fluxo de Contatos e Etiquetas na tela CRM de Vendas Atendimento para ficar simples e rápido, mantendo o layout atual e reduzindo complexidade.
+
+Tela alvo
+client/src/pages/vendas-atendimento.tsx (e os componentes que ela usa). Se existir um componente separado de contatos ou tags, pode ajustar também.
+
+Mudanças de UX na prática
+
+Modal “Novo Contato”
+
+O modal deve cadastrar somente o telefone (apenas o número).
+
+Remover campo obrigatório “Etiqueta”.
+
+Remover dropdown “Tipo” se hoje só usamos telefone. Se quiser manter “Tipo”, deixe “Telefone” como padrão e não obrigatório mudar.
+
+Campos:
+
+Valor (telefone): obrigatório
+
+Etiqueta: não existe nesse modal
+
+Ao salvar:
+
+Persistir no banco (não pode mais aparecer “Funcionalidade será persistida em breve”).
+
+Atualizar UI na hora, listando o telefone cadastrado.
+
+Exibição de telefones no Painel de Contato
+
+Listar telefones em formato compacto (ocupando menos espaço), alinhado mais para o canto (layout mais enxuto).
+
+Cada telefone listado deve ter:
+
+Botão/ícone de copiar (copy)
+
+Botão/ícone de WhatsApp (se existir)
+
+Botão/ícone de Etiqueta (tag) que aparece ao passar o mouse (hover) ou no menu de 3 pontinhos
+
+Etiquetar telefone
+
+Etiqueta NÃO é obrigatória no cadastro.
+
+Ao clicar no ícone de etiqueta em um telefone:
+
+Abrir um popover/modal pequeno com:
+
+Lista de etiquetas existentes (nome + cor)
+
+Opção “Criar nova etiqueta” (nome + cor)
+
+Opção “Remover etiqueta” se já estiver etiquetado
+
+Ao selecionar/criar:
+
+Salvar vínculo do telefone com a etiqueta
+
+Na lista de telefones:
+
+Mostrar um ícone pequeno de etiqueta ao lado do número se ele estiver etiquetado
+
+No topo do cliente (ao lado do nome):
+
+Mostrar um chip/badge com o nome e cor da etiqueta (a etiqueta do telefone principal, ou se houver mais de uma, mostrar até 2 chips e “+N”)
+
+Remover “Buscar por Etiqueta”
+
+Remover completamente a caixa “Buscar por Etiqueta” e o botão “Buscar Contatos” dessa tela de atendimento.
+
+Etiquetas serão usadas apenas dentro do cartão do cliente (topo) e nos telefones.
+
+Regras de dados
+
+Persistência real
+
+Criar/usar tabelas no banco para:
+
+contatos do cliente
+
+etiquetas
+
+relacionamento contato -> etiqueta (pode ser direto no contato ou tabela de relação)
+
+O registro deve ser consistente por lead/cliente do CRM.
+
+Estrutura recomendada (pode adaptar ao schema atual)
+
+contacts:
+
+id
+
+lead_id (ou client_id)
+
+type = “telefone”
+
+value = “DDD+numero”
+
+is_primary (opcional)
+
+created_at
+
+tags:
+
+id
+
+name
+
+color
+
+created_at
+
+contact_tags:
+
+contact_id
+
+tag_id
+
+Se já existe tabela de tags ou de contatos
+
+Reutilizar ao máximo e só ajustar o necessário.
+
+Evitar criar duplicações.
+
+Comportamento final esperado
+
+Eu clico “Novo Contato” > digito telefone > salvar > telefone aparece na lista imediatamente.
+
+Depois, eu passo o mouse no telefone > clico no ícone de etiqueta > escolho/crio etiqueta > aparece ícone no telefone e chip no topo do cliente.
+
+Nenhum campo de etiqueta obrigatório ao cadastrar telefone.
+
+Restrições
+
+Não criar novas telas ou módulos.
+
+Apenas ajustar a experiência dentro do CRM de atendimento.
+
+Manter o layout atual o mais próximo possível, só enxugar e organizar os telefones.
+
+Garantir que não exista mais o toast “Funcionalidade será persistida em breve”; tudo deve persistir de verdade.
+
+Checklist de entrega
+
+Removido “Buscar por Etiqueta” da tela
+
+Modal novo contato sem etiqueta obrigatória
+
+Telefones persistem e aparecem
+
+Etiquetar telefone via hover/menu e persistir
+
+Mostrar etiqueta no topo do cliente
+
+Fim.
+
+Para reduzir teu custo no Replit (sem travar teu desenvolvimento)
+
+Pare de usar o “Agent / Architect” pra ajustes pequenos de UI
+Use edição manual: “Edit file” direto e peça mudanças bem curtas. O que está te cobrando caro é Agent Usage.
+
+Sempre mande uma tarefa por vez
+Se você mandar 10 coisas no mesmo prompt, ele gira muito mais iterações e explode o custo.
+
+Coloque “shutdown limit” baixo enquanto está em fase de ajustes finos
+Você já abriu essa tela de budget. Define um teto diário pequeno e vai subindo conforme necessidade.
