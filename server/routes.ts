@@ -5715,9 +5715,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       const { type, label, value, isPrimary } = req.body;
       
-      if (!label || typeof label !== "string" || label.trim().length === 0) {
-        return res.status(400).json({ message: "Etiqueta é obrigatória" });
-      }
       if (!value || typeof value !== "string" || value.trim().length === 0) {
         return res.status(400).json({ message: "Valor é obrigatório" });
       }
@@ -5725,7 +5722,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const contact = await storage.createContact({
         leadId,
         type: type || "phone",
-        label: label.trim(),
+        label: label?.trim() || null,
         value: value.trim(),
         isPrimary: isPrimary || false,
         createdBy: userId,
