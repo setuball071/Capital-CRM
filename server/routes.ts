@@ -32,6 +32,7 @@ import {
   insertSalesCampaignSchema,
   insertSalesLeadSchema,
   LEAD_STATUS,
+  LEAD_MARKERS,
   TIPOS_CONTATO,
   MODULE_LIST,
   type User,
@@ -5538,6 +5539,200 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Get interactions error:", error);
       return res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+
+  // ===== CAMPAIGN MANAGEMENT ENDPOINTS =====
+
+  // GET /api/crm/campaigns/:id/distribution - Get lead distribution by marker
+  app.get("/api/crm/campaigns/:id/distribution", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ message: "ID de campanha inválido" });
+      }
+
+      // Query leads grouped by leadMarker
+      const result = await db
+        .select({
+          leadMarker: salesLeads.leadMarker,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(salesLeads)
+        .where(eq(salesLeads.campaignId, campaignId))
+        .groupBy(salesLeads.leadMarker);
+
+      // Convert to object with all markers (including zeros)
+      const distribution: Record<string, number> = {};
+      for (const marker of LEAD_MARKERS) {
+        distribution[marker] = 0;
+      }
+      for (const row of result) {
+        distribution[row.leadMarker] = row.count;
+      }
+
+      return res.json(distribution);
+    } catch (error) {
+      console.error("Get campaign distribution error:", error);
+      return res.status(500).json({ message: "Erro ao buscar distribuição" });
+    }
+  });
+
+  // POST /api/crm/campaigns/:id/reassign - Reassign leads from one user to another
+  app.post("/api/crm/campaigns/:id/reassign", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ message: "ID de campanha inválido" });
+      }
+
+      const { fromUserId, toUserId, leadMarkers } = req.body;
+
+      if (!fromUserId || !toUserId) {
+        return res.status(400).json({ message: "IDs de usuário são obrigatórios" });
+      }
+
+      // Build conditions for the update
+      const conditions = [
+        eq(salesLeadAssignments.campaignId, campaignId),
+        eq(salesLeadAssignments.userId, fromUserId),
+      ];
+
+      // If specific markers provided, filter by them
+      let leadIdsToReassign: number[] = [];
+      if (leadMarkers && Array.isArray(leadMarkers) && leadMarkers.length > 0) {
+        // Get lead IDs with those markers
+        const leadsWithMarkers = await db
+          .select({ id: salesLeads.id })
+          .from(salesLeads)
+          .where(
+            and(
+              eq(salesLeads.campaignId, campaignId),
+              inArray(salesLeads.leadMarker, leadMarkers)
+            )
+          );
+        leadIdsToReassign = leadsWithMarkers.map(l => l.id);
+
+        if (leadIdsToReassign.length === 0) {
+          return res.json({ message: "Nenhum lead encontrado com os marcadores especificados", count: 0 });
+        }
+      }
+
+      // Execute the reassignment
+      let updateResult;
+      if (leadIdsToReassign.length > 0) {
+        updateResult = await db
+          .update(salesLeadAssignments)
+          .set({ userId: toUserId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(salesLeadAssignments.campaignId, campaignId),
+              eq(salesLeadAssignments.userId, fromUserId),
+              inArray(salesLeadAssignments.leadId, leadIdsToReassign)
+            )
+          )
+          .returning({ id: salesLeadAssignments.id });
+      } else {
+        updateResult = await db
+          .update(salesLeadAssignments)
+          .set({ userId: toUserId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(salesLeadAssignments.campaignId, campaignId),
+              eq(salesLeadAssignments.userId, fromUserId)
+            )
+          )
+          .returning({ id: salesLeadAssignments.id });
+      }
+
+      return res.json({
+        message: `${updateResult.length} leads transferidos com sucesso`,
+        count: updateResult.length,
+      });
+    } catch (error) {
+      console.error("Reassign leads error:", error);
+      return res.status(500).json({ message: "Erro ao transferir leads" });
+    }
+  });
+
+  // POST /api/crm/campaigns/:id/repescagem - Return leads to pool (remove assignments)
+  app.post("/api/crm/campaigns/:id/repescagem", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ message: "ID de campanha inválido" });
+      }
+
+      const { leadMarkers } = req.body;
+
+      if (!leadMarkers || !Array.isArray(leadMarkers) || leadMarkers.length === 0) {
+        return res.status(400).json({ message: "Marcadores são obrigatórios" });
+      }
+
+      // Get leads with the specified markers in this campaign
+      const leadsToReset = await db
+        .select({ id: salesLeads.id })
+        .from(salesLeads)
+        .where(
+          and(
+            eq(salesLeads.campaignId, campaignId),
+            inArray(salesLeads.leadMarker, leadMarkers)
+          )
+        );
+
+      if (leadsToReset.length === 0) {
+        return res.json({ message: "Nenhum lead encontrado com os marcadores especificados", count: 0 });
+      }
+
+      const leadIds = leadsToReset.map(l => l.id);
+
+      // Remove assignments for these leads
+      const deletedAssignments = await db
+        .delete(salesLeadAssignments)
+        .where(inArray(salesLeadAssignments.leadId, leadIds))
+        .returning({ id: salesLeadAssignments.id });
+
+      // Reset leads to NOVO marker
+      await db
+        .update(salesLeads)
+        .set({
+          leadMarker: "NOVO",
+          motivo: null,
+          retornoEm: null,
+          ultimoContatoEm: null,
+          ultimoTipoContato: null,
+          updatedAt: new Date(),
+        })
+        .where(inArray(salesLeads.id, leadIds));
+
+      // Update campaign counters
+      const campaign = await db
+        .select()
+        .from(salesCampaigns)
+        .where(eq(salesCampaigns.id, campaignId))
+        .limit(1);
+
+      if (campaign.length > 0) {
+        const currentLeadsDisponiveis = campaign[0].leadsDisponiveis || 0;
+        const currentLeadsDistribuidos = campaign[0].leadsDistribuidos || 0;
+        
+        await db
+          .update(salesCampaigns)
+          .set({
+            leadsDisponiveis: currentLeadsDisponiveis + leadIds.length,
+            leadsDistribuidos: Math.max(0, currentLeadsDistribuidos - deletedAssignments.length),
+            updatedAt: new Date(),
+          })
+          .where(eq(salesCampaigns.id, campaignId));
+      }
+
+      return res.json({
+        message: `${leadIds.length} leads retornados ao pool`,
+        count: leadIds.length,
+      });
+    } catch (error) {
+      console.error("Repescagem error:", error);
+      return res.status(500).json({ message: "Erro ao devolver leads ao pool" });
     }
   });
   
