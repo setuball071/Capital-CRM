@@ -518,15 +518,6 @@ export default function VendasAtendimento() {
                 />
               </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => proximoMutation.mutate(undefined)}
-              disabled={proximoMutation.isPending}
-              data-testid="button-proximo-header"
-            >
-              {proximoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Próximo Cliente
-            </Button>
           </div>
         </div>
       </div>
