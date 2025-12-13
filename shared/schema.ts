@@ -739,6 +739,53 @@ export const salesCampaigns = pgTable("sales_campaigns", {
 });
 
 // Leads brutos vinculados a campanhas
+// Marcadores de lead (status único do lead)
+export const LEAD_MARKERS = [
+  "NOVO",
+  "EM_ATENDIMENTO",
+  "INTERESSADO",
+  "AGUARDANDO_RETORNO",
+  "PROPOSTA_ENVIADA",
+  "VENDIDO",
+  "NAO_ATENDE",
+  "TELEFONE_INVALIDO",
+  "ENGANO",
+  "SEM_INTERESSE",
+  "RETORNAR_DEPOIS",
+  "TRANSFERIR",
+] as const;
+
+export type LeadMarker = typeof LEAD_MARKERS[number];
+
+// Labels para exibição dos marcadores
+export const LEAD_MARKER_LABELS: Record<LeadMarker, string> = {
+  NOVO: "Novo",
+  EM_ATENDIMENTO: "Em Atendimento",
+  INTERESSADO: "Interessado",
+  AGUARDANDO_RETORNO: "Aguardando Retorno",
+  PROPOSTA_ENVIADA: "Proposta Enviada",
+  VENDIDO: "Vendido",
+  NAO_ATENDE: "Não Atende",
+  TELEFONE_INVALIDO: "Telefone Inválido",
+  ENGANO: "Engano",
+  SEM_INTERESSE: "Sem Interesse",
+  RETORNAR_DEPOIS: "Retornar Depois",
+  TRANSFERIR: "Transferir",
+};
+
+// Marcadores que requerem motivo
+export const MARKERS_REQUIRING_MOTIVO: LeadMarker[] = [
+  "NAO_ATENDE",
+  "TELEFONE_INVALIDO",
+  "ENGANO",
+  "SEM_INTERESSE",
+  "TRANSFERIR",
+];
+
+// Tipos de contato
+export const TIPOS_CONTATO_LEAD = ["ligacao", "whatsapp", "outro"] as const;
+export type TipoContatoLead = typeof TIPOS_CONTATO_LEAD[number];
+
 export const salesLeads = pgTable("sales_leads", {
   id: serial("id").primaryKey(),
   campaignId: integer("campaign_id").references(() => salesCampaigns.id, { onDelete: "cascade" }).notNull(),
@@ -752,6 +799,12 @@ export const salesLeads = pgTable("sales_leads", {
   uf: varchar("uf", { length: 10 }),
   observacoes: text("observacoes"),
   baseClienteId: integer("base_cliente_id").references(() => clientesPessoa.id, { onDelete: "set null" }),
+  // Novos campos de marcador
+  leadMarker: varchar("lead_marker", { length: 30 }).notNull().default("NOVO"),
+  retornoEm: timestamp("retorno_em"),
+  motivo: varchar("motivo", { length: 255 }),
+  ultimoContatoEm: timestamp("ultimo_contato_em"),
+  ultimoTipoContato: varchar("ultimo_tipo_contato", { length: 30 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -770,7 +823,7 @@ export const salesLeadAssignments = pgTable("sales_lead_assignments", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Histórico de eventos/interações com o lead
+// Histórico de eventos/interações com o lead (legado)
 export const salesLeadEvents = pgTable("sales_lead_events", {
   id: serial("id").primaryKey(),
   assignmentId: integer("assignment_id").references(() => salesLeadAssignments.id, { onDelete: "cascade" }).notNull(),
@@ -780,6 +833,27 @@ export const salesLeadEvents = pgTable("sales_lead_events", {
   observacao: text("observacao"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Histórico de interações com o lead (novo sistema de marcadores)
+export const leadInteractions = pgTable("lead_interactions", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => salesLeads.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }).notNull(),
+  tipoContato: varchar("tipo_contato", { length: 30 }).notNull(), // ligacao, whatsapp, outro
+  leadMarker: varchar("lead_marker", { length: 30 }).notNull(),
+  motivo: varchar("motivo", { length: 255 }),
+  observacao: text("observacao"),
+  retornoEm: timestamp("retorno_em"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertLeadInteractionSchema = createInsertSchema(leadInteractions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type LeadInteraction = typeof leadInteractions.$inferSelect;
+export type InsertLeadInteraction = z.infer<typeof insertLeadInteractionSchema>;
 
 // ===== INSERT SCHEMAS CRM VENDAS =====
 
@@ -877,31 +951,6 @@ export const insertUserPermissionSchema = createInsertSchema(userPermissions).om
 export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
 
-// ===== LEAD TAGS (ETIQUETAS) =====
-
-export const leadTags = pgTable("lead_tags", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  nome: varchar("nome", { length: 100 }).notNull(),
-  cor: varchar("cor", { length: 20 }).notNull().default("#3b82f6"), // hex color
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const leadTagAssignments = pgTable("lead_tag_assignments", {
-  id: serial("id").primaryKey(),
-  tagId: integer("tag_id").references(() => leadTags.id, { onDelete: "cascade" }).notNull(),
-  assignmentId: integer("assignment_id").references(() => salesLeadAssignments.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertLeadTagSchema = createInsertSchema(leadTags).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type LeadTag = typeof leadTags.$inferSelect;
-export type InsertLeadTag = z.infer<typeof insertLeadTagSchema>;
-export type LeadTagAssignment = typeof leadTagAssignments.$inferSelect;
 
 // ===== LEAD SCHEDULES (AGENDAMENTOS) =====
 
@@ -960,37 +1009,3 @@ export const CONTACT_LABELS = [
   "Trabalho",
 ] as const;
 
-// ===== CONTACT TAGS (ETIQUETAS DE CONTATO) =====
-
-export const contactTags = pgTable("contact_tags", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 50 }).notNull(),
-  color: varchar("color", { length: 20 }).notNull().default("#3b82f6"), // hex color
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertContactTagSchema = createInsertSchema(contactTags).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type ContactTag = typeof contactTags.$inferSelect;
-export type InsertContactTag = z.infer<typeof insertContactTagSchema>;
-
-// ===== CONTACT TAG ASSIGNMENTS (VINCULO CONTATO-ETIQUETA) =====
-
-export const contactTagAssignments = pgTable("contact_tag_assignments", {
-  id: serial("id").primaryKey(),
-  contactId: integer("contact_id").references(() => leadContacts.id, { onDelete: "cascade" }).notNull(),
-  tagId: integer("tag_id").references(() => leadTags.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertContactTagAssignmentSchema = createInsertSchema(contactTagAssignments).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type ContactTagAssignment = typeof contactTagAssignments.$inferSelect;
-export type InsertContactTagAssignment = z.infer<typeof insertContactTagAssignmentSchema>;

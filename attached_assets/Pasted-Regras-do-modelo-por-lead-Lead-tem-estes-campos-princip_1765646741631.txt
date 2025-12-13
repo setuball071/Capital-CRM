@@ -1,0 +1,156 @@
+Regras do modelo (por lead)
+Lead tem estes campos principais
+
+status (ou lead_marker) único e atual
+
+retorno_em (data/hora opcional)
+
+ultimo_contato_em (data/hora)
+
+ultimo_tipo_contato (ligação, whatsapp)
+
+motivo (opcional, só quando for negativo)
+
+observacao (texto)
+
+Histórico
+
+Toda vez que salvar atendimento, grava um registro em lead_interactions (histórico), mas o lead mantém só o “estado atual”.
+
+Prompt completo para o Replit (copiar e colar)
+
+Quero remover totalmente o sistema de Etiquetas/Tags e substituir por Marcador por LEAD.
+
+Objetivo
+Cada lead deve ter um único marcador atual (status) que define se pode reaproveitar, repescar, transferir e medir desempenho. Esse marcador é do lead, não do telefone.
+
+Remover etiqueta
+
+Remover qualquer regra de “tag por telefone”
+
+Remover botão “Buscar por Etiqueta”
+
+Remover página “Gestão de Etiquetas” e rotas/API relacionadas
+
+Manter apenas contatos: adicionar/editar/excluir telefone e copiar
+
+Banco de dados
+Criar/ajustar campos no lead:
+
+lead_marker (string/enum) NOT NULL default “NOVO”
+
+retorno_em (timestamp nullable)
+
+motivo (string nullable)
+
+ultimo_contato_em (timestamp nullable)
+
+ultimo_tipo_contato (string nullable)
+
+Criar tabela de histórico:
+lead_interactions
+
+id
+
+lead_id
+
+user_id
+
+tipo_contato (ligacao/whatsapp/outro)
+
+lead_marker (valor selecionado)
+
+motivo (nullable)
+
+observacao (nullable)
+
+retorno_em (nullable)
+
+created_at
+
+Marcadores (enum)
+Usar estes valores:
+NOVO
+EM_ATENDIMENTO
+INTERESSADO
+AGUARDANDO_RETORNO
+PROPOSTA_ENVIADA
+VENDIDO
+NAO_ATENDE
+TELEFONE_INVALIDO
+ENGANO
+SEM_INTERESSE
+RETORNAR_DEPOIS
+TRANSFERIR
+
+Tela Atendimento (vendedor)
+
+Ao clicar “Iniciar / Próximo Cliente” carrega o próximo lead disponível da fila do usuário
+
+Formulário fixo no rodapé: botão “Registrar Atendimento” abre um drawer/modal
+
+Campos do drawer:
+Tipo de contato (ligação/whatsapp)
+Marcador do lead (dropdown com os enum)
+Motivo (aparece somente para: NAO_ATENDE, TELEFONE_INVALIDO, ENGANO, SEM_INTERESSE, TRANSFERIR)
+Observações
+Agendar retorno (retorno_em opcional)
+
+Ao salvar:
+a) Inserir registro em lead_interactions
+b) Atualizar o lead: lead_marker, retorno_em, ultimo_contato_em, ultimo_tipo_contato, motivo
+c) Se lead_marker = TRANSFERIR, marcar como “recolhível” pelo admin (não manter preso no usuário)
+
+Campanhas e distribuição
+Admin Campanhas:
+
+Ao clicar em “Distribuídos” abrir detalhe da campanha com:
+a) Lista por usuário com contadores por lead_marker
+b) Botões: “Recolher”, “Transferir”, “Repescagem”
+
+Recolher: move leads selecionados de um usuário de volta para “disponíveis” da campanha
+
+Transferir: move leads selecionados de um usuário para outro usuário
+
+Repescagem: criar nova campanha a partir de leads da campanha origem filtrando por lead_marker (ex: NAO_ATENDE, TELEFONE_INVALIDO, ENGANO, AGUARDANDO_RETORNO)
+Opção: “voltar para disponíveis” (sem dono) ou “já distribuir”
+
+Regras de fila do vendedor
+
+O vendedor só vê leads atribuídos a ele
+
+O “Próximo Cliente” deve ignorar leads com retorno_em no futuro (deixar para quando vencer)
+
+Deve priorizar: retorno_em vencido, depois NOVO, depois EM_ATENDIMENTO/AGUARDANDO_RETORNO
+
+APIs necessárias
+
+GET /api/crm/queue/next (retorna próximo lead do usuário)
+
+POST /api/crm/leads/:id/interaction (grava histórico + atualiza lead)
+
+GET /api/crm/campaigns/:id/distribution (resumo por usuário e por marcador)
+
+POST /api/crm/campaigns/:id/reassign (recolher/transferir em lote)
+
+POST /api/crm/campaigns/:id/repescagem (criar campanha nova a partir de filtros)
+
+Importante
+
+Sem IA por enquanto
+
+Sem etiquetas
+
+Tudo em cima de lead_marker e histórico
+
+Se quiser, eu te digo exatamente onde mexer no código também (arquivos prováveis):
+
+client/src/pages/vendas-atendimento.tsx
+
+client/src/pages/vendas-campanhas.tsx
+
+client/src/pages/vendas-etiquetas.tsx (deletar)
+
+server/routes.ts
+
+shared/schema.ts (drizzle)
