@@ -983,7 +983,7 @@ export type InsertContactTag = z.infer<typeof insertContactTagSchema>;
 export const contactTagAssignments = pgTable("contact_tag_assignments", {
   id: serial("id").primaryKey(),
   contactId: integer("contact_id").references(() => leadContacts.id, { onDelete: "cascade" }).notNull(),
-  tagId: integer("tag_id").references(() => contactTags.id, { onDelete: "cascade" }).notNull(),
+  tagId: integer("tag_id").references(() => leadTags.id, { onDelete: "cascade" }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
