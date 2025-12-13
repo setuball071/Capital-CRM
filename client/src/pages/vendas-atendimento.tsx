@@ -20,7 +20,21 @@ import {
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
 } from "lucide-react";
-import { LEAD_STATUS, TIPOS_CONTATO, type SalesLeadAssignment, type SalesLead, type SalesLeadEvent, type LeadSchedule, type LeadContact, type ContactTag, type LeadTag } from "@shared/schema";
+import { 
+  LEAD_STATUS, 
+  TIPOS_CONTATO, 
+  LEAD_MARKERS, 
+  LEAD_MARKER_LABELS, 
+  MARKERS_REQUIRING_MOTIVO, 
+  TIPOS_CONTATO_LEAD,
+  type SalesLeadAssignment, 
+  type SalesLead, 
+  type SalesLeadEvent, 
+  type LeadSchedule, 
+  type LeadContact,
+  type LeadMarker,
+  type LeadInteraction,
+} from "@shared/schema";
 
 interface AtendimentoData {
   assignment: SalesLeadAssignment;
@@ -160,11 +174,12 @@ export default function VendasAtendimento() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
-  const [formData, setFormData] = useState({
-    tipo: "ligacao",
-    resultado: "",
+  const [interactionFormData, setInteractionFormData] = useState({
+    tipoContato: "ligacao" as typeof TIPOS_CONTATO_LEAD[number],
+    leadMarker: "EM_ATENDIMENTO" as LeadMarker,
+    motivo: "",
     observacao: "",
-    status: "em_atendimento",
+    retornoEm: "",
   });
 
   useEffect(() => {
@@ -200,47 +215,17 @@ export default function VendasAtendimento() {
     enabled: !!atendimentoAtual?.lead?.id,
   });
 
-  // Tag management queries - use the unified vendas tags system
-  const { data: allContactTags = [] } = useQuery<LeadTag[]>({
-    queryKey: ["/api/vendas/tags"],
-  });
-
-  const { data: contactsWithTagsRaw = [] } = useQuery<{ contact: { id: number }; tags: { id: number; nome: string; cor: string }[] }[]>({
-    queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"],
+  // Fetch lead interactions history
+  const { data: leadInteractions = [] } = useQuery<LeadInteraction[]>({
+    queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "interactions"],
     enabled: !!atendimentoAtual?.lead?.id,
   });
 
-  // Transform the API response to a flat format for easier lookup
-  const contactsWithTags = contactsWithTagsRaw.flatMap(item => 
-    item.tags.map(tag => ({ contactId: item.contact.id, tagId: tag.id }))
-  );
-
-  // Tag popover state
-  const [tagPopoverOpen, setTagPopoverOpen] = useState<number | null>(null);
-  const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState("#3B82F6");
-  const [showNewTagForm, setShowNewTagForm] = useState(false);
-
-  // Get tags for a specific contact
-  const getTagsForContact = (contactId: number): LeadTag[] => {
-    const tagIds = contactsWithTags
-      .filter(ct => ct.contactId === contactId)
-      .map(ct => ct.tagId);
-    return allContactTags.filter(tag => tagIds.includes(tag.id));
-  };
-
-  // Check if contact has a specific tag
-  const contactHasTag = (contactId: number, tagId: number): boolean => {
-    return contactsWithTags.some(ct => ct.contactId === contactId && ct.tagId === tagId);
-  };
-
-  // Get all unique tags for the lead (across all contacts)
-  const getAllLeadTags = (): LeadTag[] => {
-    const uniqueTagIds = Array.from(new Set(contactsWithTags.map(ct => ct.tagId)));
-    return allContactTags.filter(tag => uniqueTagIds.includes(tag.id));
-  };
-
-  const leadTags = getAllLeadTags();
+  // Check if the selected marker requires a motivo
+  const markerRequiresMotivo = MARKERS_REQUIRING_MOTIVO.includes(interactionFormData.leadMarker);
+  
+  // Check if marker requires scheduling
+  const markerRequiresRetorno = ["AGUARDANDO_RETORNO", "RETORNAR_DEPOIS"].includes(interactionFormData.leadMarker);
 
   const createContactMutation = useMutation({
     mutationFn: async (data: { type: string; value: string }) => {
@@ -299,62 +284,28 @@ export default function VendasAtendimento() {
     },
   });
 
-  // Tag mutations - use unified vendas tags system
-  const createTagMutation = useMutation({
-    mutationFn: async (data: { nome: string; cor: string }) => {
-      return apiRequest("POST", "/api/vendas/tags", data);
+  // Interaction mutation - register interaction with lead marker
+  const registerInteractionMutation = useMutation({
+    mutationFn: async (data: typeof interactionFormData) => {
+      if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
+      return apiRequest("POST", `/api/crm/leads/${atendimentoAtual.lead.id}/interaction`, {
+        tipoContato: data.tipoContato,
+        leadMarker: data.leadMarker,
+        motivo: data.motivo || null,
+        observacao: data.observacao || null,
+        retornoEm: data.retornoEm || null,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vendas/tags"] });
-      setNewTagName("");
-      setNewTagColor("#3B82F6");
-      setShowNewTagForm(false);
-      toast({ title: "Etiqueta criada!" });
+      toast({ title: "Interação registrada!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "interactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/queue/next"] });
     },
     onError: () => {
-      toast({ title: "Erro ao criar etiqueta", variant: "destructive" });
+      toast({ title: "Erro ao registrar interação", variant: "destructive" });
     },
   });
-
-  const assignTagMutation = useMutation({
-    mutationFn: async ({ contactId, tagId }: { contactId: number; tagId: number }) => {
-      return apiRequest("POST", `/api/crm/contacts/${contactId}/tags/${tagId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"] });
-    },
-    onError: () => {
-      toast({ title: "Erro ao atribuir etiqueta", variant: "destructive" });
-    },
-  });
-
-  const removeTagMutation = useMutation({
-    mutationFn: async ({ contactId, tagId }: { contactId: number; tagId: number }) => {
-      return apiRequest("DELETE", `/api/crm/contacts/${contactId}/tags/${tagId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"] });
-    },
-    onError: () => {
-      toast({ title: "Erro ao remover etiqueta", variant: "destructive" });
-    },
-  });
-
-  const handleToggleTag = (contactId: number, tagId: number) => {
-    if (contactHasTag(contactId, tagId)) {
-      removeTagMutation.mutate({ contactId, tagId });
-    } else {
-      assignTagMutation.mutate({ contactId, tagId });
-    }
-  };
-
-  const handleCreateTag = () => {
-    if (!newTagName.trim()) {
-      toast({ title: "Informe o nome da etiqueta", variant: "destructive" });
-      return;
-    }
-    createTagMutation.mutate({ nome: newTagName.trim(), cor: newTagColor });
-  };
 
   const handleCopyPhone = async (phone: string) => {
     try {
@@ -418,7 +369,7 @@ export default function VendasAtendimento() {
     },
     onSuccess: (data) => {
       setAtendimentoAtual(data);
-      setFormData({ tipo: "ligacao", resultado: "", observacao: "", status: "em_atendimento" });
+      setInteractionFormData({ tipoContato: "ligacao", leadMarker: "EM_ATENDIMENTO", motivo: "", observacao: "", retornoEm: "" });
       setDrawerOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -432,27 +383,29 @@ export default function VendasAtendimento() {
     },
   });
 
-  const registrarMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      if (!atendimentoAtual) throw new Error("Nenhum atendimento ativo");
-      return apiRequest("POST", `/api/vendas/atendimento/${atendimentoAtual.assignment.id}/registrar`, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Atendimento registrado!" });
-      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
-    },
-    onError: () => {
-      toast({ title: "Erro ao registrar atendimento", variant: "destructive" });
-    },
-  });
-
-  const handleSalvar = () => {
-    registrarMutation.mutate(formData);
+  const handleRegistrarInteracao = () => {
+    if (markerRequiresMotivo && !interactionFormData.motivo.trim()) {
+      toast({ title: "Informe o motivo", description: "Este marcador exige uma justificativa", variant: "destructive" });
+      return;
+    }
+    if (markerRequiresRetorno && !interactionFormData.retornoEm) {
+      toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
+      return;
+    }
+    registerInteractionMutation.mutate(interactionFormData);
   };
 
-  const handleSalvarEProximo = async () => {
+  const handleRegistrarEProximo = async () => {
+    if (markerRequiresMotivo && !interactionFormData.motivo.trim()) {
+      toast({ title: "Informe o motivo", description: "Este marcador exige uma justificativa", variant: "destructive" });
+      return;
+    }
+    if (markerRequiresRetorno && !interactionFormData.retornoEm) {
+      toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
+      return;
+    }
     try {
-      await registrarMutation.mutateAsync(formData);
+      await registerInteractionMutation.mutateAsync(interactionFormData);
       setDrawerOpen(false);
       proximoMutation.mutate(undefined);
     } catch {
@@ -576,34 +529,11 @@ export default function VendasAtendimento() {
                     {atendimentoAtual.campanha.nome}
                   </Badge>
                 )}
-                {/* Tag chips */}
-                {leadTags.length > 0 && (
-                  <>
-                    {leadTags.slice(0, 2).map(tag => (
-                      <Badge 
-                        key={tag.id}
-                        variant="secondary"
-                        className="text-xs"
-                        style={{ 
-                          backgroundColor: `${tag.cor}20`, 
-                          borderColor: tag.cor,
-                          color: tag.cor 
-                        }}
-                        data-testid={`badge-tag-${tag.id}`}
-                      >
-                        <div 
-                          className="w-2 h-2 rounded-full mr-1.5"
-                          style={{ backgroundColor: tag.cor }}
-                        />
-                        {tag.nome}
-                      </Badge>
-                    ))}
-                    {leadTags.length > 2 && (
-                      <Badge variant="outline" className="text-xs" data-testid="badge-more-tags">
-                        +{leadTags.length - 2}
-                      </Badge>
-                    )}
-                  </>
+                {/* Lead marker badge */}
+                {atendimentoAtual.lead.leadMarker && atendimentoAtual.lead.leadMarker !== "NOVO" && (
+                  <Badge variant="outline" className="text-xs" data-testid="badge-lead-marker">
+                    {LEAD_MARKER_LABELS[atendimentoAtual.lead.leadMarker as LeadMarker] || atendimentoAtual.lead.leadMarker}
+                  </Badge>
                 )}
               </div>
               <div className="flex items-center gap-4 text-sm">
@@ -949,151 +879,16 @@ export default function VendasAtendimento() {
                         </div>
                       ) : (
                         <>
-                          {leadContacts.map((contact) => {
-                            const contactTags = getTagsForContact(contact.id);
-                            return (
+                          {leadContacts.map((contact) => (
                               <div 
                                 key={contact.id} 
                                 className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
                                 data-testid={`contact-item-${contact.id}`}
                               >
-                                {/* Tag indicators */}
-                                {contactTags.length > 0 && (
-                                  <div className="flex gap-0.5 shrink-0">
-                                    {contactTags.slice(0, 3).map(tag => (
-                                      <div 
-                                        key={tag.id}
-                                        className="w-2 h-2 rounded-full"
-                                        style={{ backgroundColor: tag.cor }}
-                                        title={tag.nome}
-                                      />
-                                    ))}
-                                    {contactTags.length > 3 && (
-                                      <span className="text-xs text-muted-foreground">+{contactTags.length - 3}</span>
-                                    )}
-                                  </div>
-                                )}
                                 <span className="font-medium flex-1 truncate">
                                   {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
                                 </span>
                                 <div className="flex items-center gap-1 shrink-0">
-                                  {/* Tag popover button */}
-                                  <Popover 
-                                    open={tagPopoverOpen === contact.id} 
-                                    onOpenChange={(open) => {
-                                      setTagPopoverOpen(open ? contact.id : null);
-                                      if (!open) {
-                                        setShowNewTagForm(false);
-                                        setNewTagName("");
-                                        setNewTagColor("#3B82F6");
-                                      }
-                                    }}
-                                  >
-                                    <PopoverTrigger asChild>
-                                      <Button 
-                                        size="icon" 
-                                        variant="ghost"
-                                        className={`h-7 w-7 ${contactTags.length > 0 ? "text-primary" : ""}`}
-                                        data-testid={`button-tag-contact-${contact.id}`}
-                                      >
-                                        <Tag className="h-3 w-3" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-2" align="end">
-                                      <div className="space-y-2">
-                                        <p className="text-sm font-medium px-1">Etiquetas</p>
-                                        <ScrollArea className="max-h-48">
-                                          <div className="space-y-1">
-                                            {allContactTags.length === 0 ? (
-                                              <p className="text-xs text-muted-foreground px-1 py-2">
-                                                Nenhuma etiqueta criada
-                                              </p>
-                                            ) : (
-                                              allContactTags.map(tag => (
-                                                <button
-                                                  key={tag.id}
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    handleToggleTag(contact.id, tag.id);
-                                                  }}
-                                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
-                                                  data-testid={`tag-option-${tag.id}`}
-                                                >
-                                                  <div 
-                                                    className="w-3 h-3 rounded-full shrink-0"
-                                                    style={{ backgroundColor: tag.cor }}
-                                                  />
-                                                  <span className="flex-1 text-left truncate">{tag.nome}</span>
-                                                  {contactHasTag(contact.id, tag.id) && (
-                                                    <Check className="h-3 w-3 text-primary shrink-0" />
-                                                  )}
-                                                </button>
-                                              ))
-                                            )}
-                                          </div>
-                                        </ScrollArea>
-                                        <Separator />
-                                        {showNewTagForm ? (
-                                          <div className="space-y-2 p-1">
-                                            <Input
-                                              value={newTagName}
-                                              onChange={(e) => setNewTagName(e.target.value)}
-                                              placeholder="Nome da etiqueta"
-                                              className="h-8 text-sm"
-                                              data-testid="input-new-tag-name"
-                                            />
-                                            <div className="flex items-center gap-2">
-                                              <Label className="text-xs">Cor:</Label>
-                                              <input
-                                                type="color"
-                                                value={newTagColor}
-                                                onChange={(e) => setNewTagColor(e.target.value)}
-                                                className="w-8 h-6 rounded cursor-pointer border"
-                                                data-testid="input-new-tag-color"
-                                              />
-                                              <div className="flex-1" />
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => {
-                                                  setShowNewTagForm(false);
-                                                  setNewTagName("");
-                                                  setNewTagColor("#3B82F6");
-                                                }}
-                                              >
-                                                <X className="h-3 w-3" />
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                onClick={handleCreateTag}
-                                                disabled={createTagMutation.isPending}
-                                                data-testid="button-save-new-tag"
-                                              >
-                                                {createTagMutation.isPending ? (
-                                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                                ) : (
-                                                  <Check className="h-3 w-3" />
-                                                )}
-                                              </Button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="w-full justify-start"
-                                            onClick={() => setShowNewTagForm(true)}
-                                            data-testid="button-create-new-tag"
-                                          >
-                                            <Plus className="h-3 w-3 mr-2" />
-                                            Criar nova etiqueta
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
                                   <Button 
                                     size="icon" 
                                     variant="ghost"
@@ -1132,8 +927,7 @@ export default function VendasAtendimento() {
                                   </Button>
                                 </div>
                               </div>
-                            );
-                          })}
+                            ))}
                           {atendimentoAtual.lead.telefone1 && leadContacts.length === 0 && (
                             <div className="flex items-center gap-2 p-2 border rounded text-sm bg-muted/30">
                               <Badge variant="outline" className="text-xs shrink-0">Original</Badge>
@@ -1225,11 +1019,10 @@ export default function VendasAtendimento() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Registrar Atendimento
-              {currentLeadSchedule && (
+              Registrar Interação
+              {atendimentoAtual?.lead?.leadMarker && (
                 <Badge variant="secondary" className="text-xs ml-2">
-                  <Calendar className="h-3 w-3 mr-1" />
-                  Retorno agendado
+                  {LEAD_MARKER_LABELS[atendimentoAtual.lead.leadMarker as LeadMarker] || atendimentoAtual.lead.leadMarker}
                 </Badge>
               )}
             </DialogTitle>
@@ -1237,45 +1030,69 @@ export default function VendasAtendimento() {
           <div className="space-y-4 py-2">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label className="text-sm">Tipo de Contato</Label>
+                <Label className="text-sm">Tipo de Contato *</Label>
                 <Select
-                  value={formData.tipo}
-                  onValueChange={(v) => setFormData({ ...formData, tipo: v })}
+                  value={interactionFormData.tipoContato}
+                  onValueChange={(v) => setInteractionFormData({ ...interactionFormData, tipoContato: v as typeof TIPOS_CONTATO_LEAD[number] })}
                 >
                   <SelectTrigger data-testid="select-tipo-contato">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(TIPOS_CONTATO).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>{label}</SelectItem>
-                    ))}
+                    <SelectItem value="ligacao">Ligação</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label className="text-sm">Status do Lead</Label>
+                <Label className="text-sm">Marcador do Lead *</Label>
                 <Select
-                  value={formData.status}
-                  onValueChange={(v) => setFormData({ ...formData, status: v })}
+                  value={interactionFormData.leadMarker}
+                  onValueChange={(v) => setInteractionFormData({ ...interactionFormData, leadMarker: v as LeadMarker })}
                 >
-                  <SelectTrigger data-testid="select-status">
+                  <SelectTrigger data-testid="select-marcador">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(LEAD_STATUS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    {LEAD_MARKERS.map((marker) => (
+                      <SelectItem key={marker} value={marker}>{LEAD_MARKER_LABELS[marker]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
+            {markerRequiresMotivo && (
+              <div>
+                <Label className="text-sm">Motivo *</Label>
+                <Input
+                  value={interactionFormData.motivo}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, motivo: e.target.value })}
+                  placeholder="Justifique o marcador selecionado..."
+                  data-testid="input-motivo"
+                />
+              </div>
+            )}
+
+            {markerRequiresRetorno && (
+              <div>
+                <Label className="text-sm">Agendar Retorno *</Label>
+                <Input
+                  type="datetime-local"
+                  value={interactionFormData.retornoEm}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, retornoEm: e.target.value })}
+                  data-testid="input-retorno"
+                />
+              </div>
+            )}
+
             <div>
               <Label className="text-sm">Observações</Label>
               <Textarea
-                value={formData.observacao}
-                onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                value={interactionFormData.observacao}
+                onChange={(e) => setInteractionFormData({ ...interactionFormData, observacao: e.target.value })}
                 placeholder="Detalhes do atendimento..."
                 rows={3}
                 data-testid="textarea-observacao"
@@ -1285,19 +1102,21 @@ export default function VendasAtendimento() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
-              onClick={() => setScheduleDialogOpen(true)}
-              data-testid="button-agendar-retorno"
+              onClick={handleRegistrarInteracao}
+              disabled={registerInteractionMutation.isPending}
+              data-testid="button-salvar"
             >
-              <Calendar className="h-4 w-4 mr-2" />
-              Agendar Retorno
+              {registerInteractionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Save className="h-4 w-4 mr-2" />
+              Salvar
             </Button>
             <div className="flex-1" />
             <Button
-              onClick={handleSalvarEProximo}
-              disabled={registrarMutation.isPending || proximoMutation.isPending}
+              onClick={handleRegistrarEProximo}
+              disabled={registerInteractionMutation.isPending || proximoMutation.isPending}
               data-testid="button-salvar-proximo"
             >
-              {(registrarMutation.isPending || proximoMutation.isPending) && (
+              {(registerInteractionMutation.isPending || proximoMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               <SkipForward className="h-4 w-4 mr-2" />
