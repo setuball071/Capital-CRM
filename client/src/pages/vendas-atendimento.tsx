@@ -205,10 +205,15 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/tags"],
   });
 
-  const { data: contactsWithTags = [] } = useQuery<{ contactId: number; tagId: number }[]>({
+  const { data: contactsWithTagsRaw = [] } = useQuery<{ contact: { id: number }; tags: { id: number; nome: string; cor: string }[] }[]>({
     queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts-with-tags"],
     enabled: !!atendimentoAtual?.lead?.id,
   });
+
+  // Transform the API response to a flat format for easier lookup
+  const contactsWithTags = contactsWithTagsRaw.flatMap(item => 
+    item.tags.map(tag => ({ contactId: item.contact.id, tagId: tag.id }))
+  );
 
   // Tag popover state
   const [tagPopoverOpen, setTagPopoverOpen] = useState<number | null>(null);
