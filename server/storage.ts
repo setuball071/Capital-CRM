@@ -25,8 +25,6 @@ import {
   salesLeadAssignments,
   salesLeadEvents,
   userPermissions,
-  leadTags,
-  leadTagAssignments,
   leadSchedules,
   leadContacts,
   type User,
@@ -76,19 +74,10 @@ import {
   type InsertSalesLeadEvent,
   type UserPermission,
   type InsertUserPermission,
-  type LeadTag,
-  type InsertLeadTag,
-  type LeadTagAssignment,
   type LeadSchedule,
   type InsertLeadSchedule,
   type LeadContact,
   type InsertLeadContact,
-  type ContactTag,
-  type InsertContactTag,
-  type ContactTagAssignment,
-  type InsertContactTagAssignment,
-  contactTags,
-  contactTagAssignments,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -273,17 +262,6 @@ export interface IStorage {
   hasModuleAccess(userId: number, module: string): Promise<boolean>;
   hasModuleEditAccess(userId: number, module: string): Promise<boolean>;
   
-  // Lead Tags
-  getTagsByUser(userId: number): Promise<LeadTag[]>;
-  createTag(data: InsertLeadTag): Promise<LeadTag>;
-  updateTag(id: number, data: Partial<InsertLeadTag>): Promise<LeadTag | undefined>;
-  deleteTag(id: number): Promise<void>;
-  assignTagToLead(tagId: number, assignmentId: number): Promise<void>;
-  removeTagFromLead(tagId: number, assignmentId: number): Promise<void>;
-  getTagsForAssignment(assignmentId: number): Promise<LeadTag[]>;
-  getTagUsageCounts(userId: number): Promise<{ tagId: number; count: number }[]>;
-  getLeadsByTag(tagId: number): Promise<{ assignmentId: number; nome: string | null; cpf: string | null; telefones: string[] }[]>;
-  
   // Lead Schedules
   createSchedule(data: InsertLeadSchedule): Promise<LeadSchedule>;
   getSchedulesByUser(userId: number, status?: string): Promise<LeadSchedule[]>;
@@ -303,15 +281,6 @@ export interface IStorage {
   setContactAsPrimary(contactId: number, leadId: number): Promise<void>;
   getDistinctContactLabels(): Promise<string[]>;
   getContactsByLabel(label: string): Promise<{ leadId: number; leadNome: string; cpf: string | null; contactId: number; value: string; label: string }[]>;
-  
-  // Contact Tags
-  getAllContactTags(): Promise<ContactTag[]>;
-  createContactTag(data: InsertContactTag): Promise<ContactTag>;
-  deleteContactTag(id: number): Promise<void>;
-  assignTagToContact(contactId: number, tagId: number): Promise<void>;
-  removeTagFromContact(contactId: number, tagId: number): Promise<void>;
-  getTagsForContact(contactId: number): Promise<ContactTag[]>;
-  getContactsWithTags(leadId: number): Promise<{ contact: LeadContact; tags: ContactTag[] }[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1654,83 +1623,6 @@ export class DbStorage implements IStorage {
     return perm?.canEdit === true;
   }
   
-  // ===== LEAD TAGS =====
-  
-  async getTagsByUser(userId: number): Promise<LeadTag[]> {
-    return await db.select().from(leadTags)
-      .where(eq(leadTags.userId, userId))
-      .orderBy(sql`${leadTags.nome} ASC`);
-  }
-  
-  async createTag(data: InsertLeadTag): Promise<LeadTag> {
-    const [created] = await db.insert(leadTags).values(data).returning();
-    return created;
-  }
-  
-  async updateTag(id: number, data: Partial<InsertLeadTag>): Promise<LeadTag | undefined> {
-    const [updated] = await db.update(leadTags).set(data).where(eq(leadTags.id, id)).returning();
-    return updated;
-  }
-  
-  async deleteTag(id: number): Promise<void> {
-    await db.delete(leadTags).where(eq(leadTags.id, id));
-  }
-  
-  async assignTagToLead(tagId: number, assignmentId: number): Promise<void> {
-    const existing = await db.select().from(leadTagAssignments)
-      .where(and(eq(leadTagAssignments.tagId, tagId), eq(leadTagAssignments.assignmentId, assignmentId)));
-    if (existing.length === 0) {
-      await db.insert(leadTagAssignments).values({ tagId, assignmentId });
-    }
-  }
-  
-  async removeTagFromLead(tagId: number, assignmentId: number): Promise<void> {
-    await db.delete(leadTagAssignments)
-      .where(and(eq(leadTagAssignments.tagId, tagId), eq(leadTagAssignments.assignmentId, assignmentId)));
-  }
-  
-  async getTagsForAssignment(assignmentId: number): Promise<LeadTag[]> {
-    const result = await db.select({ tag: leadTags })
-      .from(leadTagAssignments)
-      .innerJoin(leadTags, eq(leadTagAssignments.tagId, leadTags.id))
-      .where(eq(leadTagAssignments.assignmentId, assignmentId));
-    return result.map(r => r.tag);
-  }
-  
-  async getTagUsageCounts(userId: number): Promise<{ tagId: number; count: number }[]> {
-    const result = await db.select({
-      tagId: leadTagAssignments.tagId,
-      count: sql<number>`count(*)::int`
-    })
-      .from(leadTagAssignments)
-      .innerJoin(leadTags, eq(leadTagAssignments.tagId, leadTags.id))
-      .where(eq(leadTags.userId, userId))
-      .groupBy(leadTagAssignments.tagId);
-    return result;
-  }
-  
-  async getLeadsByTag(tagId: number): Promise<{ assignmentId: number; nome: string | null; cpf: string | null; telefones: string[] }[]> {
-    const result = await db.select({
-      assignmentId: salesLeadAssignments.id,
-      nome: salesLeads.nome,
-      cpf: salesLeads.cpf,
-      telefone1: salesLeads.telefone1,
-      telefone2: salesLeads.telefone2,
-      telefone3: salesLeads.telefone3,
-    })
-      .from(leadTagAssignments)
-      .innerJoin(salesLeadAssignments, eq(leadTagAssignments.assignmentId, salesLeadAssignments.id))
-      .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
-      .where(eq(leadTagAssignments.tagId, tagId));
-    
-    return result.map(r => ({
-      assignmentId: r.assignmentId,
-      nome: r.nome,
-      cpf: r.cpf,
-      telefones: [r.telefone1, r.telefone2, r.telefone3].filter((t): t is string => !!t)
-    }));
-  }
-  
   // ===== LEAD SCHEDULES =====
   
   async createSchedule(data: InsertLeadSchedule): Promise<LeadSchedule> {
@@ -1889,53 +1781,6 @@ export class DbStorage implements IStorage {
       .from(leadContacts)
       .innerJoin(salesLeads, eq(leadContacts.leadId, salesLeads.id))
       .where(and(eq(leadContacts.type, "phone"), eq(leadContacts.label, label)));
-    return result;
-  }
-  
-  // ===== CONTACT TAGS =====
-  
-  async getAllContactTags(): Promise<ContactTag[]> {
-    return await db.select().from(contactTags).orderBy(contactTags.name);
-  }
-  
-  async createContactTag(data: InsertContactTag): Promise<ContactTag> {
-    const [created] = await db.insert(contactTags).values(data).returning();
-    return created;
-  }
-  
-  async deleteContactTag(id: number): Promise<void> {
-    await db.delete(contactTags).where(eq(contactTags.id, id));
-  }
-  
-  async assignTagToContact(contactId: number, tagId: number): Promise<void> {
-    // Verificar se já existe
-    const existing = await db.select().from(contactTagAssignments)
-      .where(and(eq(contactTagAssignments.contactId, contactId), eq(contactTagAssignments.tagId, tagId)));
-    if (existing.length === 0) {
-      await db.insert(contactTagAssignments).values({ contactId, tagId });
-    }
-  }
-  
-  async removeTagFromContact(contactId: number, tagId: number): Promise<void> {
-    await db.delete(contactTagAssignments)
-      .where(and(eq(contactTagAssignments.contactId, contactId), eq(contactTagAssignments.tagId, tagId)));
-  }
-  
-  async getTagsForContact(contactId: number): Promise<ContactTag[]> {
-    const result = await db.select({ tag: contactTags })
-      .from(contactTagAssignments)
-      .innerJoin(contactTags, eq(contactTagAssignments.tagId, contactTags.id))
-      .where(eq(contactTagAssignments.contactId, contactId));
-    return result.map(r => r.tag);
-  }
-  
-  async getContactsWithTags(leadId: number): Promise<{ contact: LeadContact; tags: ContactTag[] }[]> {
-    const contacts = await db.select().from(leadContacts).where(eq(leadContacts.leadId, leadId));
-    const result: { contact: LeadContact; tags: ContactTag[] }[] = [];
-    for (const contact of contacts) {
-      const tags = await this.getTagsForContact(contact.id);
-      result.push({ contact, tags });
-    }
     return result;
   }
 }
