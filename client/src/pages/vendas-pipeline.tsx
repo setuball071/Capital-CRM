@@ -24,6 +24,7 @@ import {
   TIPOS_CONTATO_LEAD,
   type SalesLead, 
   type LeadMarker,
+  type LeadContact,
 } from "@shared/schema";
 
 interface PipelineLead {
@@ -223,11 +224,15 @@ export default function VendasPipeline() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSecondary, setShowSecondary] = useState(false);
   
-  const [newMarker, setNewMarker] = useState<LeadMarker>("NOVO");
+  const [newMarker, setNewMarker] = useState<LeadMarker>("EM_ATENDIMENTO");
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
   const [observacao, setObservacao] = useState("");
   const [motivo, setMotivo] = useState("");
   const [retornoEm, setRetornoEm] = useState("");
+  const [contactId, setContactId] = useState<string>("");
+  const [margemValor, setMargemValor] = useState<string>("");
+  const [propostaValorEstimado, setPropostaValorEstimado] = useState<string>("");
+  const [leadContacts, setLeadContacts] = useState<LeadContact[]>([]);
 
   const { data: pipelineData, isLoading } = useQuery<PipelineData>({
     queryKey: ["/api/crm/pipeline"],
@@ -241,6 +246,9 @@ export default function VendasPipeline() {
       observacao?: string;
       motivo?: string;
       retornoEm?: string;
+      contactId: number;
+      margemValor: string;
+      propostaValorEstimado: string;
     }) => {
       return apiRequest("PATCH", `/api/crm/leads/${data.leadId}/stage`, {
         marker: data.marker,
@@ -248,6 +256,9 @@ export default function VendasPipeline() {
         observacao: data.observacao,
         motivo: data.motivo,
         retornoEm: data.retornoEm,
+        contactId: data.contactId,
+        margemValor: data.margemValor,
+        propostaValorEstimado: data.propostaValorEstimado,
       });
     },
     onSuccess: () => {
@@ -263,11 +274,15 @@ export default function VendasPipeline() {
   });
 
   const resetMoveForm = () => {
-    setNewMarker("NOVO");
+    setNewMarker("EM_ATENDIMENTO");
     setTipoContato("ligacao");
     setObservacao("");
     setMotivo("");
     setRetornoEm("");
+    setContactId("");
+    setMargemValor("");
+    setPropostaValorEstimado("");
+    setLeadContacts([]);
   };
 
   const handleCardClick = (lead: PipelineLead) => {
@@ -285,7 +300,7 @@ export default function VendasPipeline() {
     e.dataTransfer.dropEffect = "move";
   };
 
-  const handleDrop = (e: React.DragEvent, marker: LeadMarker) => {
+  const handleDrop = async (e: React.DragEvent, marker: LeadMarker) => {
     e.preventDefault();
     if (!draggedLead) return;
     
@@ -294,16 +309,33 @@ export default function VendasPipeline() {
       return;
     }
 
-    if (MARKERS_REQUIRING_MOTIVO.includes(marker)) {
-      setSelectedLead(draggedLead);
-      setNewMarker(marker);
-      setMoveDialogOpen(true);
-    } else {
-      moveStageMutation.mutate({
-        leadId: draggedLead.id,
-        marker,
-        tipoContato: "ligacao",
-      });
+    // Não permitir mover para NOVO
+    if (marker === "NOVO") {
+      setDraggedLead(null);
+      toast({ title: "Não é possível mover para NOVO", variant: "destructive" });
+      return;
+    }
+
+    // Sempre abrir modal para registrar atendimento com os campos obrigatórios
+    setSelectedLead(draggedLead);
+    setNewMarker(marker);
+    setMoveDialogOpen(true);
+    
+    // Buscar contatos do lead
+    try {
+      const response = await fetch(`/api/crm/leads/${draggedLead.id}/contacts`);
+      if (response.ok) {
+        const contacts = await response.json();
+        setLeadContacts(contacts);
+        const primary = contacts.find((c: LeadContact) => c.isPrimary);
+        if (primary) {
+          setContactId(String(primary.id));
+        } else if (contacts.length > 0) {
+          setContactId(String(contacts[0].id));
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao buscar contatos:", error);
     }
     
     setDraggedLead(null);
@@ -317,6 +349,21 @@ export default function VendasPipeline() {
       return;
     }
 
+    if (!contactId) {
+      toast({ title: "Selecione o contato utilizado", variant: "destructive" });
+      return;
+    }
+
+    if (!margemValor || parseFloat(margemValor) < 0) {
+      toast({ title: "Informe a margem (valor)", variant: "destructive" });
+      return;
+    }
+
+    if (!propostaValorEstimado || parseFloat(propostaValorEstimado) < 0) {
+      toast({ title: "Informe o valor estimado da proposta", variant: "destructive" });
+      return;
+    }
+
     moveStageMutation.mutate({
       leadId: selectedLead.id,
       marker: newMarker,
@@ -324,13 +371,35 @@ export default function VendasPipeline() {
       observacao: observacao.trim() || undefined,
       motivo: motivo.trim() || undefined,
       retornoEm: retornoEm || undefined,
+      contactId: parseInt(contactId),
+      margemValor,
+      propostaValorEstimado,
     });
   };
 
-  const openMoveDialog = (lead: PipelineLead) => {
+  const openMoveDialog = async (lead: PipelineLead) => {
     setSelectedLead(lead);
-    setNewMarker(lead.leadMarker);
+    // Se o lead está em NOVO, mover para EM_ATENDIMENTO por padrão
+    setNewMarker(lead.leadMarker === "NOVO" ? "EM_ATENDIMENTO" : lead.leadMarker);
     setMoveDialogOpen(true);
+    
+    // Buscar contatos do lead
+    try {
+      const response = await fetch(`/api/crm/leads/${lead.id}/contacts`);
+      if (response.ok) {
+        const contacts = await response.json();
+        setLeadContacts(contacts);
+        // Se tiver contato primário, selecionar automaticamente
+        const primary = contacts.find((c: LeadContact) => c.isPrimary);
+        if (primary) {
+          setContactId(String(primary.id));
+        } else if (contacts.length > 0) {
+          setContactId(String(contacts[0].id));
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao buscar contatos:", error);
+    }
   };
 
   const filteredLeads = useMemo(() => {
@@ -536,25 +605,74 @@ export default function VendasPipeline() {
       </Dialog>
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar Atendimento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Novo status</Label>
+              <Label>Marcador do Lead *</Label>
               <Select value={newMarker} onValueChange={(v) => setNewMarker(v as LeadMarker)}>
                 <SelectTrigger data-testid="select-new-marker">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LEAD_MARKERS.map((marker) => (
+                  {LEAD_MARKERS.filter(marker => marker !== "NOVO").map((marker) => (
                     <SelectItem key={marker} value={marker}>
                       {LEAD_MARKER_LABELS[marker]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label>Contato utilizado *</Label>
+              <Select value={contactId} onValueChange={setContactId}>
+                <SelectTrigger data-testid="select-contact">
+                  <SelectValue placeholder="Selecione o contato" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leadContacts.length === 0 ? (
+                    <SelectItem value="none" disabled>Nenhum contato cadastrado</SelectItem>
+                  ) : (
+                    leadContacts.map((contact) => (
+                      <SelectItem key={contact.id} value={String(contact.id)}>
+                        {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
+                        {contact.label && ` (${contact.label})`}
+                        {contact.isPrimary && " - Principal"}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Margem (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={margemValor}
+                  onChange={(e) => setMargemValor(e.target.value)}
+                  placeholder="0,00"
+                  data-testid="input-margem"
+                />
+              </div>
+              <div>
+                <Label>Proposta Estimada (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={propostaValorEstimado}
+                  onChange={(e) => setPropostaValorEstimado(e.target.value)}
+                  placeholder="0,00"
+                  data-testid="input-proposta"
+                />
+              </div>
             </div>
 
             <div>

@@ -6018,10 +6018,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.patch("/api/crm/leads/:id/stage", requireAuth, async (req, res) => {
     try {
       const leadId = parseInt(req.params.id);
-      const { marker, tipoContato, observacao, motivo, retornoEm } = req.body;
+      const { marker, tipoContato, observacao, motivo, retornoEm, contactId, margemValor, propostaValorEstimado } = req.body;
       
       if (isNaN(leadId) || !marker || !LEAD_MARKERS.includes(marker)) {
         return res.status(400).json({ message: "Dados inválidos" });
+      }
+
+      // Marcador "NOVO" não é permitido no modal de atendimento
+      if (marker === "NOVO") {
+        return res.status(400).json({ message: "Marcador NOVO não é permitido" });
+      }
+
+      // Validar campos obrigatórios para qualquer atendimento
+      if (!contactId) {
+        return res.status(400).json({ message: "Contato utilizado é obrigatório" });
+      }
+      if (margemValor === undefined || margemValor === null || margemValor === "") {
+        return res.status(400).json({ message: "Margem é obrigatória" });
+      }
+      if (propostaValorEstimado === undefined || propostaValorEstimado === null || propostaValorEstimado === "") {
+        return res.status(400).json({ message: "Valor estimado da proposta é obrigatório" });
       }
 
       const now = new Date();
@@ -6045,6 +6061,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         motivo: motivo || null,
         observacao: observacao || null,
         retornoEm: retornoEm ? new Date(retornoEm) : null,
+        contactId: parseInt(contactId),
+        margemValor: String(margemValor),
+        propostaValorEstimado: String(propostaValorEstimado),
       });
 
       return res.json({ message: "Lead atualizado" });
