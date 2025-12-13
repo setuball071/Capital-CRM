@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -35,8 +35,8 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes"],
   modulo_compra_lista: ["/compra-lista"],
-  modulo_crm_vendas_campanhas: ["/vendas/campanhas"],
-  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda"],
+  modulo_crm_vendas_campanhas: ["/vendas/campanhas", "/vendas/gestao-pipeline"],
+  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin"],
   modulo_config_usuarios: ["/users"],
   modulo_config_precos: ["/config-precos", "/pricing"],
@@ -140,7 +140,9 @@ export function AppSidebar() {
       items: [
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_crm_vendas_campanhas" },
         { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_crm_vendas_atendimento" },
+        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_crm_vendas_atendimento" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_crm_vendas_atendimento" },
+        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_crm_vendas_campanhas", masterOnly: false },
       ],
     },
   ];

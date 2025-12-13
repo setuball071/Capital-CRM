@@ -1,0 +1,630 @@
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { 
+  Loader2, Phone, MessageSquare, User, Building, Calendar, 
+  Clock, ChevronRight, GripVertical, Search, Filter, X, 
+  ArrowRight, Check, Copy
+} from "lucide-react";
+import { 
+  LEAD_MARKERS, 
+  LEAD_MARKER_LABELS, 
+  MARKERS_REQUIRING_MOTIVO,
+  TIPOS_CONTATO_LEAD,
+  type SalesLead, 
+  type LeadMarker,
+} from "@shared/schema";
+
+interface PipelineLead {
+  id: number;
+  nome: string;
+  cpf: string | null;
+  telefone1: string | null;
+  telefone2: string | null;
+  telefone3: string | null;
+  email: string | null;
+  cidade: string | null;
+  uf: string | null;
+  observacoes: string | null;
+  leadMarker: LeadMarker;
+  retornoEm: string | null;
+  motivo: string | null;
+  ultimoContatoEm: string | null;
+  ultimoTipoContato: string | null;
+  campaignId: number;
+  campaignNome: string;
+  assignmentId: number;
+}
+
+interface PipelineData {
+  leads: PipelineLead[];
+  summary: Record<LeadMarker, number>;
+}
+
+const MARKER_COLORS: Record<LeadMarker, string> = {
+  NOVO: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  EM_ATENDIMENTO: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  INTERESSADO: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  AGUARDANDO_RETORNO: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  PROPOSTA_ENVIADA: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+  VENDIDO: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  NAO_ATENDE: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+  TELEFONE_INVALIDO: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  ENGANO: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
+  SEM_INTERESSE: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200",
+  RETORNAR_DEPOIS: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  TRANSFERIR: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+};
+
+const KANBAN_COLUMNS: LeadMarker[] = [
+  "NOVO",
+  "EM_ATENDIMENTO", 
+  "INTERESSADO",
+  "AGUARDANDO_RETORNO",
+  "PROPOSTA_ENVIADA",
+  "VENDIDO",
+];
+
+const KANBAN_COLUMNS_SECONDARY: LeadMarker[] = [
+  "NAO_ATENDE",
+  "TELEFONE_INVALIDO",
+  "ENGANO",
+  "SEM_INTERESSE",
+  "RETORNAR_DEPOIS",
+  "TRANSFERIR",
+];
+
+function formatPhone(phone: string | null | undefined): string {
+  if (!phone) return "-";
+  const clean = phone.replace(/\D/g, "");
+  if (clean.length === 11) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+  }
+  if (clean.length === 10) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+  }
+  return phone;
+}
+
+function formatCPF(cpf: string | null): string {
+  if (!cpf) return "-";
+  const clean = cpf.replace(/\D/g, "");
+  if (clean.length !== 11) return cpf;
+  return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9)}`;
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatDateTime(dateStr: string | null): string {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  return date.toLocaleString("pt-BR", { 
+    day: "2-digit", 
+    month: "2-digit", 
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+interface LeadCardProps {
+  lead: PipelineLead;
+  onCardClick: (lead: PipelineLead) => void;
+  onDragStart: (e: React.DragEvent, lead: PipelineLead) => void;
+}
+
+function LeadCard({ lead, onCardClick, onDragStart }: LeadCardProps) {
+  return (
+    <Card 
+      className="cursor-pointer hover-elevate mb-2"
+      onClick={() => onCardClick(lead)}
+      draggable
+      onDragStart={(e) => onDragStart(e, lead)}
+      data-testid={`card-lead-${lead.id}`}
+    >
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2">
+          <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5 cursor-grab" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate" data-testid={`text-lead-nome-${lead.id}`}>
+              {lead.nome}
+            </p>
+            {lead.telefone1 && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Phone className="h-3 w-3" />
+                {formatPhone(lead.telefone1)}
+              </p>
+            )}
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              <Badge variant="outline" className="text-xs">
+                {lead.campaignNome}
+              </Badge>
+              {lead.retornoEm && (
+                <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {formatDate(lead.retornoEm)}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface KanbanColumnProps {
+  marker: LeadMarker;
+  leads: PipelineLead[];
+  onCardClick: (lead: PipelineLead) => void;
+  onDragStart: (e: React.DragEvent, lead: PipelineLead) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, marker: LeadMarker) => void;
+}
+
+function KanbanColumn({ marker, leads, onCardClick, onDragStart, onDragOver, onDrop }: KanbanColumnProps) {
+  return (
+    <div 
+      className="flex-shrink-0 w-72 flex flex-col bg-muted/30 rounded-lg"
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop(e, marker)}
+      data-testid={`column-${marker}`}
+    >
+      <div className="p-3 border-b">
+        <div className="flex items-center justify-between">
+          <Badge className={MARKER_COLORS[marker]}>
+            {LEAD_MARKER_LABELS[marker]}
+          </Badge>
+          <span className="text-sm font-medium text-muted-foreground">{leads.length}</span>
+        </div>
+      </div>
+      <ScrollArea className="flex-1 p-2">
+        <div className="space-y-2">
+          {leads.map((lead) => (
+            <LeadCard 
+              key={lead.id} 
+              lead={lead} 
+              onCardClick={onCardClick}
+              onDragStart={onDragStart}
+            />
+          ))}
+          {leads.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              Nenhum lead
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+export default function VendasPipeline() {
+  const { toast } = useToast();
+  const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [draggedLead, setDraggedLead] = useState<PipelineLead | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showSecondary, setShowSecondary] = useState(false);
+  
+  const [newMarker, setNewMarker] = useState<LeadMarker>("NOVO");
+  const [tipoContato, setTipoContato] = useState<string>("ligacao");
+  const [observacao, setObservacao] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [retornoEm, setRetornoEm] = useState("");
+
+  const { data: pipelineData, isLoading } = useQuery<PipelineData>({
+    queryKey: ["/api/crm/pipeline"],
+  });
+
+  const moveStageMutation = useMutation({
+    mutationFn: async (data: { 
+      leadId: number; 
+      marker: LeadMarker; 
+      tipoContato: string;
+      observacao?: string;
+      motivo?: string;
+      retornoEm?: string;
+    }) => {
+      return apiRequest("PATCH", `/api/crm/leads/${data.leadId}/stage`, {
+        marker: data.marker,
+        tipoContato: data.tipoContato,
+        observacao: data.observacao,
+        motivo: data.motivo,
+        retornoEm: data.retornoEm,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      toast({ title: "Lead movido com sucesso" });
+      setMoveDialogOpen(false);
+      setDetailsOpen(false);
+      resetMoveForm();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao mover lead", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetMoveForm = () => {
+    setNewMarker("NOVO");
+    setTipoContato("ligacao");
+    setObservacao("");
+    setMotivo("");
+    setRetornoEm("");
+  };
+
+  const handleCardClick = (lead: PipelineLead) => {
+    setSelectedLead(lead);
+    setDetailsOpen(true);
+  };
+
+  const handleDragStart = (e: React.DragEvent, lead: PipelineLead) => {
+    setDraggedLead(lead);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, marker: LeadMarker) => {
+    e.preventDefault();
+    if (!draggedLead) return;
+    
+    if (draggedLead.leadMarker === marker) {
+      setDraggedLead(null);
+      return;
+    }
+
+    if (MARKERS_REQUIRING_MOTIVO.includes(marker)) {
+      setSelectedLead(draggedLead);
+      setNewMarker(marker);
+      setMoveDialogOpen(true);
+    } else {
+      moveStageMutation.mutate({
+        leadId: draggedLead.id,
+        marker,
+        tipoContato: "ligacao",
+      });
+    }
+    
+    setDraggedLead(null);
+  };
+
+  const handleMoveSubmit = () => {
+    if (!selectedLead) return;
+    
+    if (MARKERS_REQUIRING_MOTIVO.includes(newMarker) && !motivo.trim()) {
+      toast({ title: "Motivo é obrigatório", variant: "destructive" });
+      return;
+    }
+
+    moveStageMutation.mutate({
+      leadId: selectedLead.id,
+      marker: newMarker,
+      tipoContato,
+      observacao: observacao.trim() || undefined,
+      motivo: motivo.trim() || undefined,
+      retornoEm: retornoEm || undefined,
+    });
+  };
+
+  const openMoveDialog = (lead: PipelineLead) => {
+    setSelectedLead(lead);
+    setNewMarker(lead.leadMarker);
+    setMoveDialogOpen(true);
+  };
+
+  const filteredLeads = useMemo(() => {
+    if (!pipelineData?.leads) return [];
+    if (!searchTerm.trim()) return pipelineData.leads;
+    
+    const term = searchTerm.toLowerCase();
+    return pipelineData.leads.filter(lead => 
+      lead.nome.toLowerCase().includes(term) ||
+      lead.cpf?.includes(term) ||
+      lead.telefone1?.includes(term) ||
+      lead.campaignNome.toLowerCase().includes(term)
+    );
+  }, [pipelineData?.leads, searchTerm]);
+
+  const leadsByMarker = useMemo(() => {
+    const grouped: Record<LeadMarker, PipelineLead[]> = {} as Record<LeadMarker, PipelineLead[]>;
+    LEAD_MARKERS.forEach(marker => {
+      grouped[marker] = [];
+    });
+    filteredLeads.forEach(lead => {
+      if (grouped[lead.leadMarker as LeadMarker]) {
+        grouped[lead.leadMarker as LeadMarker].push(lead);
+      }
+    });
+    return grouped;
+  }, [filteredLeads]);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copiado!" });
+    } catch {
+      toast({ title: "Erro ao copiar", variant: "destructive" });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b bg-background sticky top-0 z-10">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Meu Pipeline</h1>
+            <p className="text-muted-foreground">Gerencie seus leads arrastando entre as colunas</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar lead..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-64"
+                data-testid="input-search"
+              />
+              {searchTerm && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant={showSecondary ? "secondary" : "outline"}
+              onClick={() => setShowSecondary(!showSecondary)}
+              data-testid="button-toggle-secondary"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              {showSecondary ? "Ocultar descarte" : "Ver descarte"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-x-auto p-4">
+        <div className="flex gap-4 min-w-max h-full">
+          {KANBAN_COLUMNS.map((marker) => (
+            <KanbanColumn
+              key={marker}
+              marker={marker}
+              leads={leadsByMarker[marker] || []}
+              onCardClick={handleCardClick}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            />
+          ))}
+          {showSecondary && (
+            <>
+              <Separator orientation="vertical" className="mx-2" />
+              {KANBAN_COLUMNS_SECONDARY.map((marker) => (
+                <KanbanColumn
+                  key={marker}
+                  marker={marker}
+                  leads={leadsByMarker[marker] || []}
+                  onCardClick={handleCardClick}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Detalhes do Lead
+            </DialogTitle>
+          </DialogHeader>
+          {selectedLead && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-lg font-semibold">{selectedLead.nome}</p>
+                <Badge className={MARKER_COLORS[selectedLead.leadMarker]}>
+                  {LEAD_MARKER_LABELS[selectedLead.leadMarker]}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <Label className="text-muted-foreground">CPF</Label>
+                  <div className="flex items-center gap-1">
+                    <p>{formatCPF(selectedLead.cpf)}</p>
+                    {selectedLead.cpf && (
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.cpf!)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Campanha</Label>
+                  <p>{selectedLead.campaignNome}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Telefone 1</Label>
+                  <div className="flex items-center gap-1">
+                    <p>{formatPhone(selectedLead.telefone1)}</p>
+                    {selectedLead.telefone1 && (
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.telefone1!)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Telefone 2</Label>
+                  <p>{formatPhone(selectedLead.telefone2)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Cidade/UF</Label>
+                  <p>{selectedLead.cidade || "-"} {selectedLead.uf ? `/ ${selectedLead.uf}` : ""}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Retorno agendado</Label>
+                  <p>{formatDateTime(selectedLead.retornoEm)}</p>
+                </div>
+              </div>
+
+              {selectedLead.observacoes && (
+                <div>
+                  <Label className="text-muted-foreground">Observações</Label>
+                  <p className="text-sm">{selectedLead.observacoes}</p>
+                </div>
+              )}
+
+              {selectedLead.ultimoContatoEm && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  Último contato: {formatDateTime(selectedLead.ultimoContatoEm)}
+                  {selectedLead.ultimoTipoContato && ` (${selectedLead.ultimoTipoContato})`}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Fechar
+            </Button>
+            <Button onClick={() => { setDetailsOpen(false); openMoveDialog(selectedLead!); }}>
+              <ArrowRight className="h-4 w-4 mr-2" />
+              Mover estágio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Atendimento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Novo status</Label>
+              <Select value={newMarker} onValueChange={(v) => setNewMarker(v as LeadMarker)}>
+                <SelectTrigger data-testid="select-new-marker">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_MARKERS.map((marker) => (
+                    <SelectItem key={marker} value={marker}>
+                      {LEAD_MARKER_LABELS[marker]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Tipo de contato</Label>
+              <Select value={tipoContato} onValueChange={setTipoContato}>
+                <SelectTrigger data-testid="select-tipo-contato">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ligacao">Ligação</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {MARKERS_REQUIRING_MOTIVO.includes(newMarker) && (
+              <div>
+                <Label>Motivo *</Label>
+                <Input
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder="Informe o motivo"
+                  data-testid="input-motivo"
+                />
+              </div>
+            )}
+
+            {(newMarker === "AGUARDANDO_RETORNO" || newMarker === "RETORNAR_DEPOIS") && (
+              <div>
+                <Label>Data de retorno</Label>
+                <Input
+                  type="datetime-local"
+                  value={retornoEm}
+                  onChange={(e) => setRetornoEm(e.target.value)}
+                  data-testid="input-retorno"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Observação</Label>
+              <Textarea
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                placeholder="Observações sobre o atendimento"
+                rows={3}
+                data-testid="textarea-observacao"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMoveDialogOpen(false); resetMoveForm(); }}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleMoveSubmit} 
+              disabled={moveStageMutation.isPending}
+              data-testid="button-confirm-move"
+            >
+              {moveStageMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

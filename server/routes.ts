@@ -28,6 +28,7 @@ import {
   salesLeads,
   salesLeadAssignments,
   salesLeadEvents,
+  leadInteractions,
   clientesPessoa,
   insertSalesCampaignSchema,
   insertSalesLeadSchema,
@@ -5965,6 +5966,240 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Get contacts by label error:", error);
       return res.status(500).json({ message: "Erro ao buscar contatos por etiqueta" });
+    }
+  });
+
+  // ===== PIPELINE KANBAN ROUTES =====
+
+  // GET /api/crm/pipeline - Leads do usuário logado agrupados por marcador
+  app.get("/api/crm/pipeline", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      const assignments = await db
+        .select({
+          id: salesLeads.id,
+          nome: salesLeads.nome,
+          cpf: salesLeads.cpf,
+          telefone1: salesLeads.telefone1,
+          telefone2: salesLeads.telefone2,
+          telefone3: salesLeads.telefone3,
+          email: salesLeads.email,
+          cidade: salesLeads.cidade,
+          uf: salesLeads.uf,
+          observacoes: salesLeads.observacoes,
+          leadMarker: salesLeads.leadMarker,
+          retornoEm: salesLeads.retornoEm,
+          motivo: salesLeads.motivo,
+          ultimoContatoEm: salesLeads.ultimoContatoEm,
+          ultimoTipoContato: salesLeads.ultimoTipoContato,
+          campaignId: salesLeads.campaignId,
+          campaignNome: salesCampaigns.nome,
+          assignmentId: salesLeadAssignments.id,
+        })
+        .from(salesLeadAssignments)
+        .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
+        .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
+        .where(eq(salesLeadAssignments.userId, userId));
+
+      const summary: Record<string, number> = {};
+      for (const marker of LEAD_MARKERS) {
+        summary[marker] = assignments.filter(a => a.leadMarker === marker).length;
+      }
+
+      return res.json({ leads: assignments, summary });
+    } catch (error) {
+      console.error("Get pipeline error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pipeline" });
+    }
+  });
+
+  // PATCH /api/crm/leads/:id/stage - Mover lead de estágio
+  app.patch("/api/crm/leads/:id/stage", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const { marker, tipoContato, observacao, motivo, retornoEm } = req.body;
+      
+      if (isNaN(leadId) || !marker || !LEAD_MARKERS.includes(marker)) {
+        return res.status(400).json({ message: "Dados inválidos" });
+      }
+
+      const now = new Date();
+      
+      await db.update(salesLeads)
+        .set({
+          leadMarker: marker,
+          motivo: motivo || null,
+          retornoEm: retornoEm ? new Date(retornoEm) : null,
+          ultimoContatoEm: now,
+          ultimoTipoContato: tipoContato || "ligacao",
+          updatedAt: now,
+        })
+        .where(eq(salesLeads.id, leadId));
+
+      await db.insert(leadInteractions).values({
+        leadId,
+        userId: req.user!.id,
+        tipoContato: tipoContato || "ligacao",
+        leadMarker: marker,
+        motivo: motivo || null,
+        observacao: observacao || null,
+        retornoEm: retornoEm ? new Date(retornoEm) : null,
+      });
+
+      return res.json({ message: "Lead atualizado" });
+    } catch (error) {
+      console.error("Update stage error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar estágio" });
+    }
+  });
+
+  // GET /api/crm/pipeline/overview - Visão macro para gestores
+  app.get("/api/crm/pipeline/overview", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.user!.role;
+      if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const allAssignments = await db
+        .select({
+          leadMarker: salesLeads.leadMarker,
+          userId: salesLeadAssignments.userId,
+          userName: users.name,
+        })
+        .from(salesLeadAssignments)
+        .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
+        .innerJoin(users, eq(salesLeadAssignments.userId, users.id));
+
+      const totals: Record<string, number> = {};
+      for (const marker of LEAD_MARKERS) {
+        totals[marker] = allAssignments.filter(a => a.leadMarker === marker).length;
+      }
+
+      const byUserMap: Record<number, { userId: number; userName: string; totals: Record<string, number>; totalLeads: number }> = {};
+      
+      for (const assignment of allAssignments) {
+        if (!byUserMap[assignment.userId]) {
+          byUserMap[assignment.userId] = {
+            userId: assignment.userId,
+            userName: assignment.userName,
+            totals: {},
+            totalLeads: 0,
+          };
+          for (const marker of LEAD_MARKERS) {
+            byUserMap[assignment.userId].totals[marker] = 0;
+          }
+        }
+        byUserMap[assignment.userId].totals[assignment.leadMarker]++;
+        byUserMap[assignment.userId].totalLeads++;
+      }
+
+      return res.json({
+        totals,
+        byUser: Object.values(byUserMap),
+        totalLeads: allAssignments.length,
+      });
+    } catch (error) {
+      console.error("Get pipeline overview error:", error);
+      return res.status(500).json({ message: "Erro ao buscar visão geral" });
+    }
+  });
+
+  // GET /api/crm/pipeline/all-leads - Todos os leads para gestão
+  app.get("/api/crm/pipeline/all-leads", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.user!.role;
+      if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const leads = await db
+        .select({
+          id: salesLeads.id,
+          nome: salesLeads.nome,
+          cpf: salesLeads.cpf,
+          telefone1: salesLeads.telefone1,
+          leadMarker: salesLeads.leadMarker,
+          campaignNome: salesCampaigns.nome,
+          assignedUserName: users.name,
+          assignedUserId: salesLeadAssignments.userId,
+          assignmentId: salesLeadAssignments.id,
+        })
+        .from(salesLeadAssignments)
+        .innerJoin(salesLeads, eq(salesLeadAssignments.leadId, salesLeads.id))
+        .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
+        .innerJoin(users, eq(salesLeadAssignments.userId, users.id));
+
+      return res.json(leads);
+    } catch (error) {
+      console.error("Get all leads error:", error);
+      return res.status(500).json({ message: "Erro ao buscar leads" });
+    }
+  });
+
+  // GET /api/crm/team-members - Lista de membros da equipe para remanejamento
+  app.get("/api/crm/team-members", requireAuth, async (req, res) => {
+    try {
+      const members = await db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(eq(users.isActive, true));
+      return res.json(members);
+    } catch (error) {
+      console.error("Get team members error:", error);
+      return res.status(500).json({ message: "Erro ao buscar membros" });
+    }
+  });
+
+  // POST /api/crm/pipeline/bulk-reassign - Remanejamento em lote
+  app.post("/api/crm/pipeline/bulk-reassign", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.user!.role;
+      if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { leadIds, targetUserId } = req.body;
+      if (!Array.isArray(leadIds) || !targetUserId) {
+        return res.status(400).json({ message: "Dados inválidos" });
+      }
+
+      await db.update(salesLeadAssignments)
+        .set({ userId: targetUserId, updatedAt: new Date() })
+        .where(inArray(salesLeadAssignments.leadId, leadIds));
+
+      return res.json({ message: "Leads remanejados", count: leadIds.length });
+    } catch (error) {
+      console.error("Bulk reassign error:", error);
+      return res.status(500).json({ message: "Erro ao remanejar leads" });
+    }
+  });
+
+  // POST /api/crm/pipeline/repescagem - Devolver leads ao pool
+  app.post("/api/crm/pipeline/repescagem", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.user!.role;
+      if (!["master", "coordenacao", "atendimento"].includes(userRole)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { leadIds } = req.body;
+      if (!Array.isArray(leadIds) || leadIds.length === 0) {
+        return res.status(400).json({ message: "Dados inválidos" });
+      }
+
+      await db.delete(salesLeadAssignments)
+        .where(inArray(salesLeadAssignments.leadId, leadIds));
+
+      await db.update(salesLeads)
+        .set({ leadMarker: "NOVO", updatedAt: new Date() })
+        .where(inArray(salesLeads.id, leadIds));
+
+      return res.json({ message: "Leads devolvidos ao pool", count: leadIds.length });
+    } catch (error) {
+      console.error("Repescagem error:", error);
+      return res.status(500).json({ message: "Erro na repescagem" });
     }
   });
   

@@ -30,6 +30,8 @@ import AcademiaAdminPage from "@/pages/academia-admin";
 import VendasCampanhasPage from "@/pages/vendas-campanhas";
 import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import VendasAgendaPage from "@/pages/vendas-agenda";
+import VendasPipelinePage from "@/pages/vendas-pipeline";
+import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -302,6 +304,12 @@ function Router() {
               </Route>
               <Route path="/vendas/agenda">
                 {() => <ProtectedRoute component={VendasAgendaPage} />}
+              </Route>
+              <Route path="/vendas/pipeline">
+                {() => <ProtectedRoute component={VendasPipelinePage} />}
+              </Route>
+              <Route path="/vendas/gestao-pipeline">
+                {() => <CRMAdminRoute component={VendasGestaoPipelinePage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
