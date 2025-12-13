@@ -83,6 +83,12 @@ import {
   type InsertLeadSchedule,
   type LeadContact,
   type InsertLeadContact,
+  type ContactTag,
+  type InsertContactTag,
+  type ContactTagAssignment,
+  type InsertContactTagAssignment,
+  contactTags,
+  contactTagAssignments,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -297,6 +303,15 @@ export interface IStorage {
   setContactAsPrimary(contactId: number, leadId: number): Promise<void>;
   getDistinctContactLabels(): Promise<string[]>;
   getContactsByLabel(label: string): Promise<{ leadId: number; leadNome: string; cpf: string | null; contactId: number; value: string; label: string }[]>;
+  
+  // Contact Tags
+  getAllContactTags(): Promise<ContactTag[]>;
+  createContactTag(data: InsertContactTag): Promise<ContactTag>;
+  deleteContactTag(id: number): Promise<void>;
+  assignTagToContact(contactId: number, tagId: number): Promise<void>;
+  removeTagFromContact(contactId: number, tagId: number): Promise<void>;
+  getTagsForContact(contactId: number): Promise<ContactTag[]>;
+  getContactsWithTags(leadId: number): Promise<{ contact: LeadContact; tags: ContactTag[] }[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1874,6 +1889,53 @@ export class DbStorage implements IStorage {
       .from(leadContacts)
       .innerJoin(salesLeads, eq(leadContacts.leadId, salesLeads.id))
       .where(and(eq(leadContacts.type, "phone"), eq(leadContacts.label, label)));
+    return result;
+  }
+  
+  // ===== CONTACT TAGS =====
+  
+  async getAllContactTags(): Promise<ContactTag[]> {
+    return await db.select().from(contactTags).orderBy(contactTags.name);
+  }
+  
+  async createContactTag(data: InsertContactTag): Promise<ContactTag> {
+    const [created] = await db.insert(contactTags).values(data).returning();
+    return created;
+  }
+  
+  async deleteContactTag(id: number): Promise<void> {
+    await db.delete(contactTags).where(eq(contactTags.id, id));
+  }
+  
+  async assignTagToContact(contactId: number, tagId: number): Promise<void> {
+    // Verificar se já existe
+    const existing = await db.select().from(contactTagAssignments)
+      .where(and(eq(contactTagAssignments.contactId, contactId), eq(contactTagAssignments.tagId, tagId)));
+    if (existing.length === 0) {
+      await db.insert(contactTagAssignments).values({ contactId, tagId });
+    }
+  }
+  
+  async removeTagFromContact(contactId: number, tagId: number): Promise<void> {
+    await db.delete(contactTagAssignments)
+      .where(and(eq(contactTagAssignments.contactId, contactId), eq(contactTagAssignments.tagId, tagId)));
+  }
+  
+  async getTagsForContact(contactId: number): Promise<ContactTag[]> {
+    const result = await db.select({ tag: contactTags })
+      .from(contactTagAssignments)
+      .innerJoin(contactTags, eq(contactTagAssignments.tagId, contactTags.id))
+      .where(eq(contactTagAssignments.contactId, contactId));
+    return result.map(r => r.tag);
+  }
+  
+  async getContactsWithTags(leadId: number): Promise<{ contact: LeadContact; tags: ContactTag[] }[]> {
+    const contacts = await db.select().from(leadContacts).where(eq(leadContacts.leadId, leadId));
+    const result: { contact: LeadContact; tags: ContactTag[] }[] = [];
+    for (const contact of contacts) {
+      const tags = await this.getTagsForContact(contact.id);
+      result.push({ contact, tags });
+    }
     return result;
   }
 }

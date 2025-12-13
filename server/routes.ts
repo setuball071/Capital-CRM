@@ -5826,6 +5826,115 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro ao buscar contatos por etiqueta" });
     }
   });
+  
+  // ===== CONTACT TAGS =====
+  
+  // GET /api/crm/contact-tags - Get all contact tags
+  app.get("/api/crm/contact-tags", requireAuth, async (req, res) => {
+    try {
+      const tags = await storage.getAllContactTags();
+      return res.json(tags);
+    } catch (error) {
+      console.error("Get contact tags error:", error);
+      return res.status(500).json({ message: "Erro ao buscar etiquetas" });
+    }
+  });
+  
+  // POST /api/crm/contact-tags - Create a new contact tag
+  app.post("/api/crm/contact-tags", requireAuth, async (req, res) => {
+    try {
+      const { name, color } = req.body;
+      if (!name?.trim()) {
+        return res.status(400).json({ message: "Nome da etiqueta é obrigatório" });
+      }
+      const tag = await storage.createContactTag({
+        name: name.trim(),
+        color: color || "#3b82f6",
+        createdBy: req.user!.id,
+      });
+      return res.status(201).json(tag);
+    } catch (error) {
+      console.error("Create contact tag error:", error);
+      return res.status(500).json({ message: "Erro ao criar etiqueta" });
+    }
+  });
+  
+  // DELETE /api/crm/contact-tags/:tagId - Delete a contact tag
+  app.delete("/api/crm/contact-tags/:tagId", requireAuth, async (req, res) => {
+    try {
+      const tagId = parseInt(req.params.tagId);
+      if (isNaN(tagId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      await storage.deleteContactTag(tagId);
+      return res.json({ message: "Etiqueta excluída" });
+    } catch (error) {
+      console.error("Delete contact tag error:", error);
+      return res.status(500).json({ message: "Erro ao excluir etiqueta" });
+    }
+  });
+  
+  // POST /api/crm/contacts/:contactId/tags/:tagId - Assign tag to contact
+  app.post("/api/crm/contacts/:contactId/tags/:tagId", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      const tagId = parseInt(req.params.tagId);
+      if (isNaN(contactId) || isNaN(tagId)) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      await storage.assignTagToContact(contactId, tagId);
+      return res.json({ message: "Etiqueta vinculada" });
+    } catch (error) {
+      console.error("Assign tag to contact error:", error);
+      return res.status(500).json({ message: "Erro ao vincular etiqueta" });
+    }
+  });
+  
+  // DELETE /api/crm/contacts/:contactId/tags/:tagId - Remove tag from contact
+  app.delete("/api/crm/contacts/:contactId/tags/:tagId", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      const tagId = parseInt(req.params.tagId);
+      if (isNaN(contactId) || isNaN(tagId)) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      await storage.removeTagFromContact(contactId, tagId);
+      return res.json({ message: "Etiqueta removida" });
+    } catch (error) {
+      console.error("Remove tag from contact error:", error);
+      return res.status(500).json({ message: "Erro ao remover etiqueta" });
+    }
+  });
+  
+  // GET /api/crm/contacts/:contactId/tags - Get tags for a contact
+  app.get("/api/crm/contacts/:contactId/tags", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      const tags = await storage.getTagsForContact(contactId);
+      return res.json(tags);
+    } catch (error) {
+      console.error("Get tags for contact error:", error);
+      return res.status(500).json({ message: "Erro ao buscar etiquetas do contato" });
+    }
+  });
+  
+  // GET /api/crm/leads/:leadId/contacts-with-tags - Get contacts with their tags
+  app.get("/api/crm/leads/:leadId/contacts-with-tags", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.leadId);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      const contactsWithTags = await storage.getContactsWithTags(leadId);
+      return res.json(contactsWithTags);
+    } catch (error) {
+      console.error("Get contacts with tags error:", error);
+      return res.status(500).json({ message: "Erro ao buscar contatos com etiquetas" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
