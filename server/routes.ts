@@ -5984,10 +5984,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== PIPELINE KANBAN ROUTES =====
 
-  // GET /api/crm/pipeline - Leads do usuário logado agrupados por marcador
+  // GET /api/crm/pipeline - Leads do usuário logado (ou de outro usuário se master/gestor)
   app.get("/api/crm/pipeline", requireAuth, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      const currentUserId = req.user!.id;
+      const userRole = req.user!.role;
+      
+      // Se foi passado userId via query param, verificar permissão
+      let userId = currentUserId;
+      if (req.query.userId) {
+        const requestedUserId = parseInt(req.query.userId as string);
+        if (!isNaN(requestedUserId) && requestedUserId !== currentUserId) {
+          // Somente master, atendimento ou coordenacao podem ver pipeline de outros
+          if (!["master", "atendimento", "coordenacao"].includes(userRole)) {
+            return res.status(403).json({ message: "Acesso negado" });
+          }
+          // Coordenacao só pode ver membros da sua equipe
+          if (userRole === "coordenacao") {
+            const teamMembers = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(eq(users.managerId, currentUserId));
+            const teamIds = [currentUserId, ...teamMembers.map(m => m.id)];
+            if (!teamIds.includes(requestedUserId)) {
+              return res.status(403).json({ message: "Acesso negado - usuário não pertence à sua equipe" });
+            }
+          }
+          userId = requestedUserId;
+        }
+      }
       
       const assignments = await db
         .select({

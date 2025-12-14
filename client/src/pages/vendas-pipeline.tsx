@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useSearch, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
-  ArrowRight, Check, Copy
+  ArrowRight, Check, Copy, ArrowLeft
 } from "lucide-react";
 import { 
   LEAD_MARKERS, 
@@ -252,6 +253,14 @@ function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDrag
 
 export default function VendasPipeline() {
   const { toast } = useToast();
+  const searchString = useSearch();
+  const [, navigate] = useLocation();
+  
+  // Parse query params
+  const searchParams = new URLSearchParams(searchString);
+  const viewUserId = searchParams.get("userId");
+  const isGestorMode = searchParams.get("mode") === "gestor";
+  
   const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -271,8 +280,16 @@ export default function VendasPipeline() {
   const [leadInteractions, setLeadInteractions] = useState<LeadInteractionHistory[]>([]);
   const [loadingInteractions, setLoadingInteractions] = useState(false);
 
+  // Build API URL with optional userId
+  const pipelineApiUrl = viewUserId ? `/api/crm/pipeline?userId=${viewUserId}` : "/api/crm/pipeline";
+
   const { data: pipelineData, isLoading } = useQuery<PipelineData>({
-    queryKey: ["/api/crm/pipeline"],
+    queryKey: ["/api/crm/pipeline", viewUserId],
+    queryFn: async () => {
+      const res = await fetch(pipelineApiUrl);
+      if (!res.ok) throw new Error("Erro ao carregar pipeline");
+      return res.json();
+    },
   });
 
   const moveStageMutation = useMutation({
@@ -499,9 +516,28 @@ export default function VendasPipeline() {
     <div className="flex flex-col h-full">
       <div className="p-4 border-b bg-background sticky top-0 z-10">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Meu Pipeline</h1>
-            <p className="text-muted-foreground">Gerencie seus leads arrastando entre as colunas</p>
+          <div className="flex items-center gap-3">
+            {isGestorMode && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => navigate("/crm/gestao-pipeline")}
+                data-testid="button-back-to-gestao"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="text-page-title">
+                {isGestorMode ? "Pipeline do Corretor" : "Meu Pipeline"}
+              </h1>
+              <p className="text-muted-foreground">
+                {isGestorMode 
+                  ? "Visualizando pipeline de outro usuário (somente leitura para gestão)"
+                  : "Gerencie seus leads arrastando entre as colunas"
+                }
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">

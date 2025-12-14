@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -89,6 +90,7 @@ function formatPhone(phone: string | null | undefined): string {
 
 export default function VendasGestaoPipeline() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [selectedTab, setSelectedTab] = useState("overview");
   const [filterUserId, setFilterUserId] = useState<string>("all");
   const [filterMarker, setFilterMarker] = useState<string>("all");
@@ -285,8 +287,7 @@ export default function VendasGestaoPipeline() {
                         data-testid={`row-user-${userSummary.userId}`}
                         className="cursor-pointer hover-elevate"
                         onClick={() => {
-                          setFilterUserId(userSummary.userId.toString());
-                          setSelectedTab("leads");
+                          navigate(`/crm/pipeline?userId=${userSummary.userId}&mode=gestor`);
                         }}
                       >
                         <TableCell className="font-medium">
