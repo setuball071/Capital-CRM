@@ -287,7 +287,7 @@ export default function VendasGestaoPipeline() {
                         data-testid={`row-user-${userSummary.userId}`}
                         className="cursor-pointer hover-elevate"
                         onClick={() => {
-                          navigate(`/crm/pipeline?userId=${userSummary.userId}&mode=gestor`);
+                          navigate(`/vendas/pipeline?userId=${userSummary.userId}&mode=gestor`);
                         }}
                       >
                         <TableCell className="font-medium">

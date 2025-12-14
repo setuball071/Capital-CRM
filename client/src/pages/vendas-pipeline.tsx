@@ -521,7 +521,7 @@ export default function VendasPipeline() {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => navigate("/crm/gestao-pipeline")}
+                onClick={() => navigate("/vendas/gestao-pipeline")}
                 data-testid="button-back-to-gestao"
               >
                 <ArrowLeft className="h-5 w-5" />
