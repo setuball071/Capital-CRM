@@ -1,0 +1,147 @@
+Objetivo
+Corrigir CRM Pipeline para:
+
+Registro de Interação obrigar Margem e Proposta e selecionar Contato do lead
+
+Meu Pipeline mostrar soma de Margens e soma de Propostas por coluna, não contagem
+
+Gestão de Pipeline no admin mostrar nas caixas superiores a soma de Margens e Propostas por marcador, e manter a tabela “Distribuição por Corretor” como está (contagens)
+
+Tarefa 1: Corrigir o modal Registrar Interação no Atendimento
+Arquivo: client/src/pages/vendas-atendimento.tsx
+
+Hoje o modal exibido no Atendimento está antigo. Atualizar o formulário para conter:
+Campos obrigatórios:
+
+contatoId (selecionar um contato do lead, lista de telefones cadastrados do lead)
+
+margem (number, moeda BRL)
+
+propostaEstimada (number, moeda BRL)
+Campos existentes:
+
+tipoContato
+
+marcadorLead (somente marcadores existentes no pipeline, sem “Novo”)
+
+observacoes
+
+Regras:
+
+Não permitir salvar se contatoId, margem, propostaEstimada estiverem vazios
+
+Ao salvar, criar leadInteraction com esses dados e atualizar o estágio do lead para o marcador escolhido
+
+Depois de salvar, se clicar em “Registrar e Próximo”, avançar para o próximo lead da fila
+
+Se não existir endpoint para buscar contatos do lead, criar:
+GET /api/crm/leads/:id/contacts
+Retorna lista de contatos do lead (id, type, value, isPrimary)
+
+Tarefa 2: Garantir persistência e fonte dos valores para somatórios
+Backend deve ter um jeito consistente de somar por coluna.
+
+Opção preferida:
+
+Salvar no registro do lead os campos atuais:
+lead.currentMargin
+lead.currentProposal
+Atualizar esses campos sempre que registrar uma interação (ou mover estágio via modal).
+
+Assim a soma por coluna é simples e não depende de histórico.
+
+Se esses campos não existirem no schema, adicionar em shared/schema.ts e rodar db:push.
+
+Tarefa 3: Meu Pipeline somar valores por coluna
+Arquivo: client/src/pages/vendas-pipeline.tsx
+Hoje cada coluna mostra “quantidade”.
+
+Alterar cabeçalho de cada coluna para mostrar:
+
+somaMargens da coluna
+
+somaPropostas da coluna
+E opcionalmente pode manter a contagem pequeno, mas o principal tem que ser valores.
+
+Implementação:
+
+O endpoint que carrega o pipeline do usuário deve retornar, além dos leads por estágio, um summary por estágio:
+summary: {
+[stage]: { totalMargem: number, totalProposta: number, count: number }
+}
+
+No frontend, renderizar totalMargem e totalProposta no topo de cada coluna.
+
+Regras de colunas:
+
+Coluna “Novo” não aparece no pipeline
+
+Só aparecem colunas que existem no pipelineMarkers (lista de marcadores ativos)
+
+Usuário pode reordenar colunas (drag de coluna). Persistir ordem por usuário.
+Se já existir userPipelineSettings, usar ela. Se não existir, criar.
+
+Detalhes do Lead
+No modal de detalhes do lead (ao clicar num card) deve mostrar:
+
+último contato usado (contatoId e número)
+
+margem registrada
+
+proposta registrada
+
+observações
+
+tipoContato
+
+data e hora
+Mostrar histórico de interações em lista.
+
+Tarefa 4: Gestão de Pipeline no admin
+Arquivo: client/src/pages/vendas-gestao-pipeline.tsx
+Ajustar as caixas superiores (cards por marcador) para mostrar:
+Em cada card:
+
+totalMargem do marcador
+
+totalProposta do marcador
+Não mostrar quantidade como principal.
+
+Manter “Distribuição por Corretor” como está (contagem por estágio).
+Apenas adicionar colunas extras “Margens” e “Propostas” com somas por corretor, sem quebrar a tabela de contagem.
+
+Drill-down
+Ao clicar no corretor, abrir o pipeline daquele corretor em modo leitura (com as somas por coluna também).
+
+Permissões
+
+Master vê tudo
+
+Gestores de equipe veem apenas da própria equipe se tiverem permissão no módulo de delegação
+
+Checklist de validação final
+
+No Atendimento, modal tem Margem e Proposta e Contato obrigatórios
+
+Ao salvar, valores persistem e mudam de estágio
+
+Em Meu Pipeline, cada coluna mostra soma de margens e soma de propostas
+
+Em Gestão de Pipeline, cards superiores mostram somas por marcador e tabela continua com contagens
+
+IMPORTANTE
+
+Não dizer “feito” sem eu ver os campos na UI
+
+Se algum endpoint retornar 500, mostrar o log e corrigir antes de encerrar
+
+Diagnóstico rápido do seu print do console (para você mandar junto se quiser)
+Esses 500 que aparecem normalmente são chamadas falhando em endpoints do CRM, não tem relação direta com travar a IA do OpenAI, porque você travou a IA no openaiClient e isso só impacta rotas que chamam OpenAI. Aqui parece rota de CRM mesmo. O Agent tem que identificar exatamente qual endpoint está retornando 500 e corrigir.
+
+Como reduzir custo no Replit agora, sem travar seu avanço
+
+Pare de pedir “refatoração geral”. Peça sempre por tarefa única e pequena (como o prompt acima).
+
+Exija que ele rode só o necessário: alterar 2 ou 3 arquivos, testar, entregar.
+
+Se ele ficar em loop “Limpando contexto”, você está pagando por ele pensar, não por ele entregar. Force checklist de UI visível.
