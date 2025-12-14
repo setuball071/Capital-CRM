@@ -6156,6 +6156,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .select({
           leadId: salesLeadAssignments.leadId,
           leadMarker: salesLeads.leadMarker,
+          currentMargin: salesLeads.currentMargin,
+          currentProposal: salesLeads.currentProposal,
           userId: salesLeadAssignments.userId,
           userName: users.name,
         })
@@ -6167,18 +6169,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         ? await assignmentsQuery.where(inArray(salesLeadAssignments.userId, teamUserIds))
         : await assignmentsQuery;
 
-      const leadIds = allAssignments.map(a => a.leadId);
-      const interactionsData = leadIds.length > 0 ? await db
-        .select({
-          leadId: leadInteractions.leadId,
-          leadMarker: leadInteractions.leadMarker,
-          margemValor: leadInteractions.margemValor,
-          propostaValorEstimado: leadInteractions.propostaValorEstimado,
-        })
-        .from(leadInteractions)
-        .where(inArray(leadInteractions.leadId, leadIds))
-      : [];
-
       const totals: Record<string, { count: number; somaMargens: number; somaPropostas: number }> = {};
       for (const marker of LEAD_MARKERS) {
         totals[marker] = { count: 0, somaMargens: 0, somaPropostas: 0 };
@@ -6186,14 +6176,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       for (const a of allAssignments) {
         totals[a.leadMarker].count++;
-      }
-
-      for (const i of interactionsData) {
-        const marker = i.leadMarker;
-        if (totals[marker]) {
-          totals[marker].somaMargens += parseFloat(i.margemValor || "0");
-          totals[marker].somaPropostas += parseFloat(i.propostaValorEstimado || "0");
-        }
+        totals[a.leadMarker].somaMargens += parseFloat(a.currentMargin || "0");
+        totals[a.leadMarker].somaPropostas += parseFloat(a.currentProposal || "0");
       }
 
       const byUserMap: Record<number, { userId: number; userName: string; totals: Record<string, number>; totalLeads: number; somaMargens: number; somaPropostas: number }> = {};
@@ -6214,22 +6198,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
         byUserMap[assignment.userId].totals[assignment.leadMarker]++;
         byUserMap[assignment.userId].totalLeads++;
-      }
-
-      const interactionsByLead: Record<number, { somaMargens: number; somaPropostas: number }> = {};
-      for (const i of interactionsData) {
-        if (!interactionsByLead[i.leadId]) {
-          interactionsByLead[i.leadId] = { somaMargens: 0, somaPropostas: 0 };
-        }
-        interactionsByLead[i.leadId].somaMargens += parseFloat(i.margemValor || "0");
-        interactionsByLead[i.leadId].somaPropostas += parseFloat(i.propostaValorEstimado || "0");
-      }
-
-      for (const a of allAssignments) {
-        if (interactionsByLead[a.leadId]) {
-          byUserMap[a.userId].somaMargens += interactionsByLead[a.leadId].somaMargens;
-          byUserMap[a.userId].somaPropostas += interactionsByLead[a.leadId].somaPropostas;
-        }
+        byUserMap[assignment.userId].somaMargens += parseFloat(assignment.currentMargin || "0");
+        byUserMap[assignment.userId].somaPropostas += parseFloat(assignment.currentProposal || "0");
       }
 
       return res.json({
