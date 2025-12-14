@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -253,6 +254,7 @@ function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDrag
 
 export default function VendasPipeline() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const searchString = useSearch();
   const [, navigate] = useLocation();
   
@@ -260,6 +262,24 @@ export default function VendasPipeline() {
   const searchParams = new URLSearchParams(searchString);
   const viewUserId = searchParams.get("userId");
   const isGestorMode = searchParams.get("mode") === "gestor";
+  
+  // Check if user can view other pipelines
+  const canViewOthers = user && ["master", "atendimento", "coordenacao"].includes(user.role);
+
+  // Fetch team members for filter dropdown
+  const { data: teamMembers } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/crm/team-members"],
+    enabled: !!canViewOthers,
+  });
+
+  // Handler to change corretor filter
+  const handleCorretorChange = (value: string) => {
+    if (value === "") {
+      navigate("/vendas/pipeline");
+    } else {
+      navigate(`/vendas/pipeline?userId=${value}`);
+    }
+  };
   
   const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -540,6 +560,21 @@ export default function VendasPipeline() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canViewOthers && teamMembers && teamMembers.length > 0 && (
+              <Select value={viewUserId || ""} onValueChange={handleCorretorChange}>
+                <SelectTrigger className="w-48" data-testid="select-corretor">
+                  <SelectValue placeholder="Meu Pipeline" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Meu Pipeline</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id.toString()}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
