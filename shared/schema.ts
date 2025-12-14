@@ -805,6 +805,8 @@ export const salesLeads = pgTable("sales_leads", {
   motivo: varchar("motivo", { length: 255 }),
   ultimoContatoEm: timestamp("ultimo_contato_em"),
   ultimoTipoContato: varchar("ultimo_tipo_contato", { length: 30 }),
+  currentMargin: decimal("current_margin", { precision: 12, scale: 2 }),
+  currentProposal: decimal("current_proposal", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

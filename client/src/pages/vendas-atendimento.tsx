@@ -180,6 +180,8 @@ export default function VendasAtendimento() {
     motivo: "",
     observacao: "",
     retornoEm: "",
+    margemValor: "",
+    propostaValorEstimado: "",
   });
 
   useEffect(() => {
@@ -294,6 +296,8 @@ export default function VendasAtendimento() {
         motivo: data.motivo || null,
         observacao: data.observacao || null,
         retornoEm: data.retornoEm || null,
+        margemValor: data.margemValor ? parseFloat(data.margemValor) : null,
+        propostaValorEstimado: data.propostaValorEstimado ? parseFloat(data.propostaValorEstimado) : null,
       });
     },
     onSuccess: () => {
@@ -369,7 +373,7 @@ export default function VendasAtendimento() {
     },
     onSuccess: (data) => {
       setAtendimentoAtual(data);
-      setInteractionFormData({ tipoContato: "ligacao", leadMarker: "EM_ATENDIMENTO", motivo: "", observacao: "", retornoEm: "" });
+      setInteractionFormData({ tipoContato: "ligacao", leadMarker: "EM_ATENDIMENTO", motivo: "", observacao: "", retornoEm: "", margemValor: "", propostaValorEstimado: "" });
       setDrawerOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -392,6 +396,14 @@ export default function VendasAtendimento() {
       toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
       return;
     }
+    if (!interactionFormData.margemValor || parseFloat(interactionFormData.margemValor) <= 0) {
+      toast({ title: "Informe a margem", description: "O valor da margem é obrigatório", variant: "destructive" });
+      return;
+    }
+    if (!interactionFormData.propostaValorEstimado || parseFloat(interactionFormData.propostaValorEstimado) <= 0) {
+      toast({ title: "Informe a proposta", description: "O valor da proposta estimada é obrigatório", variant: "destructive" });
+      return;
+    }
     registerInteractionMutation.mutate(interactionFormData);
   };
 
@@ -402,6 +414,14 @@ export default function VendasAtendimento() {
     }
     if (markerRequiresRetorno && !interactionFormData.retornoEm) {
       toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
+      return;
+    }
+    if (!interactionFormData.margemValor || parseFloat(interactionFormData.margemValor) <= 0) {
+      toast({ title: "Informe a margem", description: "O valor da margem é obrigatório", variant: "destructive" });
+      return;
+    }
+    if (!interactionFormData.propostaValorEstimado || parseFloat(interactionFormData.propostaValorEstimado) <= 0) {
+      toast({ title: "Informe a proposta", description: "O valor da proposta estimada é obrigatório", variant: "destructive" });
       return;
     }
     try {
@@ -1087,6 +1107,33 @@ export default function VendasAtendimento() {
                 />
               </div>
             )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label className="text-sm">Valor da Margem (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={interactionFormData.margemValor}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, margemValor: e.target.value })}
+                  placeholder="0,00"
+                  data-testid="input-margem-valor"
+                />
+              </div>
+              <div>
+                <Label className="text-sm">Proposta Estimada (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={interactionFormData.propostaValorEstimado}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, propostaValorEstimado: e.target.value })}
+                  placeholder="0,00"
+                  data-testid="input-proposta-estimada"
+                />
+              </div>
+            </div>
 
             <div>
               <Label className="text-sm">Observações</Label>

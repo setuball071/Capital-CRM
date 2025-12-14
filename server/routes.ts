@@ -5482,15 +5482,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     try {
       const leadId = parseInt(req.params.id);
       const userId = req.user!.id;
-      const { tipoContato, leadMarker, motivo, observacao, retornoEm } = req.body;
+      const { tipoContato, leadMarker, motivo, observacao, retornoEm, margemValor, propostaValorEstimado } = req.body;
       
       if (!tipoContato || !leadMarker) {
         return res.status(400).json({ message: "Tipo de contato e marcador são obrigatórios" });
       }
       
-      // Update lead marker
+      // Update lead marker and current margin/proposal values
       const retornoDate = retornoEm ? new Date(retornoEm) : undefined;
       await storage.updateLeadMarker(leadId, leadMarker, motivo, retornoDate, tipoContato);
+      
+      // Update lead's current margin and proposal if provided
+      if (margemValor !== undefined || propostaValorEstimado !== undefined) {
+        await db.update(salesLeads)
+          .set({
+            currentMargin: margemValor ? String(margemValor) : undefined,
+            currentProposal: propostaValorEstimado ? String(propostaValorEstimado) : undefined,
+            updatedAt: new Date(),
+          })
+          .where(eq(salesLeads.id, leadId));
+      }
       
       // Create interaction record
       const interaction = await storage.createLeadInteraction({
@@ -5501,6 +5512,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         motivo: motivo || null,
         observacao: observacao || null,
         retornoEm: retornoDate || null,
+        margemValor: margemValor ? String(margemValor) : null,
+        propostaValorEstimado: propostaValorEstimado ? String(propostaValorEstimado) : null,
       });
       
       // Update assignment status based on marker
@@ -5993,6 +6006,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           motivo: salesLeads.motivo,
           ultimoContatoEm: salesLeads.ultimoContatoEm,
           ultimoTipoContato: salesLeads.ultimoTipoContato,
+          currentMargin: salesLeads.currentMargin,
+          currentProposal: salesLeads.currentProposal,
           campaignId: salesLeads.campaignId,
           campaignNome: salesCampaigns.nome,
           assignmentId: salesLeadAssignments.id,
@@ -6002,38 +6017,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
         .where(eq(salesLeadAssignments.userId, userId));
 
-      // Buscar somas de margens e propostas por lead da última interação
-      const interactions = await db
-        .select({
-          leadId: leadInteractions.leadId,
-          margemValor: leadInteractions.margemValor,
-          propostaValorEstimado: leadInteractions.propostaValorEstimado,
-        })
-        .from(leadInteractions)
-        .where(inArray(leadInteractions.leadId, assignments.map(a => a.id)));
-
-      // Agrupar interações por leadId (pegando a última - maior id)
-      const lastInteractionByLead: Record<number, { margem: number; proposta: number }> = {};
-      for (const i of interactions) {
-        if (!lastInteractionByLead[i.leadId] || i.leadId > (lastInteractionByLead[i.leadId] as any).id) {
-          lastInteractionByLead[i.leadId] = {
-            margem: parseFloat(i.margemValor || "0"),
-            proposta: parseFloat(i.propostaValorEstimado || "0"),
-          };
-        }
-      }
-
+      // Calcular somas por marcador usando os campos currentMargin e currentProposal dos leads
       const summary: Record<string, { count: number; somaMargens: number; somaPropostas: number }> = {};
       for (const marker of LEAD_MARKERS) {
         const leadsInMarker = assignments.filter(a => a.leadMarker === marker);
         let somaMargens = 0;
         let somaPropostas = 0;
         for (const lead of leadsInMarker) {
-          const lastInt = lastInteractionByLead[lead.id];
-          if (lastInt) {
-            somaMargens += lastInt.margem;
-            somaPropostas += lastInt.proposta;
-          }
+          somaMargens += parseFloat(lead.currentMargin || "0");
+          somaPropostas += parseFloat(lead.currentProposal || "0");
         }
         summary[marker] = {
           count: leadsInMarker.length,
@@ -6082,6 +6074,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           retornoEm: retornoEm ? new Date(retornoEm) : null,
           ultimoContatoEm: now,
           ultimoTipoContato: tipoContato || "ligacao",
+          currentMargin: margemValor ? String(margemValor) : undefined,
+          currentProposal: propostaValorEstimado ? String(propostaValorEstimado) : undefined,
           updatedAt: now,
         })
         .where(eq(salesLeads.id, leadId));
