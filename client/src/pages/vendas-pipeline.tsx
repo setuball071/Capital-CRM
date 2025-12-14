@@ -274,7 +274,7 @@ export default function VendasPipeline() {
 
   // Handler to change corretor filter
   const handleCorretorChange = (value: string) => {
-    if (value === "") {
+    if (value === "__my_pipeline__") {
       navigate("/vendas/pipeline");
     } else {
       navigate(`/vendas/pipeline?userId=${value}`);
@@ -561,12 +561,12 @@ export default function VendasPipeline() {
           </div>
           <div className="flex items-center gap-2">
             {canViewOthers && teamMembers && teamMembers.length > 0 && (
-              <Select value={viewUserId || ""} onValueChange={handleCorretorChange}>
+              <Select value={viewUserId || "__my_pipeline__"} onValueChange={handleCorretorChange}>
                 <SelectTrigger className="w-48" data-testid="select-corretor">
                   <SelectValue placeholder="Meu Pipeline" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Meu Pipeline</SelectItem>
+                  <SelectItem value="__my_pipeline__">Meu Pipeline</SelectItem>
                   {teamMembers.map((member) => (
                     <SelectItem key={member.id} value={member.id.toString()}>
                       {member.name}
