@@ -11,6 +11,8 @@ import {
   clientesPessoa,
   clientesFolhaMes,
   clientesContratos,
+  clientContacts,
+  clientSnapshots,
   basesImportadas,
   pedidosLista,
   pricingSettings,
@@ -46,6 +48,8 @@ import {
   type InsertClienteFolhaMes,
   type ClienteContrato,
   type InsertClienteContrato,
+  type ClientContact,
+  type ClientSnapshot,
   type BaseImportada,
   type InsertBaseImportada,
   type PedidoLista,
@@ -292,6 +296,13 @@ export interface IStorage {
   // Queue management
   getNextLeadInQueue(userId: number, campaignId?: number): Promise<{ lead: SalesLead; assignment: SalesLeadAssignment; campaign: SalesCampaign } | undefined>;
   updateLeadMarker(leadId: number, marker: string, motivo?: string, retornoEm?: Date, tipoContato?: string): Promise<SalesLead | undefined>;
+  
+  // ===== CRM SYNC METHODS =====
+  getClientePessoaByCpf(cpf: string): Promise<ClientePessoa | undefined>;
+  upsertClientByCpf(data: InsertClientePessoa): Promise<ClientePessoa>;
+  syncClientContracts(pessoaId: number, contratos: InsertClienteContrato[]): Promise<void>;
+  createClientSnapshot(data: { clientId: number; referenceDate: Date; fonte: string; situacaoFuncional?: string; margemEmprestimo?: string; margemCartao?: string; margem5?: string; salarioBruto?: string; salarioLiquido?: string; dadosExtras?: any }): Promise<ClientSnapshot>;
+  createCampaignFromFilter(filtros: FiltrosPedidoLista, nome: string, userId: number): Promise<{ campaign: SalesCampaign; leadsCreated: number }>;
 }
 
 export class DbStorage implements IStorage {
@@ -1852,6 +1863,91 @@ export class DbStorage implements IStorage {
       .where(eq(salesLeads.id, leadId))
       .returning();
     return updated;
+  }
+  
+  // ===== CRM SYNC METHODS =====
+  
+  async getClientePessoaByCpf(cpf: string): Promise<ClientePessoa | undefined> {
+    const [cliente] = await db.select().from(clientesPessoa).where(eq(clientesPessoa.cpf, cpf));
+    return cliente;
+  }
+  
+  async upsertClientByCpf(data: InsertClientePessoa): Promise<ClientePessoa> {
+    if (!data.cpf) {
+      const [created] = await db.insert(clientesPessoa).values(data).returning();
+      return created;
+    }
+    
+    const existing = await this.getClientePessoaByCpf(data.cpf);
+    if (existing) {
+      const [updated] = await db.update(clientesPessoa)
+        .set({
+          ...data,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(clientesPessoa.id, existing.id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(clientesPessoa).values(data).returning();
+    return created;
+  }
+  
+  async syncClientContracts(pessoaId: number, contratos: InsertClienteContrato[]): Promise<void> {
+    await db.delete(clientesContratos).where(eq(clientesContratos.pessoaId, pessoaId));
+    
+    if (contratos.length > 0) {
+      await db.insert(clientesContratos).values(contratos);
+    }
+  }
+  
+  async createClientSnapshot(data: { clientId: number; referenceDate: Date; fonte: string; situacaoFuncional?: string; margemEmprestimo?: string; margemCartao?: string; margem5?: string; salarioBruto?: string; salarioLiquido?: string; dadosExtras?: any }): Promise<ClientSnapshot> {
+    const [created] = await db.insert(clientSnapshots).values({
+      clientId: data.clientId,
+      referenceDate: data.referenceDate,
+      fonte: data.fonte,
+      situacaoFuncional: data.situacaoFuncional,
+      margemEmprestimo: data.margemEmprestimo,
+      margemCartao: data.margemCartao,
+      margem5: data.margem5,
+      salarioBruto: data.salarioBruto,
+      salarioLiquido: data.salarioLiquido,
+      dadosExtras: data.dadosExtras,
+    }).returning();
+    return created;
+  }
+  
+  async createCampaignFromFilter(filtros: FiltrosPedidoLista, nome: string, userId: number): Promise<{ campaign: SalesCampaign; leadsCreated: number }> {
+    const { clientes } = await this.searchClientesPessoa(filtros);
+    
+    const [campaign] = await db.insert(salesCampaigns).values({
+      nome,
+      descricao: `Campanha gerada por filtro com ${clientes.length} clientes`,
+      status: "ativa",
+      createdBy: userId,
+      filtrosJson: filtros as any,
+      totalLeads: clientes.length,
+      leadsDisponiveis: clientes.length,
+    }).returning();
+    
+    let leadsCreated = 0;
+    for (const cliente of clientes) {
+      const telefones = Array.isArray(cliente.telefonesBase) ? cliente.telefonesBase : [];
+      await db.insert(salesLeads).values({
+        campaignId: campaign.id,
+        nome: cliente.nome || "Sem nome",
+        cpf: cliente.cpf,
+        telefone1: telefones[0] || null,
+        telefone2: telefones[1] || null,
+        telefone3: telefones[2] || null,
+        uf: cliente.uf,
+        baseClienteId: cliente.id,
+      });
+      leadsCreated++;
+    }
+    
+    return { campaign, leadsCreated };
   }
 }
 
