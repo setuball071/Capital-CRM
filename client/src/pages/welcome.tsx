@@ -34,7 +34,7 @@ export default function WelcomePage() {
     <div className="flex flex-col h-screen">
       <header className="border-b bg-background p-4">
         <div>
-          <h1 className="text-2xl font-bold">Bem-vindo ao Simulador GoldCard</h1>
+          <h1 className="text-2xl font-bold">Bem-vindo ao CRM pro</h1>
           <p className="text-sm text-muted-foreground">{getRoleLabel(user.role)}</p>
         </div>
       </header>
@@ -133,7 +133,7 @@ export default function WelcomePage() {
             <CardHeader>
               <CardTitle>Sobre o Sistema</CardTitle>
               <CardDescription>
-                O Simulador GoldCard permite calcular ofertas de empréstimo para clientes com cartões de crédito e benefícios
+                O CRM pro permite calcular ofertas de empréstimo para clientes com cartões de crédito e benefícios
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

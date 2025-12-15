@@ -53,7 +53,7 @@ import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission 
 import { Separator } from "@/components/ui/separator";
 
 const MODULE_TRANSLATIONS: Record<string, string> = {
-  modulo_simulador: "Simulador GoldCard",
+  modulo_simulador: "CRM pro",
   modulo_roteiros: "Roteiro Bancário",
   modulo_base_clientes: "Base de Clientes",
   modulo_compra_lista: "Compra de Lista",

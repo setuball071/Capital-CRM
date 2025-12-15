@@ -328,7 +328,7 @@ export default function CalculatorPage() {
         pdf.setTextColor(255, 255, 255);
         pdf.setFontSize(18);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Simulador GoldCard', pageWidth / 2, 9, { align: 'center' });
+        pdf.text('CRM pro', pageWidth / 2, 9, { align: 'center' });
 
         pdf.setTextColor(0, 0, 0);
         yPos = 25;
@@ -448,7 +448,7 @@ export default function CalculatorPage() {
         pdf.text(`Documento gerado em ${dateStr}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
 
         const timestamp = Date.now();
-        pdf.save(`simulacao-goldcard-${timestamp}.pdf`);
+        pdf.save(`simulacao-crmpro-${timestamp}.pdf`);
 
         toast({
           title: "PDF salvo!",
@@ -471,7 +471,7 @@ export default function CalculatorPage() {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 32px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Simulador GoldCard', canvas.width / 2, 40);
+        ctx.fillText('CRM pro', canvas.width / 2, 40);
 
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'left';
@@ -570,10 +570,10 @@ export default function CalculatorPage() {
         const link = document.createElement('a');
 
         if (format === 'jpeg') {
-          link.download = `simulacao-goldcard-${timestamp}.jpg`;
+          link.download = `simulacao-crmpro-${timestamp}.jpg`;
           link.href = canvas.toDataURL('image/jpeg', 1.0);
         } else {
-          link.download = `simulacao-goldcard-${timestamp}.png`;
+          link.download = `simulacao-crmpro-${timestamp}.png`;
           link.href = canvas.toDataURL('image/png');
         }
 
@@ -613,7 +613,7 @@ export default function CalculatorPage() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
-                  Simulador GoldCard
+                  CRM pro
                 </h1>
                 <p className="text-sm text-muted-foreground hidden sm:block">
                   Cartão de Crédito e Benefício
