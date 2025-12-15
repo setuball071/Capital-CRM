@@ -1,0 +1,441 @@
+Objetivo
+
+Criar o CRM de Vendas usando a Base de Clientes já importada, sem duplicar dados, permitindo:
+
+Criar campanhas por filtro (sem reimportar clientes)
+
+Distribuir leads por usuário e controlar remanejamento
+
+Registrar interações que alimentam o Pipeline e permitem gestão (corretor, gestor, master)
+
+Atualizar dados dinâmicos (margem, situação, contratos) com higienização periódica sem “somar” e sem duplicar
+
+Princípios do modelo de dados
+
+Cliente é único por CPF
+
+Campanha não guarda “cliente duplicado”, guarda referência ao cliente
+
+Dados dinâmicos são atualizados por “snapshot” e/ou “estado atual”
+
+Contratos são sincronizados por chave e por substituição de conjunto (atualiza, adiciona, encerra)
+
+Tabelas e chaves
+1) Base de Clientes
+
+clients
+
+id
+
+cpf (único)
+
+nome
+
+matricula (se existir)
+
+convenio_id, orgao, uf, cidade (se existir)
+
+situacao_funcional_atual
+
+margem_emprestimo_atual, margem_cartao_atual, margem_5_atual etc
+
+updated_at, last_source
+
+client_contacts
+
+id
+
+client_id
+
+tipo (telefone, email)
+
+valor (telefone/email)
+
+created_at
+Regra: só adiciona novos contatos, não remove automático por importação
+
+client_contracts
+
+id
+
+client_id
+
+banco_id
+
+tipo_produto
+
+numero_contrato (chave)
+
+parcela_atual
+
+prazo_total
+
+parcelas_pagas / parcelas_restantes
+
+saldo_devedor (se houver)
+
+status (ATIVO, ENCERRADO)
+
+started_at, ended_at
+Chave única: client_id + banco_id + tipo_produto + numero_contrato
+
+2) Snapshots de atualização
+
+client_snapshots
+
+id
+
+client_id
+
+reference_date (data do arquivo)
+
+fonte (higienizacao, importacao, etc)
+
+situacao_funcional
+
+margens (todas)
+
+outros campos dinâmicos relevantes
+Regra: grava sempre um snapshot por importação e atualiza o “atual” no clients
+
+3) Campanhas
+
+campaigns
+
+id
+
+nome
+
+filtros_json (salvar o filtro usado para auditoria e recriação)
+
+status (ativa, pausada, encerrada)
+
+created_by
+
+created_at
+
+campaign_leads
+
+id
+
+campaign_id
+
+client_id
+
+status (disponivel, distribuido, em_atendimento, concluido, descartado)
+
+assigned_to_user_id (nullable)
+
+assigned_at
+
+worked_at (primeira interação)
+
+last_interaction_at
+Regra: campanha é só referência ao client_id, nada de duplicar cadastro
+
+Fluxo 1: Criar campanha sem reimportar
+Opção principal (padrão)
+
+Admin entra em “Base de Clientes / Compra de Lista”
+
+Aplica filtros (convenio, banco, idade, margem, uf, etc)
+
+Botão adicional: “Criar Campanha com esse filtro”
+
+Sistema cria:
+
+campaigns com filtros_json
+
+campaign_leads com todos os client_id resultantes do filtro
+
+Opção alternativa (quando precisar)
+
+Importar campanha por CSV apenas com CPFs (ou CPF + campos dinâmicos)
+
+Se for só CPF: vincula ao client existente e cria campaign_leads
+
+Se vier CPF + margens/contratos atualizados: dispara fluxo de atualização (snapshot + sincronização) antes de criar os leads
+
+Fluxo 2: Distribuição e gestão de leads
+Distribuição rápida
+
+Tela Campanhas
+
+total
+
+disponíveis
+
+distribuídos
+
+trabalhados
+
+botão “Distribuir”
+Dentro do modal:
+
+selecionar usuários
+
+definir quantidade por usuário (ex: 50 para A, 50 para B)
+
+confirmar
+Regra: respeitar “disponíveis” e marcar campaign_leads como distribuído com assigned_to_user_id
+
+Visão do admin dos distribuídos
+
+Na campanha, clique em “Distribuídos”
+Mostrar:
+
+usuário
+
+quantidade com ele
+
+quantos trabalhados
+
+quantos sem interação
+Ações:
+
+Remanejar (retirar do usuário e voltar para base da campanha)
+
+Transferir (passar de um usuário para outro)
+Regra: remanejamento muda assigned_to_user_id e status do lead, sem apagar nada
+
+Fluxo 3: Atendimento e Registro de Interação
+
+A tela de Atendimento do CRM deve replicar a experiência da “Consulta de Cliente” (Base de Clientes), com extras:
+
+botão fixo no rodapé “Registrar Interação”
+
+ao registrar interação, o lead sobe/atualiza no Pipeline
+
+Registrar Interação (obrigatório)
+Campos:
+
+Tipo de contato
+
+Marcador do lead (somente marcadores existentes no Pipeline, sem “Novo”)
+
+Contato utilizado (selecionar um contato existente do cliente, obrigatório)
+
+Margem informada (R$) obrigatório
+
+Proposta estimada (R$) obrigatório
+
+Observações
+
+Persistência:
+lead_interactions
+
+id
+
+lead_id (campaign_lead ou lead_id do CRM)
+
+user_id
+
+marker_stage
+
+contato_usado
+
+margem_informada
+
+proposta_estimada
+
+observacoes
+
+created_at
+
+Regra importante
+
+sempre que houver interação, atualizar o estágio do lead e last_interaction_at
+
+Fluxo 4: Meu Pipeline (corretor)
+
+Regras
+
+Não mostrar coluna “Novo” (leads nunca trabalhados não entram no pipeline)
+
+Pipeline exibe apenas leads que possuem pelo menos 1 interação
+
+Colunas do pipeline = marcadores existentes
+
+Cabeçalho da coluna
+
+Quantidade de leads (pode ser secundário)
+
+Soma das margens (somar última margem informada por lead naquela coluna)
+
+Soma das propostas (somar última proposta informada por lead naquela coluna)
+
+Cards
+
+Nome
+
+CPF
+
+Contato principal
+
+Campanha
+
+Último marcador
+
+Última interação (data)
+
+Detalhes do lead (modal)
+Além de nome/CPF:
+
+Histórico de interações (lista em ordem desc)
+
+Última margem informada
+
+Última proposta estimada
+
+Contato usado na última interação
+
+Observações
+
+Colunas reordenáveis
+
+usuário pode arrastar e mudar ordem das colunas
+
+salvar preferências por usuário
+Tabela:
+user_pipeline_settings
+
+user_id
+
+columns_order_json
+
+Fluxo 5: Gestão de Pipeline (master e gestores)
+
+Permissões
+
+Master vê tudo
+
+Gestor de equipe vê apenas sua equipe (definida por vinculação equipe_id ou manager_id)
+
+Tela Visão Geral
+Cards por marcador
+
+Em Atendimento: soma margens + soma propostas
+
+Interessado: soma margens + soma propostas
+
+etc
+Sem focar em quantidade como principal
+
+Distribuição por corretor
+Manter como antes:
+
+contagem por estágio por corretor
+Ações:
+
+ao clicar no corretor: abrir o pipeline dele (não ir para aba vazia)
+
+incluir filtro de usuário na tela do gestor para escolher qual pipeline visualizar
+
+Tela do pipeline em modo gestor
+
+dropdown “Selecionar corretor”
+
+ao selecionar, carrega o pipeline daquele usuário respeitando permissão
+
+Fluxo 6: Atualização de dados (higienização)
+
+Objetivo
+Atualizar dados dinâmicos sem duplicar e sem “somar contratos”.
+
+Chaves
+
+client: CPF
+
+contract: numero_contrato + banco + tipo_produto (chave única)
+
+Regras de importação de higienização
+
+Upsert cliente por CPF
+
+atualiza campos dinâmicos (situação, margens, lotação se vier)
+
+mantém estáveis (nome, cpf)
+
+contatos só adiciona novos
+
+Snapshot
+
+gravar client_snapshots com reference_date e fonte
+
+Sincronização de contratos por substituição de conjunto
+Para cada CPF:
+
+lista_atual = contratos ativos no sistema
+
+lista_arquivo = contratos do arquivo
+
+Processo:
+
+se contrato existe pela chave: update campos dinâmicos
+
+se não existe: insert
+
+se existe no sistema e não veio no arquivo: encerrar (status ENCERRADO + ended_at)
+Isso evita virar 11 quando era 5 e depois veio 6
+
+Remoção de contatos
+
+nunca remover automaticamente pelo arquivo
+Somente manual
+
+Como a campanha deve lidar com dados atualizados
+
+Cenário A: campanha criada por filtro interno
+
+campanha referencia os clients atuais
+
+se o cliente for atualizado depois, a campanha usa os dados mais recentes automaticamente
+
+Cenário B: campanha criada após higienização externa
+Duas opções
+
+Atualizar base e depois criar campanha
+
+recomendado, porque evita divergência
+
+Criar campanha com snapshot (se quiser congelar margem daquele ataque)
+
+salvar margem_snapshot e proposta_snapshot no campaign_leads
+
+Recomendação padrão
+
+atualizar base, depois criar campanha
+
+snapshot no campaign_leads apenas se você quiser auditoria do que foi usado naquele ataque
+
+O que não pode acontecer
+
+Reimportar clientes completos a cada campanha
+
+Duplicar contratos a cada atualização
+
+Contrato que some do arquivo ficar “ativo” para sempre
+
+Pipeline mostrar “Novo” e inflar volume sem interação
+
+Métricas do pipeline baseadas só em quantidade, sem somar margens e propostas
+
+Checklist de entrega para validar
+
+Criar campanha via filtro em “Compra de Lista”
+
+Distribuir em massa por quantidade por usuário
+
+Admin ver “distribuídos” e remanejar
+
+Atendimento replicado da Consulta Cliente, com Registrar Interação
+
+Registrar interação exige marcador, contato usado, margem, proposta e observação
+
+Meu Pipeline soma margens e propostas por coluna e não mostra “Novo”
+
+Gestão Pipeline soma margens e propostas por marcador e abre pipeline do corretor ao clicar
+
+Higienização atualiza snapshot e sincroniza contratos por substituição de conjunto
+
+Se você quiser, eu também monto o texto em formato de “tarefas numeradas” para o Replit executar sem interpretar, mas esse documento acima já é o blueprint completo para o dev.
