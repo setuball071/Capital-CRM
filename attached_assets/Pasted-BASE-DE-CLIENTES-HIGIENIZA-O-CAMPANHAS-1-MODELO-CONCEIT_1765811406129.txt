@@ -1,0 +1,257 @@
+BASE DE CLIENTES • HIGIENIZAÇÃO • CAMPANHAS
+1) MODELO CONCEITUAL (REGRA MÃE)
+
+Cliente é único no sistema
+
+CPF é a chave principal
+
+Campanha NÃO duplica cliente
+
+Atualizações substituem dados dinâmicos
+
+Contratos são sincronizados, nunca somados
+
+2) IMPORTAÇÃO DA BASE DE CLIENTES
+Objetivo
+
+Importar bases grandes (Excel/PDF/CSV) criando ou atualizando clientes, sem duplicar informações e preparando o sistema para campanhas futuras.
+
+2.1 Identificação obrigatória na importação
+
+Na tela de importação, o usuário DEVE informar manualmente:
+
+Convênio
+
+Órgão
+
+UF (se aplicável)
+
+Fonte da base (ex: SIAPE, Gov SP, Higienização Externa, etc)
+
+Data de referência da base
+
+Esses dados não precisam existir na planilha.
+
+2.2 Chaves de identificação
+
+Cliente: CPF
+
+Contrato: número do contrato (obrigatório se existir no arquivo)
+
+2.3 Dados que NÃO mudam (estrutura fixa)
+
+Esses dados não devem ser sobrescritos se já existirem:
+
+CPF
+
+Nome
+
+Matrícula
+
+Data de nascimento
+
+Telefone:
+
+Nunca apagar telefones antigos
+
+Apenas adicionar novos telefones se aparecerem
+
+2.4 Dados dinâmicos (sempre atualizados)
+
+Sempre que vierem no arquivo, substituem o valor anterior:
+
+Situação funcional (ativo, aposentado, pensionista, CLT, etc)
+
+Margens (70%, 35%, 5% cartão, 5% benefício – conforme convênio)
+
+Salário bruto
+
+Descontos
+
+Salário líquido
+
+Órgão / secretaria (se mudar)
+
+Se um campo monetário vier vazio, tratar como 0.
+
+3) IMPORTAÇÃO E SINCRONIZAÇÃO DE CONTRATOS
+Problema que precisa ser evitado
+
+Importar a mesma base várias vezes
+
+Somar contratos (5 vira 15, 20, etc)
+
+Regra correta (SINCRONIZAÇÃO POR SUBSTITUIÇÃO DE CONJUNTO)
+
+Para cada CPF importado:
+
+Ler todos os contratos do arquivo (chave = número do contrato)
+
+Buscar todos os contratos ATIVOS desse CPF no sistema
+
+Comparar:
+
+a) Contrato existe no sistema E no arquivo
+
+Atualizar dados dinâmicos:
+
+parcelas pagas
+
+parcelas restantes
+
+saldo devedor
+
+valor da parcela
+
+b) Contrato existe no arquivo, mas NÃO no sistema
+
+Criar novo contrato (INSERT)
+
+c) Contrato existe no sistema, mas NÃO veio no arquivo
+
+Marcar como ENCERRADO
+
+Não excluir histórico
+
+👉 Nunca duplicar contrato
+
+4) HIGIENIZAÇÃO DE BASE (INTERNA OU EXTERNA)
+Conceito
+
+Higienização é uma importação especial, que:
+
+Atualiza dados dinâmicos
+
+Pode vir com informações mais recentes
+
+NÃO cria novos clientes se CPF já existir
+
+NÃO duplica contratos
+
+Quando a higienização vem de fora
+
+Exemplo:
+Você extrai clientes do Banco CB, higieniza fora e volta com:
+
+Margem atualizada
+
+Telefones novos
+
+Situação funcional atualizada
+
+Comportamento do sistema
+
+Atualiza cliente existente (CPF)
+
+Cria snapshot da atualização
+
+Atualiza contratos conforme regra de sincronização
+
+Telefones novos são adicionados
+
+Telefones antigos permanecem
+
+Snapshot (importante para auditoria)
+
+Toda higienização deve gerar um registro histórico, por exemplo:
+
+Data da higienização
+
+Fonte
+
+Margens naquele momento
+
+Isso não interfere na campanha, mas permite auditoria futura.
+
+5) CRIAÇÃO DE CAMPANHAS (SEM DUPLICAR BASE)
+Regra fundamental
+
+❌ Nunca importar clientes novamente para criar campanha
+✅ Campanha é apenas um recorte da base existente
+
+Forma correta de criar campanha
+Opção A – Campanha por filtro (PADRÃO)
+
+Admin entra em Base de Clientes
+
+Aplica filtros:
+
+Convênio
+
+Banco
+
+Idade
+
+Margem
+
+UF
+
+Situação funcional
+
+Clica em “Criar Campanha”
+
+O sistema:
+
+Salva os filtros usados
+
+Cria campanha
+
+Associa apenas os IDs dos clientes
+
+👉 Nenhum dado de cliente é duplicado.
+
+Opção B – Campanha após higienização externa
+
+Fluxo recomendado:
+
+Importar higienização (atualiza base)
+
+Criar campanha por filtro com dados atualizados
+
+Fluxo alternativo (menos recomendado):
+
+Importar lista de CPFs
+
+Sistema cruza com base existente
+
+Cria campanha apenas com referência aos clientes
+
+6) O QUE A CAMPANHA GUARDA
+
+A campanha NÃO guarda dados do cliente, apenas:
+
+client_id
+
+status do lead (disponível, distribuído, etc)
+
+usuário responsável (quando distribuído)
+
+Sempre que o vendedor abrir um lead:
+
+O sistema puxa os dados atuais do cliente
+
+7) O QUE NÃO FAZER (CRÍTICO)
+
+❌ Reimportar clientes para cada campanha
+❌ Duplicar contratos a cada atualização
+❌ Somar contratos antigos + novos
+❌ Criar campanhas com dados “copiados”
+❌ Manter contrato ativo que não veio na atualização
+
+8) RESUMO EXECUTIVO (PARA O DEV)
+
+Base é única
+
+CPF é chave do cliente
+
+Contrato é chave por número
+
+Importação = criar ou atualizar
+
+Higienização = atualização inteligente
+
+Campanha = filtro sobre base existente
+
+Campanha nunca duplica dados
+
+Atualização de contrato é por substituição de conjunt
