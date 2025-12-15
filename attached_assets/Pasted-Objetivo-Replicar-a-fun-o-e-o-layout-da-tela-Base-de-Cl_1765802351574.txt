@@ -1,0 +1,73 @@
+Objetivo
+Replicar a função e o layout da tela “Base de Clientes > Consulta Cliente” dentro do módulo “CRM Vendas”, criando uma nova tela (ou ajustando “CRM Vendas > Atendimento”) para ficar visualmente e funcionalmente igual, porém com ações de CRM: registrar atendimento, marcar estágio e alimentar o Pipeline.
+
+Regra importante
+NÃO alterar nada em “Base de Clientes > Consulta Cliente”. A cópia deve ser feita apenas no CRM Vendas.
+
+Nome sugerido no menu
+CRM Vendas > Consulta (ou “Atendimento (Modo Consulta)”)
+
+Comportamento da tela no CRM Vendas
+
+Mesma UI da Consulta Cliente atual
+
+Campo de busca por CPF e por Matrícula
+
+Filtro de Convênio (opcional)
+
+Resultado exibindo os mesmos blocos de informação (dados pessoais, contato, lotação, dados bancários, margens/contratos quando existir no retorno)
+
+Origem dos dados
+
+Pode reutilizar o mesmo endpoint/serviço de busca já existente na Base de Clientes
+
+Apenas “copiar” o componente/página e apontar para o mesmo fetch
+
+Garantir que qualquer ajuste visual/ação nova fique isolado no CRM
+
+Ações extras do CRM
+Adicionar um painel lateral fixo (ou botão fixo “Registrar Atendimento” que abre modal) com:
+
+Tipo de contato (WhatsApp / Ligação)
+
+Marcador do Lead (usar apenas os estágios do Pipeline configurados, sem “Novo”)
+
+Seleção do contato usado (dropdown com telefones do cliente e opção “Adicionar novo contato”)
+
+Margem informada (obrigatório)
+
+Valor estimado da proposta (obrigatório)
+
+Observações
+
+Botão Salvar (registra interação e atualiza estágio no Pipeline do usuário)
+
+Resultado ao salvar
+
+Criar um registro em leadInteractions
+
+Atualizar o leadStage do lead para o marcador selecionado
+
+Esse cliente deve aparecer imediatamente no “Meu Pipeline” do usuário na coluna do marcador escolhido
+
+Os totais/somas do Pipeline devem considerar os valores informados (margem e proposta)
+
+Regras de permissão
+
+Essa tela do CRM deve aparecer apenas para perfis autorizados (admin, master, atendimento, e vendedores que tenham permissão de CRM Vendas)
+
+Base de Clientes continua com permissão separada e sem mudanças
+
+Critérios de aceite
+
+Visual e fluxo de busca no CRM ficam idênticos ao “Consulta Cliente” da Base
+
+Ao registrar atendimento no CRM, o lead sobe para o Pipeline com marcador, margem e proposta
+
+Nenhuma alteração aparece na tela original da Base de Clientes
+
+Implementação recomendada
+
+Duplicar o arquivo da página “consulta-cliente.tsx” para “crm-consulta-cliente.tsx” (novo path) e só então adicionar os componentes do painel de registro
+
+Não reutilizar o mesmo componente com flag, para evitar risco de alterar a Base sem querer

@@ -32,6 +32,7 @@ import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import VendasAgendaPage from "@/pages/vendas-agenda";
 import VendasPipelinePage from "@/pages/vendas-pipeline";
 import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
+import CrmConsultaClientePage from "@/pages/crm-consulta-cliente";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -310,6 +311,9 @@ function Router() {
               </Route>
               <Route path="/vendas/gestao-pipeline">
                 {() => <CRMAdminRoute component={VendasGestaoPipelinePage} />}
+              </Route>
+              <Route path="/vendas/consulta">
+                {() => <ProtectedRoute component={CrmConsultaClientePage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

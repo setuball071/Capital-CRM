@@ -5556,6 +5556,137 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // POST /api/crm/consulta/registrar-atendimento - Registrar atendimento a partir de consulta de cliente
+  app.post("/api/crm/consulta/registrar-atendimento", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { pessoaId, tipoContato, leadMarker, telefoneUsado, motivo, observacao, retornoEm, margemValor, propostaValorEstimado } = req.body;
+      
+      if (!pessoaId || !tipoContato || !leadMarker) {
+        return res.status(400).json({ message: "Dados obrigatórios faltando" });
+      }
+      
+      // Get pessoa data
+      const pessoa = await storage.getClientePessoaById(pessoaId);
+      if (!pessoa) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Find or create a "Consulta CRM" campaign for the user
+      let campaign = await db
+        .select()
+        .from(salesCampaigns)
+        .where(and(
+          eq(salesCampaigns.nome, "Consulta CRM"),
+          eq(salesCampaigns.ativo, true)
+        ))
+        .limit(1);
+      
+      let campaignId: number;
+      if (campaign.length === 0) {
+        // Create the campaign
+        const [newCampaign] = await db.insert(salesCampaigns).values({
+          nome: "Consulta CRM",
+          descricao: "Leads gerados a partir de consultas diretas no CRM",
+          ativo: true,
+          criadoPor: userId,
+        }).returning();
+        campaignId = newCampaign.id;
+      } else {
+        campaignId = campaign[0].id;
+      }
+      
+      // Check if a lead already exists for this pessoa in any campaign
+      const existingLeads = await db
+        .select()
+        .from(salesLeads)
+        .where(eq(salesLeads.baseClienteId, pessoaId))
+        .limit(1);
+      
+      let leadId: number;
+      if (existingLeads.length > 0) {
+        leadId = existingLeads[0].id;
+      } else {
+        // Create new lead from pessoa
+        const [newLead] = await db.insert(salesLeads).values({
+          campaignId,
+          cpf: pessoa.cpf || null,
+          nome: pessoa.nome || "Nome não informado",
+          telefone1: pessoa.telefones_base?.[0] || null,
+          telefone2: pessoa.telefones_base?.[1] || null,
+          telefone3: pessoa.telefones_base?.[2] || null,
+          cidade: pessoa.municipio || null,
+          uf: pessoa.uf || null,
+          baseClienteId: pessoaId,
+          leadMarker: "NOVO",
+        }).returning();
+        leadId = newLead.id;
+      }
+      
+      // Update lead marker and values
+      const retornoDate = retornoEm ? new Date(retornoEm) : undefined;
+      await storage.updateLeadMarker(leadId, leadMarker, motivo, retornoDate, tipoContato);
+      
+      if (margemValor !== undefined || propostaValorEstimado !== undefined) {
+        await db.update(salesLeads)
+          .set({
+            currentMargin: margemValor ? String(margemValor) : undefined,
+            currentProposal: propostaValorEstimado ? String(propostaValorEstimado) : undefined,
+            updatedAt: new Date(),
+          })
+          .where(eq(salesLeads.id, leadId));
+      }
+      
+      // Create interaction record
+      const interaction = await storage.createLeadInteraction({
+        leadId,
+        userId,
+        tipoContato,
+        leadMarker,
+        motivo: motivo || null,
+        observacao: observacao || null,
+        retornoEm: retornoDate || null,
+        margemValor: margemValor ? String(margemValor) : null,
+        propostaValorEstimado: propostaValorEstimado ? String(propostaValorEstimado) : null,
+      });
+      
+      // Create or update assignment for the user
+      const existingAssignments = await db
+        .select()
+        .from(salesLeadAssignments)
+        .where(and(
+          eq(salesLeadAssignments.leadId, leadId),
+          eq(salesLeadAssignments.userId, userId)
+        ))
+        .limit(1);
+      
+      if (existingAssignments.length === 0) {
+        await db.insert(salesLeadAssignments).values({
+          leadId,
+          userId,
+          status: "em_atendimento",
+          dataUltimoAtendimento: new Date(),
+        });
+      } else {
+        await db.update(salesLeadAssignments)
+          .set({
+            status: "em_atendimento",
+            dataUltimoAtendimento: new Date(),
+          })
+          .where(eq(salesLeadAssignments.id, existingAssignments[0].id));
+      }
+      
+      return res.json({
+        message: "Atendimento registrado com sucesso",
+        leadId,
+        interaction,
+      });
+    } catch (error) {
+      console.error("CRM consulta register error:", error);
+      return res.status(500).json({ message: "Erro ao registrar atendimento" });
+    }
+  });
+
   // ===== CAMPAIGN MANAGEMENT ENDPOINTS =====
 
   // GET /api/crm/campaigns/:id/distribution - Get lead distribution by marker
