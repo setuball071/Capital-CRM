@@ -300,10 +300,10 @@ export type BaseStatus = typeof BASE_STATUS[number];
 export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
 export type PedidoStatus = typeof PEDIDO_STATUS[number];
 
-// 1) clientes_pessoa - Dados fixos do indivíduo (1 pessoa = 1 matrícula)
+// 1) clientes_pessoa - Dados fixos do indivíduo (CPF é chave única)
 export const clientesPessoa = pgTable("clientes_pessoa", {
   id: serial("id").primaryKey(),
-  cpf: varchar("cpf", { length: 14 }),
+  cpf: varchar("cpf", { length: 14 }).unique(), // CPF como chave única
   matricula: varchar("matricula", { length: 50 }).notNull().unique(),
   nome: varchar("nome", { length: 255 }),
   orgaodesc: varchar("orgaodesc", { length: 255 }),
@@ -317,12 +317,20 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   uf: varchar("uf", { length: 100 }),
   municipio: varchar("municipio", { length: 150 }),
   dataNascimento: timestamp("data_nascimento"), // data de nascimento do cliente
-  telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array
+  telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array (legado)
   // Dados bancários do cliente (banco onde recebe salário)
   bancoCodigo: varchar("banco_codigo", { length: 20 }),
   agencia: varchar("agencia", { length: 20 }),
   conta: varchar("conta", { length: 30 }),
   baseTagUltima: varchar("base_tag_ultima", { length: 100 }),
+  // === CAMPOS DINÂMICOS (margens atuais) ===
+  margemEmprestimoAtual: decimal("margem_emprestimo_atual", { precision: 12, scale: 2 }),
+  margemCartaoAtual: decimal("margem_cartao_atual", { precision: 12, scale: 2 }),
+  margem5Atual: decimal("margem_5_atual", { precision: 12, scale: 2 }),
+  situacaoFuncionalAtual: varchar("situacao_funcional_atual", { length: 100 }),
+  salarioBrutoAtual: decimal("salario_bruto_atual", { precision: 12, scale: 2 }),
+  salarioLiquidoAtual: decimal("salario_liquido_atual", { precision: 12, scale: 2 }),
+  lastSource: varchar("last_source", { length: 100 }), // fonte da última atualização
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
 });
@@ -355,7 +363,12 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   extrasFolha: jsonb("extras_folha"),
 });
 
+// Status de contrato
+export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
+export type ContractStatus = typeof CONTRACT_STATUS[number];
+
 // 3) clientes_contratos - Cada linha de contrato/cartão/margem
+// Chave única: (pessoaId, banco, tipoContrato, numeroContrato)
 export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -364,13 +377,43 @@ export const clientesContratos = pgTable("clientes_contratos", {
   valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
   saldoDevedor: decimal("saldo_devedor", { precision: 12, scale: 2 }),
   parcelasRestantes: integer("parcelas_restantes"), // prazo remanescente da planilha
+  parcelasPagas: integer("parcelas_pagas"), // parcelas já pagas
+  prazoTotal: integer("prazo_total"), // prazo total do contrato
   numeroContrato: varchar("numero_contrato", { length: 100 }), // identificador do contrato
+  status: varchar("status", { length: 20 }).notNull().default("ATIVO"), // ATIVO, ENCERRADO
+  startedAt: timestamp("started_at"), // data início do contrato
+  endedAt: timestamp("ended_at"), // data encerramento (se encerrado)
   competencia: timestamp("competencia"),
   baseTag: varchar("base_tag", { length: 100 }),
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 });
 
-// 4) bases_importadas - Controle de importações
+// 4) client_contacts - Contatos do cliente (telefones, emails)
+export const clientContacts = pgTable("client_contacts", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  tipo: varchar("tipo", { length: 20 }).notNull(), // telefone, email
+  valor: varchar("valor", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// 5) client_snapshots - Histórico de atualizações para auditoria
+export const clientSnapshots = pgTable("client_snapshots", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  referenceDate: timestamp("reference_date").notNull(),
+  fonte: varchar("fonte", { length: 100 }).notNull(), // higienizacao, importacao, etc
+  situacaoFuncional: varchar("situacao_funcional", { length: 100 }),
+  margemEmprestimo: decimal("margem_emprestimo", { precision: 12, scale: 2 }),
+  margemCartao: decimal("margem_cartao", { precision: 12, scale: 2 }),
+  margem5: decimal("margem_5", { precision: 12, scale: 2 }),
+  salarioBruto: decimal("salario_bruto", { precision: 12, scale: 2 }),
+  salarioLiquido: decimal("salario_liquido", { precision: 12, scale: 2 }),
+  dadosExtras: jsonb("dados_extras"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// 6) bases_importadas - Controle de importações
 export const basesImportadas = pgTable("bases_importadas", {
   id: serial("id").primaryKey(),
   nome: varchar("nome", { length: 255 }),
@@ -477,6 +520,9 @@ export type InsertClienteFolhaMes = z.infer<typeof insertClienteFolhaMesSchema>;
 
 export type ClienteContrato = typeof clientesContratos.$inferSelect;
 export type InsertClienteContrato = z.infer<typeof insertClienteContratoSchema>;
+
+export type ClientContact = typeof clientContacts.$inferSelect;
+export type ClientSnapshot = typeof clientSnapshots.$inferSelect;
 
 export type BaseImportada = typeof basesImportadas.$inferSelect;
 export type InsertBaseImportada = z.infer<typeof insertBaseImportadaSchema>;
@@ -733,6 +779,7 @@ export const salesCampaigns = pgTable("sales_campaigns", {
   totalLeads: integer("total_leads").notNull().default(0),
   leadsDisponiveis: integer("leads_disponiveis").notNull().default(0),
   leadsDistribuidos: integer("leads_distribuidos").notNull().default(0),
+  filtrosJson: jsonb("filtros_json"), // Filtros usados para criar a campanha (auditoria)
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
