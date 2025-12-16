@@ -69,12 +69,14 @@ export default function AcademiaRoleplay() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isMaster = user?.role === "master";
+  const isCoordinator = user?.role === "coordenacao";
+  const canBypassQuiz = isMaster || isCoordinator;
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],
   });
 
-  const quizAprovado = perfilData?.perfil?.quizAprovado || isMaster;
+  const quizAprovado = perfilData?.perfil?.quizAprovado || canBypassQuiz;
 
   useEffect(() => {
     if (scrollRef.current) {

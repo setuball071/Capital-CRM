@@ -75,6 +75,8 @@ export default function AcademiaAbordagem() {
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const isMaster = user?.role === "master";
+  const isCoordinator = user?.role === "coordenacao";
+  const canBypassQuiz = isMaster || isCoordinator;
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],
@@ -82,10 +84,10 @@ export default function AcademiaAbordagem() {
 
   const { data: historico } = useQuery<AbordagemHistorico[]>({
     queryKey: ["/api/academia/abordagens"],
-    enabled: !!perfilData?.perfil?.quizAprovado || isMaster,
+    enabled: !!perfilData?.perfil?.quizAprovado || canBypassQuiz,
   });
 
-  const quizAprovado = perfilData?.perfil?.quizAprovado || isMaster;
+  const quizAprovado = perfilData?.perfil?.quizAprovado || canBypassQuiz;
 
   const gerarMutation = useMutation({
     mutationFn: async () => {
