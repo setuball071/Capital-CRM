@@ -630,7 +630,7 @@ export default function AcademiaRoleplay() {
               <CardContent className="space-y-4">
                 <div className="text-center">
                   <div className="text-4xl font-bold text-primary" data-testid="text-nota-global">
-                    {avaliacaoFinal.nota_global.toFixed(1)}
+                    {avaliacaoFinal.nota_global?.toFixed(1) ?? "N/A"}
                   </div>
                   <p className="text-sm text-muted-foreground">Nota Global</p>
                 </div>
@@ -638,19 +638,19 @@ export default function AcademiaRoleplay() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Humanização</p>
-                    <p className="font-semibold">{avaliacaoFinal.nota_humanizacao}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_humanizacao ?? "N/A"}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Consultivo</p>
-                    <p className="font-semibold">{avaliacaoFinal.nota_consultivo}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_consultivo ?? "N/A"}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Clareza</p>
-                    <p className="font-semibold">{avaliacaoFinal.nota_clareza}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_clareza ?? "N/A"}</p>
                   </div>
                   <div className="p-2 bg-muted rounded">
                     <p className="text-muted-foreground">Venda</p>
-                    <p className="font-semibold">{avaliacaoFinal.nota_venda}</p>
+                    <p className="font-semibold">{avaliacaoFinal.nota_venda ?? "N/A"}</p>
                   </div>
                 </div>
 
