@@ -152,9 +152,9 @@ async function requireUserManagementAccess(req: Request, res: Response, next: Ne
 // Legacy alias for backward compatibility
 const requireManagerAccess = requireUserManagementAccess;
 
-// Academia access middleware (master, atendimento, operacional)
+// Academia access middleware (master, atendimento, operacional, coordenacao, vendedor)
 function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master", "atendimento", "operacional", "coordenacao"])) {
+  if (!hasRole(req.user, ["master", "atendimento", "operacional", "coordenacao", "vendedor"])) {
     return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar o Treinamento" });
   }
   next();
