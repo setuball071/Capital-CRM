@@ -4385,28 +4385,63 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // ===== ADMIN ACADEMIA ENDPOINTS (MASTER AND COORDINATORS) =====
+  
+  // Helper to get team user IDs for coordinators
+  async function getAcademiaTeamUserIds(user: User): Promise<number[] | null> {
+    if (user.role === "master") {
+      return null; // Master sees all
+    }
+    // Coordinator sees their team members (users with managerId = current user)
+    const teamMembersData = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.managerId, user.id));
+    return [user.id, ...teamMembersData.map(m => m.id)];
+  }
 
   // GET /api/academia/admin/stats - Estatísticas gerais
   app.get("/api/academia/admin/stats", requireAuth, requireManagerAccess, async (req, res) => {
     try {
+      const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+      
       // Total de vendedores na academia
-      const [totalVendedores] = await db.select({ count: sql`count(*)` }).from(vendedoresAcademia);
+      let vendedoresQuery = db.select({ count: sql`count(*)` }).from(vendedoresAcademia);
+      if (teamUserIds) {
+        vendedoresQuery = vendedoresQuery.where(inArray(vendedoresAcademia.userId, teamUserIds)) as any;
+      }
+      const [totalVendedores] = await vendedoresQuery;
       
       // Total aprovados no quiz
-      const [quizAprovados] = await db.select({ count: sql`count(*)` })
+      let quizAprovadosQuery = db.select({ count: sql`count(*)` })
         .from(vendedoresAcademia)
         .where(eq(vendedoresAcademia.quizAprovado, true));
+      if (teamUserIds) {
+        quizAprovadosQuery = quizAprovadosQuery.where(inArray(vendedoresAcademia.userId, teamUserIds)) as any;
+      }
+      const [quizAprovados] = await quizAprovadosQuery;
       
       // Total de simulações
-      const [totalSimulacoes] = await db.select({ count: sql`count(*)` }).from(roleplaySessoes);
+      let simulacoesQuery = db.select({ count: sql`count(*)` }).from(roleplaySessoes);
+      if (teamUserIds) {
+        simulacoesQuery = simulacoesQuery.where(inArray(roleplaySessoes.userId, teamUserIds)) as any;
+      }
+      const [totalSimulacoes] = await simulacoesQuery;
       
       // Total de abordagens geradas
-      const [totalAbordagens] = await db.select({ count: sql`count(*)` }).from(abordagensGeradas);
+      let abordagensQuery = db.select({ count: sql`count(*)` }).from(abordagensGeradas);
+      if (teamUserIds) {
+        abordagensQuery = abordagensQuery.where(inArray(abordagensGeradas.userId, teamUserIds)) as any;
+      }
+      const [totalAbordagens] = await abordagensQuery;
       
       // Média geral de notas
-      const [mediaNotas] = await db.select({ 
+      let notasQuery = db.select({ 
         avg: sql`avg(cast(${roleplayAvaliacoes.notaGlobal} as decimal))` 
       }).from(roleplayAvaliacoes);
+      if (teamUserIds) {
+        notasQuery = notasQuery.where(inArray(roleplayAvaliacoes.userId, teamUserIds)) as any;
+      }
+      const [mediaNotas] = await notasQuery;
 
       return res.json({
         totalVendedores: Number(totalVendedores?.count || 0),
@@ -4424,7 +4459,9 @@ Responda EXCLUSIVAMENTE em JSON:
   // GET /api/academia/admin/vendedores - Listar todos os vendedores com progresso
   app.get("/api/academia/admin/vendedores", requireAuth, requireManagerAccess, async (req, res) => {
     try {
-      const vendedores = await db.select({
+      const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+      
+      let vendedoresQuery = db.select({
         id: vendedoresAcademia.id,
         userId: vendedoresAcademia.userId,
         userName: users.name,
@@ -4437,8 +4474,13 @@ Responda EXCLUSIVAMENTE em JSON:
         criadoEm: vendedoresAcademia.criadoEm,
       })
         .from(vendedoresAcademia)
-        .leftJoin(users, eq(vendedoresAcademia.userId, users.id))
-        .orderBy(sql`${vendedoresAcademia.criadoEm} DESC`);
+        .leftJoin(users, eq(vendedoresAcademia.userId, users.id));
+      
+      if (teamUserIds) {
+        vendedoresQuery = vendedoresQuery.where(inArray(vendedoresAcademia.userId, teamUserIds)) as any;
+      }
+      
+      const vendedores = await vendedoresQuery.orderBy(sql`${vendedoresAcademia.criadoEm} DESC`);
 
       return res.json(vendedores);
     } catch (error) {
@@ -4450,7 +4492,9 @@ Responda EXCLUSIVAMENTE em JSON:
   // GET /api/academia/admin/quiz-tentativas - Listar tentativas de quiz
   app.get("/api/academia/admin/quiz-tentativas", requireAuth, requireManagerAccess, async (req, res) => {
     try {
-      const tentativas = await db.select({
+      const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+      
+      let tentativasQuery = db.select({
         id: quizTentativas.id,
         userId: quizTentativas.userId,
         userName: users.name,
@@ -4461,7 +4505,13 @@ Responda EXCLUSIVAMENTE em JSON:
         criadoEm: quizTentativas.criadoEm,
       })
         .from(quizTentativas)
-        .leftJoin(users, eq(quizTentativas.userId, users.id))
+        .leftJoin(users, eq(quizTentativas.userId, users.id));
+      
+      if (teamUserIds) {
+        tentativasQuery = tentativasQuery.where(inArray(quizTentativas.userId, teamUserIds)) as any;
+      }
+      
+      const tentativas = await tentativasQuery
         .orderBy(sql`${quizTentativas.criadoEm} DESC`)
         .limit(100);
 
@@ -4476,6 +4526,12 @@ Responda EXCLUSIVAMENTE em JSON:
   app.post("/api/academia/admin/feedback-ia/:userId", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
+      
+      // Verify coordinator can only access their team members
+      const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+      if (teamUserIds && !teamUserIds.includes(userId)) {
+        return res.status(403).json({ message: "Acesso negado - usuário não pertence à sua equipe" });
+      }
       
       // Buscar dados do vendedor
       const [vendedor] = await db.select({
