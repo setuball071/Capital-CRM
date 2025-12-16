@@ -99,9 +99,9 @@ export function AppSidebar() {
       title: "Cadastros",
       icon: FileText,
       items: [
-        { title: "Convênios", url: "/agreements", icon: FileText },
-        { title: "Bancos", url: "/banks", icon: Landmark },
-        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table },
+        { title: "Convênios", url: "/agreements", icon: FileText, masterOnly: true },
+        { title: "Bancos", url: "/banks", icon: Landmark, masterOnly: true },
+        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, masterOnly: true },
         { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros" },
       ],
     },
@@ -118,7 +118,7 @@ export function AppSidebar() {
       title: "Administração",
       icon: Settings,
       items: [
-        { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck },
+        { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },
