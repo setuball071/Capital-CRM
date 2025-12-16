@@ -193,7 +193,7 @@ export default function CoefficientTablesPage() {
   });
 
   const { data: tables, isLoading } = useQuery<CoefficientTable[]>({
-    queryKey: ["/api/coefficient-tables"],
+    queryKey: ["/api/coefficient-tables/all"],
   });
 
   const { data: agreements } = useQuery<Agreement[]>({
@@ -216,7 +216,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("POST", "/api/coefficient-tables", payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsCreateDialogOpen(false);
       createForm.reset();
       toast({
@@ -250,7 +250,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("PATCH", `/api/coefficient-tables/${selectedTable.id}`, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsEditDialogOpen(false);
       setSelectedTable(null);
       editForm.reset();
@@ -273,7 +273,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("DELETE", `/api/coefficient-tables/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsDeleteDialogOpen(false);
       setSelectedTable(null);
       toast({
@@ -295,7 +295,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-delete", { ids });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsBulkDeleteDialogOpen(false);
       setSelectedIds([]);
       toast({
@@ -317,7 +317,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-deactivate", { ids });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsBulkDeactivateDialogOpen(false);
       setSelectedIds([]);
       toast({
@@ -339,7 +339,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-reactivate", { ids });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsBulkReactivateDialogOpen(false);
       setSelectedIds([]);
       toast({
@@ -361,7 +361,7 @@ export default function CoefficientTablesPage() {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-import", { tables });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables/all"] });
       setIsImportDialogOpen(false);
       setImportData([]);
       setImportErrors([]);
