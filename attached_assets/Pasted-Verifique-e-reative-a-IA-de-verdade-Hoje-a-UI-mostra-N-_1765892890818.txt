@@ -1,0 +1,77 @@
+Verifique e reative a IA de verdade. Hoje a UI mostra “Não foi possível gerar a abordagem” e os endpoints de IA estão falhando.
+
+Checklist obrigatório:
+
+Procure no projeto por “AI temporarily disabled”, “cost control”, “mock OpenAI”, “temporarily disabled” e identifique onde a IA foi desativada.
+
+Revise server/openaiClient.ts e remova qualquer mock que force erro ou retorno falso. Garanta que o export usa o client real.
+
+Confirme se existe configuração válida: ou usa Replit AI Integrations corretamente, ou usa OPENAI_API_KEY. Não deixe o código tentando usar integrações sem credencial.
+
+Abra o endpoint que a tela “Gerador de Abordagem IA” chama e teste com curl interno / logs. Corrija qualquer erro 500 e retorne um erro amigável no JSON quando faltar credencial.
+
+No final, me diga: qual endpoint estava falhando, qual era a causa real (mock, env, rota, etc), e qual commit/arquivos foram alterados.
+
+3) Se vocês usam Replit AI Integrations (sem chave OpenAI)
+
+O teu print diz que “não precisa chave API própria”. Isso só funciona se o código realmente estiver usando o provider do Replit (e não o SDK da OpenAI esperando OPENAI_API_KEY).
+
+Então aqui tem dois caminhos, escolhe 1 e mantém consistente:
+
+Caminho A: Usar OPENAI_API_KEY (mais simples de controlar)
+
+Coloca OPENAI_API_KEY em Secrets
+
+No server/openaiClient.ts usa o SDK da OpenAI normal
+
+Vantagem: previsível e fácil debugar, logs claros
+
+Custo: vai na tua conta OpenAI (não no crédito Replit)
+
+Caminho B: Usar Replit AI Integration (sem OPENAI_API_KEY)
+
+O código NÃO pode depender do new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+Tem que usar o client/provider que o Replit expõe (depende do template e lib que teu projeto está usando)
+
+Vantagem: você paga no Replit
+
+Problema: se uma parte do app ainda usa SDK OpenAI direto, vai falhar
+
+Pelo teu histórico, vocês estavam gastando MUITO em “Agent Usage” no Replit. Se a prioridade é controle, eu iria de Caminho A com limite e logs, porque dá pra travar por endpoint e por perfil (roleplay) com muito mais clareza. Mas se você quer manter no Replit, ok, só precisa ficar 100% padronizado.
+
+4) Erros 500 no console: o que pedir pra ele revisar
+
+Pelo print, você tem vários 500 repetidos. Isso normalmente é rota quebrando no back-end.
+
+Peça para ele:
+
+Abrir logs do servidor na hora do clique
+
+Identificar o stack trace do 500 (arquivo e linha)
+
+Corrigir e adicionar fallback de erro retornando 4xx com mensagem clara
+
+Prompt curto específico pros 500
+
+Quando eu clico em “Gerar Abordagem”, recebo 500. Abra os logs do servidor no momento da requisição e me diga exatamente qual exceção está ocorrendo (arquivo/linha). Corrija para não retornar 500 silencioso: se faltar credencial ou provider, retorne 401/400 com JSON { error: "...", hint: "..." }.
+
+5) O que provavelmente aconteceu (bem comum)
+
+O mock continua ativo em openaiClient.ts e faz qualquer chamada falhar
+OU
+
+Removeram o mock, mas não tem OPENAI_API_KEY e o código não está usando Replit Integration de verdade
+OU
+
+A rota do gerador de abordagem está chamando um método que mudou e agora dá exception
+
+6) Prevenção pra você não voltar a gastar sem perceber
+
+No Replit, ativa:
+
+Usage alert em um valor realista (ex: 20, 50)
+
+Service shutdown limit (isso para o gasto extra)
+
+Você já abriu essa tela. Ajusta para algo que te proteja de semana de R$ 1.000 de novo.
