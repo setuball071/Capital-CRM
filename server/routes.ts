@@ -756,6 +756,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk reactivate coefficient tables (master only)
+  app.post("/api/coefficient-tables/bulk-reactivate", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+
+      const updatePromises = ids.map((id: number) => 
+        storage.updateCoefficientTable(id, { isActive: true })
+      );
+      await Promise.all(updatePromises);
+
+      return res.json({ 
+        message: "Tabelas reativadas com sucesso",
+        count: ids.length
+      });
+    } catch (error) {
+      console.error("Bulk reactivate coefficient tables error:", error);
+      return res.status(500).json({ message: "Erro ao reativar tabelas" });
+    }
+  });
+
   // ===== USERS ROUTES =====
   
   // Get users with role-based visibility:

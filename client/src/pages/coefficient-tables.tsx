@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Papa from "papaparse";
-import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X, Search, Ban } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X, Search, Ban, Check } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
@@ -153,12 +153,14 @@ export default function CoefficientTablesPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isBulkDeactivateDialogOpen, setIsBulkDeactivateDialogOpen] = useState(false);
+  const [isBulkReactivateDialogOpen, setIsBulkReactivateDialogOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<CoefficientTable | null>(null);
   const [importData, setImportData] = useState<any[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOperationType, setSelectedOperationType] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<"all" | "active" | "inactive">("active");
 
   const createForm = useForm<CoefficientFormData>({
     resolver: zodResolver(coefficientFormSchema),
@@ -332,6 +334,28 @@ export default function CoefficientTablesPage() {
     },
   });
 
+  const bulkReactivateMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return await apiRequest("POST", "/api/coefficient-tables/bulk-reactivate", { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      setIsBulkReactivateDialogOpen(false);
+      setSelectedIds([]);
+      toast({
+        title: "Tabelas reativadas com sucesso",
+        description: `${data.count} tabelas foram reativadas.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao reativar tabelas",
+        description: error.message || "Ocorreu um erro ao reativar as tabelas.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const bulkImportMutation = useMutation({
     mutationFn: async (tables: InsertCoefficientTable[]) => {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-import", { tables });
@@ -406,6 +430,14 @@ export default function CoefficientTablesPage() {
     bulkDeactivateMutation.mutate(selectedIds);
   };
 
+  const handleBulkReactivate = () => {
+    setIsBulkReactivateDialogOpen(true);
+  };
+
+  const confirmBulkReactivate = () => {
+    bulkReactivateMutation.mutate(selectedIds);
+  };
+
   const toggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedIds([]);
@@ -433,6 +465,10 @@ export default function CoefficientTablesPage() {
   };
 
   const filteredTables = tables?.filter(table => {
+    // Filter by status
+    if (selectedStatus === "active" && !table.isActive) return false;
+    if (selectedStatus === "inactive" && table.isActive) return false;
+    
     // Filter by operation type from selected tab
     if (selectedOperationType !== "all" && table.operationType !== selectedOperationType) {
       return false;
@@ -601,15 +637,29 @@ export default function CoefficientTablesPage() {
                 >
                   <X className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkDeactivate}
-                  data-testid="button-bulk-deactivate"
-                >
-                  <Ban className="h-4 w-4 mr-2" />
-                  Desativar Selecionadas
-                </Button>
+                {selectedStatus !== "inactive" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkDeactivate}
+                    data-testid="button-bulk-deactivate"
+                  >
+                    <Ban className="h-4 w-4 mr-2" />
+                    Desativar Selecionadas
+                  </Button>
+                )}
+                {selectedStatus === "inactive" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkReactivate}
+                    data-testid="button-bulk-reactivate"
+                    className="border-green-500 text-green-600 hover:bg-green-50"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Reativar Selecionadas
+                  </Button>
+                )}
                 <Button
                   variant="destructive"
                   size="sm"
@@ -684,6 +734,34 @@ export default function CoefficientTablesPage() {
                 </p>
               )}
             </div>
+            {/* Status Filter */}
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant={selectedStatus === "active" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setSelectedStatus("active"); setSelectedIds([]); }}
+                data-testid="button-filter-active"
+              >
+                Ativas ({tables?.filter(t => t.isActive).length || 0})
+              </Button>
+              <Button
+                variant={selectedStatus === "inactive" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setSelectedStatus("inactive"); setSelectedIds([]); }}
+                data-testid="button-filter-inactive"
+              >
+                Inativas ({tables?.filter(t => !t.isActive).length || 0})
+              </Button>
+              <Button
+                variant={selectedStatus === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setSelectedStatus("all"); setSelectedIds([]); }}
+                data-testid="button-filter-all"
+              >
+                Todas ({tables?.length || 0})
+              </Button>
+            </div>
+
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -1626,6 +1704,41 @@ export default function CoefficientTablesPage() {
                 </>
               ) : (
                 `Desativar ${selectedIds.length} Tabela${selectedIds.length > 1 ? 's' : ''}`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Reactivate Confirmation Dialog */}
+      <AlertDialog open={isBulkReactivateDialogOpen} onOpenChange={setIsBulkReactivateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Reativação em Lote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja reativar <strong>{selectedIds.length} tabela{selectedIds.length > 1 ? 's' : ''}</strong>?
+              <br />
+              <br />
+              As tabelas reativadas voltarão a ser exibidas nas simulações.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-bulk-reactivate-cancel">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkReactivate}
+              disabled={bulkReactivateMutation.isPending}
+              className="bg-green-600 text-white hover:bg-green-700"
+              data-testid="button-bulk-reactivate-confirm"
+            >
+              {bulkReactivateMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reativando...
+                </>
+              ) : (
+                `Reativar ${selectedIds.length} Tabela${selectedIds.length > 1 ? 's' : ''}`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
