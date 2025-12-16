@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Papa from "papaparse";
-import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X, Search } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Calculator, Download, Upload, X, Search, Ban } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Agreement, CoefficientTable, InsertCoefficientTable } from "@shared/schema";
@@ -152,6 +152,7 @@ export default function CoefficientTablesPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isBulkDeactivateDialogOpen, setIsBulkDeactivateDialogOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<CoefficientTable | null>(null);
   const [importData, setImportData] = useState<any[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -309,6 +310,28 @@ export default function CoefficientTablesPage() {
     },
   });
 
+  const bulkDeactivateMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return await apiRequest("POST", "/api/coefficient-tables/bulk-deactivate", { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coefficient-tables"] });
+      setIsBulkDeactivateDialogOpen(false);
+      setSelectedIds([]);
+      toast({
+        title: "Tabelas desativadas com sucesso",
+        description: `${data.count} tabelas foram desativadas.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao desativar tabelas",
+        description: error.message || "Ocorreu um erro ao desativar as tabelas.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const bulkImportMutation = useMutation({
     mutationFn: async (tables: InsertCoefficientTable[]) => {
       return await apiRequest("POST", "/api/coefficient-tables/bulk-import", { tables });
@@ -373,6 +396,14 @@ export default function CoefficientTablesPage() {
 
   const confirmBulkDelete = () => {
     bulkDeleteMutation.mutate(selectedIds);
+  };
+
+  const handleBulkDeactivate = () => {
+    setIsBulkDeactivateDialogOpen(true);
+  };
+
+  const confirmBulkDeactivate = () => {
+    bulkDeactivateMutation.mutate(selectedIds);
   };
 
   const toggleSelectAll = () => {
@@ -569,6 +600,15 @@ export default function CoefficientTablesPage() {
                   data-testid="button-clear-selection"
                 >
                   <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkDeactivate}
+                  data-testid="button-bulk-deactivate"
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  Desativar Selecionadas
                 </Button>
                 <Button
                   variant="destructive"
@@ -1552,6 +1592,40 @@ export default function CoefficientTablesPage() {
                 </>
               ) : (
                 `Excluir ${selectedIds.length} Tabela${selectedIds.length > 1 ? 's' : ''}`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Deactivate Confirmation Dialog */}
+      <AlertDialog open={isBulkDeactivateDialogOpen} onOpenChange={setIsBulkDeactivateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Desativação em Lote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja desativar <strong>{selectedIds.length} tabela{selectedIds.length > 1 ? 's' : ''}</strong>?
+              <br />
+              <br />
+              As tabelas desativadas não serão exibidas nas simulações, mas poderão ser reativadas posteriormente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-bulk-deactivate-cancel">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDeactivate}
+              disabled={bulkDeactivateMutation.isPending}
+              data-testid="button-bulk-deactivate-confirm"
+            >
+              {bulkDeactivateMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Desativando...
+                </>
+              ) : (
+                `Desativar ${selectedIds.length} Tabela${selectedIds.length > 1 ? 's' : ''}`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
