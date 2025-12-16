@@ -132,7 +132,7 @@ export function AppSidebar() {
         { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia" },
         { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia" },
         { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia" },
-        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia", masterOnly: true },
+        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia" },
       ],
     },
     {

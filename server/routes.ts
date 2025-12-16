@@ -4360,10 +4360,10 @@ Responda EXCLUSIVAMENTE em JSON:
     }
   });
 
-  // ===== ADMIN ACADEMIA ENDPOINTS (MASTER ONLY) =====
+  // ===== ADMIN ACADEMIA ENDPOINTS (MASTER AND COORDINATORS) =====
 
   // GET /api/academia/admin/stats - Estatísticas gerais
-  app.get("/api/academia/admin/stats", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/academia/admin/stats", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       // Total de vendedores na academia
       const [totalVendedores] = await db.select({ count: sql`count(*)` }).from(vendedoresAcademia);
@@ -4398,7 +4398,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/admin/vendedores - Listar todos os vendedores com progresso
-  app.get("/api/academia/admin/vendedores", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/academia/admin/vendedores", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const vendedores = await db.select({
         id: vendedoresAcademia.id,
@@ -4424,7 +4424,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // GET /api/academia/admin/quiz-tentativas - Listar tentativas de quiz
-  app.get("/api/academia/admin/quiz-tentativas", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/academia/admin/quiz-tentativas", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const tentativas = await db.select({
         id: quizTentativas.id,
@@ -4449,7 +4449,7 @@ Responda EXCLUSIVAMENTE em JSON:
   });
 
   // POST /api/academia/admin/feedback-ia/:userId - Gerar feedback IA para um vendedor
-  app.post("/api/academia/admin/feedback-ia/:userId", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/academia/admin/feedback-ia/:userId", requireAuth, requireManagerAccess, async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
       
