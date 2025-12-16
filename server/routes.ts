@@ -6490,6 +6490,247 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro na repescagem" });
     }
   });
+
+  // ===== TEAMS & AI PROMPTS =====
+
+  // GET /api/teams - Listar todas as equipes
+  app.get("/api/teams", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const teams = await storage.getAllTeams();
+      const teamsWithMembers = await Promise.all(teams.map(async (team) => {
+        const members = await storage.getTeamMembersByTeam(team.id);
+        const manager = await storage.getUser(team.managerUserId);
+        return {
+          ...team,
+          managerName: manager?.name || "N/A",
+          memberCount: members.length,
+        };
+      }));
+      return res.json(teamsWithMembers);
+    } catch (error) {
+      console.error("Get teams error:", error);
+      return res.status(500).json({ message: "Erro ao buscar equipes" });
+    }
+  });
+
+  // POST /api/teams - Criar equipe
+  app.post("/api/teams", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { name, managerUserId } = req.body;
+      if (!name || !managerUserId) {
+        return res.status(400).json({ message: "Nome e coordenador são obrigatórios" });
+      }
+      const team = await storage.createTeam({ name, managerUserId });
+      return res.status(201).json(team);
+    } catch (error) {
+      console.error("Create team error:", error);
+      return res.status(500).json({ message: "Erro ao criar equipe" });
+    }
+  });
+
+  // PATCH /api/teams/:id - Atualizar equipe
+  app.patch("/api/teams/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const team = await storage.updateTeam(id, req.body);
+      if (!team) {
+        return res.status(404).json({ message: "Equipe não encontrada" });
+      }
+      return res.json(team);
+    } catch (error) {
+      console.error("Update team error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar equipe" });
+    }
+  });
+
+  // DELETE /api/teams/:id - Excluir equipe
+  app.delete("/api/teams/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteTeam(id);
+      return res.json({ message: "Equipe excluída" });
+    } catch (error) {
+      console.error("Delete team error:", error);
+      return res.status(500).json({ message: "Erro ao excluir equipe" });
+    }
+  });
+
+  // GET /api/teams/:id/members - Membros de uma equipe
+  app.get("/api/teams/:id/members", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const members = await storage.getTeamMembersByTeam(id);
+      const membersWithUsers = await Promise.all(members.map(async (member) => {
+        const user = await storage.getUser(member.userId);
+        return {
+          ...member,
+          userName: user?.name || "N/A",
+          userEmail: user?.email || "N/A",
+          userRole: user?.role || "N/A",
+        };
+      }));
+      return res.json(membersWithUsers);
+    } catch (error) {
+      console.error("Get team members error:", error);
+      return res.status(500).json({ message: "Erro ao buscar membros" });
+    }
+  });
+
+  // POST /api/teams/:id/members - Adicionar membro à equipe
+  app.post("/api/teams/:id/members", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.id);
+      const { userId, roleInTeam } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "userId é obrigatório" });
+      }
+      await storage.deleteTeamMemberByUser(userId);
+      const member = await storage.createTeamMember({
+        teamId,
+        userId,
+        roleInTeam: roleInTeam || "seller",
+      });
+      return res.status(201).json(member);
+    } catch (error) {
+      console.error("Add team member error:", error);
+      return res.status(500).json({ message: "Erro ao adicionar membro" });
+    }
+  });
+
+  // DELETE /api/teams/members/:userId - Remover membro da equipe
+  app.delete("/api/teams/members/:userId", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      await storage.deleteTeamMemberByUser(userId);
+      return res.json({ message: "Membro removido da equipe" });
+    } catch (error) {
+      console.error("Remove team member error:", error);
+      return res.status(500).json({ message: "Erro ao remover membro" });
+    }
+  });
+
+  // GET /api/ai-prompts/roleplay/active - Prompt ativo para o usuário atual
+  app.get("/api/ai-prompts/roleplay/active", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { prompt, scope } = await storage.getActiveRoleplayPrompt(userId);
+      return res.json({ prompt, scope });
+    } catch (error) {
+      console.error("Get active prompt error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prompt ativo" });
+    }
+  });
+
+  // GET /api/ai-prompts/roleplay/global - Histórico de prompts globais (Master)
+  app.get("/api/ai-prompts/roleplay/global", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const prompts = await storage.getGlobalRoleplayPrompts();
+      return res.json(prompts);
+    } catch (error) {
+      console.error("Get global prompts error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prompts globais" });
+    }
+  });
+
+  // POST /api/ai-prompts/roleplay/global - Salvar novo prompt global (Master)
+  app.post("/api/ai-prompts/roleplay/global", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { promptText } = req.body;
+      if (!promptText || promptText.trim().length < 10) {
+        return res.status(400).json({ message: "Prompt muito curto (mínimo 10 caracteres)" });
+      }
+      const prompt = await storage.saveRoleplayPrompt("roleplay", "global", null, promptText, req.user!.id);
+      return res.status(201).json(prompt);
+    } catch (error) {
+      console.error("Save global prompt error:", error);
+      return res.status(500).json({ message: "Erro ao salvar prompt" });
+    }
+  });
+
+  // GET /api/ai-prompts/roleplay/team/:teamId - Histórico de prompts da equipe
+  app.get("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const userRole = req.user!.role as UserRole;
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      if (userRole === "coordenacao") {
+        const team = await storage.getTeam(teamId);
+        if (!team || team.managerUserId !== req.user!.id) {
+          return res.status(403).json({ message: "Você não gerencia esta equipe" });
+        }
+      }
+      const prompts = await storage.getTeamRoleplayPrompts(teamId);
+      return res.json(prompts);
+    } catch (error) {
+      console.error("Get team prompts error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prompts da equipe" });
+    }
+  });
+
+  // POST /api/ai-prompts/roleplay/team/:teamId - Salvar prompt de equipe (Coordenador ou Master)
+  app.post("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const userRole = req.user!.role as UserRole;
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      if (userRole === "coordenacao") {
+        const team = await storage.getTeam(teamId);
+        if (!team || team.managerUserId !== req.user!.id) {
+          return res.status(403).json({ message: "Você não gerencia esta equipe" });
+        }
+      }
+      const { promptText } = req.body;
+      if (!promptText || promptText.trim().length < 10) {
+        return res.status(400).json({ message: "Prompt muito curto (mínimo 10 caracteres)" });
+      }
+      const prompt = await storage.saveRoleplayPrompt("roleplay", "team", teamId, promptText, req.user!.id);
+      return res.status(201).json(prompt);
+    } catch (error) {
+      console.error("Save team prompt error:", error);
+      return res.status(500).json({ message: "Erro ao salvar prompt da equipe" });
+    }
+  });
+
+  // DELETE /api/ai-prompts/roleplay/team/:teamId - Resetar prompt da equipe (volta para global)
+  app.delete("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const userRole = req.user!.role as UserRole;
+      if (!hasRole(req.user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      if (userRole === "coordenacao") {
+        const team = await storage.getTeam(teamId);
+        if (!team || team.managerUserId !== req.user!.id) {
+          return res.status(403).json({ message: "Você não gerencia esta equipe" });
+        }
+      }
+      await storage.resetTeamRoleplayPrompt(teamId);
+      return res.json({ message: "Prompt da equipe resetado. Agora usa o prompt global." });
+    } catch (error) {
+      console.error("Reset team prompt error:", error);
+      return res.status(500).json({ message: "Erro ao resetar prompt" });
+    }
+  });
+
+  // GET /api/user/team - Obter equipe do usuário atual
+  app.get("/api/user/team", requireAuth, async (req, res) => {
+    try {
+      const membership = await storage.getTeamMemberByUser(req.user!.id);
+      if (!membership) {
+        return res.json({ team: null, membership: null });
+      }
+      const team = await storage.getTeam(membership.teamId);
+      return res.json({ team, membership });
+    } catch (error) {
+      console.error("Get user team error:", error);
+      return res.status(500).json({ message: "Erro ao buscar equipe" });
+    }
+  });
   
   const httpServer = createServer(app);
   return httpServer;
