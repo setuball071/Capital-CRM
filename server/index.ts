@@ -21,7 +21,10 @@ if (isProduction && process.env.DATABASE_URL) {
   const PgStore = pgSession(session);
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
   });
   sessionStore = new PgStore({
     pool,
