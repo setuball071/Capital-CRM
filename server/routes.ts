@@ -3753,7 +3753,21 @@ nível_atual: ${nivelAtual}
 fala_corretor: "${falaCorretor}"
 ${contexto ? `contexto: ${contexto}` : ""}
 
-Avalie a fala do corretor e responda EXCLUSIVAMENTE em JSON válido com as notas e feedback.`;
+Avalie a performance completa do corretor na sessão de roleplay. Considere toda a conversa no contexto.
+Responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta estrutura:
+{
+  "nota_global": 7.5,
+  "nota_humanizacao": 8,
+  "nota_consultivo": 7,
+  "nota_clareza": 8,
+  "nota_venda": 6,
+  "comentario_geral": "Seu comentário detalhado aqui",
+  "pontos_fortes": ["Ponto forte 1", "Ponto forte 2"],
+  "pontos_melhorar": ["Ponto a melhorar 1", "Ponto a melhorar 2"],
+  "nivel_sugerido": ${nivelAtual},
+  "aprovado_para_proximo_nivel": false
+}
+Notas devem ser de 0 a 10. Seja justo e construtivo.`;
         responseFormat = "json";
 
       } else if (modo === "abordagem_ia") {
