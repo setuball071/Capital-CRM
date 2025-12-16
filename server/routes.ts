@@ -3794,7 +3794,17 @@ ${contexto ? `contexto: ${contexto}` : ""}
 
 IMPORTANTE: Respeite o tom solicitado. O tom define estrutura, força persuasiva, velocidade da abordagem e gatilhos mentais apropriados.
 
-Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos especificados.`;
+Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta estrutura:
+{
+  "abertura_resumida": "Sua abertura aqui",
+  "objetivo_abordagem": "Objetivo claro da abordagem",
+  "perguntas_consultivas": ["Pergunta 1?", "Pergunta 2?", "Pergunta 3?"],
+  "exploracao_dor": "Como explorar a dor do cliente",
+  "proposta_valor": "Proposta de valor clara",
+  "gatilhos_usados": ["Gatilho 1", "Gatilho 2"],
+  "script_pronto_whatsapp": "Script completo para WhatsApp com emojis e formatação",
+  "script_pronto_ligacao": "Script completo para ligação telefônica"
+}`;
         responseFormat = "json";
       }
 
