@@ -48,7 +48,7 @@ import {
   type PricingSettings,
 } from "@shared/schema";
 import { db } from "./storage";
-import { eq, asc, and, sql, inArray } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
