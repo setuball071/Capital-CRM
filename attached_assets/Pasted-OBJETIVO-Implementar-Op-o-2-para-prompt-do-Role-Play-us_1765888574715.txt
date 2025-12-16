@@ -1,0 +1,230 @@
+OBJETIVO
+Implementar “Opção 2” para prompt do Role Play usando OpenAI:
+
+Prompt Global (Master) editável e versionado no banco
+
+Prompt por Equipe (Coordenador) editável e versionado no banco
+
+Fallback automático: se não existir prompt ativo da equipe, usar o global
+
+Como ainda não existe equipes: ao criar usuário Coordenador, pedir “Nome da Equipe” e criar equipe automaticamente
+
+Vendedores ficam vinculados a uma equipe e usam o prompt daquela equipe (ou global se não tiver override)
+
+REGRAS DE PERMISSÃO
+
+Master: edita prompt global e prompts de qualquer equipe
+
+Coordenador: edita apenas o prompt da própria equipe
+
+Vendedor: não edita prompt
+
+Coordenador não pode editar global
+
+BANCO DE DADOS (shared/schema.ts)
+Criar/ajustar as seguintes tabelas:
+
+teams
+
+id (uuid ou serial, padrão do projeto)
+
+name (string, obrigatório)
+
+managerUserId (id do usuário coordenador, obrigatório)
+
+createdAt
+
+teamMembers
+
+id
+
+teamId (fk teams)
+
+userId (fk users)
+
+roleInTeam (enum: 'coordinator' | 'seller')
+
+createdAt
+Índices:
+
+unique(teamId, userId)
+
+aiPrompts
+
+id
+
+type (string) ex: 'roleplay' (obrigatório)
+
+scope (enum: 'global' | 'team') (obrigatório)
+
+teamId (nullable, obrigatório quando scope='team')
+
+promptText (text, obrigatório)
+
+version (int, obrigatório, começa em 1)
+
+isActive (boolean, default true)
+
+updatedByUserId (fk users)
+
+updatedAt
+Índices:
+
+(type, scope, isActive)
+
+(type, scope, teamId, isActive)
+
+REGRAS DE VERSIONAMENTO
+
+Ao salvar um prompt (global ou equipe):
+
+Desativar o prompt ativo anterior daquele mesmo escopo (global ou teamId)
+
+Criar novo registro com version = anterior + 1 (ou 1 se primeiro)
+
+Marcar novo como isActive = true
+
+PROMPT GLOBAL INICIAL
+Ao subir a migração, garantir que exista 1 prompt global ativo do tipo 'roleplay'.
+Se não existir, criar automaticamente com este texto:
+
+Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.
+Regras obrigatórias:
+
+Não repetir a mesma objeção mais de duas vezes seguidas.
+
+A cada 1-2 respostas do consultor, mudar o foco da dúvida ou aprofundar outro aspecto.
+
+Não insistir em “não vou conseguir pagar”. No consignado o desconto é em folha. O medo real é decisão errada, taxa, parcela desconfortável, arrependimento, confiança, timing e comparação.
+
+Evoluir a conversa (início dúvida genérica, meio específico, fim decisão ou avanço).
+Varie os focos (um por resposta): taxa, parcela/conforto, comparação, arrependimento, uso do dinheiro, momento de vida, clareza nos números, confiança no consultor.
+Tom: humano, curto, natural, sem termos técnicos e sem repetir frases.
+
+ASSOCIAÇÃO DE EQUIPE AO USUÁRIO
+Implementar lógica no fluxo de criação/edição de usuários:
+
+Ao criar usuário com perfil “Coordenador”:
+
+Campo obrigatório no formulário: teamName (Nome da Equipe)
+
+Criar registro em teams (name=teamName, managerUserId=user.id)
+
+Criar teamMembers com roleInTeam='coordinator'
+
+Ao criar usuário com perfil “Vendedor”:
+
+Campo obrigatório: teamId (selecionar equipe existente)
+
+Criar teamMembers com roleInTeam='seller'
+
+Master pode alterar a equipe do vendedor na edição de usuário:
+
+atualizar teamMembers
+
+ROTAS BACKEND (server/routes.ts)
+
+A) Resolver prompt para execução do Role Play (qual prompt usar)
+GET /api/ai/roleplay/prompt
+Retornar:
+
+promptText
+
+scope usado ('team' ou 'global')
+
+version
+Lógica:
+
+Identificar userId logado e sua equipe (teamId via teamMembers)
+
+Procurar prompt ativo: type='roleplay', scope='team', teamId daquele user
+
+Se não existir, usar prompt ativo global: type='roleplay', scope='global'
+
+Se não existir global, criar com o texto padrão acima e retornar
+
+B) Atualizar prompt global (somente Master)
+POST /api/ai/prompts/roleplay/global
+Body: { promptText: string }
+Ação:
+
+verificar permissão Master
+
+versionar (desativar anterior + criar novo)
+
+C) Atualizar prompt do time (Coordenador do time ou Master)
+POST /api/ai/prompts/roleplay/team/:teamId
+Body: { promptText: string }
+Permissões:
+
+Master pode qualquer teamId
+
+Coordenador só pode se teamId for a equipe dele
+Ação:
+
+versionar (desativar anterior + criar novo)
+
+D) Restaurar padrão global para o time (Coordenador do time ou Master)
+POST /api/ai/prompts/roleplay/team/:teamId/reset
+Ação:
+
+desativar qualquer prompt ativo daquele teamId (scope='team')
+
+não apagar histórico
+Depois disso, aquele time volta a usar global
+
+E) Listar prompts e versões (para telas)
+GET /api/ai/prompts/roleplay/global (lista versões + ativo)
+GET /api/ai/prompts/roleplay/team/:teamId (lista versões + ativo)
+GET /api/teams (lista de equipes para selects)
+
+FRONTEND (client)
+Criar tela “Config Role Play” com comportamento por perfil:
+
+Master
+
+Abas:
+
+Global: textarea + salvar + lista de versões (mostra version, updatedAt, updatedBy)
+
+Equipes: lista equipes, selecionar equipe, editar prompt da equipe, lista versões, botão reset
+
+Coordenador
+
+Ver apenas sua equipe
+
+textarea do prompt do time + salvar
+
+botão “Restaurar padrão global”
+
+mostrar também o prompt global em modo leitura (read-only) para referência
+
+Vendedor
+
+Não ver esta tela
+
+ONDE USAR O PROMPT NA CHAMADA DA OPENAI
+No endpoint do Role Play, antes de chamar OpenAI:
+
+Buscar o prompt via a mesma lógica do GET /api/ai/roleplay/prompt
+
+Injetar como mensagem system:
+[{ role:'system', content: promptText }, ...historicoLimitado]
+
+Limitar histórico: enviar apenas as últimas 12-16 mensagens para reduzir custo
+
+CHECKLIST DE TESTE
+
+Master edita global, versão incrementa, antigo desativa
+
+Criar coordenador com nome de equipe cria teams e teamMembers corretamente
+
+Coordenador edita prompt da equipe e só o time dele usa
+
+Vendedor do time passa a usar prompt do time
+
+Reset do time faz voltar a usar global
+
+Coordenador não consegue editar global nem editar prompt de outro time
+
+GET /api/ai/roleplay/prompt retorna corretamente scope e version usados

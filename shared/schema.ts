@@ -1077,3 +1077,81 @@ export const CONTACT_LABELS = [
   "Trabalho",
 ] as const;
 
+// ===== TEAMS & AI PROMPTS (Role Play Option 2) =====
+
+// Teams table - equipes de vendas
+export const teams = pgTable("teams", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  managerUserId: integer("manager_user_id").references(() => users.id, { onDelete: "set null" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Team Members - associação usuários <-> equipes
+export const TEAM_ROLES = ["coordinator", "seller"] as const;
+export type TeamRole = typeof TEAM_ROLES[number];
+
+export const teamMembers = pgTable("team_members", {
+  id: serial("id").primaryKey(),
+  teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  roleInTeam: varchar("role_in_team", { length: 20 }).notNull().default("seller"), // coordinator, seller
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// AI Prompts - prompts versionados para Role Play
+export const AI_PROMPT_SCOPES = ["global", "team"] as const;
+export type AiPromptScope = typeof AI_PROMPT_SCOPES[number];
+
+export const aiPrompts = pgTable("ai_prompts", {
+  id: serial("id").primaryKey(),
+  type: varchar("type", { length: 50 }).notNull(), // 'roleplay'
+  scope: varchar("scope", { length: 20 }).notNull(), // 'global' | 'team'
+  teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }), // null para global
+  promptText: text("prompt_text").notNull(),
+  version: integer("version").notNull().default(1),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedByUserId: integer("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schemas
+export const insertTeamSchema = createInsertSchema(teams).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiPromptSchema = createInsertSchema(aiPrompts).omit({
+  id: true,
+  updatedAt: true,
+});
+
+// Types
+export type Team = typeof teams.$inferSelect;
+export type InsertTeam = z.infer<typeof insertTeamSchema>;
+
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
+
+export type AiPrompt = typeof aiPrompts.$inferSelect;
+export type InsertAiPrompt = z.infer<typeof insertAiPromptSchema>;
+
+// Default Role Play prompt
+export const DEFAULT_ROLEPLAY_PROMPT = `Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.
+Regras obrigatórias:
+
+Não repetir a mesma objeção mais de duas vezes seguidas.
+
+A cada 1-2 respostas do consultor, mudar o foco da dúvida ou aprofundar outro aspecto.
+
+Não insistir em "não vou conseguir pagar". No consignado o desconto é em folha. O medo real é decisão errada, taxa, parcela desconfortável, arrependimento, confiança, timing e comparação.
+
+Evoluir a conversa (início dúvida genérica, meio específico, fim decisão ou avanço).
+Varie os focos (um por resposta): taxa, parcela/conforto, comparação, arrependimento, uso do dinheiro, momento de vida, clareza nos números, confiança no consultor.
+Tom: humano, curto, natural, sem termos técnicos e sem repetir frases.`;
+

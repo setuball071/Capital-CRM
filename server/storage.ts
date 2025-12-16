@@ -30,6 +30,10 @@ import {
   leadSchedules,
   leadContacts,
   leadInteractions,
+  teams,
+  teamMembers,
+  aiPrompts,
+  DEFAULT_ROLEPLAY_PROMPT,
   type User,
   type InsertUser,
   type Bank,
@@ -85,6 +89,12 @@ import {
   type InsertLeadContact,
   type LeadInteraction,
   type InsertLeadInteraction,
+  type Team,
+  type InsertTeam,
+  type TeamMember,
+  type InsertTeamMember,
+  type AiPrompt,
+  type InsertAiPrompt,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -303,6 +313,25 @@ export interface IStorage {
   syncClientContracts(pessoaId: number, contratos: InsertClienteContrato[]): Promise<void>;
   createClientSnapshot(data: { clientId: number; referenceDate: Date; fonte: string; situacaoFuncional?: string; margemEmprestimo?: string; margemCartao?: string; margem5?: string; salarioBruto?: string; salarioLiquido?: string; dadosExtras?: any }): Promise<ClientSnapshot>;
   createCampaignFromFilter(filtros: FiltrosPedidoLista, nome: string, userId: number): Promise<{ campaign: SalesCampaign; leadsCreated: number }>;
+  
+  // ===== TEAMS & AI PROMPTS =====
+  getAllTeams(): Promise<Team[]>;
+  getTeam(id: number): Promise<Team | undefined>;
+  createTeam(data: InsertTeam): Promise<Team>;
+  updateTeam(id: number, data: Partial<InsertTeam>): Promise<Team | undefined>;
+  deleteTeam(id: number): Promise<void>;
+  
+  getTeamMembersByTeam(teamId: number): Promise<TeamMember[]>;
+  getTeamMemberByUser(userId: number): Promise<TeamMember | undefined>;
+  createTeamMember(data: InsertTeamMember): Promise<TeamMember>;
+  updateTeamMember(id: number, data: Partial<InsertTeamMember>): Promise<TeamMember | undefined>;
+  deleteTeamMemberByUser(userId: number): Promise<void>;
+  
+  getActiveRoleplayPrompt(userId: number): Promise<{ prompt: AiPrompt; scope: "global" | "team" }>;
+  getGlobalRoleplayPrompts(): Promise<AiPrompt[]>;
+  getTeamRoleplayPrompts(teamId: number): Promise<AiPrompt[]>;
+  saveRoleplayPrompt(type: string, scope: "global" | "team", teamId: number | null, promptText: string, userId: number): Promise<AiPrompt>;
+  resetTeamRoleplayPrompt(teamId: number): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -1948,6 +1977,183 @@ export class DbStorage implements IStorage {
     }
     
     return { campaign, leadsCreated };
+  }
+  
+  // ===== TEAMS & AI PROMPTS =====
+  
+  async getAllTeams(): Promise<Team[]> {
+    return await db.select().from(teams).orderBy(teams.name);
+  }
+  
+  async getTeam(id: number): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+    return team;
+  }
+  
+  async createTeam(data: InsertTeam): Promise<Team> {
+    const [created] = await db.insert(teams).values(data).returning();
+    return created;
+  }
+  
+  async updateTeam(id: number, data: Partial<InsertTeam>): Promise<Team | undefined> {
+    const [updated] = await db.update(teams).set(data).where(eq(teams.id, id)).returning();
+    return updated;
+  }
+  
+  async deleteTeam(id: number): Promise<void> {
+    await db.delete(teams).where(eq(teams.id, id));
+  }
+  
+  async getTeamMembersByTeam(teamId: number): Promise<TeamMember[]> {
+    return await db.select().from(teamMembers).where(eq(teamMembers.teamId, teamId));
+  }
+  
+  async getTeamMemberByUser(userId: number): Promise<TeamMember | undefined> {
+    const [member] = await db.select().from(teamMembers).where(eq(teamMembers.userId, userId));
+    return member;
+  }
+  
+  async createTeamMember(data: InsertTeamMember): Promise<TeamMember> {
+    const [created] = await db.insert(teamMembers).values(data).returning();
+    return created;
+  }
+  
+  async updateTeamMember(id: number, data: Partial<InsertTeamMember>): Promise<TeamMember | undefined> {
+    const [updated] = await db.update(teamMembers).set(data).where(eq(teamMembers.id, id)).returning();
+    return updated;
+  }
+  
+  async deleteTeamMemberByUser(userId: number): Promise<void> {
+    await db.delete(teamMembers).where(eq(teamMembers.userId, userId));
+  }
+  
+  async getActiveRoleplayPrompt(userId: number): Promise<{ prompt: AiPrompt; scope: "global" | "team" }> {
+    const userMembership = await this.getTeamMemberByUser(userId);
+    
+    if (userMembership) {
+      const [teamPrompt] = await db.select().from(aiPrompts)
+        .where(and(
+          eq(aiPrompts.type, "roleplay"),
+          eq(aiPrompts.scope, "team"),
+          eq(aiPrompts.teamId, userMembership.teamId),
+          eq(aiPrompts.isActive, true)
+        ));
+      
+      if (teamPrompt) {
+        return { prompt: teamPrompt, scope: "team" };
+      }
+    }
+    
+    const [globalPrompt] = await db.select().from(aiPrompts)
+      .where(and(
+        eq(aiPrompts.type, "roleplay"),
+        eq(aiPrompts.scope, "global"),
+        eq(aiPrompts.isActive, true)
+      ));
+    
+    if (globalPrompt) {
+      return { prompt: globalPrompt, scope: "global" };
+    }
+    
+    const [newGlobalPrompt] = await db.insert(aiPrompts).values({
+      type: "roleplay",
+      scope: "global",
+      teamId: null,
+      promptText: DEFAULT_ROLEPLAY_PROMPT,
+      version: 1,
+      isActive: true,
+      updatedByUserId: null,
+    }).returning();
+    
+    return { prompt: newGlobalPrompt, scope: "global" };
+  }
+  
+  async getGlobalRoleplayPrompts(): Promise<AiPrompt[]> {
+    return await db.select().from(aiPrompts)
+      .where(and(
+        eq(aiPrompts.type, "roleplay"),
+        eq(aiPrompts.scope, "global")
+      ))
+      .orderBy(sql`${aiPrompts.version} DESC`);
+  }
+  
+  async getTeamRoleplayPrompts(teamId: number): Promise<AiPrompt[]> {
+    return await db.select().from(aiPrompts)
+      .where(and(
+        eq(aiPrompts.type, "roleplay"),
+        eq(aiPrompts.scope, "team"),
+        eq(aiPrompts.teamId, teamId)
+      ))
+      .orderBy(sql`${aiPrompts.version} DESC`);
+  }
+  
+  async saveRoleplayPrompt(type: string, scope: "global" | "team", teamId: number | null, promptText: string, userId: number): Promise<AiPrompt> {
+    let currentVersion = 0;
+    
+    if (scope === "global") {
+      await db.update(aiPrompts)
+        .set({ isActive: false })
+        .where(and(
+          eq(aiPrompts.type, type),
+          eq(aiPrompts.scope, "global"),
+          eq(aiPrompts.isActive, true)
+        ));
+      
+      const [lastVersion] = await db.select({ version: aiPrompts.version })
+        .from(aiPrompts)
+        .where(and(
+          eq(aiPrompts.type, type),
+          eq(aiPrompts.scope, "global")
+        ))
+        .orderBy(sql`${aiPrompts.version} DESC`)
+        .limit(1);
+      
+      currentVersion = lastVersion?.version || 0;
+    } else if (teamId) {
+      await db.update(aiPrompts)
+        .set({ isActive: false })
+        .where(and(
+          eq(aiPrompts.type, type),
+          eq(aiPrompts.scope, "team"),
+          eq(aiPrompts.teamId, teamId),
+          eq(aiPrompts.isActive, true)
+        ));
+      
+      const [lastVersion] = await db.select({ version: aiPrompts.version })
+        .from(aiPrompts)
+        .where(and(
+          eq(aiPrompts.type, type),
+          eq(aiPrompts.scope, "team"),
+          eq(aiPrompts.teamId, teamId)
+        ))
+        .orderBy(sql`${aiPrompts.version} DESC`)
+        .limit(1);
+      
+      currentVersion = lastVersion?.version || 0;
+    }
+    
+    const [created] = await db.insert(aiPrompts).values({
+      type,
+      scope,
+      teamId,
+      promptText,
+      version: currentVersion + 1,
+      isActive: true,
+      updatedByUserId: userId,
+    }).returning();
+    
+    return created;
+  }
+  
+  async resetTeamRoleplayPrompt(teamId: number): Promise<void> {
+    await db.update(aiPrompts)
+      .set({ isActive: false })
+      .where(and(
+        eq(aiPrompts.type, "roleplay"),
+        eq(aiPrompts.scope, "team"),
+        eq(aiPrompts.teamId, teamId),
+        eq(aiPrompts.isActive, true)
+      ));
   }
 }
 
