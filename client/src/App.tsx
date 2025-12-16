@@ -102,6 +102,30 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
   return <Component />;
 }
 
+// Protected route for Academia Admin (master and coordenacao)
+function AcademiaAdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  const allowedRoles = ["master", "coordenacao"];
+  if (!allowedRoles.includes(user.role)) {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
 // Protected route for roteiros (master, atendimento, operacional only)
 function RoteirosRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -296,7 +320,7 @@ function Router() {
                 {() => <ProtectedRoute component={AcademiaAbordagemPage} />}
               </Route>
               <Route path="/academia/admin">
-                {() => <MasterRoute component={AcademiaAdminPage} />}
+                {() => <AcademiaAdminRoute component={AcademiaAdminPage} />}
               </Route>
               <Route path="/vendas/campanhas">
                 {() => <CRMAdminRoute component={VendasCampanhasPage} />}
