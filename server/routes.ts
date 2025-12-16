@@ -3635,6 +3635,63 @@ MODOS DE OPERAÇÃO (campo "modo" na requisição):
    - Gera abordagem inicial perfeita, natural e ética.
    - Responder EXCLUSIVAMENTE em JSON com: abertura_resumida, objetivo_abordagem, perguntas_consultivas (array), exploracao_dor, proposta_valor, gatilhos_usados (array), script_pronto_ligacao, script_pronto_whatsapp.`;
 
+  // Helper function to get the effective roleplay prompt for a user
+  async function getEffectiveRoleplayPrompt(userId: number): Promise<string> {
+    try {
+      // 1. Check if user belongs to a team
+      const userMembership = await db.select()
+        .from(teamMembers)
+        .where(eq(teamMembers.userId, userId))
+        .limit(1);
+
+      if (userMembership.length > 0) {
+        const teamId = userMembership[0].teamId;
+        
+        // 2. Check for team-specific active prompt
+        const teamPrompt = await db.select()
+          .from(aiPrompts)
+          .where(
+            and(
+              eq(aiPrompts.type, "roleplay"),
+              eq(aiPrompts.scope, "team"),
+              eq(aiPrompts.teamId, teamId),
+              eq(aiPrompts.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (teamPrompt.length > 0) {
+          console.log(`[Roleplay] Using team-specific prompt for user ${userId}, team ${teamId}`);
+          return teamPrompt[0].promptText;
+        }
+      }
+
+      // 3. Fallback to global prompt
+      const globalPrompt = await db.select()
+        .from(aiPrompts)
+        .where(
+          and(
+            eq(aiPrompts.type, "roleplay"),
+            eq(aiPrompts.scope, "global"),
+            eq(aiPrompts.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (globalPrompt.length > 0) {
+        console.log(`[Roleplay] Using global prompt for user ${userId}`);
+        return globalPrompt[0].promptText;
+      }
+
+      // 4. Fallback to hardcoded default
+      console.log(`[Roleplay] Using default hardcoded prompt for user ${userId}`);
+      return TREINADOR_SYSTEM_PROMPT;
+    } catch (error) {
+      console.error("[Roleplay] Error fetching prompt, using default:", error);
+      return TREINADOR_SYSTEM_PROMPT;
+    }
+  }
+
   // POST /api/treinador-consigone - Endpoint principal do treinador IA
   app.post("/api/treinador-consigone", requireAuth, requireAcademiaAccess, async (req, res) => {
     try {
@@ -3726,11 +3783,14 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com todos os campos e
 
       console.log(`[Academia] Calling OpenAI for mode: ${modo}, user: ${userId}`);
 
+      // Get the effective prompt for this user (team-specific or global)
+      const effectivePrompt = await getEffectiveRoleplayPrompt(userId);
+
       // Call OpenAI
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: TREINADOR_SYSTEM_PROMPT },
+          { role: "system", content: effectivePrompt },
           { role: "user", content: userMessage },
         ],
         temperature: 0.7,
