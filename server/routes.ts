@@ -24,6 +24,9 @@ import {
   progressoLicoes,
   feedbacksIAHistorico,
   users,
+  teams,
+  teamMembers,
+  aiPrompts,
   salesCampaigns,
   salesLeads,
   salesLeadAssignments,
@@ -151,8 +154,8 @@ const requireManagerAccess = requireUserManagementAccess;
 
 // Academia access middleware (master, atendimento, operacional)
 function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master", "atendimento", "operacional"])) {
-    return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar a Academia" });
+  if (!hasRole(req.user, ["master", "atendimento", "operacional", "coordenacao"])) {
+    return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar o Treinamento" });
   }
   next();
 }
@@ -6581,6 +6584,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Nome e coordenador são obrigatórios" });
       }
       const team = await storage.createTeam({ name, managerUserId });
+      
+      // Automatically add the coordinator as a team member
+      await storage.deleteTeamMemberByUser(managerUserId);
+      await storage.createTeamMember({
+        teamId: team.id,
+        userId: managerUserId,
+        roleInTeam: "coordinator",
+      });
+      
       return res.status(201).json(team);
     } catch (error) {
       console.error("Create team error:", error);

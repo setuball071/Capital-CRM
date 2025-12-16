@@ -125,14 +125,14 @@ export function AppSidebar() {
       ],
     },
     {
-      title: "Academia ConsigOne",
+      title: "Treinamento",
       icon: GraduationCap,
       items: [
         { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, module: "modulo_academia" },
         { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia" },
         { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia" },
         { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia" },
-        { title: "Admin Academia", url: "/academia/admin", icon: Award, module: "modulo_academia", masterOnly: true },
+        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia", masterOnly: true },
       ],
     },
     {
