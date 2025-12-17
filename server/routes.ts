@@ -4,6 +4,14 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { storage } from "./storage";
 import {
+  resolveTenant,
+  requireTenant,
+  validateTenantAccess,
+  getTenantBranding,
+  getUserTenants,
+  checkUserTenantAccess,
+} from "./tenant-middleware";
+import {
   loginSchema,
   registerSchema,
   insertBankSchema,
@@ -24,6 +32,9 @@ import {
   progressoLicoes,
   feedbacksIAHistorico,
   users,
+  tenants,
+  tenantDomains,
+  userTenants,
   teams,
   teamMembers,
   aiPrompts,
@@ -277,6 +288,56 @@ async function getPacotesPreco(): Promise<PacotePrecoData[]> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ===== TENANT RESOLUTION MIDDLEWARE =====
+  app.use(resolveTenant);
+
+  // ===== TENANT ROUTES =====
+  
+  // Get current tenant branding/config (public - based on domain)
+  app.get("/api/tenant", async (req, res) => {
+    try {
+      if (!req.tenant) {
+        // In development, return a default tenant or null
+        if (process.env.NODE_ENV === "development") {
+          return res.json({ 
+            tenant: null,
+            development: true,
+            message: "No tenant configured for this domain"
+          });
+        }
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      res.json({
+        id: req.tenant.id,
+        key: req.tenant.key,
+        name: req.tenant.name,
+        logoUrl: req.tenant.logoUrl,
+        faviconUrl: req.tenant.faviconUrl,
+        theme: req.tenant.themeJson,
+      });
+    } catch (error) {
+      console.error("Get tenant error:", error);
+      res.status(500).json({ message: "Erro ao buscar configuração do tenant" });
+    }
+  });
+
+  // Get user's accessible tenants (requires auth)
+  app.get("/api/user/tenants", requireAuth, async (req, res) => {
+    try {
+      const userTenantsList = await getUserTenants(req.user!.id);
+      res.json(userTenantsList.map(t => ({
+        id: t.id,
+        key: t.key,
+        name: t.name,
+        logoUrl: t.logoUrl,
+      })));
+    } catch (error) {
+      console.error("Get user tenants error:", error);
+      res.status(500).json({ message: "Erro ao buscar tenants do usuário" });
+    }
+  });
+
   // ===== AUTH ROUTES =====
   
   // Create user with role-based permissions:
@@ -388,8 +449,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Email ou senha incorretos" });
       }
 
+      // Validate tenant access (only if tenant is resolved from domain)
+      if (req.tenantId) {
+        const hasAccess = await checkUserTenantAccess(user.id, req.tenantId);
+        if (!hasAccess) {
+          return res.status(403).json({ 
+            message: "Você não tem acesso a este ambiente. Por favor, acesse pelo domínio correto." 
+          });
+        }
+      }
+
       // Set session and save it
       req.session.userId = user.id;
+      req.session.tenantId = req.tenantId; // Store tenant in session
       
       // Save session before responding
       req.session.save((err) => {
@@ -404,6 +476,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({
           message: "Login realizado com sucesso",
           user: userWithoutPassword,
+          tenant: req.tenant ? {
+            id: req.tenant.id,
+            key: req.tenant.key,
+            name: req.tenant.name,
+          } : null,
         });
       });
     } catch (error) {
