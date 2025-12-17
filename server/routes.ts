@@ -127,7 +127,17 @@ function hasRole(user: User | undefined, allowedRoles: UserRole[]): boolean {
 }
 
 // Master only middleware (full access - admin)
+// Uses isMaster field for true master users who can access all tenants
 function requireMaster(req: Request, res: Response, next: NextFunction) {
+  // Check if user has isMaster flag set to true (real master user)
+  if (!req.user?.isMaster) {
+    return res.status(403).json({ message: "Acesso negado - apenas administradores master" });
+  }
+  next();
+}
+
+// Role-based master check (for backward compatibility with existing role-based permissions)
+function requireMasterRole(req: Request, res: Response, next: NextFunction) {
   if (!hasRole(req.user, ["master"])) {
     return res.status(403).json({ message: "Acesso negado - apenas administradores" });
   }
@@ -4917,7 +4927,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(403).json({ message: "Acesso negado" });
       }
       
-      const campanhas = await storage.getAllSalesCampaigns();
+      // Master users (isMaster) see all campaigns, others see only their tenant's
+      const tenantId = req.user!.isMaster ? null : req.tenantId;
+      const campanhas = await storage.getAllSalesCampaigns(tenantId);
       return res.json(campanhas);
     } catch (error) {
       console.error("Get campanhas error:", error);
@@ -4929,7 +4941,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.get("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const campanha = await storage.getSalesCampaign(id);
+      const tenantId = req.user!.isMaster ? null : req.tenantId;
+      const campanha = await storage.getSalesCampaign(id, tenantId);
       if (!campanha) {
         return res.status(404).json({ message: "Campanha não encontrada" });
       }
@@ -4948,9 +4961,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
       }
       
+      // Set tenant_id from current tenant (or null for master creating without tenant context)
       const campanha = await storage.createSalesCampaign({
         ...parsed.data,
         createdBy: req.user!.id,
+        tenantId: req.tenantId || null,
       });
       return res.status(201).json(campanha);
     } catch (error) {
@@ -4963,7 +4978,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.patch("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const campanha = await storage.updateSalesCampaign(id, req.body);
+      const tenantId = req.user!.isMaster ? null : req.tenantId;
+      const campanha = await storage.updateSalesCampaign(id, req.body, tenantId);
       if (!campanha) {
         return res.status(404).json({ message: "Campanha não encontrada" });
       }
@@ -4978,7 +4994,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.delete("/api/vendas/campanhas/:id", requireAuth, requireCRMAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      await storage.deleteSalesCampaign(id);
+      const tenantId = req.user!.isMaster ? null : req.tenantId;
+      await storage.deleteSalesCampaign(id, tenantId);
       return res.json({ message: "Campanha excluída com sucesso" });
     } catch (error) {
       console.error("Delete campanha error:", error);

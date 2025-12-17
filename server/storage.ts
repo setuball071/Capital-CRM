@@ -246,12 +246,12 @@ export interface IStorage {
   
   // ===== CRM DE VENDAS =====
   
-  // Campanhas
-  getAllSalesCampaigns(): Promise<SalesCampaign[]>;
-  getSalesCampaign(id: number): Promise<SalesCampaign | undefined>;
+  // Campanhas (with tenant filtering - pass null for master/all tenants)
+  getAllSalesCampaigns(tenantId?: number | null): Promise<SalesCampaign[]>;
+  getSalesCampaign(id: number, tenantId?: number | null): Promise<SalesCampaign | undefined>;
   createSalesCampaign(data: InsertSalesCampaign): Promise<SalesCampaign>;
-  updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>): Promise<SalesCampaign | undefined>;
-  deleteSalesCampaign(id: number): Promise<void>;
+  updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>, tenantId?: number | null): Promise<SalesCampaign | undefined>;
+  deleteSalesCampaign(id: number, tenantId?: number | null): Promise<void>;
   
   // Leads
   getSalesLeadsByCampaign(campaignId: number): Promise<SalesLead[]>;
@@ -1477,14 +1477,25 @@ export class DbStorage implements IStorage {
   
   // ===== CRM DE VENDAS =====
   
-  async getAllSalesCampaigns(): Promise<SalesCampaign[]> {
+  async getAllSalesCampaigns(tenantId?: number | null): Promise<SalesCampaign[]> {
+    // If tenantId is null or undefined, return all campaigns (for master users)
+    // If tenantId is a number, filter by that tenant
+    if (tenantId !== null && tenantId !== undefined) {
+      return await db.select().from(salesCampaigns)
+        .where(eq(salesCampaigns.tenantId, tenantId))
+        .orderBy(sql`${salesCampaigns.createdAt} DESC`);
+    }
     return await db.select().from(salesCampaigns)
       .orderBy(sql`${salesCampaigns.createdAt} DESC`);
   }
   
-  async getSalesCampaign(id: number): Promise<SalesCampaign | undefined> {
+  async getSalesCampaign(id: number, tenantId?: number | null): Promise<SalesCampaign | undefined> {
+    const conditions = [eq(salesCampaigns.id, id)];
+    if (tenantId !== null && tenantId !== undefined) {
+      conditions.push(eq(salesCampaigns.tenantId, tenantId));
+    }
     const [campaign] = await db.select().from(salesCampaigns)
-      .where(eq(salesCampaigns.id, id));
+      .where(and(...conditions));
     return campaign;
   }
   
@@ -1493,16 +1504,24 @@ export class DbStorage implements IStorage {
     return created;
   }
   
-  async updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>): Promise<SalesCampaign | undefined> {
+  async updateSalesCampaign(id: number, data: Partial<InsertSalesCampaign>, tenantId?: number | null): Promise<SalesCampaign | undefined> {
+    const conditions = [eq(salesCampaigns.id, id)];
+    if (tenantId !== null && tenantId !== undefined) {
+      conditions.push(eq(salesCampaigns.tenantId, tenantId));
+    }
     const [updated] = await db.update(salesCampaigns)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(salesCampaigns.id, id))
+      .where(and(...conditions))
       .returning();
     return updated;
   }
   
-  async deleteSalesCampaign(id: number): Promise<void> {
-    await db.delete(salesCampaigns).where(eq(salesCampaigns.id, id));
+  async deleteSalesCampaign(id: number, tenantId?: number | null): Promise<void> {
+    const conditions = [eq(salesCampaigns.id, id)];
+    if (tenantId !== null && tenantId !== undefined) {
+      conditions.push(eq(salesCampaigns.tenantId, tenantId));
+    }
+    await db.delete(salesCampaigns).where(and(...conditions));
   }
   
   async getSalesLeadsByCampaign(campaignId: number): Promise<SalesLead[]> {
