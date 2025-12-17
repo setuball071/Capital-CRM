@@ -4,6 +4,75 @@ import { z } from "zod";
 
 // ===== DATABASE TABLES =====
 
+// ===== MULTI-TENANT WHITE-LABEL SYSTEM =====
+
+// Tenants table - stores each white-label environment
+export const tenants = pgTable("tenants", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 50 }).notNull().unique(), // e.g., "goldcard", "consigcore"
+  name: varchar("name", { length: 255 }).notNull(), // Display name
+  logoUrl: varchar("logo_url", { length: 500 }),
+  faviconUrl: varchar("favicon_url", { length: 500 }),
+  themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, etc }
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Tenant Domains - maps domains to tenants
+export const tenantDomains = pgTable("tenant_domains", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  domain: varchar("domain", { length: 255 }).notNull().unique(), // e.g., "goldcarddigital.com.br"
+  isPrimary: boolean("is_primary").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// User Tenants - links users to their allowed tenants
+export const userTenants = pgTable("user_tenants", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  roleInTenant: varchar("role_in_tenant", { length: 50 }).default("vendedor"), // Override role per tenant if needed
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schemas for tenant system
+export const insertTenantSchema = createInsertSchema(tenants, {
+  key: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/, "Key must be lowercase alphanumeric with dashes/underscores"),
+  name: z.string().min(1).max(255),
+}).omit({ id: true, createdAt: true });
+
+export const insertTenantDomainSchema = createInsertSchema(tenantDomains, {
+  domain: z.string().min(1).max(255),
+}).omit({ id: true, createdAt: true });
+
+export const insertUserTenantSchema = createInsertSchema(userTenants).omit({ id: true, createdAt: true });
+
+// Types for tenant system
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+
+export type TenantDomain = typeof tenantDomains.$inferSelect;
+export type InsertTenantDomain = z.infer<typeof insertTenantDomainSchema>;
+
+export type UserTenant = typeof userTenants.$inferSelect;
+export type InsertUserTenant = z.infer<typeof insertUserTenantSchema>;
+
+// Theme schema for validation
+export const tenantThemeSchema = z.object({
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  accentColor: z.string().optional(),
+  backgroundColor: z.string().optional(),
+  textColor: z.string().optional(),
+  headerColor: z.string().optional(),
+  sidebarColor: z.string().optional(),
+});
+
+export type TenantTheme = z.infer<typeof tenantThemeSchema>;
+
+// ===== USER SYSTEM =====
+
 // User roles enum - includes legacy roles (master, coordenacao) and new roles (atendimento, operacional)
 export const USER_ROLES = ["master", "coordenacao", "atendimento", "operacional", "vendedor"] as const;
 export type UserRole = typeof USER_ROLES[number];
@@ -26,6 +95,7 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 50 }).notNull().default("vendedor"), // 'admin', 'coordenador', 'atendimento', 'operacional', 'vendedor'
   managerId: integer("manager_id").references(() => users.id, { onDelete: "set null" }), // For vendedor -> coordenador hierarchy
   isActive: boolean("is_active").notNull().default(true),
+  isMaster: boolean("is_master").notNull().default(false), // Master users can access all tenants
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -770,6 +840,7 @@ export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;
 // Campanhas de vendas
 export const salesCampaigns = pgTable("sales_campaigns", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant: nullable for migration
   nome: varchar("nome", { length: 255 }).notNull(),
   descricao: text("descricao"),
   origem: varchar("origem", { length: 100 }),
@@ -835,6 +906,7 @@ export type TipoContatoLead = typeof TIPOS_CONTATO_LEAD[number];
 
 export const salesLeads = pgTable("sales_leads", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant: nullable for migration
   campaignId: integer("campaign_id").references(() => salesCampaigns.id, { onDelete: "cascade" }).notNull(),
   cpf: varchar("cpf", { length: 14 }),
   nome: varchar("nome", { length: 255 }).notNull(),
@@ -846,7 +918,6 @@ export const salesLeads = pgTable("sales_leads", {
   uf: varchar("uf", { length: 10 }),
   observacoes: text("observacoes"),
   baseClienteId: integer("base_cliente_id").references(() => clientesPessoa.id, { onDelete: "set null" }),
-  // Novos campos de marcador
   leadMarker: varchar("lead_marker", { length: 30 }).notNull().default("NOVO"),
   retornoEm: timestamp("retorno_em"),
   motivo: varchar("motivo", { length: 255 }),
@@ -886,6 +957,7 @@ export const salesLeadEvents = pgTable("sales_lead_events", {
 // Histórico de interações com o lead (novo sistema de marcadores)
 export const leadInteractions = pgTable("lead_interactions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant: nullable for migration
   leadId: integer("lead_id").references(() => salesLeads.id, { onDelete: "cascade" }).notNull(),
   userId: integer("user_id").references(() => users.id, { onDelete: "set null" }).notNull(),
   tipoContato: varchar("tipo_contato", { length: 30 }).notNull(), // ligacao, whatsapp, outro
@@ -1082,6 +1154,7 @@ export const CONTACT_LABELS = [
 // Teams table - equipes de vendas
 export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant: nullable for migration
   name: varchar("name", { length: 255 }).notNull(),
   managerUserId: integer("manager_user_id").references(() => users.id, { onDelete: "set null" }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
