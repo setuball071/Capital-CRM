@@ -1,0 +1,151 @@
+1) Como o sistema decide o White Label
+
+Quando alguém abre:
+
+goldcarddigital.com.br
+
+consigcore.com.br
+
+consigneone.com.br
+
+O backend lê o host da requisição (req.headers.host), remove www e resolve um tenant.
+
+Tabela:
+
+tenants: id, key, name, theme_json
+
+tenant_domains: tenant_id, domain
+
+Exemplo:
+
+goldcarddigital.com.br -> tenant_key = goldcard
+
+consigcore.com.br -> tenant_key = consigcore
+
+consigneone.com.br -> tenant_key = consigneone
+
+O frontend pede um endpoint tipo:
+GET /api/tenant
+E recebe:
+{ tenantKey, brandName, logoUrl, colors... }
+
+Isso troca só identidade visual e textos.
+
+2) Como bloquear o usuário de entrar no White Label errado
+
+Você tem 2 opções boas.
+
+Opção A (simples e robusta)
+
+Cada usuário tem um tenant_id fixo (um ambiente só).
+
+users.tenant_id
+
+Regra:
+Se o usuário tentar logar no domínio que não é o tenant dele, bloqueia.
+Mensagem: “Seu usuário não tem permissão para acessar este ambiente. Use o link correto.”
+
+Opção B (mais flexível)
+
+Usuário pode pertencer a vários ambientes (por exemplo você e alguns coordenadores).
+
+user_tenants: user_id, tenant_id, role_in_tenant
+
+Regra:
+Usuário só loga se existir user_tenants para aquele tenant.
+Isso resolve teu caso de usuário Master que acessa tudo.
+
+Eu recomendo a Opção B.
+
+3) Como você vira “Master de tudo” sem bagunçar
+
+Cria um tipo de usuário:
+
+users.is_master boolean
+
+Regras:
+
+Se is_master = true, ele pode acessar qualquer tenant
+
+Se is_master = false, ele só acessa os tenants presentes em user_tenants
+
+E além disso, dentro do sistema, você pode ter um “Seletor de Ambiente” só para Master (um dropdown para alternar tenant), mas o tema continua seguindo o domínio.
+
+4) Base de dados única para todos, sem duplicar importação
+
+Dá pra manter uma base única sim.
+
+Estratégia:
+
+Tabelas globais (sem tenant_id):
+
+clientes_pessoa
+
+clientes_contratos
+
+snapshots (se você usar)
+Isso fica igual para todos.
+
+Tabelas operacionais (com tenant_id):
+
+sales_campaigns
+
+sales_leads
+
+lead_interactions
+
+pipeline settings
+Assim cada White Label enxerga só suas campanhas, leads, interações, mesmo usando a mesma base de clientes.
+
+Ou seja, a base é uma só, mas o trabalho comercial é separado por ambiente.
+
+5) Permissões por usuário dentro do ambiente
+
+Você já está fazendo isso por role.
+
+Sugestão de padrão:
+
+role = master
+
+role = admin
+
+role = coordinator
+
+role = seller
+
+role = partner
+
+Permissões em tabela:
+
+roles_permissions: role, permission_key
+
+E cada tela valida permission_key.
+
+6) Regra importante de segurança (o “bloqueio de verdade”)
+
+Não pode ser só no frontend. Tem que ser no backend em todas as rotas.
+
+Middleware padrão:
+
+Resolve tenant pelo domínio
+
+Autentica o usuário
+
+Verifica se o usuário pode acessar aquele tenant
+
+Injeta req.tenantId e segue
+Se falhar, 403.
+
+7) Como isso fica na prática no seu fluxo de criação de usuário
+
+Na tela “Criar usuário” você vai ter:
+
+Nome, email, senha
+
+Papel (role)
+
+Ambiente(s) que ele pode acessar (tenant)
+
+Opcional: time/equipe (para gestão por equipe depois)
+
+E pronto.

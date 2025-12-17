@@ -1,0 +1,779 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  LayoutDashboard, Gavel, Users, TrendingUp, AlertTriangle, CheckSquare, 
+  FileText, PieChart, ArrowRight, ShieldAlert, Wallet, Calendar, Clock, 
+  ChevronRight, PlusCircle, ArrowLeft, Search, Brain, Sparkles, Activity, 
+  MessageCircle, BarChart2, X, Send, Loader2, Bot, Trash2, AlertCircle, 
+  Settings, Edit3, Save, MoreVertical, Mail, Shield, LogOut, UserCircle, 
+  ExternalLink, Check, RefreshCw, Link, Cloud, UserPlus, MinusSquare, CheckSquare as CheckSquareIcon, Lock, Eye, EyeOff
+} from 'lucide-react';
+
+// --- CONFIGURAÇÃO GEMINI API ---
+// Para produção, recomenda-se injetar isso via variáveis de ambiente
+const apiKey = ""; 
+const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
+
+// --- DADOS E CONSTANTES ---
+
+// Usuários iniciais para Login (Mock Database)
+const INITIAL_USERS = [
+  { id: 1, name: "Camila Brito", role: "manager", label: "Gestora", avatar: "C", email: "camila@brito.consultoria", password: "123", access: "Admin", status: "Ativo" },
+  { id: 2, name: "Renata", role: "commercial", label: "Comercial", avatar: "R", email: "renata@grupogold.com", password: "123", access: "Admin", status: "Ativo" },
+  { id: 3, name: "Fábio Setubal", role: "manager", label: "Master", avatar: "F", email: "fabio.setuball@gmail.com", password: "maio3005", access: "Admin", status: "Ativo" },
+  { id: 4, name: "Thaís", role: "manager", label: "Sócio Jurídico", avatar: "T", email: "thais@grupogold.com", password: "123", access: "Visualizador", status: "Pendente" },
+  { id: 5, name: "Filipe", role: "commercial", label: "Financeiro", avatar: "F", email: "financeiro@grupogold.com", password: "123", access: "Editor", status: "Ativo" }
+];
+
+const DEFAULT_TEMPLATES = [
+  {
+    id: 'strategic',
+    label: 'Estratégica & Sócios',
+    description: 'Foco em decisões societárias, financeiras, riscos jurídicos e estrutura de capital.',
+    prompt: `Analise as notas como uma reunião de SÓCIOS/DIRETORIA. Foco obrigatório: 1. Decisões de alto nível. 2. Riscos Jurídicos. 3. Caixa. Estrutura JSON: { "title": "", "summary": "", "project": "", "date": "DD MMM YYYY", "duration": "", "participants": [], "decisions": [], "risks": [], "tags": [], "aiAnalysis": [] }`
+  },
+  {
+    id: 'commercial',
+    label: 'Análise Comercial',
+    description: 'Foco em funil de vendas, performance de time, comissões, metas e conversão.',
+    prompt: `Analise as notas como uma reunião de PERFORMANCE COMERCIAL. Foco obrigatório: 1. Números de produção. 2. Performance individual. 3. Comissionamento. Estrutura JSON idêntica.`
+  },
+  {
+    id: 'client',
+    label: 'Reunião com Cliente',
+    description: 'Foco em alinhamento de expectativas, entregáveis, prazos e satisfação.',
+    prompt: `Analise as notas como uma reunião de ALINHAMENTO COM CLIENTE. Foco obrigatório: 1. Acordos. 2. Prazos. 3. Dores. Estrutura JSON idêntica.`
+  }
+];
+
+const initialMeetingsData = [
+  {
+    id: 1,
+    ownerId: 1,
+    title: "Estruturação Financeira & Societária",
+    project: "Gold / Gold Card",
+    date: "16 Dez 2025",
+    duration: "1h 16min",
+    status: "Validado",
+    participants: ["Camila", "Renata", "Fábio", "Thaís"],
+    summary: "Definição de novo CNPJ, regra de caixa 70/30 e separação de custos.",
+    tags: ["Estratégico", "Societário"],
+    color: "amber",
+    decisions: ["Criação de CNPJ separado", "Regra 70/30 de caixa", "Reserva de 3 meses"],
+    risks: ["Risco jurídico no CPF do titular", "Passivo trabalhista"],
+    aiAnalysis: [
+       { name: "Camila Brito", role: "Consultoria", sentimentScore: 85, sentimentLabel: "Propositiva", aiSummary: "Atuou como âncora técnica.", moodColor: "text-blue-600" },
+       { name: "Fábio Setubal", role: "Sócio", sentimentScore: 60, sentimentLabel: "Pragmático", aiSummary: "Foco em viabilidade.", moodColor: "text-green-600" }
+    ]
+  },
+  {
+    id: 2,
+    ownerId: 2,
+    title: "Review Trimestral & Ajustes",
+    project: "Gold Group",
+    date: "15 Mar 2026",
+    duration: "Estimado: 2h",
+    status: "Agendado",
+    participants: ["Diretoria", "Gestores"],
+    summary: "Revisão das metas de Janeiro/Fevereiro e calibração de comissões.",
+    tags: ["Acompanhamento", "Comercial"],
+    color: "blue",
+    decisions: [],
+    risks: [],
+    aiAnalysis: []
+  },
+  {
+    id: 3,
+    ownerId: 2,
+    title: "Alinhamento de Vendas - Dezembro",
+    project: "Comercial Gold",
+    date: "20 Dez 2025",
+    duration: "45min",
+    status: "Realizado",
+    participants: ["Renata", "Time Comercial"],
+    summary: "Definição de escala de plantão de final de ano e metas flash.",
+    tags: ["Comercial", "Operacional"],
+    color: "green",
+    decisions: ["Escala de Natal definida", "Bônus por plantão aprovado"],
+    risks: ["Baixa adesão ao plantão"],
+    aiAnalysis: []
+  }
+];
+
+const defaultAiAnalysisData = [
+  { name: "Camila Brito", role: "Consultoria", sentimentScore: 85, sentimentLabel: "Propositiva", aiSummary: "Âncora técnica.", moodColor: "text-blue-600" },
+  { name: "Fábio Setubal", role: "Sócio", sentimentScore: 60, sentimentLabel: "Pragmático", aiSummary: "Foco em viabilidade.", moodColor: "text-green-600" }
+];
+
+// --- TELA DE LOGIN ---
+const LoginScreen = ({ onLogin, users }) => {
+  const [email, setEmail] = useState('fabio.setuball@gmail.com'); 
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    // Simulação de delay de rede
+    setTimeout(() => {
+      // Verifica no estado atual de usuários (permite login de usuários recém-criados)
+      const user = users.find(u => u.email === email && u.password === password);
+      
+      if (user) {
+        onLogin(user);
+      } else {
+        setError('Credenciais inválidas. Tente novamente.');
+        setIsLoading(false);
+      }
+    }, 800);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-up">
+        
+        {/* Header */}
+        <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-8 text-center">
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30 shadow-lg">
+            <span className="text-3xl font-bold text-white">G</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">GOLD GROUP</h1>
+          <p className="text-amber-100 text-sm mt-1 font-medium">Strategic Intelligence Hub</p>
+        </div>
+
+        {/* Form */}
+        <div className="p-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Acesso Restrito</h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">E-mail Corporativo</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Mail size={18} />
+                </div>
+                <input 
+                  type="email" 
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-800 font-medium"
+                  placeholder="seu.nome@grupogold.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Senha</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Lock size={18} />
+                </div>
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-800 font-medium"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-red-500 text-xs bg-red-50 p-3 rounded-lg border border-red-100 animate-shake">
+                <AlertCircle size={14} />
+                {error}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isLoading || !email || !password}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isLoading ? <Loader2 size={20} className="animate-spin" /> : <span>Entrar no Sistema</span>}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-xs text-slate-400">
+              Esqueceu sua senha? <a href="#" className="text-amber-600 hover:underline font-bold">Contate o suporte</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- PEQUENOS COMPONENTES DE UI ---
+
+const NavButton = ({ id, label, icon, active, onClick }) => (
+  <button onClick={() => onClick(id)} className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group ${active ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 translate-x-1' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+    <div className={`${active ? 'text-slate-900' : 'text-slate-500 group-hover:text-white'}`}>{icon}</div>
+    {label}
+  </button>
+);
+
+const UserSwitcher = ({ currentUser, onSwitch, users }) => (
+  <div className="px-4 py-4 mt-auto border-t border-slate-800 bg-slate-900/50">
+    <p className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-wider">Troca Rápida (Demo):</p>
+    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      {users.slice(0, 3).map(u => (
+        <button key={u.id} onClick={() => onSwitch(u)} className={`flex-shrink-0 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${currentUser.id === u.id ? 'bg-amber-500 text-slate-900 shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}>
+          {u.avatar}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+const CardSummary = ({ title, value, subtitle, icon }) => (
+  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+    <div className="flex justify-between items-start mb-4">
+      <div><p className="text-sm font-medium text-slate-500">{title}</p><h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3></div>
+      <div className="p-2 bg-slate-50 rounded-lg">{icon}</div>
+    </div>
+    <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">{subtitle}</p>
+  </div>
+);
+
+const Tag = ({ label, color }) => {
+  const colors = { blue: "bg-blue-100 text-blue-700", green: "bg-green-100 text-green-700", purple: "bg-purple-100 text-purple-700", red: "bg-red-100 text-red-700", amber: "bg-amber-100 text-amber-700" };
+  const selectedColor = colors[color] || colors.blue;
+  return <span className={`px-2 py-1 rounded text-xs font-semibold ${selectedColor}`}>{label}</span>;
+};
+
+const DecisionCard = ({ category, items, icon }) => (
+  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 h-full">
+    <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-3"><div className="p-2 bg-slate-50 rounded-lg">{icon}</div><h4 className="font-bold text-slate-800">{category}</h4></div>
+    <ul className="space-y-3">{items.map((item, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-600"><span className="mt-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0"></span><span className="leading-snug">{item}</span></li>))}</ul>
+  </div>
+);
+
+const BarChartColumn = ({ label, value, height, color }) => (
+  <div className="flex flex-col items-center justify-end h-full w-14 group">
+    <span className="mb-2 text-xs font-bold text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">{value}</span>
+    <div className={`w-full rounded-t-lg transition-all duration-500 hover:brightness-110 ${color}`} style={{ height: height }}></div>
+    <span className="mt-2 text-xs font-semibold text-slate-500">{label}</span>
+  </div>
+);
+
+const ListItem = ({ icon, text }) => (
+  <li className="flex items-center gap-3 text-slate-600 text-sm"><span className="text-green-500">{icon}</span>{text}</li>
+);
+
+const RiskItem = ({ title, desc, level }) => (
+  <div className="bg-white p-4 rounded-lg border border-red-100 shadow-sm">
+    <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800 text-sm">{title}</h4><span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded uppercase">{level}</span></div>
+    <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+  </div>
+);
+
+const TaskItem = ({ title, assignee, status, priority }) => (
+  <div className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+    <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${status === 'Pendente' ? 'bg-amber-400' : 'bg-blue-400'}`}></div><div><p className="font-medium text-slate-800 text-sm">{title}</p><p className="text-xs text-slate-500">Resp: {assignee}</p></div></div>
+    <div className="text-right"><span className={`text-[10px] font-bold px-2 py-1 rounded border ${priority === 'Alta' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{priority}</span></div>
+  </div>
+);
+
+const AIParticipantCard = ({ data }) => (
+  <div className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-slate-50/50">
+    <div className="flex justify-between items-start mb-3">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">{data.name?.charAt(0) || "?"}</div>
+        <div><h4 className="font-bold text-slate-800 text-sm">{data.name}</h4><p className="text-xs text-slate-500">{data.role}</p></div>
+      </div>
+      <div className={`text-xs font-bold px-2 py-1 rounded-md bg-white border shadow-sm ${data.moodColor || 'text-slate-600'}`}>{data.sentimentLabel}</div>
+    </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div><div className="flex justify-between text-[10px] text-slate-500 mb-1 uppercase font-semibold"><span>Sentimento</span><span>{data.sentimentScore}%</span></div><div className="h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full rounded-full ${data.sentimentScore > 50 ? 'bg-gradient-to-r from-blue-400 to-green-400' : 'bg-gradient-to-r from-red-400 to-amber-400'}`} style={{ width: `${data.sentimentScore}%` }}></div></div></div>
+        <div><div className="flex justify-between text-[10px] text-slate-500 mb-1 uppercase font-semibold"><span>Dominância</span><span>{data.speechDominance || 20}%</span></div><div className="h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-slate-400 rounded-full" style={{ width: `${data.speechDominance || 20}%` }}></div></div></div>
+      </div>
+      <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 relative"><Sparkles size={12} className="absolute top-2 right-2 text-purple-400" /><p className="text-xs text-purple-800 leading-relaxed italic">"{data.aiSummary}"</p></div>
+      {data.keywords && <div className="flex flex-wrap gap-1.5">{data.keywords.map((k, i) => (<span key={i} className="text-[10px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-500 font-medium">#{k}</span>))}</div>}
+    </div>
+  </div>
+);
+
+// --- MODAIS E PAINÉIS ---
+
+const DeleteConfirmationModal = ({ title = "Excluir?", text, onClose, onConfirm }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+      <div className="p-6 text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={32} className="text-red-500" /></div>
+        <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>
+        <p className="text-slate-500 text-sm leading-relaxed mb-6">{text || "Tem certeza que deseja continuar? Esta ação não pode ser desfeita."}</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={onClose} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">Cancelar</button>
+          <button onClick={onConfirm} className="px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg shadow-lg shadow-red-500/20 transition-all flex items-center gap-2">Sim, Excluir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const SettingsModal = ({ onClose, templates, onSave }) => {
+  const [localTemplates, setLocalTemplates] = useState(templates);
+  const [activeTemplateId, setActiveTemplateId] = useState(templates[0].id);
+  const activeTemplate = localTemplates.find(t => t.id === activeTemplateId);
+
+  const handlePromptChange = (e) => {
+    setLocalTemplates(prev => prev.map(t => t.id === activeTemplateId ? { ...t, prompt: e.target.value } : t));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50"><div className="flex items-center gap-2 text-slate-800"><Settings size={24} className="text-slate-500" /><h3 className="font-bold text-lg">Configurar Prompts da IA</h3></div><button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X size={20} /></button></div>
+        <div className="flex flex-1 overflow-hidden">
+          <div className="w-1/3 bg-slate-50 border-r border-slate-200 overflow-y-auto p-4 space-y-2">
+            <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Tipos de Reunião</h4>
+            {localTemplates.map(t => (<button key={t.id} onClick={() => setActiveTemplateId(t.id)} className={`w-full text-left p-3 rounded-lg text-sm font-medium transition-colors ${activeTemplateId === t.id ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'text-slate-600 hover:bg-white border border-transparent hover:border-slate-200'}`}>{t.label}</button>))}
+          </div>
+          <div className="w-2/3 flex flex-col p-6 bg-white">
+            <div className="mb-4"><h4 className="font-bold text-slate-800 text-lg">{activeTemplate.label}</h4><p className="text-sm text-slate-500">{activeTemplate.description}</p></div>
+            <div className="flex-1 flex flex-col"><label className="text-xs font-bold text-slate-500 uppercase mb-2">Instruções para o Gemini (Prompt do Sistema)</label><textarea className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm text-slate-600 focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none outline-none leading-relaxed" value={activeTemplate.prompt} onChange={handlePromptChange} /></div>
+          </div>
+        </div>
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3"><button onClick={onClose} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-lg">Cancelar</button><button onClick={() => onSave(localTemplates)} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-md flex items-center gap-2"><Save size={18} /> Salvar Configurações</button></div>
+      </div>
+    </div>
+  );
+};
+
+const AIChatPanel = ({ meeting, onClose }) => {
+  const [messages, setMessages] = useState([{ role: 'assistant', text: `Olá! Analisei a ata "${meeting.title}". O que gostaria de saber?` }]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userMsg = { role: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const context = JSON.stringify({ title: meeting.title, summary: meeting.summary, decisions: meeting.decisions, risks: meeting.risks, participants: meeting.participants });
+      const prompt = `Você é um assistente estratégico. Responda baseando-se EXCLUSIVAMENTE neste contexto: ${context}. Pergunta: "${userMsg.text}"`;
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      const data = await response.json();
+      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Desculpe, não consegui processar a resposta.";
+      setMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
+    } catch (error) { setMessages(prev => [...prev, { role: 'assistant', text: "Erro de conexão com a IA." }]); } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-2xl z-40 flex flex-col animate-slide-in-right border-l border-slate-200">
+      <div className="p-4 border-b border-slate-100 bg-slate-900 text-white flex justify-between items-center"><div className="flex items-center gap-2"><Bot size={20} className="text-amber-400" /><h3 className="font-bold">Chat com Ata</h3></div><button onClick={onClose} className="p-1 hover:bg-slate-700 rounded transition-colors"><X size={20} /></button></div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50" ref={scrollRef}>
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-slate-800 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none shadow-sm'}`}>{msg.text}</div></div>
+        ))}
+        {loading && <div className="flex justify-start"><div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2"><Loader2 size={14} className="animate-spin text-amber-500" /><span className="text-xs text-slate-400">Digitando...</span></div></div>}
+      </div>
+      <div className="p-4 border-t border-slate-200 bg-white"><div className="flex gap-2"><input type="text" className="flex-1 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Pergunte sobre a reunião..." value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} /><button onClick={handleSend} disabled={loading || !input.trim()} className="bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition-colors disabled:opacity-50"><Send size={18} /></button></div></div>
+    </div>
+  );
+};
+
+// --- MODAL: CRIAÇÃO/EDIÇÃO DE USUÁRIO ---
+const UserModal = ({ onClose, onSave, user }) => {
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    role: user?.role || 'Comercial',
+    access: user?.access || 'Visualizador',
+    password: user?.password || ''
+  });
+
+  const isEditing = !!user;
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.name || !formData.email || !formData.password) return;
+    onSave({ ...user, ...formData });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="font-bold text-lg text-slate-800">{isEditing ? 'Editar Usuário' : 'Cadastrar Novo Usuário'}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X size={20} className="text-slate-400" /></button>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome Completo</label>
+            <input type="text" name="name" className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Ex: João Silva" value={formData.name} onChange={handleChange} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">E-mail Corporativo</label>
+            <input type="email" name="email" className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="joao@grupogold.com" value={formData.email} onChange={handleChange} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Senha de Acesso</label>
+            <input type="text" name="password" className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Defina uma senha" value={formData.password} onChange={handleChange} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cargo / Função</label>
+              <select name="role" className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white" value={formData.role} onChange={handleChange}>
+                <option value="commercial">Comercial</option>
+                <option value="manager">Gestor</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nível de Acesso</label>
+              <select name="access" className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white" value={formData.access} onChange={handleChange}>
+                <option value="Visualizador">Visualizador</option>
+                <option value="Editor">Editor</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+          <button onClick={onClose} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+          <button onClick={handleSubmit} disabled={!formData.name || !formData.email || !formData.password} className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isEditing ? <Save size={18} /> : <UserPlus size={18} />} {isEditing ? 'Salvar Alterações' : 'Criar Usuário'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const NewMeetingAIModal = ({ onClose, onSave, templates }) => {
+  const [notes, setNotes] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0].id);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState('input'); 
+
+  const generateReport = async () => {
+    if (!notes.trim()) return;
+    setLoading(true);
+    setStep('loading');
+
+    const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+    const fullPrompt = `${selectedTemplate.prompt} NOTAS BRUTAS DA REUNIÃO: "${notes}"`;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+      });
+      const data = await response.json();
+      let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsedData = JSON.parse(generatedText);
+      if (!parsedData.tags) parsedData.tags = [];
+      parsedData.tags.push(selectedTemplate.label);
+      onSave(parsedData);
+    } catch (error) { console.error("Erro Gemini:", error); alert("Erro ao gerar relatório."); setStep('input'); } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-amber-50 to-white"><div className="flex items-center gap-2 text-amber-600"><Sparkles size={24} /><h3 className="font-bold text-lg text-slate-800">Nova Ata com IA</h3></div><button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400" /></button></div>
+        <div className="p-6 flex-1 overflow-y-auto">
+          {step === 'input' && (
+            <div className="space-y-4">
+              <div><label className="block text-sm font-bold text-slate-700 mb-2">Tipo de Reunião</label><div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{templates.map(t => (<button key={t.id} onClick={() => setSelectedTemplateId(t.id)} className={`p-3 rounded-lg border text-left text-sm transition-all ${selectedTemplateId === t.id ? 'border-amber-500 bg-amber-50 text-amber-900 ring-1 ring-amber-500' : 'border-slate-200 text-slate-600 hover:border-amber-300'}`}><div className="font-bold mb-1">{t.label}</div><div className="text-xs opacity-70 line-clamp-2">{t.description}</div></button>))}</div></div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-2">Anotações / Transcrição</label><textarea className="w-full h-48 p-4 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none resize-none text-sm leading-relaxed" placeholder="Cole aqui o texto bagunçado da reunião..." value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+            </div>
+          )}
+          {step === 'loading' && (<div className="flex flex-col items-center justify-center h-64 text-center"><Loader2 size={48} className="text-amber-500 animate-spin mb-4" /><h4 className="font-bold text-slate-700 text-lg">Processando Ata...</h4><p className="text-slate-500 text-sm mt-2">Aplicando modelo de análise específico.</p></div>)}
+        </div>
+        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">{step === 'input' && (<><button onClick={onClose} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button><button onClick={generateReport} disabled={!notes.trim()} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"><Sparkles size={18} /> Gerar Relatório</button></>)}</div>
+      </div>
+    </div>
+  );
+};
+
+// --- VISUALIZAÇÕES PRINCIPAIS ---
+
+const TeamView = ({ team, currentUser, onAddUserClick, onEditUser, onDeleteUser, onMassDelete }) => {
+  const canEdit = currentUser.role === 'manager';
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const toggleSelect = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  const toggleSelectAll = () => setSelectedIds(selectedIds.length === team.length ? [] : team.map(u => u.id));
+
+  return (
+    <div className="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in">
+      <div className="flex justify-between items-end mb-8">
+        <div><h2 className="text-3xl font-bold text-slate-800 mb-2">Equipe & Acessos</h2><p className="text-slate-500">{currentUser.role === 'manager' ? "Gerenciamento total de usuários e permissões." : "Visualização do time e contatos."}</p></div>
+        {canEdit && (
+          <div className="flex gap-3">
+            {selectedIds.length > 0 && (<button onClick={() => onMassDelete(selectedIds)} className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-red-100 transition-colors"><Trash2 size={16} /> Excluir ({selectedIds.length})</button>)}
+            <button onClick={onAddUserClick} className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 hover:bg-slate-800 transition-colors"><UserPlus size={16} /> Criar Usuário</button>
+          </div>
+        )}
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+         <div className="overflow-x-auto">
+            <table className="w-full">
+               <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                     {canEdit && (<th className="w-12 px-6 py-4 text-left"><button onClick={toggleSelectAll} className="text-slate-400 hover:text-slate-600">{selectedIds.length === team.length && team.length > 0 ? <CheckSquareIcon size={20} className="text-amber-500" /> : <MinusSquare size={20} />}</button></th>)}
+                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Membro</th>
+                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Cargo / Função</th>
+                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Acesso</th>
+                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                     {canEdit && <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>}
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-100">
+                  {team.map(member => (
+                     <tr key={member.id} className={`hover:bg-slate-50/50 transition-colors ${selectedIds.includes(member.id) ? 'bg-amber-50/30' : ''}`}>
+                        {canEdit && (<td className="px-6 py-4"><button onClick={() => toggleSelect(member.id)} className="text-slate-400 hover:text-amber-500">{selectedIds.includes(member.id) ? <CheckSquareIcon size={20} className="text-amber-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded" />}</button></td>)}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 border-2 border-white shadow-sm">{member.avatar}</div><div><div className="text-sm font-bold text-slate-800">{member.name}</div><div className="text-xs text-slate-500">{member.email}</div></div></div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-slate-600">{member.role === 'manager' ? 'Gestor' : 'Comercial'}</div></td>
+                        <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${member.access === 'Admin' ? 'bg-purple-100 text-purple-800' : member.access === 'Editor' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'}`}>{member.access}</span></td>
+                        <td className="px-6 py-4 whitespace-nowrap"><span className={`flex items-center gap-1.5 text-xs font-medium ${member.status === 'Ativo' ? 'text-green-600' : 'text-amber-600'}`}><span className={`w-1.5 h-1.5 rounded-full ${member.status === 'Ativo' ? 'bg-green-500' : 'bg-amber-500'}`}></span>{member.status}</span></td>
+                        {canEdit && (<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => onEditUser(member)} className="text-slate-400 hover:text-blue-600 p-2"><Edit3 size={16} /></button><button onClick={() => onDeleteUser(member.id)} className="text-slate-400 hover:text-red-600 p-2"><Trash2 size={16} /></button></td>)}
+                     </tr>
+                  ))}
+               </tbody>
+            </table>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const MeetingListView = ({ onSelectMeeting, meetings, onNewMeeting, onDeleteMeeting, currentUser }) => (
+  <div className="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in">
+    <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4"><div><h2 className="text-3xl font-bold text-slate-800 mb-2">Histórico de Reuniões</h2><p className="text-slate-500">{currentUser.role === 'manager' ? "Visão Geral: Todas as reuniões e atas do grupo." : "Minha Visão: Reuniões e atas da sua alçada."}</p></div></div>
+    {meetings.length === 0 ? (
+      <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
+         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300"><LayoutDashboard size={32} /></div>
+         <h3 className="text-lg font-bold text-slate-700">Nenhuma reunião encontrada</h3>
+         <p className="text-slate-500 mb-6 max-w-md mx-auto">Você não possui atas visíveis neste perfil ou ainda não há registros.</p>
+         {currentUser.role === 'manager' && (<button onClick={onNewMeeting} className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors inline-flex items-center gap-2"><PlusCircle size={18} /> Criar Nova Ata</button>)}
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {meetings.map((meeting) => (
+          <div key={meeting.id} onClick={() => onSelectMeeting(meeting.id)} className="group bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-xl hover:border-amber-400/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-${meeting.color || 'slate'}-50 rounded-bl-full -mr-10 -mt-10 group-hover:bg-amber-50 transition-colors opacity-50`}></div>
+            {(currentUser.role === 'manager' || currentUser.id === meeting.ownerId) && (<button onClick={(e) => { e.stopPropagation(); onDeleteMeeting(meeting.id); }} className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all z-10 opacity-0 group-hover:opacity-100 shadow-sm" title="Excluir Ata"><Trash2 size={16} /></button>)}
+            <div className="relative"><span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${meeting.status === 'Validado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{meeting.status}</span><h3 className="text-lg font-bold text-slate-800 mt-3 mb-2 group-hover:text-amber-600 transition-colors">{meeting.title}</h3><p className="text-sm text-slate-500 line-clamp-2 mb-4">{meeting.summary}</p><div className="flex items-center gap-2 text-xs text-slate-400"><Calendar size={12}/> {meeting.date}</div></div>
+          </div>
+        ))}
+         {currentUser.role === 'manager' && (<div onClick={onNewMeeting} className="bg-slate-50 rounded-2xl p-6 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center hover:bg-slate-100 cursor-pointer group min-h-[200px] transition-colors"><PlusCircle size={32} className="text-slate-300 group-hover:text-amber-500 mb-2 transition-colors"/><span className="font-bold text-slate-500 group-hover:text-slate-700">Nova Ata com IA ✨</span></div>)}
+      </div>
+    )}
+  </div>
+);
+
+// --- COMPONENTE PRINCIPAL (DEFINIDO NO FINAL) ---
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(null); 
+  const [meetings, setMeetings] = useState(initialMeetingsData);
+  const [team, setTeam] = useState(INITIAL_USERS); // Usando a constante com o login do Fabio
+  const [activeSection, setActiveSection] = useState('meetings'); 
+  const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  const [activeTab, setActiveTab] = useState('resumo');
+  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+  
+  const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null); 
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ isOpen: false, type: null, id: null, ids: [] });
+  
+  const handleLogin = (user) => setCurrentUser(user);
+  const handleLogout = () => { setCurrentUser(null); setActiveSection('meetings'); setSelectedMeetingId(null); };
+
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} users={team} />;
+
+  const getFilteredMeetings = () => {
+    if (currentUser.role === 'manager') return meetings;
+    return meetings.filter(m => m.ownerId === currentUser.id);
+  };
+
+  const filteredMeetings = getFilteredMeetings();
+  const activeMeeting = meetings.find(m => m.id === selectedMeetingId);
+
+  const handleNavigate = (section) => { setActiveSection(section); setSelectedMeetingId(null); setShowChat(false); };
+  const handleSelectMeeting = (id) => { setSelectedMeetingId(id); setActiveSection('meetings'); };
+
+  const handleAddMeeting = (newMeetingData) => {
+    const newId = meetings.length > 0 ? Math.max(...meetings.map(m => m.id)) + 1 : 1;
+    const meeting = { ...newMeetingData, id: newId, ownerId: currentUser.id, status: "Gerado via IA", color: "purple", tags: newMeetingData.tags || ["Novo", "IA Generated"] };
+    setMeetings([meeting, ...meetings]); setShowNewMeetingModal(false); setSelectedMeetingId(newId);
+  };
+
+  const handleSaveUser = (userData) => {
+    if (editingUser) {
+        setTeam(prev => prev.map(u => u.id === userData.id ? { ...userData, id: u.id, status: u.status, avatar: u.avatar } : u));
+    } else {
+        const newId = team.length > 0 ? Math.max(...team.map(u => u.id)) + 1 : 1;
+        const newUser = { id: newId, ...userData, status: "Ativo", avatar: userData.name.charAt(0).toUpperCase() };
+        setTeam([...team, newUser]);
+    }
+    setShowUserModal(false); setEditingUser(null);
+  };
+
+  const openEditUser = (user) => { setEditingUser(user); setShowUserModal(true); };
+  const openCreateUser = () => { setEditingUser(null); setShowUserModal(true); };
+
+  const requestDeleteMeeting = (id) => setDeleteConfirmation({ isOpen: true, type: 'meeting', id, ids: [] });
+  const requestDeleteUser = (id) => setDeleteConfirmation({ isOpen: true, type: 'user', id, ids: [] });
+  const requestMassDeleteUsers = (ids) => setDeleteConfirmation({ isOpen: true, type: 'mass_users', id: null, ids });
+
+  const confirmDelete = () => {
+    const { type, id, ids } = deleteConfirmation;
+    if (type === 'meeting' && id) {
+      setMeetings(prev => prev.filter(m => m.id !== id));
+      if (selectedMeetingId === id) setSelectedMeetingId(null);
+    } else if (type === 'user' && id) {
+      setTeam(prev => prev.filter(u => u.id !== id));
+    } else if (type === 'mass_users' && ids.length > 0) {
+      setTeam(prev => prev.filter(u => !ids.includes(u.id)));
+    }
+    setDeleteConfirmation({ isOpen: false, type: null, id: null, ids: [] });
+  };
+
+  const getDeleteMessage = () => {
+      if (deleteConfirmation.type === 'meeting') return { title: "Excluir Ata?", text: "Esta ação removerá o relatório e todas as análises da IA permanentemente." };
+      if (deleteConfirmation.type === 'user') return { title: "Remover Usuário?", text: "O usuário perderá acesso imediato ao sistema." };
+      if (deleteConfirmation.type === 'mass_users') return { title: `Excluir ${deleteConfirmation.ids.length} Usuários?`, text: "Todos os usuários selecionados serão removidos permanentemente." };
+      return { title: "Excluir?", text: "Tem certeza?" };
+  };
+
+  const handleSaveTemplates = (updatedTemplates) => { setTemplates(updatedTemplates); setShowSettingsModal(false); };
+
+  const ResumoTab = ({ meeting, analysis }) => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardSummary title="Foco Principal" value={meeting.tags?.[0] || "Geral"} subtitle={meeting.title} icon={<TrendingUp className="text-blue-500"/>} />
+        <CardSummary title="Duração" value={meeting.duration} subtitle={meeting.date} icon={<Clock className="text-green-500"/>} />
+        <CardSummary title="Participantes" value={meeting.participants?.length || 0} subtitle="Envolvidos" icon={<Users className="text-amber-500"/>} />
+      </div>
+      {analysis && analysis.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+            <div><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Sparkles className="text-purple-600" size={20} /> Análise IA</h3><p className="text-sm text-slate-500">Leitura de sentimento, contribuição e engajamento.</p></div>
+            <div className="hidden md:flex items-center gap-2 text-xs font-semibold bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100"><Brain size={14} /> AI Processed</div>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">{analysis.map((person, index) => (<AIParticipantCard key={index} data={person} />))}</div>
+        </div>
+      ) : (<div className="bg-slate-50 p-6 rounded-xl border border-dashed border-slate-300 text-center text-slate-500"><Brain className="mx-auto mb-2 opacity-50" /><p>Análise de IA não disponível.</p></div>)}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="text-lg font-bold mb-4 text-slate-800">Overview</h3>
+        <p className="text-slate-600 mb-4 leading-relaxed whitespace-pre-line">{meeting.summary}</p>
+        <div className="flex flex-wrap gap-2 mt-4">{meeting.tags?.map((tag, i) => (<Tag key={i} label={tag} color={i % 2 === 0 ? "blue" : "purple"} />))}</div>
+      </div>
+    </div>
+  );
+
+  const renderTabContent = (activeTab, meetingData) => {
+    const isDefaultMeeting = meetingData.id === 1;
+    const analysisData = isDefaultMeeting ? defaultAiAnalysisData : (meetingData.aiAnalysis || []);
+    switch (activeTab) {
+      case 'resumo': return <ResumoTab meeting={meetingData} analysis={analysisData} />;
+      case 'decisoes': return <DecisoesTab meeting={meetingData} />;
+      case 'financeiro': return <FinanceiroTab />;
+      case 'pessoas': return <PessoasTab />;
+      case 'riscos': return <RiscosTab meeting={meetingData} />;
+      case 'pendencias': return <PendenciasTab />;
+      default: return <ResumoTab meeting={meetingData} analysis={analysisData} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col md:flex-row overflow-hidden relative">
+      <aside className="w-full md:w-72 bg-slate-900 text-white flex-shrink-0 flex flex-col shadow-xl z-20 transition-all duration-300">
+        <div className="p-6 border-b border-slate-700 bg-slate-900">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 ${activeMeeting ? 'bg-slate-800 text-slate-400' : 'bg-amber-500 text-slate-900'}`}><span className="font-bold text-xl">G</span></div>
+            <div><h1 className="font-bold text-lg tracking-tight leading-none">GOLD GROUP</h1><p className="text-xs text-slate-400 mt-1">Strategic Hub</p></div>
+          </div>
+        </div>
+        <div className="px-6 py-4 bg-slate-800/30 border-b border-slate-800 flex items-center gap-3">
+           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center font-bold text-slate-900 shadow-md">{currentUser.avatar}</div>
+           <div className="flex-1 overflow-hidden"><p className="text-sm font-bold text-white truncate">{currentUser.name}</p><p className="text-xs text-slate-400 truncate flex items-center gap-1"><Shield size={10} className={currentUser.role === 'manager' ? 'text-purple-400' : 'text-blue-400'} />{currentUser.label}</p></div>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
+          {!activeMeeting ? (
+            <>
+              <div className="px-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Menu Principal</div>
+              <NavButton label="Todas as Reuniões" icon={<LayoutDashboard size={18} />} active={activeSection === 'meetings'} onClick={() => handleNavigate('meetings')} />
+              <NavButton label="Equipe & Acessos" icon={<Users size={18} />} active={activeSection === 'team'} onClick={() => handleNavigate('team')} />
+               {currentUser.role === 'manager' && (<div className="pt-4 mt-4 border-t border-slate-800"><div className="px-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Configuração</div><NavButton label="Prompts & IA" icon={<Settings size={18} />} active={false} onClick={() => setShowSettingsModal(true)} /></div>)}
+            </>
+          ) : (
+            <>
+              <button onClick={() => handleNavigate('meetings')} className="w-full flex items-center gap-2 px-4 py-3 mb-4 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-dashed border-slate-700"><ArrowLeft size={16} /> Voltar para Lista</button>
+              <div className="px-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Navegação do Relatório</div>
+              <NavButton id="resumo" label="Resumo & IA Insights" icon={<Brain size={18} />} active={activeTab === 'resumo'} onClick={setActiveTab} />
+              <NavButton id="decisoes" label="Decisões Chave" icon={<Gavel size={18} />} active={activeTab === 'decisoes'} onClick={setActiveTab} />
+              <NavButton id="financeiro" label="Financeiro & Projeções" icon={<TrendingUp size={18} />} active={activeTab === 'financeiro'} onClick={setActiveTab} />
+              <NavButton id="pessoas" label="Pessoas & Estrutura" icon={<Users size={18} />} active={activeTab === 'pessoas'} onClick={setActiveTab} />
+              <NavButton id="riscos" label="Riscos & Jurídico" icon={<ShieldAlert size={18} />} active={activeTab === 'riscos'} onClick={setActiveTab} />
+              <NavButton id="pendencias" label="Pendências" icon={<CheckSquare size={18} />} active={activeTab === 'pendencias'} onClick={setActiveTab} />
+              <div className="mt-6 px-3"><button onClick={() => setShowChat(!showChat)} className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all shadow-lg ${showChat ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-amber-500 border border-amber-500/30'}`}><Sparkles size={16} />{showChat ? 'Fechar Chat IA' : 'Chat com Ata'}</button></div>
+            </>
+          )}
+        </nav>
+        <UserSwitcher currentUser={currentUser} onSwitch={setCurrentUser} users={team} />
+        <div className="p-4 bg-slate-800/50 border-t border-slate-800 backdrop-blur-sm space-y-2">
+          {!activeMeeting ? currentUser.role === 'manager' && (<button onClick={() => setShowNewMeetingModal(true)} className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-slate-900 py-2.5 px-4 rounded-lg text-sm font-bold transition-colors shadow-lg shadow-amber-500/20"><PlusCircle size={16} /> Nova Ata (IA)</button>) : (<div className="text-xs text-slate-400 space-y-1"><p className="font-medium text-white line-clamp-1">{activeMeeting.title}</p><div className="flex items-center gap-2"><Clock size={12} /> {activeMeeting.duration}</div></div>)}
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 py-2 px-4 rounded-lg text-xs font-bold transition-all border border-transparent hover:border-red-900/50"><LogOut size={14} /> Sair</button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto bg-slate-50 relative">
+        {selectedMeetingId ? (
+          <div className="p-4 md:p-8 animate-fade-in pb-24 md:pb-8">
+            <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div><div className="flex items-center gap-2 text-sm text-slate-500 mb-2"><span className="hover:underline cursor-pointer" onClick={() => handleNavigate('meetings')}>Reuniões</span><ChevronRight size={14} /><span>{activeMeeting.date}</span></div><h2 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-3">{activeTab === 'resumo' && 'Resumo & Insights IA'}{activeTab === 'decisoes' && 'Decisões e Definições'}{activeTab === 'financeiro' && 'Planejamento Financeiro'}{activeTab === 'pessoas' && 'Estrutura & Pessoas'}{activeTab === 'riscos' && 'Matriz de Riscos'}{activeTab === 'pendencias' && 'Próximos Passos'}</h2><p className="text-slate-500 mt-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500"></span>Projeto: {activeMeeting.project}</p></div>
+              <div className="flex items-center gap-3"><span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeMeeting.status === 'Validado' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>{activeMeeting.status}</span>{(currentUser.role === 'manager' || currentUser.id === activeMeeting.ownerId) && (<button onClick={() => requestDeleteMeeting(activeMeeting.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Excluir esta ata"><Trash2 size={20} /></button>)}</div>
+            </header>
+            <div className="bg-white/50 rounded-2xl p-1">{renderTabContent(activeTab, activeMeeting)}</div>
+          </div>
+        ) : (
+          <>
+            {activeSection === 'meetings' && (<MeetingListView onSelectMeeting={handleSelectMeeting} meetings={filteredMeetings} onNewMeeting={() => setShowNewMeetingModal(true)} onDeleteMeeting={requestDeleteMeeting} currentUser={currentUser} />)}
+            {activeSection === 'team' && (<TeamView team={team} currentUser={currentUser} onAddUserClick={openCreateUser} onEditUser={openEditUser} onDeleteUser={requestDeleteUser} onMassDelete={requestMassDeleteUsers} />)}
+          </>
+        )}
+        {showNewMeetingModal && (<NewMeetingAIModal onClose={() => setShowNewMeetingModal(false)} onSave={handleAddMeeting} templates={templates} />)}
+        {showUserModal && (<UserModal onClose={() => setShowUserModal(false)} onSave={handleSaveUser} user={editingUser} />)}
+        {showSettingsModal && (<SettingsModal onClose={() => setShowSettingsModal(false)} templates={templates} onSave={handleSaveTemplates} />)}
+        {deleteConfirmation.isOpen && (<DeleteConfirmationModal title={getDeleteMessage().title} text={getDeleteMessage().text} onClose={() => setDeleteConfirmation({ isOpen: false, type: null, id: null, ids: [] })} onConfirm={confirmDelete} />)}
+        {activeMeeting && showChat && (<AIChatPanel meeting={activeMeeting} onClose={() => setShowChat(false)} />)}
+      </main>
+    </div>
+  );
+}
