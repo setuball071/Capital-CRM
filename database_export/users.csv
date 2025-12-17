@@ -1,0 +1,4 @@
+id,name,email,password_hash,role,is_active,created_at,manager_id
+21,Administrador,admin@sistema.com,$2b$10$hgEW7DmJx.P1q8zU2W3H/.dkxECb9rYzoxCYBUHt2J3xh2AgKXuyW,master,t,2025-11-24 15:38:00.337858,
+30,Coordenador,operacional@teste.com,$2b$10$Bwjeqj2khirnfo.Rl4otCeR1YAuaNq0KvcPHclw8yl.gpChqmIiWq,coordenacao,t,2025-12-05 21:21:52.643071,
+45,vendedor,venda@teste.com,$2b$10$lpUpNV9On9lZSGozY9ydFeU1ZPSLEztro6sPMk52ApJzH0NhJPGQ2,vendedor,t,2025-12-16 13:03:26.140538,30

@@ -1,0 +1,17 @@
+id,user_id,licao_id,nivel_id,concluida,respostas_atividade,concluida_em
+1,21,1.1,1,t,Bom dia fulano aqui é fabio da consigone como esta?,2025-12-11 16:15:34.29
+2,21,1.2,1,t,"Me conta um pouco sobre os empréstimos que você tem atualmente...""
+""O que te fez pensar em buscar uma alternativa agora?""
+""Como está impactando no seu dia a dia esses compromissos?""",2025-12-11 16:16:22.666
+3,21,1.3,1,t,"Cliente: ""Minha parcela está muito alta""
+Corretor: ""Entendo... e como isso está afetando seu dia a dia? Você consegue fazer outras coisas que gostaria?""",2025-12-11 16:27:46.71
+4,21,1.4,1,t,"Cliente: ""Minha parcela está muito alta""
+Corretor: ""Entendo... e como isso está afetando seu dia a dia? Você consegue fazer outras coisas que gostaria?""Cliente: ""Minha parcela está muito alta""
+Corretor: ""Entendo... e como isso está afetando seu dia a dia? Você consegue fazer outras coisas que gostaria?""",2025-12-11 16:28:01.232
+5,21,1.5,1,t,"Cliente: ""Minha parcela está muito alta""
+Corretor: ""Entendo... e como isso está afetando seu dia a dia? Você consegue fazer outras coisas que gostaria?""",2025-12-11 16:28:06.617
+6,45,1.1,1,t,"""Bom dia, [nome do cliente]! Aqui é o João da ConsigOne. Tudo bem por aí? Espero que esteja tendo um ótimo dia! Estou entrando em contato porque identifiquei uma oportunidade que pode ser muito interessante para você...""",2025-12-16 14:39:46.096
+7,45,1.2,1,t,"""Bom dia, [nome do cliente]! Aqui é o João da ConsigOne. Tudo bem por aí? Espero que esteja tendo um ótimo dia! Estou entrando em contato porque identifiquei uma oportunidade que pode ser muito interessante para você...""",2025-12-16 14:39:51.258
+8,45,1.3,1,t,"""Bom dia, [nome do cliente]! Aqui é o João da ConsigOne. Tudo bem por aí? Espero que esteja tendo um ótimo dia! Estou entrando em contato porque identifiquei uma oportunidade que pode ser muito interessante para você...""",2025-12-16 14:39:55.568
+9,45,1.4,1,t,"""Bom dia, [nome do cliente]! Aqui é o João da ConsigOne. Tudo bem por aí? Espero que esteja tendo um ótimo dia! Estou entrando em contato porque identifiquei uma oportunidade que pode ser muito interessante para você...""",2025-12-16 14:40:00.81
+10,45,1.5,1,t,"""Bom dia, [nome do cliente]! Aqui é o João da ConsigOne. Tudo bem por aí? Espero que esteja tendo um ótimo dia! Estou entrando em contato porque identifiquei uma oportunidade que pode ser muito interessante para você...""",2025-12-16 14:40:05.825

@@ -1,0 +1,1 @@
+id,pessoa_id,tipo_contrato,banco,valor_parcela,competencia,base_tag,dados_brutos,saldo_devedor,parcelas_restantes,numero_contrato,parcelas_pagas,prazo_total,status,started_at,ended_at

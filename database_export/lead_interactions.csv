@@ -1,0 +1,8 @@
+id,lead_id,user_id,tipo_contato,lead_marker,motivo,observacao,retorno_em,created_at,contact_id,margem_valor,proposta_valor_estimado
+1,101,30,ligacao,INTERESSADO,,,,2025-12-13 17:53:46.977608,,,
+2,103,30,ligacao,INTERESSADO,,,,2025-12-13 17:54:14.259928,,,
+10,105,30,ligacao,VENDIDO,,,,2025-12-13 18:38:58.228202,,,
+11,113,30,whatsapp,INTERESSADO,,,,2025-12-14 00:09:25.657739,,,
+12,117,30,whatsapp,VENDIDO,,,,2025-12-14 03:29:13.036307,,250.00,25000.00
+13,4,30,whatsapp,INTERESSADO,,,,2025-12-15 23:43:08.942657,,250.00,2500.00
+14,101,30,ligacao,PROPOSTA_ENVIADA,,,,2025-12-15 23:44:32.008878,17,2500.00,25000.00

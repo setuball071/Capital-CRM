@@ -1,0 +1,4 @@
+id,user_id,client_name,agreement_id,agreement_name,bank,term_months,table_name,coefficient,monthly_payment,outstanding_balance,total_contract_value,client_refund,created_at,operation_type
+6,21,"",12,SIAPE CLT,PH Tech,96,"3418349 - DIG+ SIAPE CLT - REFIN COMPRA DE DIVIDA CC - 3,49%",0.0301479510,228.00,5700.00,6050.16,350.16,2025-11-24 19:37:03.341878,credit_card
+7,21,"",10,Gov SP,NEO,96,NCDT_096-399_409485 - CC - CB - CD,0.0409485000,250.00,5000.00,6105.23,1105.23,2025-11-25 15:33:54.307988,benefit_card
+8,21,Cliente Teste Dashboard,13,SIAPE,NEO,96,NCDT_096-299_318661 - CC-CB_CD,0.0318661930,300.00,3000.00,9414.37,6414.37,2025-12-01 01:06:29.405645,credit_card

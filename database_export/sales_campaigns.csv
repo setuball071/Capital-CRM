@@ -1,0 +1,2 @@
+id,nome,descricao,origem,convenio,uf,status,total_leads,leads_disponiveis,leads_distribuidos,created_by,created_at,updated_at,filtros_json
+3,teste,testando,,siape,"",ativa,34733,46247,250,21,2025-12-12 00:40:40.253119,2025-12-15 23:41:59.301,

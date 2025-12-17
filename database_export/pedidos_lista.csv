@@ -1,0 +1,4 @@
+id,coordenador_id,filtros_usados,quantidade_registros,tipo,status,custo_estimado,custo_final,criado_em,atualizado_em,status_financeiro,arquivo_path,arquivo_gerado_em,nome_pacote
+2,21,"{""orgao"": ""Teste"", ""convenio"": ""SIAPE""}",100,exportacao_base,aprovado,,,2025-12-06 01:50:25.103022,2025-12-06 01:51:41.623,,,,
+3,21,"{""convenio"": ""SIAPE""}",61,exportacao_base,aprovado,,,2025-12-07 00:41:24.822142,2025-12-07 00:55:57.865,,,,
+4,21,"{""idade_max"": 70}",61,exportacao_base,processado,3.05,3.05,2025-12-07 01:19:23.473196,2025-12-07 11:39:27.164,pendente,/tmp/exports/lista-clientes-4-1765107567163.csv,2025-12-07 11:39:27.164,
