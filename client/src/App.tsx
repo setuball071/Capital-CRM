@@ -34,6 +34,7 @@ import VendasPipelinePage from "@/pages/vendas-pipeline";
 import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import CrmConsultaClientePage from "@/pages/crm-consulta-cliente";
 import ConfigPromptsPage from "@/pages/config-prompts";
+import AdminTenantsPage from "@/pages/admin-tenants";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -342,6 +343,9 @@ function Router() {
               </Route>
               <Route path="/config-prompts">
                 {() => <ProtectedRoute component={ConfigPromptsPage} />}
+              </Route>
+              <Route path="/admin/tenants">
+                {() => <MasterRoute component={AdminTenantsPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

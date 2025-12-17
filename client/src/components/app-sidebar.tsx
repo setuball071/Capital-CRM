@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2 } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -119,6 +119,7 @@ export function AppSidebar() {
       icon: Settings,
       items: [
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
+        { title: "Ambientes", url: "/admin/tenants", icon: Building2, masterOnly: true },
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },

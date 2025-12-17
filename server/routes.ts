@@ -7008,6 +7008,219 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro ao buscar equipe" });
     }
   });
+
+  // ===== TENANT MANAGEMENT ROUTES (Master Only) =====
+
+  // GET /api/admin/tenants - List all tenants
+  app.get("/api/admin/tenants", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const result = await db.select().from(tenants);
+      res.json(result);
+    } catch (error) {
+      console.error("Get tenants error:", error);
+      res.status(500).json({ message: "Erro ao buscar tenants" });
+    }
+  });
+
+  // POST /api/admin/tenants - Create tenant
+  app.post("/api/admin/tenants", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { key, name, logoUrl, faviconUrl, themeJson } = req.body;
+      
+      if (!key || !name) {
+        return res.status(400).json({ message: "key e name são obrigatórios" });
+      }
+      
+      const existing = await db.select().from(tenants).where(eq(tenants.key, key)).limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ message: "Tenant com esta key já existe" });
+      }
+      
+      const result = await db.insert(tenants).values({
+        key,
+        name,
+        logoUrl,
+        faviconUrl,
+        themeJson,
+        isActive: true,
+      }).returning();
+      
+      res.status(201).json(result[0]);
+    } catch (error) {
+      console.error("Create tenant error:", error);
+      res.status(500).json({ message: "Erro ao criar tenant" });
+    }
+  });
+
+  // PUT /api/admin/tenants/:id - Update tenant
+  app.put("/api/admin/tenants/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, logoUrl, faviconUrl, themeJson, isActive } = req.body;
+      
+      const result = await db.update(tenants)
+        .set({
+          name,
+          logoUrl,
+          faviconUrl,
+          themeJson,
+          isActive,
+        })
+        .where(eq(tenants.id, id))
+        .returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      res.json(result[0]);
+    } catch (error) {
+      console.error("Update tenant error:", error);
+      res.status(500).json({ message: "Erro ao atualizar tenant" });
+    }
+  });
+
+  // GET /api/admin/tenants/:id/domains - Get tenant domains
+  app.get("/api/admin/tenants/:id/domains", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, id));
+      res.json(result);
+    } catch (error) {
+      console.error("Get tenant domains error:", error);
+      res.status(500).json({ message: "Erro ao buscar domínios" });
+    }
+  });
+
+  // POST /api/admin/tenants/:id/domains - Add domain to tenant
+  app.post("/api/admin/tenants/:id/domains", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.id);
+      const { domain, isPrimary } = req.body;
+      
+      if (!domain) {
+        return res.status(400).json({ message: "domain é obrigatório" });
+      }
+      
+      const cleanDomain = domain.replace(/^www\./, "").toLowerCase();
+      
+      const existing = await db.select().from(tenantDomains).where(eq(tenantDomains.domain, cleanDomain)).limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ message: "Domínio já está em uso" });
+      }
+      
+      const result = await db.insert(tenantDomains).values({
+        tenantId,
+        domain: cleanDomain,
+        isPrimary: isPrimary || false,
+      }).returning();
+      
+      res.status(201).json(result[0]);
+    } catch (error) {
+      console.error("Add domain error:", error);
+      res.status(500).json({ message: "Erro ao adicionar domínio" });
+    }
+  });
+
+  // DELETE /api/admin/tenants/domains/:domainId - Remove domain
+  app.delete("/api/admin/tenants/domains/:domainId", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const domainId = parseInt(req.params.domainId);
+      await db.delete(tenantDomains).where(eq(tenantDomains.id, domainId));
+      res.json({ message: "Domínio removido" });
+    } catch (error) {
+      console.error("Delete domain error:", error);
+      res.status(500).json({ message: "Erro ao remover domínio" });
+    }
+  });
+
+  // GET /api/admin/tenants/:id/users - Get users with access to tenant
+  app.get("/api/admin/tenants/:id/users", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.id);
+      const result = await db
+        .select({
+          id: userTenants.id,
+          userId: userTenants.userId,
+          roleInTenant: userTenants.roleInTenant,
+          userName: users.name,
+          userEmail: users.email,
+          userRole: users.role,
+        })
+        .from(userTenants)
+        .innerJoin(users, eq(userTenants.userId, users.id))
+        .where(eq(userTenants.tenantId, tenantId));
+      res.json(result);
+    } catch (error) {
+      console.error("Get tenant users error:", error);
+      res.status(500).json({ message: "Erro ao buscar usuários do tenant" });
+    }
+  });
+
+  // POST /api/admin/tenants/:id/users - Add user access to tenant
+  app.post("/api/admin/tenants/:id/users", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.id);
+      const { userId, roleInTenant } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "userId é obrigatório" });
+      }
+      
+      const existing = await db.select().from(userTenants)
+        .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenantId)))
+        .limit(1);
+      
+      if (existing.length > 0) {
+        return res.status(400).json({ message: "Usuário já tem acesso a este tenant" });
+      }
+      
+      const result = await db.insert(userTenants).values({
+        userId,
+        tenantId,
+        roleInTenant: roleInTenant || "vendedor",
+      }).returning();
+      
+      res.status(201).json(result[0]);
+    } catch (error) {
+      console.error("Add user to tenant error:", error);
+      res.status(500).json({ message: "Erro ao adicionar usuário ao tenant" });
+    }
+  });
+
+  // DELETE /api/admin/tenants/users/:userTenantId - Remove user access from tenant
+  app.delete("/api/admin/tenants/users/:userTenantId", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const userTenantId = parseInt(req.params.userTenantId);
+      await db.delete(userTenants).where(eq(userTenants.id, userTenantId));
+      res.json({ message: "Acesso removido" });
+    } catch (error) {
+      console.error("Remove user from tenant error:", error);
+      res.status(500).json({ message: "Erro ao remover acesso" });
+    }
+  });
+
+  // PUT /api/admin/users/:id/master - Toggle master status
+  app.put("/api/admin/users/:id/master", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { isMaster } = req.body;
+      
+      const result = await db.update(users)
+        .set({ isMaster: isMaster || false })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+      
+      res.json(result[0]);
+    } catch (error) {
+      console.error("Toggle master error:", error);
+      res.status(500).json({ message: "Erro ao atualizar usuário" });
+    }
+  });
   
   const httpServer = createServer(app);
   return httpServer;
