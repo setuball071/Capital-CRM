@@ -33,6 +33,7 @@ import {
   teams,
   teamMembers,
   aiPrompts,
+  personalTasks,
   DEFAULT_ROLEPLAY_PROMPT,
   type User,
   type InsertUser,
@@ -95,6 +96,8 @@ import {
   type InsertTeamMember,
   type AiPrompt,
   type InsertAiPrompt,
+  type PersonalTask,
+  type InsertPersonalTask,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -313,6 +316,15 @@ export interface IStorage {
   syncClientContracts(pessoaId: number, contratos: InsertClienteContrato[]): Promise<void>;
   createClientSnapshot(data: { clientId: number; referenceDate: Date; fonte: string; situacaoFuncional?: string; margemEmprestimo?: string; margemCartao?: string; margem5?: string; salarioBruto?: string; salarioLiquido?: string; dadosExtras?: any }): Promise<ClientSnapshot>;
   createCampaignFromFilter(filtros: FiltrosPedidoLista, nome: string, userId: number): Promise<{ campaign: SalesCampaign; leadsCreated: number }>;
+  
+  // ===== KANBAN PESSOAL =====
+  getPersonalTasksByUser(userId: number): Promise<PersonalTask[]>;
+  getPersonalTask(id: number, userId: number): Promise<PersonalTask | undefined>;
+  createPersonalTask(data: InsertPersonalTask): Promise<PersonalTask>;
+  updatePersonalTask(id: number, userId: number, data: Partial<InsertPersonalTask>): Promise<PersonalTask | undefined>;
+  deletePersonalTask(id: number, userId: number): Promise<void>;
+  reorderPersonalTasks(userId: number, column: string, taskIds: number[]): Promise<void>;
+  countTasksInColumn(userId: number, column: string): Promise<number>;
   
   // ===== TEAMS & AI PROMPTS =====
   getAllTeams(): Promise<Team[]>;
@@ -2173,6 +2185,87 @@ export class DbStorage implements IStorage {
         eq(aiPrompts.teamId, teamId),
         eq(aiPrompts.isActive, true)
       ));
+  }
+  
+  // ===== KANBAN PESSOAL =====
+  
+  async getPersonalTasksByUser(userId: number): Promise<PersonalTask[]> {
+    return await db.select().from(personalTasks)
+      .where(eq(personalTasks.userId, userId))
+      .orderBy(personalTasks.orderIndex);
+  }
+  
+  async getPersonalTask(id: number, userId: number): Promise<PersonalTask | undefined> {
+    const [task] = await db.select().from(personalTasks)
+      .where(and(
+        eq(personalTasks.id, id),
+        eq(personalTasks.userId, userId)
+      ));
+    return task;
+  }
+  
+  async createPersonalTask(data: InsertPersonalTask): Promise<PersonalTask> {
+    // Get the max order index for this user's column
+    const [maxOrder] = await db.select({ maxOrder: sql<number>`COALESCE(MAX(order_index), -1)` })
+      .from(personalTasks)
+      .where(and(
+        eq(personalTasks.userId, data.userId),
+        eq(personalTasks.column, data.column || "backlog")
+      ));
+    
+    const [created] = await db.insert(personalTasks).values({
+      ...data,
+      orderIndex: (maxOrder?.maxOrder ?? -1) + 1,
+    }).returning();
+    return created;
+  }
+  
+  async updatePersonalTask(id: number, userId: number, data: Partial<InsertPersonalTask>): Promise<PersonalTask | undefined> {
+    const updateData: any = { ...data, updatedAt: new Date() };
+    
+    // If moving to "concluido", set completedAt
+    if (data.column === "concluido") {
+      updateData.completedAt = new Date();
+    }
+    
+    const [updated] = await db.update(personalTasks)
+      .set(updateData)
+      .where(and(
+        eq(personalTasks.id, id),
+        eq(personalTasks.userId, userId)
+      ))
+      .returning();
+    return updated;
+  }
+  
+  async deletePersonalTask(id: number, userId: number): Promise<void> {
+    await db.delete(personalTasks)
+      .where(and(
+        eq(personalTasks.id, id),
+        eq(personalTasks.userId, userId)
+      ));
+  }
+  
+  async reorderPersonalTasks(userId: number, column: string, taskIds: number[]): Promise<void> {
+    // Update order_index for each task in the given order
+    for (let i = 0; i < taskIds.length; i++) {
+      await db.update(personalTasks)
+        .set({ orderIndex: i, column, updatedAt: new Date() })
+        .where(and(
+          eq(personalTasks.id, taskIds[i]),
+          eq(personalTasks.userId, userId)
+        ));
+    }
+  }
+  
+  async countTasksInColumn(userId: number, column: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(personalTasks)
+      .where(and(
+        eq(personalTasks.userId, userId),
+        eq(personalTasks.column, column)
+      ));
+    return result?.count ?? 0;
   }
 }
 

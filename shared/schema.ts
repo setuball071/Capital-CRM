@@ -1214,6 +1214,79 @@ export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type AiPrompt = typeof aiPrompts.$inferSelect;
 export type InsertAiPrompt = z.infer<typeof insertAiPromptSchema>;
 
+// ===== KANBAN PESSOAL =====
+
+// Colunas do Kanban
+export const KANBAN_COLUMNS = ["backlog", "a_fazer", "em_execucao", "aguardando", "concluido"] as const;
+export type KanbanColumn = typeof KANBAN_COLUMNS[number];
+
+export const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
+  backlog: "Backlog",
+  a_fazer: "A Fazer",
+  em_execucao: "Em Execução",
+  aguardando: "Aguardando",
+  concluido: "Concluído",
+};
+
+// Prioridades
+export const TASK_PRIORITIES = ["alta", "media", "baixa"] as const;
+export type TaskPriority = typeof TASK_PRIORITIES[number];
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  alta: "Alta",
+  media: "Média",
+  baixa: "Baixa",
+};
+
+// Tags
+export const TASK_TAGS = ["trabalho", "estrategia", "sistema", "financeiro", "pessoal", "familia", "saude"] as const;
+export type TaskTag = typeof TASK_TAGS[number];
+
+export const TASK_TAG_LABELS: Record<TaskTag, string> = {
+  trabalho: "Trabalho",
+  estrategia: "Estratégia",
+  sistema: "Sistema/Tecnologia",
+  financeiro: "Financeiro",
+  pessoal: "Pessoal",
+  familia: "Família",
+  saude: "Saúde",
+};
+
+// Personal Tasks table
+export const personalTasks = pgTable("personal_tasks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  column: varchar("column", { length: 20 }).notNull().default("backlog"), // backlog, a_fazer, em_execucao, aguardando, concluido
+  priority: varchar("priority", { length: 10 }).notNull().default("media"), // alta, media, baixa
+  tag: varchar("tag", { length: 20 }).notNull().default("trabalho"), // trabalho, estrategia, sistema, financeiro, pessoal, familia, saude
+  orderIndex: integer("order_index").notNull().default(0), // For ordering within column
+  dueDate: timestamp("due_date"), // Optional deadline
+  blockedBy: varchar("blocked_by", { length: 255 }), // Who/what is blocking
+  blockedReason: text("blocked_reason"), // Why it's blocked
+  completedAt: timestamp("completed_at"), // When task was completed
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schema
+export const insertPersonalTaskSchema = createInsertSchema(personalTasks, {
+  title: z.string().min(1).max(500),
+  column: z.enum(KANBAN_COLUMNS).default("backlog"),
+  priority: z.enum(TASK_PRIORITIES).default("media"),
+  tag: z.enum(TASK_TAGS).default("trabalho"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
+// Types
+export type PersonalTask = typeof personalTasks.$inferSelect;
+export type InsertPersonalTask = z.infer<typeof insertPersonalTaskSchema>;
+
 // Default Role Play prompt
 export const DEFAULT_ROLEPLAY_PROMPT = `Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.
 Regras obrigatórias:
