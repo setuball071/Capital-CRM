@@ -92,6 +92,8 @@ export default function KanbanPage() {
       setEditingTask(null);
     },
     onError: (error: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/kanban/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kanban/stats"] });
       toast({ title: "Erro ao atualizar tarefa", description: error.message || "Tente novamente", variant: "destructive" });
     },
   });
@@ -139,6 +141,18 @@ export default function KanbanPage() {
 
     if (draggedTask.column !== targetColumn) {
       const targetTasks = tasks.filter(t => t.column === targetColumn);
+      
+      // Client-side check for em_execucao limit
+      if (targetColumn === "em_execucao" && targetTasks.length >= 3) {
+        toast({ 
+          title: "Limite atingido", 
+          description: "Você só pode ter até 3 tarefas em execução. Mova uma tarefa para outra coluna primeiro.", 
+          variant: "destructive" 
+        });
+        setDraggedTask(null);
+        return;
+      }
+      
       updateMutation.mutate({ 
         id: draggedTask.id, 
         column: targetColumn,
