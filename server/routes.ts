@@ -50,6 +50,8 @@ import {
   LEAD_MARKERS,
   TIPOS_CONTATO,
   MODULE_LIST,
+  KANBAN_COLUMNS,
+  insertPersonalTaskSchema,
   type User,
   type InsertCoefficientTable,
   type InsertSalesLead,
@@ -7239,6 +7241,129 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
+  // ===== KANBAN PESSOAL =====
+
+  // GET /api/kanban/tasks - Get all tasks for current user
+  app.get("/api/kanban/tasks", requireAuth, async (req, res) => {
+    try {
+      const tasks = await storage.getPersonalTasksByUser(req.user!.id);
+      return res.json(tasks);
+    } catch (error) {
+      console.error("Get kanban tasks error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tarefas" });
+    }
+  });
+
+  // POST /api/kanban/tasks - Create a new task
+  app.post("/api/kanban/tasks", requireAuth, async (req, res) => {
+    try {
+      const parsed = insertPersonalTaskSchema.safeParse({
+        ...req.body,
+        userId: req.user!.id,
+      });
+      
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      }
+      
+      // Check if moving to em_execucao - limit of 3 tasks
+      if (parsed.data.column === "em_execucao") {
+        const count = await storage.countTasksInColumn(req.user!.id, "em_execucao");
+        if (count >= 3) {
+          return res.status(400).json({ 
+            message: "Limite de 3 tarefas em execução atingido. Mova uma tarefa para outra coluna primeiro." 
+          });
+        }
+      }
+      
+      const task = await storage.createPersonalTask(parsed.data);
+      return res.status(201).json(task);
+    } catch (error) {
+      console.error("Create kanban task error:", error);
+      return res.status(500).json({ message: "Erro ao criar tarefa" });
+    }
+  });
+
+  // PATCH /api/kanban/tasks/:id - Update a task
+  app.patch("/api/kanban/tasks/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updateData = req.body;
+      
+      // Check if moving to em_execucao - limit of 3 tasks
+      if (updateData.column === "em_execucao") {
+        const existingTask = await storage.getPersonalTask(id, req.user!.id);
+        if (existingTask && existingTask.column !== "em_execucao") {
+          const count = await storage.countTasksInColumn(req.user!.id, "em_execucao");
+          if (count >= 3) {
+            return res.status(400).json({ 
+              message: "Limite de 3 tarefas em execução atingido. Mova uma tarefa para outra coluna primeiro." 
+            });
+          }
+        }
+      }
+      
+      const task = await storage.updatePersonalTask(id, req.user!.id, updateData);
+      if (!task) {
+        return res.status(404).json({ message: "Tarefa não encontrada" });
+      }
+      return res.json(task);
+    } catch (error) {
+      console.error("Update kanban task error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar tarefa" });
+    }
+  });
+
+  // DELETE /api/kanban/tasks/:id - Delete a task
+  app.delete("/api/kanban/tasks/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePersonalTask(id, req.user!.id);
+      return res.json({ message: "Tarefa excluída" });
+    } catch (error) {
+      console.error("Delete kanban task error:", error);
+      return res.status(500).json({ message: "Erro ao excluir tarefa" });
+    }
+  });
+
+  // POST /api/kanban/reorder - Reorder tasks within a column
+  app.post("/api/kanban/reorder", requireAuth, async (req, res) => {
+    try {
+      const { column, taskIds } = req.body;
+      
+      if (!column || !Array.isArray(taskIds)) {
+        return res.status(400).json({ message: "Dados inválidos" });
+      }
+      
+      // Check if moving to em_execucao exceeds limit
+      if (column === "em_execucao" && taskIds.length > 3) {
+        return res.status(400).json({ 
+          message: "Limite de 3 tarefas em execução atingido." 
+        });
+      }
+      
+      await storage.reorderPersonalTasks(req.user!.id, column, taskIds);
+      return res.json({ message: "Tarefas reordenadas" });
+    } catch (error) {
+      console.error("Reorder kanban tasks error:", error);
+      return res.status(500).json({ message: "Erro ao reordenar tarefas" });
+    }
+  });
+
+  // GET /api/kanban/stats - Get task statistics
+  app.get("/api/kanban/stats", requireAuth, async (req, res) => {
+    try {
+      const stats: Record<string, number> = {};
+      for (const col of KANBAN_COLUMNS) {
+        stats[col] = await storage.countTasksInColumn(req.user!.id, col);
+      }
+      return res.json(stats);
+    } catch (error) {
+      console.error("Get kanban stats error:", error);
+      return res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
