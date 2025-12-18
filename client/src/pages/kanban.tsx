@@ -46,7 +46,7 @@ export default function KanbanPage() {
     description: "",
     priority: "media" as TaskPriority,
     column: "backlog" as KanbanColumn,
-    tags: "",
+    tag: "trabalho",
     dueDate: "",
   });
 
@@ -65,16 +65,16 @@ export default function KanbanPage() {
         description: data.description || null,
         priority: data.priority,
         column: data.column,
-        tags: data.tags ? data.tags.split(",").map(t => t.trim()).filter(Boolean) : null,
+        tag: data.tag || "trabalho",
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
       };
-      return apiRequest("/api/kanban/tasks", { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+      return apiRequest("POST", "/api/kanban/tasks", body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kanban/stats"] });
       setAddDialogOpen(false);
-      setNewTask({ title: "", description: "", priority: "media", column: "backlog", tags: "", dueDate: "" });
+      setNewTask({ title: "", description: "", priority: "media", column: "backlog", tag: "trabalho", dueDate: "" });
       toast({ title: "Tarefa criada com sucesso" });
     },
     onError: (error: any) => {
@@ -84,7 +84,7 @@ export default function KanbanPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: { id: number; [key: string]: any }) => {
-      return apiRequest(`/api/kanban/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data), headers: { "Content-Type": "application/json" } });
+      return apiRequest("PATCH", `/api/kanban/tasks/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban/tasks"] });
@@ -100,7 +100,7 @@ export default function KanbanPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/kanban/tasks/${id}`, { method: "DELETE" });
+      return apiRequest("DELETE", `/api/kanban/tasks/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban/tasks"] });
@@ -114,7 +114,7 @@ export default function KanbanPage() {
 
   const reorderMutation = useMutation({
     mutationFn: async ({ column, taskIds }: { column: string; taskIds: number[] }) => {
-      return apiRequest("/api/kanban/reorder", { method: "POST", body: JSON.stringify({ column, taskIds }), headers: { "Content-Type": "application/json" } });
+      return apiRequest("POST", "/api/kanban/reorder", { column, taskIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban/tasks"] });
@@ -182,7 +182,7 @@ export default function KanbanPage() {
       title: (document.getElementById("edit-title") as HTMLInputElement)?.value,
       description: (document.getElementById("edit-description") as HTMLTextAreaElement)?.value || null,
       priority: (document.getElementById("edit-priority") as HTMLSelectElement)?.value as TaskPriority,
-      tags: (document.getElementById("edit-tags") as HTMLInputElement)?.value?.split(",").map(t => t.trim()).filter(Boolean) || null,
+      tag: (document.getElementById("edit-tags") as HTMLInputElement)?.value || "trabalho",
       dueDate: (document.getElementById("edit-dueDate") as HTMLInputElement)?.value ? new Date((document.getElementById("edit-dueDate") as HTMLInputElement)?.value).toISOString() : null,
     };
     updateMutation.mutate({ id: editingTask.id, ...formData });
@@ -250,10 +250,10 @@ export default function KanbanPage() {
                 </Select>
               </div>
               <Input
-                placeholder="Tags (separadas por vírgula)"
-                value={newTask.tags}
-                onChange={(e) => setNewTask({ ...newTask, tags: e.target.value })}
-                data-testid="input-task-tags"
+                placeholder="Tag (ex: trabalho, pessoal)"
+                value={newTask.tag}
+                onChange={(e) => setNewTask({ ...newTask, tag: e.target.value })}
+                data-testid="input-task-tag"
               />
               <Input
                 type="date"
@@ -345,9 +345,9 @@ export default function KanbanPage() {
                         <Badge variant={PRIORITY_CONFIG[task.priority as TaskPriority]?.variant || "default"} className="text-xs">
                           {PRIORITY_CONFIG[task.priority as TaskPriority]?.label || task.priority}
                         </Badge>
-                        {task.tags && Array.isArray(task.tags) && task.tags.map((tag: string, i: number) => (
-                          <Badge key={i} variant="outline" className="text-xs">{tag}</Badge>
-                        ))}
+                        {task.tag && (
+                          <Badge variant="outline" className="text-xs">{task.tag}</Badge>
+                        )}
                       </div>
                       {task.dueDate && (
                         <div className={`flex items-center gap-1 mt-2 text-xs ${isPast(new Date(task.dueDate)) && task.column !== "concluido" ? "text-destructive" : isToday(new Date(task.dueDate)) ? "text-amber-600" : "text-muted-foreground"}`}>
@@ -402,7 +402,7 @@ export default function KanbanPage() {
               <Input
                 id="edit-tags"
                 placeholder="Tags"
-                defaultValue={Array.isArray(editingTask.tags) ? editingTask.tags.join(", ") : ""}
+                defaultValue={editingTask.tag || ""}
                 data-testid="input-edit-tags"
               />
               <Input
