@@ -35,6 +35,7 @@ import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import CrmConsultaClientePage from "@/pages/crm-consulta-cliente";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import AdminTenantsPage from "@/pages/admin-tenants";
+import KanbanPage from "@/pages/kanban";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -346,6 +347,9 @@ function Router() {
               </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
+              </Route>
+              <Route path="/kanban">
+                {() => <ProtectedRoute component={KanbanPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

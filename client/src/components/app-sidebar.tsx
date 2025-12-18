@@ -92,6 +92,7 @@ export function AppSidebar() {
       icon: Home,
       items: [
         { title: "Início", url: "/", icon: Home },
+        { title: "Kanban Pessoal", url: "/kanban", icon: Kanban },
         { title: "Simulador Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador" },
       ],
     },
