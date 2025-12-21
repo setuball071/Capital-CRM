@@ -5974,6 +5974,155 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // GET /api/crm/cliente/:pessoaId/interactions - Get all interactions for a client by pessoaId
+  app.get("/api/crm/cliente/:pessoaId/interactions", requireAuth, async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      if (isNaN(pessoaId)) {
+        return res.status(400).json({ message: "ID de pessoa inválido" });
+      }
+
+      const userTenantId = req.user!.tenantId;
+      const isMaster = req.user!.isMaster;
+
+      // Find all leads for this pessoa, filtered by tenant
+      const baseCondition = eq(salesLeads.baseClienteId, pessoaId);
+      const whereCondition = (userTenantId && !isMaster) 
+        ? and(baseCondition, eq(salesLeads.tenantId, userTenantId))
+        : baseCondition;
+
+      const leads = await db
+        .select({ id: salesLeads.id })
+        .from(salesLeads)
+        .where(whereCondition);
+
+      if (leads.length === 0) {
+        return res.json([]);
+      }
+
+      const leadIds = leads.map(l => l.id);
+
+      // Get all interactions for these leads
+      const interactions = await db
+        .select({
+          id: leadInteractions.id,
+          tipoContato: leadInteractions.tipoContato,
+          leadMarker: leadInteractions.leadMarker,
+          motivo: leadInteractions.motivo,
+          observacao: leadInteractions.observacao,
+          retornoEm: leadInteractions.retornoEm,
+          createdAt: leadInteractions.createdAt,
+          userName: users.nome,
+          campaignName: salesCampaigns.nome,
+        })
+        .from(leadInteractions)
+        .innerJoin(users, eq(leadInteractions.userId, users.id))
+        .innerJoin(salesLeads, eq(leadInteractions.leadId, salesLeads.id))
+        .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
+        .where(inArray(leadInteractions.leadId, leadIds))
+        .orderBy(desc(leadInteractions.createdAt))
+        .limit(50);
+
+      return res.json(interactions);
+    } catch (error) {
+      console.error("Get client interactions error:", error);
+      return res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+
+  // GET /api/crm/cliente/:pessoaId/pipeline - Get all pipeline entries for a client
+  app.get("/api/crm/cliente/:pessoaId/pipeline", requireAuth, async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      if (isNaN(pessoaId)) {
+        return res.status(400).json({ message: "ID de pessoa inválido" });
+      }
+
+      const userTenantId = req.user!.tenantId;
+      const isMaster = req.user!.isMaster;
+
+      // Build conditions with tenant filtering
+      const baseCondition = eq(salesLeads.baseClienteId, pessoaId);
+      const whereCondition = (userTenantId && !isMaster)
+        ? and(baseCondition, eq(salesLeads.tenantId, userTenantId))
+        : baseCondition;
+
+      const pipeline = await db
+        .select({
+          leadId: salesLeads.id,
+          campaignName: salesCampaigns.nome,
+          leadMarker: salesLeads.leadMarker,
+        })
+        .from(salesLeads)
+        .innerJoin(salesCampaigns, eq(salesLeads.campaignId, salesCampaigns.id))
+        .where(whereCondition);
+
+      return res.json(pipeline);
+    } catch (error) {
+      console.error("Get client pipeline error:", error);
+      return res.status(500).json({ message: "Erro ao buscar pipeline" });
+    }
+  });
+
+  // POST /api/crm/cliente/criar-lead - Create a lead from pessoaId to a specific campaign
+  app.post("/api/crm/cliente/criar-lead", requireAuth, async (req, res) => {
+    try {
+      const { pessoaId, campaignId } = req.body;
+      const userTenantId = req.user!.tenantId;
+      
+      if (!pessoaId || !campaignId) {
+        return res.status(400).json({ message: "pessoaId e campaignId são obrigatórios" });
+      }
+
+      const pessoa = await storage.getClientePessoaById(pessoaId);
+      if (!pessoa) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+
+      // Verify the campaign belongs to user's tenant
+      const campaign = await db.select().from(salesCampaigns).where(eq(salesCampaigns.id, campaignId)).limit(1);
+      if (campaign.length === 0) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+      if (userTenantId && !req.user!.isMaster && campaign[0].tenantId !== userTenantId) {
+        return res.status(403).json({ message: "Sem permissão para esta campanha" });
+      }
+
+      // Check if lead already exists for this pessoa in this campaign
+      const existingLead = await db
+        .select()
+        .from(salesLeads)
+        .where(and(
+          eq(salesLeads.baseClienteId, pessoaId),
+          eq(salesLeads.campaignId, campaignId)
+        ))
+        .limit(1);
+
+      if (existingLead.length > 0) {
+        return res.status(400).json({ message: "Cliente já existe nesta campanha" });
+      }
+
+      const [newLead] = await db.insert(salesLeads).values({
+        tenantId: campaign[0].tenantId,
+        campaignId,
+        cpf: pessoa.cpf || null,
+        nome: pessoa.nome || "Nome não informado",
+        telefone1: pessoa.telefonesBase?.[0] || null,
+        telefone2: pessoa.telefonesBase?.[1] || null,
+        telefone3: pessoa.telefonesBase?.[2] || null,
+        cidade: pessoa.municipio || null,
+        uf: pessoa.uf || null,
+        baseClienteId: pessoaId,
+        leadMarker: "NOVO",
+      }).returning();
+
+      return res.json({ message: "Lead criado com sucesso", leadId: newLead.id });
+    } catch (error) {
+      console.error("Create lead from pessoa error:", error);
+      return res.status(500).json({ message: "Erro ao criar lead" });
+    }
+  });
+
   // ===== CAMPAIGN MANAGEMENT ENDPOINTS =====
 
   // GET /api/crm/campaigns/:id/distribution - Get lead distribution by marker
