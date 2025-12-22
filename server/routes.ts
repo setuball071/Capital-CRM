@@ -7270,7 +7270,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "domain é obrigatório" });
       }
       
-      const cleanDomain = domain.replace(/^www\./, "").toLowerCase();
+      // Normalize domain: remove protocol, www, port, path
+      let cleanDomain = domain.trim().toLowerCase();
+      cleanDomain = cleanDomain.replace(/^https?:\/\//, "");
+      cleanDomain = cleanDomain.replace(/^www\./, "");
+      cleanDomain = cleanDomain.split(":")[0];
+      cleanDomain = cleanDomain.split("/")[0];
+      cleanDomain = cleanDomain.split("?")[0];
+      
+      if (!cleanDomain || cleanDomain.length < 3) {
+        return res.status(400).json({ message: "Domínio inválido" });
+      }
       
       const existing = await db.select().from(tenantDomains).where(eq(tenantDomains.domain, cleanDomain)).limit(1);
       if (existing.length > 0) {

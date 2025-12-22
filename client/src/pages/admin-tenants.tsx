@@ -116,7 +116,23 @@ export default function AdminTenantsPage() {
   });
 
   const [newDomain, setNewDomain] = useState({ domain: "", isPrimary: false });
+  const [domainError, setDomainError] = useState("");
   const [newUserAccess, setNewUserAccess] = useState({ userId: "", roleInTenant: "vendedor" });
+
+  const validateDomain = (value: string): string => {
+    if (value.includes("http://") || value.includes("https://")) {
+      return "Digite apenas o domínio, ex: goldcarddigital.com.br (sem http ou https)";
+    }
+    if (value.includes("/")) {
+      return "Digite apenas o domínio, sem caminho ou barra";
+    }
+    return "";
+  };
+
+  const handleDomainChange = (value: string) => {
+    setDomainError(validateDomain(value));
+    setNewDomain({ ...newDomain, domain: value });
+  };
 
   const isMaster = currentUser?.role === "master";
 
@@ -658,7 +674,13 @@ export default function AdminTenantsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddDomainOpen} onOpenChange={setIsAddDomainOpen}>
+      <Dialog open={isAddDomainOpen} onOpenChange={(open) => {
+        setIsAddDomainOpen(open);
+        if (!open) {
+          setDomainError("");
+          setNewDomain({ domain: "", isPrimary: false });
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Adicionar Domínio</DialogTitle>
@@ -669,6 +691,11 @@ export default function AdminTenantsPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              const error = validateDomain(newDomain.domain);
+              if (error) {
+                setDomainError(error);
+                return;
+              }
               if (selectedTenant) {
                 addDomainMutation.mutate({
                   tenantId: selectedTenant.id,
@@ -684,14 +711,19 @@ export default function AdminTenantsPage() {
               <Input
                 id="domain"
                 value={newDomain.domain}
-                onChange={(e) => setNewDomain({ ...newDomain, domain: e.target.value })}
-                placeholder="goldcarddigital.com"
+                onChange={(e) => handleDomainChange(e.target.value)}
+                placeholder="goldcarddigital.com.br"
                 required
                 data-testid="input-new-domain"
+                className={domainError ? "border-destructive" : ""}
               />
-              <p className="text-xs text-muted-foreground">
-                Não inclua www. ou protocolo (http/https)
-              </p>
+              {domainError ? (
+                <p className="text-xs text-destructive">{domainError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Digite apenas o domínio, ex: goldcarddigital.com.br
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Switch

@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { db } from "./storage";
 import { tenants, tenantDomains, userTenants, users, type Tenant, type User } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 
 declare global {
   namespace Express {
@@ -12,14 +12,28 @@ declare global {
   }
 }
 
+export function normalizeDomain(domain: string): string {
+  let clean = domain.trim().toLowerCase();
+  clean = clean.replace(/^https?:\/\//, "");
+  clean = clean.replace(/^www\./, "");
+  clean = clean.split(":")[0];
+  clean = clean.split("/")[0];
+  clean = clean.split("?")[0];
+  return clean;
+}
+
 export async function resolveTenantByDomain(domain: string): Promise<Tenant | null> {
-  const cleanDomain = domain.replace(/^www\./, "").split(":")[0].toLowerCase();
+  const cleanDomain = normalizeDomain(domain);
+  const withWww = `www.${cleanDomain}`;
   
   const result = await db
     .select({ tenant: tenants })
     .from(tenantDomains)
     .innerJoin(tenants, eq(tenantDomains.tenantId, tenants.id))
-    .where(eq(tenantDomains.domain, cleanDomain))
+    .where(or(
+      eq(tenantDomains.domain, cleanDomain),
+      eq(tenantDomains.domain, withWww)
+    ))
     .limit(1);
   
   if (result.length === 0 || !result[0].tenant.isActive) {
@@ -59,7 +73,35 @@ export function resolveTenant(req: Request, res: Response, next: NextFunction) {
           next();
           return;
         }
-        res.status(404).json({ message: "Domínio não configurado" });
+        const normalizedHost = normalizeDomain(host);
+        res.status(404).send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Domínio não configurado</title>
+            <style>
+              body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+              .container { text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; }
+              h1 { color: #dc2626; margin-bottom: 1rem; }
+              p { color: #666; margin-bottom: 0.5rem; }
+              .domain { font-family: monospace; background: #f0f0f0; padding: 0.25rem 0.5rem; border-radius: 4px; }
+              .instructions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.9rem; color: #888; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Domínio não configurado</h1>
+              <p>O domínio <span class="domain">${normalizedHost}</span> não está vinculado a nenhum ambiente.</p>
+              <div class="instructions">
+                <p>Para configurar este domínio:</p>
+                <p>Acesse <strong>Administração → Ambientes</strong> e adicione o domínio ao ambiente desejado.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `);
         return;
       }
       
