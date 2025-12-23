@@ -238,13 +238,29 @@ class StreamingImportService {
     let processedInThisRun = 0;
     let successCount = 0;
     let errorCount = 0;
-    let currentRow = 0;
     let headers: string[] = [];
     let headerMap: Record<string, string> = {};
     const buffer: Record<string, any>[] = [];
     const errors: InsertImportError[] = [];
     let pausedForResume = false;
-    let lastByteOffset = startOffset;
+    let bytesRead = startOffset;
+
+    const headerFirstLineStream = fs.createReadStream(filePath, {
+      start: 0,
+      end: 20000,
+      encoding: "utf8",
+    });
+    const headerRl = readline.createInterface({
+      input: headerFirstLineStream,
+      crlfDelay: Infinity,
+    });
+    for await (const firstLine of headerRl) {
+      headers = this.parseCSVLine(firstLine);
+      headerMap = this.buildHeaderMap(headers, columnMap);
+      break;
+    }
+    headerRl.close();
+    headerFirstLineStream.destroy();
 
     const fileStream = fs.createReadStream(filePath, {
       start: startOffset,
@@ -256,44 +272,25 @@ class StreamingImportService {
       crlfDelay: Infinity,
     });
 
-    let isFirstLine = startOffset === 0;
-    let bytesRead = startOffset;
+    let isFirstLineOfStream = true;
+    let partialLine = "";
 
     for await (const line of rl) {
-      bytesRead += Buffer.byteLength(line, "utf8") + 1;
-
-      if (isFirstLine && startOffset === 0) {
-        headers = this.parseCSVLine(line);
-        headerMap = this.buildHeaderMap(headers, columnMap);
-        isFirstLine = false;
+      let currentLine = line;
+      
+      if (isFirstLineOfStream && startOffset > 0) {
+        isFirstLineOfStream = false;
+        continue;
+      }
+      
+      if (isFirstLineOfStream && startOffset === 0) {
+        isFirstLineOfStream = false;
         continue;
       }
 
-      if (startOffset > 0 && currentRow === 0 && !headers.length) {
-        const firstLineStream = fs.createReadStream(filePath, {
-          start: 0,
-          end: 10000,
-          encoding: "utf8",
-        });
-        const firstRl = readline.createInterface({
-          input: firstLineStream,
-          crlfDelay: Infinity,
-        });
-        for await (const firstLine of firstRl) {
-          headers = this.parseCSVLine(firstLine);
-          headerMap = this.buildHeaderMap(headers, columnMap);
-          break;
-        }
-        firstRl.close();
-      }
+      bytesRead += Buffer.byteLength(currentLine, "utf8") + 1;
 
-      currentRow++;
-
-      if (currentRow <= run.processedRows) {
-        continue;
-      }
-
-      const values = this.parseCSVLine(line);
+      const values = this.parseCSVLine(currentLine);
       const row: Record<string, any> = {};
       headers.forEach((h, i) => {
         row[h] = values[i] || "";
@@ -314,7 +311,7 @@ class StreamingImportService {
         processedInThisRun += buffer.length;
         buffer.length = 0;
 
-        await this.updateProgress(run.id, run.processedRows + processedInThisRun, successCount, errorCount, bytesRead);
+        await this.updateProgress(run.id, run.processedRows + processedInThisRun, run.successRows + successCount, run.errorRows + errorCount, bytesRead);
 
         if (errors.length >= 1000) {
           await this.flushErrors(errors);
@@ -324,7 +321,6 @@ class StreamingImportService {
 
       if (processedInThisRun >= maxLinhas) {
         pausedForResume = true;
-        lastByteOffset = bytesRead;
         break;
       }
     }

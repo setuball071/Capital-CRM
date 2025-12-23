@@ -71,7 +71,7 @@ import * as path from "path";
 import * as os from "os";
 import Papa from "papaparse";
 
-// Configure multer for file uploads using memory storage
+// Configure multer for file uploads using memory storage (for smaller files)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -84,6 +84,35 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error("Formato de arquivo inválido. Use .xlsx, .xls ou .csv"));
+    }
+  },
+});
+
+// Configure multer for massive streaming imports using disk storage
+const uploadDisk = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = "/tmp/imports";
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + "_" + file.originalname);
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit for massive imports
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = [".csv"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido para importação massiva. Use .csv"));
     }
   },
 });
@@ -3195,8 +3224,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
   
-  // POST /imports/start - Inicia um job de importação massiva
-  app.post("/api/imports/start", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+  // POST /imports/start - Inicia um job de importação massiva (disk storage)
+  app.post("/api/imports/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
     try {
       const { streamingImportService } = await import("./streaming-import-service");
       const file = req.file;
@@ -3218,13 +3247,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(400).json({ message: "banco é obrigatório para importação de D8" });
       }
       
-      const tmpPath = `/tmp/import_${Date.now()}_${file.originalname}`;
-      fs.writeFileSync(tmpPath, file.buffer);
-      
       const [year, month] = (competencia || "").split("-");
       const competenciaDate = competencia ? new Date(parseInt(year), parseInt(month) - 1, 1) : undefined;
       
-      const result = await streamingImportService.startImportJob(tmpPath, {
+      const result = await streamingImportService.startImportJob(file.path, {
         tipoImport: tipo_import,
         competencia: competenciaDate,
         banco: banco || undefined,
@@ -3234,7 +3260,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         createdById: req.user?.id,
       });
       
-      console.log(`[StreamImport] Job started: ${result.importRunId}`);
+      console.log(`[StreamImport] Job started: ${result.importRunId}, file at: ${file.path}`);
       
       return res.json({
         success: true,
