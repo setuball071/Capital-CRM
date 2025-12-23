@@ -24,6 +24,14 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
 *   **CRM de Vendas (Sales CRM)**: Campaign-based lead management system with lead distribution, transfer, status tracking, contact history, scheduling, and user-defined tags. Integrates with the client database for campaign creation.
 *   **Roteiro Bancário Inteligente**: Intelligent search and management of bank-specific procedures, including JSON import, metadata editing, and AI-powered natural language search (using OpenAI GPT-4.1-mini) with a two-stage query interpreter and module-specific responders (e.g., bank comparison, rule explanation, best operation recommendation).
 *   **Base de Clientes (Client CRM)**: Comprehensive client database management supporting Excel/CSV imports, filtering, and purchase list requests with a package-based pricing model. Handles detailed client, payroll, and contract data, including sophisticated deduplication and fallback logic for legacy spreadsheets.
+*   **Massive-Scale Import System**: Streaming import infrastructure for handling 10M+ row files with pause/resume capability. Features:
+    - Three import types: `folha` (payroll), `d8` (contracts), `contatos` (contacts)
+    - Sequence dependency: folha → d8 → contatos (each requires previous data)
+    - D8 layouts: "servidor" (basic) and "pensionista" (includes instituidor fields)
+    - Streaming mechanics: 1M rows/execution limit, byte-offset resume, disk-based uploads (no memory loading)
+    - Anchor table `clientes_vinculo` for many-to-many CPF↔matrícula relationships
+    - API endpoints: `POST /imports/start`, `POST /imports/process/:id`, `GET /imports/status/:id`, `GET /imports/:id/errors`
+    - Job tracking via `import_runs` table with status, progress, and error tracking via `import_errors` table
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
 
 ### System Design Choices
