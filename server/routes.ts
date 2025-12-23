@@ -44,6 +44,7 @@ import {
   salesLeadEvents,
   leadInteractions,
   clientesPessoa,
+  importRuns,
   insertSalesCampaignSchema,
   insertSalesLeadSchema,
   LEAD_STATUS,
@@ -3113,6 +3114,84 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET status de um import run específico - MASTER ONLY
+  app.get("/api/import-runs/:id/status", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { importService } = await import("./import-service");
+      const runId = parseInt(req.params.id);
+      const progress = await importService.getImportProgress(runId);
+      
+      if (!progress) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      return res.json(progress);
+    } catch (error) {
+      console.error("Get import status error:", error);
+      return res.status(500).json({ message: "Erro ao buscar status do import" });
+    }
+  });
+
+  // GET erros de um import run - MASTER ONLY
+  app.get("/api/import-runs/:id/errors", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { importService } = await import("./import-service");
+      const runId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const errors = await importService.getImportErrors(runId, limit, offset);
+      
+      return res.json({
+        errors,
+        count: errors.length,
+        limit,
+        offset,
+      });
+    } catch (error) {
+      console.error("Get import errors error:", error);
+      return res.status(500).json({ message: "Erro ao buscar erros do import" });
+    }
+  });
+
+  // GET download de erros em CSV - MASTER ONLY
+  app.get("/api/import-runs/:id/errors/download", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { importService } = await import("./import-service");
+      const runId = parseInt(req.params.id);
+      
+      const errors = await importService.getImportErrors(runId, 100000, 0);
+      
+      if (errors.length === 0) {
+        return res.status(404).json({ message: "Nenhum erro encontrado para este import" });
+      }
+      
+      const csvRows = [
+        "linha,cpf,matricula,tipo_erro,mensagem",
+        ...errors.map((e: any) => 
+          `${e.rowNumber},"${e.cpf || ""}","${e.matricula || ""}","${e.errorType}","${(e.errorMessage || "").replace(/"/g, '""')}"`
+        )
+      ];
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=erros_import_${runId}.csv`);
+      return res.send(csvRows.join("\n"));
+    } catch (error) {
+      console.error("Download import errors error:", error);
+      return res.status(500).json({ message: "Erro ao baixar erros do import" });
+    }
+  });
+
+  // GET lista de import runs - MASTER ONLY
+  app.get("/api/import-runs", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runs = await db.select().from(importRuns).orderBy(desc(importRuns.createdAt)).limit(50);
+      return res.json(runs);
+    } catch (error) {
+      console.error("Get import runs error:", error);
+      return res.status(500).json({ message: "Erro ao buscar import runs" });
+    }
+  });
 
   // GET filtros disponíveis para clientes - MASTER ONLY
   app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {

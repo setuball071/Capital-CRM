@@ -1,0 +1,44 @@
+Objetivo: Ajustar o sistema de importação para escala massiva (10M+ linhas) mantendo 100% dos dígitos, padding de zeros e exportação correta para Excel.
+
+Regras obrigatórias de dados:
+1) Identificadores devem ser armazenados como TEXT (apenas dígitos) para não perder dígitos nem virar notação científica:
+- cpf, upag, matricula, numero_contrato
+2) Aplicar padding no backend (edge function):
+- cpf: padStart(11,'0')
+- upag: padStart(9,'0')
+- prazo: padStart(3,'0')
+- matricula: preservar como veio (trim), sem converter para number
+- numero_contrato: SEMPRE texto, nunca number
+3) Parcela (PMT):
+- salvar pmt_value como DECIMAL/NUMERIC para Excel e relatórios (ex: 152.56)
+- opcional: salvar pmt_raw como TEXT no padrão do arquivo (ex: "000000152,56") para auditoria
+
+Escala:
+4) Implementar importação em CHUNKS:
+- Processar por batches de 10.000 linhas (configurável 5k a 20k)
+- Nunca processar o arquivo inteiro em uma única execução
+5) Criar controle de job:
+Tabela import_runs:
+- id, tenant_id, tipo_import ('folha','d8','contatos'), competencia, arquivo_origem, status, processed_rows, total_rows, created_at, updated_at
+Tabela import_errors:
+- import_run_id, row_number, cpf, matricula, error_message, raw_payload
+6) Retomada:
+- Se a execução cair, retomar pelo processed_rows sem reiniciar do zero
+- Deve ser possível reprocessar um import_run
+
+Validação:
+7) Normalizar decimais BR no backend:
+- "7.390,26" -> 7390.26
+- Campos vazios -> NULL
+8) Garantir UPSERT idempotente com UNIQUE:
+- pessoa: (tenant_id, cpf)
+- vinculo: (tenant_id, cpf, matricula)
+- mes: (tenant_id, cpf, matricula, competencia)
+- contratos: (tenant_id, banco, numero_contrato)
+- contratos_mes: (tenant_id, contrato_id, competencia)
+- pessoa_contatos: (tenant_id, cpf, tipo, valor)
+
+Entregáveis:
+- Ajuste do importador existente para usar import_runs e chunks
+- Logs visíveis de progresso e download de erros
+- Confirmar que numero_contrato não vira E+13 e que upag/cpf mantêm zeros à esquerda

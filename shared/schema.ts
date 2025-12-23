@@ -370,11 +370,13 @@ export type BaseStatus = typeof BASE_STATUS[number];
 export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
 export type PedidoStatus = typeof PEDIDO_STATUS[number];
 
-// 1) clientes_pessoa - Dados fixos do indivíduo (CPF é chave única)
+// 1) clientes_pessoa - Dados fixos do indivíduo
+// Chave única composta: (tenant_id, cpf) para isolamento multi-tenant
 export const clientesPessoa = pgTable("clientes_pessoa", {
   id: serial("id").primaryKey(),
-  cpf: varchar("cpf", { length: 14 }).unique(), // CPF como chave única
-  matricula: varchar("matricula", { length: 50 }).notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant
+  cpf: varchar("cpf", { length: 14 }), // CPF como TEXT (preserva zeros)
+  matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como TEXT (preserva zeros)
   nome: varchar("nome", { length: 255 }),
   orgaodesc: varchar("orgaodesc", { length: 255 }),
   orgaocod: varchar("orgaocod", { length: 50 }),
@@ -483,9 +485,11 @@ export const clientSnapshots = pgTable("client_snapshots", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// 6) bases_importadas - Controle de importações
+// 6) bases_importadas - Controle de importações (legado - use import_runs para novos imports)
 export const basesImportadas = pgTable("bases_importadas", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant
+  importRunId: integer("import_run_id"), // Link ao novo sistema (FK adicionada via migration)
   nome: varchar("nome", { length: 255 }),
   baseTag: varchar("base_tag", { length: 100 }).notNull(),
   convenio: varchar("convenio", { length: 100 }),
@@ -1286,6 +1290,82 @@ export const insertPersonalTaskSchema = createInsertSchema(personalTasks, {
 // Types
 export type PersonalTask = typeof personalTasks.$inferSelect;
 export type InsertPersonalTask = z.infer<typeof insertPersonalTaskSchema>;
+
+// ===== IMPORT SYSTEM FOR MASSIVE SCALE =====
+
+// Status de import run
+export const IMPORT_RUN_STATUS = ["pendente", "processando", "pausado", "concluido", "erro", "cancelado"] as const;
+export type ImportRunStatus = typeof IMPORT_RUN_STATUS[number];
+
+// Tipos de import
+export const IMPORT_TYPES = ["folha", "d8", "contatos", "base_geral"] as const;
+export type ImportType = typeof IMPORT_TYPES[number];
+
+// Tabela import_runs - Controle de jobs de importação
+export const importRuns = pgTable("import_runs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  tipoImport: varchar("tipo_import", { length: 50 }).notNull().default("base_geral"), // folha, d8, contatos, base_geral
+  competencia: timestamp("competencia"),
+  arquivoOrigem: varchar("arquivo_origem", { length: 500 }),
+  arquivoTamanhoBytes: integer("arquivo_tamanho_bytes"),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente, processando, pausado, concluido, erro, cancelado
+  processedRows: integer("processed_rows").notNull().default(0),
+  totalRows: integer("total_rows").notNull().default(0),
+  successRows: integer("success_rows").notNull().default(0),
+  errorRows: integer("error_rows").notNull().default(0),
+  chunkSize: integer("chunk_size").notNull().default(10000), // Tamanho do batch (5k-20k)
+  currentChunk: integer("current_chunk").notNull().default(0), // Chunk atual para retomada
+  baseTag: varchar("base_tag", { length: 100 }),
+  convenio: varchar("convenio", { length: 100 }),
+  errorMessage: text("error_message"), // Mensagem de erro geral se falhar
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Tabela import_errors - Erros de linhas individuais
+export const importErrors = pgTable("import_errors", {
+  id: serial("id").primaryKey(),
+  importRunId: integer("import_run_id").references(() => importRuns.id, { onDelete: "cascade" }).notNull(),
+  rowNumber: integer("row_number").notNull(), // Número da linha no arquivo original
+  cpf: varchar("cpf", { length: 14 }), // CPF da linha (se disponível)
+  matricula: varchar("matricula", { length: 50 }), // Matrícula da linha (se disponível)
+  errorType: varchar("error_type", { length: 50 }).notNull(), // validation, database, parsing, etc.
+  errorMessage: text("error_message").notNull(),
+  rawPayload: jsonb("raw_payload"), // Linha completa do arquivo para debug
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schemas
+export const insertImportRunSchema = createInsertSchema(importRuns, {
+  tipoImport: z.enum(IMPORT_TYPES).default("base_geral"),
+  chunkSize: z.number().int().min(1000).max(50000).default(10000),
+}).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true, 
+  processedRows: true, 
+  successRows: true, 
+  errorRows: true,
+  currentChunk: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export const insertImportErrorSchema = createInsertSchema(importErrors).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type ImportRun = typeof importRuns.$inferSelect;
+export type InsertImportRun = z.infer<typeof insertImportRunSchema>;
+
+export type ImportError = typeof importErrors.$inferSelect;
+export type InsertImportError = z.infer<typeof insertImportErrorSchema>;
 
 // Default Role Play prompt
 export const DEFAULT_ROLEPLAY_PROMPT = `Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.
