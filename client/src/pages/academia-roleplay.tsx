@@ -70,7 +70,8 @@ export default function AcademiaRoleplay() {
 
   const isMaster = user?.role === "master";
   const isCoordinator = user?.role === "coordenacao";
-  const canBypassQuiz = isMaster || isCoordinator;
+  const isAtendimento = user?.role === "atendimento";
+  const canBypassQuiz = isMaster || isCoordinator || isAtendimento;
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],

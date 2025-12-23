@@ -49,8 +49,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check } from "lucide-react";
-import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission } from "@shared/schema";
+import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission, type Tenant } from "@shared/schema";
 import { Separator } from "@/components/ui/separator";
+import { Building2 } from "lucide-react";
 
 const MODULE_TRANSLATIONS: Record<string, string> = {
   modulo_simulador: "CRM pro",
@@ -86,6 +87,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<UserRole>("vendedor");
   const [managerId, setManagerId] = useState<string>("");
   const [permissions, setPermissions] = useState<PermissionState[]>([]);
+  const [selectedTenantIds, setSelectedTenantIds] = useState<number[]>([]);
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
@@ -115,6 +117,29 @@ export default function UsersPage() {
   const { data: myPermissions = [] } = useQuery<UserPermission[]>({
     queryKey: ["/api/permissions/my"],
     enabled: !isMaster, // Only non-master users need this
+  });
+
+  // Fetch all tenants (ambientes) for master/atendimento users
+  const { data: allTenants = [] } = useQuery<Tenant[]>({
+    queryKey: ["/api/admin/tenants"],
+    enabled: canManageAllUsers,
+  });
+
+  // Fetch user's tenants when editing
+  const { data: userTenantsList = [] } = useQuery<{ id: number; userId: number; roleInTenant: string }[]>({
+    queryKey: ["/api/admin/tenants/user", editingUser?.id],
+    enabled: !!editingUser && canManageAllUsers,
+    queryFn: async () => {
+      // Get all user-tenant associations for this user
+      const promises = allTenants.map(async (tenant) => {
+        const res = await fetch(`/api/admin/tenants/${tenant.id}/users`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.filter((ut: any) => ut.userId === editingUser?.id).map((ut: any) => ({ ...ut, tenantId: tenant.id }));
+      });
+      const results = await Promise.all(promises);
+      return results.flat();
+    },
   });
 
   // Check if current user has Config. Usuários with canEdit
@@ -231,6 +256,49 @@ export default function UsersPage() {
     },
   });
 
+  // Save user tenants mutation
+  const saveUserTenantsMutation = useMutation({
+    mutationFn: async ({ userId, tenantIds }: { userId: number; tenantIds: number[] }) => {
+      // First, get current tenant associations
+      const currentAssociations: { tenantId: number; userTenantId: number }[] = [];
+      for (const tenant of allTenants) {
+        const res = await fetch(`/api/admin/tenants/${tenant.id}/users`);
+        if (res.ok) {
+          const data = await res.json();
+          const userAssoc = data.find((ut: any) => ut.userId === userId);
+          if (userAssoc) {
+            currentAssociations.push({ tenantId: tenant.id, userTenantId: userAssoc.id });
+          }
+        }
+      }
+
+      // Remove associations that are no longer selected
+      for (const assoc of currentAssociations) {
+        if (!tenantIds.includes(assoc.tenantId)) {
+          await apiRequest("DELETE", `/api/admin/tenants/users/${assoc.userTenantId}`, undefined);
+        }
+      }
+
+      // Add new associations
+      const currentTenantIds = currentAssociations.map(a => a.tenantId);
+      for (const tenantId of tenantIds) {
+        if (!currentTenantIds.includes(tenantId)) {
+          await apiRequest("POST", `/api/admin/tenants/${tenantId}/users`, { userId });
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao salvar permissões",
+        description: error.message || "Não foi possível salvar as permissões",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
@@ -285,6 +353,7 @@ export default function UsersPage() {
     setRole("vendedor");
     setManagerId("");
     setPermissions([]);
+    setSelectedTenantIds([]);
   };
 
   const handleOpenCreateDialog = () => {
@@ -294,6 +363,7 @@ export default function UsersPage() {
     setPassword("");
     setRole("vendedor");
     setManagerId("");
+    setSelectedTenantIds([]);
     setIsDialogOpen(true);
   };
 
@@ -304,8 +374,17 @@ export default function UsersPage() {
     setPassword("");
     setRole(user.role as UserRole);
     setManagerId(user.managerId?.toString() || "");
+    setSelectedTenantIds([]);
     setIsDialogOpen(true);
   };
+
+  // Load user tenants when editing
+  useEffect(() => {
+    if (editingUser && userTenantsList.length > 0) {
+      const tenantIds = userTenantsList.map((ut: any) => ut.tenantId);
+      setSelectedTenantIds(tenantIds);
+    }
+  }, [editingUser, userTenantsList]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,10 +421,24 @@ export default function UsersPage() {
           if (hasConfigUsuariosPermission && editingUser.role !== "master" && permissions.length > 0) {
             savePermissionsMutation.mutate({ userId: editingUser.id, permissions });
           }
+          // Save user tenants
+          if (canManageAllUsers && allTenants.length > 0) {
+            saveUserTenantsMutation.mutate({ userId: editingUser.id, tenantIds: selectedTenantIds });
+          }
         },
       });
     } else {
-      createUserMutation.mutate(data);
+      createUserMutation.mutate(data, {
+        onSuccess: async (response) => {
+          // Save tenants for newly created user
+          if (canManageAllUsers && selectedTenantIds.length > 0) {
+            const newUser = await response.json();
+            if (newUser?.id) {
+              saveUserTenantsMutation.mutate({ userId: newUser.id, tenantIds: selectedTenantIds });
+            }
+          }
+        },
+      });
     }
   };
 
@@ -571,6 +664,47 @@ export default function UsersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {canManageAllUsers && allTenants.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-base font-semibold">Ambientes</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Selecione os ambientes que este usuário terá acesso.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-md p-3">
+                    {allTenants.map((tenant) => (
+                      <div key={tenant.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`tenant-${tenant.id}`}
+                          checked={selectedTenantIds.includes(tenant.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedTenantIds(prev => [...prev, tenant.id]);
+                            } else {
+                              setSelectedTenantIds(prev => prev.filter(id => id !== tenant.id));
+                            }
+                          }}
+                          data-testid={`checkbox-tenant-${tenant.id}`}
+                        />
+                        <Label
+                          htmlFor={`tenant-${tenant.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {tenant.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedTenantIds.length === 0 && (
+                    <p className="text-xs text-amber-600">
+                      Nenhum ambiente selecionado. O usuário não terá acesso a nenhum ambiente.
+                    </p>
+                  )}
                 </div>
               )}
 
