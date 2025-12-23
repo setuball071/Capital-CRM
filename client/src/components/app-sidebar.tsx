@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/components/tenant-theme-provider";
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -54,6 +56,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
+  const { tenant, logoUrl } = useTenant();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
     cadastros: false,
@@ -184,7 +187,24 @@ export function AppSidebar() {
   const filteredSections = getFilteredSections();
 
   return (
-    <Sidebar>
+    <Sidebar className="border-r border-border bg-background">
+      <SidebarHeader className="border-b border-border p-4">
+        <div className="flex items-center gap-3">
+          <img 
+            src={logoUrl} 
+            alt={tenant?.name || "Logo"} 
+            className="h-8 w-auto max-w-[140px] object-contain"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          {!tenant?.logoUrl && (
+            <span className="text-base font-semibold text-foreground">
+              {tenant?.name || "GoldCard"}
+            </span>
+          )}
+        </div>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
