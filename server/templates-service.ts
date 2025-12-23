@@ -1,71 +1,78 @@
 import ExcelJS from "exceljs";
 
+// Colunas que DEVEM ser formatadas como TEXTO para não virar notação científica
+const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "cpf_instituidor", "matricula_instituidor", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
+
 export const TEMPLATE_COLUMNS = {
   folha: [
-    { header: "CPF", key: "cpf", width: 15, required: true, example: "12345678901" },
-    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "123456" },
-    { header: "ORGAO", key: "orgaodesc", width: 25, required: false, example: "SECRETARIA DE EDUCACAO" },
-    { header: "UPAG", key: "upag", width: 15, required: false, example: "1234" },
-    { header: "UF", key: "uf", width: 5, required: false, example: "SP" },
-    { header: "MUNICIPIO", key: "municipio", width: 20, required: false, example: "SAO PAULO" },
-    { header: "SITUACAO_FUNCIONAL", key: "sit_func", width: 20, required: false, example: "ATIVO" },
-    { header: "SALARIO_BRUTO", key: "salario_bruto", width: 15, required: false, example: "5000.00" },
-    { header: "DESCONTOS_BRUTOS", key: "descontos_brutos", width: 15, required: false, example: "1000.00" },
-    { header: "SALARIO_LIQUIDO", key: "salario_liquido", width: 15, required: false, example: "4000.00" },
-    { header: "MARGEM_30_BRUTA", key: "margem_30_bruta", width: 15, required: false, example: "1500.00" },
-    { header: "MARGEM_30_UTILIZADA", key: "margem_30_utilizada", width: 18, required: false, example: "500.00" },
-    { header: "MARGEM_30_SALDO", key: "margem_30_saldo", width: 15, required: false, example: "1000.00" },
-    { header: "MARGEM_35_BRUTA", key: "margem_35_bruta", width: 15, required: false, example: "1750.00" },
-    { header: "MARGEM_35_UTILIZADA", key: "margem_35_utilizada", width: 18, required: false, example: "500.00" },
-    { header: "MARGEM_35_SALDO", key: "margem_35_saldo", width: 15, required: false, example: "1250.00" },
-    { header: "MARGEM_70_BRUTA", key: "margem_70_bruta", width: 15, required: false, example: "3500.00" },
-    { header: "MARGEM_70_UTILIZADA", key: "margem_70_utilizada", width: 18, required: false, example: "1000.00" },
-    { header: "MARGEM_70_SALDO", key: "margem_70_saldo", width: 15, required: false, example: "2500.00" },
-    { header: "MARGEM_CARTAO_CREDITO_SALDO", key: "margem_cartao_credito_saldo", width: 25, required: false, example: "200.00" },
-    { header: "MARGEM_CARTAO_BENEFICIO_SALDO", key: "margem_cartao_beneficio_saldo", width: 28, required: false, example: "200.00" },
+    { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "ORGAO", key: "orgaodesc", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
+    { header: "UPAG", key: "upag", width: 15, required: false, example: "00123", isText: true },
+    { header: "UF", key: "uf", width: 5, required: false, example: "SP", isText: false },
+    { header: "MUNICIPIO", key: "municipio", width: 20, required: false, example: "SAO PAULO", isText: false },
+    { header: "SITUACAO_FUNCIONAL", key: "sit_func", width: 20, required: false, example: "ATIVO", isText: false },
+    { header: "SALARIO_BRUTO", key: "salario_bruto", width: 15, required: false, example: 5000.00, isText: false },
+    { header: "DESCONTOS_BRUTOS", key: "descontos_brutos", width: 15, required: false, example: 1000.00, isText: false },
+    { header: "SALARIO_LIQUIDO", key: "salario_liquido", width: 15, required: false, example: 4000.00, isText: false },
+    { header: "MARGEM_30_BRUTA", key: "margem_30_bruta", width: 15, required: false, example: 1500.00, isText: false },
+    { header: "MARGEM_30_UTILIZADA", key: "margem_30_utilizada", width: 18, required: false, example: 500.00, isText: false },
+    { header: "MARGEM_30_SALDO", key: "margem_30_saldo", width: 15, required: false, example: 1000.00, isText: false },
+    { header: "MARGEM_35_BRUTA", key: "margem_35_bruta", width: 15, required: false, example: 1750.00, isText: false },
+    { header: "MARGEM_35_UTILIZADA", key: "margem_35_utilizada", width: 18, required: false, example: 500.00, isText: false },
+    { header: "MARGEM_35_SALDO", key: "margem_35_saldo", width: 15, required: false, example: 1250.00, isText: false },
+    { header: "MARGEM_70_BRUTA", key: "margem_70_bruta", width: 15, required: false, example: 3500.00, isText: false },
+    { header: "MARGEM_70_UTILIZADA", key: "margem_70_utilizada", width: 18, required: false, example: 1000.00, isText: false },
+    { header: "MARGEM_70_SALDO", key: "margem_70_saldo", width: 15, required: false, example: 2500.00, isText: false },
+    { header: "MARGEM_CARTAO_CREDITO_SALDO", key: "margem_cartao_credito_saldo", width: 25, required: false, example: 200.00, isText: false },
+    { header: "MARGEM_CARTAO_BENEFICIO_SALDO", key: "margem_cartao_beneficio_saldo", width: 28, required: false, example: 200.00, isText: false },
   ],
   d8_servidor: [
-    { header: "CPF", key: "cpf", width: 15, required: true, example: "12345678901" },
-    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "123456" },
-    { header: "NOME", key: "nome", width: 30, required: false, example: "JOAO DA SILVA" },
-    { header: "BANCO", key: "banco", width: 20, required: false, example: "BANCO DO BRASIL" },
-    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 20, required: false, example: "CT123456789" },
-    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO" },
-    { header: "VALOR_PARCELA", key: "valor_parcela", width: 15, required: false, example: "500.00" },
-    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: "15000.00" },
-    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "30" },
-    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO" },
-    { header: "DATA_INICIO", key: "data_inicio", width: 12, required: false, example: "01/01/2024" },
-    { header: "DATA_FIM", key: "data_fim", width: 12, required: false, example: "01/01/2027" },
+    { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "NOME", key: "nome", width: 30, required: false, example: "JOAO DA SILVA SANTOS", isText: false },
+    { header: "BANCO", key: "banco", width: 20, required: false, example: "BANCO DO BRASIL", isText: false },
+    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: false, example: "00123456789012345", isText: true },
+    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO", isText: false },
+    { header: "PMT", key: "pmt", width: 15, required: false, example: 328.50, isText: false },
+    { header: "PMT_FMT", key: "pmt_fmt", width: 18, required: false, example: "000000328,50", isText: true },
+    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: 15000.00, isText: false },
+    { header: "PRAZO", key: "prazo", width: 10, required: false, example: "084", isText: true },
+    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "030", isText: true },
+    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO", isText: false },
+    { header: "DATA_INICIO", key: "data_inicio", width: 12, required: false, example: "01/01/2024", isText: false },
+    { header: "DATA_FIM", key: "data_fim", width: 12, required: false, example: "01/01/2027", isText: false },
   ],
   d8_pensionista: [
-    { header: "CPF", key: "cpf", width: 15, required: true, example: "12345678901" },
-    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "123456" },
-    { header: "NOME", key: "nome", width: 30, required: false, example: "MARIA DA SILVA" },
-    { header: "BANCO", key: "banco", width: 20, required: false, example: "CAIXA ECONOMICA" },
-    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 20, required: false, example: "CT987654321" },
-    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO" },
-    { header: "VALOR_PARCELA", key: "valor_parcela", width: 15, required: false, example: "300.00" },
-    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: "9000.00" },
-    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "24" },
-    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO" },
-    { header: "M_INSTITUIDOR", key: "m_instituidor", width: 15, required: false, example: "654321" },
-    { header: "CPF_INSTITUIDOR", key: "cpf_instituidor", width: 15, required: false, example: "98765432109" },
-    { header: "MATRICULA_INSTITUIDOR", key: "matricula_instituidor", width: 20, required: false, example: "654321" },
+    { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "NOME", key: "nome", width: 30, required: false, example: "MARIA DA SILVA SANTOS", isText: false },
+    { header: "BANCO", key: "banco", width: 20, required: false, example: "CAIXA ECONOMICA", isText: false },
+    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: false, example: "00987654321012345", isText: true },
+    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO", isText: false },
+    { header: "PMT", key: "pmt", width: 15, required: false, example: 300.00, isText: false },
+    { header: "PMT_FMT", key: "pmt_fmt", width: 18, required: false, example: "000000300,00", isText: true },
+    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: 9000.00, isText: false },
+    { header: "PRAZO", key: "prazo", width: 10, required: false, example: "072", isText: true },
+    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "024", isText: true },
+    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO", isText: false },
+    { header: "M_INSTITUIDOR", key: "m_instituidor", width: 15, required: false, example: "0654321", isText: true },
+    { header: "CPF_INSTITUIDOR", key: "cpf_instituidor", width: 15, required: false, example: "00098765432", isText: true },
+    { header: "MATRICULA_INSTITUIDOR", key: "matricula_instituidor", width: 20, required: false, example: "0654321", isText: true },
   ],
   contatos: [
-    { header: "CPF", key: "cpf", width: 15, required: true, example: "12345678901" },
-    { header: "TELEFONE_1", key: "telefone_1", width: 15, required: false, example: "11999998888" },
-    { header: "TELEFONE_2", key: "telefone_2", width: 15, required: false, example: "11988887777" },
-    { header: "TELEFONE_3", key: "telefone_3", width: 15, required: false, example: "1133334444" },
-    { header: "TELEFONE_4", key: "telefone_4", width: 15, required: false, example: "" },
-    { header: "TELEFONE_5", key: "telefone_5", width: 15, required: false, example: "" },
-    { header: "EMAIL", key: "email", width: 30, required: false, example: "cliente@email.com" },
-    { header: "EMAIL_2", key: "email_2", width: 30, required: false, example: "" },
-    { header: "ENDERECO", key: "endereco", width: 40, required: false, example: "RUA EXEMPLO, 123" },
-    { header: "CIDADE", key: "cidade", width: 20, required: false, example: "SAO PAULO" },
-    { header: "UF", key: "uf", width: 5, required: false, example: "SP" },
-    { header: "CEP", key: "cep", width: 12, required: false, example: "01234567" },
+    { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "TELEFONE_1", key: "telefone_1", width: 15, required: false, example: "11999998888", isText: true },
+    { header: "TELEFONE_2", key: "telefone_2", width: 15, required: false, example: "11988887777", isText: true },
+    { header: "TELEFONE_3", key: "telefone_3", width: 15, required: false, example: "1133334444", isText: true },
+    { header: "TELEFONE_4", key: "telefone_4", width: 15, required: false, example: "", isText: true },
+    { header: "TELEFONE_5", key: "telefone_5", width: 15, required: false, example: "", isText: true },
+    { header: "EMAIL", key: "email", width: 30, required: false, example: "cliente@email.com", isText: false },
+    { header: "EMAIL_2", key: "email_2", width: 30, required: false, example: "", isText: false },
+    { header: "ENDERECO", key: "endereco", width: 40, required: false, example: "RUA EXEMPLO, 123 - APTO 45", isText: false },
+    { header: "CIDADE", key: "cidade", width: 20, required: false, example: "SAO PAULO", isText: false },
+    { header: "UF", key: "uf", width: 5, required: false, example: "SP", isText: false },
+    { header: "CEP", key: "cep", width: 12, required: false, example: "01234567", isText: true },
   ],
 };
 
@@ -113,16 +120,17 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
     };
   });
 
-  // Add example row
-  const exampleData: Record<string, string> = {};
+  // Add example row with proper formatting
+  const exampleData: Record<string, string | number> = {};
   columns.forEach(col => {
     exampleData[col.key] = col.example;
   });
-  worksheet.addRow(exampleData);
+  const exampleRow = worksheet.addRow(exampleData);
 
-  // Style example row
-  const exampleRow = worksheet.getRow(2);
-  exampleRow.eachCell((cell) => {
+  // Style example row and set TEXT format for critical columns
+  exampleRow.eachCell((cell, colNumber) => {
+    const colDef = columns[colNumber - 1];
+    
     cell.fill = {
       type: "pattern",
       pattern: "solid",
@@ -132,12 +140,26 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
       italic: true,
       color: { argb: "FF92400E" },
     };
+    
+    // Set TEXT format for columns that must preserve leading zeros
+    if (colDef.isText) {
+      cell.numFmt = "@"; // Text format
+    }
+  });
+
+  // Set column formats for the entire column (for user data)
+  columns.forEach((col, index) => {
+    if (col.isText) {
+      const column = worksheet.getColumn(index + 1);
+      column.numFmt = "@"; // Text format for entire column
+    }
   });
 
   // Add instructions sheet
   instructionsSheet.columns = [
     { header: "Campo", key: "field", width: 30 },
     { header: "Obrigatorio", key: "required", width: 15 },
+    { header: "Formato", key: "format", width: 15 },
     { header: "Descricao", key: "description", width: 50 },
     { header: "Exemplo", key: "example", width: 25 },
   ];
@@ -159,15 +181,15 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
 
   // Add field descriptions
   const descriptions: Record<string, string> = {
-    cpf: "CPF do cliente (somente numeros, 11 digitos)",
-    matricula: "Matricula do servidor/pensionista",
+    cpf: "CPF do cliente (11 digitos, com zeros a esquerda)",
+    matricula: "Matricula do servidor/pensionista (preserva zeros)",
     nome: "Nome completo do cliente",
     orgaodesc: "Descricao do orgao",
-    upag: "Unidade pagadora",
+    upag: "Unidade pagadora (preserva zeros)",
     uf: "Estado (sigla)",
     municipio: "Cidade do cliente",
     sit_func: "Situacao funcional (ATIVO, APOSENTADO, PENSIONISTA)",
-    salario_bruto: "Salario bruto em reais",
+    salario_bruto: "Salario bruto em reais (numero com 2 decimais)",
     descontos_brutos: "Total de descontos em reais",
     salario_liquido: "Salario liquido em reais",
     margem_30_bruta: "Margem 30% bruta",
@@ -182,18 +204,20 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
     margem_cartao_credito_saldo: "Margem disponivel para cartao de credito",
     margem_cartao_beneficio_saldo: "Margem disponivel para cartao beneficio",
     banco: "Nome do banco do emprestimo",
-    numero_contrato: "Numero do contrato",
+    numero_contrato: "Numero do contrato (TEXTO - preserva todos os digitos)",
     tipo_contrato: "Tipo do contrato (CONSIGNADO, CARTAO, etc)",
-    valor_parcela: "Valor da parcela em reais",
+    pmt: "Valor da parcela (NUMERO com 2 casas decimais)",
+    pmt_fmt: "Parcela formatada (TEXTO ex: 000000328,50) - se preenchido, tem prioridade sobre PMT",
     saldo_devedor: "Saldo devedor total em reais",
-    prazo_remanescente: "Quantidade de parcelas restantes",
+    prazo: "Prazo total do contrato (3 digitos, ex: 084)",
+    prazo_remanescente: "Parcelas restantes (3 digitos, ex: 030)",
     situacao_contrato: "Status do contrato (ATIVO, ENCERRADO)",
     data_inicio: "Data de inicio do contrato (DD/MM/AAAA)",
     data_fim: "Data prevista de fim do contrato (DD/MM/AAAA)",
-    m_instituidor: "Matricula do instituidor (para pensionistas)",
-    cpf_instituidor: "CPF do instituidor (para pensionistas)",
+    m_instituidor: "Matricula do instituidor (para pensionistas, TEXTO)",
+    cpf_instituidor: "CPF do instituidor (para pensionistas, 11 digitos)",
     matricula_instituidor: "Matricula do instituidor (para pensionistas)",
-    telefone_1: "Telefone principal (DDD + numero)",
+    telefone_1: "Telefone principal (DDD + numero, sem formatacao)",
     telefone_2: "Telefone secundario",
     telefone_3: "Telefone adicional",
     telefone_4: "Telefone adicional",
@@ -202,32 +226,51 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
     email_2: "Email secundario",
     endereco: "Endereco completo",
     cidade: "Cidade",
-    cep: "CEP (somente numeros)",
+    cep: "CEP (8 digitos, sem hifen)",
   };
 
   columns.forEach(col => {
     instructionsSheet.addRow({
       field: col.header,
       required: col.required ? "SIM" : "NAO",
+      format: col.isText ? "TEXTO" : "NUMERO/TEXTO",
       description: descriptions[col.key] || col.header,
-      example: col.example,
+      example: String(col.example),
     });
   });
 
   // Add general instructions at the bottom
   instructionsSheet.addRow({});
-  instructionsSheet.addRow({ field: "INSTRUCOES GERAIS:", required: "", description: "", example: "" });
-  instructionsSheet.addRow({ field: "1. Campos em azul escuro sao obrigatorios", required: "", description: "", example: "" });
-  instructionsSheet.addRow({ field: "2. A linha 2 da aba Dados e um exemplo - delete antes de importar", required: "", description: "", example: "" });
-  instructionsSheet.addRow({ field: "3. Valores monetarios devem usar ponto como separador decimal (ex: 1500.50)", required: "", description: "", example: "" });
-  instructionsSheet.addRow({ field: "4. CPF deve ter 11 digitos numericos", required: "", description: "", example: "" });
+  const boldStyle: Partial<ExcelJS.Font> = { bold: true, color: { argb: "FF1F2937" } };
+  
+  const instrRow1 = instructionsSheet.addRow({ field: "=== INSTRUCOES GERAIS ===" });
+  instrRow1.getCell(1).font = boldStyle;
+  
+  instructionsSheet.addRow({ field: "1. Campos em AZUL ESCURO sao OBRIGATORIOS" });
+  instructionsSheet.addRow({ field: "2. Campos em AZUL CLARO sao opcionais" });
+  instructionsSheet.addRow({ field: "3. A linha 2 da aba 'Dados' contem um EXEMPLO - delete antes de importar" });
+  instructionsSheet.addRow({ field: "4. Colunas marcadas como TEXTO preservam zeros a esquerda automaticamente" });
+  instructionsSheet.addRow({ field: "5. CPF deve ter EXATAMENTE 11 digitos (com zeros a esquerda se necessario)" });
+  instructionsSheet.addRow({ field: "6. Valores monetarios (PMT, SALDO) devem usar ponto como separador decimal (ex: 1500.50)" });
+  
+  instructionsSheet.addRow({});
   
   if (templateType === "folha") {
-    instructionsSheet.addRow({ field: "5. Importe a FOLHA primeiro, antes de D8 e Contatos", required: "", description: "", example: "" });
+    const folhaRow = instructionsSheet.addRow({ field: ">>> ORDEM DE IMPORTACAO: Importe a FOLHA PRIMEIRO <<<" });
+    folhaRow.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
+    instructionsSheet.addRow({ field: "A folha cria o vinculo CPF+MATRICULA que sera usado por D8 e Contatos" });
   } else if (templateType.startsWith("d8")) {
-    instructionsSheet.addRow({ field: "5. Importe D8 DEPOIS da folha (CPF+Matricula devem existir)", required: "", description: "", example: "" });
+    const d8Row = instructionsSheet.addRow({ field: ">>> ORDEM: Importe D8 DEPOIS da Folha <<<" });
+    d8Row.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
+    instructionsSheet.addRow({ field: "O par CPF+MATRICULA deve existir (importado via Folha)" });
+    instructionsSheet.addRow({ field: "PMT_FMT (texto) tem prioridade sobre PMT (numero) se ambos estiverem preenchidos" });
+    if (templateType === "d8_pensionista") {
+      instructionsSheet.addRow({ field: "M_INSTITUIDOR: matricula do servidor original (para pensoes)" });
+    }
   } else if (templateType === "contatos") {
-    instructionsSheet.addRow({ field: "5. Importe Contatos POR ULTIMO (CPF deve existir na base)", required: "", description: "", example: "" });
+    const contatosRow = instructionsSheet.addRow({ field: ">>> ORDEM: Importe Contatos POR ULTIMO <<<" });
+    contatosRow.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
+    instructionsSheet.addRow({ field: "O CPF deve existir na base (importado via Folha ou D8)" });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -236,10 +279,10 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
 
 export function getTemplateFileName(templateType: TemplateType): string {
   const names: Record<TemplateType, string> = {
-    folha: "modelo_importacao_folha.xlsx",
-    d8_servidor: "modelo_importacao_d8_servidor.xlsx",
-    d8_pensionista: "modelo_importacao_d8_pensionista.xlsx",
-    contatos: "modelo_importacao_contatos.xlsx",
+    folha: "modelo_folha.xlsx",
+    d8_servidor: "modelo_d8_servidor.xlsx",
+    d8_pensionista: "modelo_d8_pensionista.xlsx",
+    contatos: "modelo_contatos.xlsx",
   };
   return names[templateType];
 }

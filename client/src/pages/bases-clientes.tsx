@@ -392,7 +392,7 @@ export default function BasesClientes() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open("/api/templates/folha", "_blank")}
+                    onClick={() => window.location.href = "/api/import/templates/folha"}
                     data-testid="button-download-modelo-folha"
                     className="justify-start"
                   >
@@ -402,7 +402,7 @@ export default function BasesClientes() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open("/api/templates/d8_servidor", "_blank")}
+                    onClick={() => window.location.href = "/api/import/templates/d8-servidor"}
                     data-testid="button-download-modelo-d8-servidor"
                     className="justify-start"
                   >
@@ -412,7 +412,7 @@ export default function BasesClientes() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open("/api/templates/d8_pensionista", "_blank")}
+                    onClick={() => window.location.href = "/api/import/templates/d8-pensionista"}
                     data-testid="button-download-modelo-d8-pensionista"
                     className="justify-start"
                   >
@@ -422,7 +422,7 @@ export default function BasesClientes() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open("/api/templates/contatos", "_blank")}
+                    onClick={() => window.location.href = "/api/import/templates/contatos"}
                     data-testid="button-download-modelo-contatos"
                     className="justify-start"
                   >

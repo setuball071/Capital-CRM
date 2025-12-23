@@ -3224,28 +3224,57 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
   
-  // GET /api/templates/:type - Download template Excel para importação
-  app.get("/api/templates/:type", requireAuth, async (req, res) => {
+  // Helper function para download de templates
+  async function handleTemplateDownload(req: Request, res: Response, templateType: "folha" | "d8_servidor" | "d8_pensionista" | "contatos") {
     try {
       const { generateExcelTemplate, getTemplateFileName } = await import("./templates-service");
-      type TemplateType = "folha" | "d8_servidor" | "d8_pensionista" | "contatos";
-      const templateType = req.params.type as TemplateType;
-      
-      const validTypes = ["folha", "d8_servidor", "d8_pensionista", "contatos"];
-      if (!validTypes.includes(templateType)) {
-        return res.status(400).json({ message: "Tipo de template inválido. Use: folha, d8_servidor, d8_pensionista ou contatos" });
-      }
       
       const buffer = await generateExcelTemplate(templateType);
       const fileName = getTemplateFileName(templateType);
       
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       return res.send(buffer);
     } catch (error: any) {
       console.error("Download template error:", error);
       return res.status(500).json({ message: error.message || "Erro ao gerar template" });
     }
+  }
+  
+  // GET /api/import/templates/folha - Download template Folha
+  app.get("/api/import/templates/folha", requireAuth, async (req, res) => {
+    return handleTemplateDownload(req, res, "folha");
+  });
+  
+  // GET /api/import/templates/d8-servidor - Download template D8 Servidor
+  app.get("/api/import/templates/d8-servidor", requireAuth, async (req, res) => {
+    return handleTemplateDownload(req, res, "d8_servidor");
+  });
+  
+  // GET /api/import/templates/d8-pensionista - Download template D8 Pensionista
+  app.get("/api/import/templates/d8-pensionista", requireAuth, async (req, res) => {
+    return handleTemplateDownload(req, res, "d8_pensionista");
+  });
+  
+  // GET /api/import/templates/contatos - Download template Contatos
+  app.get("/api/import/templates/contatos", requireAuth, async (req, res) => {
+    return handleTemplateDownload(req, res, "contatos");
+  });
+  
+  // GET /api/templates/:type - Download template Excel para importação (legacy/generic)
+  app.get("/api/templates/:type", requireAuth, async (req, res) => {
+    type TemplateType = "folha" | "d8_servidor" | "d8_pensionista" | "contatos";
+    const templateType = req.params.type as TemplateType;
+    
+    const validTypes = ["folha", "d8_servidor", "d8_pensionista", "contatos"];
+    if (!validTypes.includes(templateType)) {
+      return res.status(400).json({ message: "Tipo de template inválido. Use: folha, d8_servidor, d8_pensionista ou contatos" });
+    }
+    
+    return handleTemplateDownload(req, res, templateType);
   });
   
   // POST /imports/start - Inicia um job de importação massiva (disk storage)

@@ -1,0 +1,64 @@
+Objetivo: Corrigir e finalizar a área “Modelos para Importação Massiva (Streaming)” da Base de Clientes.
+
+Hoje existe apenas um modal explicando colunas obrigatórias/opcionais. Eu preciso de MODELOS PRONTOS (arquivos .xlsx) para download, para ganhar tempo e evitar erro de digitação.
+
+Tarefas (obrigatórias):
+
+1) Criar 4 templates .XLSX reais e baixáveis:
+- folha.xlsx (Folha/Financeiro mensal)
+- d8_servidor.xlsx (Descontos bancários D8 Servidor)
+- d8_pensionista.xlsx (Descontos bancários D8 Pensionista com M_INSTITUIDOR)
+- contatos.xlsx (Higienização: telefones/emails/endereço)
+
+2) Implementação técnica dos templates:
+- Gerar via exceljs no backend (Node/Express), sem depender do front.
+- Cada arquivo deve ter:
+  a) Cabeçalho na primeira linha com os nomes exatos das colunas
+  b) Linha 2 com exemplo preenchido (dados fictícios) para orientar o usuário
+  c) Formatação de colunas CRÍTICAS como TEXTO no Excel (para não virar número científico e não comer zeros):
+     - cpf (texto, 11 dígitos)
+     - matricula (texto)
+     - upag (texto)
+     - numero_contrato / n_contrato (texto)
+     - prazo (texto com 3 dígitos, ex 001)
+     - m_instituidor (texto)
+  d) PMT/parcela:
+     - No template, PMT deve vir como NÚMERO com 2 casas (para “ficar normal” no Excel)
+     - Mas deve existir também uma coluna opcional pmt_fmt (texto) se eu quiser colar o padrão com zeros (000000328,00)
+     - Se a coluna pmt_fmt vier preenchida, o import prioriza pmt_fmt; senão usa pmt numérico.
+
+3) Rotas (endpoints) para download autenticado:
+- GET /api/import/templates/folha
+- GET /api/import/templates/d8-servidor
+- GET /api/import/templates/d8-pensionista
+- GET /api/import/templates/contatos
+Regras:
+- Exigir autenticação (401 se não logado)
+- Responder com headers corretos:
+  Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  Content-Disposition: attachment; filename="folha.xlsx" (etc)
+
+4) UI:
+Na página “Base de Clientes”, na seção “Modelos para Importação Massiva (Streaming)”:
+- Adicionar 4 botões de download (Folha, D8 Servidor, D8 Pensionista, Contatos).
+- Ao clicar, chamar os endpoints acima e baixar o arquivo.
+- Se 401, redirecionar para login ou exibir “Faça login para baixar”.
+
+5) Correções de robustez (não quebrar dados):
+- Garantir que no import:
+  - CPF sempre normalize para 11 dígitos (remove máscara e padStart 11)
+  - Matrícula e UPAG sempre texto e preserva zeros
+  - Numero_contrato sempre texto e preserva todos os dígitos (nunca Number / nunca notação científica)
+  - Prazo sempre padStart 3
+  - Para Pensionista: armazenar M_INSTITUIDOR (texto) em extras JSONB do vínculo e do contrato
+
+6) Entregáveis:
+- Os 4 endpoints funcionando com download real (xlsx)
+- Os 4 botões funcionando na UI
+- Templates abrindo no Excel com as colunas críticas como TEXTO (sem notação científica, sem remover zeros)
+- Linha exemplo nos 4 templates
+
+Restrições:
+- Não criar telas novas além da seção de download na Base de Clientes.
+- Não alterar regras de negócio fora do import e templates.
+- Não remover o modal explicativo atual (ele pode continuar), mas o foco é entregar os arquivos modelo.

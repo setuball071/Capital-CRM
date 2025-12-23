@@ -18,6 +18,7 @@ import {
   normalizeCol,
   padCpf,
   padUpag,
+  padPrazo,
   preserveMatricula,
   preserveNumeroContrato,
   normalizeBrDecimal,
@@ -55,13 +56,16 @@ const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   nome: "nome",
   banco: "banco",
   numero_contrato: "numero_contrato",
+  n_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
   valor_parcela: "valor_parcela",
-  pmt: "valor_parcela",
+  pmt: "pmt",
+  pmt_fmt: "pmt_fmt",
   saldo_devedor: "saldo_devedor",
   prazo_remanescente: "prazo_remanescente",
-  prazo: "prazo_remanescente",
+  prazo: "prazo",
+  prazo_total: "prazo",
   situacao_contrato: "situacao_contrato",
   data_inicio: "data_inicio",
   data_fim: "data_fim",
@@ -540,19 +544,43 @@ class StreamingImportService {
 
     const extras: Record<string, any> = {};
     if (run.layoutD8 === "pensionista") {
-      extras.m_instituidor = this.extractValue(row, headerMap, "m_instituidor");
-      extras.cpf_instituidor = this.extractValue(row, headerMap, "cpf_instituidor");
-      extras.matricula_instituidor = this.extractValue(row, headerMap, "matricula_instituidor");
+      extras.m_instituidor = preserveMatricula(this.extractValue(row, headerMap, "m_instituidor"));
+      extras.cpf_instituidor = padCpf(this.extractValue(row, headerMap, "cpf_instituidor"));
+      extras.matricula_instituidor = preserveMatricula(this.extractValue(row, headerMap, "matricula_instituidor"));
     }
+
+    // PMT: pmt_fmt (texto) tem prioridade sobre pmt (número)
+    const pmtFmt = this.extractValue(row, headerMap, "pmt_fmt");
+    const pmtNumerico = this.extractValue(row, headerMap, "pmt");
+    const valorParcelaRaw = this.extractValue(row, headerMap, "valor_parcela");
+    let valorParcela: number | null = null;
+    
+    if (pmtFmt && pmtFmt.trim().length > 0) {
+      valorParcela = normalizeBrDecimal(pmtFmt);
+    } else if (pmtNumerico) {
+      valorParcela = normalizeBrDecimal(pmtNumerico);
+    } else if (valorParcelaRaw) {
+      valorParcela = normalizeBrDecimal(valorParcelaRaw);
+    }
+
+    // Prazo: normaliza para 3 dígitos
+    const prazoRaw = this.extractValue(row, headerMap, "prazo");
+    const prazoRemanRaw = this.extractValue(row, headerMap, "prazo_remanescente");
+    const prazoNorm = padPrazo(prazoRaw);
+    const prazoRemanNorm = padPrazo(prazoRemanRaw);
+    
+    const parcelasRestantes = prazoRemanNorm 
+      ? parseInt(prazoRemanNorm, 10) || null 
+      : (prazoNorm ? parseInt(prazoNorm, 10) || null : null);
 
     await this.upsertContrato({
       pessoaId: vinculo.pessoaId,
       banco,
       numeroContrato,
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",
-      valorParcela: normalizeBrDecimal(this.extractValue(row, headerMap, "valor_parcela")),
+      valorParcela,
       saldoDevedor: normalizeBrDecimal(this.extractValue(row, headerMap, "saldo_devedor")),
-      parcelasRestantes: parseInt(this.extractValue(row, headerMap, "prazo_remanescente") || "0", 10) || null,
+      parcelasRestantes,
       status: this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO",
       competencia: run.competencia,
       baseTag: run.baseTag,
