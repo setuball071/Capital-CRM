@@ -382,10 +382,59 @@ export default function BasesClientes() {
                   </div>
                 </div>
               </ScrollArea>
-              <DialogFooter>
+              <Separator className="my-4" />
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-primary">Modelos para Importação Massiva (Streaming)</h3>
+                <p className="text-xs text-muted-foreground">
+                  Para bases com milhões de registros, use os modelos específicos abaixo. Siga a ordem: 1) Folha → 2) D8 → 3) Contatos
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/api/templates/folha", "_blank")}
+                    data-testid="button-download-modelo-folha"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo Folha
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/api/templates/d8_servidor", "_blank")}
+                    data-testid="button-download-modelo-d8-servidor"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo D8 Servidor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/api/templates/d8_pensionista", "_blank")}
+                    data-testid="button-download-modelo-d8-pensionista"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo D8 Pensionista
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/api/templates/contatos", "_blank")}
+                    data-testid="button-download-modelo-contatos"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo Contatos
+                  </Button>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
                 <Button onClick={handleDownloadModelo} data-testid="button-download-modelo">
                   <Download className="w-4 h-4 mr-2" />
-                  Baixar modelo Excel
+                  Baixar modelo geral Excel
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -3224,6 +3224,30 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
   
+  // GET /api/templates/:type - Download template Excel para importação
+  app.get("/api/templates/:type", requireAuth, async (req, res) => {
+    try {
+      const { generateExcelTemplate, getTemplateFileName } = await import("./templates-service");
+      type TemplateType = "folha" | "d8_servidor" | "d8_pensionista" | "contatos";
+      const templateType = req.params.type as TemplateType;
+      
+      const validTypes = ["folha", "d8_servidor", "d8_pensionista", "contatos"];
+      if (!validTypes.includes(templateType)) {
+        return res.status(400).json({ message: "Tipo de template inválido. Use: folha, d8_servidor, d8_pensionista ou contatos" });
+      }
+      
+      const buffer = await generateExcelTemplate(templateType);
+      const fileName = getTemplateFileName(templateType);
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+      return res.send(buffer);
+    } catch (error: any) {
+      console.error("Download template error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao gerar template" });
+    }
+  });
+  
   // POST /imports/start - Inicia um job de importação massiva (disk storage)
   app.post("/api/imports/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
     try {

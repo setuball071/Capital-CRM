@@ -529,6 +529,15 @@ class StreamingImportService {
       return false;
     }
 
+    // D8 contém nome do cliente - atualizar pessoa se nome estiver disponível e não vazio
+    const nomeD8 = this.extractValue(row, headerMap, "nome");
+    if (nomeD8 && nomeD8.trim().length > 0 && vinculo.pessoaId) {
+      await db
+        .update(clientesPessoa)
+        .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
+        .where(eq(clientesPessoa.id, vinculo.pessoaId));
+    }
+
     const extras: Record<string, any> = {};
     if (run.layoutD8 === "pensionista") {
       extras.m_instituidor = this.extractValue(row, headerMap, "m_instituidor");
