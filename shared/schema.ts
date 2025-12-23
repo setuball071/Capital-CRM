@@ -407,7 +407,23 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
 });
 
-// 2) clientes_folha_mes - Dados agregados da folha por competência
+// 2) clientes_vinculo - Vínculos CPF + Matrícula (âncora de cruzamento)
+// Permite um CPF ter múltiplas matrículas e vice-versa
+export const clientesVinculo = pgTable("clientes_vinculo", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  cpf: varchar("cpf", { length: 14 }).notNull(), // CPF padStart 11
+  matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como texto
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }),
+  convenio: varchar("convenio", { length: 100 }),
+  orgao: varchar("orgao", { length: 255 }),
+  upag: varchar("upag", { length: 100 }),
+  ativo: boolean("ativo").notNull().default(true),
+  primeiraImportacao: timestamp("primeira_importacao").notNull().defaultNow(),
+  ultimaAtualizacao: timestamp("ultima_atualizacao").notNull().defaultNow(),
+});
+
+// 3) clientes_folha_mes - Dados agregados da folha por competência
 export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -1306,8 +1322,11 @@ export const importRuns = pgTable("import_runs", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
   tipoImport: varchar("tipo_import", { length: 50 }).notNull().default("base_geral"), // folha, d8, contatos, base_geral
-  competencia: timestamp("competencia"),
+  competencia: timestamp("competencia"), // Para tipo folha
+  banco: varchar("banco", { length: 100 }), // Para tipo d8
+  layoutD8: varchar("layout_d8", { length: 20 }), // "servidor" ou "pensionista" para tipo d8
   arquivoOrigem: varchar("arquivo_origem", { length: 500 }),
+  arquivoPath: varchar("arquivo_path", { length: 500 }), // Caminho do arquivo no servidor para streaming
   arquivoTamanhoBytes: integer("arquivo_tamanho_bytes"),
   status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente, processando, pausado, concluido, erro, cancelado
   processedRows: integer("processed_rows").notNull().default(0),
@@ -1316,11 +1335,14 @@ export const importRuns = pgTable("import_runs", {
   errorRows: integer("error_rows").notNull().default(0),
   chunkSize: integer("chunk_size").notNull().default(10000), // Tamanho do batch (5k-20k)
   currentChunk: integer("current_chunk").notNull().default(0), // Chunk atual para retomada
+  offsetAtual: integer("offset_atual").notNull().default(0), // Offset em bytes para retomada de streaming
   baseTag: varchar("base_tag", { length: 100 }),
   convenio: varchar("convenio", { length: 100 }),
+  maxLinhasExecucao: integer("max_linhas_execucao").default(1000000), // Limite de linhas por execução (1M)
   errorMessage: text("error_message"), // Mensagem de erro geral se falhar
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  pausedAt: timestamp("paused_at"), // Quando foi pausado para retomada
   createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1339,10 +1361,16 @@ export const importErrors = pgTable("import_errors", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// D8 layout types
+export const D8_LAYOUTS = ["servidor", "pensionista"] as const;
+export type D8Layout = typeof D8_LAYOUTS[number];
+
 // Insert schemas
 export const insertImportRunSchema = createInsertSchema(importRuns, {
   tipoImport: z.enum(IMPORT_TYPES).default("base_geral"),
+  layoutD8: z.enum(D8_LAYOUTS).optional(),
   chunkSize: z.number().int().min(1000).max(50000).default(10000),
+  maxLinhasExecucao: z.number().int().min(100000).max(10000000).default(1000000),
 }).omit({ 
   id: true, 
   createdAt: true, 
@@ -1351,9 +1379,20 @@ export const insertImportRunSchema = createInsertSchema(importRuns, {
   successRows: true, 
   errorRows: true,
   currentChunk: true,
+  offsetAtual: true,
   startedAt: true,
   completedAt: true,
+  pausedAt: true,
 });
+
+// Insert schema for clientes_vinculo
+export const insertClienteVinculoSchema = createInsertSchema(clientesVinculo, {
+  cpf: z.string().min(11).max(14),
+  matricula: z.string().min(1).max(50),
+}).omit({ id: true, primeiraImportacao: true, ultimaAtualizacao: true });
+
+export type ClienteVinculo = typeof clientesVinculo.$inferSelect;
+export type InsertClienteVinculo = z.infer<typeof insertClienteVinculoSchema>;
 
 export const insertImportErrorSchema = createInsertSchema(importErrors).omit({
   id: true,

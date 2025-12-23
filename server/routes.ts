@@ -3193,6 +3193,168 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
+  
+  // POST /imports/start - Inicia um job de importação massiva
+  app.post("/api/imports/start", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+    try {
+      const { streamingImportService } = await import("./streaming-import-service");
+      const file = req.file;
+      const { tipo_import, competencia, banco, layout_d8, convenio } = req.body;
+      
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo é obrigatório" });
+      }
+      
+      if (!tipo_import || !["folha", "d8", "contatos"].includes(tipo_import)) {
+        return res.status(400).json({ message: "tipo_import deve ser folha, d8 ou contatos" });
+      }
+      
+      if (tipo_import === "folha" && !competencia) {
+        return res.status(400).json({ message: "competencia é obrigatória para importação de folha" });
+      }
+      
+      if (tipo_import === "d8" && !banco) {
+        return res.status(400).json({ message: "banco é obrigatório para importação de D8" });
+      }
+      
+      const tmpPath = `/tmp/import_${Date.now()}_${file.originalname}`;
+      fs.writeFileSync(tmpPath, file.buffer);
+      
+      const [year, month] = (competencia || "").split("-");
+      const competenciaDate = competencia ? new Date(parseInt(year), parseInt(month) - 1, 1) : undefined;
+      
+      const result = await streamingImportService.startImportJob(tmpPath, {
+        tipoImport: tipo_import,
+        competencia: competenciaDate,
+        banco: banco || undefined,
+        layoutD8: layout_d8 || undefined,
+        convenio: convenio || undefined,
+        tenantId: req.tenantId || undefined,
+        createdById: req.user?.id,
+      });
+      
+      console.log(`[StreamImport] Job started: ${result.importRunId}`);
+      
+      return res.json({
+        success: true,
+        importRunId: result.importRunId,
+        message: result.message,
+        nextStep: `POST /api/imports/process/${result.importRunId}`,
+      });
+    } catch (error: any) {
+      console.error("Start import error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao iniciar importação" });
+    }
+  });
+
+  // POST /imports/process/:id - Processa um chunk do job de importação
+  app.post("/api/imports/process/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { streamingImportService } = await import("./streaming-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      console.log(`[StreamImport] Processing chunk for run ${runId}`);
+      
+      const result = await streamingImportService.processImportChunk(runId);
+      
+      console.log(`[StreamImport] Chunk result: ${result.processedRows} rows, status: ${result.status}`);
+      
+      return res.json({
+        success: result.success,
+        importRunId: result.importRunId,
+        processedRows: result.processedRows,
+        successRows: result.successRows,
+        errorRows: result.errorRows,
+        status: result.status,
+        pausedForResume: result.pausedForResume,
+        message: result.message,
+        nextStep: result.pausedForResume ? `POST /api/imports/process/${runId}` : null,
+      });
+    } catch (error: any) {
+      console.error("Process import error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar importação" });
+    }
+  });
+
+  // GET /imports/status/:id - Status de um job de importação
+  app.get("/api/imports/status/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { streamingImportService } = await import("./streaming-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      const run = await streamingImportService.getImportStatus(runId);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Job de importação não encontrado" });
+      }
+      
+      const percentComplete = run.totalRows > 0 
+        ? Math.round((run.processedRows / run.totalRows) * 100) 
+        : 0;
+      
+      return res.json({
+        id: run.id,
+        tipoImport: run.tipoImport,
+        status: run.status,
+        arquivoOrigem: run.arquivoOrigem,
+        totalRows: run.totalRows,
+        processedRows: run.processedRows,
+        successRows: run.successRows,
+        errorRows: run.errorRows,
+        percentComplete,
+        competencia: run.competencia,
+        banco: run.banco,
+        layoutD8: run.layoutD8,
+        convenio: run.convenio,
+        baseTag: run.baseTag,
+        errorMessage: run.errorMessage,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        pausedAt: run.pausedAt,
+        canResume: run.status === "pausado",
+        nextStep: run.status === "pausado" ? `POST /api/imports/process/${run.id}` : null,
+      });
+    } catch (error: any) {
+      console.error("Get import status error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar status" });
+    }
+  });
+
+  // GET /imports/:id/errors - Lista erros de um job de importação
+  app.get("/api/imports/:id/errors", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { streamingImportService } = await import("./streaming-import-service");
+      const runId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      const errors = await streamingImportService.getImportErrors(runId, limit, offset);
+      
+      return res.json({
+        errors,
+        count: errors.length,
+        limit,
+        offset,
+      });
+    } catch (error: any) {
+      console.error("Get import errors error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar erros" });
+    }
+  });
+
   // GET filtros disponíveis para clientes - MASTER ONLY
   app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {
     try {

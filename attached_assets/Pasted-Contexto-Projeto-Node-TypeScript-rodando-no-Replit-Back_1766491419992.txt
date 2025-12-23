@@ -1,0 +1,224 @@
+Contexto
+Projeto Node + TypeScript rodando no Replit.
+Backend em /server.
+Já existe importação antiga funcionando, mas não escala para arquivos com milhões de linhas.
+
+Precisamos adaptar o sistema para importações massivas (10+ milhões de linhas), mantendo o modelo antigo funcional.
+
+Arquivos principais envolvidos:
+
+server/import-service.ts
+
+server/routes.ts
+
+server/storage.ts
+
+server/tenant-middleware.ts
+
+OBJETIVO GERAL
+
+Criar um novo pipeline de importação em JOB + STREAM, capaz de importar até 1.000.000 de linhas por execução, com retomada automática, logs de erro por linha, e 3 tipos distintos de importação, sem carregar o arquivo inteiro em memória.
+
+TIPOS DE IMPORTAÇÃO (OBRIGATÓRIO)
+
+A importação SEMPRE acontece em 3 camadas separadas:
+
+1) FOLHA / FINANCEIRO (mensal)
+
+Arquivo com dados financeiros do cliente.
+
+Balisadores:
+
+CPF + MATRÍCULA + COMPETÊNCIA
+
+A competência será informada manualmente pelo usuário no upload.
+
+Atualiza:
+
+pessoa
+
+clientes_vinculo
+
+mes (fotografia mensal)
+
+2) BANCOS / D8 (por banco)
+
+Arquivo com descontos bancários.
+
+Balisadores:
+
+Cruzamento cliente: CPF + MATRÍCULA
+
+Âncora do contrato: BANCO + NUMERO_CONTRATO
+
+Banco será informado manualmente no upload.
+
+Pode ter layout SERVIDOR ou PENSIONISTA.
+
+Pensionista traz M_INSTITUIDOR, que deve ser salvo em extras (json).
+
+3) CONTATOS / HIGIENIZAÇÃO
+
+Arquivo com telefones, emails e endereço.
+
+Balisador:
+
+CPF apenas
+
+Telefones/emails deduplicados.
+
+Contato vale para todas as matrículas do CPF.
+
+REGRAS TÉCNICAS OBRIGATÓRIAS
+Tipos e preservação de dados
+
+CPF, MATRÍCULA, UPAG, NUMERO_CONTRATO:
+
+armazenar como TEXT
+
+apenas dígitos
+
+aplicar padStart
+
+PMT:
+
+armazenar como numeric
+
+exportar normal para Excel
+
+Nunca permitir notação científica.
+
+ESCALA (PONTO CRÍTICO)
+
+NÃO ler arquivo inteiro em memória.
+
+Usar streaming (fs.createReadStream + readline ou parser CSV em stream).
+
+Processar em buffers internos (100k–200k linhas).
+
+Cada execução do job processa até 1.000.000 de linhas.
+
+Ao atingir 1M:
+
+salvar progresso
+
+encerrar execução
+
+permitir retomada manual ou automática.
+
+ESTRUTURA DE JOB (CRIAR)
+
+Criar tabelas:
+
+import_runs
+
+Campos mínimos:
+
+id
+
+tenant_id
+
+tipo (folha | d8 | contatos)
+
+competencia (quando aplicável)
+
+banco (quando aplicável)
+
+arquivo_path
+
+status (pendente | processando | concluido | erro)
+
+total_linhas
+
+processadas
+
+offset_atual
+
+created_at
+
+updated_at
+
+import_errors
+
+id
+
+import_run_id
+
+linha
+
+cpf
+
+matricula
+
+mensagem
+
+raw_data
+
+created_at
+
+IMPLEMENTAÇÃO NO CÓDIGO
+1) import-service.ts
+
+NÃO apagar código antigo.
+
+Criar novo serviço:
+
+startImportJob
+
+processImportChunk
+
+Separar handlers:
+
+processFolhaChunk
+
+processD8Chunk
+
+processContatosChunk
+
+Usar streaming e buffers.
+
+Atualizar import_runs a cada batch.
+
+2) routes.ts
+
+Criar novas rotas (sem remover as antigas):
+
+POST /imports/start
+
+POST /imports/process/:id
+
+GET /imports/status/:id
+
+3) Logs e falhas
+
+Erros de linha NÃO abortam o job.
+
+Erro é salvo em import_errors.
+
+Job continua.
+
+RESTRIÇÕES ABSOLUTAS
+
+NÃO quebrar importações antigas.
+
+NÃO carregar arquivo inteiro em memória.
+
+NÃO misturar os 3 tipos de importação.
+
+NÃO alterar balisadores definidos.
+
+NÃO criar UI nova agora (somente backend).
+
+RESULTADO ESPERADO
+
+Sistema capaz de importar bases gigantes (10M+ linhas).
+
+Importação feita em blocos grandes com retomada.
+
+Dados preservados sem perda de dígitos.
+
+Cruzamento correto por CPF + matrícula.
+
+Contatos funcionando por CPF.
+
+Código organizado e extensível.
