@@ -28,6 +28,18 @@ interface TenantBranding {
   theme: TenantTheme | null;
 }
 
+interface TenantApiResponse {
+  id?: number;
+  key?: string;
+  name?: string;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  theme?: TenantTheme | null;
+  tenant?: null;
+  development?: boolean;
+  message?: string;
+}
+
 interface TenantContextValue {
   tenant: TenantBranding | null;
   isLoading: boolean;
@@ -37,23 +49,6 @@ interface TenantContextValue {
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
 
-const DEFAULT_THEME: TenantTheme = {
-  primary: "210 85% 42%",
-  primaryForeground: "210 85% 98%",
-  accent: "210 10% 88%",
-  accentForeground: "215 25% 15%",
-  background: "210 20% 98%",
-  foreground: "215 25% 15%",
-  surface: "0 0% 100%",
-  muted: "210 12% 90%",
-  mutedForeground: "215 15% 35%",
-  border: "210 15% 88%",
-  card: "0 0% 100%",
-  cardForeground: "215 25% 15%",
-  sidebar: "0 0% 100%",
-  sidebarForeground: "215 25% 15%",
-  radius: "0.5rem",
-};
 
 function hexToHsl(hex: string): string | null {
   if (!hex || !hex.startsWith("#")) return null;
@@ -144,11 +139,20 @@ function updateFavicon(url: string) {
 export function TenantThemeProvider({ children }: { children: React.ReactNode }) {
   const [appliedTheme, setAppliedTheme] = useState(false);
   
-  const { data: tenant, isLoading } = useQuery<TenantBranding>({
+  const { data: rawData, isLoading } = useQuery<TenantApiResponse>({
     queryKey: ["/api/tenant"],
     retry: 1,
     staleTime: 1000 * 60 * 5,
   });
+  
+  const tenant: TenantBranding | null = rawData?.id ? {
+    id: rawData.id,
+    key: rawData.key || "",
+    name: rawData.name || "",
+    logoUrl: rawData.logoUrl || null,
+    faviconUrl: rawData.faviconUrl || null,
+    theme: rawData.theme || null,
+  } : null;
   
   const logoUrl = tenant?.logoUrl || "/branding/logo.png";
   const faviconUrl = tenant?.faviconUrl || "/branding/favicon.png";
@@ -156,11 +160,9 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isLoading) return;
     
-    const themeToApply = tenant?.theme 
-      ? { ...DEFAULT_THEME, ...tenant.theme }
-      : DEFAULT_THEME;
-    
-    applyThemeVariables(themeToApply);
+    if (tenant?.theme) {
+      applyThemeVariables(tenant.theme);
+    }
     setAppliedTheme(true);
   }, [tenant, isLoading]);
   

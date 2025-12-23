@@ -57,6 +57,7 @@ export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const { tenant, logoUrl } = useTenant();
+  const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
     cadastros: false,
@@ -190,15 +191,15 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border bg-background">
       <SidebarHeader className="border-b border-border p-4">
         <div className="flex items-center gap-3">
-          <img 
-            src={logoUrl} 
-            alt={tenant?.name || "Logo"} 
-            className="h-8 w-auto max-w-[140px] object-contain"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-          {!tenant?.logoUrl && (
+          {!logoFailed && (
+            <img 
+              src={logoUrl} 
+              alt={tenant?.name || "Logo"} 
+              className="h-8 w-auto max-w-[140px] object-contain"
+              onError={() => setLogoFailed(true)}
+            />
+          )}
+          {(logoFailed || !tenant?.logoUrl) && (
             <span className="text-base font-semibold text-foreground">
               {tenant?.name || "GoldCard"}
             </span>
