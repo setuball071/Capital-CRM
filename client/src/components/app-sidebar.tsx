@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2 } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -35,7 +35,7 @@ interface MenuSection {
 const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_simulador: ["/calculator", "/simulador-compra"],
   modulo_roteiros: ["/roteiros"],
-  modulo_base_clientes: ["/bases-clientes"],
+  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv"],
   modulo_compra_lista: ["/compra-lista"],
   modulo_crm_vendas_campanhas: ["/vendas/campanhas", "/vendas/gestao-pipeline"],
   modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta"],
@@ -115,6 +115,7 @@ export function AppSidebar() {
       icon: Database,
       items: [
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes" },
+        { title: "Split TXT→CSV", url: "/split-txt-csv", icon: Scissors, module: "modulo_base_clientes" },
         { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_compra_lista" },
         { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes" },
       ],

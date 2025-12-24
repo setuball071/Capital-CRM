@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, decimal, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, varchar, decimal, integer, bigint, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1405,6 +1405,40 @@ export type InsertImportRun = z.infer<typeof insertImportRunSchema>;
 
 export type ImportError = typeof importErrors.$inferSelect;
 export type InsertImportError = z.infer<typeof insertImportErrorSchema>;
+
+// Tabela split_runs - Controle de jobs de split TXT→CSV incremental
+export const splitRuns = pgTable("split_runs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  storagePath: varchar("storage_path", { length: 500 }).notNull(),
+  originalFilename: varchar("original_filename", { length: 255 }),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente, processando, pausado, concluido, erro
+  currentPart: integer("current_part").notNull().default(0),
+  linesInCurrentPart: integer("lines_in_current_part").notNull().default(0),
+  byteOffset: bigint("byte_offset", { mode: "number" }).notNull().default(0),
+  totalParts: integer("total_parts").default(0),
+  totalLinesProcessed: integer("total_lines_processed").notNull().default(0),
+  linesPerPart: integer("lines_per_part").notNull().default(100000),
+  outputFolder: varchar("output_folder", { length: 500 }),
+  errorMessage: text("error_message"),
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSplitRunSchema = createInsertSchema(splitRuns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  currentPart: true,
+  linesInCurrentPart: true,
+  byteOffset: true,
+  totalParts: true,
+  totalLinesProcessed: true,
+});
+
+export type SplitRun = typeof splitRuns.$inferSelect;
+export type InsertSplitRun = z.infer<typeof insertSplitRunSchema>;
 
 // Default Role Play prompt
 export const DEFAULT_ROLEPLAY_PROMPT = `Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.

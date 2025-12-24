@@ -117,6 +117,35 @@ const uploadDisk = multer({
   },
 });
 
+// Configure multer for TXT split uploads using disk storage
+const uploadTxt = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = "/tmp/split_uploads";
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + "_" + file.originalname);
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit for TXT files
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = [".txt"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido. Use .txt"));
+    }
+  },
+});
+
 // Schema for updating users
 const updateUserSchema = z.object({
   name: z.string().min(3).optional(),
@@ -3433,6 +3462,161 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       return res.status(500).json({ message: error.message || "Erro ao buscar erros" });
     }
   });
+
+  // ==================== SPLIT TXT→CSV ROUTES ====================
+
+  // POST /api/split/start - Iniciar novo job de split TXT→CSV
+  app.post("/api/split/start", requireAuth, requireMaster, uploadTxt.single("arquivo"), async (req, res) => {
+    try {
+      const user = req.user as User;
+      const tenantId = (req as any).tenantId || user.tenantId || 1;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo TXT é obrigatório" });
+      }
+
+      const linesPerPart = parseInt(req.body.linesPerPart) || 100000;
+
+      const { splitService } = await import("./split-service");
+      const run = await splitService.createRun(
+        tenantId,
+        file.path,
+        file.originalname,
+        user.id,
+        linesPerPart
+      );
+
+      return res.json({
+        success: true,
+        runId: run.id,
+        status: "pendente",
+        message: "Job de split criado. Chame POST /api/split/process/:id para iniciar.",
+        nextStep: `/api/split/process/${run.id}`,
+      });
+    } catch (error: any) {
+      console.error("Split start error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao criar job de split" });
+    }
+  });
+
+  // POST /api/split/process/:id - Processar próximo chunk do split
+  app.post("/api/split/process/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { splitService } = await import("./split-service");
+      const result = await splitService.processChunk(runId);
+
+      return res.json({
+        success: result.success,
+        runId: result.runId,
+        status: result.status,
+        currentPart: result.currentPart,
+        linesInCurrentPart: result.linesInCurrentPart,
+        totalLinesProcessed: result.totalLinesProcessed,
+        totalParts: result.totalParts,
+        message: result.message,
+        outputFiles: result.outputFiles,
+        nextStep: result.status === "continue" ? `/api/split/process/${runId}` : null,
+      });
+    } catch (error: any) {
+      console.error("Split process error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar split" });
+    }
+  });
+
+  // GET /api/split/status/:id - Consultar status do job de split
+  app.get("/api/split/status/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { splitService } = await import("./split-service");
+      const run = await splitService.getRun(runId);
+
+      if (!run) {
+        return res.status(404).json({ message: "Job não encontrado" });
+      }
+
+      const files = await splitService.listOutputFiles(runId);
+
+      return res.json({
+        id: run.id,
+        status: run.status,
+        originalFilename: run.originalFilename,
+        currentPart: run.currentPart,
+        linesInCurrentPart: run.linesInCurrentPart,
+        totalLinesProcessed: run.totalLinesProcessed,
+        totalParts: run.totalParts,
+        linesPerPart: run.linesPerPart,
+        byteOffset: run.byteOffset,
+        errorMessage: run.errorMessage,
+        outputFiles: files,
+        canResume: run.status === "pausado",
+        nextStep: run.status === "pausado" ? `/api/split/process/${run.id}` : null,
+      });
+    } catch (error: any) {
+      console.error("Split status error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar status" });
+    }
+  });
+
+  // GET /api/split/runs - Listar jobs de split do tenant
+  app.get("/api/split/runs", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const tenantId = (req as any).tenantId || user.tenantId || 1;
+
+      const { splitService } = await import("./split-service");
+      const runs = await splitService.getRunsByTenant(tenantId);
+
+      return res.json(runs);
+    } catch (error: any) {
+      console.error("Split runs error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao listar jobs" });
+    }
+  });
+
+  // GET /api/split/download/:id/:filename - Download arquivo CSV gerado
+  app.get("/api/split/download/:id/:filename", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const filename = req.params.filename;
+
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { splitService } = await import("./split-service");
+      const run = await splitService.getRun(runId);
+
+      if (!run || !run.outputFolder) {
+        return res.status(404).json({ message: "Job não encontrado" });
+      }
+
+      const filePath = path.join(run.outputFolder, filename);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "Arquivo não encontrado" });
+      }
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } catch (error: any) {
+      console.error("Split download error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao baixar arquivo" });
+    }
+  });
+
+  // ==================== END SPLIT ROUTES ====================
 
   // GET filtros disponíveis para clientes - MASTER ONLY
   app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {
