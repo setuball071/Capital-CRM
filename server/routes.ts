@@ -117,6 +117,35 @@ const uploadDisk = multer({
   },
 });
 
+// Configure multer for CSV/XLSX split uploads using disk storage
+const uploadCsvXlsx = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = "/tmp/csv_split_uploads";
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + "_" + file.originalname);
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = [".csv", ".xlsx"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido. Use .csv ou .xlsx"));
+    }
+  },
+});
+
 // Configure multer for TXT split uploads using disk storage
 const uploadTxt = multer({
   storage: multer.diskStorage({
@@ -3620,24 +3649,34 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ==================== CSV SPLIT ROUTES (Dividir CSV em partes com header) ====================
 
-  // POST /api/csv-split/start - Iniciar novo job de split CSV
-  app.post("/api/csv-split/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
+  // POST /api/csv-split/start - Iniciar novo job de split CSV/XLSX
+  app.post("/api/csv-split/start", requireAuth, requireMaster, uploadCsvXlsx.single("arquivo"), async (req, res) => {
     try {
       const user = req.user as User;
       const tenantId = (req as any).tenantId || user.tenantId || 1;
       const file = req.file;
 
       if (!file) {
-        return res.status(400).json({ message: "Arquivo CSV é obrigatório" });
+        return res.status(400).json({ message: "Arquivo CSV ou XLSX é obrigatório" });
       }
 
       const baseName = req.body.baseName || undefined;
       const linesPerPart = parseInt(req.body.linesPerPart) || 100000;
 
       const { csvSplitService } = await import("./csv-split-service");
+
+      let filePath = file.path;
+      const ext = path.extname(file.originalname).toLowerCase();
+
+      if (ext === ".xlsx") {
+        console.log("Convertendo XLSX para CSV...");
+        filePath = await csvSplitService.convertXlsxToCsv(file.path);
+        console.log("Conversão concluída:", filePath);
+      }
+
       const run = await csvSplitService.createRun(
         tenantId,
-        file.path,
+        filePath,
         file.originalname,
         user.id,
         baseName,
@@ -3648,12 +3687,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         success: true,
         runId: run.id,
         status: "pendente",
-        message: "Job de split CSV criado. Chame POST /api/csv-split/process/:id para iniciar.",
+        message: "Job de split criado. Chame POST /api/csv-split/process/:id para iniciar.",
         nextStep: `/api/csv-split/process/${run.id}`,
       });
     } catch (error: any) {
       console.error("CSV Split start error:", error);
-      return res.status(500).json({ message: error.message || "Erro ao criar job de split CSV" });
+      return res.status(500).json({ message: error.message || "Erro ao criar job de split" });
     }
   });
 

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import ExcelJS from "exceljs";
 import { db } from "./storage";
 import { csvSplitRuns, type CsvSplitRun } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -79,6 +80,75 @@ class CsvSplitService {
     } finally {
       await fd.close();
     }
+  }
+
+  async convertXlsxToCsv(xlsxPath: string): Promise<string> {
+    const csvPath = xlsxPath.replace(/\.xlsx$/i, ".csv");
+    
+    const workbook = new ExcelJS.stream.xlsx.WorkbookReader(xlsxPath, {
+      sharedStrings: "cache",
+      hyperlinks: "ignore",
+      styles: "ignore",
+      worksheets: "emit",
+    });
+
+    const writeStream = fs.createWriteStream(csvPath, { encoding: "utf8" });
+    let isFirstRow = true;
+    let worksheetProcessed = false;
+
+    for await (const worksheetReader of workbook) {
+      if (worksheetProcessed) break;
+      worksheetProcessed = true;
+
+      for await (const row of worksheetReader) {
+        if (!row.hasValues) continue;
+
+        const values: string[] = [];
+        const cellCount = row.cellCount || 0;
+        
+        for (let i = 1; i <= cellCount; i++) {
+          const cell = row.getCell(i);
+          let cellValue = "";
+
+          if (cell.text !== undefined && cell.text !== null && cell.text !== "") {
+            cellValue = cell.text;
+          } else if (cell.value !== null && cell.value !== undefined) {
+            if (typeof cell.value === "object") {
+              if ("richText" in cell.value && Array.isArray(cell.value.richText)) {
+                cellValue = cell.value.richText.map((rt: any) => String(rt.text || "")).join("");
+              } else if ("text" in cell.value) {
+                cellValue = String(cell.value.text || "");
+              } else if ("result" in cell.value) {
+                cellValue = String(cell.value.result || "");
+              } else {
+                cellValue = "";
+              }
+            } else {
+              cellValue = String(cell.value);
+            }
+          }
+
+          if (cellValue.includes(",") || cellValue.includes('"') || cellValue.includes("\n") || cellValue.includes("\r")) {
+            cellValue = '"' + cellValue.replace(/"/g, '""') + '"';
+          }
+
+          values.push(cellValue);
+        }
+
+        const line = values.join(",") + "\n";
+        writeStream.write(line);
+        isFirstRow = false;
+      }
+    }
+
+    writeStream.end();
+    
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on("finish", resolve);
+      writeStream.on("error", reject);
+    });
+
+    return csvPath;
   }
 
   async getRun(runId: number): Promise<CsvSplitRun | null> {

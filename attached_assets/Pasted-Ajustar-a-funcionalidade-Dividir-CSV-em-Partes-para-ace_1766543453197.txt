@@ -1,0 +1,55 @@
+Ajustar a funcionalidade "Dividir CSV em Partes" para aceitar também arquivos XLSX, mantendo performance e padrão atual.
+
+Contexto:
+Existe uma tela "Dividir CSV em Partes" que hoje aceita apenas CSV e divide arquivos grandes em partes de 100.000 linhas, mantendo o cabeçalho em cada parte. Essa funcionalidade será usada antes da fila de importação da Folha.
+
+Objetivo:
+Permitir upload de arquivos XLSX além de CSV, convertendo XLSX internamente para CSV antes da divisão, sem alterar o comportamento final.
+
+Requisitos funcionais:
+1) Aceitar upload de:
+   - .csv
+   - .xlsx
+
+2) Se o arquivo for XLSX:
+   - Ler apenas a primeira aba (sheet 0)
+   - Converter para CSV internamente
+   - Usar a primeira linha como cabeçalho
+   - Tratar todas as células como texto (não converter números automaticamente)
+   - Preservar zeros à esquerda (CPF, matrícula, UPAG etc)
+   - Não permitir notação científica (ex: 2,02409E+13)
+
+3) Após conversão:
+   - Aplicar exatamente a mesma lógica atual de divisão:
+     - Partes de 100.000 linhas (configurável)
+     - Cabeçalho presente em todos os arquivos gerados
+     - Nomeação sequencial: 
+       nomebase_parte001.csv
+       nomebase_parte002.csv
+
+4) UX:
+   - Alterar texto da interface de "Enviar CSV" para "Enviar CSV ou XLSX"
+   - Ajustar validação do input file para aceitar:
+     accept=".csv,.xlsx"
+   - Manter o restante da tela inalterado
+
+5) Performance:
+   - Processar XLSX em streaming (não carregar tudo em memória se possível)
+   - Evitar travar o navegador para arquivos grandes
+   - Converter e dividir em blocos internos
+
+6) Dependências:
+   - Usar biblioteca confiável para XLSX (ex: exceljs ou xlsx)
+   - Garantir leitura como string (cell.text ou equivalente)
+
+Restrições:
+- Não alterar o tamanho padrão das partes (100.000 linhas)
+- Não alterar lógica de importação posterior
+- Não salvar dados no banco, apenas gerar arquivos para download
+
+Entregável:
+- Usuário consegue subir um XLSX grande
+- O sistema divide corretamente em vários CSVs de 100.000 linhas
+- Cabeçalho preservado
+- Zeros à esquerda mantidos
+- Valores não viram notação científica

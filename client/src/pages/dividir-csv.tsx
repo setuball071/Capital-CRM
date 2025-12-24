@@ -133,17 +133,18 @@ export default function DividirCsvPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.name.toLowerCase().endsWith(".csv")) {
+      const fileName = file.name.toLowerCase();
+      if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx")) {
         toast({
           title: "Formato inválido",
-          description: "Selecione um arquivo .csv",
+          description: "Selecione um arquivo .csv ou .xlsx",
           variant: "destructive",
         });
         return;
       }
       setSelectedFile(file);
       if (!baseName) {
-        const nameWithoutExt = file.name.replace(/\.csv$/i, "");
+        const nameWithoutExt = file.name.replace(/\.(csv|xlsx)$/i, "");
         setBaseName(nameWithoutExt);
       }
     }
@@ -242,19 +243,19 @@ export default function DividirCsvPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Enviar CSV
+            Enviar CSV ou XLSX
           </CardTitle>
           <CardDescription>
-            Selecione um arquivo CSV para dividir. O cabeçalho será copiado em todas as partes.
+            Selecione um arquivo CSV ou XLSX para dividir. O cabeçalho será copiado em todas as partes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="csv-file">Arquivo CSV</Label>
+            <Label htmlFor="csv-file">Arquivo CSV ou XLSX</Label>
             <Input
               id="csv-file"
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx"
               ref={fileInputRef}
               onChange={handleFileSelect}
               disabled={isUploading || isProcessing}
