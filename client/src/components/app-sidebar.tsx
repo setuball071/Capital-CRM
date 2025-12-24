@@ -115,7 +115,6 @@ export function AppSidebar() {
       icon: Database,
       items: [
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes" },
-        { title: "Split TXT→CSV", url: "/split-txt-csv", icon: Scissors, module: "modulo_base_clientes" },
         { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_compra_lista" },
         { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes" },
       ],
