@@ -3618,6 +3618,186 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ==================== END SPLIT ROUTES ====================
 
+  // ==================== CSV SPLIT ROUTES (Dividir CSV em partes com header) ====================
+
+  // POST /api/csv-split/start - Iniciar novo job de split CSV
+  app.post("/api/csv-split/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
+    try {
+      const user = req.user as User;
+      const tenantId = (req as any).tenantId || user.tenantId || 1;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo CSV é obrigatório" });
+      }
+
+      const baseName = req.body.baseName || undefined;
+      const linesPerPart = parseInt(req.body.linesPerPart) || 100000;
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const run = await csvSplitService.createRun(
+        tenantId,
+        file.path,
+        file.originalname,
+        user.id,
+        baseName,
+        linesPerPart
+      );
+
+      return res.json({
+        success: true,
+        runId: run.id,
+        status: "pendente",
+        message: "Job de split CSV criado. Chame POST /api/csv-split/process/:id para iniciar.",
+        nextStep: `/api/csv-split/process/${run.id}`,
+      });
+    } catch (error: any) {
+      console.error("CSV Split start error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao criar job de split CSV" });
+    }
+  });
+
+  // POST /api/csv-split/process/:id - Processar próximo chunk do split CSV
+  app.post("/api/csv-split/process/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const result = await csvSplitService.processChunk(runId);
+
+      return res.json({
+        success: result.success,
+        runId: result.runId,
+        status: result.status,
+        currentPart: result.currentPart,
+        lineOffset: result.lineOffset,
+        totalLinesProcessed: result.totalLinesProcessed,
+        totalParts: result.totalParts,
+        message: result.message,
+        outputFiles: result.outputFiles,
+        nextStep: result.status === "continue" ? `/api/csv-split/process/${runId}` : null,
+      });
+    } catch (error: any) {
+      console.error("CSV Split process error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar split CSV" });
+    }
+  });
+
+  // GET /api/csv-split/status/:id - Consultar status do job de split CSV
+  app.get("/api/csv-split/status/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const run = await csvSplitService.getRun(runId);
+
+      if (!run) {
+        return res.status(404).json({ message: "Job não encontrado" });
+      }
+
+      const files = await csvSplitService.getOutputFiles(runId);
+
+      return res.json({
+        id: run.id,
+        status: run.status,
+        originalFilename: run.originalFilename,
+        baseName: run.baseName,
+        currentPart: run.currentPart,
+        lineOffset: run.lineOffset,
+        headerLine: run.headerLine ? run.headerLine.substring(0, 200) + "..." : null,
+        totalLinesProcessed: run.totalLinesProcessed,
+        totalParts: run.totalParts,
+        linesPerPart: run.linesPerPart,
+        errorMessage: run.errorMessage,
+        outputFiles: files,
+        canResume: run.status === "processando" || run.status === "pendente",
+        nextStep: (run.status === "processando" || run.status === "pendente") ? `/api/csv-split/process/${run.id}` : null,
+      });
+    } catch (error: any) {
+      console.error("CSV Split status error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar status" });
+    }
+  });
+
+  // GET /api/csv-split/runs - Listar jobs de split CSV do tenant
+  app.get("/api/csv-split/runs", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const tenantId = (req as any).tenantId || user.tenantId || 1;
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const runs = await csvSplitService.getRunsByTenant(tenantId);
+
+      return res.json(runs);
+    } catch (error: any) {
+      console.error("CSV Split runs error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao listar jobs" });
+    }
+  });
+
+  // POST /api/csv-split/reset/:id - Resetar job de split CSV para retomar
+  app.post("/api/csv-split/reset/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { csvSplitService } = await import("./csv-split-service");
+      await csvSplitService.resetRun(runId);
+
+      return res.json({
+        success: true,
+        message: "Job resetado. Pode continuar o processamento.",
+        nextStep: `/api/csv-split/process/${runId}`,
+      });
+    } catch (error: any) {
+      console.error("CSV Split reset error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao resetar job" });
+    }
+  });
+
+  // GET /api/csv-split/download/:id/:filename - Download arquivo CSV gerado
+  app.get("/api/csv-split/download/:id/:filename", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const filename = req.params.filename;
+
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const run = await csvSplitService.getRun(runId);
+
+      if (!run || !run.outputFolder) {
+        return res.status(404).json({ message: "Job não encontrado" });
+      }
+
+      const filePath = path.join(run.outputFolder, filename);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "Arquivo não encontrado" });
+      }
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } catch (error: any) {
+      console.error("CSV Split download error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao baixar arquivo" });
+    }
+  });
+
+  // ==================== END CSV SPLIT ROUTES ====================
+
   // GET filtros disponíveis para clientes - MASTER ONLY
   app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {
     try {

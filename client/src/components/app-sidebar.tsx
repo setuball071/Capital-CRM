@@ -126,6 +126,7 @@ export function AppSidebar() {
       items: [
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, masterOnly: true },
+        { title: "Dividir CSV", url: "/dividir-csv", icon: Scissors, masterOnly: true },
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },

@@ -20,6 +20,7 @@ import CoefficientTablesPage from "@/pages/coefficient-tables";
 import RoteirosPage from "@/pages/roteiros";
 import BasesClientesPage from "@/pages/bases-clientes";
 import SplitTxtCsvPage from "@/pages/split-txt-csv";
+import DividirCsvPage from "@/pages/dividir-csv";
 import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
 import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
@@ -301,6 +302,9 @@ function Router() {
               </Route>
               <Route path="/split-txt-csv">
                 {() => <MasterRoute component={SplitTxtCsvPage} />}
+              </Route>
+              <Route path="/dividir-csv">
+                {() => <MasterRoute component={DividirCsvPage} />}
               </Route>
               <Route path="/compra-lista">
                 {() => <MasterRoute component={CompraListaPage} />}
