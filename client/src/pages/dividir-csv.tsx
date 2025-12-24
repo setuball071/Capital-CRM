@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Upload, Play, Download, RefreshCw, CheckCircle, XCircle, Clock, Loader2, FileText, Scissors, AlertCircle, Archive } from "lucide-react";
+import { Upload, Download, RefreshCw, CheckCircle, XCircle, Clock, Loader2, FileText, Scissors, AlertCircle, Archive } from "lucide-react";
 
 interface CsvSplitRun {
   id: number;
@@ -45,21 +45,6 @@ interface StatusResponse {
   fileSize: number;
   bytesProcessed: number;
   canResume: boolean;
-  nextStep: string | null;
-}
-
-interface ProcessResponse {
-  success: boolean;
-  runId: number;
-  status: "continue" | "completed" | "error";
-  currentPart: number;
-  lineOffset: number;
-  totalLinesProcessed: number;
-  totalParts: number;
-  message: string;
-  nextStep: string | null;
-  fileSize?: number;
-  bytesProcessed?: number;
 }
 
 export default function DividirCsvPage() {
@@ -68,58 +53,40 @@ export default function DividirCsvPage() {
   const [baseName, setBaseName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: runs = [], refetch: refetchRuns } = useQuery<CsvSplitRun[]>({
     queryKey: ["/api/csv-split/runs"],
-    refetchInterval: activeRunId ? 2000 : false,
+    refetchInterval: 5000,
   });
 
   const { data: activeStatus, refetch: refetchStatus } = useQuery<StatusResponse>({
     queryKey: ["/api/csv-split/status", activeRunId],
     enabled: !!activeRunId,
-    refetchInterval: isProcessing ? 1000 : false,
+    refetchInterval: (data) => {
+      if (!data) return 2000;
+      const status = data.status;
+      if (status === "concluido" || status === "erro") return false;
+      return 2000;
+    },
   });
 
-  const processChunk = useMutation({
-    mutationFn: async (runId: number) => {
-      const response = await apiRequest("POST", `/api/csv-split/process/${runId}`);
-      return response.json() as Promise<ProcessResponse>;
-    },
-    onSuccess: async (data) => {
-      if (data.status === "continue") {
-        setTimeout(() => {
-          processChunk.mutate(data.runId);
-        }, 100);
-      } else if (data.status === "completed") {
-        setIsProcessing(false);
-        toast({
-          title: "Divisão concluída!",
-          description: data.message,
-        });
-        refetchRuns();
-        refetchStatus();
-      } else if (data.status === "error") {
-        setIsProcessing(false);
-        toast({
-          title: "Erro no processamento",
-          description: data.message,
-          variant: "destructive",
-        });
-      }
-      refetchStatus();
-    },
-    onError: (error: any) => {
-      setIsProcessing(false);
+  useEffect(() => {
+    if (activeStatus?.status === "concluido") {
       toast({
-        title: "Erro",
-        description: error.message || "Erro ao processar",
+        title: "Divisão concluída!",
+        description: `${activeStatus.currentPart} partes criadas com ${activeStatus.totalLinesProcessed.toLocaleString("pt-BR")} linhas.`,
+      });
+      refetchRuns();
+    } else if (activeStatus?.status === "erro") {
+      toast({
+        title: "Erro no processamento",
+        description: activeStatus.errorMessage || "Erro desconhecido",
         variant: "destructive",
       });
-    },
-  });
+    }
+  }, [activeStatus?.status]);
 
   const resetMutation = useMutation({
     mutationFn: async (runId: number) => {
@@ -129,9 +96,10 @@ export default function DividirCsvPage() {
     onSuccess: () => {
       toast({
         title: "Job resetado",
-        description: "Você pode retomar o processamento.",
+        description: "O processamento será retomado automaticamente.",
       });
       refetchRuns();
+      refetchStatus();
     },
   });
 
@@ -181,7 +149,7 @@ export default function DividirCsvPage() {
       
       toast({
         title: "Arquivo enviado!",
-        description: "Iniciando processamento...",
+        description: "Processamento iniciado em background.",
       });
 
       setSelectedFile(null);
@@ -191,8 +159,6 @@ export default function DividirCsvPage() {
       }
 
       setActiveRunId(data.runId);
-      setIsProcessing(true);
-      processChunk.mutate(data.runId);
       refetchRuns();
     } catch (error: any) {
       toast({
@@ -203,12 +169,6 @@ export default function DividirCsvPage() {
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const handleResume = (runId: number) => {
-    setActiveRunId(runId);
-    setIsProcessing(true);
-    processChunk.mutate(runId);
   };
 
   const handleViewStatus = (runId: number) => {
@@ -258,6 +218,8 @@ export default function DividirCsvPage() {
         return <Badge variant="default" className="bg-green-600"><CheckCircle className="w-3 h-3 mr-1" /> Concluído</Badge>;
       case "processando":
         return <Badge variant="default" className="bg-blue-600"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Processando</Badge>;
+      case "convertendo":
+        return <Badge variant="default" className="bg-purple-600"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Convertendo XLSX</Badge>;
       case "pendente":
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" /> Pendente</Badge>;
       case "erro":
@@ -282,6 +244,8 @@ export default function DividirCsvPage() {
     return Math.min(100, Math.round((activeStatus.bytesProcessed / activeStatus.fileSize) * 100));
   };
 
+  const isProcessing = activeStatus && ["pendente", "processando", "convertendo"].includes(activeStatus.status);
+
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
@@ -301,7 +265,7 @@ export default function DividirCsvPage() {
             Enviar CSV ou XLSX
           </CardTitle>
           <CardDescription>
-            Selecione um arquivo CSV ou XLSX grande para dividir. Suporta arquivos de até 300MB ou mais.
+            Selecione um arquivo CSV ou XLSX grande para dividir. O processamento acontece em background.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -313,7 +277,7 @@ export default function DividirCsvPage() {
               accept=".csv,.xlsx"
               ref={fileInputRef}
               onChange={handleFileSelect}
-              disabled={isUploading || isProcessing}
+              disabled={isUploading}
               data-testid="input-csv-file"
             />
             {selectedFile && (
@@ -330,7 +294,7 @@ export default function DividirCsvPage() {
               placeholder="Ex: minha_base"
               value={baseName}
               onChange={(e) => setBaseName(e.target.value)}
-              disabled={isUploading || isProcessing}
+              disabled={isUploading}
               data-testid="input-base-name"
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -340,7 +304,7 @@ export default function DividirCsvPage() {
 
           <Button
             onClick={handleUpload}
-            disabled={!selectedFile || isUploading || isProcessing}
+            disabled={!selectedFile || isUploading}
             className="w-full"
             data-testid="button-upload"
           >
@@ -378,10 +342,12 @@ export default function DividirCsvPage() {
                 <span>Arquivo:</span>
                 <span className="font-mono">{activeStatus.originalFilename}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Tamanho:</span>
-                <span className="font-bold">{formatBytes(activeStatus.fileSize)}</span>
-              </div>
+              {activeStatus.fileSize > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Tamanho:</span>
+                  <span className="font-bold">{formatBytes(activeStatus.fileSize)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span>Nome base:</span>
                 <span className="font-mono">{activeStatus.baseName}</span>
@@ -394,22 +360,28 @@ export default function DividirCsvPage() {
                 <span>Linhas processadas:</span>
                 <span className="font-bold">{formatNumber(activeStatus.totalLinesProcessed)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Bytes processados:</span>
-                <span className="font-bold">{formatBytes(activeStatus.bytesProcessed)} / {formatBytes(activeStatus.fileSize)}</span>
-              </div>
+              {activeStatus.fileSize > 0 && activeStatus.bytesProcessed > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Progresso:</span>
+                  <span className="font-bold">{formatBytes(activeStatus.bytesProcessed)} / {formatBytes(activeStatus.fileSize)}</span>
+                </div>
+              )}
             </div>
 
-            {(activeStatus.status === "processando" || isProcessing) && (
+            {isProcessing && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2 text-blue-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Processando parte {activeStatus.currentPart + 1}...
+                    {activeStatus.status === "convertendo" ? "Convertendo XLSX..." : `Processando parte ${activeStatus.currentPart + 1}...`}
                   </span>
-                  <span className="font-bold">{getProgressPercent()}%</span>
+                  {activeStatus.fileSize > 0 && (
+                    <span className="font-bold">{getProgressPercent()}%</span>
+                  )}
                 </div>
-                <Progress value={getProgressPercent()} className="h-2" />
+                {activeStatus.fileSize > 0 && (
+                  <Progress value={getProgressPercent()} className="h-2" />
+                )}
               </div>
             )}
 
@@ -464,14 +436,15 @@ export default function DividirCsvPage() {
               </div>
             )}
 
-            {activeStatus.canResume && !isProcessing && (
+            {activeStatus.status === "erro" && (
               <Button
-                onClick={() => handleResume(activeStatus.id)}
+                onClick={() => resetMutation.mutate(activeStatus.id)}
                 className="w-full"
-                data-testid="button-resume"
+                variant="outline"
+                data-testid="button-reset"
               >
-                <Play className="w-4 h-4 mr-2" />
-                Continuar Processamento
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Tentar Novamente
               </Button>
             )}
           </CardContent>
@@ -529,16 +502,6 @@ export default function DividirCsvPage() {
                       >
                         <RefreshCw className="w-3 h-3 mr-1" />
                         Resetar
-                      </Button>
-                    )}
-                    {(run.status === "processando" || run.status === "pendente") && !isProcessing && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleResume(run.id)}
-                        data-testid={`button-resume-${run.id}`}
-                      >
-                        <Play className="w-3 h-3 mr-1" />
-                        Retomar
                       </Button>
                     )}
                     <Button

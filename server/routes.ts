@@ -3649,7 +3649,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // ==================== CSV SPLIT ROUTES (Dividir CSV em partes com header) ====================
 
-  // POST /api/csv-split/start - Iniciar novo job de split CSV/XLSX
+  // POST /api/csv-split/start - Iniciar novo job de split CSV/XLSX (async - returns immediately)
   app.post("/api/csv-split/start", requireAuth, requireMaster, uploadCsvXlsx.single("arquivo"), async (req, res) => {
     try {
       const user = req.user as User;
@@ -3664,15 +3664,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const linesPerPart = parseInt(req.body.linesPerPart) || 100000;
 
       const { csvSplitService } = await import("./csv-split-service");
+      const { csvSplitRunner } = await import("./csv-split-runner");
 
       let filePath = file.path;
       const ext = path.extname(file.originalname).toLowerCase();
 
-      if (ext === ".xlsx") {
-        console.log("Convertendo XLSX para CSV...");
-        filePath = await csvSplitService.convertXlsxToCsv(file.path);
-        console.log("Conversão concluída:", filePath);
-      }
+      // If XLSX, start conversion in background after creating the run
+      const needsConversion = ext === ".xlsx";
 
       const run = await csvSplitService.createRun(
         tenantId,
@@ -3680,48 +3678,22 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         file.originalname,
         user.id,
         baseName,
-        linesPerPart
+        linesPerPart,
+        needsConversion
       );
+
+      // Enqueue for background processing (runner will handle XLSX conversion)
+      csvSplitRunner.enqueue(run.id);
 
       return res.json({
         success: true,
         runId: run.id,
         status: "pendente",
-        message: "Job de split criado. Chame POST /api/csv-split/process/:id para iniciar.",
-        nextStep: `/api/csv-split/process/${run.id}`,
+        message: "Upload concluído. Processamento iniciado em background.",
       });
     } catch (error: any) {
       console.error("CSV Split start error:", error);
       return res.status(500).json({ message: error.message || "Erro ao criar job de split" });
-    }
-  });
-
-  // POST /api/csv-split/process/:id - Processar próximo chunk do split CSV
-  app.post("/api/csv-split/process/:id", requireAuth, requireMaster, async (req, res) => {
-    try {
-      const runId = parseInt(req.params.id);
-      if (isNaN(runId)) {
-        return res.status(400).json({ message: "ID inválido" });
-      }
-
-      const { csvSplitService } = await import("./csv-split-service");
-      const result = await csvSplitService.processChunk(runId);
-
-      return res.json({
-        success: result.success,
-        runId: result.runId,
-        status: result.status,
-        currentPart: result.currentPart,
-        lineOffset: result.lineOffset,
-        totalLinesProcessed: result.totalLinesProcessed,
-        totalParts: result.totalParts,
-        message: result.message,
-        outputFiles: result.outputFiles,
-        nextStep: result.status === "continue" ? `/api/csv-split/process/${runId}` : null,
-      });
-    } catch (error: any) {
-      console.error("CSV Split process error:", error);
-      return res.status(500).json({ message: error.message || "Erro ao processar split CSV" });
     }
   });
 

@@ -31,14 +31,23 @@ class CsvSplitService {
     originalFilename: string,
     createdById: number,
     baseName?: string,
-    linesPerPart: number = LINES_PER_PART
+    linesPerPart: number = LINES_PER_PART,
+    needsConversion: boolean = false
   ): Promise<CsvSplitRun> {
     const finalBaseName = baseName || path.basename(originalFilename, path.extname(originalFilename));
     const outputFolder = `/tmp/csv_split_exports/${tenantId}/${Date.now()}`;
     
     await fs.promises.mkdir(outputFolder, { recursive: true });
 
-    const { headerLine, headerByteLength } = await this.extractHeaderWithBytes(storagePath);
+    // If XLSX, we'll extract header after conversion in the runner
+    let headerLine = "";
+    let headerByteLength = 0;
+    
+    if (!needsConversion) {
+      const extracted = await this.extractHeaderWithBytes(storagePath);
+      headerLine = extracted.headerLine;
+      headerByteLength = extracted.headerByteLength;
+    }
 
     const [run] = await db
       .insert(csvSplitRuns)
@@ -49,14 +58,29 @@ class CsvSplitService {
         baseName: finalBaseName,
         linesPerPart,
         outputFolder,
-        headerLine,
+        headerLine: headerLine || null,
         lineOffset: headerByteLength,
-        status: "pendente",
+        status: needsConversion ? "convertendo" : "pendente",
         createdById,
       })
       .returning();
 
     return run;
+  }
+  
+  async updateStoragePath(runId: number, newPath: string): Promise<void> {
+    const { headerLine, headerByteLength } = await this.extractHeaderWithBytes(newPath);
+    
+    await db
+      .update(csvSplitRuns)
+      .set({
+        storagePath: newPath,
+        headerLine,
+        lineOffset: headerByteLength,
+        status: "pendente",
+        updatedAt: new Date(),
+      })
+      .where(eq(csvSplitRuns.id, runId));
   }
 
   private async extractHeaderWithBytes(filePath: string): Promise<{ headerLine: string; headerByteLength: number }> {
