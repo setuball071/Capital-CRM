@@ -15,12 +15,19 @@ export const TEMPLATE_COLUMNS = {
     { header: "SALARIO_BRUTO", key: "salario_bruto", width: 15, required: false, example: 5000.00, isText: false },
     { header: "DESCONTOS_BRUTOS", key: "descontos_brutos", width: 15, required: false, example: 1000.00, isText: false },
     { header: "SALARIO_LIQUIDO", key: "salario_liquido", width: 15, required: false, example: 4000.00, isText: false },
-    { header: "MARGEM_30_BRUTA", key: "margem_30_bruta", width: 15, required: false, example: 1500.00, isText: false },
-    { header: "MARGEM_30_UTILIZADA", key: "margem_30_utilizada", width: 18, required: false, example: 500.00, isText: false },
-    { header: "MARGEM_30_SALDO", key: "margem_30_saldo", width: 15, required: false, example: 1000.00, isText: false },
+    // Margem 5% (Bruta 5%, Utiliz 5%, Saldo 5%)
+    { header: "MARGEM_5_BRUTA", key: "margem_5_bruta", width: 15, required: false, example: 250.00, isText: false },
+    { header: "MARGEM_5_UTILIZADA", key: "margem_5_utilizada", width: 18, required: false, example: 50.00, isText: false },
+    { header: "MARGEM_5_SALDO", key: "margem_5_saldo", width: 15, required: false, example: 200.00, isText: false },
+    // Margem Benefício 5% (Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%)
+    { header: "MARGEM_BENEFICIO_5_BRUTA", key: "margem_beneficio_5_bruta", width: 22, required: false, example: 250.00, isText: false },
+    { header: "MARGEM_BENEFICIO_5_UTILIZADA", key: "margem_beneficio_5_utilizada", width: 25, required: false, example: 50.00, isText: false },
+    { header: "MARGEM_BENEFICIO_5_SALDO", key: "margem_beneficio_5_saldo", width: 22, required: false, example: 200.00, isText: false },
+    // Margem 35% (Bruta 35%, Utiliz 35%, Saldo 35%)
     { header: "MARGEM_35_BRUTA", key: "margem_35_bruta", width: 15, required: false, example: 1750.00, isText: false },
     { header: "MARGEM_35_UTILIZADA", key: "margem_35_utilizada", width: 18, required: false, example: 500.00, isText: false },
     { header: "MARGEM_35_SALDO", key: "margem_35_saldo", width: 15, required: false, example: 1250.00, isText: false },
+    // Margem 70% (Bruta 70%, Utiliz 70%, Saldo 70%)
     { header: "MARGEM_70_BRUTA", key: "margem_70_bruta", width: 15, required: false, example: 3500.00, isText: false },
     { header: "MARGEM_70_UTILIZADA", key: "margem_70_utilizada", width: 18, required: false, example: 1000.00, isText: false },
     { header: "MARGEM_70_SALDO", key: "margem_70_saldo", width: 15, required: false, example: 2500.00, isText: false },

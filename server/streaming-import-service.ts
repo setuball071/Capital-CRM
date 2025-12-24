@@ -759,12 +759,19 @@ class StreamingImportService {
       salarioBruto: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_bruto")),
       descontosBrutos: normalizeBrDecimal(this.extractValue(row, headerMap, "descontos_brutos")),
       salarioLiquido: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_liquido")),
-      margemBruta30: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_30_bruta")),
-      margemUtilizada30: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_30_utilizada")),
-      margemSaldo30: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_30_saldo")),
+      // Margem 5% (COLUMN_MAP mapeia margem_30 → margem_5 para retrocompatibilidade)
+      margemBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_bruta")),
+      margemUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_utilizada")),
+      margemSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_saldo")),
+      // Margem Benefício 5%
+      margemBeneficioBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_bruta")),
+      margemBeneficioUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_utilizada")),
+      margemBeneficioSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_saldo")),
+      // Margem 35%
       margemBruta35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_bruta")),
       margemUtilizada35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_utilizada")),
       margemSaldo35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_saldo")),
+      // Margem 70%
       margemBruta70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_bruta")),
       margemUtilizada70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_utilizada")),
       margemSaldo70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_saldo")),

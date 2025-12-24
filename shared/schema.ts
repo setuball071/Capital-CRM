@@ -428,12 +428,19 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
   competencia: timestamp("competencia").notNull(), // Ex: 2025-11-01
-  margemBruta30: decimal("margem_bruta_30", { precision: 12, scale: 2 }),
-  margemUtilizada30: decimal("margem_utilizada_30", { precision: 12, scale: 2 }),
-  margemSaldo30: decimal("margem_saldo_30", { precision: 12, scale: 2 }),
+  // Margem 5% (nova - era 30% antes)
+  margemBruta5: decimal("margem_bruta_5", { precision: 12, scale: 2 }),
+  margemUtilizada5: decimal("margem_utilizada_5", { precision: 12, scale: 2 }),
+  margemSaldo5: decimal("margem_saldo_5", { precision: 12, scale: 2 }),
+  // Margem Benefício 5%
+  margemBeneficioBruta5: decimal("margem_beneficio_bruta_5", { precision: 12, scale: 2 }),
+  margemBeneficioUtilizada5: decimal("margem_beneficio_utilizada_5", { precision: 12, scale: 2 }),
+  margemBeneficioSaldo5: decimal("margem_beneficio_saldo_5", { precision: 12, scale: 2 }),
+  // Margem 35%
   margemBruta35: decimal("margem_bruta_35", { precision: 12, scale: 2 }),
   margemUtilizada35: decimal("margem_utilizada_35", { precision: 12, scale: 2 }),
   margemSaldo35: decimal("margem_saldo_35", { precision: 12, scale: 2 }),
+  // Margem 70%
   margemBruta70: decimal("margem_bruta_70", { precision: 12, scale: 2 }),
   margemUtilizada70: decimal("margem_utilizada_70", { precision: 12, scale: 2 }),
   margemSaldo70: decimal("margem_saldo_70", { precision: 12, scale: 2 }),
