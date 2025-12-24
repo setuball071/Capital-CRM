@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Upload, Play, Download, RefreshCw, CheckCircle, XCircle, Clock, Loader2, FileText, Scissors, AlertCircle } from "lucide-react";
+import { Upload, Play, Download, RefreshCw, CheckCircle, XCircle, Clock, Loader2, FileText, Scissors, AlertCircle, Archive } from "lucide-react";
 
 interface CsvSplitRun {
   id: number;
@@ -42,6 +42,8 @@ interface StatusResponse {
   linesPerPart: number;
   errorMessage: string | null;
   outputFiles: { name: string; path: string }[];
+  fileSize: number;
+  bytesProcessed: number;
   canResume: boolean;
   nextStep: string | null;
 }
@@ -56,6 +58,8 @@ interface ProcessResponse {
   totalParts: number;
   message: string;
   nextStep: string | null;
+  fileSize?: number;
+  bytesProcessed?: number;
 }
 
 export default function DividirCsvPage() {
@@ -65,6 +69,7 @@ export default function DividirCsvPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: runs = [], refetch: refetchRuns } = useQuery<CsvSplitRun[]>({
@@ -90,12 +95,12 @@ export default function DividirCsvPage() {
         }, 100);
       } else if (data.status === "completed") {
         setIsProcessing(false);
-        setActiveRunId(null);
         toast({
           title: "Divisão concluída!",
           description: data.message,
         });
         refetchRuns();
+        refetchStatus();
       } else if (data.status === "error") {
         setIsProcessing(false);
         toast({
@@ -210,6 +215,43 @@ export default function DividirCsvPage() {
     setActiveRunId(runId);
   };
 
+  const handleDownloadZip = async (runId: number) => {
+    setIsDownloadingZip(true);
+    try {
+      const response = await fetch(`/api/csv-split/download-zip/${runId}`, {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao gerar ZIP");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeStatus?.baseName || "partes"}_completo.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Download iniciado",
+        description: "O arquivo ZIP está sendo baixado.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro no download",
+        description: error.message || "Erro ao baixar ZIP",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "concluido":
@@ -226,6 +268,19 @@ export default function DividirCsvPage() {
   };
 
   const formatNumber = (n: number) => n.toLocaleString("pt-BR");
+  
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const getProgressPercent = () => {
+    if (!activeStatus || !activeStatus.fileSize || activeStatus.fileSize === 0) return 0;
+    return Math.min(100, Math.round((activeStatus.bytesProcessed / activeStatus.fileSize) * 100));
+  };
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -235,7 +290,7 @@ export default function DividirCsvPage() {
           Dividir CSV em Partes
         </h1>
         <p className="text-muted-foreground mt-1">
-          Divide arquivos CSV grandes em partes de 100.000 linhas, mantendo o cabeçalho em cada parte.
+          Divide arquivos CSV/XLSX grandes (até 300MB+) em partes de 100.000 linhas, mantendo o cabeçalho em cada parte.
         </p>
       </div>
 
@@ -246,7 +301,7 @@ export default function DividirCsvPage() {
             Enviar CSV ou XLSX
           </CardTitle>
           <CardDescription>
-            Selecione um arquivo CSV ou XLSX para dividir. O cabeçalho será copiado em todas as partes.
+            Selecione um arquivo CSV ou XLSX grande para dividir. Suporta arquivos de até 300MB ou mais.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -263,7 +318,7 @@ export default function DividirCsvPage() {
             />
             {selectedFile && (
               <p className="text-sm text-muted-foreground mt-1">
-                Selecionado: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                Selecionado: {selectedFile.name} ({formatBytes(selectedFile.size)})
               </p>
             )}
           </div>
@@ -324,6 +379,10 @@ export default function DividirCsvPage() {
                 <span className="font-mono">{activeStatus.originalFilename}</span>
               </div>
               <div className="flex justify-between text-sm">
+                <span>Tamanho:</span>
+                <span className="font-bold">{formatBytes(activeStatus.fileSize)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
                 <span>Nome base:</span>
                 <span className="font-mono">{activeStatus.baseName}</span>
               </div>
@@ -335,15 +394,22 @@ export default function DividirCsvPage() {
                 <span>Linhas processadas:</span>
                 <span className="font-bold">{formatNumber(activeStatus.totalLinesProcessed)}</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span>Bytes processados:</span>
+                <span className="font-bold">{formatBytes(activeStatus.bytesProcessed)} / {formatBytes(activeStatus.fileSize)}</span>
+              </div>
             </div>
 
-            {activeStatus.status === "processando" && (
+            {(activeStatus.status === "processando" || isProcessing) && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processando parte {activeStatus.currentPart + 1}...
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 text-blue-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processando parte {activeStatus.currentPart + 1}...
+                  </span>
+                  <span className="font-bold">{getProgressPercent()}%</span>
                 </div>
-                <Progress value={undefined} className="h-2" />
+                <Progress value={getProgressPercent()} className="h-2" />
               </div>
             )}
 
@@ -354,9 +420,29 @@ export default function DividirCsvPage() {
               </div>
             )}
 
-            {activeStatus.outputFiles && activeStatus.outputFiles.length > 0 && (
-              <div className="space-y-2">
-                <Label>Arquivos gerados:</Label>
+            {activeStatus.status === "concluido" && activeStatus.outputFiles && activeStatus.outputFiles.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Arquivos gerados ({activeStatus.outputFiles.length} partes):</Label>
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownloadZip(activeStatus.id)}
+                    disabled={isDownloadingZip}
+                    data-testid="button-download-zip"
+                  >
+                    {isDownloadingZip ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Gerando ZIP...
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="w-3 h-3 mr-1" />
+                        Baixar Tudo (ZIP)
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {activeStatus.outputFiles.map((file, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
@@ -430,7 +516,7 @@ export default function DividirCsvPage() {
                       {run.originalFilename}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {run.currentPart} partes · {formatNumber(run.totalLinesProcessed)} linhas
+                      {run.currentPart} partes | {formatNumber(run.totalLinesProcessed)} linhas
                     </p>
                   </div>
                   <div className="flex gap-2">

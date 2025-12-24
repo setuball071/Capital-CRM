@@ -1,13 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import ExcelJS from "exceljs";
+import archiver from "archiver";
 import { db } from "./storage";
 import { csvSplitRuns, type CsvSplitRun } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 const LINES_PER_PART = 100_000;
 const MAX_EXECUTION_TIME_MS = 25_000;
-const CHUNK_READ_SIZE = 64 * 1024;
+const CHUNK_READ_SIZE = 1024 * 1024; // 1MB chunks for better performance with large files
 
 export interface CsvSplitJobResult {
   success: boolean;
@@ -19,6 +20,8 @@ export interface CsvSplitJobResult {
   totalParts: number;
   message: string;
   outputFiles?: string[];
+  fileSize?: number;
+  bytesProcessed?: number;
 }
 
 class CsvSplitService {
@@ -82,7 +85,7 @@ class CsvSplitService {
     }
   }
 
-  async convertXlsxToCsv(xlsxPath: string): Promise<string> {
+  async convertXlsxToCsv(xlsxPath: string, onProgress?: (rows: number) => void): Promise<string> {
     const csvPath = xlsxPath.replace(/\.xlsx$/i, ".csv");
     
     const workbook = new ExcelJS.stream.xlsx.WorkbookReader(xlsxPath, {
@@ -92,9 +95,13 @@ class CsvSplitService {
       worksheets: "emit",
     });
 
-    const writeStream = fs.createWriteStream(csvPath, { encoding: "utf8" });
-    let isFirstRow = true;
+    const writeStream = fs.createWriteStream(csvPath, { 
+      encoding: "utf8",
+      highWaterMark: 1024 * 1024 // 1MB buffer for write stream
+    });
+    
     let worksheetProcessed = false;
+    let rowCount = 0;
 
     for await (const worksheetReader of workbook) {
       if (worksheetProcessed) break;
@@ -136,8 +143,17 @@ class CsvSplitService {
         }
 
         const line = values.join(",") + "\n";
-        writeStream.write(line);
-        isFirstRow = false;
+        
+        // Backpressure handling: wait if buffer is full
+        const canContinue = writeStream.write(line);
+        if (!canContinue) {
+          await new Promise<void>(resolve => writeStream.once("drain", resolve));
+        }
+        
+        rowCount++;
+        if (onProgress && rowCount % 10000 === 0) {
+          onProgress(rowCount);
+        }
       }
     }
 
@@ -164,6 +180,17 @@ class CsvSplitService {
       .orderBy(csvSplitRuns.createdAt);
   }
 
+  async getFileSize(runId: number): Promise<number> {
+    const run = await this.getRun(runId);
+    if (!run) return 0;
+    try {
+      const stats = await fs.promises.stat(run.storagePath);
+      return stats.size;
+    } catch {
+      return 0;
+    }
+  }
+
   async processChunk(runId: number): Promise<CsvSplitJobResult> {
     const run = await this.getRun(runId);
     if (!run) {
@@ -180,6 +207,7 @@ class CsvSplitService {
     }
 
     if (run.status === "concluido") {
+      const fileSize = await this.getFileSize(runId);
       return {
         success: true,
         runId,
@@ -189,6 +217,8 @@ class CsvSplitService {
         totalLinesProcessed: run.totalLinesProcessed,
         totalParts: run.totalParts || run.currentPart,
         message: "Processamento já concluído",
+        fileSize,
+        bytesProcessed: run.lineOffset,
       };
     }
 
@@ -267,6 +297,8 @@ class CsvSplitService {
         totalLinesProcessed: run.totalLinesProcessed,
         totalParts: run.currentPart,
         message: `Processamento concluído! Total: ${run.currentPart} partes.`,
+        fileSize,
+        bytesProcessed: byteOffset,
       };
     }
 
@@ -306,8 +338,25 @@ class CsvSplitService {
             const partFilename = `${baseName}_parte_${String(currentPart).padStart(6, "0")}.csv`;
             const partPath = path.join(outputFolder, partFilename);
 
-            const content = headerLine + "\n" + currentPartLines.join("\n") + "\n";
-            await fs.promises.writeFile(partPath, content, "utf8");
+            // Use streaming write for the part file
+            const partWriteStream = fs.createWriteStream(partPath, { encoding: "utf8" });
+            partWriteStream.write(headerLine + "\n");
+            
+            // Write lines in batches to avoid memory issues
+            const BATCH_SIZE = 10000;
+            for (let i = 0; i < currentPartLines.length; i += BATCH_SIZE) {
+              const batch = currentPartLines.slice(i, Math.min(i + BATCH_SIZE, currentPartLines.length));
+              const canContinue = partWriteStream.write(batch.join("\n") + "\n");
+              if (!canContinue) {
+                await new Promise<void>(resolve => partWriteStream.once("drain", resolve));
+              }
+            }
+            
+            partWriteStream.end();
+            await new Promise<void>((resolve, reject) => {
+              partWriteStream.on("finish", resolve);
+              partWriteStream.on("error", reject);
+            });
 
             totalLinesProcessed += currentPartLines.length;
             partsCreatedThisExecution++;
@@ -327,7 +376,8 @@ class CsvSplitService {
             currentPartLines = [];
 
             const elapsed = Date.now() - startTime;
-            if (elapsed >= MAX_EXECUTION_TIME_MS || partsCreatedThisExecution >= 1) {
+            // Process up to 3 parts per execution or 25 seconds max
+            if (elapsed >= MAX_EXECUTION_TIME_MS || partsCreatedThisExecution >= 3) {
               shouldStop = true;
               break;
             }
@@ -345,8 +395,15 @@ class CsvSplitService {
           const partFilename = `${baseName}_parte_${String(currentPart).padStart(6, "0")}.csv`;
           const partPath = path.join(outputFolder, partFilename);
 
-          const content = headerLine + "\n" + currentPartLines.join("\n") + "\n";
-          await fs.promises.writeFile(partPath, content, "utf8");
+          const partWriteStream = fs.createWriteStream(partPath, { encoding: "utf8" });
+          partWriteStream.write(headerLine + "\n");
+          partWriteStream.write(currentPartLines.join("\n") + "\n");
+          partWriteStream.end();
+          
+          await new Promise<void>((resolve, reject) => {
+            partWriteStream.on("finish", resolve);
+            partWriteStream.on("error", reject);
+          });
 
           totalLinesProcessed += currentPartLines.length;
         }
@@ -383,6 +440,8 @@ class CsvSplitService {
       message: isCompleted 
         ? `Processamento concluído! Total: ${currentPart} partes, ${totalLinesProcessed} linhas.`
         : `Parte ${currentPart} criada. Continue processando...`,
+      fileSize,
+      bytesProcessed: adjustedByteOffset,
     };
   }
 
@@ -401,6 +460,45 @@ class CsvSplitService {
         name: f,
         path: path.join(outputFolder, f),
       }));
+  }
+
+  async createZip(runId: number): Promise<string | null> {
+    const run = await this.getRun(runId);
+    if (!run || !run.outputFolder) return null;
+    
+    const outputFolder = run.outputFolder;
+    if (!fs.existsSync(outputFolder)) return null;
+    
+    const files = await fs.promises.readdir(outputFolder);
+    const csvFiles = files.filter(f => f.endsWith(".csv")).sort();
+    
+    if (csvFiles.length === 0) return null;
+    
+    const zipPath = path.join(outputFolder, `${run.baseName || "partes"}_completo.zip`);
+    
+    // Check if ZIP already exists and is complete
+    if (fs.existsSync(zipPath)) {
+      return zipPath;
+    }
+    
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver("zip", {
+      zlib: { level: 6 } // Balanced compression
+    });
+    
+    return new Promise((resolve, reject) => {
+      output.on("close", () => resolve(zipPath));
+      output.on("error", reject);
+      archive.on("error", reject);
+      
+      archive.pipe(output);
+      
+      for (const file of csvFiles) {
+        archive.file(path.join(outputFolder, file), { name: file });
+      }
+      
+      archive.finalize();
+    });
   }
 
   async resetRun(runId: number): Promise<void> {

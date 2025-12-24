@@ -3741,6 +3741,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       const files = await csvSplitService.getOutputFiles(runId);
+      const fileSize = await csvSplitService.getFileSize(runId);
 
       return res.json({
         id: run.id,
@@ -3755,6 +3756,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         linesPerPart: run.linesPerPart,
         errorMessage: run.errorMessage,
         outputFiles: files,
+        fileSize,
+        bytesProcessed: run.lineOffset,
         canResume: run.status === "processando" || run.status === "pendente",
         nextStep: (run.status === "processando" || run.status === "pendente") ? `/api/csv-split/process/${run.id}` : null,
       });
@@ -3832,6 +3835,44 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error: any) {
       console.error("CSV Split download error:", error);
       return res.status(500).json({ message: error.message || "Erro ao baixar arquivo" });
+    }
+  });
+
+  // GET /api/csv-split/download-zip/:id - Download ZIP com todas as partes
+  app.get("/api/csv-split/download-zip/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { csvSplitService } = await import("./csv-split-service");
+      const run = await csvSplitService.getRun(runId);
+
+      if (!run || !run.outputFolder) {
+        return res.status(404).json({ message: "Job não encontrado" });
+      }
+
+      if (run.status !== "concluido") {
+        return res.status(400).json({ message: "Processamento ainda não concluído" });
+      }
+
+      const zipPath = await csvSplitService.createZip(runId);
+      
+      if (!zipPath || !fs.existsSync(zipPath)) {
+        return res.status(404).json({ message: "Não foi possível gerar o ZIP" });
+      }
+
+      const zipFilename = `${run.baseName || "partes"}_completo.zip`;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${zipFilename}"`);
+      
+      const stream = fs.createReadStream(zipPath);
+      stream.pipe(res);
+    } catch (error: any) {
+      console.error("CSV Split ZIP download error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao gerar ZIP" });
     }
   });
 
