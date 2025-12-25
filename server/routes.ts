@@ -2429,15 +2429,42 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== BASE DE CLIENTES ROUTES =====
 
   // Complete column mapping for import (includes official template + legacy aliases)
+  // Formato Folha Servidor oficial (ordem exata com acentos e %):
+  // Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%,
+  // Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido,
+  // ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
   const COLUMN_MAP: Record<string, string> = {
-    // IDENTIFICAÇÃO (template oficial + legado)
-    "CPF": "cpf",
+    // === TEMPLATE FOLHA SERVIDOR OFICIAL (ordem exata) ===
+    "ORGÃO": "orgaodesc",
     "MATRICULA": "matricula",
+    "BASE CALC": "base_calc",
+    "BRUTA 5%": "margem_5_bruta",
+    "UTILZ 5%": "margem_5_utilizada",
+    "SALDO 5%": "margem_5_saldo",
+    "BENEFICIO BRUTA 5%": "margem_beneficio_5_bruta",
+    "BENEFICIO UTILIZADO 5%": "margem_beneficio_5_utilizada",
+    "BENEFICIO SALDO 5%": "margem_beneficio_5_saldo",
+    "BRUTA 35%": "margem_35_bruta",
+    "UTILZ 35%": "margem_35_utilizada",
+    "SALDO 35%": "margem_35_saldo",
+    "BRUTA 70%": "margem_70_bruta",
+    "UTILZ 70%": "margem_70_utilizada",
+    "SALDO 70%": "margem_70_saldo",
+    "CRÉDITOS": "creditos",
+    "DÉBITOS": "debitos",
+    "LÍQUIDO": "liquido",
+    "ARQ. UPAG": "arq_upag",
+    "EXC QTD": "exc_qtd",
+    "EXC SOMA": "exc_soma",
+    "RJUR": "rjur",
+    "SIT FUNC": "sit_func",
+    "CPF": "cpf",
+    "MARGEM": "margem",
+    // === IDENTIFICAÇÃO (legado) ===
     "MATRÍCULA": "matricula",
     "CONVENIO": "convenio",
     "CONVÊNIO": "convenio",
     "ORGAO": "orgaodesc",
-    "ÓRGÃO": "orgaodesc",
     "ORGAODESC": "orgaodesc",
     "ORGAO_DESC": "orgaodesc",
     "ORGÃO_DESC": "orgaodesc",
@@ -2448,7 +2475,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "SITUACAO_FUNCIONAL": "sit_func",
     "SITUAÇÃO_FUNCIONAL": "sit_func",
     "SIT_FUNC": "sit_func",
-    "SIT FUNC": "sit_func",
     "SITUACAO FUNCIONAL": "sit_func",
     "SITUAÇÃO FUNCIONAL": "sit_func",
     "NOME": "nome",
@@ -2457,7 +2483,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "DATA_NASCIMENTO": "data_nascimento",
     "DATA NASCIMENTO": "data_nascimento",
     "DT_NASCIMENTO": "data_nascimento",
-    // CONTATO
+    // === CONTATO ===
     "TELEFONE_1": "telefone_1",
     "TELEFONE 1": "telefone_1",
     "TELEFONE1": "telefone_1",
@@ -2473,7 +2499,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "TELEFONE 5": "telefone_5",
     "EMAIL": "email",
     "E-MAIL": "email",
-    // DADOS BANCÁRIOS DO SALÁRIO
+    // === DADOS BANCÁRIOS DO SALÁRIO ===
     "BANCO_SALARIO": "banco_salario",
     "BANCO SALARIO": "banco_salario",
     "BANCO": "banco_salario",
@@ -2487,9 +2513,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "UPAG": "upag",
     "UNIDADE_PAGADORA": "upag",
     "UNIDADE PAGADORA": "upag",
-    // IDADE
+    // === IDADE ===
     "IDADE": "idade",
-    // RENDIMENTOS
+    // === RENDIMENTOS ===
     "SALARIO_BRUTO": "salario_bruto",
     "SALARIO BRUTO": "salario_bruto",
     "BRUTO": "salario_bruto",
@@ -2499,30 +2525,38 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "TOTAL DESCONTOS": "descontos_brutos",
     "SALARIO_LIQUIDO": "salario_liquido",
     "SALARIO LIQUIDO": "salario_liquido",
-    // MARGENS 70%
-    "MARGEM_70_BRUTA": "margem_70_bruta",
-    "MARGEM 70 BRUTA": "margem_70_bruta",
-    "BRUTA 70%": "margem_70_bruta",
-    "MARGEM_70_UTILIZADA": "margem_70_utilizada",
-    "MARGEM 70 UTILIZADA": "margem_70_utilizada",
-    "UTILZ 70%": "margem_70_utilizada",
-    "MARGEM_70_SALDO": "margem_70_saldo",
-    "MARGEM 70 SALDO": "margem_70_saldo",
-    "SALDO 70%": "margem_70_saldo",
-    // MARGENS 35%
+    // === MARGENS 5% (template oficial) ===
+    "MARGEM_5_BRUTA": "margem_5_bruta",
+    "MARGEM 5 BRUTA": "margem_5_bruta",
+    "MARGEM_5_UTILIZADA": "margem_5_utilizada",
+    "MARGEM 5 UTILIZADA": "margem_5_utilizada",
+    "MARGEM_5_SALDO": "margem_5_saldo",
+    "MARGEM 5 SALDO": "margem_5_saldo",
+    // === MARGENS BENEFÍCIO 5% (template oficial) ===
+    "MARGEM_BENEFICIO_5_BRUTA": "margem_beneficio_5_bruta",
+    "MARGEM BENEFICIO 5 BRUTA": "margem_beneficio_5_bruta",
+    "MARGEM_BENEFICIO_5_UTILIZADA": "margem_beneficio_5_utilizada",
+    "MARGEM BENEFICIO 5 UTILIZADA": "margem_beneficio_5_utilizada",
+    "MARGEM_BENEFICIO_5_SALDO": "margem_beneficio_5_saldo",
+    "MARGEM BENEFICIO 5 SALDO": "margem_beneficio_5_saldo",
+    // === MARGENS 35% ===
     "MARGEM_35_BRUTA": "margem_35_bruta",
     "MARGEM 35 BRUTA": "margem_35_bruta",
-    "BRUTA 35%": "margem_35_bruta",
     "BRUTA 30%": "margem_35_bruta",
     "MARGEM_35_UTILIZADA": "margem_35_utilizada",
     "MARGEM 35 UTILIZADA": "margem_35_utilizada",
-    "UTILZ 35%": "margem_35_utilizada",
     "UTILZ 30%": "margem_35_utilizada",
     "MARGEM_35_SALDO": "margem_35_saldo",
     "MARGEM 35 SALDO": "margem_35_saldo",
-    "SALDO 35%": "margem_35_saldo",
     "SALDO 30%": "margem_35_saldo",
-    // MARGEM CARTÃO CRÉDITO
+    // === MARGENS 70% ===
+    "MARGEM_70_BRUTA": "margem_70_bruta",
+    "MARGEM 70 BRUTA": "margem_70_bruta",
+    "MARGEM_70_UTILIZADA": "margem_70_utilizada",
+    "MARGEM 70 UTILIZADA": "margem_70_utilizada",
+    "MARGEM_70_SALDO": "margem_70_saldo",
+    "MARGEM 70 SALDO": "margem_70_saldo",
+    // === MARGEM CARTÃO CRÉDITO (legado) ===
     "MARGEM_CARTAO_CREDITO_BRUTA": "margem_cartao_credito_bruta",
     "MARGEM CARTAO CREDITO BRUTA": "margem_cartao_credito_bruta",
     "MARGEM_CARTAO_CREDITO_UTILIZADA": "margem_cartao_credito_utilizada",
@@ -2532,7 +2566,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "MARGEM CARTAO CREDITO": "margem_cartao_credito_saldo",
     "SALDO CARTAO CREDITO": "margem_cartao_credito_saldo",
     "MARGEM 5% CREDITO": "margem_cartao_credito_saldo",
-    // MARGEM CARTÃO BENEFÍCIO
+    // === MARGEM CARTÃO BENEFÍCIO (legado) ===
     "MARGEM_CARTAO_BENEFICIO_BRUTA": "margem_cartao_beneficio_bruta",
     "MARGEM CARTAO BENEFICIO BRUTA": "margem_cartao_beneficio_bruta",
     "MARGEM_CARTAO_BENEFICIO_UTILIZADA": "margem_cartao_beneficio_utilizada",
@@ -2542,14 +2576,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "MARGEM CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
     "SALDO CARTAO BENEFICIO": "margem_cartao_beneficio_saldo",
     "MARGEM 5% BENEFICIO": "margem_cartao_beneficio_saldo",
-    // FOLHA AGREGADOS
+    // === FOLHA AGREGADOS (legado) ===
     "CREDITOS": "creditos",
-    "CRÉDITOS": "creditos",
     "DEBITOS": "debitos",
-    "DÉBITOS": "debitos",
     "LIQUIDO": "liquido",
-    "LÍQUIDO": "liquido",
-    // CONTRATOS
+    // === CONTRATOS ===
     "BANCO_EMPRESTIMO": "banco_emprestimo",
     "BANCO EMPRESTIMO": "banco_emprestimo",
     "BANCO DO EMPRESTIMO": "banco_emprestimo",
@@ -2573,6 +2604,41 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "SITUACAO_CONTRATO": "situacao_contrato",
     "SITUACAO CONTRATO": "situacao_contrato",
   };
+
+  // Headers esperados para template Folha Servidor (validação estrita)
+  const FOLHA_SERVIDOR_EXPECTED_HEADERS = [
+    "Orgão", "Matricula", "Base Calc", "Bruta 5%", "Utilz 5%", "Saldo 5%",
+    "Beneficio Bruta 5%", "Beneficio Utilizado 5%", "Beneficio Saldo 5%",
+    "Bruta 35%", "Utilz 35%", "Saldo 35%", "Bruta 70%", "Utilz 70%", "Saldo 70%",
+    "Créditos", "Débitos", "Líquido", "ARQ. UPAG", "EXC QTD", "EXC Soma",
+    "RJUR", "Sit Func", "CPF", "Margem"
+  ];
+
+  // Verifica se o header é do template Folha Servidor oficial
+  function isFolhaServidorTemplate(headers: string[]): boolean {
+    const normalizedHeaders = headers.map(h => h.trim());
+    // Verifica se pelo menos 80% das colunas esperadas estão presentes
+    const matchCount = FOLHA_SERVIDOR_EXPECTED_HEADERS.filter(expected => 
+      normalizedHeaders.some(h => h.toLowerCase() === expected.toLowerCase())
+    ).length;
+    return matchCount >= FOLHA_SERVIDOR_EXPECTED_HEADERS.length * 0.8;
+  }
+
+  // Valida header e retorna erro se não bater
+  function validateFolhaServidorHeader(headers: string[]): { valid: boolean; missing: string[] } {
+    const normalizedHeaders = headers.map(h => h.trim().toLowerCase());
+    const missing: string[] = [];
+    
+    // Colunas obrigatórias
+    const required = ["matricula", "cpf"];
+    for (const req of required) {
+      if (!normalizedHeaders.includes(req)) {
+        missing.push(req.toUpperCase());
+      }
+    }
+    
+    return { valid: missing.length === 0, missing };
+  }
 
   function normalizeCol(col: string): string {
     // Normaliza para maiúsculas mas mantém espaços para permitir matching com aliases que usam espaço
@@ -2706,6 +2772,35 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           else if (field === "salario_liquido") {
             folhaData.salarioLiquido = normalizeMoney(value);
           }
+          // Novos campos do template Folha Servidor oficial
+          else if (field === "base_calc") {
+            folhaData.baseCalc = normalizeMoney(value);
+          }
+          else if (field === "creditos") {
+            folhaData.creditos = normalizeMoney(value);
+          }
+          else if (field === "debitos") {
+            folhaData.debitos = normalizeMoney(value);
+          }
+          else if (field === "liquido") {
+            folhaData.liquido = normalizeMoney(value);
+          }
+          else if (field === "arq_upag") {
+            folhaData.arqUpag = String(value || "").trim() || null;
+          }
+          else if (field === "exc_qtd") {
+            const qtd = parseInt(String(value || "0"), 10);
+            folhaData.excQtd = isNaN(qtd) ? null : qtd;
+          }
+          else if (field === "exc_soma") {
+            folhaData.excSoma = normalizeMoney(value);
+          }
+          else if (field === "rjur") {
+            folhaData.rjur = String(value || "").trim() || null;
+          }
+          else if (field === "margem") {
+            folhaData.margem = normalizeMoney(value);
+          }
           else if (field.startsWith("margem_")) {
             const parts = field.split("_");
             let camelField = parts[0];
@@ -2754,17 +2849,32 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           await storage.createClienteFolhaMes({
             pessoaId: pessoa.id,
             competencia: competenciaDate,
-            margemBruta70: folhaData.margem70Bruta,
-            margemUtilizada70: folhaData.margem70Utilizada,
-            margemSaldo70: folhaData.margem70Saldo,
+            // Margem 5%
+            margemBruta5: folhaData.margem5Bruta,
+            margemUtilizada5: folhaData.margem5Utilizada,
+            margemSaldo5: folhaData.margem5Saldo,
+            // Margem Benefício 5%
+            margemBeneficioBruta5: folhaData.margemBeneficio5Bruta,
+            margemBeneficioUtilizada5: folhaData.margemBeneficio5Utilizada,
+            margemBeneficioSaldo5: folhaData.margemBeneficio5Saldo,
+            // Margem 35%
             margemBruta35: folhaData.margem35Bruta,
             margemUtilizada35: folhaData.margem35Utilizada,
             margemSaldo35: folhaData.margem35Saldo,
+            // Margem 70%
+            margemBruta70: folhaData.margem70Bruta,
+            margemUtilizada70: folhaData.margem70Utilizada,
+            margemSaldo70: folhaData.margem70Saldo,
+            // Cartões
             margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
             margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+            // Rendimentos
             salarioBruto: folhaData.salarioBruto || null,
             descontosBrutos: folhaData.descontosBrutos || null,
             salarioLiquido: folhaData.salarioLiquido || null,
+            creditos: folhaData.creditos || null,
+            debitos: folhaData.debitos || null,
+            liquido: folhaData.liquido || null,
             sitFuncNoMes: pessoaData.sitFunc || null,
             baseTag,
           } as any);
@@ -3058,6 +3168,35 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             else if (field === "salario_liquido") {
               folhaData.salarioLiquido = normalizeMoney(value);
             }
+            // Novos campos do template Folha Servidor oficial
+            else if (field === "base_calc") {
+              folhaData.baseCalc = normalizeMoney(value);
+            }
+            else if (field === "creditos") {
+              folhaData.creditos = normalizeMoney(value);
+            }
+            else if (field === "debitos") {
+              folhaData.debitos = normalizeMoney(value);
+            }
+            else if (field === "liquido") {
+              folhaData.liquido = normalizeMoney(value);
+            }
+            else if (field === "arq_upag") {
+              folhaData.arqUpag = String(value || "").trim() || null;
+            }
+            else if (field === "exc_qtd") {
+              const qtd = parseInt(String(value || "0"), 10);
+              folhaData.excQtd = isNaN(qtd) ? null : qtd;
+            }
+            else if (field === "exc_soma") {
+              folhaData.excSoma = normalizeMoney(value);
+            }
+            else if (field === "rjur") {
+              folhaData.rjur = String(value || "").trim() || null;
+            }
+            else if (field === "margem") {
+              folhaData.margem = normalizeMoney(value);
+            }
             // FOLHA FIELDS (margens) - usam parseNum para permitir nulos
             else if (field.startsWith("margem_")) {
               const parts = field.split("_");
@@ -3111,17 +3250,32 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             await storage.createClienteFolhaMes({
               pessoaId: pessoa.id,
               competencia: competenciaDate,
-              margemBruta70: folhaData.margem70Bruta,
-              margemUtilizada70: folhaData.margem70Utilizada,
-              margemSaldo70: folhaData.margem70Saldo,
+              // Margem 5%
+              margemBruta5: folhaData.margem5Bruta,
+              margemUtilizada5: folhaData.margem5Utilizada,
+              margemSaldo5: folhaData.margem5Saldo,
+              // Margem Benefício 5%
+              margemBeneficioBruta5: folhaData.margemBeneficio5Bruta,
+              margemBeneficioUtilizada5: folhaData.margemBeneficio5Utilizada,
+              margemBeneficioSaldo5: folhaData.margemBeneficio5Saldo,
+              // Margem 35%
               margemBruta35: folhaData.margem35Bruta,
               margemUtilizada35: folhaData.margem35Utilizada,
               margemSaldo35: folhaData.margem35Saldo,
+              // Margem 70%
+              margemBruta70: folhaData.margem70Bruta,
+              margemUtilizada70: folhaData.margem70Utilizada,
+              margemSaldo70: folhaData.margem70Saldo,
+              // Cartões
               margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
               margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+              // Rendimentos
               salarioBruto: folhaData.salarioBruto || null,
               descontosBrutos: folhaData.descontosBrutos || null,
               salarioLiquido: folhaData.salarioLiquido || null,
+              creditos: folhaData.creditos || null,
+              debitos: folhaData.debitos || null,
+              liquido: folhaData.liquido || null,
               sitFuncNoMes: pessoaData.sitFunc || null,
               baseTag,
             } as any);
