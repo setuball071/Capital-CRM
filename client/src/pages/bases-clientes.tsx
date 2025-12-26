@@ -228,11 +228,12 @@ export default function BasesClientes() {
 
     const formData = new FormData();
     formData.append("arquivo", fastImportFile);
-    formData.append("tipoImport", fastImportTipo);
+    formData.append("tipo_import", fastImportTipo);
     formData.append("convenio", fastImportConvenio);
     formData.append("competencia", fastImportCompetencia);
     if (fastImportTipo === "d8") {
-      formData.append("layoutD8", fastImportLayoutD8);
+      formData.append("layout_d8", fastImportLayoutD8);
+      formData.append("banco", "DIVERSOS");
     }
     
     setIsPolling(true);

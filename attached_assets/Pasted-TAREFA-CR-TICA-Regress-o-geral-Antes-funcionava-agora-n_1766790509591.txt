@@ -1,0 +1,100 @@
+TAREFA CRÍTICA: Regressão geral. Antes funcionava, agora nem o import normal funciona. Corrigir com prioridade máxima e sem adicionar features novas.
+
+OBJETIVO
+1) Restaurar imediatamente o fluxo que já funcionava: página /bases-clientes carregando a lista e import normal funcionando.
+2) Corrigir o Fast Import para não quebrar nada (se não conseguir, desativar o botão e os endpoints até estar estável).
+3) Garantir que os templates de download existem de fato e retornam arquivo (não só texto), incluindo folha_pensionista.
+
+REGRAS
+- Não refatorar a aplicação inteira.
+- Não criar telas novas.
+- Não alterar o schema sem necessidade. Se precisar, criar migração/SQL mínima e documentar.
+- Toda mudança deve ter teste manual simples (curl ou chamada interna) e logs claros.
+- Primeiro estabiliza o import normal. Só depois mexe no rápido.
+
+PASSO A: Identificar a causa do 500 atual
+1) Abrir logs do backend no momento que a página /bases-clientes carrega.
+2) Encontrar o stacktrace do erro 500 das rotas:
+   - GET /api/bases
+   - POST /api/bases/import
+   - GET /api/import/templates/*
+3) Corrigir a causa real (coluna faltando, query errada, tenant_id, import_run_id, join inválido, etc).
+4) Após corrigir, confirmar:
+   - GET /api/bases retorna 200 com lista (mesmo vazia)
+   - A UI não fica spammando erro 500 no console.
+
+PASSO B: Autenticação e tenant middleware
+1) Conferir que TODAS as rotas usadas pela página Base de Clientes passam pelo mesmo middleware:
+   - auth middleware
+   - tenant middleware
+2) Garantir que:
+   - /api/bases
+   - /api/bases/import
+   - /api/import-runs
+   - /api/imports/*
+   - /api/import/templates/*
+não retornam 401 quando o usuário está logado.
+3) Se o /api/auth/me estiver 401 quando logado, corrigir o cookie/session/token.
+
+PASSO C: Templates de verdade (arquivo para baixar)
+1) Os botões devem baixar um arquivo real (xlsx ou csv), não um modal com texto.
+2) Implementar/validar endpoints:
+   - GET /api/import/templates/folha
+   - GET /api/import/templates/folha-pensionista
+   - GET /api/import/templates/d8-servidor
+   - GET /api/import/templates/d8-pensionista
+   - GET /api/import/templates/contatos
+3) Cada endpoint deve responder com:
+   - Content-Type correto (xlsx ou text/csv)
+   - Content-Disposition: attachment; filename="..."
+4) Garantir que a UI aponta para o endpoint correto e não está escondendo o botão no modal.
+5) ADICIONAR botão separado para Folha Pensionista na seção "Modelos para Importação Massiva", ao lado do "Modelo Folha".
+   - Não substituir o botão existente; criar um novo.
+
+PASSO D: Parser Folha com ordem EXATA das colunas (Servidor e Pensionista)
+1) O parser da folha deve aceitar CSV e XLSX (convertendo XLSX->CSV no backend ou frontend, mas estável).
+2) Layout Servidor (ordem exata):
+Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+3) Layout Pensionista (ordem exata, com Instituidor após Orgão):
+Orgão, Instituidor, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+4) O sistema deve detectar layout pelo header "Instituidor" (case-insensitive).
+5) Normalizações:
+   - CPF: apenas dígitos, padStart 11.
+   - UPAG: apenas dígitos, remover apóstrofo, padStart conforme padrão (manter zeros).
+   - Decimais BR: "7.390,26" -> 7390.26.
+6) Persistência:
+   - Instituidor deve ir para o vínculo (clientes_vinculo.extras ou coluna específica), nunca para pessoa.
+   - O registro mensal deve guardar os valores financeiros na folha_mes e pode ter extrasFolha se já existir.
+
+PASSO E: CSV Splitter aceitar XLSX e não cair com 168MB
+1) Endpoint /csv-split/start está dando 408 timeout.
+2) Ajustar para:
+   - suportar upload de XLSX e CSV
+   - processar streaming (não carregar arquivo inteiro em memória)
+   - gerar partes de 100.000 linhas mantendo cabeçalho
+   - retornar status via job (import_runs ou split_runs)
+3) A UI deve mostrar progresso e permitir download dos arquivos gerados (zip ou lista).
+4) Se não der pra fazer zip, gerar arquivos individuais e listar links.
+
+PASSO F: Fast Import sem quebrar o normal
+1) Se Fast Import está causando regressão, DESABILITAR o botão e as rotas atrás de feature flag (env FAST_IMPORT_ENABLED=false).
+2) Se for manter, garantir:
+   - rotas do fast import usam os mesmos middlewares de auth/tenant do normal
+   - payload inclui competencia, convenio, tipoImportacao, nomeBase
+   - retornar erros claros (400 com mensagem) e UI exibir a mensagem.
+3) Confirmar que o import normal continua funcionando após isso.
+
+CHECKLIST FINAL (OBRIGATÓRIO)
+- Acessar /bases-clientes e não ter spam de 500 no console.
+- Listagem de bases carrega.
+- Import normal de um CSV pequeno (100 linhas) funciona e cria um import_run.
+- Download de template Folha Servidor e Folha Pensionista baixa arquivo real.
+- CSV Splitter aceita XLSX e divide em 100k sem timeout (usar arquivo de teste grande).
+- Fast Import: ou funciona sem quebrar nada, ou fica desativado com mensagem.
+
+ENTREGÁVEL
+No final, me mandar:
+1) Quais arquivos foram alterados.
+2) Quais endpoints foram corrigidos.
+3) Como testar (3 passos simples).
+4) Prints/trechos de log do backend mostrando 200 OK para /api/bases e um import concluído.

@@ -394,7 +394,7 @@ class FastImportService {
 
     const pessoaResult = await db.execute(sql`
       INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, upag, uf, municipio, convenio, base_tag_ultima)
-      SELECT DISTINCT ON (s.cpf, s.matricula)
+      SELECT DISTINCT ON (s.cpf)
         ${tenantId}::integer,
         s.cpf,
         s.matricula,
@@ -409,7 +409,7 @@ class FastImportService {
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
-      ON CONFLICT (cpf, matricula) DO UPDATE SET
+      ON CONFLICT (cpf) DO UPDATE SET
         nome = COALESCE(EXCLUDED.nome, clientes_pessoa.nome),
         orgaodesc = COALESCE(EXCLUDED.orgaodesc, clientes_pessoa.orgaodesc),
         upag = COALESCE(EXCLUDED.upag, clientes_pessoa.upag),
@@ -417,7 +417,7 @@ class FastImportService {
         municipio = COALESCE(EXCLUDED.municipio, clientes_pessoa.municipio),
         convenio = ${convenio},
         base_tag_ultima = ${baseTag},
-        ultima_atualizacao = NOW()
+        atualizado_em = NOW()
     `);
 
     console.log(`[FastImport] Pessoas upserted: ${pessoaResult.rowCount || 0}`);
@@ -430,7 +430,7 @@ class FastImportService {
         ${convenio},
         p.id
       FROM staging_folha s
-      JOIN clientes_pessoa p ON p.cpf = s.cpf AND p.matricula = s.matricula
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
@@ -443,46 +443,42 @@ class FastImportService {
 
     const folhaResult = await db.execute(sql`
       INSERT INTO clientes_folha_mes (
-        pessoa_id, competencia, base_calc,
+        pessoa_id, competencia,
         margem_bruta_5, margem_utilizada_5, margem_saldo_5,
         margem_beneficio_bruta_5, margem_beneficio_utilizada_5, margem_beneficio_saldo_5,
         margem_bruta_35, margem_utilizada_35, margem_saldo_35,
         margem_bruta_70, margem_utilizada_70, margem_saldo_70,
-        creditos, debitos, liquido,
-        exc_qtd, exc_soma, rjur, sit_func, margem, base_tag
+        creditos, debitos, liquido, salario_bruto, salario_liquido,
+        sit_func_no_mes, base_tag
       )
       SELECT DISTINCT ON (p.id)
         p.id,
         ${competencia}::timestamp,
-        s.base_calc,
-        s.margem_5_bruta,
-        s.margem_5_utilizada,
-        s.margem_5_saldo,
-        s.margem_beneficio_5_bruta,
-        s.margem_beneficio_5_utilizada,
-        s.margem_beneficio_5_saldo,
-        s.margem_35_bruta,
-        s.margem_35_utilizada,
-        s.margem_35_saldo,
-        s.margem_70_bruta,
-        s.margem_70_utilizada,
-        s.margem_70_saldo,
-        s.creditos,
-        s.debitos,
-        s.liquido,
-        s.exc_qtd,
-        s.exc_soma,
-        s.rjur,
+        s.margem_5_bruta::numeric,
+        s.margem_5_utilizada::numeric,
+        s.margem_5_saldo::numeric,
+        s.margem_beneficio_5_bruta::numeric,
+        s.margem_beneficio_5_utilizada::numeric,
+        s.margem_beneficio_5_saldo::numeric,
+        s.margem_35_bruta::numeric,
+        s.margem_35_utilizada::numeric,
+        s.margem_35_saldo::numeric,
+        s.margem_70_bruta::numeric,
+        s.margem_70_utilizada::numeric,
+        s.margem_70_saldo::numeric,
+        s.creditos::numeric,
+        s.debitos::numeric,
+        s.liquido::numeric,
+        s.creditos::numeric,
+        s.liquido::numeric,
         s.sit_func,
-        s.margem,
         ${baseTag}
       FROM staging_folha s
-      JOIN clientes_pessoa p ON p.cpf = s.cpf AND p.matricula = s.matricula
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (pessoa_id, competencia) DO UPDATE SET
-        base_calc = COALESCE(EXCLUDED.base_calc, clientes_folha_mes.base_calc),
         margem_bruta_5 = COALESCE(EXCLUDED.margem_bruta_5, clientes_folha_mes.margem_bruta_5),
         margem_utilizada_5 = COALESCE(EXCLUDED.margem_utilizada_5, clientes_folha_mes.margem_utilizada_5),
         margem_saldo_5 = COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5),
@@ -498,13 +494,7 @@ class FastImportService {
         creditos = COALESCE(EXCLUDED.creditos, clientes_folha_mes.creditos),
         debitos = COALESCE(EXCLUDED.debitos, clientes_folha_mes.debitos),
         liquido = COALESCE(EXCLUDED.liquido, clientes_folha_mes.liquido),
-        exc_qtd = COALESCE(EXCLUDED.exc_qtd, clientes_folha_mes.exc_qtd),
-        exc_soma = COALESCE(EXCLUDED.exc_soma, clientes_folha_mes.exc_soma),
-        rjur = COALESCE(EXCLUDED.rjur, clientes_folha_mes.rjur),
-        sit_func = COALESCE(EXCLUDED.sit_func, clientes_folha_mes.sit_func),
-        margem = COALESCE(EXCLUDED.margem, clientes_folha_mes.margem),
-        base_tag = ${baseTag},
-        ultima_atualizacao = NOW()
+        base_tag = ${baseTag}
     `);
 
     console.log(`[FastImport] Folha upserted: ${folhaResult.rowCount || 0}`);
@@ -549,7 +539,7 @@ class FastImportService {
         situacao = COALESCE(EXCLUDED.situacao, clientes_contratos.situacao),
         data_inicio = COALESCE(EXCLUDED.data_inicio, clientes_contratos.data_inicio),
         data_fim = COALESCE(EXCLUDED.data_fim, clientes_contratos.data_fim),
-        ultima_atualizacao = NOW()
+        atualizado_em = NOW()
     `);
 
     console.log(`[FastImport] Contratos upserted: ${contratoResult.rowCount || 0}`);
