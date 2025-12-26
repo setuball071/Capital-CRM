@@ -188,6 +188,7 @@ export interface IStorage {
   
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
+  upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]>;
   
   // Clientes Contratos
@@ -1170,6 +1171,48 @@ export class DbStorage implements IStorage {
 
   // Clientes Folha Mês
   async createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes> {
+    const [newFolha] = await db.insert(clientesFolhaMes).values(data).returning();
+    return newFolha;
+  }
+
+  async upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes> {
+    // Busca folha existente por pessoaId + competência + baseTag
+    const existing = await db.select()
+      .from(clientesFolhaMes)
+      .where(and(
+        eq(clientesFolhaMes.pessoaId, data.pessoaId!),
+        eq(clientesFolhaMes.competencia, data.competencia!),
+        eq(clientesFolhaMes.baseTag, data.baseTag!)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const old = existing[0];
+      
+      // Merge extrasFolha se ambos existirem
+      let mergedExtras = data.extrasFolha;
+      if (old.extrasFolha && data.extrasFolha) {
+        mergedExtras = { ...old.extrasFolha as object, ...data.extrasFolha as object };
+      } else if (old.extrasFolha && !data.extrasFolha) {
+        // Preserve existing extras if new data has null
+        mergedExtras = old.extrasFolha;
+      }
+
+      // Só atualiza campos que têm valores não-nulos (preserva dados existentes)
+      const updateData: Record<string, any> = { extrasFolha: mergedExtras };
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== null && value !== undefined && key !== 'extrasFolha' && key !== 'pessoaId' && key !== 'id') {
+          updateData[key] = value;
+        }
+      }
+
+      const [updated] = await db.update(clientesFolhaMes)
+        .set(updateData)
+        .where(eq(clientesFolhaMes.id, old.id))
+        .returning();
+      return updated;
+    }
+
     const [newFolha] = await db.insert(clientesFolhaMes).values(data).returning();
     return newFolha;
   }

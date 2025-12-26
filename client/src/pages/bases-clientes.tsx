@@ -402,6 +402,16 @@ export default function BasesClientes() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => window.location.href = "/api/import/templates/folha-pensionista"}
+                    data-testid="button-download-modelo-folha-pensionista"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo Folha Pensionista
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => window.location.href = "/api/import/templates/d8-servidor"}
                     data-testid="button-download-modelo-d8-servidor"
                     className="justify-start"

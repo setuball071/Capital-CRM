@@ -2867,23 +2867,44 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           }
           // Campo específico de Pensionista - salvar separadamente para extrasVinculo
           else if (field === "instituidor") {
-            folhaData.instituidor = String(value || "").trim() || null;
+            const instituidorRaw = String(value || "").trim();
+            folhaData.instituidor = instituidorRaw || null;
+            if (instituidorRaw) {
+              console.log(`[Import-BG] instituidorNormalizado=${instituidorRaw} (linha ${i + 1})`);
+            }
           }
         }
         
         pessoaData.telefonesBase = telefones;
         
+        // Se for pensionista, salvar instituidor em extrasVinculo
+        if (folhaData.instituidor && detectedLayout === 'pensionista') {
+          pessoaData.extrasVinculo = {
+            ...(pessoaData.extrasVinculo || {}),
+            instituidor: folhaData.instituidor,
+            layoutDetectado: 'pensionista'
+          };
+        }
+        
         const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
         let pessoa = pessoasEncontradas[0];
         
         if (pessoa) {
+          // Merge extrasVinculo existente com o novo
+          if (pessoaData.extrasVinculo && pessoa.extrasVinculo) {
+            pessoaData.extrasVinculo = {
+              ...pessoa.extrasVinculo as object,
+              ...pessoaData.extrasVinculo
+            };
+          }
           pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
         } else {
           pessoa = await storage.createClientePessoa(pessoaData as any);
         }
         
         if (pessoa) {
-          await storage.createClienteFolhaMes({
+          // Upsert folha com merge de extrasFolha para preservar instituidor
+          await storage.upsertClienteFolhaMes({
             pessoaId: pessoa.id,
             competencia: competenciaDate,
             // Margem 5%
@@ -3278,25 +3299,45 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             }
             // Campo específico de Pensionista - salvar separadamente para extrasFolha
             else if (field === "instituidor") {
-              folhaData.instituidor = String(value || "").trim() || null;
+              const instituidorRaw = String(value || "").trim();
+              folhaData.instituidor = instituidorRaw || null;
+              if (instituidorRaw) {
+                console.log(`[Import] instituidorNormalizado=${instituidorRaw} (linha ${i + 1})`);
+              }
             }
           }
           
           pessoaData.telefonesBase = telefones;
+          
+          // Se for pensionista, salvar instituidor em extrasVinculo
+          if (folhaData.instituidor && detectedLayout === 'pensionista') {
+            pessoaData.extrasVinculo = {
+              ...(pessoaData.extrasVinculo || {}),
+              instituidor: folhaData.instituidor,
+              layoutDetectado: 'pensionista'
+            };
+          }
           
           // Upsert pessoa - busca por matrícula + convênio (chave composta)
           const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
           let pessoa = pessoasEncontradas[0];
           
           if (pessoa) {
+            // Merge extrasVinculo existente com o novo
+            if (pessoaData.extrasVinculo && pessoa.extrasVinculo) {
+              pessoaData.extrasVinculo = {
+                ...pessoa.extrasVinculo as object,
+                ...pessoaData.extrasVinculo
+              };
+            }
             pessoa = await storage.updateClientePessoa(pessoa.id, pessoaData as any);
           } else {
             pessoa = await storage.createClientePessoa(pessoaData as any);
           }
           
           if (pessoa) {
-            // Create folha record
-            await storage.createClienteFolhaMes({
+            // Upsert folha com merge de extrasFolha para preservar instituidor
+            await storage.upsertClienteFolhaMes({
               pessoaId: pessoa.id,
               competencia: competenciaDate,
               // Margem 5%

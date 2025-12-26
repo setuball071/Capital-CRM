@@ -1,0 +1,96 @@
+Objetivo
+Adicionar o template “Modelo Folha Pensionista” separado do “Modelo Folha”, com download próprio e suporte no parser para detectar e processar o layout de pensionista (26 colunas). Hoje já existem botões e templates para: Folha, D8 Servidor, D8 Pensionista, Contatos. Falta Folha Pensionista.
+
+Requisitos obrigatórios
+1) Criar um novo template tipo: folha_pensionista
+2) Criar um novo botão de download na tela Base de Clientes: “Modelo Folha Pensionista”
+3) O template deve vir com o cabeçalho EXATAMENTE nesta ordem (26 colunas):
+   Orgão
+   Instituidor
+   Matricula
+   Base Calc
+   Bruta 5%
+   Utilz 5%
+   Saldo 5%
+   Beneficio Bruta 5%
+   Beneficio Utilizado 5%
+   Beneficio Saldo 5%
+   Bruta 35%
+   Utilz 35%
+   Saldo 35%
+   Bruta 70%
+   Utilz 70%
+   Saldo 70%
+   Créditos
+   Débitos
+   Líquido
+   ARQ. UPAG
+   EXC QTD
+   EXC Soma
+   RJUR
+   Sit Func
+   CPF
+   Margem
+
+4) O “Modelo Folha” (Servidor) deve continuar com o cabeçalho EXATO nesta ordem (25 colunas):
+   Orgão
+   Matricula
+   Base Calc
+   Bruta 5%
+   Utilz 5%
+   Saldo 5%
+   Beneficio Bruta 5%
+   Beneficio Utilizado 5%
+   Beneficio Saldo 5%
+   Bruta 35%
+   Utilz 35%
+   Saldo 35%
+   Bruta 70%
+   Utilz 70%
+   Saldo 70%
+   Créditos
+   Débitos
+   Líquido
+   ARQ. UPAG
+   EXC QTD
+   EXC Soma
+   RJUR
+   Sit Func
+   CPF
+   Margem
+
+5) Parser de Folha:
+- Detectar automaticamente layout PENSIONISTA quando existir a coluna “Instituidor” (case-insensitive e ignorando espaços/pontos/acentos).
+- Para pensionista: salvar “Instituidor” em:
+  a) extrasVinculo do vínculo (clientes_vinculo) com chave "instituidor"
+  b) extrasFolha do registro do mês (folha_mes / mes) com chave "instituidor"
+- Para servidor: não existe instituidor.
+
+6) Normalizações:
+- CPF sempre só dígitos e padStart(11,'0')
+- Matricula e Instituidor como string (preservar zeros à esquerda)
+- ARQ. UPAG como string (preservar zeros e remover apóstrofo do Excel)
+- Decimais BR: “7.390,26” -> 7390.26
+
+7) Download:
+- Reutilizar o endpoint existente de download de templates.
+- Adicionar suporte a “folha_pensionista” na rota.
+- O arquivo baixado deve ser .xlsx e conter uma linha de exemplo (linha 2) com valores dummy (só para o usuário entender o formato).
+
+Onde mexer
+- client/src/pages/bases-clientes.tsx: adicionar botão “Modelo Folha Pensionista”
+- server/import-service.ts (ou onde ficam TEMPLATE_COLUMNS e gerador xlsx): incluir TEMPLATE_COLUMNS.folha_pensionista
+- server/routes.ts: incluir novo tipo no endpoint GET /api/templates/:type (ou equivalente)
+- server/parser de folha: adicionar detecção e leitura da coluna Instituidor no layout de pensionista
+
+Restrições
+- Não alterar templates existentes de D8 e Contatos
+- Não alterar o modal “Ver modelo de planilha” atual além de adicionar o novo botão
+- Não mexer em RLS/tenant
+- Não criar telas novas, só o botão e o download do arquivo
+
+Entregáveis
+1) Botão “Modelo Folha Pensionista” aparece ao lado dos outros
+2) Ao clicar, baixa um .xlsx com as 26 colunas na ordem definida
+3) Importar um arquivo pensionista com essa ordem detecta layout pensionista e persiste instituidor em extrasVinculo e extrasFolha
+4) Logs do import mostram: layoutDetectado=PENSIONISTA e instituidorNormalizado
