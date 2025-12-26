@@ -12,7 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -101,6 +103,17 @@ export default function BasesClientes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [baseToDelete, setBaseToDelete] = useState<BaseImportada | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  
+  // Fast Import states
+  const [isFastImportOpen, setIsFastImportOpen] = useState(false);
+  const [fastImportFile, setFastImportFile] = useState<File | null>(null);
+  const [fastImportTipo, setFastImportTipo] = useState<string>("folha");
+  const [fastImportConvenio, setFastImportConvenio] = useState("");
+  const [fastImportCompetencia, setFastImportCompetencia] = useState("");
+  const [fastImportLayoutD8, setFastImportLayoutD8] = useState<string>("servidor");
+  const [fastImportRunId, setFastImportRunId] = useState<number | null>(null);
+  const [fastImportStatus, setFastImportStatus] = useState<any>(null);
+  const [isPolling, setIsPolling] = useState(false);
 
   const handleDownloadModelo = () => {
     const headers = [
@@ -124,6 +137,118 @@ export default function BasesClientes() {
       title: "Modelo baixado",
       description: "Use este arquivo como base para sua planilha de importação.",
     });
+  };
+
+  // Fast Import mutations
+  const startFastImportMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/fast-imports/start", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao iniciar importação rápida");
+      }
+      return response.json();
+    },
+    onSuccess: (data: { importRunId: number; message: string }) => {
+      setFastImportRunId(data.importRunId);
+      toast({
+        title: "Importação iniciada",
+        description: data.message,
+      });
+      // Iniciar processamento
+      processFastImportMutation.mutate(data.importRunId);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao iniciar importação",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const processFastImportMutation = useMutation({
+    mutationFn: async (runId: number) => {
+      const response = await apiRequest("POST", `/api/fast-imports/process/${runId}`);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setFastImportStatus(data);
+      
+      if (data.pausedForResume) {
+        // Continuar processando
+        setTimeout(() => {
+          processFastImportMutation.mutate(fastImportRunId!);
+        }, 100);
+      } else if (data.status === "concluida" || data.phase === "completed") {
+        toast({
+          title: "Importação concluída!",
+          description: `${data.mergedRows?.toLocaleString("pt-BR") || 0} registros processados em ${((data.elapsedMs || 0) / 1000).toFixed(1)}s`,
+        });
+        setIsPolling(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      } else if (data.status === "erro") {
+        toast({
+          title: "Erro na importação",
+          description: data.message,
+          variant: "destructive",
+        });
+        setIsPolling(false);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro no processamento",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsPolling(false);
+    },
+  });
+
+  const handleFastImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFastImportFile(e.target.files[0]);
+    }
+  };
+
+  const handleStartFastImport = async () => {
+    if (!fastImportFile || !fastImportConvenio || !fastImportCompetencia) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha todos os campos obrigatórios.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("arquivo", fastImportFile);
+    formData.append("tipoImport", fastImportTipo);
+    formData.append("convenio", fastImportConvenio);
+    formData.append("competencia", fastImportCompetencia);
+    if (fastImportTipo === "d8") {
+      formData.append("layoutD8", fastImportLayoutD8);
+    }
+    
+    setIsPolling(true);
+    startFastImportMutation.mutate(formData);
+  };
+
+  const resetFastImport = () => {
+    setFastImportFile(null);
+    setFastImportTipo("folha");
+    setFastImportConvenio("");
+    setFastImportCompetencia("");
+    setFastImportLayoutD8("servidor");
+    setFastImportRunId(null);
+    setFastImportStatus(null);
+    setIsPolling(false);
+    setIsFastImportOpen(false);
   };
 
   const { data: bases = [], isLoading, refetch } = useQuery<BaseImportada[]>({
@@ -535,6 +660,177 @@ export default function BasesClientes() {
                   </>
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={isFastImportOpen} onOpenChange={(open) => {
+          if (!open && !isPolling) resetFastImport();
+          else if (open) setIsFastImportOpen(true);
+        }}>
+          <DialogTrigger asChild>
+            <Button variant="default" className="bg-amber-600 hover:bg-amber-700" data-testid="button-fast-import">
+              <Zap className="w-4 h-4 mr-2" />
+              Importação Rápida
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-amber-500" />
+                Importação Rápida (100x mais veloz)
+              </DialogTitle>
+              <DialogDescription>
+                Sistema otimizado para grandes volumes. Processa 100k linhas em ~2 minutos.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {!isPolling ? (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fast-tipo">Tipo de Importação *</Label>
+                  <Select value={fastImportTipo} onValueChange={setFastImportTipo}>
+                    <SelectTrigger data-testid="select-fast-tipo">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="folha">Folha (Servidor/Pensionista)</SelectItem>
+                      <SelectItem value="d8">D8 (Contratos)</SelectItem>
+                      <SelectItem value="contatos">Contatos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {fastImportTipo === "d8" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="fast-layout">Layout D8</Label>
+                    <Select value={fastImportLayoutD8} onValueChange={setFastImportLayoutD8}>
+                      <SelectTrigger data-testid="select-fast-layout">
+                        <SelectValue placeholder="Selecione o layout" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="servidor">Servidor</SelectItem>
+                        <SelectItem value="pensionista">Pensionista (com Instituidor)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label htmlFor="fast-file">Arquivo CSV *</Label>
+                  <Input
+                    id="fast-file"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFastImportFileChange}
+                    data-testid="input-fast-file"
+                  />
+                  {fastImportFile && (
+                    <p className="text-sm text-muted-foreground">
+                      Arquivo: {fastImportFile.name} ({(fastImportFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="fast-convenio">Convênio *</Label>
+                  <Input
+                    id="fast-convenio"
+                    placeholder="Ex: SIAPE, INSS, GOV SP"
+                    value={fastImportConvenio}
+                    onChange={(e) => setFastImportConvenio(e.target.value)}
+                    data-testid="input-fast-convenio"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="fast-competencia">Competência *</Label>
+                  <Input
+                    id="fast-competencia"
+                    type="month"
+                    value={fastImportCompetencia}
+                    onChange={(e) => setFastImportCompetencia(e.target.value)}
+                    data-testid="input-fast-competencia"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 py-6">
+                <div className="flex items-center justify-center">
+                  <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">Processando importação...</p>
+                  {fastImportStatus && (
+                    <>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Fase: {fastImportStatus.phase === "staging" ? "Carregando dados" : 
+                               fastImportStatus.phase === "merge" ? "Mesclando registros" : 
+                               fastImportStatus.phase === "completed" ? "Concluído" : fastImportStatus.phase}
+                      </p>
+                      {fastImportStatus.stagedRows > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Linhas carregadas: {fastImportStatus.stagedRows?.toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                      {fastImportStatus.mergedRows > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Registros mesclados: {fastImportStatus.mergedRows?.toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                      {fastImportStatus.elapsedMs > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Tempo: {(fastImportStatus.elapsedMs / 1000).toFixed(1)}s
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <Progress value={fastImportStatus?.phase === "completed" ? 100 : 
+                                 fastImportStatus?.phase === "merge" ? 75 : 
+                                 fastImportStatus?.phase === "staging" ? 25 : 0} 
+                          className="h-2" />
+              </div>
+            )}
+            
+            <DialogFooter>
+              {!isPolling ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={resetFastImport}
+                    data-testid="button-fast-cancel"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleStartFastImport}
+                    disabled={startFastImportMutation.isPending}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    data-testid="button-fast-submit"
+                  >
+                    {startFastImportMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Iniciando...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Iniciar Importação
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsFastImportOpen(false)}
+                  data-testid="button-fast-minimize"
+                >
+                  Minimizar (continua em segundo plano)
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
