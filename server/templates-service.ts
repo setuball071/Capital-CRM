@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 
 // Colunas que DEVEM ser formatadas como TEXTO para não virar notação científica
-const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "cpf_instituidor", "matricula_instituidor", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
+const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "cpf_instituidor", "matricula_instituidor", "instituidor", "arq_upag", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
 
 // Colunas do template Folha Servidor - ordem EXATA conforme especificação do usuário
 // NÃO reordenar, NÃO renomear, NÃO traduzir, NÃO remover espaços ou acentos
@@ -62,6 +62,43 @@ export const FOLHA_SERVIDOR_COLUMN_MAP: Record<string, string> = {
   "Margem": "margem",
 };
 
+// Colunas do template Folha Pensionista - ordem EXATA conforme especificação
+// Diferença do Servidor: inclui coluna "Instituidor" na posição 2
+export const FOLHA_PENSIONISTA_HEADERS = [
+  "Orgão",
+  "Instituidor",
+  "Matricula",
+  "Base Calc",
+  "Bruta 5%",
+  "Utilz 5%",
+  "Saldo 5%",
+  "Beneficio Bruta 5%",
+  "Beneficio Utilizado 5%",
+  "Beneficio Saldo 5%",
+  "Bruta 35%",
+  "Utilz 35%",
+  "Saldo 35%",
+  "Bruta 70%",
+  "Utilz 70%",
+  "Saldo 70%",
+  "Créditos",
+  "Débitos",
+  "Líquido",
+  "ARQ. UPAG",
+  "EXC QTD",
+  "EXC Soma",
+  "RJUR",
+  "Sit Func",
+  "CPF",
+  "Margem",
+];
+
+// Mapeamento de header → campo interno (Pensionista - inclui instituidor)
+export const FOLHA_PENSIONISTA_COLUMN_MAP: Record<string, string> = {
+  ...FOLHA_SERVIDOR_COLUMN_MAP,
+  "Instituidor": "instituidor",
+};
+
 export const TEMPLATE_COLUMNS = {
   folha: [
     // Ordem EXATA conforme especificação - com acentos e % incluídos
@@ -90,6 +127,35 @@ export const TEMPLATE_COLUMNS = {
     { header: "Sit Func", key: "sit_func", width: 15, required: false, example: "ATIVO", isText: false },
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
     { header: "Margem", key: "margem", width: 12, required: false, example: "200,00", isText: false },
+  ],
+  folha_pensionista: [
+    // Ordem EXATA conforme especificação - inclui Instituidor na posição 2
+    { header: "Orgão", key: "orgao", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
+    { header: "Instituidor", key: "instituidor", width: 15, required: false, example: "0654321", isText: true },
+    { header: "Matricula", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "Base Calc", key: "base_calc", width: 15, required: false, example: "3500,00", isText: false },
+    { header: "Bruta 5%", key: "margem_5_bruta", width: 12, required: false, example: "175,00", isText: false },
+    { header: "Utilz 5%", key: "margem_5_utilizada", width: 12, required: false, example: "50,00", isText: false },
+    { header: "Saldo 5%", key: "margem_5_saldo", width: 12, required: false, example: "125,00", isText: false },
+    { header: "Beneficio Bruta 5%", key: "margem_beneficio_5_bruta", width: 18, required: false, example: "175,00", isText: false },
+    { header: "Beneficio Utilizado 5%", key: "margem_beneficio_5_utilizada", width: 20, required: false, example: "25,00", isText: false },
+    { header: "Beneficio Saldo 5%", key: "margem_beneficio_5_saldo", width: 18, required: false, example: "150,00", isText: false },
+    { header: "Bruta 35%", key: "margem_35_bruta", width: 12, required: false, example: "1.225,00", isText: false },
+    { header: "Utilz 35%", key: "margem_35_utilizada", width: 12, required: false, example: "400,00", isText: false },
+    { header: "Saldo 35%", key: "margem_35_saldo", width: 12, required: false, example: "825,00", isText: false },
+    { header: "Bruta 70%", key: "margem_70_bruta", width: 12, required: false, example: "2.450,00", isText: false },
+    { header: "Utilz 70%", key: "margem_70_utilizada", width: 12, required: false, example: "700,00", isText: false },
+    { header: "Saldo 70%", key: "margem_70_saldo", width: 12, required: false, example: "1.750,00", isText: false },
+    { header: "Créditos", key: "creditos", width: 12, required: false, example: "3.500,00", isText: false },
+    { header: "Débitos", key: "debitos", width: 12, required: false, example: "700,00", isText: false },
+    { header: "Líquido", key: "liquido", width: 12, required: false, example: "2.800,00", isText: false },
+    { header: "ARQ. UPAG", key: "arq_upag", width: 15, required: false, example: "00456", isText: true },
+    { header: "EXC QTD", key: "exc_qtd", width: 10, required: false, example: "0", isText: false },
+    { header: "EXC Soma", key: "exc_soma", width: 12, required: false, example: "0,00", isText: false },
+    { header: "RJUR", key: "rjur", width: 10, required: false, example: "CLT", isText: false },
+    { header: "Sit Func", key: "sit_func", width: 15, required: false, example: "PENSIONISTA", isText: false },
+    { header: "CPF", key: "cpf", width: 15, required: true, example: "00098765432", isText: true },
+    { header: "Margem", key: "margem", width: 12, required: false, example: "125,00", isText: false },
   ],
   d8_servidor: [
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
@@ -140,7 +206,7 @@ export const TEMPLATE_COLUMNS = {
   ],
 };
 
-export type TemplateType = "folha" | "d8_servidor" | "d8_pensionista" | "contatos";
+export type TemplateType = "folha" | "folha_pensionista" | "d8_servidor" | "d8_pensionista" | "contatos";
 
 export async function generateExcelTemplate(templateType: TemplateType): Promise<Buffer> {
   const columns = TEMPLATE_COLUMNS[templateType];
@@ -319,10 +385,14 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
   
   instructionsSheet.addRow({});
   
-  if (templateType === "folha") {
+  if (templateType === "folha" || templateType === "folha_pensionista") {
     const folhaRow = instructionsSheet.addRow({ field: ">>> ORDEM DE IMPORTACAO: Importe a FOLHA PRIMEIRO <<<" });
     folhaRow.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
     instructionsSheet.addRow({ field: "A folha cria o vinculo CPF+MATRICULA que sera usado por D8 e Contatos" });
+    if (templateType === "folha_pensionista") {
+      instructionsSheet.addRow({ field: ">>> FOLHA PENSIONISTA: Inclui coluna INSTITUIDOR <<<" });
+      instructionsSheet.addRow({ field: "INSTITUIDOR: matricula do servidor original (fonte do beneficio)" });
+    }
   } else if (templateType.startsWith("d8")) {
     const d8Row = instructionsSheet.addRow({ field: ">>> ORDEM: Importe D8 DEPOIS da Folha <<<" });
     d8Row.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
@@ -343,7 +413,8 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
 
 export function getTemplateFileName(templateType: TemplateType): string {
   const names: Record<TemplateType, string> = {
-    folha: "modelo_folha.xlsx",
+    folha: "modelo_folha_servidor.xlsx",
+    folha_pensionista: "modelo_folha_pensionista.xlsx",
     d8_servidor: "modelo_d8_servidor.xlsx",
     d8_pensionista: "modelo_d8_pensionista.xlsx",
     contatos: "modelo_contatos.xlsx",

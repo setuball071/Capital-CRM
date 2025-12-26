@@ -2460,6 +2460,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "SIT FUNC": "sit_func",
     "CPF": "cpf",
     "MARGEM": "margem",
+    // === TEMPLATE FOLHA PENSIONISTA (campo adicional) ===
+    "INSTITUIDOR": "instituidor",
     // === IDENTIFICAÇÃO (legado) ===
     "MATRÍCULA": "matricula",
     "CONVENIO": "convenio",
@@ -2614,22 +2616,45 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     "RJUR", "Sit Func", "CPF", "Margem"
   ];
 
-  // Verifica se o header é do template Folha Servidor oficial
-  function isFolhaServidorTemplate(headers: string[]): boolean {
-    const normalizedHeaders = headers.map(h => h.trim());
-    // Verifica se pelo menos 80% das colunas esperadas estão presentes
-    const matchCount = FOLHA_SERVIDOR_EXPECTED_HEADERS.filter(expected => 
-      normalizedHeaders.some(h => h.toLowerCase() === expected.toLowerCase())
-    ).length;
-    return matchCount >= FOLHA_SERVIDOR_EXPECTED_HEADERS.length * 0.8;
+  // Headers esperados para template Folha Pensionista (inclui Instituidor)
+  const FOLHA_PENSIONISTA_EXPECTED_HEADERS = [
+    "Orgão", "Instituidor", "Matricula", "Base Calc", "Bruta 5%", "Utilz 5%", "Saldo 5%",
+    "Beneficio Bruta 5%", "Beneficio Utilizado 5%", "Beneficio Saldo 5%",
+    "Bruta 35%", "Utilz 35%", "Saldo 35%", "Bruta 70%", "Utilz 70%", "Saldo 70%",
+    "Créditos", "Débitos", "Líquido", "ARQ. UPAG", "EXC QTD", "EXC Soma",
+    "RJUR", "Sit Func", "CPF", "Margem"
+  ];
+
+  // Detecta automaticamente se o arquivo é Servidor ou Pensionista
+  // Regra: se existir a coluna "Instituidor" -> Pensionista, senão -> Servidor
+  type FolhaLayoutType = "servidor" | "pensionista" | "unknown";
+  
+  function detectFolhaLayout(headers: string[]): FolhaLayoutType {
+    const normalizedHeaders = headers.map(h => h.trim().toLowerCase());
+    
+    // Se tiver coluna "Instituidor" -> Pensionista
+    if (normalizedHeaders.some(h => h === "instituidor")) {
+      return "pensionista";
+    }
+    
+    // Se tiver Matricula + CPF -> Servidor
+    const hasMatricula = normalizedHeaders.some(h => h === "matricula");
+    const hasCpf = normalizedHeaders.some(h => h === "cpf");
+    
+    if (hasMatricula && hasCpf) {
+      return "servidor";
+    }
+    
+    return "unknown";
   }
 
-  // Valida header e retorna erro se não bater
-  function validateFolhaServidorHeader(headers: string[]): { valid: boolean; missing: string[] } {
+  // Valida header e retorna erro se não bater com nenhum layout
+  function validateFolhaHeader(headers: string[]): { valid: boolean; layout: FolhaLayoutType; missing: string[] } {
     const normalizedHeaders = headers.map(h => h.trim().toLowerCase());
+    const layout = detectFolhaLayout(headers);
     const missing: string[] = [];
     
-    // Colunas obrigatórias
+    // Colunas obrigatórias para ambos os layouts
     const required = ["matricula", "cpf"];
     for (const req of required) {
       if (!normalizedHeaders.includes(req)) {
@@ -2637,7 +2662,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
     }
     
-    return { valid: missing.length === 0, missing };
+    if (layout === "unknown") {
+      return { valid: false, layout, missing: ["MATRICULA", "CPF", "Layout não reconhecido - use template Servidor ou Pensionista"] };
+    }
+    
+    return { valid: missing.length === 0, layout, missing };
   }
 
   function normalizeCol(col: string): string {
@@ -2689,7 +2718,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     baseId: number,
     baseTag: string,
     convenio: string,
-    competenciaDate: Date
+    competenciaDate: Date,
+    tenantId?: number
   ) {
     console.log(`[Import-BG] Starting background processing for base ${baseId}, ${data.length} rows`);
     
@@ -2703,6 +2733,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
     }
 
+    // Detecta automaticamente o layout (Servidor ou Pensionista)
+    const detectedLayout = detectFolhaLayout(headers);
+    console.log(`[Import-BG] Layout detectado: ${detectedLayout.toUpperCase()} (baseId: ${baseId})`);
     console.log(`[Import-BG] Mapped columns:`, Object.keys(headerMap).length);
 
     let totalLinhas = 0;
@@ -2832,6 +2865,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           else if (field === "tipo_produto") {
             contratoData.tipoContrato = String(value || "").trim() || null;
           }
+          // Campo específico de Pensionista - salvar separadamente para extrasVinculo
+          else if (field === "instituidor") {
+            folhaData.instituidor = String(value || "").trim() || null;
+          }
         }
         
         pessoaData.telefonesBase = telefones;
@@ -2877,6 +2914,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             liquido: folhaData.liquido || null,
             sitFuncNoMes: pessoaData.sitFunc || null,
             baseTag,
+            // Extras para pensionista (instituidor)
+            extrasFolha: folhaData.instituidor ? { 
+              instituidor: folhaData.instituidor, 
+              layoutDetectado: detectedLayout 
+            } : null,
           } as any);
           
           if (contratoData.banco || contratoData.valorParcela || contratoData.numeroContrato) {
@@ -3087,6 +3129,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         }
       }
 
+      // Detecta automaticamente o layout (Servidor ou Pensionista)
+      const detectedLayout = detectFolhaLayout(headers);
+      console.log(`[Import] Layout detectado: ${detectedLayout.toUpperCase()} (baseId: ${base.id})`);
       console.log(`[Import] Mapped columns:`, Object.keys(headerMap).length);
 
       let totalLinhas = 0;
@@ -3231,6 +3276,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             else if (field === "tipo_produto") {
               contratoData.tipoContrato = String(value || "").trim() || null;
             }
+            // Campo específico de Pensionista - salvar separadamente para extrasFolha
+            else if (field === "instituidor") {
+              folhaData.instituidor = String(value || "").trim() || null;
+            }
           }
           
           pessoaData.telefonesBase = telefones;
@@ -3278,6 +3327,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               liquido: folhaData.liquido || null,
               sitFuncNoMes: pessoaData.sitFunc || null,
               baseTag,
+              // Extras para pensionista (instituidor)
+              extrasFolha: folhaData.instituidor ? { 
+                instituidor: folhaData.instituidor, 
+                layoutDetectado: detectedLayout 
+              } : null,
             } as any);
             
             // UPSERT contrato: atualiza se existir (mesmo numero_contrato), senão cria novo
@@ -3437,7 +3491,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
   
   // Helper function para download de templates
-  async function handleTemplateDownload(req: Request, res: Response, templateType: "folha" | "d8_servidor" | "d8_pensionista" | "contatos") {
+  async function handleTemplateDownload(req: Request, res: Response, templateType: "folha" | "folha_pensionista" | "d8_servidor" | "d8_pensionista" | "contatos") {
     try {
       const { generateExcelTemplate, getTemplateFileName } = await import("./templates-service");
       
@@ -3456,9 +3510,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   }
   
-  // GET /api/import/templates/folha - Download template Folha
+  // GET /api/import/templates/folha - Download template Folha Servidor
   app.get("/api/import/templates/folha", requireAuth, async (req, res) => {
     return handleTemplateDownload(req, res, "folha");
+  });
+  
+  // GET /api/import/templates/folha-pensionista - Download template Folha Pensionista
+  app.get("/api/import/templates/folha-pensionista", requireAuth, async (req, res) => {
+    return handleTemplateDownload(req, res, "folha_pensionista");
   });
   
   // GET /api/import/templates/d8-servidor - Download template D8 Servidor
@@ -3478,12 +3537,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   
   // GET /api/templates/:type - Download template Excel para importação (legacy/generic)
   app.get("/api/templates/:type", requireAuth, async (req, res) => {
-    type TemplateType = "folha" | "d8_servidor" | "d8_pensionista" | "contatos";
+    type TemplateType = "folha" | "folha_pensionista" | "d8_servidor" | "d8_pensionista" | "contatos";
     const templateType = req.params.type as TemplateType;
     
-    const validTypes = ["folha", "d8_servidor", "d8_pensionista", "contatos"];
+    const validTypes = ["folha", "folha_pensionista", "d8_servidor", "d8_pensionista", "contatos"];
     if (!validTypes.includes(templateType)) {
-      return res.status(400).json({ message: "Tipo de template inválido. Use: folha, d8_servidor, d8_pensionista ou contatos" });
+      return res.status(400).json({ message: "Tipo de template inválido. Use: folha, folha_pensionista, d8_servidor, d8_pensionista ou contatos" });
     }
     
     return handleTemplateDownload(req, res, templateType);

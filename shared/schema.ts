@@ -421,6 +421,7 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   ativo: boolean("ativo").notNull().default(true),
   primeiraImportacao: timestamp("primeira_importacao").notNull().defaultNow(),
   ultimaAtualizacao: timestamp("ultima_atualizacao").notNull().defaultNow(),
+  extrasVinculo: jsonb("extras_vinculo"), // Ex: { "instituidor": "0654321" } para pensionistas
 });
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
