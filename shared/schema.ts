@@ -1369,6 +1369,32 @@ export const importErrors = pgTable("import_errors", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Status de linha importada
+export const IMPORT_ROW_STATUS = ["ok", "erro"] as const;
+export type ImportRowStatus = typeof IMPORT_ROW_STATUS[number];
+
+// Tabela import_run_rows - Rastreia TODAS as linhas importadas (sucesso ou erro)
+export const importRunRows = pgTable("import_run_rows", {
+  id: serial("id").primaryKey(),
+  importRunId: integer("import_run_id").references(() => importRuns.id, { onDelete: "cascade" }).notNull(),
+  rowNumber: integer("row_number").notNull(), // Número da linha no arquivo original (1-based)
+  cpf: varchar("cpf", { length: 14 }), // CPF da linha (se disponível)
+  matricula: varchar("matricula", { length: 50 }), // Matrícula da linha (se disponível)
+  status: varchar("status", { length: 10 }).notNull().default("ok"), // 'ok' ou 'erro'
+  errorMessage: text("error_message"), // Mensagem de erro (se status='erro')
+  rawData: jsonb("raw_data"), // Dados originais da linha como JSON
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schema for import_run_rows
+export const insertImportRunRowSchema = createInsertSchema(importRunRows, {
+  status: z.enum(IMPORT_ROW_STATUS).default("ok"),
+}).omit({ id: true, createdAt: true });
+
+// Types for import_run_rows
+export type ImportRunRow = typeof importRunRows.$inferSelect;
+export type InsertImportRunRow = z.infer<typeof insertImportRunRowSchema>;
+
 // D8 layout types
 export const D8_LAYOUTS = ["servidor", "pensionista"] as const;
 export type D8Layout = typeof D8_LAYOUTS[number];

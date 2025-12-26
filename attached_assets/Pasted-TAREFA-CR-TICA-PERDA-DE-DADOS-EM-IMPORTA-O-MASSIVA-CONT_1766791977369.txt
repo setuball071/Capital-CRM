@@ -1,0 +1,78 @@
+TAREFA CRÍTICA – PERDA DE DADOS EM IMPORTAÇÃO MASSIVA
+
+CONTEXTO
+O sistema importa arquivos grandes (100k+ linhas), mas:
+1) Nem todas as linhas são importadas
+2) Não existe relatório do que foi importado ou perdido
+3) A tela de gerenciamento não abre após a importação
+Isso é inaceitável para dados financeiros.
+
+OBJETIVO
+Garantir 100% de rastreabilidade de cada linha importada e corrigir o acesso à tela de gerenciamento.
+
+PASSO A – Corrigir vínculo da base com a importação
+1) Garantir que toda importação cria um registro em `import_runs`
+2) Garantir que `bases_importadas` referencia corretamente `import_run_id`
+3) A rota GET /api/bases deve retornar:
+   - id da base
+   - import_run_id
+   - status
+   - totais (linhas, sucesso, erro)
+4) A tela de gerenciamento deve abrir usando esse ID
+
+PASSO B – Rastrear TODAS as linhas (obrigatório)
+Criar tabela (ou usar existente):
+`import_run_rows`
+
+Campos obrigatórios:
+- import_run_id
+- linha_numero
+- raw_data (json da linha)
+- status ('ok' | 'erro')
+- mensagem_erro (se houver)
+
+Regra:
+- Toda linha do arquivo gera UM registro
+- Nunca descartar silenciosamente
+- Nunca seguir sem registrar erro
+
+PASSO C – Contadores reais
+1) Remover contadores em memória
+2) Após o processamento:
+   - total_linhas_arquivo = count do arquivo
+   - total_linhas_processadas = count(import_run_rows)
+   - total_linhas_sucesso = where status='ok'
+   - total_linhas_erro = where status='erro'
+3) Atualizar import_runs com esses números
+
+PASSO D – Relatórios obrigatórios
+Criar endpoints:
+- GET /api/import-runs/:id
+- GET /api/import-runs/:id/rows
+- GET /api/import-runs/:id/errors
+- GET /api/import-runs/:id/errors/download (CSV)
+
+O CSV de erros deve conter:
+- linha
+- CPF (se existir)
+- mensagem_erro
+- dados_originais
+
+PASSO E – UI mínima (sem inventar layout)
+Na tela de gerenciamento:
+- Mostrar contadores
+- Mostrar status
+- Botão "Ver erros"
+- Botão "Baixar erros CSV"
+
+REGRAS
+- Não ignorar erro de linha
+- Não usar apenas console.log
+- Não “continuar silenciosamente”
+- Se falhar 30% das linhas, o status deve ser “CONCLUÍDO COM ERROS”
+
+ENTREGÁVEL
+1) Importar CSV de 100 linhas com 10 erros simulados
+2) UI mostrar 90 sucesso / 10 erro
+3) CSV de erros disponível para download
+4) Tela de gerenciamento acessível sem erro
