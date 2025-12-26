@@ -410,7 +410,7 @@ class FastImportService {
       INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, raw_data)
       SELECT 
         ${run.id},
-        s.row_number,
+        COALESCE(s.row_num, s.id),
         s.cpf,
         ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
         'ok',
@@ -426,7 +426,7 @@ class FastImportService {
       INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message, raw_data)
       SELECT 
         ${run.id},
-        s.row_number,
+        COALESCE(s.row_num, s.id),
         s.cpf,
         ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
         'erro',

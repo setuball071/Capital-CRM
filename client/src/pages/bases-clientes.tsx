@@ -30,6 +30,25 @@ interface BaseImportada {
   status: string;
   criadoEm: string;
   atualizadoEm: string;
+  importRunId?: number;
+}
+
+interface ImportRun {
+  id: number;
+  tipoImport: string;
+  convenio: string;
+  status: string;
+  processedRows: number;
+  successRows: number;
+  errorRows: number;
+  arquivoOrigem: string;
+  createdAt: string;
+  completedAt?: string;
+  realCounts?: {
+    totalRows: number;
+    successRows: number;
+    errorRows: number;
+  };
 }
 
 const MODELO_COLUNAS = {
@@ -114,6 +133,11 @@ export default function BasesClientes() {
   const [fastImportRunId, setFastImportRunId] = useState<number | null>(null);
   const [fastImportStatus, setFastImportStatus] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
+  
+  // Import Runs detail states
+  const [selectedImportRun, setSelectedImportRun] = useState<ImportRun | null>(null);
+  const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
+  const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
 
   const handleDownloadModelo = () => {
     const headers = [
@@ -256,6 +280,67 @@ export default function BasesClientes() {
     queryKey: ["/api/bases"],
     refetchInterval: 5000,
   });
+
+  // Query para Import Runs (apenas master)
+  const { data: importRuns = [] } = useQuery<ImportRun[]>({
+    queryKey: ["/api/import-runs"],
+    enabled: isMaster,
+  });
+
+  // Funções para visualizar detalhes e download de erros
+  const viewImportRunDetails = async (runId: number) => {
+    try {
+      const response = await fetch(`/api/import-runs/${runId}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Erro ao buscar detalhes");
+      const data = await response.json();
+      setSelectedImportRun(data);
+      setIsRunDetailOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os detalhes da importação.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadImportErrors = async (runId: number) => {
+    setIsDownloadingErrors(true);
+    try {
+      const response = await fetch(`/api/import-runs/${runId}/rows/errors/download`, { credentials: "include" });
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast({
+            title: "Sem erros",
+            description: "Esta importação não possui linhas com erro.",
+          });
+          return;
+        }
+        throw new Error("Erro ao baixar erros");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `erros_import_${runId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast({
+        title: "Download concluído",
+        description: "Arquivo CSV com erros baixado com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível baixar os erros.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingErrors(false);
+    }
+  };
 
   const importMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -910,6 +995,161 @@ export default function BasesClientes() {
           )}
         </CardContent>
       </Card>
+
+      {/* Seção de Histórico de Importações (Import Runs) - MASTER ONLY */}
+      {isMaster && importRuns.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Histórico de Importações Rápidas
+            </CardTitle>
+            <CardDescription>
+              Rastreabilidade completa de cada linha importada
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Convênio</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Sucesso</TableHead>
+                  <TableHead>Erros</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {importRuns.slice(0, 10).map((run) => (
+                  <TableRow key={run.id} data-testid={`row-import-run-${run.id}`}>
+                    <TableCell className="font-mono">#{run.id}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{run.tipoImport}</Badge>
+                    </TableCell>
+                    <TableCell>{run.convenio || "-"}</TableCell>
+                    <TableCell>
+                      {run.status === "concluido" ? (
+                        <Badge className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" />Concluído</Badge>
+                      ) : run.status === "erro" ? (
+                        <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Erro</Badge>
+                      ) : run.status === "processando" ? (
+                        <Badge variant="secondary"><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processando</Badge>
+                      ) : (
+                        <Badge variant="outline">{run.status}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-green-600 font-medium">
+                      {run.successRows?.toLocaleString("pt-BR") || 0}
+                    </TableCell>
+                    <TableCell className={run.errorRows > 0 ? "text-red-600 font-medium" : ""}>
+                      {run.errorRows?.toLocaleString("pt-BR") || 0}
+                    </TableCell>
+                    <TableCell>
+                      {run.createdAt ? format(new Date(run.createdAt), "dd/MM HH:mm", { locale: ptBR }) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => viewImportRunDetails(run.id)}
+                        title="Ver detalhes"
+                        data-testid={`button-view-run-${run.id}`}
+                      >
+                        <HelpCircle className="w-4 h-4" />
+                      </Button>
+                      {run.errorRows > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => downloadImportErrors(run.id)}
+                          disabled={isDownloadingErrors}
+                          title="Baixar erros CSV"
+                          data-testid={`button-download-errors-${run.id}`}
+                        >
+                          <Download className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialog de detalhes de Import Run */}
+      <Dialog open={isRunDetailOpen} onOpenChange={setIsRunDetailOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5" />
+              Detalhes da Importação #{selectedImportRun?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Contadores reais baseados nas linhas registradas
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedImportRun && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-muted p-3 rounded-md text-center">
+                  <div className="text-2xl font-bold">
+                    {(selectedImportRun.realCounts?.totalRows || selectedImportRun.processedRows || 0).toLocaleString("pt-BR")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Total de Linhas</div>
+                </div>
+                <div className="bg-green-50 dark:bg-green-950 p-3 rounded-md text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {(selectedImportRun.realCounts?.successRows || selectedImportRun.successRows || 0).toLocaleString("pt-BR")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Sucesso</div>
+                </div>
+                <div className="bg-red-50 dark:bg-red-950 p-3 rounded-md text-center">
+                  <div className="text-2xl font-bold text-red-600">
+                    {(selectedImportRun.realCounts?.errorRows || selectedImportRun.errorRows || 0).toLocaleString("pt-BR")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Erros</div>
+                </div>
+              </div>
+              
+              <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
+                <div><strong>Tipo:</strong> {selectedImportRun.tipoImport}</div>
+                <div><strong>Convênio:</strong> {selectedImportRun.convenio || "-"}</div>
+                <div><strong>Arquivo:</strong> {selectedImportRun.arquivoOrigem}</div>
+                <div><strong>Status:</strong> {selectedImportRun.status}</div>
+              </div>
+              
+              {(selectedImportRun.realCounts?.errorRows || selectedImportRun.errorRows || 0) > 0 && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => downloadImportErrors(selectedImportRun.id)}
+                  disabled={isDownloadingErrors}
+                  data-testid="button-download-errors-detail"
+                >
+                  {isDownloadingErrors ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  Baixar Erros CSV
+                </Button>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRunDetailOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="sm:max-w-[500px]">
