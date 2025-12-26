@@ -1,0 +1,198 @@
+O que esse erro SIGNIFICA de verdade
+
+Pelos logs do navegador:
+
+POST /api/bases/import 500
+
+Vários GET /api/bases 500 em sequência
+
+O toast mostra apenas “Erro ao importar base” porque o backend caiu antes de responder corretamente
+
+👉 Isso indica exceção no servidor, normalmente em um destes pontos:
+
+Parser CSV/XLSX não conseguiu abrir o arquivo
+
+Streaming não foi aplicado (arquivo grande)
+
+Alguma coluna obrigatória veio undefined
+
+Conversão de número BR quebrou (parseFloat)
+
+Inserção no banco falhou (campo novo não existe)
+
+Timeout ou memória (168 MB é pesado)
+
+Ou seja:
+a requisição chegou, mas o servidor quebrou durante o processamento.
+
+2️⃣ Checklist rápido (faça nessa ordem)
+✅ 1. Confirme se o backend está logando o erro real
+
+No Replit, abra os logs do server e procure por:
+
+TypeError
+
+Cannot read property
+
+undefined
+
+NaN
+
+Out of memory
+
+column does not exist
+
+invalid input syntax
+
+⚠️ Se não existir try/catch com console.error(err) no import, o erro fica invisível.
+
+✅ 2. Validação crítica: arquivo CSV de 100 mil linhas
+
+Mesmo sendo “só” 100k linhas, verifique:
+
+CSV está em UTF-8
+
+Separador é ; ou , (e o parser sabe qual é)
+
+Primeira linha é cabeçalho exato, sem espaço invisível
+
+Não existe BOM (Byte Order Mark) quebrando a primeira coluna
+
+💥 Erro comum:
+
+﻿Orgão;Matricula;Base Calc;...
+
+
+Esse caractere invisível antes de Orgão quebra o mapeamento.
+
+✅ 3. Colunas numéricas que quebram importação
+
+Essas colunas PRECISAM passar por normalização antes de salvar:
+
+Bruta 5%
+
+Utilz 5%
+
+Saldo 5%
+
+Bruta 35%
+
+Utilz 35%
+
+Saldo 35%
+
+Bruta 70%
+
+Utilz 70%
+
+Saldo 70%
+
+Créditos
+
+Débitos
+
+Líquido
+
+Margem
+
+Se uma vier assim:
+
+7.390,26
+
+
+e o código fizer:
+
+parseFloat(valor)
+
+
+💥 BOOM → vira 7.39 ou NaN.
+
+3️⃣ Correção estrutural (essa é a parte importante)
+🚨 Problema raiz provável
+
+O sistema não está usando streaming real ainda, ou mistura streaming com lógica que carrega tudo em memória.
+
+Arquivo de 168 MB + XLSX + parse tradicional = crash silencioso.
+
+4️⃣ Prompt correto para o Replit Agent (use exatamente esse)
+
+Esse prompt corrige o erro atual e blinda o sistema para os próximos imports.
+
+Temos erro 500 ao importar CSV de folha (100k linhas, arquivo dividido). Corrigir a importação no backend com foco em robustez e streaming.
+
+Problema atual
+- POST /api/bases/import retorna 500
+- Erro ocorre antes de qualquer validação visível
+- Arquivo CSV ~100k linhas (original 168MB dividido)
+- Parser provavelmente está quebrando por memória, NaN ou coluna undefined
+
+Objetivo
+1) Garantir importação de CSV e XLSX grandes via STREAMING real
+2) Garantir que erros retornem mensagem clara para o frontend
+3) Normalizar corretamente números no formato BR
+4) Garantir que colunas obrigatórias não causem crash silencioso
+
+Correções obrigatórias
+
+1) Streaming
+- CSV: usar stream linha a linha (csv-parser ou similar)
+- XLSX: converter para CSV stream ou usar reader em chunks
+- Nunca carregar o arquivo inteiro em memória
+
+2) Try/Catch global
+- Envolver TODO o pipeline de importação em try/catch
+- Em caso de erro:
+  - console.error(err)
+  - retornar res.status(400).json({ message, line, column })
+
+3) Normalização de números (função única)
+Criar helper:
+normalizeNumberBR(value):
+- remover espaços
+- remover pontos
+- trocar vírgula por ponto
+- se vazio → 0
+- se NaN → lançar erro com nome da coluna
+
+4) Cabeçalhos
+- Normalizar headers:
+  - trim
+  - uppercase
+  - remover acentos
+  - remover pontos
+- Logar headers detectados no início do import
+
+5) Validação mínima antes de salvar
+- CPF obrigatório
+- Matricula obrigatória
+- Se faltar, logar linha e continuar (não quebrar tudo)
+
+6) Resposta para o frontend
+- Retornar progresso:
+  {
+    totalLines,
+    processed,
+    errorsCount
+  }
+
+7) Segurança
+- Se ocorrer erro crítico:
+  - Não derrubar o servidor
+  - Não retornar 500 genérico
+
+Entregáveis
+- Importação de CSV de 100k linhas funciona sem erro 500
+- Erros aparecem no console e no response
+- Sistema aguenta múltiplos arquivos em sequência (fila)
+
+5️⃣ Próximo passo recomendado (importação profissional)
+
+Depois que isso funcionar, o próximo nível é:
+
+Criar fila de importação (status: pendente, processando, concluído, erro)
+
+Processar em background
+
+Frontend só acompanha progresso
+
+Mas primeiro precisamos tirar esse 500.
