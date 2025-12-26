@@ -1483,6 +1483,96 @@ export const insertCsvSplitRunSchema = createInsertSchema(csvSplitRuns).omit({
 export type CsvSplitRun = typeof csvSplitRuns.$inferSelect;
 export type InsertCsvSplitRun = z.infer<typeof insertCsvSplitRunSchema>;
 
+// ===== STAGING TABLES FOR FAST BULK IMPORT =====
+// These tables have NO indexes and are optimized for COPY operations
+
+// Staging table for Folha imports
+export const stagingFolha = pgTable("staging_folha", {
+  id: serial("id").primaryKey(),
+  importRunId: integer("import_run_id").notNull(),
+  cpf: varchar("cpf", { length: 14 }),
+  matricula: varchar("matricula", { length: 50 }),
+  nome: varchar("nome", { length: 255 }),
+  orgaodesc: varchar("orgaodesc", { length: 255 }),
+  upag: varchar("upag", { length: 50 }),
+  uf: varchar("uf", { length: 2 }),
+  municipio: varchar("municipio", { length: 100 }),
+  baseCalc: decimal("base_calc", { precision: 15, scale: 2 }),
+  margem5Bruta: decimal("margem_5_bruta", { precision: 15, scale: 2 }),
+  margem5Utilizada: decimal("margem_5_utilizada", { precision: 15, scale: 2 }),
+  margem5Saldo: decimal("margem_5_saldo", { precision: 15, scale: 2 }),
+  margemBeneficio5Bruta: decimal("margem_beneficio_5_bruta", { precision: 15, scale: 2 }),
+  margemBeneficio5Utilizada: decimal("margem_beneficio_5_utilizada", { precision: 15, scale: 2 }),
+  margemBeneficio5Saldo: decimal("margem_beneficio_5_saldo", { precision: 15, scale: 2 }),
+  margem35Bruta: decimal("margem_35_bruta", { precision: 15, scale: 2 }),
+  margem35Utilizada: decimal("margem_35_utilizada", { precision: 15, scale: 2 }),
+  margem35Saldo: decimal("margem_35_saldo", { precision: 15, scale: 2 }),
+  margem70Bruta: decimal("margem_70_bruta", { precision: 15, scale: 2 }),
+  margem70Utilizada: decimal("margem_70_utilizada", { precision: 15, scale: 2 }),
+  margem70Saldo: decimal("margem_70_saldo", { precision: 15, scale: 2 }),
+  creditos: decimal("creditos", { precision: 15, scale: 2 }),
+  debitos: decimal("debitos", { precision: 15, scale: 2 }),
+  liquido: decimal("liquido", { precision: 15, scale: 2 }),
+  excQtd: integer("exc_qtd"),
+  excSoma: decimal("exc_soma", { precision: 15, scale: 2 }),
+  rjur: varchar("rjur", { length: 50 }),
+  sitFunc: varchar("sit_func", { length: 50 }),
+  margem: decimal("margem", { precision: 15, scale: 2 }),
+  instituidor: varchar("instituidor", { length: 255 }),
+  rowNum: integer("row_num"),
+  processed: boolean("processed").default(false),
+  errorMessage: text("error_message"),
+});
+
+// Staging table for D8 (contracts) imports
+export const stagingD8 = pgTable("staging_d8", {
+  id: serial("id").primaryKey(),
+  importRunId: integer("import_run_id").notNull(),
+  cpf: varchar("cpf", { length: 14 }),
+  matricula: varchar("matricula", { length: 50 }),
+  nome: varchar("nome", { length: 255 }),
+  banco: varchar("banco", { length: 100 }),
+  numeroContrato: varchar("numero_contrato", { length: 100 }),
+  tipoContrato: varchar("tipo_contrato", { length: 100 }),
+  valorParcela: decimal("valor_parcela", { precision: 15, scale: 2 }),
+  saldoDevedor: decimal("saldo_devedor", { precision: 15, scale: 2 }),
+  prazoRemanescente: integer("prazo_remanescente"),
+  prazoTotal: integer("prazo_total"),
+  situacaoContrato: varchar("situacao_contrato", { length: 50 }),
+  dataInicio: varchar("data_inicio", { length: 20 }),
+  dataFim: varchar("data_fim", { length: 20 }),
+  mInstituidor: varchar("m_instituidor", { length: 50 }),
+  cpfInstituidor: varchar("cpf_instituidor", { length: 14 }),
+  rowNum: integer("row_num"),
+  processed: boolean("processed").default(false),
+  errorMessage: text("error_message"),
+});
+
+// Staging table for Contatos imports
+export const stagingContatos = pgTable("staging_contatos", {
+  id: serial("id").primaryKey(),
+  importRunId: integer("import_run_id").notNull(),
+  cpf: varchar("cpf", { length: 14 }),
+  telefone1: varchar("telefone_1", { length: 20 }),
+  telefone2: varchar("telefone_2", { length: 20 }),
+  telefone3: varchar("telefone_3", { length: 20 }),
+  telefone4: varchar("telefone_4", { length: 20 }),
+  telefone5: varchar("telefone_5", { length: 20 }),
+  email: varchar("email", { length: 255 }),
+  email2: varchar("email_2", { length: 255 }),
+  endereco: text("endereco"),
+  cidade: varchar("cidade", { length: 100 }),
+  uf: varchar("uf", { length: 2 }),
+  cep: varchar("cep", { length: 10 }),
+  rowNum: integer("row_num"),
+  processed: boolean("processed").default(false),
+  errorMessage: text("error_message"),
+});
+
+export type StagingFolha = typeof stagingFolha.$inferSelect;
+export type StagingD8 = typeof stagingD8.$inferSelect;
+export type StagingContatos = typeof stagingContatos.$inferSelect;
+
 // Default Role Play prompt
 export const DEFAULT_ROLEPLAY_PROMPT = `Você é um CLIENTE SERVIDOR PÚBLICO REALISTA em uma simulação de atendimento de crédito consignado.
 Regras obrigatórias:

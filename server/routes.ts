@@ -3746,6 +3746,141 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // ==================== FAST IMPORT ROUTES (SQL-based, 10-50x faster) ====================
+
+  // POST /api/fast-imports/start - Inicia importação rápida com staging tables
+  app.post("/api/fast-imports/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
+    try {
+      const { fastImportService } = await import("./fast-import-service");
+      const file = req.file;
+      const { tipo_import, competencia, banco, layout_d8, convenio } = req.body;
+      
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo é obrigatório" });
+      }
+      
+      if (!tipo_import || !["folha", "d8", "contatos"].includes(tipo_import)) {
+        return res.status(400).json({ message: "tipo_import deve ser folha, d8 ou contatos" });
+      }
+      
+      if (tipo_import === "folha" && !competencia) {
+        return res.status(400).json({ message: "competencia é obrigatória para importação de folha" });
+      }
+      
+      if (tipo_import === "d8" && !banco) {
+        return res.status(400).json({ message: "banco é obrigatório para importação de D8" });
+      }
+      
+      const [year, month] = (competencia || "").split("-");
+      const competenciaDate = competencia ? new Date(parseInt(year), parseInt(month) - 1, 1) : undefined;
+      
+      const result = await fastImportService.startFastImport(file.path, {
+        tipoImport: tipo_import,
+        competencia: competenciaDate,
+        banco: banco || undefined,
+        layoutD8: layout_d8 || undefined,
+        convenio: convenio || undefined,
+        tenantId: req.tenantId || undefined,
+        createdById: req.user?.id,
+      });
+      
+      console.log(`[FastImport] Job started: ${result.importRunId}, file at: ${file.path}`);
+      
+      return res.json({
+        success: true,
+        importRunId: result.importRunId,
+        message: result.message,
+        nextStep: `POST /api/fast-imports/process/${result.importRunId}`,
+      });
+    } catch (error: any) {
+      console.error("Fast import start error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao iniciar importação rápida" });
+    }
+  });
+
+  // POST /api/fast-imports/process/:id - Processa staging + merge
+  app.post("/api/fast-imports/process/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { fastImportService } = await import("./fast-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      console.log(`[FastImport] Processing run ${runId}...`);
+      
+      const result = await fastImportService.processChunk(runId);
+      
+      console.log(`[FastImport] Result: phase=${result.phase}, staged=${result.stagedRows}, merged=${result.mergedRows}, elapsed=${result.elapsedMs}ms`);
+      
+      return res.json({
+        success: result.success,
+        importRunId: result.importRunId,
+        phase: result.phase,
+        stagedRows: result.stagedRows,
+        mergedRows: result.mergedRows,
+        errorRows: result.errorRows,
+        status: result.status,
+        pausedForResume: result.pausedForResume,
+        message: result.message,
+        elapsedMs: result.elapsedMs,
+        nextStep: result.pausedForResume ? `POST /api/fast-imports/process/${runId}` : null,
+      });
+    } catch (error: any) {
+      console.error("Fast import process error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar importação" });
+    }
+  });
+
+  // GET /api/fast-imports/status/:id - Status de um job de importação rápida
+  app.get("/api/fast-imports/status/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { fastImportService } = await import("./fast-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      const run = await fastImportService.getStatus(runId);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Job de importação não encontrado" });
+      }
+      
+      const percentComplete = run.totalRows > 0 
+        ? Math.round((run.processedRows / run.totalRows) * 100) 
+        : 0;
+      
+      return res.json({
+        id: run.id,
+        tipoImport: run.tipoImport,
+        status: run.status,
+        arquivoOrigem: run.arquivoOrigem,
+        totalRows: run.totalRows,
+        processedRows: run.processedRows,
+        successRows: run.successRows,
+        errorRows: run.errorRows,
+        percentComplete,
+        competencia: run.competencia,
+        banco: run.banco,
+        layoutD8: run.layoutD8,
+        convenio: run.convenio,
+        baseTag: run.baseTag,
+        errorMessage: run.errorMessage,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        pausedAt: run.pausedAt,
+        canResume: run.status === "pausado",
+        nextStep: run.status === "pausado" ? `POST /api/fast-imports/process/${run.id}` : null,
+      });
+    } catch (error: any) {
+      console.error("Get fast import status error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar status" });
+    }
+  });
+
   // ==================== SPLIT TXT→CSV ROUTES ====================
 
   // POST /api/split/start - Iniciar novo job de split TXT→CSV
