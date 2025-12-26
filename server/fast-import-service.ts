@@ -5,6 +5,7 @@ import { db } from "./storage";
 import {
   importRuns,
   importErrors,
+  importRunRows,
   stagingFolha,
   stagingD8,
   stagingContatos,
@@ -351,37 +352,115 @@ class FastImportService {
           break;
       }
 
+      // Registrar TODAS as linhas em import_run_rows ANTES de limpar staging
+      await this.registerAllRows(run, tipoImport, mergedCount, errorCount);
+
       await this.cleanupStaging(run.id, tipoImport);
+
+      // Calcular contadores reais a partir de import_run_rows
+      const realCounts = await this.getRealRowCounts(run.id);
 
       await db
         .update(importRuns)
         .set({
-          status: "concluido",
-          successRows: mergedCount,
-          errorRows: run.errorRows + errorCount,
+          status: realCounts.errorRows > 0 && realCounts.successRows === 0 ? "erro" : 
+                  realCounts.errorRows > 0 ? "concluido" : "concluido",
+          processedRows: realCounts.totalRows,
+          successRows: realCounts.successRows,
+          errorRows: realCounts.errorRows,
           completedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(importRuns.id, run.id));
 
-      console.log(`[FastImport] Merge complete: ${mergedCount} records merged`);
+      console.log(`[FastImport] Merge complete: ${realCounts.successRows} OK, ${realCounts.errorRows} errors`);
 
       return {
         success: true,
         importRunId: run.id,
         phase: "completed",
-        stagedRows: run.processedRows,
-        mergedRows: mergedCount,
-        errorRows: run.errorRows + errorCount,
-        status: "concluido",
+        stagedRows: realCounts.totalRows,
+        mergedRows: realCounts.successRows,
+        errorRows: realCounts.errorRows,
+        status: realCounts.errorRows > 0 ? "concluido_com_erros" : "concluido",
         pausedForResume: false,
-        message: `Import concluído! ${mergedCount} registros processados.`,
+        message: `Import concluído! ${realCounts.successRows} OK, ${realCounts.errorRows} erros.`,
         elapsedMs: 0,
       };
     } catch (error: any) {
       console.error(`[FastImport] Merge error:`, error);
       throw error;
     }
+  }
+
+  // Registrar TODAS as linhas do staging em import_run_rows
+  private async registerAllRows(
+    run: ImportRun,
+    tipoImport: string,
+    mergedCount: number,
+    errorCount: number
+  ): Promise<void> {
+    console.log(`[FastImport] Registering all rows for run ${run.id}...`);
+    
+    const stagingTable = tipoImport === "folha" ? "staging_folha" : 
+                         tipoImport === "d8" ? "staging_d8" : "staging_contatos";
+    
+    // Inserir todas as linhas válidas como 'ok'
+    const okResult = await db.execute(sql`
+      INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, raw_data)
+      SELECT 
+        ${run.id},
+        s.row_number,
+        s.cpf,
+        ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
+        'ok',
+        row_to_json(s)
+      FROM ${sql.raw(stagingTable)} s
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+        AND (${tipoImport === "contatos" ? sql`TRUE` : sql`s.matricula IS NOT NULL AND s.matricula != ''`})
+    `);
+
+    // Inserir linhas inválidas como 'erro'
+    const errorResult = await db.execute(sql`
+      INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message, raw_data)
+      SELECT 
+        ${run.id},
+        s.row_number,
+        s.cpf,
+        ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
+        'erro',
+        CASE 
+          WHEN s.cpf IS NULL OR s.cpf = '' THEN 'CPF inválido ou vazio'
+          WHEN ${tipoImport !== "contatos"} AND (${tipoImport === "contatos" ? sql`FALSE` : sql`s.matricula IS NULL OR s.matricula = ''`}) THEN 'Matrícula inválida ou vazia'
+          ELSE 'Dados incompletos'
+        END,
+        row_to_json(s)
+      FROM ${sql.raw(stagingTable)} s
+      WHERE s.import_run_id = ${run.id}
+        AND (s.cpf IS NULL OR s.cpf = '' OR (${tipoImport !== "contatos"} AND ${tipoImport === "contatos" ? sql`FALSE` : sql`(s.matricula IS NULL OR s.matricula = '')`}))
+    `);
+
+    console.log(`[FastImport] Registered: ${okResult.rowCount || 0} ok, ${errorResult.rowCount || 0} errors`);
+  }
+
+  // Obter contadores reais de import_run_rows
+  private async getRealRowCounts(importRunId: number): Promise<{ totalRows: number; successRows: number; errorRows: number }> {
+    const result = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'ok') as ok_count,
+        COUNT(*) FILTER (WHERE status = 'erro') as error_count
+      FROM import_run_rows
+      WHERE import_run_id = ${importRunId}
+    `);
+    
+    const row = result.rows[0] as any;
+    return {
+      totalRows: parseInt(row?.total || "0"),
+      successRows: parseInt(row?.ok_count || "0"),
+      errorRows: parseInt(row?.error_count || "0"),
+    };
   }
 
   private async mergeFolha(run: ImportRun): Promise<{ merged: number; errors: number }> {

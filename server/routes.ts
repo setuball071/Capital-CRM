@@ -3529,6 +3529,116 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET detalhes de um import run específico
+  app.get("/api/import-runs/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      // Buscar contadores reais de import_run_rows
+      const countsResult = await db.execute(sql`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'ok') as ok_count,
+          COUNT(*) FILTER (WHERE status = 'erro') as error_count
+        FROM import_run_rows
+        WHERE import_run_id = ${runId}
+      `);
+      
+      const counts = countsResult.rows[0] as any;
+      
+      return res.json({
+        ...run,
+        realCounts: {
+          totalRows: parseInt(counts?.total || "0"),
+          successRows: parseInt(counts?.ok_count || "0"),
+          errorRows: parseInt(counts?.error_count || "0"),
+        }
+      });
+    } catch (error) {
+      console.error("Get import run error:", error);
+      return res.status(500).json({ message: "Erro ao buscar import run" });
+    }
+  });
+
+  // GET todas as linhas de um import run (com paginação)
+  app.get("/api/import-runs/:id/rows", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const statusFilter = req.query.status as string; // 'ok', 'erro', ou undefined para todos
+      
+      let query = sql`
+        SELECT id, import_run_id, row_number, cpf, matricula, status, error_message, raw_data, created_at
+        FROM import_run_rows
+        WHERE import_run_id = ${runId}
+      `;
+      
+      if (statusFilter === "ok" || statusFilter === "erro") {
+        query = sql`${query} AND status = ${statusFilter}`;
+      }
+      
+      query = sql`${query} ORDER BY row_number LIMIT ${limit} OFFSET ${offset}`;
+      
+      const result = await db.execute(query);
+      
+      // Contar total
+      const countResult = await db.execute(sql`
+        SELECT COUNT(*) as total FROM import_run_rows WHERE import_run_id = ${runId}
+        ${statusFilter ? sql`AND status = ${statusFilter}` : sql``}
+      `);
+      
+      return res.json({
+        rows: result.rows,
+        total: parseInt((countResult.rows[0] as any)?.total || "0"),
+        limit,
+        offset,
+      });
+    } catch (error) {
+      console.error("Get import run rows error:", error);
+      return res.status(500).json({ message: "Erro ao buscar linhas do import" });
+    }
+  });
+
+  // GET download de TODAS as linhas com erro em CSV (usando import_run_rows)
+  app.get("/api/import-runs/:id/rows/errors/download", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      
+      const result = await db.execute(sql`
+        SELECT row_number, cpf, matricula, error_message, raw_data
+        FROM import_run_rows
+        WHERE import_run_id = ${runId} AND status = 'erro'
+        ORDER BY row_number
+        LIMIT 100000
+      `);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Nenhum erro encontrado para este import" });
+      }
+      
+      const csvRows = [
+        "linha,cpf,matricula,mensagem_erro,dados_originais",
+        ...(result.rows as any[]).map((row: any) => {
+          const rawDataStr = row.raw_data ? JSON.stringify(row.raw_data).replace(/"/g, '""') : "";
+          return `${row.row_number},"${row.cpf || ""}","${row.matricula || ""}","${(row.error_message || "").replace(/"/g, '""')}","${rawDataStr}"`;
+        })
+      ];
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=erros_import_${runId}.csv`);
+      return res.send(csvRows.join("\n"));
+    } catch (error) {
+      console.error("Download import row errors error:", error);
+      return res.status(500).json({ message: "Erro ao baixar erros do import" });
+    }
+  });
+
   // ===== SISTEMA DE IMPORTAÇÃO MASSIVA (STREAMING) =====
   
   // Helper function para download de templates
