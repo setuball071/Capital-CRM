@@ -1,0 +1,549 @@
+Você é um engenheiro full stack dentro deste repositório no Replit. Preciso corrigir e evoluir o módulo Base de Clientes para suportar importação massiva em 3 camadas (Folha, D8, Contatos), com templates reais para download, parser aderente ao layout exato e uma fila de importação para processar muitos arquivos sem timeout.
+OBJETIVO PRINCIPAL
+
+
+Corrigir o erro 500 atual em /api/bases e /api/bases/import (a importação está falhando e a listagem de bases também).
+
+
+Criar templates reais (arquivos .xlsx e .csv) para download, incluindo o template de Folha Pensionista que está faltando.
+
+
+Ajustar o parser da Folha para aceitar exatamente os layouts e ordem de colunas abaixo (Servidor e Pensionista), detectando automaticamente pelo header.
+
+
+Implementar fila de importação (job queue) para eu subir cerca de 100 arquivos CSV de 100.000 linhas cada (Folha) e deixar processando em sequência, com progresso e log.
+
+
+Ajustar o utilitário “Dividir CSV em Partes” para aceitar também XLSX (arquivo grande 168 MB), com processamento por streaming, sem travar e sem timeout.
+
+
+RESTRIÇÕES
+
+
+Não quebrar o modelo antigo, apenas ajustar e evoluir.
+
+
+Não mudar as regras de cruzamento:
+
+
+Folha: balizador CPF + Matrícula (vínculo)
+
+
+D8: cruzamento por CPF + Matrícula para encontrar vínculo; contrato por Banco + Número_Contrato
+
+
+Contatos: balizador apenas CPF
+
+
+
+
+Competência e Banco serão informados na tela no momento da importação (não precisam existir na planilha).
+
+
+Preservar todos os dígitos de identificadores e zeros à esquerda. Nada pode virar notação científica.
+
+
+REPO (pistas)
+Back-end está em /server, com arquivos como:
+
+
+server/routes.ts
+
+
+server/import-service.ts
+
+
+server/storage.ts
+
+
+server/tenant-middleware.ts
+Front-end está em /client/src/pages, existe:
+
+
+client/src/pages/bases-clientes.tsx
+Existe pasta client/public/branding com logo e favicon.
+Já existe UI de “Ver modelo de planilha” e botões de download, mas hoje não baixa arquivos reais do jeito certo.
+
+
+PARTE A: CORRIGIR O ERRO 500 (PRIORIDADE 1)
+
+
+Reproduzir e corrigir o 500 em:
+
+
+
+
+GET /api/bases
+
+
+POST /api/bases/import
+
+
+
+
+Adicionar logs claros no servidor com stack trace e contexto (tenant_id, user_id, tipo import, competencia, banco, filename).
+
+
+Validar migrações e schema:
+
+
+
+
+garantir tenant_id nas tabelas usadas por bases importadas e importações
+
+
+garantir que queries do storage usam os nomes reais das colunas
+
+
+
+
+Retornar erro amigável no front, mas log completo no back.
+
+
+ENTREGÁVEL A
+
+
+GET /api/bases volta 200 e lista corretamente
+
+
+POST /api/bases/import funciona e não cai em 500
+
+
+Console do servidor mostra stack trace completo se algo falhar
+
+
+PARTE B: TEMPLATES REAIS PARA DOWNLOAD (XLSX E CSV)
+Hoje só aparece um texto com colunas. Eu quero “modelo pronto” baixável.
+Criar endpoint de download de template:
+
+
+GET /api/templates/:type?format=xlsx|csv
+Tipos obrigatórios:
+
+
+folha_servidor
+
+
+folha_pensionista
+
+
+d8_servidor
+
+
+d8_pensionista
+
+
+contatos
+
+
+Requisitos dos templates:
+
+
+Primeira linha: header exatamente conforme layouts abaixo (ordem e nomes)
+
+
+Segunda linha: um exemplo preenchido (dummy) para eu enxergar o formato
+
+
+Para XLSX: usar exceljs (adicionar dependência se não existir)
+
+
+Para CSV: gerar string com separador “;” ou “,” (defina um padrão e use em todos, preferencial “;” por ser Brasil, mas mantenha consistente)
+
+
+UI
+
+
+Na página Base de Clientes, seção “Modelos para Importação Massiva (Streaming)”
+
+
+Mostrar botões separados e visíveis fora do modal (não escondidos no scroll):
+
+
+Modelo Folha Servidor
+
+
+Modelo Folha Pensionista
+
+
+Modelo D8 Servidor
+
+
+Modelo D8 Pensionista
+
+
+Modelo Contatos
+
+
+
+
+ENTREGÁVEL B
+
+
+Ao clicar, baixa o arquivo real (xlsx/csv) de cada modelo
+
+
+O template de Folha Pensionista aparece e baixa corretamente
+
+
+PARTE C: LAYOUT EXATO DA FOLHA (SERVIDOR E PENSIONISTA)
+A Folha precisa seguir exatamente essa ordem e nomes.
+FOLHA SERVIDOR (ordem exata)
+Orgão
+Matricula
+Base Calc
+Bruta 5%
+Utilz 5%
+Saldo 5%
+Beneficio Bruta 5%
+Beneficio Utilizado 5%
+Beneficio Saldo 5%
+Bruta 35%
+Utilz 35%
+Saldo 35%
+Bruta 70%
+Utilz 70%
+Saldo 70%
+Créditos
+Débitos
+Líquido
+ARQ. UPAG
+EXC QTD
+EXC Soma
+RJUR
+Sit Func
+CPF
+Margem
+FOLHA PENSIONISTA (ordem exata)
+Orgão
+Instituidor
+Matricula
+Base Calc
+Bruta 5%
+Utilz 5%
+Saldo 5%
+Beneficio Bruta 5%
+Beneficio Utilizado 5%
+Beneficio Saldo 5%
+Bruta 35%
+Utilz 35%
+Saldo 35%
+Bruta 70%
+Utilz 70%
+Saldo 70%
+Créditos
+Débitos
+Líquido
+ARQ. UPAG
+EXC QTD
+EXC Soma
+RJUR
+Sit Func
+CPF
+Margem
+Detecção automática do layout:
+
+
+Se existir coluna “Instituidor” no header, tratar como pensionista
+
+
+Normalização obrigatória (Folha):
+
+
+CPF: somente dígitos, padStart 11
+
+
+Matricula: string, preservar zeros à esquerda
+
+
+ARQ. UPAG: string, remover apóstrofo se existir, preservar zeros
+
+
+Decimais BR: “7.390,26” deve virar número 7390.26 internamente
+
+
+Campos vazios: virar null (não inventar 0)
+
+
+Persistência:
+
+
+pessoa: chave tenant_id + cpf
+
+
+clientes_vinculo: chave tenant_id + cpf + matricula
+
+
+folha_mes (ou tabela equivalente): chave tenant_id + cpf + matricula + competencia
+
+
+Para pensionista: salvar “Instituidor” em extras do vínculo (json) ou coluna específica do vínculo, mas deve ficar acessível e não pode quebrar schema.
+
+
+ENTREGÁVEL C
+
+
+Importar um CSV de Folha Servidor e outro de Folha Pensionista e o sistema detectar e salvar corretamente
+
+
+O template gerado tem exatamente essas colunas e ordem
+
+
+PARTE D: D8 (SERVIDOR E PENSIONISTA) GARANTIR IDENTIFICADORES SEM PERDER DÍGITOS
+Para o D8, garantir:
+
+
+numero_contrato nunca pode virar notação científica
+
+
+deve preservar todos os dígitos e zeros à esquerda
+
+
+guardar como string de dígitos (isso preserva melhor do que number)
+
+
+se vier em Excel como 2,02409E+13, tentar recuperar como string sem arredondar (se não der, avisar no log e jogar para “erros” do job)
+
+
+Além disso:
+
+
+Nome vindo no D8 pode atualizar pessoa.nome somente se:
+
+
+nome importado é não vazio
+
+
+e (pessoa.nome está vazio OU pessoa.nome é claramente pior, ex: “NAO_ACHADO”)
+
+
+
+
+Cruzamento D8: procurar vínculo por cpf + matricula, criar vínculo mínimo se não existir
+
+
+ENTREGÁVEL D
+
+
+D8 Servidor e D8 Pensionista funcionando, com logs e sem perder dígitos
+
+
+PARTE E: FILA DE IMPORTAÇÃO PARA 100 ARQUIVOS CSV (100K LINHAS CADA)
+Eu vou subir muitos arquivos e quero “deixar numa fila” para o sistema processar, sem timeout, um por vez.
+Implementar:
+
+
+Tabela import_jobs (ou equivalente):
+
+
+
+
+id, tenant_id, user_id
+
+
+tipo: folha | d8 | contatos
+
+
+status: queued | running | done | failed
+
+
+filename, file_path (ou storage key)
+
+
+competencia (para folha e d8)
+
+
+banco (para d8)
+
+
+total_rows, processed_rows
+
+
+created_at, started_at, finished_at
+
+
+error_message, error_sample (json)
+
+
+
+
+Endpoint:
+
+
+
+
+POST /api/import-jobs/enqueue
+
+
+recebe arquivo (csv ou xlsx), tipo, competencia, banco
+
+
+salva arquivo em disco temporário ou storage
+
+
+cria job queued
+
+
+retorna job id
+
+
+
+
+GET /api/import-jobs
+
+
+lista jobs com status e progresso
+
+
+
+
+POST /api/import-jobs/:id/retry
+
+
+
+
+Worker no servidor:
+
+
+
+
+roda em background no boot do server
+
+
+pega 1 job por vez por tenant (concurrency 1 por tenant)
+
+
+processa por streaming e escreve em batches no banco
+
+
+atualiza processed_rows periodicamente
+
+
+registra erros por linha sem abortar o job inteiro
+
+
+
+
+UI:
+
+
+
+
+Ao importar na tela Base de Clientes:
+
+
+em vez de processar síncrono, chamar enqueue
+
+
+mostrar fila e progresso (lista de jobs)
+
+
+botão “ver erros” (download csv de erros) quando houver
+
+
+
+
+Observação:
+
+
+Eu já vou separar a Folha em CSV de 100.000 linhas cada. Então cada arquivo não precisa ser 1 milhão.
+
+
+O que eu quero é conseguir subir vários arquivos e processar em sequência, sem ficar travando e sem timeout no request.
+
+
+ENTREGÁVEL E
+
+
+Eu consigo subir 10 arquivos seguidos e todos ficam queued
+
+
+O worker processa um por vez e atualiza progresso
+
+
+Sem timeout 408 e sem 500
+
+
+PARTE F: DIVIDIR CSV EM PARTES ACEITANDO XLSX (168 MB) SEM TRAVAR
+Na tela “Dividir CSV em Partes”, hoje só aceita CSV e com arquivo grande dá timeout.
+Ajustar:
+
+
+Aceitar CSV e XLSX no input
+
+
+Para CSV: streaming read e escrever partes de 100.000 linhas mantendo header
+
+
+Para XLSX: usar leitura streaming do exceljs e converter para CSV partes de 100.000 linhas
+
+
+Saída: gerar um .zip com as partes (parte_000001.csv, parte_000002.csv...)
+
+
+Processamento assíncrono via job (usar o mesmo import_jobs ou criar split_jobs)
+
+
+UI mostra progresso e depois botão “baixar zip”
+
+
+ENTREGÁVEL F
+
+
+Eu seleciono um XLSX de 168 MB e ele processa por streaming
+
+
+Não trava o navegador e não estoura timeout
+
+
+No final eu baixo um zip com os CSVs cortados em 100k linhas
+
+
+CHECKLIST FINAL (ANTES DE CONCLUIR)
+
+
+Template Folha Servidor ok
+
+
+Template Folha Pensionista ok (aparece e baixa)
+
+
+Parser Folha detecta layout e respeita ordem e nomes
+
+
+Importação Base não dá 500
+
+
+/api/bases não dá 500
+
+
+Fila de importação existe e funciona
+
+
+Divisor aceita XLSX e funciona para arquivos grandes
+
+
+COMECE POR:
+
+
+Corrigir o 500 e estabilizar /api/bases e /api/bases/import
+
+
+Implementar os endpoints /api/templates e os templates reais, incluindo folha_pensionista
+
+
+Ajustar parser e depois fila
+
+
+Depois de aplicar, me entregue:
+
+
+Lista dos arquivos alterados
+
+
+Como testar (passo a passo)
+
+
+Prints ou logs de sucesso de um job de folha (100k) concluído
+
+
