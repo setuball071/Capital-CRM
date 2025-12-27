@@ -9,6 +9,7 @@ import {
   simulations,
   roteirosBancarios,
   clientesPessoa,
+  clientesVinculo,
   clientesFolhaMes,
   clientesContratos,
   clientContacts,
@@ -49,6 +50,7 @@ import {
   type RoteiroImportItem,
   type ClientePessoa,
   type InsertClientePessoa,
+  type ClienteVinculo,
   type ClienteFolhaMes,
   type InsertClienteFolhaMes,
   type ClienteContrato,
@@ -186,10 +188,15 @@ export interface IStorage {
   getDistinctOrgaosClientes(): Promise<string[]>;
   getDistinctUfsClientes(): Promise<string[]>;
   
+  // Clientes Vínculos
+  getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
+  getVinculoById(id: number): Promise<ClienteVinculo | undefined>;
+  
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]>;
+  getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]>;
   
   // Clientes Contratos
   createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
@@ -1222,6 +1229,28 @@ export class DbStorage implements IStorage {
       .from(clientesFolhaMes)
       .where(eq(clientesFolhaMes.pessoaId, pessoaId))
       .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+  }
+  
+  async getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]> {
+    return await db.select()
+      .from(clientesFolhaMes)
+      .where(eq(clientesFolhaMes.vinculoId, vinculoId))
+      .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+  }
+
+  // Clientes Vínculos
+  async getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]> {
+    return await db.select()
+      .from(clientesVinculo)
+      .where(eq(clientesVinculo.pessoaId, pessoaId))
+      .orderBy(sql`${clientesVinculo.ultimaAtualizacao} DESC`);
+  }
+  
+  async getVinculoById(id: number): Promise<ClienteVinculo | undefined> {
+    const [vinculo] = await db.select()
+      .from(clientesVinculo)
+      .where(eq(clientesVinculo.id, id));
+    return vinculo;
   }
 
   // Clientes Contratos

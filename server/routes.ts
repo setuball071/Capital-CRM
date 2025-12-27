@@ -4473,6 +4473,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   app.get("/api/clientes/:pessoaId", requireAuth, requireMaster, async (req, res) => {
     try {
       const pessoaId = parseInt(req.params.pessoaId);
+      const vinculoIdParam = req.query.vinculoId ? parseInt(req.query.vinculoId as string) : null;
       
       if (isNaN(pessoaId)) {
         return res.status(400).json({ message: "ID de pessoa inválido" });
@@ -4484,8 +4485,36 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
       
-      // Get folha data (all competencias, ordered by most recent)
-      const folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+      // Get all vínculos for this pessoa
+      const vinculos = await storage.getVinculosByPessoaId(pessoaId);
+      
+      // Determinar qual vínculo usar para buscar folha
+      let vinculoIdEfetivo: number | null = null;
+      
+      if (vinculoIdParam && !isNaN(vinculoIdParam)) {
+        // Validar que o vinculoId pertence a esta pessoa
+        const vinculoValido = vinculos.find(v => v.id === vinculoIdParam);
+        if (vinculoValido) {
+          vinculoIdEfetivo = vinculoIdParam;
+        }
+      }
+      
+      // Se não foi especificado ou inválido, usar o vínculo mais recente (primeiro da lista ordenada por ultimaAtualizacao DESC)
+      if (!vinculoIdEfetivo && vinculos.length > 0) {
+        vinculoIdEfetivo = vinculos[0].id;
+      }
+      
+      // Get folha data - sempre buscar por vínculo quando disponível, senão por pessoa (fallback para dados legados)
+      let folhaRegistros;
+      if (vinculoIdEfetivo) {
+        folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoIdEfetivo);
+        // Fallback: se não encontrou por vínculo, tentar por pessoa (dados antigos sem vinculo_id)
+        if (folhaRegistros.length === 0) {
+          folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+        }
+      } else {
+        folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+      }
       
       // Get contratos
       const contratos = await storage.getContratosByPessoaId(pessoaId);
@@ -4563,6 +4592,20 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           base_tag: c.baseTag,
           dados_brutos: c.dadosBrutos,
         })),
+        vinculos: vinculos.map(v => ({
+          id: v.id,
+          cpf: v.cpf,
+          matricula: v.matricula,
+          orgao: v.orgao,
+          convenio: v.convenio,
+          rjur: v.rjur,
+          sit_func: v.sitFunc,
+          ativo: v.ativo,
+          primeira_importacao: v.primeiraImportacao,
+          ultima_atualizacao: v.ultimaAtualizacao,
+        })),
+        vinculo_selecionado: vinculoIdEfetivo,
+        tem_multiplos_vinculos: vinculos.length > 1,
         higienizacao: null, // Reserved for Part 3
       });
     } catch (error) {

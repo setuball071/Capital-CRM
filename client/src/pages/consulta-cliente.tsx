@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +123,19 @@ interface Contrato {
   dados_brutos: any;
 }
 
+interface Vinculo {
+  id: number;
+  cpf: string;
+  matricula: string;
+  orgao: string;
+  convenio: string | null;
+  rjur: string | null;
+  sit_func: string | null;
+  ativo: boolean;
+  primeira_importacao: string;
+  ultima_atualizacao: string;
+}
+
 interface ClienteDetalhado {
   pessoa: ClienteDetalhadoPessoa;
   folha: {
@@ -130,6 +143,9 @@ interface ClienteDetalhado {
     historico: FolhaHistorico[];
   };
   contratos: Contrato[];
+  vinculos: Vinculo[];
+  vinculo_selecionado: number | null;
+  tem_multiplos_vinculos: boolean;
   higienizacao: null;
 }
 
@@ -254,6 +270,7 @@ export default function ConsultaCliente() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<ConsultaResultado[] | null>(null);
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
+  const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
 
   // Handler para notificar quando algo é copiado
   const handleCopy = (text: string, label?: string) => {
@@ -267,10 +284,27 @@ export default function ConsultaCliente() {
     queryKey: ["/api/clientes/filtros/convenios"],
   });
 
+  const queryUrl = selectedVinculoId 
+    ? `/api/clientes/${selectedPessoaId}?vinculoId=${selectedVinculoId}`
+    : `/api/clientes/${selectedPessoaId}`;
+
   const { data: clienteDetalhado, isLoading: isLoadingDetails } = useQuery<ClienteDetalhado>({
-    queryKey: ["/api/clientes", selectedPessoaId],
+    queryKey: ["/api/clientes", selectedPessoaId, selectedVinculoId],
+    queryFn: async () => {
+      const res = await fetch(queryUrl, { credentials: "include" });
+      if (!res.ok) throw new Error("Erro ao carregar cliente");
+      return res.json();
+    },
     enabled: !!selectedPessoaId,
   });
+  
+  // Auto-sincronizar o vínculo selecionado com o retornado pelo backend
+  useEffect(() => {
+    if (clienteDetalhado?.vinculo_selecionado && !selectedVinculoId) {
+      // Se o backend retornou um vínculo selecionado e não temos um local, usar o do backend
+      setSelectedVinculoId(clienteDetalhado.vinculo_selecionado);
+    }
+  }, [clienteDetalhado?.vinculo_selecionado, selectedVinculoId]);
 
   const handleSearch = async () => {
     const term = searchTerm.trim();
@@ -297,6 +331,7 @@ export default function ConsultaCliente() {
     setIsSearching(true);
     setSearchResults(null);
     setSelectedPessoaId(null);
+    setSelectedVinculoId(null);
 
     try {
       const queryParams = new URLSearchParams();
@@ -343,15 +378,18 @@ export default function ConsultaCliente() {
 
   const handleSelectPessoa = (pessoaId: number) => {
     setSelectedPessoaId(pessoaId);
+    setSelectedVinculoId(null); // Reset vínculo quando muda de pessoa
   };
 
   const handleBackToResults = () => {
     setSelectedPessoaId(null);
+    setSelectedVinculoId(null);
   };
 
   const handleNewSearch = () => {
     setSearchResults(null);
     setSelectedPessoaId(null);
+    setSelectedVinculoId(null);
     setSearchTerm("");
     setSelectedConvenio("");
   };
@@ -499,7 +537,7 @@ export default function ConsultaCliente() {
             </div>
           ) : clienteDetalhado ? (
             <div className="space-y-6">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 {searchResults && searchResults.length > 1 && (
                   <Button variant="outline" size="sm" onClick={handleBackToResults} data-testid="button-voltar">
                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -510,6 +548,45 @@ export default function ConsultaCliente() {
                   Nova Consulta
                 </Button>
               </div>
+
+              {clienteDetalhado.tem_multiplos_vinculos && clienteDetalhado.vinculos.length > 1 && (
+                <Card className="border-amber-500/50 bg-amber-50/10">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Building2 className="w-5 h-5 text-amber-500" />
+                      Este CPF possui {clienteDetalhado.vinculos.length} vínculos/órgãos
+                    </CardTitle>
+                    <CardDescription>
+                      Selecione o vínculo para ver os dados de margem correspondentes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {clienteDetalhado.vinculos.map((vinculo) => (
+                        <Button
+                          key={vinculo.id}
+                          variant={selectedVinculoId === vinculo.id ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSelectedVinculoId(vinculo.id)}
+                          className="flex flex-col items-start h-auto py-2 px-3 text-left"
+                          data-testid={`button-vinculo-${vinculo.id}`}
+                        >
+                          <span className="font-medium">{vinculo.orgao}</span>
+                          <span className="text-xs opacity-80">
+                            Mat: {vinculo.matricula} | {vinculo.sit_func || "SEM INFO"}
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
+                    {!selectedVinculoId && (
+                      <p className="text-sm text-amber-600 mt-3 flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        Os dados de margem mostrados são do vínculo mais recente. Selecione um vínculo específico para detalhes.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>
