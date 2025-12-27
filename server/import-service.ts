@@ -6,7 +6,12 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
+// COLUMN_MAP: Mapeamento de headers do XLSX para campos internos
+// Headers canônicos do modelo: Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, 
+// Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, 
+// Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
 export const COLUMN_MAP: Record<string, string> = {
+  // === CAMPOS BÁSICOS ===
   cpf: "cpf",
   matricula: "matricula",
   nome: "nome",
@@ -14,8 +19,12 @@ export const COLUMN_MAP: Record<string, string> = {
   orgaodesc: "orgaodesc",
   uf: "uf",
   municipio: "municipio",
+  
+  // === SITUAÇÃO FUNCIONAL (Header: "Sit Func") ===
   situacao_funcional: "sit_func",
   sit_func: "sit_func",
+  sitfunc: "sit_func",
+  
   data_nascimento: "data_nascimento",
   idade: "idade",
   telefone_1: "telefone_1",
@@ -27,16 +36,34 @@ export const COLUMN_MAP: Record<string, string> = {
   banco_salario: "banco_salario",
   agencia_salario: "agencia_salario",
   conta_salario: "conta_salario",
+  
+  // === UPAG (Header: "ARQ. UPAG") ===
   upag: "upag",
   arq_upag: "upag",
+  arqupag: "upag",
+  
+  // === RJUR (Header: "RJUR") ===
   rejur: "rjur",
   rjur: "rjur",
   regime_juridico: "rjur",
+  
+  // === SALÁRIO (Headers: "Créditos", "Débitos", "Líquido") ===
+  // Créditos → creditos (usado como salario_bruto na UI)
+  creditos: "creditos",
+  credito: "creditos",
+  // Débitos → debitos (usado como descontos_brutos na UI)
+  debitos: "debitos",
+  debito: "debitos",
+  // Líquido → liquido (usado como salario_liquido na UI)
+  liquido: "liquido",
+  // Campos legados diretos
   salario_bruto: "salario_bruto",
   descontos_brutos: "descontos_brutos",
   salario_liquido: "salario_liquido",
+  
   competencia_folha: "competencia_folha",
-  // Margem 70% (modelo: Bruta 70%, Utilz 70%, Saldo 70%)
+  
+  // === MARGEM 70% (Headers: "Bruta 70%", "Utilz 70%", "Saldo 70%") ===
   margem_70_bruta: "margem_70_bruta",
   margem_70_utilizada: "margem_70_utilizada",
   margem_70_saldo: "margem_70_saldo",
@@ -47,7 +74,8 @@ export const COLUMN_MAP: Record<string, string> = {
   utilz_70_: "margem_70_utilizada",
   saldo_70: "margem_70_saldo",
   saldo_70_: "margem_70_saldo",
-  // Margem 35% (modelo: Bruta 35%, Utilz 35%, Saldo 35%)
+  
+  // === MARGEM 35% (Headers: "Bruta 35%", "Utilz 35%", "Saldo 35%") ===
   margem_35_bruta: "margem_35_bruta",
   margem_35_utilizada: "margem_35_utilizada",
   margem_35_saldo: "margem_35_saldo",
@@ -58,7 +86,8 @@ export const COLUMN_MAP: Record<string, string> = {
   utilz_35_: "margem_35_utilizada",
   saldo_35: "margem_35_saldo",
   saldo_35_: "margem_35_saldo",
-  // Margem 5% (modelo: Bruta 5%, Utilz 5%, Saldo 5%)
+  
+  // === MARGEM 5% (Headers: "Bruta 5%", "Utilz 5%", "Saldo 5%") ===
   margem_5_bruta: "margem_5_bruta",
   margem_5_utilizada: "margem_5_utilizada",
   margem_5_saldo: "margem_5_saldo",
@@ -73,7 +102,8 @@ export const COLUMN_MAP: Record<string, string> = {
   margem_30_bruta: "margem_5_bruta",
   margem_30_utilizada: "margem_5_utilizada",
   margem_30_saldo: "margem_5_saldo",
-  // Margem Benefício 5% (modelo: Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%)
+  
+  // === MARGEM BENEFÍCIO 5% (Headers: "Beneficio Bruta 5%", "Beneficio Utilizado 5%", "Beneficio Saldo 5%") ===
   margem_beneficio_5_bruta: "margem_beneficio_5_bruta",
   margem_beneficio_5_utilizada: "margem_beneficio_5_utilizada",
   margem_beneficio_5_saldo: "margem_beneficio_5_saldo",
@@ -83,33 +113,33 @@ export const COLUMN_MAP: Record<string, string> = {
   beneficio_utilizado_5_: "margem_beneficio_5_utilizada",
   beneficio_saldo_5: "margem_beneficio_5_saldo",
   beneficio_saldo_5_: "margem_beneficio_5_saldo",
-  // Cartão crédito (legado)
+  
+  // === CARTÃO (Campos legados) ===
   margem_cartao_credito_bruta: "margem_cartao_credito_bruta",
   margem_cartao_credito_utilizada: "margem_cartao_credito_utilizada",
   margem_cartao_credito_saldo: "margem_cartao_credito_saldo",
-  // Cartão benefício (legado)
   margem_cartao_beneficio_bruta: "margem_cartao_beneficio_bruta",
   margem_cartao_beneficio_utilizada: "margem_cartao_beneficio_utilizada",
   margem_cartao_beneficio_saldo: "margem_cartao_beneficio_saldo",
-  // Créditos/Débitos/Líquido do modelo (mapeados para campos de salário)
-  creditos: "creditos",
-  debitos: "debitos",
-  liquido: "liquido",
-  credito: "creditos",
-  debito: "debitos",
-  // Base de cálculo
+  
+  // === BASE DE CÁLCULO (Header: "Base Calc") ===
   base_calc: "base_calc",
   base_calculo: "base_calc",
   basecalc: "base_calc",
-  // Exclusões
+  
+  // === EXCLUSÕES (Headers: "EXC QTD", "EXC Soma") ===
   exc_qtd: "exc_qtd",
   exc_soma: "exc_soma",
   excqtd: "exc_qtd",
   excsoma: "exc_soma",
-  // Margem geral
+  
+  // === MARGEM GERAL (Header: "Margem") ===
   margem: "margem",
-  // Instituidor (pensionista)
+  
+  // === INSTITUIDOR (pensionista) ===
   instituidor: "instituidor",
+  
+  // === CAMPOS D8/CONTRATOS ===
   banco_emprestimo: "banco_emprestimo",
   tipo_produto: "tipo_produto",
   valor_parcela: "valor_parcela",

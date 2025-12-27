@@ -1,0 +1,80 @@
+Você está no projeto do Replit (não é Lovable). Pare de responder genérico.
+
+Objetivo: corrigir importação e consulta de Folha para suportar múltiplos vínculos do mesmo CPF e matrícula em órgãos diferentes, e fazer aparecer salários (Créditos/Débitos/Líquido), margens 5% e Benefício 5%, além de corrigir UPAG por vínculo. Também unificar a tela de consulta do CRM Vendas para usar o mesmo componente da Consulta Cliente (Base de Clientes).
+
+1) Fonte da verdade dos headers
+Abra o arquivo /mnt/data/modelo_folha_servidor.xlsx e considere os headers da aba "Dados" como CANÔNICOS. Eles são exatamente:
+Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+Faça o import aceitar exatamente esses nomes (com acento) e também uma versão normalizada sem acento e sem espaços (fallback), mas o template e a UI devem manter os nomes acima.
+
+2) Correção do mapeamento da Folha (normal import e fast import)
+Localize os mapeamentos de colunas do parser e do fast-import (ex: COLUMN_MAP, TEMPLATE_COLUMNS, staging_folha columns e o merge SQL).
+Garanta o seguinte mapeamento na persistência final:
+Base Calc -> base_calc
+Bruta 70%, Utilz 70%, Saldo 70% -> margem_70_bruta, margem_70_utilizada, margem_70_saldo
+Bruta 35%, Utilz 35%, Saldo 35% -> margem_35_bruta, margem_35_utilizada, margem_35_saldo
+Bruta 5%, Utilz 5%, Saldo 5% -> margem_cartao_credito_bruta, margem_cartao_credito_utilizada, margem_cartao_credito_saldo
+Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5% -> margem_cartao_beneficio_bruta, margem_cartao_beneficio_utilizada, margem_cartao_beneficio_saldo
+Créditos -> salario_bruto
+Débitos -> descontos_brutos
+Líquido -> salario_liquido
+ARQ. UPAG -> upag
+RJUR -> rejur
+Sit Func -> situacao_funcional
+CPF -> cpf (normalizar para só dígitos)
+Orgão -> orgao (obrigatório para SIAPE, pois existe cpf+matricula repetido em mais de um órgão)
+
+IMPORTANTE: hoje na UI os cards 5% e Benefício 5% aparecem mas sem valores. Isso significa que o dado não está chegando no retorno da API ou está chegando null. Corrija no import e na query de retorno.
+
+3) Corrigir a chave única e o modelo de vínculo
+Hoje existe caso real: mesmo CPF + matrícula + competência aparece duas vezes com órgãos diferentes.
+Ajuste o schema para que a unicidade do registro de folha_mes seja por vínculo e competência.
+Opção preferida:
+- Garantir que existe tabela de vínculo com unique(cpf, matricula, orgao, tenant_id) gerando vinculo_id
+- Em folha_mes, criar unique(vinculo_id, competencia_folha, tenant_id)
+Se não houver vinculo_id, então crie unique(cpf, matricula, orgao, competencia_folha, tenant_id) na tabela final de folha.
+
+Atualize o fast import (ON CONFLICT) e o import normal para fazer UPSERT usando essa chave correta. Isso deve eliminar o erro:
+duplicate key value violates unique constraint "clientes_folha_mes_pessoa_competencia_unique"
+
+4) Corrigir a consulta por vínculo (bug UPAG e congelamento)
+Localize a API usada pela tela Consulta Cliente e a tela client/src/pages/consulta-cliente.tsx.
+Garanta que ao selecionar o vínculo (orgao + matricula), a query de dados de folha e dados do cliente refaça a busca com esses filtros:
+cpf + matricula + orgao + competencia mais recente
+O retorno deve vir do registro correspondente e TODOS os campos (incluindo upag) devem mudar junto com o vínculo selecionado.
+Se usar React Query, a queryKey deve incluir cpf, matricula e orgao.
+
+5) Salário não aparece
+Na UI, os campos Créditos/Débitos/Líquido devem mostrar salario_bruto, descontos_brutos, salario_liquido.
+Se o valor for 0, mostrar 0,00.
+Só mostrar "-" se for null/undefined.
+
+6) Templates de download
+Adicionar o botão e endpoint de download do Modelo Folha Pensionista se ainda estiver faltando na UI.
+Além disso, o modal de instruções deve bater com os headers reais do template (não pode falar "salario_bruto" se o header é "Créditos").
+
+7) Relatório de importação e perda de linhas
+Hoje você está importando 100k e o sistema registra menos linhas sem você saber quais foram ignoradas.
+Implemente obrigatoriamente:
+- total_linhas_lidas
+- total_linhas_processadas
+- total_inseridas
+- total_atualizadas
+- total_ignoradas
+- total_erros
+- arquivo CSV para download de erros com: linha, cpf, matricula, orgao, motivo
+Disponibilize isso na tela de gerenciamento da base importada.
+
+8) Unificar consulta do CRM Vendas
+Remover o formato atual de consulta do menu CRM Vendas e redirecionar para o mesmo componente e mesmas APIs da Consulta Cliente (Base de Clientes), para não existir 2 leituras diferentes.
+
+Critérios de aceite (obrigatório testar):
+- Para o CPF 67232027753 e matrícula 241768, com órgãos 21000 e 25000 na competência 2025-12:
+  a) ao alternar o vínculo, muda orgao, muda upag, muda margens 70/35/5/benefício e muda salario_bruto/descontos_brutos/salario_liquido
+  b) Importação Rápida não pode dar duplicate key
+  c) Tela exibe salários e margens 5% e benefício 5% com valores
+- Exibir relatório de import com contagens e CSV de erros
+- Consulta do CRM Vendas passa a usar a mesma tela e não duplica lógica
+
+Execute as mudanças no código, rode migrações necessárias, e liste os arquivos alterados com um resumo do que foi feito em cada um.
