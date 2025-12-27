@@ -32,6 +32,9 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
     - Anchor table `clientes_vinculo` for many-to-many CPF↔matrícula relationships
     - API endpoints: `POST /imports/start`, `POST /imports/process/:id`, `GET /imports/status/:id`, `GET /imports/:id/errors`
     - Job tracking via `import_runs` table with status, progress, and error tracking via `import_errors` table
+    - Unique indexes defined in schema.ts for consistent ON CONFLICT upserts:
+      - `idx_vinculo_cpf_mat_orgao` on clientes_vinculo(cpf, matricula, orgao)
+      - `idx_folha_mes_vinculo_competencia` on clientes_folha_mes(vinculo_id, competencia)
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
 
 ### System Design Choices
