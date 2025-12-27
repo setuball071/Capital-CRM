@@ -31,62 +31,51 @@ type ImportRunWithCounts = ImportRun & {
   };
 };
 
+// Headers canônicos do modelo XLSX conforme especificação:
+// Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, 
+// Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, 
+// Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
 const MODELO_COLUNAS = {
   identificacaoObrigatorios: [
-    { nome: "cpf", descricao: "CPF do cliente", obrigatorio: true },
-    { nome: "matricula", descricao: "Matrícula no órgão/convênio", obrigatorio: true },
-    { nome: "nome", descricao: "Nome completo do cliente", obrigatorio: true },
+    { nome: "CPF", descricao: "CPF do cliente (11 dígitos)", obrigatorio: true },
+    { nome: "Matricula", descricao: "Matrícula no órgão/convênio", obrigatorio: true },
+    { nome: "Orgão", descricao: "Nome do órgão (obrigatório para múltiplos vínculos)", obrigatorio: true },
   ],
   identificacaoOpcionais: [
-    { nome: "orgao", descricao: "Nome do órgão/secretaria/autarquia" },
-    { nome: "uf", descricao: "Estado do vínculo (opcional)" },
-    { nome: "municipio", descricao: "Município (se existir)" },
-    { nome: "rejur", descricao: "Regime Jurídico (Ex: CLT, ESTATUTÁRIO)" },
-    { nome: "situacao_funcional", descricao: "ATIVO, APOSENTADO, PENSIONISTA, CLT" },
-    { nome: "data_nascimento", descricao: "Data de nascimento" },
-    { nome: "idade", descricao: "Idade já calculada (se vier na planilha)" },
-  ],
-  contatos: [
-    { nome: "telefone_1", descricao: "Telefone principal" },
-    { nome: "telefone_2", descricao: "Telefone alternativo" },
-    { nome: "telefone_3", descricao: "Telefone alternativo 2" },
-    { nome: "email", descricao: "E-mail do cliente" },
-  ],
-  dadosBancarios: [
-    { nome: "banco_salario", descricao: "Código/nome do banco onde recebe salário" },
-    { nome: "agencia_salario", descricao: "Agência do banco" },
-    { nome: "conta_salario", descricao: "Número da conta" },
-    { nome: "upag", descricao: "Unidade pagadora (se existir)" },
+    { nome: "Sit Func", descricao: "ATIVO, APOSENTADO, PENSIONISTA, CLT" },
+    { nome: "RJUR", descricao: "Regime Jurídico (Ex: CLT, ESTATUTÁRIO)" },
+    { nome: "ARQ. UPAG", descricao: "Unidade pagadora" },
   ],
   rendimentos: [
-    { nome: "salario_bruto", descricao: "Valor bruto da folha" },
-    { nome: "descontos_brutos", descricao: "Total de descontos" },
-    { nome: "salario_liquido", descricao: "Valor líquido do salário" },
+    { nome: "Créditos", descricao: "Valor bruto da folha (salário bruto)" },
+    { nome: "Débitos", descricao: "Total de descontos da folha" },
+    { nome: "Líquido", descricao: "Valor líquido do salário" },
+    { nome: "Base Calc", descricao: "Base de cálculo" },
   ],
-  folhaMargens: [
-    { nome: "competencia_folha", descricao: "Mês da folha (ex: 2025-10)" },
-    { nome: "margem_70_bruta", descricao: "Margem 70% bruta" },
-    { nome: "margem_70_utilizada", descricao: "Margem 70% utilizada" },
-    { nome: "margem_70_saldo", descricao: "Margem 70% disponível" },
-    { nome: "margem_35_bruta", descricao: "Margem 35% bruta" },
-    { nome: "margem_35_utilizada", descricao: "Margem 35% utilizada" },
-    { nome: "margem_35_saldo", descricao: "Margem 35% disponível" },
-    { nome: "margem_cartao_credito_bruta", descricao: "Margem cartão crédito bruta" },
-    { nome: "margem_cartao_credito_utilizada", descricao: "Margem cartão crédito utilizada" },
-    { nome: "margem_cartao_credito_saldo", descricao: "Margem cartão crédito disponível" },
-    { nome: "margem_cartao_beneficio_bruta", descricao: "Margem cartão benefício bruta" },
-    { nome: "margem_cartao_beneficio_utilizada", descricao: "Margem cartão benefício utilizada" },
-    { nome: "margem_cartao_beneficio_saldo", descricao: "Margem cartão benefício disponível" },
+  margens70: [
+    { nome: "Bruta 70%", descricao: "Margem 70% bruta" },
+    { nome: "Utilz 70%", descricao: "Margem 70% utilizada" },
+    { nome: "Saldo 70%", descricao: "Margem 70% disponível" },
   ],
-  contratos: [
-    { nome: "banco_emprestimo", descricao: "Banco do contrato (BMG, PAN, etc.)" },
-    { nome: "tipo_produto", descricao: "consignado, cartao_credito, cartao_beneficio (opcional)" },
-    { nome: "valor_parcela", descricao: "Valor da parcela mensal" },
-    { nome: "saldo_devedor", descricao: "Saldo devedor (opcional)" },
-    { nome: "prazo_remanescente", descricao: "Parcelas restantes" },
-    { nome: "numero_contrato", descricao: "ID do contrato (chave única)" },
-    { nome: "situacao_contrato", descricao: "ATIVO, QUITADO (opcional)" },
-    { nome: "competencia_contrato", descricao: "Mês da folha (opcional)" },
+  margens35: [
+    { nome: "Bruta 35%", descricao: "Margem 35% bruta" },
+    { nome: "Utilz 35%", descricao: "Margem 35% utilizada" },
+    { nome: "Saldo 35%", descricao: "Margem 35% disponível" },
+  ],
+  margens5: [
+    { nome: "Bruta 5%", descricao: "Margem 5% bruta (cartão crédito consignado)" },
+    { nome: "Utilz 5%", descricao: "Margem 5% utilizada" },
+    { nome: "Saldo 5%", descricao: "Margem 5% disponível" },
+  ],
+  margensBeneficio5: [
+    { nome: "Beneficio Bruta 5%", descricao: "Margem benefício 5% bruta" },
+    { nome: "Beneficio Utilizado 5%", descricao: "Margem benefício 5% utilizada" },
+    { nome: "Beneficio Saldo 5%", descricao: "Margem benefício 5% disponível" },
+  ],
+  exclusoes: [
+    { nome: "EXC QTD", descricao: "Quantidade de exclusões" },
+    { nome: "EXC Soma", descricao: "Soma das exclusões" },
+    { nome: "Margem", descricao: "Margem geral" },
   ],
 };
 
@@ -121,19 +110,21 @@ export default function BasesClientes() {
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
 
   const handleDownloadModelo = () => {
+    // Headers canônicos conforme modelo XLSX
     const headers = [
       ...MODELO_COLUNAS.identificacaoObrigatorios.map((c) => c.nome),
       ...MODELO_COLUNAS.identificacaoOpcionais.map((c) => c.nome),
-      ...MODELO_COLUNAS.contatos.map((c) => c.nome),
-      ...MODELO_COLUNAS.dadosBancarios.map((c) => c.nome),
       ...MODELO_COLUNAS.rendimentos.map((c) => c.nome),
-      ...MODELO_COLUNAS.folhaMargens.map((c) => c.nome),
-      ...MODELO_COLUNAS.contratos.map((c) => c.nome),
+      ...MODELO_COLUNAS.margens70.map((c) => c.nome),
+      ...MODELO_COLUNAS.margens35.map((c) => c.nome),
+      ...MODELO_COLUNAS.margens5.map((c) => c.nome),
+      ...MODELO_COLUNAS.margensBeneficio5.map((c) => c.nome),
+      ...MODELO_COLUNAS.exclusoes.map((c) => c.nome),
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Modelo");
+    XLSX.utils.book_append_sheet(wb, ws, "Dados");
     
     ws["!cols"] = headers.map(() => ({ wch: 25 }));
 
@@ -544,9 +535,9 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Contatos (opcionais)</h3>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Rendimentos</h3>
                     <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.contatos.map((col) => (
+                      {MODELO_COLUNAS.rendimentos.map((col: { nome: string; descricao: string }) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>
@@ -556,10 +547,9 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Dados Bancários do Salário</h3>
-                    <p className="text-xs text-muted-foreground mb-2">Onde o cliente recebe o salário (diferente do banco do empréstimo)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.dadosBancarios.map((col) => (
+                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 70%</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MODELO_COLUNAS.margens70.map((col: { nome: string; descricao: string }) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>
@@ -569,9 +559,9 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Rendimentos (opcionais)</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.rendimentos.map((col) => (
+                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 35%</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MODELO_COLUNAS.margens35.map((col: { nome: string; descricao: string }) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>
@@ -581,9 +571,9 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Folha / Margens</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.folhaMargens.map((col) => (
+                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 5% (Cartão Crédito Consignado)</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MODELO_COLUNAS.margens5.map((col: { nome: string; descricao: string }) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>
@@ -593,10 +583,21 @@ export default function BasesClientes() {
                   </div>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Contratos / Descontos em Folha</h3>
-                    <p className="text-xs text-muted-foreground mb-2">Nem toda base terá todos os campos. O número do contrato é usado como chave única para evitar duplicação.</p>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Margens Benefício 5% (Cartão Benefício)</h3>
                     <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.contratos.map((col) => (
+                      {MODELO_COLUNAS.margensBeneficio5.map((col: { nome: string; descricao: string }) => (
+                        <div key={col.nome} className="flex items-start gap-2 text-sm">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
+                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-2">Exclusões e Outros</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MODELO_COLUNAS.exclusoes.map((col: { nome: string; descricao: string }) => (
                         <div key={col.nome} className="flex items-start gap-2 text-sm">
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
                           <span className="text-muted-foreground text-xs">{col.descricao}</span>

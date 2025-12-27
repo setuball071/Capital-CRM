@@ -539,7 +539,7 @@ class FastImportService {
         margem_bruta_35, margem_utilizada_35, margem_saldo_35,
         margem_bruta_70, margem_utilizada_70, margem_saldo_70,
         margem_cartao_credito_saldo, margem_cartao_beneficio_saldo,
-        creditos, debitos, liquido, salario_bruto, salario_liquido,
+        creditos, debitos, liquido, salario_bruto, descontos_brutos, salario_liquido,
         sit_func_no_mes, base_tag
       )
       SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
@@ -564,6 +564,7 @@ class FastImportService {
         s.debitos::numeric,
         s.liquido::numeric,
         s.creditos::numeric,
+        s.debitos::numeric,
         s.liquido::numeric,
         s.sit_func,
         ${baseTag}
@@ -593,6 +594,9 @@ class FastImportService {
         creditos = COALESCE(EXCLUDED.creditos, clientes_folha_mes.creditos),
         debitos = COALESCE(EXCLUDED.debitos, clientes_folha_mes.debitos),
         liquido = COALESCE(EXCLUDED.liquido, clientes_folha_mes.liquido),
+        salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
+        descontos_brutos = COALESCE(EXCLUDED.descontos_brutos, clientes_folha_mes.descontos_brutos),
+        salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
         base_tag = ${baseTag}
     `);
 
