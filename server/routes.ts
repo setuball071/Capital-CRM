@@ -3030,14 +3030,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Base não encontrada" });
       }
       
-      // Don't allow deletion if still processing
-      if (base.status === "processando") {
-        return res.status(400).json({ 
-          message: "Não é possível excluir uma base em processamento. Aguarde a conclusão." 
-        });
-      }
-      
-      console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome}`);
+      console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome} (status: ${base.status})`);
       
       // Delete base and all related data
       const result = await storage.deleteBaseImportada(id, base.baseTag);
