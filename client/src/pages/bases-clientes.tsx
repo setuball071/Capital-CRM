@@ -20,37 +20,16 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
+import type { BaseImportada, ImportRun } from "@shared/schema";
 
-interface BaseImportada {
-  id: number;
-  nome: string;
-  baseTag: string;
-  convenio: string;
-  competencia: string;
-  totalLinhas: number;
-  status: string;
-  criadoEm: string;
-  atualizadoEm: string;
-  importRunId?: number;
-}
-
-interface ImportRun {
-  id: number;
-  tipoImport: string;
-  convenio: string;
-  status: string;
-  processedRows: number;
-  successRows: number;
-  errorRows: number;
-  arquivoOrigem: string;
-  createdAt: string;
-  completedAt?: string;
+// Extended type for API response with real counts
+type ImportRunWithCounts = ImportRun & {
   realCounts?: {
     totalRows: number;
     successRows: number;
     errorRows: number;
   };
-}
+};
 
 const MODELO_COLUNAS = {
   identificacaoObrigatorios: [
@@ -136,7 +115,7 @@ export default function BasesClientes() {
   const [isPolling, setIsPolling] = useState(false);
   
   // Import Runs detail states
-  const [selectedImportRun, setSelectedImportRun] = useState<ImportRun | null>(null);
+  const [selectedImportRun, setSelectedImportRun] = useState<ImportRunWithCounts | null>(null);
   const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
 
@@ -464,7 +443,7 @@ export default function BasesClientes() {
     if (baseToDelete) {
       const isValidConfirmation = 
         deleteConfirmText === "EXCLUIR" || 
-        deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase();
+        (baseToDelete.nome && deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase());
       if (isValidConfirmation) {
         deleteMutation.mutate(baseToDelete.id);
       }
@@ -473,7 +452,7 @@ export default function BasesClientes() {
 
   const isDeleteConfirmValid = baseToDelete && (
     deleteConfirmText === "EXCLUIR" || 
-    deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase()
+    (baseToDelete.nome && deleteConfirmText.toLowerCase() === baseToDelete.nome.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
