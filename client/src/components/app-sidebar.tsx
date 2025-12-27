@@ -149,7 +149,7 @@ export function AppSidebar() {
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_crm_vendas_campanhas" },
         { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_crm_vendas_atendimento" },
         { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_crm_vendas_atendimento" },
-        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_crm_vendas_atendimento" },
+        { title: "Consulta", url: "/consulta-cliente", icon: Search, module: "modulo_crm_vendas_atendimento" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_crm_vendas_atendimento" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_crm_vendas_campanhas", masterOnly: false },
       ],
