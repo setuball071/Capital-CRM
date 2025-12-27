@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { ConvenioCombobox } from "@/components/convenio-combobox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -718,12 +719,11 @@ export default function BasesClientes() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="convenio">Convênio *</Label>
-                <Input
-                  id="convenio"
-                  placeholder="Ex: SIAPE, INSS, GOV SP"
+                <ConvenioCombobox
                   value={convenio}
-                  onChange={(e) => setConvenio(e.target.value)}
-                  data-testid="input-convenio"
+                  onChange={setConvenio}
+                  placeholder="Selecione ou crie um convênio..."
+                  testId="combobox-convenio"
                 />
               </div>
               <div className="space-y-2">
@@ -846,12 +846,11 @@ export default function BasesClientes() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="fast-convenio">Convênio *</Label>
-                  <Input
-                    id="fast-convenio"
-                    placeholder="Ex: SIAPE, INSS, GOV SP"
+                  <ConvenioCombobox
                     value={fastImportConvenio}
-                    onChange={(e) => setFastImportConvenio(e.target.value)}
-                    data-testid="input-fast-convenio"
+                    onChange={setFastImportConvenio}
+                    placeholder="Selecione ou crie um convênio..."
+                    testId="combobox-fast-convenio"
                   />
                 </div>
                 
