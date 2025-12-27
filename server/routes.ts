@@ -4552,20 +4552,24 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
       
       // Get all vínculos for this pessoa
-      const vinculos = await storage.getVinculosByPessoaId(pessoaId);
+      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId);
+      
+      // Filtrar vínculos: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
+      const vinculosValidos = vinculosTodos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+      const vinculos = vinculosValidos.length > 0 ? vinculosValidos : vinculosTodos;
       
       // Determinar qual vínculo usar para buscar folha
       let vinculoIdEfetivo: number | null = null;
       
       if (vinculoIdParam && !isNaN(vinculoIdParam)) {
-        // Validar que o vinculoId pertence a esta pessoa
+        // Validar que o vinculoId pertence aos vínculos filtrados
         const vinculoValido = vinculos.find(v => v.id === vinculoIdParam);
         if (vinculoValido) {
           vinculoIdEfetivo = vinculoIdParam;
         }
       }
       
-      // Se não foi especificado ou inválido, usar o vínculo mais recente (primeiro da lista ordenada por ultimaAtualizacao DESC)
+      // Se não foi especificado ou não está na lista filtrada, usar o primeiro vínculo válido
       if (!vinculoIdEfetivo && vinculos.length > 0) {
         vinculoIdEfetivo = vinculos[0].id;
       }
@@ -4601,6 +4605,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           undpagadoradesc: pessoa.undpagadoradesc,
           undpagadoracod: pessoa.undpagadoracod,
           upag: pessoa.upag || null,
+          // REJUR: buscar do vínculo selecionado ou primeiro vínculo
+          rjur: vinculos.length > 0 ? vinculos.find(v => v.id === vinculoIdEfetivo)?.rjur || vinculos[0]?.rjur || null : null,
           natureza: pessoa.natureza,
           sit_func: pessoa.sitFunc,
           uf: pessoa.uf,

@@ -64,6 +64,7 @@ interface ClienteDetalhadoPessoa {
   undpagadoradesc: string | null;
   undpagadoracod: string | null;
   upag: string | null;
+  rjur: string | null;
   natureza: string | null;
   sit_func: string | null;
   uf: string | null;
@@ -673,11 +674,8 @@ export default function ConsultaCliente() {
                       )}
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Unidade Pagadora</p>
-                      <p>{clienteDetalhado.pessoa.undpagadoradesc || "-"}</p>
-                      {clienteDetalhado.pessoa.undpagadoracod && (
-                        <p className="text-xs text-muted-foreground">Código: {clienteDetalhado.pessoa.undpagadoracod}</p>
-                      )}
+                      <p className="text-sm text-muted-foreground">Regime Jurídico (REJUR)</p>
+                      <p>{clienteDetalhado.pessoa.rjur || "-"}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">

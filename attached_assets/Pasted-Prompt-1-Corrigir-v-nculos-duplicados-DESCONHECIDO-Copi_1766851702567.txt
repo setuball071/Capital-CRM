@@ -1,0 +1,47 @@
+Prompt 1 — Corrigir vínculos duplicados (“DESCONHECIDO”)
+
+Copie/cole:
+
+Contexto: Na tela “Consulta Cliente”, o app mostra “Este CPF possui 2 vínculos/órgãos”, mas na prática deveria ter 1. Um dos cards aparece como “DESCONHECIDO” com a mesma matrícula.
+Tarefa: Corrigir a origem da duplicidade e a renderização.
+Diretrizes:
+
+Localize a query/função que monta a lista de vínculos para o CPF/matrícula.
+
+Identifique se o segundo vínculo vem do banco (registro duplicado) ou de fallback no front.
+
+Implemente deduplicação: chave = cpf_normalizado + matricula + orgao (ou vinculo_id se existir).
+
+Se existir pelo menos 1 vínculo com orgao preenchido, filtre fora os vínculos com orgao vazio/null (que viram “DESCONHECIDO”).
+
+Só exiba o seletor “possui X vínculos” se vinculos_validos.length > 1. Caso contrário, não mostrar o seletor e carregar direto o vínculo único.
+
+Se a duplicidade estiver no import, ajuste o import para não criar registro com orgao vazio e fazer upsert pela chave única.
+Restrições: manter layout atual; apenas corrigir lógica e dados.
+
+Prompt 2 — Fazer margens aparecerem + trocar Unidade Pagadora por REJUR
+
+Copie/cole:
+
+Contexto: Margens de cartão e benefício não estão aparecendo na consulta do cliente, mesmo após importação por planilha. Além disso, não preciso exibir “Unidade Pagadora”; quero exibir “REJUR” no lugar.
+Tarefa: Corrigir import/consulta das margens e ajustar UI do cliente.
+Diretrizes:
+
+Localize onde as margens são armazenadas (tabela/campos) e como a consulta carrega esses dados.
+
+Normalizar CPF para apenas dígitos no import e na consulta (usar o mesmo formato nas chaves).
+
+Padronize tipos de margem: beneficio_70 e cartao_35 (ou os tipos usados no app) e garanta que o import preencha esses tipos corretamente.
+
+Corrigir competência: salvar como YYYY-MM ou data real e buscar a mais recente por ordenação correta (não por string).
+
+Converter valores monetários/numéricos importados para número (tratar vírgula/ponto).
+
+Atualizar a UI “Situação de Folha” para exibir:
+
+Margem 70: bruta/utilizada/saldo
+
+Margem 35: bruta/utilizada/saldo
+
+Na seção “Dados do Cliente”, remover campo “Unidade Pagadora” e adicionar campo “REJUR” (usando o dado importado).
+Restrições: não alterar fluxo de telas; apenas corrigir dados e exibição.

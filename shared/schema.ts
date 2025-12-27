@@ -1563,6 +1563,8 @@ export const stagingFolha = pgTable("staging_folha", {
   margem70Bruta: decimal("margem_70_bruta", { precision: 15, scale: 2 }),
   margem70Utilizada: decimal("margem_70_utilizada", { precision: 15, scale: 2 }),
   margem70Saldo: decimal("margem_70_saldo", { precision: 15, scale: 2 }),
+  margemCartaoCreditoSaldo: decimal("margem_cartao_credito_saldo", { precision: 15, scale: 2 }),
+  margemCartaoBeneficioSaldo: decimal("margem_cartao_beneficio_saldo", { precision: 15, scale: 2 }),
   creditos: decimal("creditos", { precision: 15, scale: 2 }),
   debitos: decimal("debitos", { precision: 15, scale: 2 }),
   liquido: decimal("liquido", { precision: 15, scale: 2 }),
