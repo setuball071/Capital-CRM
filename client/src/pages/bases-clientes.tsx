@@ -1006,8 +1006,7 @@ export default function BasesClientes() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteClick(base)}
-                          disabled={base.status === "processando"}
-                          title={base.status === "processando" ? "Aguarde a conclusão" : "Excluir base"}
+                          title="Excluir base"
                           data-testid={`button-delete-base-${base.id}`}
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
