@@ -1,0 +1,96 @@
+Você está no meu projeto no Replit. Não é Lovable.
+
+Objetivo
+Corrigir importação e consulta de Folha para que:
+1) Margens (5, 35, 70 e cartão crédito/benefício) apareçam na tela do cliente
+2) Salários (Créditos, Débitos, Líquido) apareçam na tela do cliente
+3) Quando um CPF tem múltiplos vínculos, a tela não congele em um só. Deve alternar corretamente ao selecionar outro vínculo
+4) Garantir que nada seja perdido na importação: relatório completo por import_run
+
+Problema confirmado
+Existe duplicidade real de CPF + matrícula na mesma competência porque muda o órgão e Sit Func.
+Logo, vínculo NÃO é apenas (tenant_id, cpf, matricula). Deve ser (tenant_id, cpf, matricula, orgao).
+A folha mensal deve ser por vínculo e competência.
+
+Parte A. Ajuste do modelo do vínculo e folha mensal
+1) Tabela clientes_vinculo
+- Garantir colunas: tenant_id, cpf, matricula, orgao, upag, uf, rjur, situacao_funcional, extras jsonb
+- Criar unique composto: UNIQUE (tenant_id, cpf, matricula, orgao)
+- Para registros antigos com orgao nulo, setar orgao = 'DESCONHECIDO'
+
+2) Tabela de folha mensal (ex: clientes_folha_mes)
+- A chave única não pode ser (pessoa, competencia) porque há múltiplos vínculos
+- Deve ser UNIQUE (tenant_id, vinculo_id, competencia)
+- Se não existir vinculo_id na tabela, criar vinculo_id e backfill via join (cpf, matricula, orgao)
+- Se o modelo atual for por cpf e matricula, alterar para incluir orgao na chave: UNIQUE (tenant_id, cpf, matricula, orgao, competencia)
+
+Parte B. Corrigir import da Folha para persistir margens e salários
+1) Template e parser Folha Servidor devem aceitar exatamente este cabeçalho e ordem:
+Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%,
+Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG,
+EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+2) Folha Pensionista cabeçalho e ordem:
+Orgão, Instituidor, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%,
+Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG,
+EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+3) Normalizações obrigatórias no backend
+- CPF somente dígitos e padStart 11
+- Matricula sempre string, manter zeros
+- Orgão sempre string, obrigatório para folha
+- UPAG sempre string, remover apóstrofo do Excel e manter zeros
+- Valores BR converter corretamente: 7.390,26 => 7390.26
+- Campo vazio vira NULL, mas zero deve virar 0
+
+4) Regras de persistência
+- Upsert pessoa por tenant_id + cpf (não apagar nome, só atualizar se vier válido)
+- Upsert clientes_vinculo por tenant_id + cpf + matricula + orgao (atualizar upag, rjur, situacao_funcional, uf, extras)
+- Upsert folha_mes por tenant_id + vinculo_id + competencia com TODOS os campos financeiros e margens
+- Garantir que Créditos, Débitos, Líquido sejam gravados nos campos do banco usados pela UI
+  Se a UI usa salario_bruto, descontos_brutos, salario_liquido:
+  mapear Créditos => salario_bruto
+  Débitos => descontos_brutos
+  Líquido => salario_liquido
+
+5) Importação rápida
+O erro de duplicate key acontece porque o fast import faz INSERT sem ON CONFLICT adequado na folha_mes.
+Corrigir merge para usar INSERT ... ON CONFLICT (tenant_id, vinculo_id, competencia) DO UPDATE
+Garantir que vinculo_id seja resolvido considerando orgao
+
+Parte C. Corrigir a tela do cliente para múltiplos vínculos
+1) A tela de dados do cliente deve ser vínculo-aware.
+Manter selectedVinculo contendo vinculo_id (preferido) ou cpf + matricula + orgao.
+2) Todas as queries de dados devem depender de selectedVinculo.
+Se usa React Query, incluir selectedVinculo na queryKey.
+3) Ao trocar vínculo no seletor, recarregar folha, margens, UPAG, órgão, RJUR, Sit Func.
+Não pode congelar no primeiro vínculo.
+
+Parte D. Garantir relatório completo e nada perdido
+1) Para cada import_run, registrar:
+total_rows, processed_rows, inserted_rows, updated_rows, skipped_rows, error_rows
+2) Criar import_errors com:
+import_run_id, row_number, raw_row_json, reason
+3) Exibir na tela Base de Clientes:
+status do run, contadores e botão para baixar CSV de erros
+4) Quando importar 100.000 linhas:
+inserted + updated + skipped + errors deve ser igual a total_rows
+Se não for, é bug e deve ser corrigido
+
+Parte E. Convenios padronizados
+1) Criar tabela convenios (tenant_id, nome_normalizado, nome_original, created_at)
+2) Dropdown puxa existentes
+3) Se usuário digitar novo, salvar normalizado (uppercase + trim) e usar nas próximas importações
+
+Parte F. Diagnóstico e validação
+Após corrigir:
+1) Rodar import de um CSV com o mesmo cpf e matricula em dois órgãos diferentes na mesma competência
+2) Confirmar que foram criados dois vínculos e duas folhas_mes
+3) Na tela do cliente, seletor alterna e muda os dados sem congelar
+4) Margens e Créditos/Débitos/Líquido aparecem corretamente
+
+Entrega
+1) Listar arquivos alterados no repositório
+2) Mostrar as migrations/SQL executadas
+3) Mostrar exemplo da resposta JSON do endpoint de import com contadores
+4) Explicar exatamente por que as margens e salários não apareciam antes (campo não persistido ou query errada) e como foi corrigido

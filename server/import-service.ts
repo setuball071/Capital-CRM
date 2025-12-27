@@ -75,6 +75,26 @@ export const COLUMN_MAP: Record<string, string> = {
   margem_cartao_beneficio_bruta: "margem_cartao_beneficio_bruta",
   margem_cartao_beneficio_utilizada: "margem_cartao_beneficio_utilizada",
   margem_cartao_beneficio_saldo: "margem_cartao_beneficio_saldo",
+  // Créditos/Débitos/Líquido (folha de pagamento)
+  creditos: "creditos",
+  debitos: "debitos",
+  liquido: "liquido",
+  // Aliases para Créditos/Débitos/Líquido
+  credito: "creditos",
+  debito: "debitos",
+  // Base de cálculo
+  base_calc: "base_calc",
+  base_calculo: "base_calc",
+  basecalc: "base_calc",
+  // Exclusões
+  exc_qtd: "exc_qtd",
+  exc_soma: "exc_soma",
+  excqtd: "exc_qtd",
+  excsoma: "exc_soma",
+  // Margem geral
+  margem: "margem",
+  // Instituidor (pensionista)
+  instituidor: "instituidor",
   banco_emprestimo: "banco_emprestimo",
   tipo_produto: "tipo_produto",
   valor_parcela: "valor_parcela",
