@@ -506,13 +506,14 @@ class FastImportService {
     console.log(`[FastImport] Pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
     const vinculoResult = await db.execute(sql`
-      INSERT INTO clientes_vinculo (cpf, matricula, orgao, convenio, pessoa_id, rjur, sit_func)
+      INSERT INTO clientes_vinculo (cpf, matricula, orgao, convenio, pessoa_id, upag, rjur, sit_func)
       SELECT DISTINCT ON (s.cpf, s.matricula, COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
         s.cpf,
         s.matricula,
         COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'),
         ${convenio},
         p.id,
+        s.upag,
         s.rjur,
         s.sit_func
       FROM staging_folha s
@@ -522,6 +523,7 @@ class FastImportService {
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
         pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
+        upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
         rjur = COALESCE(EXCLUDED.rjur, clientes_vinculo.rjur),
         sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
         ultima_atualizacao = NOW()
