@@ -1,0 +1,94 @@
+IMPORTAÇÃO RÁPIDA – CORRIGIR ERRO 500 EM /api/imports/process/:id E GARANTIR RELATÓRIO
+
+CENÁRIO
+A importação normal funciona.
+A opção “Importação Rápida” está dando 500 no endpoint:
+POST /api/imports/process/:id
+No console do browser aparece apenas 500. Preciso do erro real no backend e corrigir.
+
+OBJETIVOS
+1) Fazer o backend retornar um erro útil (com código, mensagem e causa) quando falhar.
+2) Corrigir o 500 no fast import.
+3) Garantir que o fast import gere relatório de quantas linhas foram processadas, inseridas, atualizadas, ignoradas e quantas deram erro, com download do CSV de erros.
+
+PASSO 1 – LOGS E ERRO ÚTIL (obrigatório)
+No handler de /api/imports/process/:id:
+- Envolver o processamento em try/catch
+- Logar SEMPRE:
+  - import_run_id, tenant_id, user_id
+  - tipo_import (folha/d8/contatos), layout detectado
+  - chunk: offset, limit, total_linhas
+  - nome do arquivo, competência, convênio, banco (se aplicável)
+- No catch, retornar JSON com:
+  { error: "FAST_IMPORT_FAILED", message: e.message, details: e.stack (em dev), import_run_id }
+
+Também salvar em tabela import_run_errors:
+(import_run_id, row_number, raw_row_json, error_code, error_message, created_at)
+
+PASSO 2 – REPRODUZIR E IDENTIFICAR A CAUSA
+Rodar 1 import_run pequeno (ex 1000 linhas) usando o fast import e capturar no log:
+- erro SQL exato (constraint, coluna faltando, tipo inválido)
+- em qual etapa ocorreu (staging, merge pessoa, merge vinculo, merge folha_mes)
+
+PASSO 3 – CORREÇÕES MAIS PROVÁVEIS (implementar todas)
+A) CONSTRAINTS/ON CONFLICT incorreto
+Verificar se as tabelas alvo têm UNIQUE composto compatível com ON CONFLICT usado no fast import.
+Ex:
+- clientes_pessoa: UNIQUE(tenant_id, cpf)
+- clientes_vinculo: UNIQUE(tenant_id, cpf, matricula, orgao)  (nova regra)
+- folha_mes: UNIQUE(tenant_id, cpf, matricula, orgao, competencia) ou UNIQUE(tenant_id, vinculo_id, competencia)
+
+Se o SQL do fast import estiver usando ON CONFLICT em chaves que NÃO existem, vai dar 500.
+Corrigir criando os UNIQUE necessários e ajustando o SQL.
+
+B) COLUNAS FALTANDO EM STAGING OU TABELAS
+Checar se staging tables têm todos os campos que o merge usa (ex orgao, matricula, cpf, competencia, tenant_id).
+Se faltar, adicionar via migration e ajustar a carga.
+
+C) NORMALIZAÇÃO QUEBRA (decimais BR e zeros)
+No fast import garantir:
+- cpf sempre 11 dígitos
+- matricula texto (preservar zeros)
+- orgao texto (preservar zeros)
+- valores como “7.390,26” virar numeric corretamente
+Se parseNum estiver retornando null e isso quebrar insert/merge, corrigir:
+- parseNum deve retornar number OU null
+- e o SQL deve usar NULL seguro
+- jamais jogar string BR direto em numeric sem conversão
+
+D) TIMEOUT / payload grande
+O /imports/process deve trabalhar por chunk real e confirmar transação curta:
+- 5k a 20k linhas por chunk no fast import (não 100k)
+- mas permitir fila de muitos arquivos (você já tem 100 arquivos de 100k)
+- processar em background via queue (import_runs) e não travar request
+
+PASSO 4 – RELATÓRIO (obrigatório)
+Em import_runs adicionar/garantir campos:
+- total_rows
+- processed_rows
+- inserted_rows
+- updated_rows
+- skipped_rows
+- error_rows
+- started_at, finished_at, status
+
+No final de cada chunk atualizar contadores.
+Criar endpoints:
+GET /api/import-runs/:id
+GET /api/import-runs/:id/errors (lista paginada)
+GET /api/import-runs/:id/errors.csv (download)
+
+PASSO 5 – UI
+Na tela “Base de Clientes”:
+- Ao iniciar importação rápida, exibir import_run_id
+- Mostrar progresso e contadores
+- Botão “Ver relatório” abrindo modal com:
+  - contadores
+  - link para baixar CSV de erros
+  - link para ver linhas importadas (filtro por import_run_id)
+
+ENTREGÁVEL
+- Importação rápida funcionando sem 500
+- Logs mostrando o erro real quando ocorrer
+- Relatório completo de importação e CSV de erros disponível
+- Sem perda silenciosa de linhas
