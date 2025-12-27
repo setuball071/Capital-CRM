@@ -1,0 +1,113 @@
+Contexto
+Projeto Replit. Temos 3 importações: Folha (Servidor/Pensionista), D8 (Servidor/Pensionista), Contatos.
+Problemas atuais:
+1) Tela Consulta Cliente não traz Situação Funcional e não traz salários (Créditos, Débitos, Líquido). Em vários casos fica “-”.
+2) Para CPF com 2 vínculos (mesmo CPF + mesma Matrícula repetidos), o que muda é Órgão e Sit Func. Hoje o sistema trava/buga alternando vínculos e não trata corretamente o caso. Precisa considerar ÓRGÃO como parte do vínculo.
+3) Em alguns casos margens não aparecem ou aparecem inconsistentes.
+4) Importação rápida falha com erro: duplicate key value violates unique constraint "clientes_folha_mes_pessoa_competencia_unique".
+5) Quero padronização de Convênio (dropdown com SIAPE/INSS/GOV SP etc, e criar novo se não existir, salvando para próximas importações).
+6) Quero remover “Consulta” do menu CRM Vendas (ou deixar como link/alias) e usar exatamente a mesma tela de Consulta Cliente do menu Base de Clientes, para não ter 2 formatos diferentes e evitar erros.
+
+Regras de negócio obrigatórias
+A) Novo balizador do vínculo:
+- Vínculo deve ser identificado por: tenant_id + cpf + matricula + orgao
+- CPF pode ter múltiplos vínculos por ORGAO, mesmo com mesma matrícula.
+- Contatos continuam por: tenant_id + cpf (não depende de vínculo)
+
+B) Folha mensal deve ser única por:
+- tenant_id + cpf + matricula + orgao + competencia
+Isso deve substituir a constraint atual (que está causando duplicate key na importação rápida).
+Se existir constraint antiga, migrar.
+
+C) Templates e parsers da Folha precisam seguir exatamente a ordem de colunas:
+Folha Servidor (25 colunas):
+Orgao, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+Folha Pensionista (26 colunas):
+Orgao, Instituidor, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+D) Conversões:
+- CPF: somente dígitos, padStart 11
+- Matrícula: texto, preservar zeros
+- Órgão: texto
+- UPAG: texto, preservar zeros
+- Valores monetários aceitam vírgula/ponto e separador de milhar. Normalizar para numeric.
+- “Créditos, Débitos, Líquido” devem ser persistidos como numeric e exibidos na tela (0 deve aparecer como 0,00 e não “-”).
+
+O que implementar (passo a passo)
+1) Banco: corrigir chaves e constraints
+- Criar/alterar tabela clientes_vinculo para garantir UNIQUE (tenant_id, cpf, matricula, orgao).
+- Ajustar clientes_folha_mes (ou tabela equivalente da folha) para ter colunas orgao e competencia e criar UNIQUE (tenant_id, cpf, matricula, orgao, competencia).
+- Remover/substituir a constraint antiga "clientes_folha_mes_pessoa_competencia_unique" que não considera orgao.
+- Garantir índices para as consultas da tela (por cpf+matricula+orgao e por competencia desc).
+
+2) Import Folha (normal e rápida)
+- Parser deve ler exatamente as colunas na ordem acima. Detectar layout Pensionista pela presença da coluna “Instituidor” na posição 2.
+- Persistir Instituidor em extras_vinculo ou coluna instituidor no vínculo (mas sempre associado ao vínculo tenant+cpf+matricula+orgao).
+- No UPSERT da folha: usar ON CONFLICT no novo UNIQUE (tenant, cpf, matricula, orgao, competencia) fazendo UPDATE dos campos financeiros.
+- Garantir que “Sit Func” e “RJUR” sejam salvos no vínculo (clientes_vinculo) e também, se necessário, na folha_mes (para histórico). A tela deve mostrar o valor do vínculo selecionado e/ou o mais recente da competência.
+- Corrigir importação rápida: hoje está batendo na constraint antiga e falhando. Depois da migration, deve passar.
+
+3) Tela Consulta Cliente: corrigir bug de alternância de vínculos e exibir salários e Situação Funcional
+- Quando CPF tiver múltiplos vínculos, exibir seletor com Órgão e Matrícula e Sit Func.
+- Ao trocar o vínculo selecionado, TODAS as queries precisam usar (cpf, matricula, orgao) ou vinculo_id. Nada pode ficar só por cpf.
+- Se estiver usando React Query/SWR: queryKey deve incluir cpf + matricula + orgao para não reutilizar cache errado.
+- Exibir na seção “Dados do Cliente”:
+  - Situação Funcional (do vínculo selecionado)
+  - Órgão (do vínculo selecionado)
+  - UPAG (do vínculo selecionado)
+  - RJUR/REJUR (do vínculo selecionado)
+- Exibir na seção “Situação de Folha”:
+  - Margens 
+  - Créditos, Débitos, Líquido (pegar da folha_mes mais recente da competência do vínculo selecionado)
+  - Se vier nulo, mostrar “-”. Se vier 0, mostrar 0,00.
+
+4) Margens: garantir persistência e consulta
+- Confirmar que import Folha grava:
+  - margem_70_bruta, margem_70_utilizada, margem_70_saldo
+  - margem_35_bruta, margem_35_utilizada, margem_35_saldo
+  - campos de 5% e benefício 5% também devem ser persistidos 
+- A consulta da tela deve buscar sempre a folha mais recente por competencia DESC para o vínculo selecionado.
+
+5) Convênios padronizados
+- Criar tabela convenios (tenant_id, nome_padronizado, alias) ou algo simples:
+  - Ao digitar “Siape”, normalizar para “SIAPE” e salvar.
+  - Dropdown deve listar os convenios existentes, sempre em formato padronizado (uppercase).
+  - Se usuário digitar um novo, criar e passar a sugerir nas próximas importações.
+- Aplicar isso tanto no import normal quanto no rápido.
+
+6) Unificar consulta do CRM Vendas
+- Remover item “Consulta” do menu CRM Vendas ou transformar em link que abre a mesma rota/página do “Consulta Cliente” do menu Base de Clientes.
+- Não manter duas telas diferentes.
+- Garantir que qualquer rota antiga redirecione para a tela única.
+
+Relatórios e integridade (obrigatório)
+- Cada import (normal e rápido) deve gerar um import_run com:
+  - total_linhas, processadas, inseridas, atualizadas, rejeitadas
+  - motivo das rejeições por linha (primeiras 200 no banco, e export CSV de erros)
+- Na listagem “Bases Importadas”, ao clicar deve abrir a tela de gerenciamento do import_run com:
+  - status
+  - contagens
+  - baixar erros
+- Não pode acontecer “importar menos linhas” sem relatório claro do que foi rejeitado e por quê.
+
+Critérios de aceite
+- Importar um arquivo de 100k linhas sem perder linhas silenciosamente. Se rejeitar, tem relatório.
+- Importação rápida não pode mais dar duplicate key.
+- Para CPF com 2 vínculos (mesmo cpf+matricula, orgaos diferentes), alternar vínculo muda Sit Func, Órgão, UPAG, margens e salários corretamente (sem travar).
+- “Créditos, Débitos, Líquido” aparecem (quando presentes no arquivo), com 0 exibindo 0,00.
+- Menu CRM Vendas não tem consulta duplicada. Usa a mesma tela única.
+
+Arquivos prováveis no repo (use para localizar)
+- server/routes.ts
+- server/import-service.ts ou server/services/*
+- client/src/pages/bases-clientes.tsx
+- client/src/pages/consulta-cliente.tsx (ou equivalente)
+- components do modal Importação Rápida
+- migrations/schema em /schema ou /server/db
+
+Entregue no final
+- Lista de migrations feitas
+- Quais constraints mudaram
+- Quais rotas foram alteradas
+- Print/log de import_run com contagens e export de erros funcionando

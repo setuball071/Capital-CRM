@@ -4623,9 +4623,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         folha: {
           atual: folhaAtual ? {
             competencia: folhaAtual.competencia,
-            margem_bruta_30: folhaAtual.margemBruta30 ? parseFloat(folhaAtual.margemBruta30) : null,
-            margem_utilizada_30: folhaAtual.margemUtilizada30 ? parseFloat(folhaAtual.margemUtilizada30) : null,
-            margem_saldo_30: folhaAtual.margemSaldo30 ? parseFloat(folhaAtual.margemSaldo30) : null,
+            margem_bruta_30: folhaAtual.margemBruta5 ? parseFloat(folhaAtual.margemBruta5) : null,
+            margem_utilizada_30: folhaAtual.margemUtilizada5 ? parseFloat(folhaAtual.margemUtilizada5) : null,
+            margem_saldo_30: folhaAtual.margemSaldo5 ? parseFloat(folhaAtual.margemSaldo5) : null,
             margem_bruta_35: folhaAtual.margemBruta35 ? parseFloat(folhaAtual.margemBruta35) : null,
             margem_utilizada_35: folhaAtual.margemUtilizada35 ? parseFloat(folhaAtual.margemUtilizada35) : null,
             margem_saldo_35: folhaAtual.margemSaldo35 ? parseFloat(folhaAtual.margemSaldo35) : null,
@@ -4645,7 +4645,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           } : null,
           historico: folhaHistorico.map(f => ({
             competencia: f.competencia,
-            margem_saldo_30: f.margemSaldo30 ? parseFloat(f.margemSaldo30) : null,
+            margem_saldo_30: f.margemSaldo5 ? parseFloat(f.margemSaldo5) : null,
             margem_saldo_35: f.margemSaldo35 ? parseFloat(f.margemSaldo35) : null,
             margem_saldo_70: f.margemSaldo70 ? parseFloat(f.margemSaldo70) : null,
             liquido: f.liquido ? parseFloat(f.liquido) : null,
@@ -4986,11 +4986,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         c.uf || "",
         c.municipio || "",
         c.sitFunc || "",
-        (c.telefonesBase || []).join("; "),
+        Array.isArray(c.telefonesBase) ? c.telefonesBase.join("; ") : "",
         c.folhaAtual?.margemSaldo70 || "",
         c.folhaAtual?.margemSaldo35 || "",
-        c.folhaAtual?.margemCartaoCredito5 || "",
-        c.folhaAtual?.margemCartaoBeneficio5 || "",
+        c.folhaAtual?.margemCartaoCreditoSaldo || "",
+        c.folhaAtual?.margemCartaoBeneficioSaldo || "",
         c.folhaAtual?.liquido || "",
       ]);
       
