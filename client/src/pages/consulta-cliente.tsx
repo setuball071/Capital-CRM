@@ -288,14 +288,21 @@ export default function ConsultaCliente() {
     ? `/api/clientes/${selectedPessoaId}?vinculoId=${selectedVinculoId}`
     : `/api/clientes/${selectedPessoaId}`;
 
-  const { data: clienteDetalhado, isLoading: isLoadingDetails } = useQuery<ClienteDetalhado>({
+  const { data: clienteDetalhado, isLoading: isLoadingDetails, error: detailsError } = useQuery<ClienteDetalhado>({
     queryKey: ["/api/clientes", selectedPessoaId, selectedVinculoId],
     queryFn: async () => {
       const res = await fetch(queryUrl, { credentials: "include" });
-      if (!res.ok) throw new Error("Erro ao carregar cliente");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (res.status === 404) {
+          throw new Error("Cliente não encontrado na base de dados.");
+        }
+        throw new Error(errorData.message || "Erro ao carregar detalhes do cliente.");
+      }
       return res.json();
     },
     enabled: !!selectedPessoaId,
+    retry: false,
   });
   
   // Auto-sincronizar o vínculo selecionado com o retornado pelo backend
@@ -1053,7 +1060,10 @@ export default function ConsultaCliente() {
             <Card>
               <CardContent className="text-center py-8 text-muted-foreground">
                 <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Não foi possível carregar os detalhes do cliente.</p>
+                <p>{detailsError instanceof Error ? detailsError.message : "Não foi possível carregar os detalhes do cliente."}</p>
+                <Button variant="outline" size="sm" className="mt-4" onClick={handleBackToResults} data-testid="button-tentar-novamente">
+                  Voltar aos resultados
+                </Button>
               </CardContent>
             </Card>
           )}
