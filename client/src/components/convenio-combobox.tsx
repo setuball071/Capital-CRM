@@ -159,7 +159,7 @@ export function ConvenioCombobox({
                   ) : (
                     <>
                       <Plus className="mr-2 h-4 w-4" />
-                      Criar convênio "{normalizeForSearch(searchValue)}"
+                      Criar convênio "{searchValue.trim()}"
                     </>
                   )}
                 </CommandItem>

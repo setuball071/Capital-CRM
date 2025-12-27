@@ -3475,7 +3475,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const tenantId = req.user?.tenantId || 1;
       const code = normalizeConvenio(trimmed);
       
-      const convenio = await storage.upsertConvenio(tenantId, code, code);
+      // Store normalized code and user-friendly label
+      const convenio = await storage.upsertConvenio(tenantId, code, trimmed);
       return res.json(convenio);
     } catch (error) {
       console.error("Create convenio error:", error);

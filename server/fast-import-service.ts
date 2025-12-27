@@ -102,6 +102,10 @@ class FastImportService {
     const stats = fs.statSync(filePath);
     const totalEstimatedRows = await this.estimateRowCount(filePath);
     const baseTag = this.generateBaseTag(options);
+    
+    // Normalize convenio for consistent storage
+    const { normalizeConvenio } = await import("@shared/utils");
+    const normalizedConvenio = options.convenio ? normalizeConvenio(options.convenio) : null;
 
     const [importRun] = await db
       .insert(importRuns)
@@ -118,7 +122,7 @@ class FastImportService {
         totalRows: totalEstimatedRows,
         chunkSize: BATCH_INSERT_SIZE,
         baseTag,
-        convenio: options.convenio || null,
+        convenio: normalizedConvenio,
         maxLinhasExecucao: MAX_LINHAS_POR_EXECUCAO,
         createdById: options.createdById || null,
       })
