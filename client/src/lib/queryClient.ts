@@ -1,10 +1,51 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Custom error class with structured error info
+export class ApiError extends Error {
+  status: number;
+  statusText: string;
+  data?: { message?: string; errors?: Record<string, string[]> };
+
+  constructor(status: number, statusText: string, data?: { message?: string; errors?: Record<string, string[]> }) {
+    const message = data?.message || statusText || `Erro ${status}`;
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.statusText = statusText;
+    this.data = data;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let data: { message?: string; errors?: Record<string, string[]> } | undefined;
+    
+    // Try to parse JSON error response from backend
+    try {
+      const text = await res.text();
+      if (text) {
+        data = JSON.parse(text);
+      }
+    } catch {
+      // Not JSON, ignore
+    }
+    
+    throw new ApiError(res.status, res.statusText, data);
   }
+}
+
+// Helper to extract error message from any error type
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "Ocorreu um erro inesperado";
 }
 
 export async function apiRequest(
