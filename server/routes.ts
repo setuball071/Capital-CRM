@@ -4493,17 +4493,20 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         }));
       } else if (cpf) {
         tipoBusca = "cpf";
-        // Clean CPF (remove dots and dashes)
-        termo = String(cpf).replace(/\D/g, "");
+        // Clean CPF (remove dots, dashes) and normalize to 11 digits with padStart
+        const cleanCpf = String(cpf).replace(/\D/g, "");
+        termo = cleanCpf.padStart(11, "0");
         
-        // Validate CPF has exactly 11 digits
-        if (termo.length !== 11) {
+        // Validate CPF has at least 1 digit and at most 11 digits
+        if (cleanCpf.length === 0 || cleanCpf.length > 11) {
           return res.status(400).json({ 
-            message: "CPF inválido. O CPF deve ter 11 dígitos." 
+            message: "CPF inválido. Informe um CPF válido." 
           });
         }
         
-        // Pass convenio filter if provided
+        console.log(`[Consulta Cliente] CPF input: "${cpf}" -> normalized: "${termo}", convenio: ${convenioFiltro || "none"}`);
+        
+        // Pass convenio filter if provided (getClientesByCpf also normalizes, but we log here)
         const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,

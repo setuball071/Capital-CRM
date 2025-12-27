@@ -987,20 +987,27 @@ export class DbStorage implements IStorage {
   }
 
   async getClientesByCpf(cpf: string, convenio?: string): Promise<ClientePessoa[]> {
-    // Remove formatting from CPF (dots and dashes)
-    const cleanCpf = cpf.replace(/\D/g, "");
-    // Compare by removing non-digits from stored CPF as well (handles both formatted and unformatted storage)
+    // Remove formatting from CPF (dots and dashes) and normalize to 11 digits
+    const cleanCpf = cpf.replace(/\D/g, "").padStart(11, "0");
+    
+    console.log(`[getClientesByCpf] Input: "${cpf}" -> Normalized: "${cleanCpf}", Convenio: ${convenio || "none"}`);
+    
+    // Direct comparison since both stored and search CPF are normalized to 11 digits
     if (convenio) {
-      return await db.select()
+      const results = await db.select()
         .from(clientesPessoa)
         .where(and(
-          sql`regexp_replace(${clientesPessoa.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
+          eq(clientesPessoa.cpf, cleanCpf),
           ilike(clientesPessoa.convenio, convenio)
         ));
+      console.log(`[getClientesByCpf] Found ${results.length} results with convenio filter`);
+      return results;
     }
-    return await db.select()
+    const results = await db.select()
       .from(clientesPessoa)
-      .where(sql`regexp_replace(${clientesPessoa.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`);
+      .where(eq(clientesPessoa.cpf, cleanCpf));
+    console.log(`[getClientesByCpf] Found ${results.length} results without convenio filter`);
+    return results;
   }
 
   async createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa> {

@@ -1,0 +1,80 @@
+Você é o agente de correção do meu CRM no Replit.
+
+SINTOMA
+A importação está concluindo e marcando como “Concluída”, mas na tela “Consulta de Cliente” nenhum cliente importado aparece.
+A UI mostra “Não foi possível carregar os detalhes do cliente.”
+
+OBJETIVO
+Fazer a consulta retornar os dados reais dos clientes importados, respeitando tenant e o novo modelo (CPF pode ter múltiplos vínculos por órgão).
+
+TAREFA (FAZER NESSA ORDEM, COMPROVANDO COM LOGS)
+
+1) IDENTIFICAR O ENDPOINT USADO PELA TELA
+- Encontre o arquivo da página "Consulta de Cliente" (provável: client/src/pages/consulta-cliente.tsx ou similar).
+- Identifique qual endpoint ela chama ao clicar na lupa (ex.: GET /api/clientes/consulta?cpf=... ou /api/clientes/:cpf).
+- Copie aqui o endpoint e o handler no backend (server/routes.ts ou server/routes/*).
+
+2) TESTE RÁPIDO NO BACKEND COM SQL (PROVA)
+No handler do endpoint, antes da lógica atual, logue:
+- tenant_id do usuário autenticado (de onde você resolve tenant)
+- cpf recebido
+- cpf normalizado (somente dígitos, padStart 11)
+
+Execute 3 queries SQL (com o mesmo tenant_id e cpf normalizado) e logue o resultado (count):
+A) SELECT count(*) FROM clientes_pessoa WHERE tenant_id=$1 AND cpf=$2;
+B) SELECT count(*) FROM clientes_vinculo WHERE tenant_id=$1 AND cpf=$2;
+C) SELECT count(*) FROM clientes_folha_mes WHERE tenant_id=$1 AND cpf=$2;   (ou vinculo_id join, dependendo do schema)
+
+Se A ou B for 0, a importação está gravando em outro tenant_id ou com cpf em formato diferente.
+Se A/B existir mas a consulta não retorna, a query do endpoint está errada.
+
+3) CORREÇÃO DE NORMALIZAÇÃO DO CPF NA CONSULTA
+- Garanta que a consulta SEMPRE normaliza o CPF do input:
+  cpf = digitsOnly(cpf).padStart(11,'0')
+- A UI pode mandar CPF com máscara. O backend deve aceitar ambos.
+
+4) CORREÇÃO DO MODELO: SUPORTAR MÚLTIPLOS VÍNCULOS POR ÓRGÃO
+A consulta por CPF deve retornar:
+- dados da pessoa (clientes_pessoa)
+- uma lista de vínculos (clientes_vinculo) ordenada por updated_at desc
+- para cada vínculo, a folha do mês mais recente OU por competência selecionada
+- NÃO juntar tudo num único card quando houver mais de um vínculo
+
+Implementação recomendada no endpoint:
+- Buscar pessoa (tenant_id+cpf)
+- Buscar vínculos: tenant_id+cpf (include orgao, matricula, sit_func, rjur, upag)
+- Para cada vínculo, buscar folha_mes:
+  a) se "competencia" foi informada, usar ela
+  b) se não, pegar a mais recente (order by competencia desc limit 1)
+- Retornar um JSON com:
+  { pessoa, vinculos: [{ vinculo, folhaAtual }] }
+
+5) CONVÊNIO (OPCIONAL) NÃO PODE BLOQUEAR RESULTADO
+Hoje existe dropdown “Convênio (opcional)”.
+- Se convênio estiver vazio, NÃO filtrar por convênio.
+- Se convênio estiver selecionado, filtrar pelas bases/import_runs associados a aquele convênio (se vocês tiverem isso).
+Se atualmente a query filtra convênio mesmo quando vazio, corrigir.
+
+6) STATUS CODE E ERRO DA UI
+- Hoje a UI mostra mensagem genérica.
+- Garanta que o endpoint devolve:
+  200 com payload quando achou
+  404 quando não achou (com message clara)
+  401 quando não autenticado
+  500 somente erro real
+- Na UI, mostrar “Cliente não encontrado” se 404 (ao invés de “não foi possível carregar”).
+
+7) VALIDAÇÃO FINAL (OBRIGATÓRIA)
+- Pegue um CPF que você sabe que foi importado (da sua base).
+- Mostre no log do servidor:
+  tenant_id correto
+  cpf normalizado
+  counts A/B/C > 0
+- Confirme que o endpoint retorna pessoa + lista de vínculos.
+- Confirme que a tela renderiza os resultados.
+
+ENTREGÁVEIS
+- Liste os arquivos alterados.
+- Cole o trecho do endpoint corrigido.
+- Cole exemplo de resposta JSON retornada.
+- Explique em 2 linhas qual era a causa raiz (tenant, cpf formato, query errada, convênio etc).
