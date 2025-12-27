@@ -194,7 +194,9 @@ export default function BasesClientes() {
           description: `${data.mergedRows?.toLocaleString("pt-BR") || 0} registros processados em ${((data.elapsedMs || 0) / 1000).toFixed(1)}s`,
         });
         setIsPolling(false);
+        // Invalidate both bases and import-runs caches
         queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
       } else if (data.status === "erro") {
         toast({
           title: "Erro na importação",
@@ -371,7 +373,9 @@ export default function BasesClientes() {
       setConvenio("");
       setCompetencia("");
       setNomeBase("");
+      // Invalidate both bases and import-runs caches
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
     },
     onError: (error: any) => {
       toast({
@@ -422,7 +426,9 @@ export default function BasesClientes() {
       setDeleteDialogOpen(false);
       setBaseToDelete(null);
       setDeleteConfirmText("");
+      // Invalidate both bases and import-runs caches
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
     },
     onError: (error: any) => {
       toast({

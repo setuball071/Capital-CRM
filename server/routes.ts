@@ -3457,26 +3457,28 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
   
-  // POST criar/atualizar convênio
+  // POST criar/atualizar convênio - uses Zod schema for validation
   app.post("/api/convenios", requireAuth, async (req: any, res) => {
     try {
       const { normalizeConvenio } = await import("@shared/utils");
-      const { label } = req.body;
+      const { insertConvenioSchema } = await import("@shared/schema");
       
-      if (!label || typeof label !== "string") {
-        return res.status(400).json({ message: "Label é obrigatório" });
+      // Validate with Zod schema
+      const parseResult = insertConvenioSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        const firstError = parseResult.error.errors[0];
+        return res.status(400).json({ 
+          message: firstError?.message || "Dados inválidos",
+          errors: parseResult.error.flatten().fieldErrors
+        });
       }
       
-      const trimmed = label.trim();
-      if (trimmed.length < 2 || trimmed.length > 40) {
-        return res.status(400).json({ message: "Label deve ter entre 2 e 40 caracteres" });
-      }
-      
+      const { label } = parseResult.data;
       const tenantId = req.user?.tenantId || 1;
-      const code = normalizeConvenio(trimmed);
+      const code = normalizeConvenio(label);
       
       // Store normalized code and user-friendly label
-      const convenio = await storage.upsertConvenio(tenantId, code, trimmed);
+      const convenio = await storage.upsertConvenio(tenantId, code, label);
       return res.json(convenio);
     } catch (error) {
       console.error("Create convenio error:", error);
