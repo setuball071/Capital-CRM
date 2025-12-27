@@ -28,6 +28,7 @@ export const COLUMN_MAP: Record<string, string> = {
   agencia_salario: "agencia_salario",
   conta_salario: "conta_salario",
   upag: "upag",
+  arq_upag: "upag",
   rejur: "rjur",
   rjur: "rjur",
   regime_juridico: "rjur",
@@ -35,51 +36,65 @@ export const COLUMN_MAP: Record<string, string> = {
   descontos_brutos: "descontos_brutos",
   salario_liquido: "salario_liquido",
   competencia_folha: "competencia_folha",
-  // Margem 70%
+  // Margem 70% (modelo: Bruta 70%, Utilz 70%, Saldo 70%)
   margem_70_bruta: "margem_70_bruta",
   margem_70_utilizada: "margem_70_utilizada",
   margem_70_saldo: "margem_70_saldo",
   bruta_70: "margem_70_bruta",
+  bruta_70_: "margem_70_bruta",
   utiliz_70: "margem_70_utilizada",
+  utilz_70: "margem_70_utilizada",
+  utilz_70_: "margem_70_utilizada",
   saldo_70: "margem_70_saldo",
-  // Margem 35%
+  saldo_70_: "margem_70_saldo",
+  // Margem 35% (modelo: Bruta 35%, Utilz 35%, Saldo 35%)
   margem_35_bruta: "margem_35_bruta",
   margem_35_utilizada: "margem_35_utilizada",
   margem_35_saldo: "margem_35_saldo",
   bruta_35: "margem_35_bruta",
+  bruta_35_: "margem_35_bruta",
   utiliz_35: "margem_35_utilizada",
+  utilz_35: "margem_35_utilizada",
+  utilz_35_: "margem_35_utilizada",
   saldo_35: "margem_35_saldo",
-  // Margem 5% (nova)
+  saldo_35_: "margem_35_saldo",
+  // Margem 5% (modelo: Bruta 5%, Utilz 5%, Saldo 5%)
   margem_5_bruta: "margem_5_bruta",
   margem_5_utilizada: "margem_5_utilizada",
   margem_5_saldo: "margem_5_saldo",
   bruta_5: "margem_5_bruta",
+  bruta_5_: "margem_5_bruta",
   utiliz_5: "margem_5_utilizada",
+  utilz_5: "margem_5_utilizada",
+  utilz_5_: "margem_5_utilizada",
   saldo_5: "margem_5_saldo",
+  saldo_5_: "margem_5_saldo",
   // Alias MARGEM_30 → MARGEM_5 (retrocompatibilidade)
   margem_30_bruta: "margem_5_bruta",
   margem_30_utilizada: "margem_5_utilizada",
   margem_30_saldo: "margem_5_saldo",
-  // Margem Benefício 5% (nova)
+  // Margem Benefício 5% (modelo: Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%)
   margem_beneficio_5_bruta: "margem_beneficio_5_bruta",
   margem_beneficio_5_utilizada: "margem_beneficio_5_utilizada",
   margem_beneficio_5_saldo: "margem_beneficio_5_saldo",
   beneficio_bruta_5: "margem_beneficio_5_bruta",
+  beneficio_bruta_5_: "margem_beneficio_5_bruta",
   beneficio_utilizado_5: "margem_beneficio_5_utilizada",
+  beneficio_utilizado_5_: "margem_beneficio_5_utilizada",
   beneficio_saldo_5: "margem_beneficio_5_saldo",
-  // Cartão crédito
+  beneficio_saldo_5_: "margem_beneficio_5_saldo",
+  // Cartão crédito (legado)
   margem_cartao_credito_bruta: "margem_cartao_credito_bruta",
   margem_cartao_credito_utilizada: "margem_cartao_credito_utilizada",
   margem_cartao_credito_saldo: "margem_cartao_credito_saldo",
-  // Cartão benefício
+  // Cartão benefício (legado)
   margem_cartao_beneficio_bruta: "margem_cartao_beneficio_bruta",
   margem_cartao_beneficio_utilizada: "margem_cartao_beneficio_utilizada",
   margem_cartao_beneficio_saldo: "margem_cartao_beneficio_saldo",
-  // Créditos/Débitos/Líquido (folha de pagamento)
+  // Créditos/Débitos/Líquido do modelo (mapeados para campos de salário)
   creditos: "creditos",
   debitos: "debitos",
   liquido: "liquido",
-  // Aliases para Créditos/Débitos/Líquido
   credito: "creditos",
   debito: "debitos",
   // Base de cálculo

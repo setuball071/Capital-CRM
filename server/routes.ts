@@ -4679,6 +4679,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           matricula: v.matricula,
           orgao: v.orgao,
           convenio: v.convenio,
+          upag: v.upag,
           rjur: v.rjur,
           sit_func: v.sitFunc,
           ativo: v.ativo,

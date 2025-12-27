@@ -1,0 +1,154 @@
+CONTEXTO
+Estamos no projeto do Replit (não é Lovable). A tela Base de Clientes > Consulta Cliente já mostra seletor quando o CPF tem 2 vínculos/órgãos, e troca as margens 70 e 35 corretamente, mas ainda existem bugs:
+
+1) UPAG não muda corretamente ao alternar vínculo (fica “travado” em um dos vínculos)
+2) Cards “Margem 5%” e “Benefício 5%” aparecem, porém sem valores (fica “-”), mesmo os dados existindo no arquivo importado
+3) Salários não aparecem (Créditos/Débitos/Líquido ficam “-”)
+4) O template Folha (Servidor) precisa seguir exatamente a ordem e os nomes de colunas do XLSX modelo (25 colunas) que vou usar na importação massiva
+5) Existem CPFs com mesma matrícula repetida em órgãos diferentes, então a chave do vínculo não pode ser só cpf+matricula. Precisa incluir orgao. E os registros de folha mensal precisam ser por vínculo + competência
+6) Queremos eliminar o formato de consulta duplicado do CRM Vendas e usar o mesmo componente/rota da “Consulta Cliente” da Base de Clientes (um único jeito de ler e exibir)
+7) Precisamos de relatório do que foi importado e do que falhou (não posso perder pacotes de dados). Importo CSVs de 100.000 linhas cada e preciso ver contagem e erros.
+
+MODELO FOLHA SERVIDOR (EXATO)
+Confirmar e usar exatamente estes cabeçalhos e ordem (25 colunas), iguais ao arquivo modelo_folha_servidor.xlsx:
+1 Orgão
+2 Matricula
+3 Base Calc
+4 Bruta 5%
+5 Utilz 5%
+6 Saldo 5%
+7 Beneficio Bruta 5%
+8 Beneficio Utilizado 5%
+9 Beneficio Saldo 5%
+10 Bruta 35%
+11 Utilz 35%
+12 Saldo 35%
+13 Bruta 70%
+14 Utilz 70%
+15 Saldo 70%
+16 Créditos
+17 Débitos
+18 Líquido
+19 ARQ. UPAG
+20 EXC QTD
+21 EXC Soma
+22 RJUR
+23 Sit Func
+24 CPF
+25 Margem
+
+MAPEAMENTO OBRIGATÓRIO (IMPORT)
+Mapear esses cabeçalhos para os campos internos do banco assim:
+Orgão -> orgao
+Matricula -> matricula
+CPF -> cpf (normalizar somente dígitos na persistência e também manter formatado para exibição se quiser)
+Sit Func -> situacao_funcional
+RJUR -> rejur
+ARQ. UPAG -> upag
+Créditos -> salario_bruto
+Débitos -> descontos_brutos
+Líquido -> salario_liquido
+
+Bruta 70/Utilz 70/Saldo 70 -> margem_70_bruta / margem_70_utilizada / margem_70_saldo
+Bruta 35/Utilz 35/Saldo 35 -> margem_35_bruta / margem_35_utilizada / margem_35_saldo
+
+Bruta 5%/Utilz 5%/Saldo 5% -> margem_cartao_credito_bruta / margem_cartao_credito_utilizada / margem_cartao_credito_saldo
+Beneficio Bruta 5%/Beneficio Utilizado 5%/Beneficio Saldo 5% -> margem_cartao_beneficio_bruta / margem_cartao_beneficio_utilizada / margem_cartao_beneficio_saldo
+
+Base Calc -> base_calc
+EXC QTD -> exc_qtd
+EXC Soma -> exc_soma
+Margem -> margem (se existir no schema)
+
+E TAMBÉM:
+Aceitar variações de cabeçalho com e sem acento e com espaços diferentes (ex.: “Creditos”, “Débitos”, “ARQ. UPAG”, “ARQ UPAG”, “RJUR”, “Rjur”, etc.), mas sempre gerar o mesmo mapeamento acima.
+
+CHAVE DE VÍNCULO E FOLHA MENSAL (CRÍTICO)
+Hoje temos casos com mesmo CPF e mesma matrícula em órgãos diferentes. Então:
+- A entidade de vínculo precisa ser identificada por (cpf_normalizado + matricula + orgao + convenio/tenant), ou usar vinculo_id único gerado a partir disso
+- A folha mensal precisa ser única por (vinculo_id + competencia_folha). NÃO pode ser única só por (pessoa_id + competencia). Isso está causando erro e também sobrescrita/perda.
+
+Ajuste de banco:
+1) Atualizar o UNIQUE CONSTRAINT que hoje gera erro (ex.: clientes_folha_mes_pessoa_competencia_unique) para refletir o correto:
+   - Preferência: unique (vinculo_id, competencia_folha)
+   - Alternativa: unique (cpf_normalizado, matricula, orgao, competencia_folha, tenant_id)
+2) Ajustar upsert do import para usar essa chave correta, sem erro de duplicate key e sem perder linha.
+
+BUG UPAG ENTRE VÍNCULOS
+Na UI de Consulta Cliente:
+- Ao alternar o botão do vínculo (orgao 21000 vs 25000), a UPAG precisa mudar junto com o resto.
+- Garantir que a query que monta “Dados do Cliente” e “Situação de Folha” seja totalmente dependente do selectedVinculo:
+  selectedVinculo = { cpf_normalizado, matricula, orgao, convenio }
+- Se usa cache (React Query/SWR), incluir orgao e matricula na queryKey.
+- Não pode haver “fallback” que pega UPAG do primeiro vínculo e reaproveita.
+
+MARGEM 5% E BENEFÍCIO 5% NÃO APARECENDO
+Os valores existem no arquivo e já chegam no backend, mas a UI está exibindo “-”.
+Corrigir de ponta a ponta:
+1) Garantir que o import realmente persiste os campos margem_cartao_credito_* e margem_cartao_beneficio_* na tabela final (não só staging)
+2) Garantir que o endpoint de consulta retorna esses campos no payload
+3) Garantir que a UI lê exatamente esses campos para popular os cards “Margem 5%” e “Benefício 5%”
+4) Se o valor for 0, mostrar “0,00” (não “-”). Mostrar “-” apenas quando for null/undefined.
+
+SALÁRIOS NÃO APARECENDO
+O template chama “Créditos / Débitos / Líquido”, mas internamente queremos persistir em:
+salario_bruto / descontos_brutos / salario_liquido
+Corrigir:
+- Import: mapear corretamente (Créditos -> salario_bruto, Débitos -> descontos_brutos, Líquido -> salario_liquido)
+- UI: exibir esses três valores no card/linha de salários. Se 0, mostrar 0,00. Se null, “-”.
+
+RELATÓRIO E GARANTIA DE NÃO PERDER LINHAS
+Para cada import (normal e rápida), salvar e exibir:
+- total_linhas_lidas
+- total_importadas_ok
+- total_rejeitadas
+- motivo das rejeições (por linha) em uma tabela import_errors com:
+  import_run_id, line_number, cpf, matricula, orgao, field, message, raw_row (json/text)
+E criar botão “Baixar relatório de erros (CSV)” na tela de gerenciamento de importação.
+Também exibir na UI o total efetivamente importado (não só o total do arquivo).
+
+PADRONIZAÇÃO DE CONVÊNIOS
+No modal de Importação Rápida:
+- O campo “Convênio” deve ser um select padronizado puxado do banco (tabela convenios por tenant).
+- Permitir criar novo convênio digitando e confirmar “Criar convênio X”.
+- Depois de criado, nas próximas importações ele aparece na lista.
+- Armazenar sempre em uppercase (SIAPE, INSS, GOV SP etc.) e evitar duplicados (siape vs SIAPE).
+
+REMOVER CONSULTA DUPLA DO CRM VENDAS
+Hoje existe “CRM Vendas > Consulta” com formato diferente.
+Quero remover esse caminho e reaproveitar o MESMO componente/rota de “Base de Clientes > Consulta Cliente”.
+Ajuste:
+- Menu CRM Vendas: remover item Consulta (ou redirecionar para /base-clientes/consulta-cliente).
+- Garantir que só existe uma tela de consulta, uma rota e um serviço de API para dados do cliente.
+
+TEMPLATE FOLHA PENSIONISTA
+Além do template Folha (Servidor), garantir que exista também “Modelo Folha Pensionista” separado e visível com botão na UI.
+Mas prioridade agora é consertar o Servidor (25 colunas) e a consulta.
+Depois disso, garantir Pensionista (26 colunas com Instituidor) com download e parser, sem sumir do menu.
+
+AÇÃO
+1) Localizar os arquivos de importação (server/import-service.ts, server/routes.ts, fast-import-service.ts ou similares) e ajustar o COLUMN_MAP com os cabeçalhos reais acima (com acentos)
+2) Ajustar schema/constraints para folha mensal por vinculo_id + competencia_folha
+3) Ajustar endpoints de consulta para aceitar filtros de vínculo (cpf+matricula+orgao+convenio) e retornar margens 70/35/5/crédito/benefício + salários + upag + situacao_funcional + rejur
+4) Ajustar UI para:
+   - selectedVinculo controlar tudo
+   - UPAG mudar corretamente
+   - mostrar valores 5% e benefício
+   - mostrar salários
+   - tratar 0 como 0,00 e null como “-”
+5) Implementar relatório de importação com erros e contagens
+6) Padronizar convênios com select + criar novo
+7) Remover/redirect “CRM Vendas > Consulta” para usar a mesma tela da Base de Clientes
+
+VALIDAÇÃO FINAL (OBRIGATÓRIA)
+Testar com este exemplo de dois vínculos do mesmo CPF/matricula e órgãos diferentes:
+Vínculo 21000 e vínculo 25000.
+Ao alternar:
+- Orgão muda
+- UPAG muda corretamente (não pode ficar igual)
+- Margem 70 e 35 mudam
+- Margem 5% e Benefício 5% mostram números (não “-”)
+- Créditos/Débitos/Líquido mostram números
+
+IMPORTANTE
+Não diga que está “pronto” sem realmente validar no código. Se houver erro 500, mostre a causa no log e corrija.

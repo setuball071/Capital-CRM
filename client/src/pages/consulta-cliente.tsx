@@ -139,6 +139,7 @@ interface Vinculo {
   matricula: string;
   orgao: string;
   convenio: string | null;
+  upag: string | null;
   rjur: string | null;
   sit_func: string | null;
   ativo: boolean;
@@ -675,7 +676,7 @@ export default function ConsultaCliente() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">UPAG</p>
-                      <p>{clienteDetalhado.pessoa.upag || "-"}</p>
+                      <p>{vinculoAtual?.upag || clienteDetalhado.pessoa.upag || "-"}</p>
                     </div>
                     <div className="space-y-1 md:col-span-2">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
