@@ -3443,6 +3443,46 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // ===== CONVENIOS (LISTA PADRONIZADA POR TENANT) =====
+  
+  // GET lista de convênios do tenant
+  app.get("/api/convenios", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.user?.tenantId || 1;
+      const conveniosList = await storage.getConvenios(tenantId);
+      return res.json(conveniosList);
+    } catch (error) {
+      console.error("Get convenios error:", error);
+      return res.status(500).json({ message: "Erro ao buscar convênios" });
+    }
+  });
+  
+  // POST criar/atualizar convênio
+  app.post("/api/convenios", requireAuth, async (req: any, res) => {
+    try {
+      const { normalizeConvenio } = await import("@shared/utils");
+      const { label } = req.body;
+      
+      if (!label || typeof label !== "string") {
+        return res.status(400).json({ message: "Label é obrigatório" });
+      }
+      
+      const trimmed = label.trim();
+      if (trimmed.length < 2 || trimmed.length > 40) {
+        return res.status(400).json({ message: "Label deve ter entre 2 e 40 caracteres" });
+      }
+      
+      const tenantId = req.user?.tenantId || 1;
+      const code = normalizeConvenio(trimmed);
+      
+      const convenio = await storage.upsertConvenio(tenantId, code, code);
+      return res.json(convenio);
+    } catch (error) {
+      console.error("Create convenio error:", error);
+      return res.status(500).json({ message: "Erro ao criar convênio" });
+    }
+  });
+
   // GET status de um import run específico - MASTER ONLY
   app.get("/api/import-runs/:id/status", requireAuth, requireMaster, async (req, res) => {
     try {

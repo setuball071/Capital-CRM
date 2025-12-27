@@ -35,6 +35,7 @@ import {
   teamMembers,
   aiPrompts,
   personalTasks,
+  convenios,
   DEFAULT_ROLEPLAY_PROMPT,
   type User,
   type InsertUser,
@@ -100,6 +101,7 @@ import {
   type InsertAiPrompt,
   type PersonalTask,
   type InsertPersonalTask,
+  type Convenio,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -254,6 +256,10 @@ export interface IStorage {
   // Abordagens
   createAbordagemGerada(data: InsertAbordagemGerada): Promise<AbordagemGerada>;
   getAbordagensByUser(userId: number): Promise<AbordagemGerada[]>;
+  
+  // Convenios (lista padronizada por tenant)
+  getConvenios(tenantId: number): Promise<Convenio[]>;
+  upsertConvenio(tenantId: number, code: string, label: string): Promise<Convenio>;
   
   // ===== CRM DE VENDAS =====
   
@@ -1557,6 +1563,24 @@ export class DbStorage implements IStorage {
     return await db.select().from(abordagensGeradas)
       .where(eq(abordagensGeradas.userId, userId))
       .orderBy(sql`${abordagensGeradas.criadoEm} DESC`);
+  }
+  
+  // Convenios (lista padronizada por tenant)
+  async getConvenios(tenantId: number): Promise<Convenio[]> {
+    return await db.select().from(convenios)
+      .where(eq(convenios.tenantId, tenantId))
+      .orderBy(sql`${convenios.label} ASC`);
+  }
+  
+  async upsertConvenio(tenantId: number, code: string, label: string): Promise<Convenio> {
+    const [result] = await db.insert(convenios)
+      .values({ tenantId, code, label })
+      .onConflictDoUpdate({
+        target: [convenios.tenantId, convenios.code],
+        set: { label },
+      })
+      .returning();
+    return result;
   }
   
   // ===== CRM DE VENDAS =====
