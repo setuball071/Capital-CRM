@@ -3958,7 +3958,27 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       });
     } catch (error: any) {
       console.error("Fast import process error:", error);
-      return res.status(500).json({ message: error.message || "Erro ao processar importação" });
+      const runId = parseInt(req.params.id);
+      
+      // Salvar erro no import_run
+      try {
+        await db.update(importRuns)
+          .set({ 
+            status: "erro", 
+            errorMessage: error.message || "Erro desconhecido",
+            updatedAt: new Date() 
+          })
+          .where(eq(importRuns.id, runId));
+      } catch (e) {
+        console.error("Failed to update import run status:", e);
+      }
+      
+      return res.status(500).json({ 
+        error: "FAST_IMPORT_FAILED",
+        message: error.message || "Erro ao processar importação",
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        importRunId: runId,
+      });
     }
   });
 

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, decimal, integer, bigint, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, varchar, decimal, integer, bigint, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -424,10 +424,13 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   primeiraImportacao: timestamp("primeira_importacao").notNull().defaultNow(),
   ultimaAtualizacao: timestamp("ultima_atualizacao").notNull().defaultNow(),
   extrasVinculo: jsonb("extras_vinculo"), // Ex: { "instituidor": "0654321" } para pensionistas
-});
+}, (table) => ({
+  cpfMatriculaOrgaoIdx: uniqueIndex("idx_vinculo_cpf_mat_orgao").on(table.cpf, table.matricula, table.orgao),
+}));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
 // IMPORTANTE: vinculoId é a chave de relacionamento (vinculo = cpf+matricula+orgao)
+// ÍNDICE ÚNICO: (vinculo_id, competencia) - para ON CONFLICT no fast import
 export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -461,7 +464,9 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   sitFuncNoMes: varchar("sit_func_no_mes", { length: 100 }),
   baseTag: varchar("base_tag", { length: 100 }),
   extrasFolha: jsonb("extras_folha"),
-});
+}, (table) => ({
+  vinculoCompetenciaIdx: uniqueIndex("idx_folha_mes_vinculo_competencia").on(table.vinculoId, table.competencia),
+}));
 
 // Status de contrato
 export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
