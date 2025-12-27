@@ -1,0 +1,143 @@
+Você é o agente de correção do meu projeto no Replit (CRM Pro). Preciso que você corrija a importação (normal e rápida) e ajuste o modelo de dados para NÃO perder linhas e suportar casos reais onde o mesmo CPF + matrícula aparece mais de uma vez porque muda o órgão/situação funcional.
+
+CONTEXTO REAL
+1) Existem 3 importações separadas:
+   A) Folha (Servidor e Pensionista) com dados financeiros do mês.
+   B) D8 (por banco) com contratos/descontos, cruzando por CPF + matrícula (e agora também precisa considerar órgão no vínculo).
+   C) Contatos (telefones/emails/endereço) por CPF apenas.
+
+2) A competência e o banco/convenio são informados pelo usuário na tela no momento do upload.
+
+3) Hoje a importação rápida está falhando com:
+   duplicate key value violates unique constraint "clientes_folha_mes_pessoa_competencia_unique"
+   e também estou percebendo que subo 100k linhas e entra menos, sem relatório detalhado do que não entrou. Isso é inaceitável.
+
+4) Descoberta importante:
+   CPF + matrícula podem se repetir em múltiplas linhas na mesma competência porque o órgão é diferente.
+   Exemplo do meu arquivo: CPF e matrícula iguais, órgão e Sit Func diferentes.
+   Portanto, CPF + matrícula NÃO é chave única de vínculo. Precisa ser CPF + matrícula + órgão (e manter Sit Func e demais campos por vínculo/folha).
+
+OBJETIVOS
+A) Corrigir a importação rápida para fazer UPSERT corretamente (nunca dar erro de chave duplicada).
+B) Ajustar o modelo: vínculo deve considerar órgão (e pensionista tem instituidor).
+C) Parar de perder linhas: preciso de relatório completo por import_run (quantas linhas lidas, quantas inseridas, quantas atualizadas, quantas rejeitadas, e arquivo de erros para baixar).
+D) Criar a experiência de consulta: quando CPF tiver múltiplos vínculos (por órgão), a tela deve permitir selecionar (chave seletora) ao invés de misturar tudo em um único card.
+E) Padronizar convênios: dropdown com lista existente do banco. Se usuário digitar novo, salva padronizado e aparece nas próximas importações.
+F) Templates: preciso de modelos Excel/CSV reais para download, incluindo Folha Servidor e Folha Pensionista separados (hoje não aparece Folha Pensionista no bloco de modelos).
+
+ENTREGÁVEIS OBRIGATÓRIOS
+1) MIGRAÇÃO DE BANCO (Postgres)
+   1.1) clientes_vinculo:
+        - adicionar coluna orgao TEXT (se ainda não existir) e garantir que ela seja preenchida no import
+        - adicionar coluna uf TEXT (se ainda não existir)
+        - garantir extras JSONB (já existe em alguns fluxos, mas validar)
+        - CRIAR UNIQUE composto correto:
+          UNIQUE (tenant_id, cpf, matricula, orgao)
+        - manter compatibilidade: para vínculos antigos sem orgao, setar orgao = 'DESCONHECIDO' ou tentar preencher a partir da folha mais recente, se disponível
+
+   1.2) clientes_folha_mes (ou tabela equivalente de folha mensal):
+        - a chave única não pode ser só (pessoa + competência).
+        - deve ser por VÍNCULO (que agora inclui órgão).
+        - Criar UNIQUE:
+          UNIQUE (tenant_id, vinculo_id, competencia)
+          (ou equivalente se sua tabela não tiver vinculo_id: UNIQUE(tenant_id, cpf, matricula, orgao, competencia))
+        - atualizar constraints e índices necessários para ON CONFLICT funcionar.
+
+   1.3) Tabelas de importação:
+        - garantir import_runs e import_run_items (ou similar) com:
+          import_run_id, total_rows, processed_rows, inserted_rows, updated_rows, skipped_rows, error_rows
+        - garantir tabela import_errors com:
+          import_run_id, row_number, raw_line (ou json), reason, created_at
+
+2) AJUSTE DO PARSER DA FOLHA (NORMAL E RÁPIDA)
+   2.1) A ordem e cabeçalho da Folha Servidor deve ser EXATAMENTE:
+        Orgão, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%,
+        Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG,
+        EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+   2.2) A Folha Pensionista deve ser EXATAMENTE:
+        Orgão, Instituidor, Matricula, Base Calc, Bruta 5%, Utilz 5%, Saldo 5%, Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%,
+        Bruta 35%, Utilz 35%, Saldo 35%, Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG,
+        EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
+
+   2.3) Normalizações obrigatórias:
+        - CPF: somente dígitos, padStart 11
+        - Matricula: string, trim, manter zeros (não virar number)
+        - Orgão: string (não pode ser ignorado)
+        - UPAG: string, somente dígitos, manter zeros (se vier com apóstrofo do Excel, remover)
+        - Números BR: "7.390,26" virar decimal correto
+        - Campos vazios virar NULL
+
+   2.4) Regras de vínculo e folha:
+        - localizar/crear pessoa por (tenant_id, cpf)
+        - localizar/crear vínculo por (tenant_id, cpf, matricula, orgao)
+        - salvar uf/rjur/sit_func/upag no vínculo e/ou na folha_mes conforme modelo atual
+        - salvar instituidor em extras do vínculo e também em extras da folha_mes quando for pensionista
+
+   2.5) UPSERT:
+        - nunca falhar por duplicidade
+        - se a mesma linha (mesmo vínculo+competência) aparecer duas vezes no mesmo arquivo, escolher a última ocorrência e registrar que houve duplicidade interna (contador de skipped/updated).
+
+3) AJUSTE DO D8 (NORMAL E RÁPIDO)
+   - Cruzamento por (tenant_id, cpf, matricula) continua, mas agora também deve:
+     - se orgao existir no D8, usar para localizar o vínculo correto
+     - se orgao não existir no D8, usar orgao = 'DESCONHECIDO' no vínculo do D8 e depois a folha completa
+   - Não sobrescrever nome com vazio
+   - numero_contrato sempre string sem notação científica
+
+4) IMPORTAÇÃO RÁPIDA: CORRIGIR ERRO 500 E DUPLICATE KEY
+   - O erro atual de unique constraint indica que o fast import está fazendo INSERT sem ON CONFLICT adequado na folha_mes.
+   - Ajustar o merge da folha para:
+     - staging -> merge em lote
+     - usar INSERT ... ON CONFLICT (tenant_id, vinculo_id, competencia) DO UPDATE
+     - garantir que vinculo_id seja resolvido corretamente considerando orgao
+   - Retornar resposta 200 com resumo do lote:
+     inserted, updated, skipped, errors
+   - Se houver erro por linha, gravar em import_errors e continuar processando.
+
+5) RELATÓRIOS E VISIBILIDADE (SEM PERDER PACOTES)
+   - Na tela Base de Clientes, cada import_run deve permitir:
+     - ver detalhes (página de gerenciamento do run)
+     - baixar CSV de erros
+     - ver resumo (total_rows, inserted, updated, skipped, errors)
+     - ver quantas linhas do arquivo foram realmente processadas e por que as demais não foram
+   - Se hoje “não entra na tela de gerenciamento”, corrigir rota/links e garantir que a tela abre.
+
+6) PADRONIZAÇÃO DE CONVÊNIOS
+   - Criar tabela convenios (tenant_id, nome_normalizado, nome_original, created_at)
+   - Normalizar: trim, uppercase, remover duplicados
+   - No modal de importação normal e rápida:
+     - dropdown com convênios existentes
+     - opção “criar novo” se não existir
+     - após criar, já aparecer nas próximas importações
+
+7) TEMPLATES REAIS PARA DOWNLOAD
+   - Implementar download de arquivos modelo (XLSX ou CSV) com cabeçalho exato e 1 linha exemplo de dados (mock).
+   - Botões visíveis na página:
+     - Modelo Folha Servidor
+     - Modelo Folha Pensionista (ESTÁ FALTANDO, CRIAR)
+     - Modelo D8 Servidor
+     - Modelo D8 Pensionista
+     - Modelo Contatos
+   - Garantir endpoints funcionando e os botões apontando para os endpoints corretos.
+
+8) DIVIDIR CSV: ACEITAR XLSX
+   - Na tela “Dividir CSV em Partes”, aceitar também XLSX.
+   - Converter XLSX -> CSV em streaming (sem carregar tudo na memória) e dividir em partes de 100.000 linhas mantendo cabeçalho.
+   - Arquivo de 168MB não pode travar nem dar timeout.
+   - Mostrar progresso e permitir baixar as partes.
+
+RESTRIÇÕES
+- Não quebrar funcionalidades já existentes.
+- Não remover importação normal, apenas corrigir e alinhar com o novo modelo.
+- Se precisar alterar schema, fazer migração segura e ajustar queries existentes.
+- Depois de implementar, rode testes simples com:
+  - Folha Servidor (25 colunas) contendo duplicidade de CPF+matricula com orgao diferente
+  - Folha Pensionista (26 colunas) com instituidor
+  - Fast import do mesmo arquivo em 100k linhas, confirmando que inserted+updated+skipped+errors = total_rows
+
+SAÍDA ESPERADA
+- Liste exatamente quais arquivos você alterou.
+- Mostre as migrations/SQL executadas.
+- Mostre exemplo de resposta JSON do endpoint de import com contadores.
+- Confirme que o erro de unique constraint não ocorre mais e que os relatórios de perdas/erros existem.
