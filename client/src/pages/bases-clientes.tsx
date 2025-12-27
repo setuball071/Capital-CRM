@@ -41,6 +41,7 @@ const MODELO_COLUNAS = {
     { nome: "orgao", descricao: "Nome do órgão/secretaria/autarquia" },
     { nome: "uf", descricao: "Estado do vínculo (opcional)" },
     { nome: "municipio", descricao: "Município (se existir)" },
+    { nome: "rejur", descricao: "Regime Jurídico (Ex: CLT, ESTATUTÁRIO)" },
     { nome: "situacao_funcional", descricao: "ATIVO, APOSENTADO, PENSIONISTA, CLT" },
     { nome: "data_nascimento", descricao: "Data de nascimento" },
     { nome: "idade", descricao: "Idade já calculada (se vier na planilha)" },
