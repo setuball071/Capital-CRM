@@ -1,0 +1,81 @@
+TAREFA CRÍTICA – CPF+MATRICULA NÃO É ÚNICO, PRECISA CONSIDERAR ORGÃO
+
+CONTEXTO
+Durante a importação da folha, encontramos linhas em que CPF e MATRICULA se repetem, mas o ORGAO é diferente (e também pode variar SIT_FUNC / RJUR).
+Hoje o sistema usa CPF+MATRICULA como balizador (UNIQUE / UPSERT). Isso faz o sistema:
+- sobrescrever um vínculo com outro
+- ou ignorar linhas
+- ou perder dados sem registrar
+
+OBJETIVO
+1) Ajustar o modelo para suportar múltiplos vínculos de folha para o mesmo CPF+MATRICULA quando ORGAO muda.
+2) Garantir que a importação não perca registros.
+3) Ajustar a tela de consulta para permitir selecionar o “vínculo/órgão” quando existir mais de um.
+
+PARTE A – BANCO (chaves corretas)
+1) Revisar tabelas existentes:
+- clientes_pessoa (pessoa)
+- clientes_vinculo (vínculo)
+- folha_mes (ou tabela mensal equivalente)
+
+2) Alterar o vínculo para ser único por:
+tenant_id + cpf + matricula + orgao
+
+Se hoje existe UNIQUE(tenant_id, cpf, matricula) em clientes_vinculo:
+- remover ou desabilitar esse UNIQUE
+- criar UNIQUE composto:
+UNIQUE(tenant_id, cpf, matricula, orgao)
+
+3) Alterar o registro mensal (folha_mes) para incluir orgao na âncora.
+A folha mensal deve ser única por:
+tenant_id + cpf + matricula + orgao + competencia
+
+Se hoje a folha_mes usa UNIQUE(tenant_id, cpf, matricula, competencia) ou depende do vinculo_id:
+- garantir que vinculo_id aponte para o vínculo correto (incluindo orgao)
+- criar UNIQUE(tenant_id, vinculo_id, competencia) ou UNIQUE(tenant_id, cpf, matricula, orgao, competencia)
+
+4) Migração de dados (obrigatório)
+Se já existem vínculos gravados sem orgao ou com orgao null:
+- setar orgao com valor do último import se tiver
+- ou manter orgao como campo obrigatório no import daqui pra frente
+- garantir que não quebra registros existentes (usar default 'DESCONHECIDO' apenas se não houver valor, mas logar como erro de qualidade)
+
+PARTE B – IMPORTADOR FOLHA (não perder dados)
+5) Atualizar o parser da folha (Servidor e Pensionista):
+- Normalizar ORGAO como TEXT (preservar zeros/formatos se existirem)
+- Ao criar/atualizar vínculo, usar chave: cpf+matricula+orgao (não mais só cpf+matricula)
+
+6) Processamento:
+- Upsert pessoa por CPF
+- Upsert vínculo por (cpf, matricula, orgao)
+- Inserir/Upsert folha_mes vinculando ao vínculo correto
+
+7) Logs:
+Se chegar linha com CPF+MATRICULA iguais e ORGAO diferente:
+- isso deve virar um novo vínculo, nunca sobrescrever
+
+PARTE C – UI (selector quando houver múltiplos vínculos)
+8) Na tela de consulta do cliente:
+- Se existir apenas 1 vínculo: mostrar normal
+- Se existir mais de 1 vínculo para o mesmo CPF:
+  - mostrar um seletor (dropdown) "Órgão / Vínculo"
+  - opções: ORGAO + SIT_FUNC (e opcionalmente UPAG)
+  - ao trocar, atualizar os dados exibidos (margens, situação, folha do mês, etc)
+
+9) Endpoint/API
+- Criar/ajustar endpoint que retorne:
+  - pessoa
+  - lista de vínculos (id, orgao, matricula, rjur, sit_func, upag, etc)
+  - folha_mes do vínculo selecionado (por competência)
+
+PARTE D – GARANTIA (teste obrigatório)
+10) Criar teste com 2 linhas iguais em CPF+MATRICULA mas ORGAO diferente:
+- ambas devem ser importadas
+- devem virar 2 vínculos distintos
+- UI deve permitir alternar entre eles
+
+ENTREGÁVEL
+- Migração aplicada com UNIQUE novo
+- Importador atualizado
+- UI com seletor de vínculo/órgão quando houver múltiplos
+- Nenhuma linha de folha deve sumir por conflito de chave

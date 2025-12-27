@@ -407,8 +407,8 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
 });
 
-// 2) clientes_vinculo - Vínculos CPF + Matrícula (âncora de cruzamento)
-// Permite um CPF ter múltiplas matrículas e vice-versa
+// 2) clientes_vinculo - Vínculos CPF + Matrícula + Órgão (âncora de cruzamento)
+// IMPORTANTE: A chave única é (cpf, matricula, orgao) - permite múltiplos vínculos por CPF+MATRICULA quando ORGAO muda
 export const clientesVinculo = pgTable("clientes_vinculo", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
@@ -416,8 +416,10 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como texto
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }),
   convenio: varchar("convenio", { length: 100 }),
-  orgao: varchar("orgao", { length: 255 }),
+  orgao: varchar("orgao", { length: 255 }).notNull().default("DESCONHECIDO"), // Órgão é parte da chave única
   upag: varchar("upag", { length: 100 }),
+  rjur: varchar("rjur", { length: 50 }), // Regime jurídico
+  sitFunc: varchar("sit_func", { length: 100 }), // Situação funcional (ATIVO, APOSENTADO, etc)
   ativo: boolean("ativo").notNull().default(true),
   primeiraImportacao: timestamp("primeira_importacao").notNull().defaultNow(),
   ultimaAtualizacao: timestamp("ultima_atualizacao").notNull().defaultNow(),
@@ -425,9 +427,11 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
 });
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
+// IMPORTANTE: vinculoId é a chave de relacionamento (vinculo = cpf+matricula+orgao)
 export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  vinculoId: integer("vinculo_id").references(() => clientesVinculo.id, { onDelete: "cascade" }), // Referência ao vínculo específico
   competencia: timestamp("competencia").notNull(), // Ex: 2025-11-01
   // Margem 5% (nova - era 30% antes)
   margemBruta5: decimal("margem_bruta_5", { precision: 12, scale: 2 }),
