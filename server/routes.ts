@@ -4623,15 +4623,23 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         folha: {
           atual: folhaAtual ? {
             competencia: folhaAtual.competencia,
-            margem_bruta_30: folhaAtual.margemBruta5 ? parseFloat(folhaAtual.margemBruta5) : null,
-            margem_utilizada_30: folhaAtual.margemUtilizada5 ? parseFloat(folhaAtual.margemUtilizada5) : null,
-            margem_saldo_30: folhaAtual.margemSaldo5 ? parseFloat(folhaAtual.margemSaldo5) : null,
+            // Margem 5% (cartão crédito consignado)
+            margem_bruta_5: folhaAtual.margemBruta5 ? parseFloat(folhaAtual.margemBruta5) : null,
+            margem_utilizada_5: folhaAtual.margemUtilizada5 ? parseFloat(folhaAtual.margemUtilizada5) : null,
+            margem_saldo_5: folhaAtual.margemSaldo5 ? parseFloat(folhaAtual.margemSaldo5) : null,
+            // Margem Benefício 5% (cartão benefício)
+            margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 ? parseFloat(folhaAtual.margemBeneficioBruta5) : null,
+            margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 ? parseFloat(folhaAtual.margemBeneficioUtilizada5) : null,
+            margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 ? parseFloat(folhaAtual.margemBeneficioSaldo5) : null,
+            // Margem 35%
             margem_bruta_35: folhaAtual.margemBruta35 ? parseFloat(folhaAtual.margemBruta35) : null,
             margem_utilizada_35: folhaAtual.margemUtilizada35 ? parseFloat(folhaAtual.margemUtilizada35) : null,
             margem_saldo_35: folhaAtual.margemSaldo35 ? parseFloat(folhaAtual.margemSaldo35) : null,
+            // Margem 70%
             margem_bruta_70: folhaAtual.margemBruta70 ? parseFloat(folhaAtual.margemBruta70) : null,
             margem_utilizada_70: folhaAtual.margemUtilizada70 ? parseFloat(folhaAtual.margemUtilizada70) : null,
             margem_saldo_70: folhaAtual.margemSaldo70 ? parseFloat(folhaAtual.margemSaldo70) : null,
+            // Campos legados (mantidos para compatibilidade)
             margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo ? parseFloat(folhaAtual.margemCartaoCreditoSaldo) : null,
             margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo ? parseFloat(folhaAtual.margemCartaoBeneficioSaldo) : null,
             salario_bruto: folhaAtual.salarioBruto ? parseFloat(folhaAtual.salarioBruto) : null,
@@ -4645,7 +4653,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           } : null,
           historico: folhaHistorico.map(f => ({
             competencia: f.competencia,
-            margem_saldo_30: f.margemSaldo5 ? parseFloat(f.margemSaldo5) : null,
+            margem_saldo_5: f.margemSaldo5 ? parseFloat(f.margemSaldo5) : null,
+            margem_beneficio_saldo_5: f.margemBeneficioSaldo5 ? parseFloat(f.margemBeneficioSaldo5) : null,
             margem_saldo_35: f.margemSaldo35 ? parseFloat(f.margemSaldo35) : null,
             margem_saldo_70: f.margemSaldo70 ? parseFloat(f.margemSaldo70) : null,
             liquido: f.liquido ? parseFloat(f.liquido) : null,

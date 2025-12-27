@@ -81,15 +81,23 @@ interface ClienteDetalhadoPessoa {
 
 interface FolhaAtual {
   competencia: string;
-  margem_bruta_30: number | null;
-  margem_utilizada_30: number | null;
-  margem_saldo_30: number | null;
+  // Margem 5% (cartão crédito consignado)
+  margem_bruta_5: number | null;
+  margem_utilizada_5: number | null;
+  margem_saldo_5: number | null;
+  // Margem Benefício 5% (cartão benefício)
+  margem_beneficio_bruta_5: number | null;
+  margem_beneficio_utilizada_5: number | null;
+  margem_beneficio_saldo_5: number | null;
+  // Margem 35%
   margem_bruta_35: number | null;
   margem_utilizada_35: number | null;
   margem_saldo_35: number | null;
+  // Margem 70%
   margem_bruta_70: number | null;
   margem_utilizada_70: number | null;
   margem_saldo_70: number | null;
+  // Campos legados
   margem_cartao_credito_saldo: number | null;
   margem_cartao_beneficio_saldo: number | null;
   salario_bruto: number | null;
@@ -104,7 +112,8 @@ interface FolhaAtual {
 
 interface FolhaHistorico {
   competencia: string;
-  margem_saldo_30: number | null;
+  margem_saldo_5: number | null;
+  margem_beneficio_saldo_5: number | null;
   margem_saldo_35: number | null;
   margem_saldo_70: number | null;
   liquido: number | null;
@@ -762,138 +771,117 @@ export default function ConsultaCliente() {
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Margem 70% - Compulsória (SIAPE) - só exibe se tiver dados */}
-                        {(clienteDetalhado.folha.atual.margem_bruta_70 !== null || 
-                          clienteDetalhado.folha.atual.margem_utilizada_70 !== null || 
-                          clienteDetalhado.folha.atual.margem_saldo_70 !== null) && (
-                          <Card className="bg-muted/50">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem 70%</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_70)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_70)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_70)}</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Margem 35% - Consignado - só exibe se tiver dados */}
-                        {(clienteDetalhado.folha.atual.margem_bruta_35 !== null || 
-                          clienteDetalhado.folha.atual.margem_utilizada_35 !== null || 
-                          clienteDetalhado.folha.atual.margem_saldo_35 !== null) && (
-                          <Card className="bg-muted/50">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem 35%</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_35)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_35)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_35)}</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Cartão de Crédito (5%) - só exibe se tiver dados */}
-                        {clienteDetalhado.folha.atual.margem_cartao_credito_saldo !== null && (
-                          <Card className="bg-muted/50">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Cartão Crédito</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo Disponível:</span>
-                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_cartao_credito_saldo)}</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Cartão Benefício (5%) - só exibe se tiver dados */}
-                        {clienteDetalhado.folha.atual.margem_cartao_beneficio_saldo !== null && (
-                          <Card className="bg-muted/50">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Cartão Benefício</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo Disponível:</span>
-                                  <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_cartao_beneficio_saldo)}</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Rendimentos - só exibe se tiver dados */}
-                        {(clienteDetalhado.folha.atual.salario_bruto !== null ||
-                          clienteDetalhado.folha.atual.descontos_brutos !== null ||
-                          clienteDetalhado.folha.atual.salario_liquido !== null) && (
-                          <Card className="bg-blue-50 dark:bg-blue-950/30" data-testid="card-rendimentos">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Rendimentos</p>
-                              <div className="space-y-1 text-sm">
-                                {clienteDetalhado.folha.atual.salario_bruto !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Bruto:</span>
-                                    <span>{formatCurrency(clienteDetalhado.folha.atual.salario_bruto)}</span>
-                                  </div>
-                                )}
-                                {clienteDetalhado.folha.atual.descontos_brutos !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Descontos:</span>
-                                    <span className="text-red-600">{formatCurrency(clienteDetalhado.folha.atual.descontos_brutos)}</span>
-                                  </div>
-                                )}
-                                {clienteDetalhado.folha.atual.salario_liquido !== null && (
-                                  <div className="flex justify-between font-medium">
-                                    <span>Líquido:</span>
-                                    <span className="text-blue-600">{formatCurrency(clienteDetalhado.folha.atual.salario_liquido)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-
-                      {/* Margem 30% - Só mostrar se existir dados (outros convênios) */}
-                      {(clienteDetalhado.folha.atual.margem_bruta_30 !== null || 
-                        clienteDetalhado.folha.atual.margem_utilizada_30 !== null || 
-                        clienteDetalhado.folha.atual.margem_saldo_30 !== null) && (
-                        <Card className="bg-muted/50 max-w-sm">
+                        {/* Margem 70% - Compulsória (SIAPE) */}
+                        <Card className="bg-muted/50" data-testid="card-margem-70">
                           <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Margem 30%</p>
+                            <p className="text-sm font-medium mb-2">Margem 70%</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_30)}</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_70)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_30)}</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_70)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_30)}</span>
+                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_70)}</span>
                               </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Margem 35% - Consignado */}
+                        <Card className="bg-muted/50" data-testid="card-margem-35">
+                          <CardContent className="p-4">
+                            <p className="text-sm font-medium mb-2">Margem 35%</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bruta:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_35)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Utilizada:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_35)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Saldo:</span>
+                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_35)}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Margem 5% - Cartão Crédito Consignado */}
+                        <Card className="bg-muted/50" data-testid="card-margem-5">
+                          <CardContent className="p-4">
+                            <p className="text-sm font-medium mb-2">Margem 5%</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bruta:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_5)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Utilizada:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_5)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Saldo:</span>
+                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_5)}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Margem Benefício 5% - Cartão Benefício */}
+                        <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
+                          <CardContent className="p-4">
+                            <p className="text-sm font-medium mb-2">Benefício 5%</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bruta:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_bruta_5)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Utilizada:</span>
+                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_utilizada_5)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Saldo:</span>
+                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_saldo_5)}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Rendimentos - só exibe se tiver dados */}
+                      {(clienteDetalhado.folha.atual.salario_bruto !== null ||
+                        clienteDetalhado.folha.atual.descontos_brutos !== null ||
+                        clienteDetalhado.folha.atual.salario_liquido !== null) && (
+                        <Card className="bg-blue-50 dark:bg-blue-950/30 max-w-sm" data-testid="card-rendimentos">
+                          <CardContent className="p-4">
+                            <p className="text-sm font-medium mb-2">Rendimentos</p>
+                            <div className="space-y-1 text-sm">
+                              {clienteDetalhado.folha.atual.salario_bruto !== null && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruto:</span>
+                                  <span>{formatCurrency(clienteDetalhado.folha.atual.salario_bruto)}</span>
+                                </div>
+                              )}
+                              {clienteDetalhado.folha.atual.descontos_brutos !== null && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Descontos:</span>
+                                  <span className="text-red-600">{formatCurrency(clienteDetalhado.folha.atual.descontos_brutos)}</span>
+                                </div>
+                              )}
+                              {clienteDetalhado.folha.atual.salario_liquido !== null && (
+                                <div className="flex justify-between font-medium">
+                                  <span>Líquido:</span>
+                                  <span className="text-blue-600">{formatCurrency(clienteDetalhado.folha.atual.salario_liquido)}</span>
+                                </div>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
@@ -928,8 +916,10 @@ export default function ConsultaCliente() {
                                 <TableHeader>
                                   <TableRow>
                                     <TableHead>Competência</TableHead>
-                                    <TableHead>Saldo 70%</TableHead>
-                                    <TableHead>Saldo 35%</TableHead>
+                                    <TableHead>70%</TableHead>
+                                    <TableHead>35%</TableHead>
+                                    <TableHead>5%</TableHead>
+                                    <TableHead>Benef. 5%</TableHead>
                                     <TableHead>Líquido</TableHead>
                                     <TableHead>Base</TableHead>
                                   </TableRow>
@@ -940,6 +930,8 @@ export default function ConsultaCliente() {
                                       <TableCell>{formatDate(f.competencia)}</TableCell>
                                       <TableCell>{formatCurrency(f.margem_saldo_70)}</TableCell>
                                       <TableCell>{formatCurrency(f.margem_saldo_35)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_5)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_beneficio_saldo_5)}</TableCell>
                                       <TableCell>{formatCurrency(f.liquido)}</TableCell>
                                       <TableCell>
                                         <Badge variant="outline" className="text-xs">{f.base_tag}</Badge>
