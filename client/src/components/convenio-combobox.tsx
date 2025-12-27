@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-interface Convenio {
-  id: number;
-  code: string;
-  label: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import type { Convenio } from "@shared/schema";
 
 interface ConvenioComboboxProps {
   value: string;
@@ -35,12 +31,13 @@ interface ConvenioComboboxProps {
 export function ConvenioCombobox({ 
   value, 
   onChange, 
-  placeholder = "Selecione o convênio...",
+  placeholder = "Selecione ou crie um convênio...",
   disabled = false,
   testId = "combobox-convenio"
 }: ConvenioComboboxProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const { toast } = useToast();
   
   const { data: convenios = [], isLoading } = useQuery<Convenio[]>({
     queryKey: ["/api/convenios"],
@@ -56,6 +53,17 @@ export function ConvenioCombobox({
       onChange(newConvenio.code);
       setOpen(false);
       setSearchValue("");
+      toast({
+        title: "Convênio criado",
+        description: `"${newConvenio.label}" foi adicionado com sucesso.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar convênio",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     },
   });
   

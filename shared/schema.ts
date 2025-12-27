@@ -40,7 +40,7 @@ export const convenios = pgTable("convenios", {
 
 export const insertConvenioSchema = createInsertSchema(convenios, {
   label: z.string().min(2, "Mínimo 2 caracteres").max(40, "Máximo 40 caracteres"),
-}).omit({ id: true, createdAt: true, code: true });
+}).omit({ id: true, createdAt: true, code: true, tenantId: true });
 
 export type Convenio = typeof convenios.$inferSelect;
 export type InsertConvenio = z.infer<typeof insertConvenioSchema>;
