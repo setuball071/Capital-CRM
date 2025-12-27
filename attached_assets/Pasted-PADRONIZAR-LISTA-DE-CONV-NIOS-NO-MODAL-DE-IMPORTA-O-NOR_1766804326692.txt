@@ -1,0 +1,71 @@
+PADRONIZAR LISTA DE CONVÊNIOS NO MODAL DE IMPORTAÇÃO (NORMAL E RÁPIDA) + CRIAR NOVO CONVÊNIO
+
+CENÁRIO
+No modal de importação aparece “Siape” e “SIAPE” (duplicado por variação de caixa). Quero padronização total.
+Se o convênio não existir, o usuário pode criar. Depois de criado, nas próximas importações ele deve aparecer automaticamente na lista padronizada.
+
+OBJETIVO
+1) Ter uma lista única e padronizada de convênios por tenant.
+2) Evitar duplicações por caixa, espaços, acentos e variações (“Siape”, “SIAPE”, “siape ”).
+3) Permitir criar um convênio novo no modal e persistir no banco.
+4) Usar o mesmo componente/lista no Importar Base (normal) e Importação Rápida.
+
+REGRA DE PADRONIZAÇÃO
+- Criar função normalizeConvenio(input):
+  - trim
+  - remover múltiplos espaços
+  - remover acentos
+  - uppercase
+Exemplos:
+" Siape " -> "SIAPE"
+"Gov Sp" -> "GOV SP"
+"INSS" -> "INSS"
+
+BANCO DE DADOS
+Criar tabela convenios (por tenant):
+- id (uuid)
+- tenant_id (uuid)
+- code (text)  -> valor normalizado (ex "SIAPE")
+- label (text) -> valor exibido (ex "SIAPE" ou "GOV SP")
+- created_at
+UNIQUE: (tenant_id, code)
+
+API
+1) GET /api/convenios
+- retorna lista ordenada por label
+- sempre baseada no tenant_id do usuário logado
+
+2) POST /api/convenios
+Body: { label: string }
+- normalizar: code = normalizeConvenio(label)
+- UPSERT:
+  - se já existir (tenant_id, code), retornar existente
+  - se não existir, criar e retornar
+- validações:
+  - label obrigatório
+  - tamanho 2..40
+- retornar { id, code, label }
+
+FRONTEND (MODAIS)
+1) Substituir input livre por SELECT com busca (combobox):
+- opções vindas do GET /api/convenios
+- exibir label
+- armazenar code no payload da importação
+
+2) Se usuário digitar algo que não existe:
+- mostrar opção “Criar convênio ‘X’”
+- ao clicar, chamar POST /api/convenios {label: X}
+- ao retornar, adicionar na lista e selecionar automaticamente
+
+3) Garantir que o valor enviado na importação seja sempre code (normalizado)
+- tanto no fluxo normal quanto no fast import
+
+INTEGRAÇÃO COM IMPORTAÇÃO
+- No backend, ao receber convenio, normalizar novamente (defensivo)
+- Salvar sempre o convenio normalizado no import_run / bases_importadas
+
+ENTREGÁVEIS
+- Lista de convênios sem duplicidade por caixa/acentos
+- Botão/ação de criar convênio no modal
+- Próximas importações puxam convênios já criados
+- Mesma UX nos dois modais (normal e rápida)

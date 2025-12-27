@@ -27,6 +27,24 @@ export const tenantDomains = pgTable("tenant_domains", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Convenios - lista padronizada de convênios por tenant
+export const convenios = pgTable("convenios", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  code: varchar("code", { length: 50 }).notNull(), // Valor normalizado (SIAPE, INSS, GOV SP)
+  label: varchar("label", { length: 50 }).notNull(), // Valor exibido
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantCodeIdx: uniqueIndex("idx_convenios_tenant_code").on(table.tenantId, table.code),
+}));
+
+export const insertConvenioSchema = createInsertSchema(convenios, {
+  label: z.string().min(2, "Mínimo 2 caracteres").max(40, "Máximo 40 caracteres"),
+}).omit({ id: true, createdAt: true, code: true });
+
+export type Convenio = typeof convenios.$inferSelect;
+export type InsertConvenio = z.infer<typeof insertConvenioSchema>;
+
 // User Tenants - links users to their allowed tenants
 export const userTenants = pgTable("user_tenants", {
   id: serial("id").primaryKey(),
