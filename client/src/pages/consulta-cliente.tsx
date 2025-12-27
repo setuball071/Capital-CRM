@@ -402,6 +402,11 @@ export default function ConsultaCliente() {
     setSelectedConvenio("");
   };
 
+  // Obter o vínculo atualmente selecionado para exibir dados corretos
+  const vinculoAtual = clienteDetalhado?.vinculos?.find(v => v.id === selectedVinculoId) 
+    || clienteDetalhado?.vinculos?.find(v => v.id === clienteDetalhado.vinculo_selecionado)
+    || clienteDetalhado?.vinculos?.[0];
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
@@ -625,7 +630,7 @@ export default function ConsultaCliente() {
                     <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">Matrícula</p>
                       <p className="font-mono" data-testid="text-matricula">
-                        <CopyableField value={clienteDetalhado.pessoa.matricula} label="Matrícula" onCopy={handleCopy} />
+                        <CopyableField value={vinculoAtual?.matricula || clienteDetalhado.pessoa.matricula} label="Matrícula" onCopy={handleCopy} />
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -634,7 +639,7 @@ export default function ConsultaCliente() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Situação Funcional</p>
-                      <Badge variant="secondary">{clienteDetalhado.pessoa.sit_func || "-"}</Badge>
+                      <Badge variant="secondary">{vinculoAtual?.sit_func || clienteDetalhado.pessoa.sit_func || "-"}</Badge>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Natureza</p>
@@ -668,14 +673,14 @@ export default function ConsultaCliente() {
                         <Building2 className="w-4 h-4" />
                         Órgão
                       </p>
-                      <p>{clienteDetalhado.pessoa.orgao || "-"}</p>
+                      <p>{vinculoAtual?.orgao || clienteDetalhado.pessoa.orgao || "-"}</p>
                       {clienteDetalhado.pessoa.orgaocod && (
                         <p className="text-xs text-muted-foreground">Código: {clienteDetalhado.pessoa.orgaocod}</p>
                       )}
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Regime Jurídico (REJUR)</p>
-                      <p>{clienteDetalhado.pessoa.rjur || "-"}</p>
+                      <p>{vinculoAtual?.rjur || clienteDetalhado.pessoa.rjur || "-"}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
