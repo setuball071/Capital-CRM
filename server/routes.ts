@@ -3605,6 +3605,32 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE excluir import run e linhas associadas
+  app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      
+      // Deletar linhas de rastreabilidade primeiro
+      await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
+      
+      // Deletar erros do import
+      await db.execute(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
+      
+      // Deletar o registro principal
+      const result = await db.delete(importRuns).where(eq(importRuns.id, runId)).returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      console.log(`[ImportRun] Deleted run ${runId} and associated data`);
+      return res.json({ success: true, message: "Import excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete import run error:", error);
+      return res.status(500).json({ message: "Erro ao excluir import" });
+    }
+  });
+
   // GET download de TODAS as linhas com erro em CSV (usando import_run_rows)
   app.get("/api/import-runs/:id/rows/errors/download", requireAuth, requireMaster, async (req, res) => {
     try {

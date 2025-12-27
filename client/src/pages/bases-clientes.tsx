@@ -342,6 +342,32 @@ export default function BasesClientes() {
     }
   };
 
+  const deleteImportRun = async (runId: number) => {
+    if (!confirm(`Tem certeza que deseja excluir a importação #${runId}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/import-runs/${runId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Erro ao excluir importação");
+      }
+      toast({
+        title: "Importação excluída",
+        description: `Importação #${runId} foi excluída com sucesso.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir a importação.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const importMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await fetch("/api/bases/import", {
@@ -1072,6 +1098,15 @@ export default function BasesClientes() {
                           <Download className="w-4 h-4 text-destructive" />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteImportRun(run.id)}
+                        title="Excluir importação"
+                        data-testid={`button-delete-run-${run.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
