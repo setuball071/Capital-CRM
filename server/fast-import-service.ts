@@ -111,10 +111,14 @@ class FastImportService {
     const { normalizeConvenio } = await import("@shared/utils");
     const normalizedConvenio = options.convenio ? normalizeConvenio(options.convenio) : null;
 
+    // CRÍTICO: tenantId é obrigatório para isolamento multi-tenant
+    // Fallback para tenant 1 (goldcard) para compatibilidade com workflows legados
+    const tenantId = options.tenantId || 1;
+
     const [importRun] = await db
       .insert(importRuns)
       .values({
-        tenantId: options.tenantId || null,
+        tenantId,
         tipoImport: options.tipoImport,
         competencia: options.competencia || null,
         banco: options.banco || null,
@@ -474,7 +478,8 @@ class FastImportService {
   private async mergeFolha(run: ImportRun): Promise<{ merged: number; errors: number }> {
     const competencia = run.competencia || new Date();
     const convenio = run.convenio || "SIAPE";
-    const tenantId = run.tenantId || null;
+    // Fallback para tenant 1 (goldcard) para compatibilidade
+    const tenantId = run.tenantId || 1;
     const baseTag = run.baseTag || "";
 
     console.log(`[FastImport] Starting SQL-based merge for folha...`);
@@ -512,8 +517,9 @@ class FastImportService {
     console.log(`[FastImport] Pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
     const vinculoResult = await db.execute(sql`
-      INSERT INTO clientes_vinculo (cpf, matricula, orgao, convenio, pessoa_id, upag, rjur, sit_func, import_run_id, base_tag)
+      INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, upag, rjur, sit_func, import_run_id, base_tag)
       SELECT DISTINCT ON (s.cpf, s.matricula, COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
+        ${tenantId}::integer,
         s.cpf,
         s.matricula,
         COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'),
@@ -529,7 +535,7 @@ class FastImportService {
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
-      ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
+      ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
         pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
         upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
         rjur = COALESCE(EXCLUDED.rjur, clientes_vinculo.rjur),
@@ -581,7 +587,8 @@ class FastImportService {
         ${run.id}
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
-      JOIN clientes_vinculo v ON v.cpf = s.cpf 
+      JOIN clientes_vinculo v ON v.tenant_id = ${tenantId}::integer
+        AND v.cpf = s.cpf 
         AND v.matricula = s.matricula 
         AND v.orgao = COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO')
       WHERE s.import_run_id = ${run.id}
@@ -621,7 +628,8 @@ class FastImportService {
 
   private async mergeD8(run: ImportRun): Promise<{ merged: number; errors: number }> {
     const banco = run.banco || "DESCONHECIDO";
-    const tenantId = run.tenantId || null;
+    // Fallback para tenant 1 (goldcard) para compatibilidade
+    const tenantId = run.tenantId || 1;
 
     console.log(`[FastImport] Starting SQL-based merge for D8...`);
 
