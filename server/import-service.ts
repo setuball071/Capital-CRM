@@ -37,11 +37,12 @@ export const COLUMN_MAP: Record<string, string> = {
   agencia_salario: "agencia_salario",
   conta_salario: "conta_salario",
   
-  // === UPAG (Header: "ARQ. UPAG") ===
+  // === UPAG (Header: "ARQ. UPAG") - sinônimos expandidos ===
   upag: "upag",
   arq_upag: "upag",
   arqupag: "upag",
   arq__upag: "upag",
+  arq_upag_: "upag", // "ARQ. UPAG" normalizado com trailing
   
   // === RJUR (Header: "RJUR") ===
   rejur: "rjur",
@@ -49,18 +50,17 @@ export const COLUMN_MAP: Record<string, string> = {
   regime_juridico: "rjur",
   
   // === SALÁRIO/RENDIMENTOS (Headers: "Créditos", "Débitos", "Líquido") ===
-  // Créditos → creditos (salario_bruto na UI)
+  // Créditos → creditos (sinônimo: salario_bruto)
   creditos: "creditos",
   credito: "creditos",
-  // Débitos → debitos (descontos_brutos na UI)
+  salario_bruto: "creditos", // Legado → Créditos
+  // Débitos → debitos (sinônimo: descontos_brutos)
   debitos: "debitos",
   debito: "debitos",
-  // Líquido → liquido (salario_liquido na UI)
+  descontos_brutos: "debitos", // Legado → Débitos
+  // Líquido → liquido (sinônimo: salario_liquido)
   liquido: "liquido",
-  // Campos legados diretos (mapeamento alternativo)
-  salario_bruto: "salario_bruto",
-  descontos_brutos: "descontos_brutos",
-  salario_liquido: "salario_liquido",
+  salario_liquido: "liquido", // Legado → Líquido
   
   competencia_folha: "competencia_folha",
   
