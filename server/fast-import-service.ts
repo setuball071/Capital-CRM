@@ -822,16 +822,21 @@ class FastImportService {
   private async insertStagingBatch(tipoImport: string, batch: any[]): Promise<void> {
     if (batch.length === 0) return;
 
-    switch (tipoImport) {
-      case "folha":
-        await db.insert(stagingFolha).values(batch);
-        break;
-      case "d8":
-        await db.insert(stagingD8).values(batch);
-        break;
-      case "contatos":
-        await db.insert(stagingContatos).values(batch);
-        break;
+    // Insert in smaller chunks to avoid Neon HTTP payload limit
+    for (let i = 0; i < batch.length; i += SQL_INSERT_CHUNK) {
+      const chunk = batch.slice(i, i + SQL_INSERT_CHUNK);
+      
+      switch (tipoImport) {
+        case "folha":
+          await db.insert(stagingFolha).values(chunk);
+          break;
+        case "d8":
+          await db.insert(stagingD8).values(chunk);
+          break;
+        case "contatos":
+          await db.insert(stagingContatos).values(chunk);
+          break;
+      }
     }
   }
 
