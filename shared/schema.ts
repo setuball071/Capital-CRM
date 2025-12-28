@@ -428,10 +428,10 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
 });
 
 // 2) clientes_vinculo - Vínculos CPF + Matrícula + Órgão (âncora de cruzamento)
-// IMPORTANTE: A chave única é (cpf, matricula, orgao) - permite múltiplos vínculos por CPF+MATRICULA quando ORGAO muda
+// IMPORTANTE: A chave única é (tenant_id, cpf, matricula, orgao) para isolamento multi-tenant
 export const clientesVinculo = pgTable("clientes_vinculo", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
   cpf: varchar("cpf", { length: 14 }).notNull(), // CPF padStart 11
   matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como texto
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }),
@@ -448,7 +448,8 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
-  cpfMatriculaOrgaoIdx: uniqueIndex("idx_vinculo_cpf_mat_orgao").on(table.cpf, table.matricula, table.orgao),
+  // Chave única multi-tenant: (tenant_id, cpf, matricula, orgao)
+  tenantCpfMatOrgaoIdx: uniqueIndex("idx_vinculo_tenant_cpf_mat_orgao").on(table.tenantId, table.cpf, table.matricula, table.orgao),
 }));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
