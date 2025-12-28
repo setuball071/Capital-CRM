@@ -9274,6 +9274,131 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // DELETE /api/admin/reset-tenant-data - Hard delete all client data for current tenant (MASTER ONLY)
+  app.delete("/api/admin/reset-tenant-data", requireAuth, requireMaster, async (req, res) => {
+    const tenantId = req.tenantId || 1;
+    const startTime = Date.now();
+    
+    console.log(`[RESET-TENANT] ========== INICIANDO LIMPEZA FORTE TENANT ${tenantId} ==========`);
+    
+    try {
+      const result = await db.execute(sql`
+        WITH 
+        -- 1. Deletar contratos de pessoas do tenant
+        deleted_contratos AS (
+          DELETE FROM clientes_contratos 
+          WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})
+          RETURNING id
+        ),
+        -- 2. Deletar folhas de pessoas do tenant
+        deleted_folhas AS (
+          DELETE FROM clientes_folha_mes 
+          WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})
+          RETURNING id
+        ),
+        -- 3. Deletar contatos de pessoas do tenant
+        deleted_contatos AS (
+          DELETE FROM client_contacts 
+          WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})
+          RETURNING id
+        ),
+        -- 4. Deletar vínculos do tenant
+        deleted_vinculos AS (
+          DELETE FROM clientes_vinculo 
+          WHERE tenant_id = ${tenantId}
+          RETURNING id
+        ),
+        -- 5. Deletar pessoas do tenant
+        deleted_pessoas AS (
+          DELETE FROM clientes_pessoa 
+          WHERE tenant_id = ${tenantId}
+          RETURNING id
+        ),
+        -- 6. Deletar import_run_rows dos runs do tenant
+        deleted_run_rows AS (
+          DELETE FROM import_run_rows 
+          WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})
+          RETURNING id
+        ),
+        -- 7. Deletar import_errors dos runs do tenant
+        deleted_errors AS (
+          DELETE FROM import_errors 
+          WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})
+          RETURNING id
+        ),
+        -- 8. Deletar import_runs do tenant
+        deleted_runs AS (
+          DELETE FROM import_runs 
+          WHERE tenant_id = ${tenantId}
+          RETURNING id
+        ),
+        -- 9. Deletar bases_importadas do tenant
+        deleted_bases AS (
+          DELETE FROM bases_importadas 
+          WHERE tenant_id = ${tenantId}
+          RETURNING id
+        )
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_contratos) as contratos,
+          (SELECT COUNT(*) FROM deleted_folhas) as folhas,
+          (SELECT COUNT(*) FROM deleted_contatos) as contatos,
+          (SELECT COUNT(*) FROM deleted_vinculos) as vinculos,
+          (SELECT COUNT(*) FROM deleted_pessoas) as pessoas,
+          (SELECT COUNT(*) FROM deleted_run_rows) as run_rows,
+          (SELECT COUNT(*) FROM deleted_errors) as errors,
+          (SELECT COUNT(*) FROM deleted_runs) as runs,
+          (SELECT COUNT(*) FROM deleted_bases) as bases
+      `);
+      
+      const counts = result.rows[0] as any;
+      const elapsedMs = Date.now() - startTime;
+      
+      console.log(`[RESET-TENANT] Contratos deletados: ${counts.contratos}`);
+      console.log(`[RESET-TENANT] Folhas deletadas: ${counts.folhas}`);
+      console.log(`[RESET-TENANT] Contatos deletados: ${counts.contatos}`);
+      console.log(`[RESET-TENANT] Vínculos deletados: ${counts.vinculos}`);
+      console.log(`[RESET-TENANT] Pessoas deletadas: ${counts.pessoas}`);
+      console.log(`[RESET-TENANT] Run rows deletadas: ${counts.run_rows}`);
+      console.log(`[RESET-TENANT] Errors deletados: ${counts.errors}`);
+      console.log(`[RESET-TENANT] Import runs deletados: ${counts.runs}`);
+      console.log(`[RESET-TENANT] Bases deletadas: ${counts.bases}`);
+      console.log(`[RESET-TENANT] ========== LIMPEZA CONCLUÍDA EM ${elapsedMs}ms ==========`);
+      
+      // Rodar snapshot para retornar contagens atualizadas
+      const snapshot = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as clientes_pessoa,
+          (SELECT COUNT(*) FROM clientes_vinculo WHERE tenant_id = ${tenantId}) as clientes_vinculo,
+          (SELECT COUNT(*) FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as clientes_folha_mes,
+          (SELECT COUNT(*) FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as clientes_contratos,
+          (SELECT COUNT(*) FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as client_contacts,
+          (SELECT COUNT(*) FROM bases_importadas WHERE tenant_id = ${tenantId}) as bases_importadas,
+          (SELECT COUNT(*) FROM import_runs WHERE tenant_id = ${tenantId}) as import_runs
+      `);
+      
+      return res.json({
+        success: true,
+        tenantId,
+        deleted: {
+          contratos: parseInt(counts.contratos || "0"),
+          folhas: parseInt(counts.folhas || "0"),
+          contatos: parseInt(counts.contatos || "0"),
+          vinculos: parseInt(counts.vinculos || "0"),
+          pessoas: parseInt(counts.pessoas || "0"),
+          run_rows: parseInt(counts.run_rows || "0"),
+          errors: parseInt(counts.errors || "0"),
+          import_runs: parseInt(counts.runs || "0"),
+          bases_importadas: parseInt(counts.bases || "0"),
+        },
+        remainingCounts: snapshot.rows[0],
+        elapsedMs,
+      });
+    } catch (error: any) {
+      console.error(`[RESET-TENANT] ERRO: ${error.message}`);
+      return res.status(500).json({ message: error.message || "Erro ao limpar dados do tenant" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
