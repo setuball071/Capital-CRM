@@ -237,6 +237,7 @@ declare global {
 }
 
 // Auth middleware
+// Deriva tenantId do usuário autenticado, não depende de header
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Não autorizado" });
@@ -248,6 +249,26 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   req.user = user;
+  
+  // CRÍTICO: Derivar tenantId do usuário autenticado
+  // Prioridade: user.tenantId > session.tenantId > req.tenantId (domínio - apenas para masters)
+  if (user.tenantId) {
+    // Usuário tem tenant fixo - usar sempre esse
+    req.tenantId = user.tenantId;
+  } else if (user.isMaster) {
+    // Master pode operar em qualquer tenant - usar da sessão ou domínio
+    if (req.session.tenantId) {
+      req.tenantId = req.session.tenantId;
+    }
+    // Se ainda não tiver, req.tenantId pode vir do resolveTenant (domínio)
+    // Em dev, pode usar fallback para tenant 1
+    if (!req.tenantId && process.env.NODE_ENV === "development") {
+      req.tenantId = 1;
+    }
+  }
+  // Para não-masters sem tenantId, req.tenantId permanece undefined
+  // e endpoints que exigem tenant retornarão 401
+  
   next();
 }
 
@@ -3087,8 +3108,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Base não encontrada" });
       }
       
-      // tenantId será derivado autoritativamente da base no storage - não usar fallbacks
-      const userTenantId = req.user?.tenantId;
+      // tenantId derivado do usuário autenticado via requireAuth
+      const userTenantId = req.tenantId;
       
       console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome} (baseTenant: ${base.tenantId}, userTenant: ${userTenantId}, status: ${base.status}, importRunId: ${base.importRunId})`);
       
@@ -3547,7 +3568,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // GET lista de convênios do tenant
   app.get("/api/convenios", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = req.user?.tenantId || 1;
+      const tenantId = req.tenantId || 1;
       const conveniosList = await storage.getConvenios(tenantId);
       return res.json(conveniosList);
     } catch (error) {
@@ -3573,7 +3594,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
       
       const { label } = parseResult.data;
-      const tenantId = req.user?.tenantId || 1;
+      const tenantId = req.tenantId || 1;
       const code = normalizeConvenio(label);
       
       // Store normalized code and user-friendly label
@@ -3745,7 +3766,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const runId = parseInt(req.params.id);
-      const userTenantId = req.user?.tenantId;
+      const userTenantId = req.tenantId;
       
       console.log(`[ImportRun] Starting TRANSACTIONAL cascading delete for run ${runId} (userTenant: ${userTenantId})...`);
       
@@ -4700,16 +4721,19 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
-  // CRÍTICO: Sempre filtra por tenant_id do usuário logado
+  // CRÍTICO: Sempre filtra por tenant_id derivado do usuário autenticado
   app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const { cpf, matricula, convenio, base } = req.query;
-      const userTenantId = req.user?.tenantId;
+      // CRÍTICO: Usar req.tenantId que é derivado do usuário autenticado pelo requireAuth
+      const userTenantId = req.tenantId;
       
-      // CRÍTICO: tenant_id obrigatório para isolamento
+      // CRÍTICO: tenant_id obrigatório para isolamento multi-tenant
       if (!userTenantId) {
-        console.error("[Consulta Cliente] ERROR: No tenantId in session");
-        return res.status(400).json({ message: "Tenant ID obrigatório" });
+        console.error("[Consulta Cliente] ERROR: No tenantId - user may not have tenant assigned");
+        return res.status(401).json({ 
+          message: "Sessão inválida. Seu usuário não está vinculado a um ambiente. Faça login novamente ou contate o administrador." 
+        });
       }
       
       // Validate at least one search parameter is provided
@@ -7687,7 +7711,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "ID de pessoa inválido" });
       }
 
-      const userTenantId = req.user!.tenantId;
+      const userTenantId = req.tenantId;
       const isMaster = req.user!.isMaster;
 
       // Find all leads for this pessoa, filtered by tenant
@@ -7743,7 +7767,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "ID de pessoa inválido" });
       }
 
-      const userTenantId = req.user!.tenantId;
+      const userTenantId = req.tenantId;
       const isMaster = req.user!.isMaster;
 
       // Build conditions with tenant filtering
@@ -7773,7 +7797,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.post("/api/crm/cliente/criar-lead", requireAuth, async (req, res) => {
     try {
       const { pessoaId, campaignId } = req.body;
-      const userTenantId = req.user!.tenantId;
+      const userTenantId = req.tenantId;
       
       if (!pessoaId || !campaignId) {
         return res.status(400).json({ message: "pessoaId e campaignId são obrigatórios" });
