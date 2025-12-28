@@ -2889,7 +2889,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           };
         }
         
-        const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
+        // CRÍTICO: Passar tenantId para isolamento multi-tenant (default 1 para imports legados)
+        const effectiveTenantIdBg = tenantId || 1;
+        const pessoasEncontradas = await storage.getClientesByMatricula(matricula, effectiveTenantIdBg, convenio);
         let pessoa = pessoasEncontradas[0];
         
         if (pessoa) {
@@ -3356,7 +3358,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           }
           
           // Upsert pessoa - busca por matrícula + convênio (chave composta)
-          const pessoasEncontradas = await storage.getClientesByMatricula(matricula, convenio);
+          // CRÍTICO: Passar tenantId para isolamento multi-tenant (default 1 para imports legados)
+          const effectiveTenantIdSync = base.tenantId || 1;
+          const pessoasEncontradas = await storage.getClientesByMatricula(matricula, effectiveTenantIdSync, convenio);
           let pessoa = pessoasEncontradas[0];
           
           if (pessoa) {
@@ -4654,9 +4658,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
-  app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req, res) => {
+  // CRÍTICO: Sempre filtra por tenant_id do usuário logado
+  app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const { cpf, matricula, convenio, base } = req.query;
+      const userTenantId = req.user?.tenantId;
+      
+      // CRÍTICO: tenant_id obrigatório para isolamento
+      if (!userTenantId) {
+        console.error("[Consulta Cliente] ERROR: No tenantId in session");
+        return res.status(400).json({ message: "Tenant ID obrigatório" });
+      }
       
       // Validate at least one search parameter is provided
       if (!cpf && !matricula) {
@@ -4671,13 +4683,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const convenioFiltro = convenio ? String(convenio).trim() : null;
       const baseFiltro = base ? String(base).trim() : null;
       
+      console.log(`[Consulta Cliente] tenant=${userTenantId}, tipoBusca=${matricula ? 'matricula' : 'cpf'}, convenio=${convenioFiltro || 'all'}, base=${baseFiltro || 'all'}`);
+      
       // Priority: matricula > cpf
       if (matricula) {
         tipoBusca = "matricula";
         termo = String(matricula).trim();
         
-        // Use new method that supports convenio and base filters
-        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined, baseFiltro || undefined);
+        // CRÍTICO: Passa tenantId para filtrar apenas dados do tenant
+        const clientes = await storage.getClientesByMatricula(termo, userTenantId, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -4702,10 +4716,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           });
         }
         
-        console.log(`[Consulta Cliente] CPF input: "${cpf}" -> normalized: "${termo}", convenio: ${convenioFiltro || "none"}, base: ${baseFiltro || "none"}`);
-        
-        // Pass convenio and base filters
-        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined, baseFiltro || undefined);
+        // CRÍTICO: Passa tenantId para filtrar apenas dados do tenant
+        const clientes = await storage.getClientesByCpf(termo, userTenantId, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -4720,6 +4732,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       } else {
         return res.status(400).json({ message: "Parâmetro inválido" });
       }
+      
+      console.log(`[Consulta Cliente] tenant=${userTenantId}, tipo=${tipoBusca}, termo="${termo}", resultados=${resultados.length}`);
       
       return res.json({
         tipo_busca: tipoBusca,

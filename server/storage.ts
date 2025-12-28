@@ -180,9 +180,9 @@ export interface IStorage {
   
   // Clientes Pessoa
   getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
-  getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
+  getClientesByMatricula(matricula: string, tenantId: number, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
-  getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
+  getClientesByCpf(cpf: string, tenantId: number, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -973,8 +973,12 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
-    const conditions = [eq(clientesPessoa.matricula, matricula)];
+  async getClientesByMatricula(matricula: string, tenantId: number, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
+    // CRÍTICO: Sempre filtrar por tenant_id para isolamento multi-tenant
+    const conditions = [
+      eq(clientesPessoa.matricula, matricula),
+      eq(clientesPessoa.tenantId, tenantId)
+    ];
     if (convenio) {
       conditions.push(ilike(clientesPessoa.convenio, convenio));
     }
@@ -982,8 +986,9 @@ export class DbStorage implements IStorage {
       conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
     }
     // Sistema usa hard delete - registros deletados são fisicamente removidos
-    // Não precisamos de filtro adicional para isNotNull(importRunId)
-    return await db.select().from(clientesPessoa).where(and(...conditions));
+    const results = await db.select().from(clientesPessoa).where(and(...conditions));
+    console.log(`[getClientesByMatricula] tenant=${tenantId}, matricula="${matricula}", found=${results.length}`);
+    return results;
   }
 
   async getClientePessoaById(id: number): Promise<ClientePessoa | undefined> {
@@ -991,15 +996,15 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
+  async getClientesByCpf(cpf: string, tenantId: number, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
     // Remove formatting from CPF (dots and dashes) and normalize to 11 digits
     const cleanCpf = cpf.replace(/\D/g, "").padStart(11, "0");
     
-    console.log(`[getClientesByCpf] Input: "${cpf}" -> Normalized: "${cleanCpf}", Convenio: ${convenio || "none"}, Base: ${baseTag || "none"}`);
-    
-    // Build conditions array
-    // Sistema usa hard delete - registros deletados são fisicamente removidos
-    const conditions = [eq(clientesPessoa.cpf, cleanCpf)];
+    // CRÍTICO: Sempre filtrar por tenant_id para isolamento multi-tenant
+    const conditions = [
+      eq(clientesPessoa.cpf, cleanCpf),
+      eq(clientesPessoa.tenantId, tenantId)
+    ];
     
     if (convenio) {
       conditions.push(ilike(clientesPessoa.convenio, convenio));
@@ -1011,7 +1016,7 @@ export class DbStorage implements IStorage {
     const results = await db.select()
       .from(clientesPessoa)
       .where(and(...conditions));
-    console.log(`[getClientesByCpf] Found ${results.length} results with filters applied`);
+    console.log(`[getClientesByCpf] tenant=${tenantId}, cpf="${cleanCpf}", found=${results.length}`);
     return results;
   }
 
