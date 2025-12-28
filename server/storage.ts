@@ -1206,15 +1206,29 @@ export class DbStorage implements IStorage {
   }
 
   async upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes> {
-    // Busca folha existente por pessoaId + competência + baseTag
-    const existing = await db.select()
-      .from(clientesFolhaMes)
-      .where(and(
-        eq(clientesFolhaMes.pessoaId, data.pessoaId!),
-        eq(clientesFolhaMes.competencia, data.competencia!),
-        eq(clientesFolhaMes.baseTag, data.baseTag!)
-      ))
-      .limit(1);
+    // Busca folha existente por vinculoId + competência (chave única correta)
+    // Se não tem vinculoId, fallback para pessoaId + competência + baseTag (legado)
+    let existing: ClienteFolhaMes[] = [];
+    
+    if (data.vinculoId) {
+      existing = await db.select()
+        .from(clientesFolhaMes)
+        .where(and(
+          eq(clientesFolhaMes.vinculoId, data.vinculoId),
+          eq(clientesFolhaMes.competencia, data.competencia!)
+        ))
+        .limit(1);
+    } else {
+      // Fallback legado para imports antigos sem vinculoId
+      existing = await db.select()
+        .from(clientesFolhaMes)
+        .where(and(
+          eq(clientesFolhaMes.pessoaId, data.pessoaId!),
+          eq(clientesFolhaMes.competencia, data.competencia!),
+          eq(clientesFolhaMes.baseTag, data.baseTag!)
+        ))
+        .limit(1);
+    }
 
     if (existing.length > 0) {
       const old = existing[0];

@@ -2803,6 +2803,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
     let totalLinhas = 0;
     const BATCH_SIZE = 100;
+    
+    // Cache local de pessoas processadas para evitar duplicatas na mesma importação
+    const processedPessoas = new Map<string, { id: number }>();
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -2952,10 +2955,22 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           };
         }
         
-        // CRÍTICO: Passar tenantId para isolamento multi-tenant (default 1 para imports legados)
+        // CRÍTICO: Buscar pessoa por CPF (não matrícula) - CPF é único por pessoa
+        // Vínculos são criados separadamente (tenant + cpf + matricula + orgao)
         const effectiveTenantIdBg = tenantId || 1;
-        const pessoasEncontradas = await storage.getClientesByMatricula(matricula, effectiveTenantIdBg, convenio);
-        let pessoa = pessoasEncontradas[0];
+        const cpf = pessoaData.cpf ? String(pessoaData.cpf).replace(/\D/g, "").padStart(11, "0") : null;
+        
+        let pessoa: any = null;
+        if (cpf) {
+          // Primeiro verificar o cache local (evita duplicatas na mesma importação)
+          if (processedPessoas.has(cpf)) {
+            pessoa = processedPessoas.get(cpf);
+          } else {
+            // Buscar no banco de dados
+            const pessoasEncontradas = await storage.getClientesByCpf(cpf, effectiveTenantIdBg);
+            pessoa = pessoasEncontradas[0];
+          }
+        }
         
         if (pessoa) {
           // Merge extrasVinculo existente com o novo
@@ -2970,10 +2985,47 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           pessoa = await storage.createClientePessoa(pessoaData as any);
         }
         
+        // Adicionar ao cache local
+        if (cpf && pessoa) {
+          processedPessoas.set(cpf, { id: pessoa.id });
+        }
+        
         if (pessoa) {
+          // Criar/atualizar vínculo (tenant + cpf + matricula + orgao)
+          const orgao = pessoaData.orgaodesc || 'DESCONHECIDO';
+          const effectiveTenantIdVinculo = tenantId || 1;
+          
+          // Upsert vínculo via SQL direto para garantir consistência
+          const vinculoResult = await db.execute(sql`
+            INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, upag, sit_func, import_run_id, base_tag)
+            VALUES (
+              ${effectiveTenantIdVinculo}::integer,
+              ${pessoaData.cpf || null},
+              ${matricula},
+              ${orgao},
+              ${convenio},
+              ${pessoa.id},
+              ${pessoaData.upag || null},
+              ${pessoaData.sitFunc || null},
+              ${importRunId || null},
+              ${baseTag}
+            )
+            ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
+              pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
+              upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
+              sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
+              import_run_id = ${importRunId || null},
+              base_tag = ${baseTag},
+              ultima_atualizacao = NOW()
+            RETURNING id
+          `);
+          
+          const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
+          
           // Upsert folha com merge de extrasFolha para preservar instituidor
           await storage.upsertClienteFolhaMes({
             pessoaId: pessoa.id,
+            vinculoId: vinculoId,
             competencia: competenciaDate,
             // Margem 5%
             margemBruta5: folhaData.margem5Bruta,
@@ -3255,6 +3307,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       console.log(`[Import] Mapped columns:`, Object.keys(headerMap).length);
 
       let totalLinhas = 0;
+      
+      // Cache local de pessoas processadas para evitar duplicatas na mesma importação
+      const processedPessoas = new Map<string, { id: number }>();
 
       // Process each row
       for (let i = 0; i < data.length; i++) {
@@ -3420,11 +3475,22 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             };
           }
           
-          // Upsert pessoa - busca por matrícula + convênio (chave composta)
-          // CRÍTICO: Passar tenantId para isolamento multi-tenant (default 1 para imports legados)
+          // CRÍTICO: Buscar pessoa por CPF (não matrícula) - CPF é único por pessoa
+          // Vínculos são criados separadamente (tenant + cpf + matricula + orgao)
           const effectiveTenantIdSync = base.tenantId || 1;
-          const pessoasEncontradas = await storage.getClientesByMatricula(matricula, effectiveTenantIdSync, convenio);
-          let pessoa = pessoasEncontradas[0];
+          const cpf = pessoaData.cpf ? String(pessoaData.cpf).replace(/\D/g, "").padStart(11, "0") : null;
+          
+          let pessoa: any = null;
+          if (cpf) {
+            // Primeiro verificar o cache local (evita duplicatas na mesma importação)
+            if (processedPessoas.has(cpf)) {
+              pessoa = processedPessoas.get(cpf);
+            } else {
+              // Buscar no banco de dados
+              const pessoasEncontradas = await storage.getClientesByCpf(cpf, effectiveTenantIdSync);
+              pessoa = pessoasEncontradas[0];
+            }
+          }
           
           if (pessoa) {
             // Merge extrasVinculo existente com o novo
@@ -3439,10 +3505,47 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             pessoa = await storage.createClientePessoa(pessoaData as any);
           }
           
+          // Adicionar ao cache local
+          if (cpf && pessoa) {
+            processedPessoas.set(cpf, { id: pessoa.id });
+          }
+          
           if (pessoa) {
+            // Criar/atualizar vínculo (tenant + cpf + matricula + orgao)
+            const orgao = pessoaData.orgaodesc || 'DESCONHECIDO';
+            const effectiveTenantId = base.tenantId || 1;
+            
+            // Upsert vínculo via SQL direto para garantir consistência
+            const vinculoResult = await db.execute(sql`
+              INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, upag, sit_func, import_run_id, base_tag)
+              VALUES (
+                ${effectiveTenantId}::integer,
+                ${pessoaData.cpf || null},
+                ${matricula},
+                ${orgao},
+                ${convenio},
+                ${pessoa.id},
+                ${pessoaData.upag || null},
+                ${pessoaData.sitFunc || null},
+                ${importRunRecord.id},
+                ${baseTag}
+              )
+              ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
+                pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
+                upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
+                sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
+                import_run_id = ${importRunRecord.id},
+                base_tag = ${baseTag},
+                ultima_atualizacao = NOW()
+              RETURNING id
+            `);
+            
+            const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
+            
             // Upsert folha com merge de extrasFolha para preservar instituidor
             await storage.upsertClienteFolhaMes({
               pessoaId: pessoa.id,
+              vinculoId: vinculoId,
               competencia: competenciaDate,
               // Margem 5%
               margemBruta5: folhaData.margem5Bruta,
