@@ -1367,6 +1367,39 @@ export default function BasesClientes() {
                           Tempo: {(fastImportStatus.elapsedMs / 1000).toFixed(1)}s
                         </p>
                       )}
+                      
+                      {fastImportStatus.report && (
+                        <div className="mt-4 p-3 bg-muted rounded-lg text-left" data-testid="fast-import-report">
+                          <h4 className="font-medium text-sm mb-2">Relatório da Importação</h4>
+                          <div className="grid grid-cols-3 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Total:</span>
+                              <p className="font-medium">{fastImportStatus.report.totalLinhas?.toLocaleString("pt-BR") || 0}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Importadas:</span>
+                              <p className="font-medium text-green-600">{fastImportStatus.report.importadas?.toLocaleString("pt-BR") || 0}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Rejeitadas:</span>
+                              <p className="font-medium text-red-600">{fastImportStatus.report.rejeitadas?.toLocaleString("pt-BR") || 0}</p>
+                            </div>
+                          </div>
+                          {fastImportStatus.report.motivosRejeicao && Object.keys(fastImportStatus.report.motivosRejeicao).length > 0 && (
+                            <div className="mt-3 pt-2 border-t">
+                              <span className="text-xs text-muted-foreground">Motivos de Rejeição:</span>
+                              <ul className="text-xs mt-1 space-y-1">
+                                {Object.entries(fastImportStatus.report.motivosRejeicao).map(([motivo, count]) => (
+                                  <li key={motivo} className="flex justify-between">
+                                    <span className="text-muted-foreground truncate max-w-[200px]">{motivo}</span>
+                                    <span className="font-medium text-red-600">{(count as number).toLocaleString("pt-BR")}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

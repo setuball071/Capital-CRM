@@ -28,12 +28,13 @@ import {
 } from "./import-service";
 
 // Reduced batch size to avoid Neon HTTP payload limit (~16MB)
-// Each folha row has ~30 fields, so 200 rows keeps payload under limit
-const BATCH_INSERT_SIZE = 200;
+// Each folha row has ~30 fields, so 100 rows keeps payload under limit
+const BATCH_INSERT_SIZE = 100;
 const MAX_LINHAS_POR_EXECUCAO = 500_000;
-const MERGE_BATCH_SIZE = 2000;
+const MERGE_BATCH_SIZE = 1000;
 // Sub-batch for SQL inserts to avoid "value too large to transmit"
-const SQL_INSERT_CHUNK = 100;
+// Reduced from 100 to 50 to handle larger row sizes
+const SQL_INSERT_CHUNK = 50;
 
 export interface FastImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
@@ -43,6 +44,13 @@ export interface FastImportOptions {
   convenio?: string;
   tenantId?: number;
   createdById?: number;
+}
+
+export interface FastImportReport {
+  totalLinhas: number;
+  importadas: number;
+  rejeitadas: number;
+  motivosRejeicao: Record<string, number>;
 }
 
 export interface FastImportResult {
@@ -56,6 +64,7 @@ export interface FastImportResult {
   pausedForResume: boolean;
   message: string;
   elapsedMs: number;
+  report?: FastImportReport;
 }
 
 const D8_COLUMN_MAP: Record<string, string> = {
@@ -371,6 +380,9 @@ class FastImportService {
 
       // Calcular contadores reais a partir de import_run_rows
       const realCounts = await this.getRealRowCounts(run.id);
+      
+      // Gerar relatório detalhado
+      const report = await this.getImportReport(run.id);
 
       await db
         .update(importRuns)
@@ -398,6 +410,7 @@ class FastImportService {
         pausedForResume: false,
         message: `Import concluído! ${realCounts.successRows} OK, ${realCounts.errorRows} erros.`,
         elapsedMs: 0,
+        report,
       };
     } catch (error: any) {
       console.error(`[FastImport] Merge error:`, error);
@@ -472,6 +485,44 @@ class FastImportService {
       totalRows: parseInt(row?.total || "0"),
       successRows: parseInt(row?.ok_count || "0"),
       errorRows: parseInt(row?.error_count || "0"),
+    };
+  }
+
+  // Gerar relatório detalhado de importação por arquivo
+  async getImportReport(importRunId: number): Promise<FastImportReport> {
+    const countsResult = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'ok') as importadas,
+        COUNT(*) FILTER (WHERE status = 'erro') as rejeitadas
+      FROM import_run_rows
+      WHERE import_run_id = ${importRunId}
+    `);
+    
+    const countsRow = countsResult.rows[0] as any;
+    
+    // Agrupar motivos de rejeição
+    const motivosResult = await db.execute(sql`
+      SELECT 
+        COALESCE(error_message, 'Erro desconhecido') as motivo,
+        COUNT(*) as contagem
+      FROM import_run_rows
+      WHERE import_run_id = ${importRunId}
+        AND status = 'erro'
+      GROUP BY error_message
+      ORDER BY contagem DESC
+    `);
+    
+    const motivosRejeicao: Record<string, number> = {};
+    for (const row of motivosResult.rows as any[]) {
+      motivosRejeicao[row.motivo] = parseInt(row.contagem || "0");
+    }
+    
+    return {
+      totalLinhas: parseInt(countsRow?.total || "0"),
+      importadas: parseInt(countsRow?.importadas || "0"),
+      rejeitadas: parseInt(countsRow?.rejeitadas || "0"),
+      motivosRejeicao,
     };
   }
 

@@ -4262,6 +4262,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         message: result.message,
         elapsedMs: result.elapsedMs,
         nextStep: result.pausedForResume ? `POST /api/fast-imports/process/${runId}` : null,
+        report: result.report,
       });
     } catch (error: any) {
       console.error("Fast import process error:", error);
@@ -4334,6 +4335,39 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error: any) {
       console.error("Get fast import status error:", error);
       return res.status(500).json({ message: error.message || "Erro ao buscar status" });
+    }
+  });
+
+  // GET /api/fast-imports/report/:id - Relatório detalhado de uma importação
+  app.get("/api/fast-imports/report/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { fastImportService } = await import("./fast-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+      
+      const run = await fastImportService.getStatus(runId);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Job de importação não encontrado" });
+      }
+      
+      const report = await fastImportService.getImportReport(runId);
+      
+      return res.json({
+        importRunId: runId,
+        arquivoOrigem: run.arquivoOrigem,
+        tipoImport: run.tipoImport,
+        convenio: run.convenio,
+        competencia: run.competencia,
+        status: run.status,
+        report,
+      });
+    } catch (error: any) {
+      console.error("Get fast import report error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao buscar relatório" });
     }
   });
 
