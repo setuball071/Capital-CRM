@@ -35,6 +35,8 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
     - Unique indexes defined in schema.ts for consistent ON CONFLICT upserts:
       - `idx_vinculo_cpf_mat_orgao` on clientes_vinculo(cpf, matricula, orgao)
       - `idx_folha_mes_vinculo_competencia` on clientes_folha_mes(vinculo_id, competencia)
+    - **Mandatory import_run_id traceability**: All final tables (clientes_pessoa, clientes_vinculo, clientes_folha_mes, clientes_contratos, client_contacts) have import_run_id column linking to the import that created/updated each record. Legacy imports (POST /api/bases/import) automatically create import_run records and populate import_run_id in all inserted/updated records.
+    - **Cascading delete**: Deleting an import_run (DELETE /api/import-runs/:id) or base (DELETE /api/bases/:id) removes all related folhas, contratos, vinculos, contacts, and orphaned pessoas
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
 
 ### System Design Choices

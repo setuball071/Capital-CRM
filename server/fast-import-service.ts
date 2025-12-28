@@ -480,7 +480,7 @@ class FastImportService {
     console.log(`[FastImport] Starting SQL-based merge for folha...`);
 
     const pessoaResult = await db.execute(sql`
-      INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, upag, uf, municipio, convenio, base_tag_ultima)
+      INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, upag, uf, municipio, convenio, base_tag_ultima, import_run_id)
       SELECT DISTINCT ON (s.cpf)
         ${tenantId}::integer,
         s.cpf,
@@ -491,7 +491,8 @@ class FastImportService {
         s.uf,
         s.municipio,
         ${convenio},
-        ${baseTag}
+        ${baseTag},
+        ${run.id}
       FROM staging_folha s
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
@@ -504,6 +505,7 @@ class FastImportService {
         municipio = COALESCE(EXCLUDED.municipio, clientes_pessoa.municipio),
         convenio = ${convenio},
         base_tag_ultima = ${baseTag},
+        import_run_id = ${run.id},
         atualizado_em = NOW()
     `);
 

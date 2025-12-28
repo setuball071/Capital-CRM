@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { z } from "zod";
-import { storage } from "./storage";
+import { storage, db } from "./storage";
 import {
   resolveTenant,
   requireTenant,
@@ -61,7 +61,6 @@ import {
   type FiltrosPedidoLista,
   type PricingSettings,
 } from "@shared/schema";
-import { db } from "./storage";
 import { eq, asc, desc, and, or, sql, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
@@ -2719,9 +2718,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     baseTag: string,
     convenio: string,
     competenciaDate: Date,
-    tenantId?: number
+    tenantId?: number,
+    importRunId?: number // Rastreabilidade obrigatória
   ) {
-    console.log(`[Import-BG] Starting background processing for base ${baseId}, ${data.length} rows`);
+    console.log(`[Import-BG] Starting background processing for base ${baseId}, importRun ${importRunId || 'N/A'}, ${data.length} rows`);
     
     const headers = data[0] ? Object.keys(data[0]) : [];
     const headerMap: Record<string, string> = {};
@@ -2758,11 +2758,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           matricula,
           convenio,
           baseTagUltima: baseTag,
+          importRunId: importRunId || null, // Rastreabilidade obrigatória
         };
         
         const folhaData: Record<string, any> = {
           competencia: competenciaDate,
           baseTag,
+          importRunId: importRunId || null, // Rastreabilidade obrigatória
         };
         
         const telefones: string[] = [];
@@ -2770,6 +2772,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         const contratoData: Record<string, any> = {
           competencia: competenciaDate,
           baseTag,
+          importRunId: importRunId || null, // Rastreabilidade obrigatória
         };
         
         for (const [col, value] of Object.entries(row)) {
@@ -2935,6 +2938,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             liquido: folhaData.liquido || null,
             sitFuncNoMes: pessoaData.sitFunc || null,
             baseTag,
+            importRunId: importRunId || null, // Rastreabilidade obrigatória
             // Extras para pensionista (instituidor)
             extrasFolha: folhaData.instituidor ? { 
               instituidor: folhaData.instituidor, 
@@ -2952,6 +2956,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             if (contratoExistente) {
               const updateData: Record<string, any> = {
                 baseTag,
+                importRunId: importRunId || null,
                 dadosBrutos: row,
               };
               if (contratoData.tipoContrato) updateData.tipoContrato = contratoData.tipoContrato;
@@ -2973,6 +2978,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
                 numeroContrato: contratoData.numeroContrato,
                 competencia: competenciaDate,
                 baseTag,
+                importRunId: importRunId || null,
                 dadosBrutos: row,
               } as any);
             }
@@ -3000,7 +3006,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       status: "concluida",
     });
     
-    console.log(`[Import-BG] Base ${baseId} completed with ${totalLinhas} rows`);
+    // Update import_run status to completed (if importRunId provided)
+    if (importRunId) {
+      await db.update(importRuns)
+        .set({ status: "concluido", completedAt: new Date(), processedRows: totalLinhas, successRows: totalLinhas })
+        .where(eq(importRuns.id, importRunId));
+    }
+    
+    console.log(`[Import-BG] Base ${baseId} (importRun ${importRunId}) completed with ${totalLinhas} rows`);
   }
 
   // GET bases importadas - Master only
@@ -3084,7 +3097,21 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         status: "processando",
       });
 
-      console.log(`[Import] Created base ${base.id} with tag ${baseTag}`);
+      // Criar import_run para rastreabilidade obrigatória
+      const [importRunRecord] = await db.insert(importRuns).values({
+        tenantId: null,
+        tipoImport: "base_geral",
+        competencia: competenciaDate,
+        arquivoOrigem: file.originalname,
+        status: "processando",
+        baseTag,
+        convenio,
+      }).returning();
+      
+      // Vincular import_run à base
+      await storage.updateBaseImportada(base.id, { importRunId: importRunRecord.id });
+
+      console.log(`[Import] Created base ${base.id} with importRun ${importRunRecord.id} and tag ${baseTag}`);
       
       // Parse file - use PapaParse for CSV (much faster for large files)
       const ext = path.extname(file.originalname).toLowerCase();
@@ -3121,6 +3148,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         res.json({
           message: "Importação iniciada em segundo plano",
           baseId: base.id,
+          importRunId: importRunRecord.id,
           baseTag,
           status: "processando",
           totalRows: data.length,
@@ -3128,8 +3156,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           isBackground: true,
         });
         
-        // Process in background (don't await)
-        processImportInBackground(data, base.id, baseTag, convenio, competenciaDate).catch(err => {
+        // Process in background (don't await) - passa importRunId para rastreabilidade
+        processImportInBackground(data, base.id, baseTag, convenio, competenciaDate, null, importRunRecord.id).catch(err => {
           console.error(`[Import] Background processing error:`, err);
         });
         
@@ -3174,12 +3202,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             matricula,
             convenio,
             baseTagUltima: baseTag,
+            importRunId: importRunRecord.id, // Rastreabilidade obrigatória
           };
           
           // Build folha data
           const folhaData: Record<string, any> = {
             competencia: competenciaDate,
             baseTag,
+            importRunId: importRunRecord.id, // Rastreabilidade obrigatória
           };
           
           // Build telefones array
@@ -3189,6 +3219,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           const contratoData: Record<string, any> = {
             competencia: competenciaDate,
             baseTag,
+            importRunId: importRunRecord.id, // Rastreabilidade obrigatória
           };
           
           // Map row values
@@ -3365,6 +3396,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               liquido: folhaData.liquido || null,
               sitFuncNoMes: pessoaData.sitFunc || null,
               baseTag,
+              importRunId: importRunRecord.id, // Rastreabilidade obrigatória
               // Extras para pensionista (instituidor)
               extrasFolha: folhaData.instituidor ? { 
                 instituidor: folhaData.instituidor, 
@@ -3385,6 +3417,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
                 // ATUALIZAR contrato existente com novos dados (preserva pessoaId, atualiza só campos relevantes)
                 const updateData: Record<string, any> = {
                   baseTag,
+                  importRunId: importRunRecord.id,
                   dadosBrutos: row,
                 };
                 // Só atualiza campos se tiverem valores na planilha
@@ -3409,6 +3442,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
                   numeroContrato: contratoData.numeroContrato,
                   competencia: competenciaDate,
                   baseTag,
+                  importRunId: importRunRecord.id,
                   dadosBrutos: row,
                 } as any);
               }
@@ -3432,11 +3466,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         status: "concluida",
       });
       
-      console.log(`[Import] Base ${base.id} completed with ${totalLinhas} rows`);
+      // Update import_run status to completed
+      await db.update(importRuns)
+        .set({ status: "concluido", completedAt: new Date(), processedRows: totalLinhas, successRows: totalLinhas })
+        .where(eq(importRuns.id, importRunRecord.id));
+      
+      console.log(`[Import] Base ${base.id} (importRun ${importRunRecord.id}) completed with ${totalLinhas} rows`);
       
       return res.json({
         message: "Importação concluída",
         baseId: base.id,
+        importRunId: importRunRecord.id,
         baseTag,
         totalLinhas,
         fileName: file.originalname,
