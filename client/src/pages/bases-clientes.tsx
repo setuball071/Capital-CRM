@@ -93,6 +93,31 @@ export default function BasesClientes() {
   const [baseToDelete, setBaseToDelete] = useState<BaseImportada | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   
+  // Reset tenant data states
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetResult, setResetResult] = useState<{
+    deleted: {
+      contratos: number;
+      folhas: number;
+      contatos: number;
+      vinculos: number;
+      pessoas: number;
+      import_runs: number;
+      bases_importadas: number;
+    };
+    remainingCounts: {
+      clientes_pessoa: string;
+      clientes_vinculo: string;
+      clientes_folha_mes: string;
+      clientes_contratos: string;
+      client_contacts: string;
+      bases_importadas: string;
+      import_runs: string;
+    };
+    elapsedMs: number;
+  } | null>(null);
+  
   // Fast Import states
   const [isFastImportOpen, setIsFastImportOpen] = useState(false);
   const [fastImportFile, setFastImportFile] = useState<File | null>(null);
@@ -451,6 +476,43 @@ export default function BasesClientes() {
     },
   });
 
+  // Reset tenant data mutation (master only)
+  const resetTenantMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/admin/reset-tenant-data");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setResetResult(data);
+      toast({
+        title: "Dados do tenant resetados",
+        description: `${data.deleted.pessoas} clientes, ${data.deleted.vinculos} vínculos, ${data.deleted.folhas} folhas removidas em ${(data.elapsedMs / 1000).toFixed(1)}s`,
+      });
+      setResetConfirmText("");
+      // Invalidar caches
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao resetar dados",
+        description: error.message || "Ocorreu um erro ao resetar os dados do tenant.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleResetTenant = () => {
+    if (resetConfirmText === "RESET") {
+      resetTenantMutation.mutate();
+    }
+  };
+
   const handleDeleteClick = (base: BaseImportada) => {
     setBaseToDelete(base);
     setDeleteConfirmText("");
@@ -694,6 +756,166 @@ export default function BasesClientes() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          
+          {/* Reset Tenant Button - Master Only */}
+          {isMaster && (
+            <Dialog open={resetDialogOpen} onOpenChange={(open) => {
+              setResetDialogOpen(open);
+              if (!open) {
+                setResetConfirmText("");
+                setResetResult(null);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" data-testid="button-reset-tenant">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Resetar dados do tenant
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="w-5 h-5" />
+                    Resetar todos os dados do tenant
+                  </DialogTitle>
+                  <DialogDescription>
+                    Esta ação irá remover PERMANENTEMENTE todos os clientes, vínculos, folhas, contratos, 
+                    contatos, bases e importações do tenant atual. Esta ação não pode ser desfeita.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {!resetResult ? (
+                  <>
+                    <div className="space-y-4 py-4">
+                      <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
+                        <p className="text-sm font-medium text-destructive">
+                          Para confirmar, digite <code className="bg-destructive/20 px-1.5 py-0.5 rounded font-mono font-bold">RESET</code> abaixo:
+                        </p>
+                      </div>
+                      <Input
+                        value={resetConfirmText}
+                        onChange={(e) => setResetConfirmText(e.target.value.toUpperCase())}
+                        placeholder="Digite RESET para confirmar"
+                        className="font-mono uppercase"
+                        data-testid="input-reset-confirm"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setResetDialogOpen(false)}
+                        data-testid="button-reset-cancel"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={handleResetTenant}
+                        disabled={resetConfirmText !== "RESET" || resetTenantMutation.isPending}
+                        data-testid="button-reset-confirm"
+                      >
+                        {resetTenantMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Resetando...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Resetar Tudo
+                          </>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                ) : (
+                  <div className="space-y-4 py-4">
+                    <div className="bg-green-500/10 p-4 rounded-lg border border-green-500/20">
+                      <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" />
+                        Reset concluído em {(resetResult.elapsedMs / 1000).toFixed(1)}s
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2">Registros removidos:</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Pessoas:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.pessoas.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Vínculos:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.vinculos.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Folhas:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.folhas.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Contratos:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.contratos.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Contatos:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.contatos.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Importações:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.import_runs.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded col-span-2">
+                          <span>Bases:</span>
+                          <span className="font-mono text-destructive">{resetResult.deleted.bases_importadas.toLocaleString("pt-BR")}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2">Contagens atuais (após reset):</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Pessoas:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_pessoa || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Vínculos:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_vinculo || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Folhas:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_folha_mes || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Contratos:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_contratos || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Contatos:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.client_contacts || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                          <span>Importações:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.import_runs || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded col-span-2">
+                          <span>Bases:</span>
+                          <span className="font-mono">{parseInt(resetResult.remainingCounts.bases_importadas || "0").toLocaleString("pt-BR")}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button onClick={() => setResetDialogOpen(false)} data-testid="button-reset-close">
+                        Fechar
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
+          
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-import-base">
