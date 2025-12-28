@@ -9348,6 +9348,43 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // GET /api/admin/tenant-counts - Get current tenant table counts (for sanity test)
+  app.get("/api/admin/tenant-counts", requireAuth, requireMaster, async (req, res) => {
+    const tenantId = req.tenantId || 1;
+    
+    try {
+      const counts = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as clientes_pessoa,
+          (SELECT COUNT(*) FROM clientes_vinculo WHERE tenant_id = ${tenantId}) as clientes_vinculo,
+          (SELECT COUNT(*) FROM clientes_folha_mes fm 
+           JOIN clientes_vinculo v ON fm.vinculo_id = v.id 
+           WHERE v.tenant_id = ${tenantId}) as clientes_folha_mes,
+          (SELECT COUNT(*) FROM clientes_contratos ct 
+           JOIN clientes_vinculo v ON ct.vinculo_id = v.id 
+           WHERE v.tenant_id = ${tenantId}) as clientes_contratos,
+          (SELECT COUNT(*) FROM client_contacts cc 
+           JOIN clientes_pessoa p ON cc.client_id = p.id 
+           WHERE p.tenant_id = ${tenantId}) as client_contacts,
+          (SELECT COUNT(*) FROM bases_importadas WHERE tenant_id = ${tenantId}) as bases_importadas,
+          (SELECT COUNT(*) FROM import_runs WHERE tenant_id = ${tenantId}) as import_runs
+      `);
+      
+      return res.json(counts.rows[0] || {
+        clientes_pessoa: "0",
+        clientes_vinculo: "0",
+        clientes_folha_mes: "0",
+        clientes_contratos: "0",
+        client_contacts: "0",
+        bases_importadas: "0",
+        import_runs: "0",
+      });
+    } catch (error: any) {
+      console.error("Tenant counts error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao contar registros" });
+    }
+  });
+
   // ============ ASYNC RESET TENANT ENDPOINTS ============
   
   // POST /api/admin/reset-tenant - Start async reset job (MASTER ONLY)

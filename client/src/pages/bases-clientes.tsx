@@ -116,6 +116,12 @@ export default function BasesClientes() {
     error?: string;
   } | null>(null);
   const resetPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const [sanityTestResult, setSanityTestResult] = useState<{
+    cpfTested: string;
+    clientsFound: number;
+    tableCounts: Record<string, number>;
+    passed: boolean;
+  } | null>(null);
   
   // Fast Import states
   const [isFastImportOpen, setIsFastImportOpen] = useState(false);
@@ -500,6 +506,61 @@ export default function BasesClientes() {
     },
   });
 
+  // Sanity test after reset
+  const runSanityTest = async () => {
+    try {
+      // Generate random CPF for test
+      const randomCpf = String(Math.floor(Math.random() * 99999999999)).padStart(11, "0");
+      
+      // Test 1: Query for random CPF should return 0 results
+      const consultaResponse = await apiRequest("GET", `/api/clientes/consulta?cpf=${randomCpf}`);
+      const consultaData = await consultaResponse.json();
+      const clientsFound = consultaData.clientes?.length || 0;
+      
+      // Test 2: Get table counts (snapshot)
+      const countResponse = await apiRequest("GET", "/api/admin/tenant-counts");
+      const countData = await countResponse.json();
+      
+      const tableCounts: Record<string, number> = {
+        pessoas: parseInt(countData.clientes_pessoa || "0"),
+        vinculos: parseInt(countData.clientes_vinculo || "0"),
+        folhas: parseInt(countData.clientes_folha_mes || "0"),
+        contratos: parseInt(countData.clientes_contratos || "0"),
+        contatos: parseInt(countData.client_contacts || "0"),
+      };
+      
+      const allZero = Object.values(tableCounts).every(v => v === 0);
+      const passed = clientsFound === 0 && allZero;
+      
+      setSanityTestResult({
+        cpfTested: randomCpf,
+        clientsFound,
+        tableCounts,
+        passed,
+      });
+      
+      if (passed) {
+        toast({
+          title: "Teste de sanidade: PASSOU",
+          description: "Todas as tabelas estão zeradas corretamente.",
+        });
+      } else {
+        toast({
+          title: "Teste de sanidade: ALERTA",
+          description: `Algumas tabelas ainda contêm dados.`,
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Erro no teste de sanidade:", err);
+      toast({
+        title: "Erro no teste de sanidade",
+        description: "Não foi possível executar o teste de verificação.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Polling for reset job status
   const startResetPolling = (jobId: string) => {
     if (resetPollingRef.current) {
@@ -523,14 +584,23 @@ export default function BasesClientes() {
               title: "Reset concluído",
               description: `Limpeza finalizada em ${(status.elapsedMs / 1000).toFixed(1)}s`,
             });
-            // Invalidar caches
+            
+            // Invalidar TODOS os caches relacionados a clientes (targeted invalidation)
             queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
             queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
             queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
             queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
             queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
             queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/tenant-counts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/fast-imports"] });
+            
+            // Dispatch event for other components
             window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+            
+            // Reset sanity test result and run test automatically
+            setSanityTestResult(null);
+            setTimeout(() => runSanityTest(), 500);
           } else if (status.status === "error") {
             toast({
               title: "Erro no reset",
@@ -816,6 +886,7 @@ export default function BasesClientes() {
                 setResetConfirmText("");
                 setResetJobId(null);
                 setResetJobStatus(null);
+                setSanityTestResult(null);
               }
             }}>
               <DialogTrigger asChild>
@@ -984,11 +1055,51 @@ export default function BasesClientes() {
                       </div>
                     </div>
                     
+                    {/* Sanity Test Result */}
+                    {sanityTestResult ? (
+                      <div className={`p-3 rounded-lg border ${
+                        sanityTestResult.passed 
+                          ? "bg-green-500/10 border-green-500/20" 
+                          : "bg-yellow-500/10 border-yellow-500/20"
+                      }`}>
+                        <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          {sanityTestResult.passed ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                          )}
+                          Teste de Sanidade: {sanityTestResult.passed ? "PASSOU" : "ALERTA"}
+                        </h4>
+                        <div className="text-xs space-y-1">
+                          <p className="text-muted-foreground">
+                            CPF testado: <span className="font-mono">{sanityTestResult.cpfTested}</span>
+                            {" → "}<span className="font-medium">{sanityTestResult.clientsFound} resultados</span>
+                          </p>
+                          <div className="grid grid-cols-3 gap-1 mt-2">
+                            {Object.entries(sanityTestResult.tableCounts).map(([table, count]) => (
+                              <div key={table} className={`flex justify-between px-2 py-0.5 rounded ${
+                                count === 0 ? "bg-green-500/20" : "bg-yellow-500/20"
+                              }`}>
+                                <span className="capitalize">{table}:</span>
+                                <span className="font-mono">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-2">
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        <span className="text-sm text-muted-foreground">Executando teste de sanidade...</span>
+                      </div>
+                    )}
+                    
                     <DialogFooter>
                       <Button onClick={() => {
                         setResetDialogOpen(false);
                         setResetJobId(null);
                         setResetJobStatus(null);
+                        setSanityTestResult(null);
                       }} data-testid="button-reset-close">
                         Fechar
                       </Button>
