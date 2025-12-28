@@ -11,7 +11,7 @@ import { eq, and, sql } from "drizzle-orm";
 // Beneficio Bruta 5%, Beneficio Utilizado 5%, Beneficio Saldo 5%, Bruta 35%, Utilz 35%, Saldo 35%, 
 // Bruta 70%, Utilz 70%, Saldo 70%, Créditos, Débitos, Líquido, ARQ. UPAG, EXC QTD, EXC Soma, RJUR, Sit Func, CPF, Margem
 export const COLUMN_MAP: Record<string, string> = {
-  // === CAMPOS BÁSICOS ===
+  // === CAMPOS BÁSICOS (Headers: "CPF", "Matricula", "Orgão") ===
   cpf: "cpf",
   matricula: "matricula",
   nome: "nome",
@@ -41,22 +41,23 @@ export const COLUMN_MAP: Record<string, string> = {
   upag: "upag",
   arq_upag: "upag",
   arqupag: "upag",
+  arq__upag: "upag",
   
   // === RJUR (Header: "RJUR") ===
   rejur: "rjur",
   rjur: "rjur",
   regime_juridico: "rjur",
   
-  // === SALÁRIO (Headers: "Créditos", "Débitos", "Líquido") ===
-  // Créditos → creditos (usado como salario_bruto na UI)
+  // === SALÁRIO/RENDIMENTOS (Headers: "Créditos", "Débitos", "Líquido") ===
+  // Créditos → creditos (salario_bruto na UI)
   creditos: "creditos",
   credito: "creditos",
-  // Débitos → debitos (usado como descontos_brutos na UI)
+  // Débitos → debitos (descontos_brutos na UI)
   debitos: "debitos",
   debito: "debitos",
-  // Líquido → liquido (usado como salario_liquido na UI)
+  // Líquido → liquido (salario_liquido na UI)
   liquido: "liquido",
-  // Campos legados diretos
+  // Campos legados diretos (mapeamento alternativo)
   salario_bruto: "salario_bruto",
   descontos_brutos: "descontos_brutos",
   salario_liquido: "salario_liquido",
