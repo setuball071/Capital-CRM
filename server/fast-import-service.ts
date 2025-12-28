@@ -27,9 +27,13 @@ import {
   COLUMN_MAP,
 } from "./import-service";
 
-const BATCH_INSERT_SIZE = 1000;
+// Reduced batch size to avoid Neon HTTP payload limit (~16MB)
+// Each folha row has ~30 fields, so 200 rows keeps payload under limit
+const BATCH_INSERT_SIZE = 200;
 const MAX_LINHAS_POR_EXECUCAO = 500_000;
-const MERGE_BATCH_SIZE = 5000;
+const MERGE_BATCH_SIZE = 2000;
+// Sub-batch for SQL inserts to avoid "value too large to transmit"
+const SQL_INSERT_CHUNK = 100;
 
 export interface FastImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
