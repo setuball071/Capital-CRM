@@ -22,12 +22,18 @@ import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import type { BaseImportada, ImportRun } from "@shared/schema";
 
-// Extended type for API response with real counts
+// Extended type for API response with real counts and rejection reasons
 type ImportRunWithCounts = ImportRun & {
   realCounts?: {
     totalRows: number;
     successRows: number;
     errorRows: number;
+  };
+  report?: {
+    totalLinhas: number;
+    importadas: number;
+    rejeitadas: number;
+    motivosRejeicao: Record<string, number>;
   };
 };
 
@@ -294,10 +300,23 @@ export default function BasesClientes() {
   // Funções para visualizar detalhes e download de erros
   const viewImportRunDetails = async (runId: number) => {
     try {
-      const response = await fetch(`/api/import-runs/${runId}`, { credentials: "include" });
-      if (!response.ok) throw new Error("Erro ao buscar detalhes");
-      const data = await response.json();
-      setSelectedImportRun(data);
+      // Buscar detalhes básicos e relatório em paralelo
+      const [detailsRes, reportRes] = await Promise.all([
+        fetch(`/api/import-runs/${runId}`, { credentials: "include" }),
+        fetch(`/api/fast-imports/report/${runId}`, { credentials: "include" }),
+      ]);
+      
+      if (!detailsRes.ok) throw new Error("Erro ao buscar detalhes");
+      
+      const details = await detailsRes.json();
+      let report = null;
+      
+      if (reportRes.ok) {
+        const reportData = await reportRes.json();
+        report = reportData.report;
+      }
+      
+      setSelectedImportRun({ ...details, report });
       setIsRunDetailOpen(true);
     } catch (error) {
       toast({
@@ -1398,6 +1417,37 @@ export default function BasesClientes() {
                               </ul>
                             </div>
                           )}
+                          
+                          {fastImportRunId && (fastImportStatus?.phase === "completed" || fastImportStatus?.status === "concluido") && (
+                            <div className="mt-3 pt-2 border-t flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => {
+                                  viewImportRunDetails(fastImportRunId);
+                                  setIsFastImportOpen(false);
+                                }}
+                                data-testid="button-fast-view-report"
+                              >
+                                <HelpCircle className="w-4 h-4 mr-1" />
+                                Ver Relatório Completo
+                              </Button>
+                              {(fastImportStatus?.errorRows || 0) > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 text-red-600"
+                                  onClick={() => downloadImportErrors(fastImportRunId)}
+                                  disabled={isDownloadingErrors}
+                                  data-testid="button-fast-download-errors"
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Baixar Erros CSV
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
@@ -1662,6 +1712,22 @@ export default function BasesClientes() {
                 <div><strong>Arquivo:</strong> {selectedImportRun.arquivoOrigem}</div>
                 <div><strong>Status:</strong> {selectedImportRun.status}</div>
               </div>
+              
+              {selectedImportRun.report?.motivosRejeicao && Object.keys(selectedImportRun.report.motivosRejeicao).length > 0 && (
+                <div className="bg-red-50 dark:bg-red-950 p-3 rounded-md" data-testid="motivos-rejeicao">
+                  <h4 className="font-medium text-sm mb-2 text-red-700 dark:text-red-300">Motivos de Rejeição</h4>
+                  <ScrollArea className="max-h-40">
+                    <ul className="text-xs space-y-1">
+                      {Object.entries(selectedImportRun.report.motivosRejeicao).map(([motivo, count]) => (
+                        <li key={motivo} className="flex justify-between items-start gap-2">
+                          <span className="text-muted-foreground break-words flex-1">{motivo}</span>
+                          <span className="font-medium text-red-600 whitespace-nowrap">{(count as number).toLocaleString("pt-BR")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </div>
+              )}
               
               {(selectedImportRun.realCounts?.errorRows || selectedImportRun.errorRows || 0) > 0 && (
                 <Button
