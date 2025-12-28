@@ -9154,6 +9154,126 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // GET /api/admin/db-snapshot - Database diagnostic snapshot (MASTER ONLY)
+  app.get("/api/admin/db-snapshot", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const countsByTenant = await db.execute(sql`
+        WITH pessoa_counts AS (
+          SELECT COALESCE(tenant_id, 0) as tid, COUNT(*) as cnt FROM clientes_pessoa GROUP BY tenant_id
+        ),
+        vinculo_counts AS (
+          SELECT COALESCE(tenant_id, 0) as tid, COUNT(*) as cnt FROM clientes_vinculo GROUP BY tenant_id
+        ),
+        folha_counts AS (
+          SELECT COALESCE(p.tenant_id, 0) as tid, COUNT(*) as cnt 
+          FROM clientes_folha_mes f
+          LEFT JOIN clientes_pessoa p ON f.pessoa_id = p.id
+          GROUP BY p.tenant_id
+        ),
+        contrato_counts AS (
+          SELECT COALESCE(p.tenant_id, 0) as tid, COUNT(*) as cnt 
+          FROM clientes_contratos c
+          LEFT JOIN clientes_pessoa p ON c.pessoa_id = p.id
+          GROUP BY p.tenant_id
+        ),
+        contact_counts AS (
+          SELECT COALESCE(p.tenant_id, 0) as tid, COUNT(*) as cnt 
+          FROM client_contacts cc
+          LEFT JOIN clientes_pessoa p ON cc.client_id = p.id
+          GROUP BY p.tenant_id
+        ),
+        base_counts AS (
+          SELECT COALESCE(tenant_id, 0) as tid, COUNT(*) as cnt FROM bases_importadas GROUP BY tenant_id
+        ),
+        run_counts AS (
+          SELECT COALESCE(tenant_id, 0) as tid, COUNT(*) as cnt FROM import_runs GROUP BY tenant_id
+        ),
+        run_row_counts AS (
+          SELECT COALESCE(ir.tenant_id, 0) as tid, COUNT(*) as cnt 
+          FROM import_run_rows rr
+          LEFT JOIN import_runs ir ON rr.import_run_id = ir.id
+          GROUP BY ir.tenant_id
+        ),
+        error_counts AS (
+          SELECT COALESCE(ir.tenant_id, 0) as tid, COUNT(*) as cnt 
+          FROM import_errors ie
+          LEFT JOIN import_runs ir ON ie.import_run_id = ir.id
+          GROUP BY ir.tenant_id
+        )
+        SELECT 
+          COALESCE(t.id, 0) as tenant_id,
+          COALESCE(t.name, 'Sem Tenant') as tenant_name,
+          COALESCE(pc.cnt, 0) as clientes_pessoa,
+          COALESCE(vc.cnt, 0) as clientes_vinculo,
+          COALESCE(fc.cnt, 0) as clientes_folha_mes,
+          COALESCE(cc.cnt, 0) as clientes_contratos,
+          COALESCE(ctc.cnt, 0) as client_contacts,
+          COALESCE(bc.cnt, 0) as bases_importadas,
+          COALESCE(rc.cnt, 0) as import_runs,
+          COALESCE(rrc.cnt, 0) as import_run_rows,
+          COALESCE(ec.cnt, 0) as import_errors
+        FROM (
+          SELECT DISTINCT tid FROM (
+            SELECT tid FROM pessoa_counts UNION ALL
+            SELECT tid FROM vinculo_counts UNION ALL
+            SELECT tid FROM base_counts UNION ALL
+            SELECT tid FROM run_counts UNION ALL
+            SELECT tid FROM run_row_counts UNION ALL
+            SELECT tid FROM error_counts
+          ) all_tids
+        ) tids
+        LEFT JOIN tenants t ON t.id = tids.tid
+        LEFT JOIN pessoa_counts pc ON pc.tid = tids.tid
+        LEFT JOIN vinculo_counts vc ON vc.tid = tids.tid
+        LEFT JOIN folha_counts fc ON fc.tid = tids.tid
+        LEFT JOIN contrato_counts cc ON cc.tid = tids.tid
+        LEFT JOIN contact_counts ctc ON ctc.tid = tids.tid
+        LEFT JOIN base_counts bc ON bc.tid = tids.tid
+        LEFT JOIN run_counts rc ON rc.tid = tids.tid
+        LEFT JOIN run_row_counts rrc ON rrc.tid = tids.tid
+        LEFT JOIN error_counts ec ON ec.tid = tids.tid
+        ORDER BY tenant_id
+      `);
+
+      const globalCounts = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM clientes_pessoa) as total_clientes_pessoa,
+          (SELECT COUNT(*) FROM clientes_vinculo) as total_clientes_vinculo,
+          (SELECT COUNT(*) FROM clientes_folha_mes) as total_clientes_folha_mes,
+          (SELECT COUNT(*) FROM clientes_contratos) as total_clientes_contratos,
+          (SELECT COUNT(*) FROM client_contacts) as total_client_contacts,
+          (SELECT COUNT(*) FROM bases_importadas) as total_bases_importadas,
+          (SELECT COUNT(*) FROM import_runs) as total_import_runs,
+          (SELECT COUNT(*) FROM import_run_rows) as total_import_run_rows,
+          (SELECT COUNT(*) FROM import_errors) as total_import_errors
+      `);
+
+      const dbUrl = process.env.DATABASE_URL || "";
+      let dbInfo = { host: "***", dbname: "***" };
+      try {
+        const match = dbUrl.match(/@([^:\/]+)(?::\d+)?\/([^?]+)/);
+        if (match) {
+          const host = match[1];
+          const dbname = match[2];
+          dbInfo = {
+            host: host.length > 8 ? host.slice(0, 4) + "****" + host.slice(-4) : "****",
+            dbname: dbname.length > 6 ? dbname.slice(0, 3) + "***" + dbname.slice(-3) : "***",
+          };
+        }
+      } catch {}
+
+      return res.json({
+        timestamp: new Date().toISOString(),
+        database: dbInfo,
+        countsByTenant: countsByTenant.rows,
+        globalCounts: globalCounts.rows[0] || { import_run_rows: 0, import_errors: 0 },
+      });
+    } catch (error: any) {
+      console.error("DB snapshot error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao gerar snapshot" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
