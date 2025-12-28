@@ -9307,111 +9307,112 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // DELETE /api/admin/reset-tenant-data - Hard delete all client data for current tenant (MASTER ONLY)
+  // Usa session_replication_role='replica' para desabilitar triggers/FKs e acelerar DELETEs
   app.delete("/api/admin/reset-tenant-data", requireAuth, requireMaster, async (req, res) => {
     const tenantId = req.tenantId || 1;
     const startTime = Date.now();
     const stepTimes: Record<string, number> = {};
     const deleted: Record<string, number> = {};
+    const countsBefore: Record<string, number> = {};
     
-    console.log(`[RESET-TENANT] ========== INICIANDO LIMPEZA FORTE TENANT ${tenantId} ==========`);
+    console.log(`[RESET-TENANT] ========== INICIANDO LIMPEZA RÁPIDA TENANT ${tenantId} ==========`);
     
     try {
-      // Helper para log e execução de cada step
-      const executeStep = async (stepNum: number, tableName: string, deleteQuery: any, countQuery: any) => {
-        const stepStart = Date.now();
+      // 1. Capturar contagens ANTES (para relatório)
+      console.log(`[RESET-TENANT] Capturando contagens iniciais...`);
+      const beforeSnapshot = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as contratos,
+          (SELECT COUNT(*) FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as folhas,
+          (SELECT COUNT(*) FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as contatos,
+          (SELECT COUNT(*) FROM clientes_vinculo WHERE tenant_id = ${tenantId}) as vinculos,
+          (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as pessoas,
+          (SELECT COUNT(*) FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})) as run_rows,
+          (SELECT COUNT(*) FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})) as errors,
+          (SELECT COUNT(*) FROM import_runs WHERE tenant_id = ${tenantId}) as runs,
+          (SELECT COUNT(*) FROM bases_importadas WHERE tenant_id = ${tenantId}) as bases
+      `);
+      const before = beforeSnapshot.rows[0] as any;
+      countsBefore["contratos"] = parseInt(before.contratos || "0");
+      countsBefore["folhas"] = parseInt(before.folhas || "0");
+      countsBefore["contatos"] = parseInt(before.contatos || "0");
+      countsBefore["vinculos"] = parseInt(before.vinculos || "0");
+      countsBefore["pessoas"] = parseInt(before.pessoas || "0");
+      countsBefore["run_rows"] = parseInt(before.run_rows || "0");
+      countsBefore["errors"] = parseInt(before.errors || "0");
+      countsBefore["runs"] = parseInt(before.runs || "0");
+      countsBefore["bases"] = parseInt(before.bases || "0");
+      
+      console.log(`[RESET-TENANT] Contagens iniciais: pessoas=${countsBefore.pessoas}, vinculos=${countsBefore.vinculos}, folhas=${countsBefore.folhas}`);
+      
+      // 2. Desabilitar triggers/FKs para acelerar DELETEs
+      console.log(`[RESET-TENANT] Desabilitando triggers (session_replication_role='replica')...`);
+      await db.execute(sql`SET session_replication_role = 'replica'`);
+      
+      try {
+        // Helper para log e execução de cada step (sem contagem intermediária para velocidade)
+        const fastDelete = async (stepNum: number, tableName: string, deleteQuery: any) => {
+          const stepStart = Date.now();
+          console.log(`[RESET-TENANT] Step ${stepNum} START: ${tableName}`);
+          
+          const result = await db.execute(deleteQuery);
+          const count = result.rowCount || 0;
+          
+          const stepElapsed = Date.now() - stepStart;
+          stepTimes[tableName] = stepElapsed;
+          deleted[tableName] = count;
+          
+          console.log(`[RESET-TENANT] Step ${stepNum} DONE: ${tableName} - deletados: ${count}, tempo: ${stepElapsed}ms`);
+          return count;
+        };
+
+        // Ordem: folhas → mestres (contratos, folhas, contatos → vinculos → pessoas → run_rows, errors → runs → bases)
+        await fastDelete(1, "clientes_contratos",
+          sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
+        );
         
-        // Contagem ANTES
-        const beforeResult = await db.execute(countQuery);
-        const countBefore = parseInt((beforeResult.rows[0] as any)?.count || "0");
-        console.log(`[RESET-TENANT] Step ${stepNum} START: ${tableName} (${countBefore} registros)`);
+        await fastDelete(2, "clientes_folha_mes",
+          sql`DELETE FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
+        );
         
-        // DELETE
-        const deleteResult = await db.execute(deleteQuery);
-        const deletedCount = deleteResult.rowCount || 0;
+        await fastDelete(3, "client_contacts",
+          sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
+        );
         
-        // Contagem DEPOIS
-        const afterResult = await db.execute(countQuery);
-        const countAfter = parseInt((afterResult.rows[0] as any)?.count || "0");
+        await fastDelete(4, "clientes_vinculo",
+          sql`DELETE FROM clientes_vinculo WHERE tenant_id = ${tenantId}`
+        );
         
-        const stepElapsed = Date.now() - stepStart;
-        stepTimes[tableName] = stepElapsed;
-        deleted[tableName] = deletedCount;
+        await fastDelete(5, "clientes_pessoa",
+          sql`DELETE FROM clientes_pessoa WHERE tenant_id = ${tenantId}`
+        );
         
-        console.log(`[RESET-TENANT] Step ${stepNum} DONE: ${tableName} - deletados: ${deletedCount}, restantes: ${countAfter}, tempo: ${stepElapsed}ms`);
+        await fastDelete(6, "import_run_rows",
+          sql`DELETE FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`
+        );
         
-        return deletedCount;
-      };
-
-      // 1. Deletar contratos de pessoas do tenant
-      await executeStep(1, "clientes_contratos",
-        sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-        sql`SELECT COUNT(*) as count FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
-      );
-
-      // 2. Deletar folhas de pessoas do tenant
-      await executeStep(2, "clientes_folha_mes",
-        sql`DELETE FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-        sql`SELECT COUNT(*) as count FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
-      );
-
-      // 3. Deletar contatos de pessoas do tenant
-      await executeStep(3, "client_contacts",
-        sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-        sql`SELECT COUNT(*) as count FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
-      );
-
-      // 4. Deletar vínculos do tenant
-      await executeStep(4, "clientes_vinculo",
-        sql`DELETE FROM clientes_vinculo WHERE tenant_id = ${tenantId}`,
-        sql`SELECT COUNT(*) as count FROM clientes_vinculo WHERE tenant_id = ${tenantId}`
-      );
-
-      // 5. Deletar pessoas do tenant
-      await executeStep(5, "clientes_pessoa",
-        sql`DELETE FROM clientes_pessoa WHERE tenant_id = ${tenantId}`,
-        sql`SELECT COUNT(*) as count FROM clientes_pessoa WHERE tenant_id = ${tenantId}`
-      );
-
-      // 6. Deletar import_run_rows dos runs do tenant
-      await executeStep(6, "import_run_rows",
-        sql`DELETE FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
-        sql`SELECT COUNT(*) as count FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`
-      );
-
-      // 7. Deletar import_errors dos runs do tenant
-      await executeStep(7, "import_errors",
-        sql`DELETE FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
-        sql`SELECT COUNT(*) as count FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`
-      );
-
-      // 8. Deletar import_runs do tenant
-      await executeStep(8, "import_runs",
-        sql`DELETE FROM import_runs WHERE tenant_id = ${tenantId}`,
-        sql`SELECT COUNT(*) as count FROM import_runs WHERE tenant_id = ${tenantId}`
-      );
-
-      // 9. Deletar bases_importadas do tenant
-      await executeStep(9, "bases_importadas",
-        sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`,
-        sql`SELECT COUNT(*) as count FROM bases_importadas WHERE tenant_id = ${tenantId}`
-      );
+        await fastDelete(7, "import_errors",
+          sql`DELETE FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`
+        );
+        
+        await fastDelete(8, "import_runs",
+          sql`DELETE FROM import_runs WHERE tenant_id = ${tenantId}`
+        );
+        
+        await fastDelete(9, "bases_importadas",
+          sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`
+        );
+        
+      } finally {
+        // 3. SEMPRE restaurar session_replication_role para 'origin'
+        console.log(`[RESET-TENANT] Restaurando triggers (session_replication_role='origin')...`);
+        await db.execute(sql`SET session_replication_role = 'origin'`);
+      }
 
       const elapsedMs = Date.now() - startTime;
       
-      console.log(`[RESET-TENANT] ========== RESUMO ==========`);
-      console.log(`[RESET-TENANT] Contratos deletados: ${deleted["clientes_contratos"] || 0}`);
-      console.log(`[RESET-TENANT] Folhas deletadas: ${deleted["clientes_folha_mes"] || 0}`);
-      console.log(`[RESET-TENANT] Contatos deletados: ${deleted["client_contacts"] || 0}`);
-      console.log(`[RESET-TENANT] Vínculos deletados: ${deleted["clientes_vinculo"] || 0}`);
-      console.log(`[RESET-TENANT] Pessoas deletadas: ${deleted["clientes_pessoa"] || 0}`);
-      console.log(`[RESET-TENANT] Run rows deletadas: ${deleted["import_run_rows"] || 0}`);
-      console.log(`[RESET-TENANT] Errors deletados: ${deleted["import_errors"] || 0}`);
-      console.log(`[RESET-TENANT] Import runs deletados: ${deleted["import_runs"] || 0}`);
-      console.log(`[RESET-TENANT] Bases deletadas: ${deleted["bases_importadas"] || 0}`);
-      console.log(`[RESET-TENANT] ========== LIMPEZA CONCLUÍDA EM ${elapsedMs}ms ==========`);
-      
-      // Rodar snapshot para retornar contagens atualizadas
-      const snapshot = await db.execute(sql`
+      // 4. Capturar contagens DEPOIS
+      const afterSnapshot = await db.execute(sql`
         SELECT 
           (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as clientes_pessoa,
           (SELECT COUNT(*) FROM clientes_vinculo WHERE tenant_id = ${tenantId}) as clientes_vinculo,
@@ -9422,9 +9423,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           (SELECT COUNT(*) FROM import_runs WHERE tenant_id = ${tenantId}) as import_runs
       `);
       
+      console.log(`[RESET-TENANT] ========== RESUMO ==========`);
+      console.log(`[RESET-TENANT] Contratos: ${countsBefore.contratos} → ${deleted["clientes_contratos"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Folhas: ${countsBefore.folhas} → ${deleted["clientes_folha_mes"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Contatos: ${countsBefore.contatos} → ${deleted["client_contacts"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Vínculos: ${countsBefore.vinculos} → ${deleted["clientes_vinculo"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Pessoas: ${countsBefore.pessoas} → ${deleted["clientes_pessoa"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Run rows: ${countsBefore.run_rows} → ${deleted["import_run_rows"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Errors: ${countsBefore.errors} → ${deleted["import_errors"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Import runs: ${countsBefore.runs} → ${deleted["import_runs"] || 0} deletados`);
+      console.log(`[RESET-TENANT] Bases: ${countsBefore.bases} → ${deleted["bases_importadas"] || 0} deletados`);
+      console.log(`[RESET-TENANT] ========== LIMPEZA CONCLUÍDA EM ${elapsedMs}ms ==========`);
+      
       return res.json({
         success: true,
         tenantId,
+        countsBefore,
         deleted: {
           contratos: deleted["clientes_contratos"] || 0,
           folhas: deleted["clientes_folha_mes"] || 0,
@@ -9437,10 +9451,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           bases_importadas: deleted["bases_importadas"] || 0,
         },
         stepTimes,
-        remainingCounts: snapshot.rows[0],
+        remainingCounts: afterSnapshot.rows[0],
         elapsedMs,
       });
     } catch (error: any) {
+      // Garantir que session_replication_role seja restaurado mesmo em erro
+      try {
+        await db.execute(sql`SET session_replication_role = 'origin'`);
+      } catch (e) {
+        console.error(`[RESET-TENANT] Erro ao restaurar session_replication_role: ${e}`);
+      }
       console.error(`[RESET-TENANT] ERRO: ${error.message}`);
       return res.status(500).json({ message: error.message || "Erro ao limpar dados do tenant" });
     }
