@@ -9532,23 +9532,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       console.log(`[RESET-JOB] Contagens iniciais: pessoas=${job.countsBefore.pessoas}, vinculos=${job.countsBefore.vinculos}, folhas=${job.countsBefore.folhas}`);
       
-      // 2. Desabilitar triggers/FKs
-      console.log(`[RESET-JOB] Desabilitando triggers...`);
-      await db.execute(sql`SET session_replication_role = 'replica'`);
+      // 2. Executar DELETEs em ordem correta (filhos antes de pais) dentro de transação
+      // Ordem: contratos → folhas → contatos → vínculos → pessoas → run_rows → errors → runs → bases
+      console.log(`[RESET-JOB] Iniciando transação de deleção...`);
+      
+      const deleteQueries = [
+        sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+        sql`DELETE FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+        sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+        sql`DELETE FROM clientes_vinculo WHERE tenant_id = ${tenantId}`,
+        sql`DELETE FROM clientes_pessoa WHERE tenant_id = ${tenantId}`,
+        sql`DELETE FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
+        sql`DELETE FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
+        sql`DELETE FROM import_runs WHERE tenant_id = ${tenantId}`,
+        sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`,
+      ];
+      
+      // BEGIN transaction
+      await db.execute(sql`BEGIN`);
       
       try {
-        const deleteQueries = [
-          sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-          sql`DELETE FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-          sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
-          sql`DELETE FROM clientes_vinculo WHERE tenant_id = ${tenantId}`,
-          sql`DELETE FROM clientes_pessoa WHERE tenant_id = ${tenantId}`,
-          sql`DELETE FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
-          sql`DELETE FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
-          sql`DELETE FROM import_runs WHERE tenant_id = ${tenantId}`,
-          sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`,
-        ];
-        
         for (let i = 0; i < deleteQueries.length; i++) {
           const step = job.steps[i];
           step.status = "running";
@@ -9557,26 +9560,32 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const stepStart = Date.now();
           console.log(`[RESET-JOB] Step ${i + 1} START: ${step.name}`);
           
-          try {
-            const result = await db.execute(deleteQueries[i]);
-            step.deleted = result.rowCount || 0;
-            step.status = "completed";
-            step.elapsedMs = Date.now() - stepStart;
-            job.deleted[step.name] = step.deleted;
-            
-            console.log(`[RESET-JOB] Step ${i + 1} DONE: ${step.name} - deletados: ${step.deleted}, tempo: ${step.elapsedMs}ms`);
-          } catch (stepErr: any) {
-            step.status = "error";
-            step.error = stepErr.message;
-            step.elapsedMs = Date.now() - stepStart;
-            throw stepErr;
-          }
+          const result = await db.execute(deleteQueries[i]);
+          step.deleted = result.rowCount || 0;
+          step.status = "completed";
+          step.elapsedMs = Date.now() - stepStart;
+          job.deleted[step.name] = step.deleted;
+          
+          console.log(`[RESET-JOB] Step ${i + 1} DONE: ${step.name} - deletados: ${step.deleted}, tempo: ${step.elapsedMs}ms`);
         }
         
-      } finally {
-        // 3. Restaurar triggers
-        console.log(`[RESET-JOB] Restaurando triggers...`);
-        await db.execute(sql`SET session_replication_role = 'origin'`);
+        // COMMIT transaction
+        await db.execute(sql`COMMIT`);
+        console.log(`[RESET-JOB] Transação commitada com sucesso`);
+        
+      } catch (txError: any) {
+        // ROLLBACK on any error
+        console.error(`[RESET-JOB] Erro durante deleção, fazendo ROLLBACK: ${txError.message}`);
+        await db.execute(sql`ROLLBACK`);
+        
+        // Mark failed step
+        const currentStepIndex = job.currentStep - 1;
+        if (job.steps[currentStepIndex]) {
+          job.steps[currentStepIndex].status = "error";
+          job.steps[currentStepIndex].error = txError.message;
+        }
+        
+        throw txError;
       }
       
       job.status = "completed";
@@ -9586,12 +9595,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       console.log(`[RESET-JOB] ========== JOB ${jobId} CONCLUÍDO EM ${job.elapsedMs}ms ==========`);
       
     } catch (error: any) {
-      try {
-        await db.execute(sql`SET session_replication_role = 'origin'`);
-      } catch (e) {
-        console.error(`[RESET-JOB] Erro ao restaurar triggers:`, e);
-      }
-      
       job.status = "error";
       job.error = error.message;
       job.completedAt = new Date();
@@ -9602,7 +9605,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   }
 
   // DELETE /api/admin/reset-tenant-data - Hard delete all client data for current tenant (MASTER ONLY)
-  // Usa session_replication_role='replica' para desabilitar triggers/FKs e acelerar DELETEs
+  // Executa DELETEs em ordem correta respeitando foreign keys
   // DEPRECATED: Use POST /api/admin/reset-tenant for async version
   app.delete("/api/admin/reset-tenant-data", requireAuth, requireMaster, async (req, res) => {
     const tenantId = req.tenantId || 1;
@@ -9641,28 +9644,29 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       console.log(`[RESET-TENANT] Contagens iniciais: pessoas=${countsBefore.pessoas}, vinculos=${countsBefore.vinculos}, folhas=${countsBefore.folhas}`);
       
-      // 2. Desabilitar triggers/FKs para acelerar DELETEs
-      console.log(`[RESET-TENANT] Desabilitando triggers (session_replication_role='replica')...`);
-      await db.execute(sql`SET session_replication_role = 'replica'`);
+      // 2. Executar DELETEs em ordem correta (filhos antes de pais) dentro de transação
+      // Ordem: contratos → folhas → contatos → vínculos → pessoas → run_rows → errors → runs → bases
+      console.log(`[RESET-TENANT] Iniciando transação de deleção...`);
+      
+      const fastDelete = async (stepNum: number, tableName: string, deleteQuery: any) => {
+        const stepStart = Date.now();
+        console.log(`[RESET-TENANT] Step ${stepNum} START: ${tableName}`);
+        
+        const result = await db.execute(deleteQuery);
+        const count = result.rowCount || 0;
+        
+        const stepElapsed = Date.now() - stepStart;
+        stepTimes[tableName] = stepElapsed;
+        deleted[tableName] = count;
+        
+        console.log(`[RESET-TENANT] Step ${stepNum} DONE: ${tableName} - deletados: ${count}, tempo: ${stepElapsed}ms`);
+        return count;
+      };
+
+      // BEGIN transaction
+      await db.execute(sql`BEGIN`);
       
       try {
-        // Helper para log e execução de cada step (sem contagem intermediária para velocidade)
-        const fastDelete = async (stepNum: number, tableName: string, deleteQuery: any) => {
-          const stepStart = Date.now();
-          console.log(`[RESET-TENANT] Step ${stepNum} START: ${tableName}`);
-          
-          const result = await db.execute(deleteQuery);
-          const count = result.rowCount || 0;
-          
-          const stepElapsed = Date.now() - stepStart;
-          stepTimes[tableName] = stepElapsed;
-          deleted[tableName] = count;
-          
-          console.log(`[RESET-TENANT] Step ${stepNum} DONE: ${tableName} - deletados: ${count}, tempo: ${stepElapsed}ms`);
-          return count;
-        };
-
-        // Ordem: folhas → mestres (contratos, folhas, contatos → vinculos → pessoas → run_rows, errors → runs → bases)
         await fastDelete(1, "clientes_contratos",
           sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`
         );
@@ -9699,15 +9703,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`
         );
         
-      } finally {
-        // 3. SEMPRE restaurar session_replication_role para 'origin'
-        console.log(`[RESET-TENANT] Restaurando triggers (session_replication_role='origin')...`);
-        await db.execute(sql`SET session_replication_role = 'origin'`);
+        // COMMIT transaction
+        await db.execute(sql`COMMIT`);
+        console.log(`[RESET-TENANT] Transação commitada com sucesso`);
+        
+      } catch (txError: any) {
+        // ROLLBACK on any error
+        console.error(`[RESET-TENANT] Erro durante deleção, fazendo ROLLBACK: ${txError.message}`);
+        await db.execute(sql`ROLLBACK`);
+        throw txError;
       }
 
       const elapsedMs = Date.now() - startTime;
       
-      // 4. Capturar contagens DEPOIS
+      // 3. Capturar contagens DEPOIS
       const afterSnapshot = await db.execute(sql`
         SELECT 
           (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as clientes_pessoa,
@@ -9751,12 +9760,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         elapsedMs,
       });
     } catch (error: any) {
-      // Garantir que session_replication_role seja restaurado mesmo em erro
-      try {
-        await db.execute(sql`SET session_replication_role = 'origin'`);
-      } catch (e) {
-        console.error(`[RESET-TENANT] Erro ao restaurar session_replication_role: ${e}`);
-      }
       console.error(`[RESET-TENANT] ERRO: ${error.message}`);
       return res.status(500).json({ message: error.message || "Erro ao limpar dados do tenant" });
     }
