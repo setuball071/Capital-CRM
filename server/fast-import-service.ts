@@ -510,7 +510,7 @@ class FastImportService {
     console.log(`[FastImport] Pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
     const vinculoResult = await db.execute(sql`
-      INSERT INTO clientes_vinculo (cpf, matricula, orgao, convenio, pessoa_id, upag, rjur, sit_func)
+      INSERT INTO clientes_vinculo (cpf, matricula, orgao, convenio, pessoa_id, upag, rjur, sit_func, import_run_id, base_tag)
       SELECT DISTINCT ON (s.cpf, s.matricula, COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
         s.cpf,
         s.matricula,
@@ -519,7 +519,9 @@ class FastImportService {
         p.id,
         s.upag,
         s.rjur,
-        s.sit_func
+        s.sit_func,
+        ${run.id},
+        ${baseTag}
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
@@ -530,6 +532,8 @@ class FastImportService {
         upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
         rjur = COALESCE(EXCLUDED.rjur, clientes_vinculo.rjur),
         sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
+        import_run_id = ${run.id},
+        base_tag = ${baseTag},
         ultima_atualizacao = NOW()
     `);
 
@@ -544,7 +548,7 @@ class FastImportService {
         margem_bruta_70, margem_utilizada_70, margem_saldo_70,
         margem_cartao_credito_saldo, margem_cartao_beneficio_saldo,
         creditos, debitos, liquido, salario_bruto, descontos_brutos, salario_liquido,
-        sit_func_no_mes, base_tag
+        sit_func_no_mes, base_tag, import_run_id
       )
       SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
         p.id,
@@ -571,7 +575,8 @@ class FastImportService {
         s.debitos::numeric,
         s.liquido::numeric,
         s.sit_func,
-        ${baseTag}
+        ${baseTag},
+        ${run.id}
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       JOIN clientes_vinculo v ON v.cpf = s.cpf 
@@ -601,7 +606,8 @@ class FastImportService {
         salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
         descontos_brutos = COALESCE(EXCLUDED.descontos_brutos, clientes_folha_mes.descontos_brutos),
         salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
-        base_tag = ${baseTag}
+        base_tag = ${baseTag},
+        import_run_id = ${run.id}
     `);
 
     console.log(`[FastImport] Folha upserted: ${folhaResult.rowCount || 0}`);
@@ -617,8 +623,10 @@ class FastImportService {
 
     console.log(`[FastImport] Starting SQL-based merge for D8...`);
 
+    const baseTag = run.baseTag || "";
+    
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, situacao, data_inicio, data_fim)
+      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, situacao, data_inicio, data_fim, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
         p.id,
         COALESCE(s.banco, ${banco}),
@@ -630,7 +638,9 @@ class FastImportService {
         s.prazo_total,
         s.situacao_contrato,
         s.data_inicio,
-        s.data_fim
+        s.data_fim,
+        ${run.id},
+        ${baseTag}
       FROM staging_d8 s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
@@ -646,7 +656,8 @@ class FastImportService {
         situacao = COALESCE(EXCLUDED.situacao, clientes_contratos.situacao),
         data_inicio = COALESCE(EXCLUDED.data_inicio, clientes_contratos.data_inicio),
         data_fim = COALESCE(EXCLUDED.data_fim, clientes_contratos.data_fim),
-        atualizado_em = NOW()
+        import_run_id = ${run.id},
+        base_tag = ${baseTag}
     `);
 
     console.log(`[FastImport] Contratos upserted: ${contratoResult.rowCount || 0}`);
@@ -656,10 +667,11 @@ class FastImportService {
 
   private async mergeContatos(run: ImportRun): Promise<{ merged: number; errors: number }> {
     console.log(`[FastImport] Starting SQL-based merge for contatos...`);
+    const baseTag = run.baseTag || "";
 
     const telefone1Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor)
-      SELECT p.id, 'telefone', s.telefone_1
+      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
+      SELECT p.id, 'telefone', s.telefone_1, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
@@ -669,8 +681,8 @@ class FastImportService {
     `);
 
     const telefone2Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor)
-      SELECT p.id, 'telefone', s.telefone_2
+      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
+      SELECT p.id, 'telefone', s.telefone_2, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
@@ -680,8 +692,8 @@ class FastImportService {
     `);
 
     const telefone3Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor)
-      SELECT p.id, 'telefone', s.telefone_3
+      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
+      SELECT p.id, 'telefone', s.telefone_3, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
@@ -691,8 +703,8 @@ class FastImportService {
     `);
 
     const emailResult = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor)
-      SELECT p.id, 'email', s.email
+      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
+      SELECT p.id, 'email', s.email, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}

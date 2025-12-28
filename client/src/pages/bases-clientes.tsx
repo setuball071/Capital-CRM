@@ -317,7 +317,7 @@ export default function BasesClientes() {
   };
 
   const deleteImportRun = async (runId: number) => {
-    if (!confirm(`Tem certeza que deseja excluir a importação #${runId}? Esta ação não pode ser desfeita.`)) {
+    if (!confirm(`Tem certeza que deseja excluir a importação #${runId}? Esta ação irá remover todos os dados importados (clientes, folhas, contratos) e não pode ser desfeita.`)) {
       return;
     }
     try {
@@ -328,11 +328,19 @@ export default function BasesClientes() {
       if (!response.ok) {
         throw new Error("Erro ao excluir importação");
       }
+      const result = await response.json();
       toast({
         title: "Importação excluída",
-        description: `Importação #${runId} foi excluída com sucesso.`,
+        description: result.deleted 
+          ? `Importação #${runId} excluída. Removidos: ${result.deleted.folhas} folhas, ${result.deleted.contratos} contratos, ${result.deleted.vinculos} vínculos, ${result.deleted.pessoasOrfas} pessoas.`
+          : `Importação #${runId} foi excluída com sucesso.`,
       });
+      // Invalidar todos os caches relacionados a clientes
       queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
     } catch (error) {
       toast({
         title: "Erro",

@@ -3035,13 +3035,17 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Delete base and all related data
       const result = await storage.deleteBaseImportada(id, base.baseTag);
       
-      console.log(`[Delete Base] Completed: ${result.deletedFolhas} folhas, ${result.deletedContratos} contratos, ${result.deletedPessoas} pessoas removed`);
+      console.log(`[Delete Base] Completed: ${result.deletedFolhas} folhas, ${result.deletedContratos} contratos, ${result.deletedVinculos} vinculos, ${result.deletedContacts} contacts, ${result.deletedPessoas} pessoas removed`);
       
       return res.json({
-        message: "Base excluída com sucesso",
-        deletedFolhas: result.deletedFolhas,
-        deletedContratos: result.deletedContratos,
-        deletedPessoas: result.deletedPessoas,
+        message: "Base e dados associados excluídos com sucesso",
+        deleted: {
+          folhas: result.deletedFolhas,
+          contratos: result.deletedContratos,
+          vinculos: result.deletedVinculos,
+          contacts: result.deletedContacts,
+          pessoas: result.deletedPessoas,
+        },
       });
     } catch (error) {
       console.error("Delete base error:", error);
@@ -3641,26 +3645,75 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // DELETE excluir import run e linhas associadas
+  // DELETE excluir import run e TODOS os dados finais associados (cascata completa)
   app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       
-      // Deletar linhas de rastreabilidade primeiro
+      console.log(`[ImportRun] Starting cascading delete for run ${runId}...`);
+      
+      // 1. Deletar dados finais vinculados a este import_run_id
+      // Ordem: folha_mes -> contratos -> contacts -> vinculos (inversa da criação)
+      
+      const folhasDeleted = await db.execute(sql`
+        DELETE FROM clientes_folha_mes WHERE import_run_id = ${runId}
+      `);
+      console.log(`[ImportRun] Deleted ${folhasDeleted.rowCount || 0} folhas`);
+      
+      const contratosDeleted = await db.execute(sql`
+        DELETE FROM clientes_contratos WHERE import_run_id = ${runId}
+      `);
+      console.log(`[ImportRun] Deleted ${contratosDeleted.rowCount || 0} contratos`);
+      
+      const contactsDeleted = await db.execute(sql`
+        DELETE FROM client_contacts WHERE import_run_id = ${runId}
+      `);
+      console.log(`[ImportRun] Deleted ${contactsDeleted.rowCount || 0} contacts`);
+      
+      const vinculosDeleted = await db.execute(sql`
+        DELETE FROM clientes_vinculo WHERE import_run_id = ${runId}
+      `);
+      console.log(`[ImportRun] Deleted ${vinculosDeleted.rowCount || 0} vinculos`);
+      
+      // 2. Deletar pessoas órfãs (sem folhas, sem contratos, sem vínculos)
+      const pessoasOrfasDeleted = await db.execute(sql`
+        DELETE FROM clientes_pessoa 
+        WHERE NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
+          AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
+          AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
+      `);
+      console.log(`[ImportRun] Deleted ${pessoasOrfasDeleted.rowCount || 0} orphaned pessoas`);
+      
+      // 3. Deletar linhas de rastreabilidade
       await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
       
-      // Deletar erros do import
+      // 4. Deletar erros do import
       await db.execute(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
       
-      // Deletar o registro principal
+      // 5. Deletar staging (caso tenha restado)
+      await db.execute(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
+      await db.execute(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
+      await db.execute(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
+      
+      // 6. Deletar o registro principal
       const result = await db.delete(importRuns).where(eq(importRuns.id, runId)).returning();
       
       if (result.length === 0) {
         return res.status(404).json({ message: "Import run não encontrado" });
       }
       
-      console.log(`[ImportRun] Deleted run ${runId} and associated data`);
-      return res.json({ success: true, message: "Import excluído com sucesso" });
+      console.log(`[ImportRun] Completed cascading delete for run ${runId}`);
+      return res.json({ 
+        success: true, 
+        message: "Import e dados associados excluídos com sucesso",
+        deleted: {
+          folhas: folhasDeleted.rowCount || 0,
+          contratos: contratosDeleted.rowCount || 0,
+          contacts: contactsDeleted.rowCount || 0,
+          vinculos: vinculosDeleted.rowCount || 0,
+          pessoasOrfas: pessoasOrfasDeleted.rowCount || 0
+        }
+      });
     } catch (error) {
       console.error("Delete import run error:", error);
       return res.status(500).json({ message: "Erro ao excluir import" });

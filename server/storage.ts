@@ -211,7 +211,7 @@ export interface IStorage {
   getBaseByStatus(status: string): Promise<BaseImportada | undefined>;
   createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada>;
   updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined>;
-  deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedPessoas: number }>;
+  deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }>;
   
   // Pedidos Lista
   getAllPedidosLista(): Promise<PedidoLista[]>;
@@ -1315,39 +1315,52 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
-  async deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedPessoas: number }> {
-    console.log(`[Storage] Deleting base ${id} with tag ${baseTag}`);
+  async deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }> {
+    console.log(`[Storage] Starting cascading delete for base ${id} with tag ${baseTag}`);
     
     // 1. Delete folhas with this baseTag
-    const folhasResult = await db.delete(clientesFolhaMes)
-      .where(eq(clientesFolhaMes.baseTag, baseTag))
-      .returning({ id: clientesFolhaMes.id });
-    const deletedFolhas = folhasResult.length;
+    const folhasResult = await db.execute(sql`
+      DELETE FROM clientes_folha_mes WHERE base_tag = ${baseTag}
+    `);
+    const deletedFolhas = Number(folhasResult.rowCount) || 0;
     console.log(`[Storage] Deleted ${deletedFolhas} folhas`);
     
     // 2. Delete contratos with this baseTag
-    const contratosResult = await db.delete(clientesContratos)
-      .where(eq(clientesContratos.baseTag, baseTag))
-      .returning({ id: clientesContratos.id });
-    const deletedContratos = contratosResult.length;
+    const contratosResult = await db.execute(sql`
+      DELETE FROM clientes_contratos WHERE base_tag = ${baseTag}
+    `);
+    const deletedContratos = Number(contratosResult.rowCount) || 0;
     console.log(`[Storage] Deleted ${deletedContratos} contratos`);
     
-    // 3. Delete orphaned pessoas - those whose last base was this one AND have no remaining folhas/contratos
-    // Use a single efficient query with NOT EXISTS subqueries
+    // 3. Delete contacts with this baseTag
+    const contactsResult = await db.execute(sql`
+      DELETE FROM client_contacts WHERE base_tag = ${baseTag}
+    `);
+    const deletedContacts = Number(contactsResult.rowCount) || 0;
+    console.log(`[Storage] Deleted ${deletedContacts} contacts`);
+    
+    // 4. Delete vinculos with this baseTag
+    const vinculosResult = await db.execute(sql`
+      DELETE FROM clientes_vinculo WHERE base_tag = ${baseTag}
+    `);
+    const deletedVinculos = Number(vinculosResult.rowCount) || 0;
+    console.log(`[Storage] Deleted ${deletedVinculos} vinculos`);
+    
+    // 5. Delete orphaned pessoas - those without any remaining folhas, contratos, or vinculos
     const pessoasOrfasResult = await db.execute(sql`
       DELETE FROM clientes_pessoa 
-      WHERE base_tag_ultima = ${baseTag}
-        AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
+      WHERE NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
         AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
+        AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
     `);
     const deletedPessoas = Number(pessoasOrfasResult.rowCount) || 0;
     console.log(`[Storage] Deleted ${deletedPessoas} orphaned pessoas`);
     
-    // 4. Delete the base record itself
+    // 6. Delete the base record itself
     await db.delete(basesImportadas).where(eq(basesImportadas.id, id));
-    console.log(`[Storage] Deleted base record ${id}`);
+    console.log(`[Storage] Completed cascading delete for base ${id}`);
     
-    return { deletedFolhas, deletedContratos, deletedPessoas };
+    return { deletedFolhas, deletedContratos, deletedVinculos, deletedContacts, deletedPessoas };
   }
 
   // Pedidos Lista

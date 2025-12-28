@@ -442,6 +442,9 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   primeiraImportacao: timestamp("primeira_importacao").notNull().defaultNow(),
   ultimaAtualizacao: timestamp("ultima_atualizacao").notNull().defaultNow(),
   extrasVinculo: jsonb("extras_vinculo"), // Ex: { "instituidor": "0654321" } para pensionistas
+  // Rastreabilidade para exclusão
+  importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
+  baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
   cpfMatriculaOrgaoIdx: uniqueIndex("idx_vinculo_cpf_mat_orgao").on(table.cpf, table.matricula, table.orgao),
 }));
@@ -481,6 +484,7 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   liquido: decimal("liquido", { precision: 12, scale: 2 }),
   sitFuncNoMes: varchar("sit_func_no_mes", { length: 100 }),
   baseTag: varchar("base_tag", { length: 100 }),
+  importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   extrasFolha: jsonb("extras_folha"),
 }, (table) => ({
   vinculoCompetenciaIdx: uniqueIndex("idx_folha_mes_vinculo_competencia").on(table.vinculoId, table.competencia),
@@ -508,6 +512,7 @@ export const clientesContratos = pgTable("clientes_contratos", {
   endedAt: timestamp("ended_at"), // data encerramento (se encerrado)
   competencia: timestamp("competencia"),
   baseTag: varchar("base_tag", { length: 100 }),
+  importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 });
 
@@ -518,6 +523,9 @@ export const clientContacts = pgTable("client_contacts", {
   tipo: varchar("tipo", { length: 20 }).notNull(), // telefone, email
   valor: varchar("valor", { length: 255 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Rastreabilidade para exclusão
+  importRunId: integer("import_run_id"), // Link ao import que criou
+  baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 });
 
 // 5) client_snapshots - Histórico de atualizações para auditoria
