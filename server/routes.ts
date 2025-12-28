@@ -3695,6 +3695,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // DELETE excluir import run e TODOS os dados finais associados (cascata completa)
+  // IMPORTANTE: Usa BOTH import_run_id E base_tag para capturar registros órfãos legados
   app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const runId = parseInt(req.params.id);
@@ -3702,64 +3703,81 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       console.log(`[ImportRun] Starting TRANSACTIONAL cascading delete for run ${runId} (userTenant: ${userTenantId})...`);
       
-      // Buscar o import_run para obter tenantId
+      // Buscar o import_run para obter tenantId e base_tag
       const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
       
       if (!run) {
         return res.status(404).json({ message: "Import run não encontrado" });
       }
       
-      // Obter tenantId do run (se existir base_id, buscar da base)
-      let effectiveTenantId = userTenantId;
-      if (run.baseId) {
-        const [base] = await db.select().from(basesImportadas).where(eq(basesImportadas.id, run.baseId)).limit(1);
-        if (base?.tenantId) {
-          effectiveTenantId = base.tenantId;
-        }
-      }
+      // Usar tenantId do run ou do usuário
+      const effectiveTenantId = run.tenantId || userTenantId;
+      const runBaseTag = run.baseTag || "";
       
       if (!effectiveTenantId) {
         console.error(`[ImportRun] ERROR: Cannot delete run ${runId} - no tenantId found`);
         return res.status(400).json({ message: "Tenant ID obrigatório para exclusão" });
       }
       
-      console.log(`[ImportRun] Effective tenant: ${effectiveTenantId}`);
+      console.log(`[ImportRun] Effective tenant: ${effectiveTenantId}, base_tag: "${runBaseTag}"`);
       
       // Usar uma única query SQL com CTEs para garantir atomicidade total
-      // CRÍTICO: Filtra APENAS por import_run_id para garantir que só dados deste import sejam deletados
-      // O tenant_id é usado apenas para verificação de segurança e para limpeza de órfãos
+      // CRÍTICO: Filtra por import_run_id OU (import_run_id IS NULL AND base_tag match) para capturar órfãos
+      // Isso garante que registros legados sem import_run_id também sejam deletados
       const result = await db.execute(sql`
         WITH 
-        -- 1. Deletar folhas APENAS deste import_run_id (não usa tenant, filtra direto)
+        -- Identificar pessoas do tenant para isolamento
+        tenant_pessoas AS (
+          SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+        ),
+        -- 1. Deletar folhas: por import_run_id OU por base_tag (órfãos legados)
         deleted_folhas AS (
           DELETE FROM clientes_folha_mes 
-          WHERE import_run_id = ${runId}
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
           RETURNING id
         ),
-        -- 2. Deletar contratos APENAS deste import_run_id
+        -- 2. Deletar contratos: por import_run_id OU por base_tag
         deleted_contratos AS (
           DELETE FROM clientes_contratos 
-          WHERE import_run_id = ${runId}
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
           RETURNING id
         ),
-        -- 3. Deletar contacts APENAS deste import_run_id
+        -- 3. Deletar contacts: por import_run_id OU por base_tag
         deleted_contacts AS (
           DELETE FROM client_contacts 
-          WHERE import_run_id = ${runId}
+          WHERE client_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
           RETURNING id
         ),
-        -- 4. Deletar vinculos APENAS deste import_run_id
+        -- 4. Deletar vinculos: por import_run_id OU por base_tag (vínculos têm tenant_id direto)
         deleted_vinculos AS (
           DELETE FROM clientes_vinculo 
-          WHERE import_run_id = ${runId}
+          WHERE tenant_id = ${effectiveTenantId}
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
           RETURNING id
         ),
-        -- 5. Deletar pessoas APENAS criadas por este import_run_id E que agora são órfãs
-        -- CRÍTICO: Só deletamos pessoas com este import_run_id específico que não têm mais dependentes
+        -- 5. Deletar pessoas órfãs criadas por este import (por run_id OU base_tag)
         deleted_pessoas AS (
           DELETE FROM clientes_pessoa 
-          WHERE import_run_id = ${runId}
-            AND tenant_id = ${effectiveTenantId}
+          WHERE tenant_id = ${effectiveTenantId}
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+            )
             AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
             AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
             AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
@@ -3821,7 +3839,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Import run não encontrado ou já deletado" });
       }
       
-      console.log(`[ImportRun] TRANSACTIONAL DELETE completed for run ${runId} (tenant ${effectiveTenantId}):`);
+      console.log(`[ImportRun] TRANSACTIONAL DELETE completed for run ${runId} (tenant ${effectiveTenantId}, tag "${runBaseTag}"):`);
       console.log(`  - Folhas: ${deletedFolhas}`);
       console.log(`  - Contratos: ${deletedContratos}`);
       console.log(`  - Contacts: ${deletedContacts}`);
