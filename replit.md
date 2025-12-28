@@ -36,7 +36,12 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
       - `idx_vinculo_cpf_mat_orgao` on clientes_vinculo(cpf, matricula, orgao)
       - `idx_folha_mes_vinculo_competencia` on clientes_folha_mes(vinculo_id, competencia)
     - **Mandatory import_run_id traceability**: All final tables (clientes_pessoa, clientes_vinculo, clientes_folha_mes, clientes_contratos, client_contacts) have import_run_id column linking to the import that created/updated each record. Legacy imports (POST /api/bases/import) automatically create import_run records and populate import_run_id in all inserted/updated records.
-    - **Cascading delete**: Deleting an import_run (DELETE /api/import-runs/:id) or base (DELETE /api/bases/:id) removes all related folhas, contratos, vinculos, contacts, and orphaned pessoas
+    - **Cascading delete (transactional)**: DELETE /api/bases/:id uses a single atomic SQL CTE transaction that:
+      1. Enforces tenant isolation (no cross-tenant data loss)
+      2. Deletes folhas, contratos, contacts, vínculos scoped by base_tag + tenant
+      3. Removes orphaned pessoas (without remaining folhas/contratos/vínculos/contacts)
+      4. Physically deletes the import_run (not just marks as deleted)
+      5. All operations are atomic - complete success or complete rollback
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
 
 ### System Design Choices

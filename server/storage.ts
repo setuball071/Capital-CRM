@@ -211,7 +211,7 @@ export interface IStorage {
   getBaseByStatus(status: string): Promise<BaseImportada | undefined>;
   createBaseImportada(data: InsertBaseImportada): Promise<BaseImportada>;
   updateBaseImportada(id: number, data: Partial<InsertBaseImportada>): Promise<BaseImportada | undefined>;
-  deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }>;
+  deleteBaseImportada(id: number, baseTag: string, tenantId?: number, importRunId?: number | null): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }>;
   
   // Pedidos Lista
   getAllPedidosLista(): Promise<PedidoLista[]>;
@@ -1315,50 +1315,111 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
-  async deleteBaseImportada(id: number, baseTag: string): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }> {
-    console.log(`[Storage] Starting cascading delete for base ${id} with tag ${baseTag}`);
+  async deleteBaseImportada(id: number, baseTag: string, tenantId?: number, importRunId?: number | null): Promise<{ deletedFolhas: number; deletedContratos: number; deletedVinculos: number; deletedContacts: number; deletedPessoas: number }> {
+    // Primeiro, buscar a base para obter o tenantId real (não confiar em parâmetro)
+    const [baseRecord] = await db.select().from(basesImportadas).where(eq(basesImportadas.id, id));
     
-    // 1. Delete folhas with this baseTag
-    const folhasResult = await db.execute(sql`
-      DELETE FROM clientes_folha_mes WHERE base_tag = ${baseTag}
+    // Usar tenantId da base como fonte autoritativa, fallback para parâmetro
+    const effectiveTenantId = baseRecord?.tenantId || tenantId;
+    
+    if (!effectiveTenantId) {
+      console.error(`[Storage] ERROR: Cannot delete base ${id} - no tenantId found (base or param)`);
+      throw new Error("Tenant ID obrigatório para exclusão de base");
+    }
+    
+    console.log(`[Storage] Starting TRANSACTIONAL cascading delete for base ${id} (tenant: ${effectiveTenantId}, tag: ${baseTag}, importRun: ${importRunId})`);
+    
+    // Usar uma única query SQL com CTEs para garantir atomicidade total
+    // Todas as operações são feitas em uma única transação implícita do PostgreSQL
+    // IMPORTANTE: Filtra por tenant_id para garantir isolamento multi-tenant
+    const result = await db.execute(sql`
+      WITH 
+      -- Identificar pessoas do tenant (para filtrar deletes)
+      tenant_pessoas AS (
+        SELECT id FROM clientes_pessoa 
+        WHERE tenant_id = ${effectiveTenantId}
+      ),
+      -- 1. Deletar folhas da base_tag que pertencem a pessoas do tenant
+      deleted_folhas AS (
+        DELETE FROM clientes_folha_mes 
+        WHERE base_tag = ${baseTag}
+          AND pessoa_id IN (SELECT id FROM tenant_pessoas)
+        RETURNING id
+      ),
+      -- 2. Deletar contratos da base_tag que pertencem a pessoas do tenant
+      deleted_contratos AS (
+        DELETE FROM clientes_contratos 
+        WHERE base_tag = ${baseTag}
+          AND pessoa_id IN (SELECT id FROM tenant_pessoas)
+        RETURNING id
+      ),
+      -- 3. Deletar contacts da base_tag que pertencem a pessoas do tenant
+      -- NOTA: client_contacts usa client_id (não pessoa_id) como FK para clientes_pessoa
+      deleted_contacts AS (
+        DELETE FROM client_contacts 
+        WHERE base_tag = ${baseTag}
+          AND client_id IN (SELECT id FROM tenant_pessoas)
+        RETURNING id
+      ),
+      -- 4. Deletar vinculos da base_tag que pertencem ao tenant
+      deleted_vinculos AS (
+        DELETE FROM clientes_vinculo 
+        WHERE base_tag = ${baseTag}
+          AND tenant_id = ${effectiveTenantId}
+        RETURNING id
+      ),
+      -- 5. Deletar pessoas órfãs do tenant (sem folhas, contratos, vinculos OU contacts restantes)
+      -- NOTA: client_contacts usa client_id como FK
+      deleted_pessoas AS (
+        DELETE FROM clientes_pessoa 
+        WHERE tenant_id = ${effectiveTenantId}
+          AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
+          AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
+          AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
+          AND NOT EXISTS (SELECT 1 FROM client_contacts WHERE client_id = clientes_pessoa.id)
+        RETURNING id
+      ),
+      -- 6. Deletar a base importada (apenas se pertence ao tenant correto)
+      deleted_base AS (
+        DELETE FROM bases_importadas 
+        WHERE id = ${id} AND (tenant_id = ${effectiveTenantId} OR tenant_id IS NULL)
+        RETURNING id
+      ),
+      -- 7. Deletar import_run fisicamente (já que todos dependentes foram removidos)
+      -- Isso garante consistência: não existem registros apontando para import_run deletado
+      deleted_import_run AS (
+        DELETE FROM import_runs 
+        WHERE id = ${importRunId || 0} AND ${importRunId || 0} > 0
+          AND base_id = ${id}
+        RETURNING id
+      )
+      -- Retornar os counts de cada operação
+      SELECT 
+        (SELECT COUNT(*) FROM deleted_folhas) as folhas_count,
+        (SELECT COUNT(*) FROM deleted_contratos) as contratos_count,
+        (SELECT COUNT(*) FROM deleted_contacts) as contacts_count,
+        (SELECT COUNT(*) FROM deleted_vinculos) as vinculos_count,
+        (SELECT COUNT(*) FROM deleted_pessoas) as pessoas_count,
+        (SELECT COUNT(*) FROM deleted_base) as base_count,
+        (SELECT COUNT(*) FROM deleted_import_run) as import_run_deleted
     `);
-    const deletedFolhas = Number(folhasResult.rowCount) || 0;
-    console.log(`[Storage] Deleted ${deletedFolhas} folhas`);
     
-    // 2. Delete contratos with this baseTag
-    const contratosResult = await db.execute(sql`
-      DELETE FROM clientes_contratos WHERE base_tag = ${baseTag}
-    `);
-    const deletedContratos = Number(contratosResult.rowCount) || 0;
-    console.log(`[Storage] Deleted ${deletedContratos} contratos`);
+    // Extrair counts do resultado
+    const row = result.rows?.[0] as any || {};
+    const deletedFolhas = Number(row.folhas_count) || 0;
+    const deletedContratos = Number(row.contratos_count) || 0;
+    const deletedContacts = Number(row.contacts_count) || 0;
+    const deletedVinculos = Number(row.vinculos_count) || 0;
+    const deletedPessoas = Number(row.pessoas_count) || 0;
+    const importRunDeleted = Number(row.import_run_deleted) || 0;
     
-    // 3. Delete contacts with this baseTag
-    const contactsResult = await db.execute(sql`
-      DELETE FROM client_contacts WHERE base_tag = ${baseTag}
-    `);
-    const deletedContacts = Number(contactsResult.rowCount) || 0;
-    console.log(`[Storage] Deleted ${deletedContacts} contacts`);
-    
-    // 4. Delete vinculos with this baseTag
-    const vinculosResult = await db.execute(sql`
-      DELETE FROM clientes_vinculo WHERE base_tag = ${baseTag}
-    `);
-    const deletedVinculos = Number(vinculosResult.rowCount) || 0;
-    console.log(`[Storage] Deleted ${deletedVinculos} vinculos`);
-    
-    // 5. Delete orphaned pessoas - those without any remaining folhas, contratos, or vinculos
-    const pessoasOrfasResult = await db.execute(sql`
-      DELETE FROM clientes_pessoa 
-      WHERE NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
-        AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
-        AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
-    `);
-    const deletedPessoas = Number(pessoasOrfasResult.rowCount) || 0;
-    console.log(`[Storage] Deleted ${deletedPessoas} orphaned pessoas`);
-    
-    // 6. Delete the base record itself
-    await db.delete(basesImportadas).where(eq(basesImportadas.id, id));
-    console.log(`[Storage] Completed cascading delete for base ${id}`);
+    console.log(`[Storage] TRANSACTIONAL DELETE completed for base ${id} (tenant ${effectiveTenantId}):`);
+    console.log(`  - Folhas: ${deletedFolhas}`);
+    console.log(`  - Contratos: ${deletedContratos}`);
+    console.log(`  - Contacts: ${deletedContacts}`);
+    console.log(`  - Vinculos: ${deletedVinculos}`);
+    console.log(`  - Pessoas órfãs: ${deletedPessoas}`);
+    console.log(`  - Import run deleted: ${importRunDeleted}`);
     
     return { deletedFolhas, deletedContratos, deletedVinculos, deletedContacts, deletedPessoas };
   }

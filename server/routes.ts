@@ -3028,7 +3028,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // DELETE base importada - Master only
-  app.delete("/api/bases/:id", requireAuth, requireMaster, async (req, res) => {
+  app.delete("/api/bases/:id", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -3043,10 +3043,19 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Base não encontrada" });
       }
       
-      console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome} (status: ${base.status})`);
+      // tenantId será derivado autoritativamente da base no storage - não usar fallbacks
+      const userTenantId = req.user?.tenantId;
       
-      // Delete base and all related data
-      const result = await storage.deleteBaseImportada(id, base.baseTag);
+      console.log(`[Delete Base] User ${req.user?.id} (${req.user?.email}) deleting base ${id}: ${base.nome} (baseTenant: ${base.tenantId}, userTenant: ${userTenantId}, status: ${base.status}, importRunId: ${base.importRunId})`);
+      
+      // Verificar se usuário tem acesso ao tenant da base
+      if (base.tenantId && userTenantId && base.tenantId !== userTenantId) {
+        return res.status(403).json({ message: "Acesso negado - base pertence a outro tenant" });
+      }
+      
+      // Delete base and all related data - transacional com isolamento por tenant
+      // Storage deriva tenantId da base, não confiamos em parâmetro
+      const result = await storage.deleteBaseImportada(id, base.baseTag, userTenantId, base.importRunId);
       
       console.log(`[Delete Base] Completed: ${result.deletedFolhas} folhas, ${result.deletedContratos} contratos, ${result.deletedVinculos} vinculos, ${result.deletedContacts} contacts, ${result.deletedPessoas} pessoas removed`);
       
