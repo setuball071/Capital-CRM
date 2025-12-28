@@ -167,7 +167,8 @@ function formatCPF(cpf: string | null): string {
   return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9)}`;
 }
 
-function formatCurrency(value: number | null): string {
+function formatCurrency(value: number | null | undefined): string {
+  // null/undefined → "-", valor 0 → "R$ 0,00"
   if (value === null || value === undefined) return "-";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
