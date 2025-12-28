@@ -38,7 +38,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv"],
   modulo_compra_lista: ["/compra-lista"],
   modulo_crm_vendas_campanhas: ["/vendas/campanhas", "/vendas/gestao-pipeline"],
-  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta"],
+  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/consulta-cliente"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin"],
   modulo_config_usuarios: ["/users"],
   modulo_config_precos: ["/config-precos", "/pricing"],

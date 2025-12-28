@@ -35,7 +35,6 @@ import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import VendasAgendaPage from "@/pages/vendas-agenda";
 import VendasPipelinePage from "@/pages/vendas-pipeline";
 import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
-import CrmConsultaClientePage from "@/pages/crm-consulta-cliente";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import AdminTenantsPage from "@/pages/admin-tenants";
 import KanbanPage from "@/pages/kanban";
@@ -347,9 +346,6 @@ function Router() {
               </Route>
               <Route path="/vendas/gestao-pipeline">
                 {() => <CRMAdminRoute component={VendasGestaoPipelinePage} />}
-              </Route>
-              <Route path="/vendas/consulta">
-                {() => <ProtectedRoute component={CrmConsultaClientePage} />}
               </Route>
               <Route path="/config-prompts">
                 {() => <ProtectedRoute component={ConfigPromptsPage} />}
