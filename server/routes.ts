@@ -3695,72 +3695,149 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // DELETE excluir import run e TODOS os dados finais associados (cascata completa)
-  app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req, res) => {
+  app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const runId = parseInt(req.params.id);
+      const userTenantId = req.user?.tenantId;
       
-      console.log(`[ImportRun] Starting cascading delete for run ${runId}...`);
+      console.log(`[ImportRun] Starting TRANSACTIONAL cascading delete for run ${runId} (userTenant: ${userTenantId})...`);
       
-      // 1. Deletar dados finais vinculados a este import_run_id
-      // Ordem: folha_mes -> contratos -> contacts -> vinculos (inversa da criação)
+      // Buscar o import_run para obter tenantId
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
       
-      const folhasDeleted = await db.execute(sql`
-        DELETE FROM clientes_folha_mes WHERE import_run_id = ${runId}
-      `);
-      console.log(`[ImportRun] Deleted ${folhasDeleted.rowCount || 0} folhas`);
-      
-      const contratosDeleted = await db.execute(sql`
-        DELETE FROM clientes_contratos WHERE import_run_id = ${runId}
-      `);
-      console.log(`[ImportRun] Deleted ${contratosDeleted.rowCount || 0} contratos`);
-      
-      const contactsDeleted = await db.execute(sql`
-        DELETE FROM client_contacts WHERE import_run_id = ${runId}
-      `);
-      console.log(`[ImportRun] Deleted ${contactsDeleted.rowCount || 0} contacts`);
-      
-      const vinculosDeleted = await db.execute(sql`
-        DELETE FROM clientes_vinculo WHERE import_run_id = ${runId}
-      `);
-      console.log(`[ImportRun] Deleted ${vinculosDeleted.rowCount || 0} vinculos`);
-      
-      // 2. Deletar pessoas órfãs (sem folhas, sem contratos, sem vínculos)
-      const pessoasOrfasDeleted = await db.execute(sql`
-        DELETE FROM clientes_pessoa 
-        WHERE NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
-          AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
-          AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
-      `);
-      console.log(`[ImportRun] Deleted ${pessoasOrfasDeleted.rowCount || 0} orphaned pessoas`);
-      
-      // 3. Deletar linhas de rastreabilidade
-      await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
-      
-      // 4. Deletar erros do import
-      await db.execute(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
-      
-      // 5. Deletar staging (caso tenha restado)
-      await db.execute(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
-      await db.execute(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
-      await db.execute(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
-      
-      // 6. Deletar o registro principal
-      const result = await db.delete(importRuns).where(eq(importRuns.id, runId)).returning();
-      
-      if (result.length === 0) {
+      if (!run) {
         return res.status(404).json({ message: "Import run não encontrado" });
       }
       
-      console.log(`[ImportRun] Completed cascading delete for run ${runId}`);
+      // Obter tenantId do run (se existir base_id, buscar da base)
+      let effectiveTenantId = userTenantId;
+      if (run.baseId) {
+        const [base] = await db.select().from(basesImportadas).where(eq(basesImportadas.id, run.baseId)).limit(1);
+        if (base?.tenantId) {
+          effectiveTenantId = base.tenantId;
+        }
+      }
+      
+      if (!effectiveTenantId) {
+        console.error(`[ImportRun] ERROR: Cannot delete run ${runId} - no tenantId found`);
+        return res.status(400).json({ message: "Tenant ID obrigatório para exclusão" });
+      }
+      
+      console.log(`[ImportRun] Effective tenant: ${effectiveTenantId}`);
+      
+      // Usar uma única query SQL com CTEs para garantir atomicidade total
+      // CRÍTICO: Filtra APENAS por import_run_id para garantir que só dados deste import sejam deletados
+      // O tenant_id é usado apenas para verificação de segurança e para limpeza de órfãos
+      const result = await db.execute(sql`
+        WITH 
+        -- 1. Deletar folhas APENAS deste import_run_id (não usa tenant, filtra direto)
+        deleted_folhas AS (
+          DELETE FROM clientes_folha_mes 
+          WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 2. Deletar contratos APENAS deste import_run_id
+        deleted_contratos AS (
+          DELETE FROM clientes_contratos 
+          WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 3. Deletar contacts APENAS deste import_run_id
+        deleted_contacts AS (
+          DELETE FROM client_contacts 
+          WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 4. Deletar vinculos APENAS deste import_run_id
+        deleted_vinculos AS (
+          DELETE FROM clientes_vinculo 
+          WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 5. Deletar pessoas APENAS criadas por este import_run_id E que agora são órfãs
+        -- CRÍTICO: Só deletamos pessoas com este import_run_id específico que não têm mais dependentes
+        deleted_pessoas AS (
+          DELETE FROM clientes_pessoa 
+          WHERE import_run_id = ${runId}
+            AND tenant_id = ${effectiveTenantId}
+            AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes WHERE pessoa_id = clientes_pessoa.id)
+            AND NOT EXISTS (SELECT 1 FROM clientes_contratos WHERE pessoa_id = clientes_pessoa.id)
+            AND NOT EXISTS (SELECT 1 FROM clientes_vinculo WHERE pessoa_id = clientes_pessoa.id)
+            AND NOT EXISTS (SELECT 1 FROM client_contacts WHERE client_id = clientes_pessoa.id)
+          RETURNING id
+        ),
+        -- 6. Deletar linhas de rastreabilidade
+        deleted_rows AS (
+          DELETE FROM import_run_rows WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 7. Deletar erros do import
+        deleted_errors AS (
+          DELETE FROM import_errors WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 8. Deletar staging (caso tenha restado)
+        deleted_staging_folha AS (
+          DELETE FROM staging_folha WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        deleted_staging_d8 AS (
+          DELETE FROM staging_d8 WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        deleted_staging_contatos AS (
+          DELETE FROM staging_contatos WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
+        -- 9. Deletar o registro principal do import_run
+        deleted_run AS (
+          DELETE FROM import_runs WHERE id = ${runId}
+          RETURNING id
+        )
+        -- Retornar os counts de cada operação
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_folhas) as folhas_count,
+          (SELECT COUNT(*) FROM deleted_contratos) as contratos_count,
+          (SELECT COUNT(*) FROM deleted_contacts) as contacts_count,
+          (SELECT COUNT(*) FROM deleted_vinculos) as vinculos_count,
+          (SELECT COUNT(*) FROM deleted_pessoas) as pessoas_count,
+          (SELECT COUNT(*) FROM deleted_rows) as rows_count,
+          (SELECT COUNT(*) FROM deleted_errors) as errors_count,
+          (SELECT COUNT(*) FROM deleted_run) as run_deleted
+      `);
+      
+      // Extrair counts do resultado
+      const row = result.rows?.[0] as any || {};
+      const deletedFolhas = Number(row.folhas_count) || 0;
+      const deletedContratos = Number(row.contratos_count) || 0;
+      const deletedContacts = Number(row.contacts_count) || 0;
+      const deletedVinculos = Number(row.vinculos_count) || 0;
+      const deletedPessoas = Number(row.pessoas_count) || 0;
+      const deletedRows = Number(row.rows_count) || 0;
+      const deletedErrors = Number(row.errors_count) || 0;
+      const runDeleted = Number(row.run_deleted) || 0;
+      
+      if (runDeleted === 0) {
+        return res.status(404).json({ message: "Import run não encontrado ou já deletado" });
+      }
+      
+      console.log(`[ImportRun] TRANSACTIONAL DELETE completed for run ${runId} (tenant ${effectiveTenantId}):`);
+      console.log(`  - Folhas: ${deletedFolhas}`);
+      console.log(`  - Contratos: ${deletedContratos}`);
+      console.log(`  - Contacts: ${deletedContacts}`);
+      console.log(`  - Vinculos: ${deletedVinculos}`);
+      console.log(`  - Pessoas órfãs: ${deletedPessoas}`);
+      console.log(`  - Rows/Errors: ${deletedRows}/${deletedErrors}`);
+      
       return res.json({ 
         success: true, 
         message: "Import e dados associados excluídos com sucesso",
         deleted: {
-          folhas: folhasDeleted.rowCount || 0,
-          contratos: contratosDeleted.rowCount || 0,
-          contacts: contactsDeleted.rowCount || 0,
-          vinculos: vinculosDeleted.rowCount || 0,
-          pessoasOrfas: pessoasOrfasDeleted.rowCount || 0
+          folhas: deletedFolhas,
+          contratos: deletedContratos,
+          contacts: deletedContacts,
+          vinculos: deletedVinculos,
+          pessoasOrfas: deletedPessoas
         }
       });
     } catch (error) {
