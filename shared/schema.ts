@@ -423,6 +423,8 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   lastSource: varchar("last_source", { length: 100 }), // fonte da última atualização
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
+  // Rastreabilidade para exclusão em cascata
+  importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
 });
 
 // 2) clientes_vinculo - Vínculos CPF + Matrícula + Órgão (âncora de cruzamento)
