@@ -317,14 +317,13 @@ export default function ConsultaCliente() {
     queryKey: ["/api/clientes/filtros/convenios"],
   });
 
-  const queryUrl = selectedVinculoId 
-    ? `/api/clientes/${selectedPessoaId}?vinculoId=${selectedVinculoId}`
-    : `/api/clientes/${selectedPessoaId}`;
-
   const { data: clienteDetalhado, isLoading: isLoadingDetails, error: detailsError } = useQuery<ClienteDetalhado>({
     queryKey: ["/api/clientes", selectedPessoaId, selectedVinculoId],
     queryFn: async () => {
-      const res = await fetch(queryUrl, { credentials: "include" });
+      const url = selectedVinculoId 
+        ? `/api/clientes/${selectedPessoaId}?vinculoId=${selectedVinculoId}`
+        : `/api/clientes/${selectedPessoaId}`;
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         if (res.status === 404) {
@@ -879,36 +878,6 @@ export default function ConsultaCliente() {
                         </Card>
                       </div>
 
-                      {/* Rendimentos - só exibe se tiver dados */}
-                      {(clienteDetalhado.folha.atual.salario_bruto !== null ||
-                        clienteDetalhado.folha.atual.descontos_brutos !== null ||
-                        clienteDetalhado.folha.atual.salario_liquido !== null) && (
-                        <Card className="bg-blue-50 dark:bg-blue-950/30 max-w-sm" data-testid="card-rendimentos">
-                          <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Rendimentos</p>
-                            <div className="space-y-1 text-sm">
-                              {clienteDetalhado.folha.atual.salario_bruto !== null && (
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruto:</span>
-                                  <span>{formatCurrency(clienteDetalhado.folha.atual.salario_bruto)}</span>
-                                </div>
-                              )}
-                              {clienteDetalhado.folha.atual.descontos_brutos !== null && (
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Descontos:</span>
-                                  <span className="text-red-600">{formatCurrency(clienteDetalhado.folha.atual.descontos_brutos)}</span>
-                                </div>
-                              )}
-                              {clienteDetalhado.folha.atual.salario_liquido !== null && (
-                                <div className="flex justify-between font-medium">
-                                  <span>Líquido:</span>
-                                  <span className="text-blue-600">{formatCurrency(clienteDetalhado.folha.atual.salario_liquido)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
 
                       <Separator />
 
