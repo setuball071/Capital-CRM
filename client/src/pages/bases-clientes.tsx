@@ -418,17 +418,23 @@ export default function BasesClientes() {
       const response = await apiRequest("DELETE", `/api/bases/${baseId}`);
       return response.json();
     },
-    onSuccess: (data: { message: string; deletedFolhas: number; deletedContratos: number; deletedPessoas: number }) => {
+    onSuccess: (data: { message: string; deleted?: { folhas: number; contratos: number; vinculos: number; contacts: number; pessoas: number } }) => {
+      const deleted = data.deleted;
       toast({
         title: "Base excluída com sucesso",
-        description: `Todos os dados vinculados foram removidos: ${data.deletedFolhas} folhas, ${data.deletedContratos} contratos, ${data.deletedPessoas} clientes.`,
+        description: deleted 
+          ? `Removidos: ${deleted.folhas} folhas, ${deleted.contratos} contratos, ${deleted.vinculos} vínculos, ${deleted.pessoas} clientes.`
+          : "Todos os dados vinculados foram removidos.",
       });
       setDeleteDialogOpen(false);
       setBaseToDelete(null);
       setDeleteConfirmText("");
-      // Invalidate both bases and import-runs caches
+      // Invalidar todos os caches relacionados a clientes
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
     },
     onError: (error: any) => {
       toast({
