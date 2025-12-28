@@ -4638,7 +4638,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
   app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req, res) => {
     try {
-      const { cpf, matricula, convenio } = req.query;
+      const { cpf, matricula, convenio, base } = req.query;
       
       // Validate at least one search parameter is provided
       if (!cpf && !matricula) {
@@ -4651,14 +4651,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       let termo: string;
       let resultados: any[] = [];
       const convenioFiltro = convenio ? String(convenio).trim() : null;
+      const baseFiltro = base ? String(base).trim() : null;
       
       // Priority: matricula > cpf
       if (matricula) {
         tipoBusca = "matricula";
         termo = String(matricula).trim();
         
-        // Use new method that supports convenio filter and returns array
-        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined);
+        // Use new method that supports convenio and base filters
+        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -4683,10 +4684,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           });
         }
         
-        console.log(`[Consulta Cliente] CPF input: "${cpf}" -> normalized: "${termo}", convenio: ${convenioFiltro || "none"}`);
+        console.log(`[Consulta Cliente] CPF input: "${cpf}" -> normalized: "${termo}", convenio: ${convenioFiltro || "none"}, base: ${baseFiltro || "none"}`);
         
-        // Pass convenio filter if provided (getClientesByCpf also normalizes, but we log here)
-        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined);
+        // Pass convenio and base filters
+        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -4706,6 +4707,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         tipo_busca: tipoBusca,
         termo,
         convenio_filtro: convenioFiltro,
+        base_filtro: baseFiltro,
         resultados,
       });
     } catch (error) {

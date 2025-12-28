@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, inArray, sql, ilike, gte, lte } from "drizzle-orm";
+import { eq, and, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
 import {
   users,
   banks,
@@ -180,9 +180,9 @@ export interface IStorage {
   
   // Clientes Pessoa
   getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
-  getClientesByMatricula(matricula: string, convenio?: string): Promise<ClientePessoa[]>;
+  getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
-  getClientesByCpf(cpf: string, convenio?: string): Promise<ClientePessoa[]>;
+  getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -973,11 +973,16 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByMatricula(matricula: string, convenio?: string): Promise<ClientePessoa[]> {
+  async getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
     const conditions = [eq(clientesPessoa.matricula, matricula)];
     if (convenio) {
       conditions.push(ilike(clientesPessoa.convenio, convenio));
     }
+    if (baseTag) {
+      conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
+    }
+    // Sistema usa hard delete - registros deletados são fisicamente removidos
+    // Não precisamos de filtro adicional para isNotNull(importRunId)
     return await db.select().from(clientesPessoa).where(and(...conditions));
   }
 
@@ -986,27 +991,27 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByCpf(cpf: string, convenio?: string): Promise<ClientePessoa[]> {
+  async getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
     // Remove formatting from CPF (dots and dashes) and normalize to 11 digits
     const cleanCpf = cpf.replace(/\D/g, "").padStart(11, "0");
     
-    console.log(`[getClientesByCpf] Input: "${cpf}" -> Normalized: "${cleanCpf}", Convenio: ${convenio || "none"}`);
+    console.log(`[getClientesByCpf] Input: "${cpf}" -> Normalized: "${cleanCpf}", Convenio: ${convenio || "none"}, Base: ${baseTag || "none"}`);
     
-    // Direct comparison since both stored and search CPF are normalized to 11 digits
+    // Build conditions array
+    // Sistema usa hard delete - registros deletados são fisicamente removidos
+    const conditions = [eq(clientesPessoa.cpf, cleanCpf)];
+    
     if (convenio) {
-      const results = await db.select()
-        .from(clientesPessoa)
-        .where(and(
-          eq(clientesPessoa.cpf, cleanCpf),
-          ilike(clientesPessoa.convenio, convenio)
-        ));
-      console.log(`[getClientesByCpf] Found ${results.length} results with convenio filter`);
-      return results;
+      conditions.push(ilike(clientesPessoa.convenio, convenio));
     }
+    if (baseTag) {
+      conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
+    }
+    
     const results = await db.select()
       .from(clientesPessoa)
-      .where(eq(clientesPessoa.cpf, cleanCpf));
-    console.log(`[getClientesByCpf] Found ${results.length} results without convenio filter`);
+      .where(and(...conditions));
+    console.log(`[getClientesByCpf] Found ${results.length} results with filters applied`);
     return results;
   }
 
