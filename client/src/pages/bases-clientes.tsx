@@ -300,20 +300,23 @@ export default function BasesClientes() {
   // Funções para visualizar detalhes e download de erros
   const viewImportRunDetails = async (runId: number) => {
     try {
-      // Buscar detalhes básicos e relatório em paralelo
-      const [detailsRes, reportRes] = await Promise.all([
-        fetch(`/api/import-runs/${runId}`, { credentials: "include" }),
-        fetch(`/api/fast-imports/report/${runId}`, { credentials: "include" }),
-      ]);
-      
+      // Buscar detalhes básicos primeiro
+      const detailsRes = await fetch(`/api/import-runs/${runId}`, { credentials: "include" });
       if (!detailsRes.ok) throw new Error("Erro ao buscar detalhes");
-      
       const details = await detailsRes.json();
-      let report = null;
       
-      if (reportRes.ok) {
-        const reportData = await reportRes.json();
-        report = reportData.report;
+      // Tentar buscar relatório apenas para usuários master (graceful failure)
+      let report = null;
+      if (isMaster) {
+        try {
+          const reportRes = await fetch(`/api/fast-imports/report/${runId}`, { credentials: "include" });
+          if (reportRes.ok) {
+            const reportData = await reportRes.json();
+            report = reportData.report;
+          }
+        } catch {
+          // Ignorar erros no relatório - ainda exibimos os detalhes básicos
+        }
       }
       
       setSelectedImportRun({ ...details, report });
@@ -1418,7 +1421,7 @@ export default function BasesClientes() {
                             </div>
                           )}
                           
-                          {fastImportRunId && (fastImportStatus?.phase === "completed" || fastImportStatus?.status === "concluido") && (
+                          {fastImportRunId && (fastImportStatus?.phase === "completed" || fastImportStatus?.status?.startsWith("concluido")) && (
                             <div className="mt-3 pt-2 border-t flex gap-2">
                               <Button
                                 variant="outline"
