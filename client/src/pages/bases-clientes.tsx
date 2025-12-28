@@ -339,8 +339,11 @@ export default function BasesClientes() {
       queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
+      // Disparar evento para zerar estados em outras telas (consulta-cliente)
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
     } catch (error) {
       toast({
         title: "Erro",
@@ -433,8 +436,11 @@ export default function BasesClientes() {
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
+      // Disparar evento para zerar estados em outras telas (consulta-cliente)
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
     },
     onError: (error: any) => {
       toast({

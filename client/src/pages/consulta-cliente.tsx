@@ -284,6 +284,27 @@ export default function ConsultaCliente() {
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
 
+  // Listener para resetar estados locais quando dados de clientes são deletados em outra tela
+  // Nota: invalidação de queries já é feita na origem (bases-clientes), aqui só resetamos estados locais
+  useEffect(() => {
+    const handleClientDataDeleted = () => {
+      // Não resetar se uma busca está em andamento
+      if (isSearching) {
+        console.log("[ConsultaCliente] clientDataDeleted event ignored - search in progress");
+        return;
+      }
+      console.log("[ConsultaCliente] clientDataDeleted event received - resetting local states");
+      setSearchResults(null);
+      setSelectedPessoaId(null);
+      setSelectedVinculoId(null);
+      setSelectedConvenio("");
+      setSearchTerm("");
+    };
+
+    window.addEventListener("clientDataDeleted", handleClientDataDeleted);
+    return () => window.removeEventListener("clientDataDeleted", handleClientDataDeleted);
+  }, [isSearching]);
+
   // Handler para notificar quando algo é copiado
   const handleCopy = (text: string, label?: string) => {
     toast({
