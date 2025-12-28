@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -93,30 +93,29 @@ export default function BasesClientes() {
   const [baseToDelete, setBaseToDelete] = useState<BaseImportada | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   
-  // Reset tenant data states
+  // Reset tenant data states (async job system)
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
-  const [resetResult, setResetResult] = useState<{
-    deleted: {
-      contratos: number;
-      folhas: number;
-      contatos: number;
-      vinculos: number;
-      pessoas: number;
-      import_runs: number;
-      bases_importadas: number;
-    };
-    remainingCounts: {
-      clientes_pessoa: string;
-      clientes_vinculo: string;
-      clientes_folha_mes: string;
-      clientes_contratos: string;
-      client_contacts: string;
-      bases_importadas: string;
-      import_runs: string;
-    };
+  const [resetJobId, setResetJobId] = useState<string | null>(null);
+  const [resetJobStatus, setResetJobStatus] = useState<{
+    id: string;
+    status: "pending" | "running" | "completed" | "error";
+    currentStep: number;
+    totalSteps: number;
+    steps: Array<{
+      name: string;
+      status: "pending" | "running" | "completed" | "error";
+      countBefore?: number;
+      deleted?: number;
+      elapsedMs?: number;
+      error?: string;
+    }>;
+    countsBefore: Record<string, number>;
+    deleted: Record<string, number>;
     elapsedMs: number;
+    error?: string;
   } | null>(null);
+  const resetPollingRef = useRef<NodeJS.Timeout | null>(null);
   
   // Fast Import states
   const [isFastImportOpen, setIsFastImportOpen] = useState(false);
@@ -476,40 +475,92 @@ export default function BasesClientes() {
     },
   });
 
-  // Reset tenant data mutation (master only)
-  const resetTenantMutation = useMutation({
+  // Reset tenant data mutation (master only) - async job version
+  const startResetMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("DELETE", "/api/admin/reset-tenant-data");
+      const response = await apiRequest("POST", "/api/admin/reset-tenant");
       return response.json();
     },
-    onSuccess: (data: any) => {
-      setResetResult(data);
-      toast({
-        title: "Dados do tenant resetados",
-        description: `${data.deleted.pessoas} clientes, ${data.deleted.vinculos} vínculos, ${data.deleted.folhas} folhas removidas em ${(data.elapsedMs / 1000).toFixed(1)}s`,
-      });
+    onSuccess: (data: { success: boolean; jobId: string }) => {
+      setResetJobId(data.jobId);
       setResetConfirmText("");
-      // Invalidar caches
-      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
-      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+      toast({
+        title: "Reset iniciado",
+        description: "O processo de limpeza foi iniciado em background.",
+      });
+      // Start polling
+      startResetPolling(data.jobId);
     },
     onError: (error: any) => {
       toast({
-        title: "Erro ao resetar dados",
-        description: error.message || "Ocorreu um erro ao resetar os dados do tenant.",
+        title: "Erro ao iniciar reset",
+        description: error.message || "Ocorreu um erro ao iniciar o reset.",
         variant: "destructive",
       });
     },
   });
 
+  // Polling for reset job status
+  const startResetPolling = (jobId: string) => {
+    if (resetPollingRef.current) {
+      clearInterval(resetPollingRef.current);
+    }
+    
+    const pollStatus = async () => {
+      try {
+        const response = await apiRequest("GET", `/api/admin/reset-tenant/status/${jobId}`);
+        const status = await response.json();
+        setResetJobStatus(status);
+        
+        if (status.status === "completed" || status.status === "error") {
+          if (resetPollingRef.current) {
+            clearInterval(resetPollingRef.current);
+            resetPollingRef.current = null;
+          }
+          
+          if (status.status === "completed") {
+            toast({
+              title: "Reset concluído",
+              description: `Limpeza finalizada em ${(status.elapsedMs / 1000).toFixed(1)}s`,
+            });
+            // Invalidar caches
+            queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/clientes/filtros/convenios"] });
+            window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+          } else if (status.status === "error") {
+            toast({
+              title: "Erro no reset",
+              description: status.error || "Ocorreu um erro durante o reset.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao consultar status do reset:", err);
+      }
+    };
+    
+    // Poll immediately then every 500ms
+    pollStatus();
+    resetPollingRef.current = setInterval(pollStatus, 500);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (resetPollingRef.current) {
+        clearInterval(resetPollingRef.current);
+      }
+    };
+  }, []);
+
   const handleResetTenant = () => {
     if (resetConfirmText === "RESET") {
-      resetTenantMutation.mutate();
+      startResetMutation.mutate();
     }
   };
 
@@ -761,9 +812,10 @@ export default function BasesClientes() {
           {isMaster && (
             <Dialog open={resetDialogOpen} onOpenChange={(open) => {
               setResetDialogOpen(open);
-              if (!open) {
+              if (!open && resetJobStatus?.status !== "running" && resetJobStatus?.status !== "pending") {
                 setResetConfirmText("");
-                setResetResult(null);
+                setResetJobId(null);
+                setResetJobStatus(null);
               }
             }}>
               <DialogTrigger asChild>
@@ -772,7 +824,7 @@ export default function BasesClientes() {
                   Resetar dados do tenant
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[550px]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="w-5 h-5" />
@@ -784,7 +836,8 @@ export default function BasesClientes() {
                   </DialogDescription>
                 </DialogHeader>
                 
-                {!resetResult ? (
+                {/* Initial confirmation state */}
+                {!resetJobId && !resetJobStatus && (
                   <>
                     <div className="space-y-4 py-4">
                       <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
@@ -811,13 +864,13 @@ export default function BasesClientes() {
                       <Button
                         variant="destructive"
                         onClick={handleResetTenant}
-                        disabled={resetConfirmText !== "RESET" || resetTenantMutation.isPending}
+                        disabled={resetConfirmText !== "RESET" || startResetMutation.isPending}
                         data-testid="button-reset-confirm"
                       >
-                        {resetTenantMutation.isPending ? (
+                        {startResetMutation.isPending ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Resetando...
+                            Iniciando...
                           </>
                         ) : (
                           <>
@@ -828,85 +881,165 @@ export default function BasesClientes() {
                       </Button>
                     </DialogFooter>
                   </>
-                ) : (
+                )}
+                
+                {/* Job in progress state */}
+                {resetJobStatus && (resetJobStatus.status === "pending" || resetJobStatus.status === "running") && (
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">Progresso</span>
+                        <span className="text-muted-foreground">
+                          Step {resetJobStatus.currentStep} de {resetJobStatus.totalSteps}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={(resetJobStatus.currentStep / resetJobStatus.totalSteps) * 100} 
+                        className="h-3"
+                      />
+                      <p className="text-xs text-muted-foreground text-center">
+                        Tempo decorrido: {(resetJobStatus.elapsedMs / 1000).toFixed(1)}s
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-1 max-h-[250px] overflow-y-auto">
+                      {resetJobStatus.steps.map((step, idx) => (
+                        <div 
+                          key={step.name}
+                          className={`flex items-center justify-between text-sm px-3 py-1.5 rounded ${
+                            step.status === "running" 
+                              ? "bg-primary/10 border border-primary/20" 
+                              : step.status === "completed"
+                              ? "bg-green-500/10"
+                              : step.status === "error"
+                              ? "bg-destructive/10"
+                              : "bg-muted/30"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {step.status === "running" && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                            {step.status === "completed" && <CheckCircle className="w-3 h-3 text-green-500" />}
+                            {step.status === "error" && <XCircle className="w-3 h-3 text-destructive" />}
+                            {step.status === "pending" && <Clock className="w-3 h-3 text-muted-foreground" />}
+                            <span className={step.status === "running" ? "font-medium" : ""}>
+                              {idx + 1}. {step.name}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {step.countBefore !== undefined && step.status === "pending" && (
+                              <span>{step.countBefore.toLocaleString("pt-BR")} registros</span>
+                            )}
+                            {step.deleted !== undefined && step.status === "completed" && (
+                              <span className="text-green-600">-{step.deleted.toLocaleString("pt-BR")}</span>
+                            )}
+                            {step.status === "running" && (
+                              <span className="text-primary">processando...</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Job completed state */}
+                {resetJobStatus && resetJobStatus.status === "completed" && (
                   <div className="space-y-4 py-4">
                     <div className="bg-green-500/10 p-4 rounded-lg border border-green-500/20">
                       <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
-                        Reset concluído em {(resetResult.elapsedMs / 1000).toFixed(1)}s
+                        Reset concluído em {(resetJobStatus.elapsedMs / 1000).toFixed(1)}s
                       </p>
                     </div>
                     
                     <div>
-                      <h4 className="text-sm font-semibold mb-2">Registros removidos:</h4>
+                      <h4 className="text-sm font-semibold mb-2">Registros removidos por tabela:</h4>
                       <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Pessoas:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.pessoas.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Vínculos:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.vinculos.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Folhas:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.folhas.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Contratos:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.contratos.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Contatos:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.contatos.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Importações:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.import_runs.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded col-span-2">
-                          <span>Bases:</span>
-                          <span className="font-mono text-destructive">{resetResult.deleted.bases_importadas.toLocaleString("pt-BR")}</span>
-                        </div>
+                        {resetJobStatus.steps.map((step) => (
+                          <div key={step.name} className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                            <span className="truncate">{step.name}:</span>
+                            <span className="font-mono text-destructive">
+                              {(step.deleted || 0).toLocaleString("pt-BR")}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     
                     <div>
-                      <h4 className="text-sm font-semibold mb-2">Contagens atuais (após reset):</h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                      <h4 className="text-sm font-semibold mb-2">Contagens iniciais (antes do reset):</h4>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="flex justify-between bg-muted/50 px-2 py-1 rounded text-xs">
                           <span>Pessoas:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_pessoa || "0").toLocaleString("pt-BR")}</span>
+                          <span className="font-mono">{(resetJobStatus.countsBefore.pessoas || 0).toLocaleString("pt-BR")}</span>
                         </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                        <div className="flex justify-between bg-muted/50 px-2 py-1 rounded text-xs">
                           <span>Vínculos:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_vinculo || "0").toLocaleString("pt-BR")}</span>
+                          <span className="font-mono">{(resetJobStatus.countsBefore.vinculos || 0).toLocaleString("pt-BR")}</span>
                         </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
+                        <div className="flex justify-between bg-muted/50 px-2 py-1 rounded text-xs">
                           <span>Folhas:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_folha_mes || "0").toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Contratos:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.clientes_contratos || "0").toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Contatos:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.client_contacts || "0").toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded">
-                          <span>Importações:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.import_runs || "0").toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div className="flex justify-between bg-muted/50 px-3 py-1.5 rounded col-span-2">
-                          <span>Bases:</span>
-                          <span className="font-mono">{parseInt(resetResult.remainingCounts.bases_importadas || "0").toLocaleString("pt-BR")}</span>
+                          <span className="font-mono">{(resetJobStatus.countsBefore.folhas || 0).toLocaleString("pt-BR")}</span>
                         </div>
                       </div>
                     </div>
                     
                     <DialogFooter>
-                      <Button onClick={() => setResetDialogOpen(false)} data-testid="button-reset-close">
+                      <Button onClick={() => {
+                        setResetDialogOpen(false);
+                        setResetJobId(null);
+                        setResetJobStatus(null);
+                      }} data-testid="button-reset-close">
+                        Fechar
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
+                
+                {/* Job error state */}
+                {resetJobStatus && resetJobStatus.status === "error" && (
+                  <div className="space-y-4 py-4">
+                    <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
+                      <p className="text-sm font-medium text-destructive flex items-center gap-2">
+                        <XCircle className="w-4 h-4" />
+                        Erro no reset
+                      </p>
+                      <p className="text-xs text-destructive/80 mt-1">
+                        {resetJobStatus.error || "Ocorreu um erro durante o processo de limpeza."}
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      {resetJobStatus.steps.map((step, idx) => (
+                        <div 
+                          key={step.name}
+                          className={`flex items-center justify-between text-sm px-3 py-1.5 rounded ${
+                            step.status === "completed"
+                              ? "bg-green-500/10"
+                              : step.status === "error"
+                              ? "bg-destructive/10"
+                              : "bg-muted/30"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {step.status === "completed" && <CheckCircle className="w-3 h-3 text-green-500" />}
+                            {step.status === "error" && <XCircle className="w-3 h-3 text-destructive" />}
+                            {step.status === "pending" && <Clock className="w-3 h-3 text-muted-foreground" />}
+                            <span>{idx + 1}. {step.name}</span>
+                          </div>
+                          {step.error && (
+                            <span className="text-xs text-destructive truncate max-w-[150px]">{step.error}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => {
+                        setResetDialogOpen(false);
+                        setResetJobId(null);
+                        setResetJobStatus(null);
+                      }} data-testid="button-reset-close">
                         Fechar
                       </Button>
                     </DialogFooter>

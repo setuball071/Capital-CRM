@@ -174,6 +174,48 @@ const uploadTxt = multer({
   },
 });
 
+// ============ ASYNC RESET JOB SYSTEM ============
+interface ResetJobStep {
+  name: string;
+  status: "pending" | "running" | "completed" | "error";
+  countBefore?: number;
+  deleted?: number;
+  elapsedMs?: number;
+  error?: string;
+}
+
+interface ResetJob {
+  id: string;
+  tenantId: number;
+  userId: number;
+  status: "pending" | "running" | "completed" | "error";
+  currentStep: number;
+  totalSteps: number;
+  steps: ResetJobStep[];
+  countsBefore: Record<string, number>;
+  deleted: Record<string, number>;
+  startedAt: Date;
+  completedAt?: Date;
+  elapsedMs?: number;
+  error?: string;
+}
+
+const resetJobs = new Map<string, ResetJob>();
+
+function generateJobId(): string {
+  return `reset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+// Cleanup old jobs after 1 hour
+setInterval(() => {
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+  for (const [id, job] of resetJobs.entries()) {
+    if (job.startedAt.getTime() < oneHourAgo) {
+      resetJobs.delete(id);
+    }
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
+
 // Schema for updating users
 const updateUserSchema = z.object({
   name: z.string().min(3).optional(),
@@ -9306,8 +9348,225 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ============ ASYNC RESET TENANT ENDPOINTS ============
+  
+  // POST /api/admin/reset-tenant - Start async reset job (MASTER ONLY)
+  app.post("/api/admin/reset-tenant", requireAuth, requireMaster, async (req, res) => {
+    const tenantId = req.tenantId || 1;
+    const userId = req.user!.id;
+    
+    // Check if there's already a running job for this tenant
+    for (const job of resetJobs.values()) {
+      if (job.tenantId === tenantId && (job.status === "pending" || job.status === "running")) {
+        return res.status(409).json({ 
+          message: "Já existe um job de reset em execução para este tenant",
+          jobId: job.id 
+        });
+      }
+    }
+    
+    const jobId = generateJobId();
+    const stepNames = [
+      "clientes_contratos",
+      "clientes_folha_mes", 
+      "client_contacts",
+      "clientes_vinculo",
+      "clientes_pessoa",
+      "import_run_rows",
+      "import_errors",
+      "import_runs",
+      "bases_importadas"
+    ];
+    
+    const job: ResetJob = {
+      id: jobId,
+      tenantId,
+      userId,
+      status: "pending",
+      currentStep: 0,
+      totalSteps: stepNames.length,
+      steps: stepNames.map(name => ({ name, status: "pending" })),
+      countsBefore: {},
+      deleted: {},
+      startedAt: new Date(),
+    };
+    
+    resetJobs.set(jobId, job);
+    
+    console.log(`[RESET-JOB] Job ${jobId} criado para tenant ${tenantId}`);
+    
+    // Start the job in background (don't await)
+    runResetJob(jobId, tenantId).catch(err => {
+      console.error(`[RESET-JOB] Erro fatal no job ${jobId}:`, err);
+      const j = resetJobs.get(jobId);
+      if (j) {
+        j.status = "error";
+        j.error = err.message;
+        j.completedAt = new Date();
+        j.elapsedMs = Date.now() - j.startedAt.getTime();
+      }
+    });
+    
+    return res.json({ 
+      success: true, 
+      jobId,
+      message: "Job de reset iniciado em background"
+    });
+  });
+  
+  // GET /api/admin/reset-tenant/status/:jobId - Get job status
+  app.get("/api/admin/reset-tenant/status/:jobId", requireAuth, requireMaster, async (req, res) => {
+    const { jobId } = req.params;
+    const job = resetJobs.get(jobId);
+    
+    if (!job) {
+      return res.status(404).json({ message: "Job não encontrado" });
+    }
+    
+    // Security: only allow access to jobs from same tenant
+    const tenantId = req.tenantId || 1;
+    if (job.tenantId !== tenantId) {
+      return res.status(403).json({ message: "Acesso negado a este job" });
+    }
+    
+    return res.json({
+      id: job.id,
+      status: job.status,
+      currentStep: job.currentStep,
+      totalSteps: job.totalSteps,
+      steps: job.steps,
+      countsBefore: job.countsBefore,
+      deleted: job.deleted,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      elapsedMs: job.elapsedMs || (Date.now() - job.startedAt.getTime()),
+      error: job.error,
+    });
+  });
+  
+  // Background job runner function
+  async function runResetJob(jobId: string, tenantId: number) {
+    const job = resetJobs.get(jobId);
+    if (!job) return;
+    
+    job.status = "running";
+    const startTime = Date.now();
+    
+    console.log(`[RESET-JOB] ========== INICIANDO JOB ${jobId} TENANT ${tenantId} ==========`);
+    
+    try {
+      // 1. Capturar contagens ANTES
+      console.log(`[RESET-JOB] Capturando contagens iniciais...`);
+      const beforeSnapshot = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as contratos,
+          (SELECT COUNT(*) FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as folhas,
+          (SELECT COUNT(*) FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})) as contatos,
+          (SELECT COUNT(*) FROM clientes_vinculo WHERE tenant_id = ${tenantId}) as vinculos,
+          (SELECT COUNT(*) FROM clientes_pessoa WHERE tenant_id = ${tenantId}) as pessoas,
+          (SELECT COUNT(*) FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})) as run_rows,
+          (SELECT COUNT(*) FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})) as errors,
+          (SELECT COUNT(*) FROM import_runs WHERE tenant_id = ${tenantId}) as runs,
+          (SELECT COUNT(*) FROM bases_importadas WHERE tenant_id = ${tenantId}) as bases
+      `);
+      const before = beforeSnapshot.rows[0] as any;
+      job.countsBefore = {
+        contratos: parseInt(before.contratos || "0"),
+        folhas: parseInt(before.folhas || "0"),
+        contatos: parseInt(before.contatos || "0"),
+        vinculos: parseInt(before.vinculos || "0"),
+        pessoas: parseInt(before.pessoas || "0"),
+        run_rows: parseInt(before.run_rows || "0"),
+        errors: parseInt(before.errors || "0"),
+        runs: parseInt(before.runs || "0"),
+        bases: parseInt(before.bases || "0"),
+      };
+      
+      // Update step counts
+      job.steps[0].countBefore = job.countsBefore.contratos;
+      job.steps[1].countBefore = job.countsBefore.folhas;
+      job.steps[2].countBefore = job.countsBefore.contatos;
+      job.steps[3].countBefore = job.countsBefore.vinculos;
+      job.steps[4].countBefore = job.countsBefore.pessoas;
+      job.steps[5].countBefore = job.countsBefore.run_rows;
+      job.steps[6].countBefore = job.countsBefore.errors;
+      job.steps[7].countBefore = job.countsBefore.runs;
+      job.steps[8].countBefore = job.countsBefore.bases;
+      
+      console.log(`[RESET-JOB] Contagens iniciais: pessoas=${job.countsBefore.pessoas}, vinculos=${job.countsBefore.vinculos}, folhas=${job.countsBefore.folhas}`);
+      
+      // 2. Desabilitar triggers/FKs
+      console.log(`[RESET-JOB] Desabilitando triggers...`);
+      await db.execute(sql`SET session_replication_role = 'replica'`);
+      
+      try {
+        const deleteQueries = [
+          sql`DELETE FROM clientes_contratos WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+          sql`DELETE FROM clientes_folha_mes WHERE pessoa_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+          sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clientes_pessoa WHERE tenant_id = ${tenantId})`,
+          sql`DELETE FROM clientes_vinculo WHERE tenant_id = ${tenantId}`,
+          sql`DELETE FROM clientes_pessoa WHERE tenant_id = ${tenantId}`,
+          sql`DELETE FROM import_run_rows WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
+          sql`DELETE FROM import_errors WHERE import_run_id IN (SELECT id FROM import_runs WHERE tenant_id = ${tenantId})`,
+          sql`DELETE FROM import_runs WHERE tenant_id = ${tenantId}`,
+          sql`DELETE FROM bases_importadas WHERE tenant_id = ${tenantId}`,
+        ];
+        
+        for (let i = 0; i < deleteQueries.length; i++) {
+          const step = job.steps[i];
+          step.status = "running";
+          job.currentStep = i + 1;
+          
+          const stepStart = Date.now();
+          console.log(`[RESET-JOB] Step ${i + 1} START: ${step.name}`);
+          
+          try {
+            const result = await db.execute(deleteQueries[i]);
+            step.deleted = result.rowCount || 0;
+            step.status = "completed";
+            step.elapsedMs = Date.now() - stepStart;
+            job.deleted[step.name] = step.deleted;
+            
+            console.log(`[RESET-JOB] Step ${i + 1} DONE: ${step.name} - deletados: ${step.deleted}, tempo: ${step.elapsedMs}ms`);
+          } catch (stepErr: any) {
+            step.status = "error";
+            step.error = stepErr.message;
+            step.elapsedMs = Date.now() - stepStart;
+            throw stepErr;
+          }
+        }
+        
+      } finally {
+        // 3. Restaurar triggers
+        console.log(`[RESET-JOB] Restaurando triggers...`);
+        await db.execute(sql`SET session_replication_role = 'origin'`);
+      }
+      
+      job.status = "completed";
+      job.completedAt = new Date();
+      job.elapsedMs = Date.now() - startTime;
+      
+      console.log(`[RESET-JOB] ========== JOB ${jobId} CONCLUÍDO EM ${job.elapsedMs}ms ==========`);
+      
+    } catch (error: any) {
+      try {
+        await db.execute(sql`SET session_replication_role = 'origin'`);
+      } catch (e) {
+        console.error(`[RESET-JOB] Erro ao restaurar triggers:`, e);
+      }
+      
+      job.status = "error";
+      job.error = error.message;
+      job.completedAt = new Date();
+      job.elapsedMs = Date.now() - startTime;
+      
+      console.error(`[RESET-JOB] ERRO no job ${jobId}: ${error.message}`);
+    }
+  }
+
   // DELETE /api/admin/reset-tenant-data - Hard delete all client data for current tenant (MASTER ONLY)
   // Usa session_replication_role='replica' para desabilitar triggers/FKs e acelerar DELETEs
+  // DEPRECATED: Use POST /api/admin/reset-tenant for async version
   app.delete("/api/admin/reset-tenant-data", requireAuth, requireMaster, async (req, res) => {
     const tenantId = req.tenantId || 1;
     const startTime = Date.now();
