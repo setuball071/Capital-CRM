@@ -5225,7 +5225,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidadePacote: pricing.quantidadePacote,
         precoTotal: pricing.precoTotal,
         pacotes: await getPacotesPreco(), // Envia lista de pacotes para exibição
-        preview: clientes.slice(0, 10).map(c => ({
+        preview: clientes.slice(0, 10).map((c: any) => ({
           matricula: c.matricula,
           nome: c.nome,
           cpf: c.cpf ? `***${c.cpf.slice(-4)}` : null, // Mask CPF
@@ -5233,6 +5233,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           orgao: c.orgaodesc,
           uf: c.uf,
           sit_func: c.sitFunc,
+          // Campos de desconto fora de folha
+          exc_qtd: c.exc_qtd ?? null,
+          exc_soma: c.exc_soma ? parseFloat(c.exc_soma) : null,
+          margem: c.margem ? parseFloat(c.margem) : null,
+          has_desconto_fora_folha: c.has_desconto_fora_folha ?? false,
         })),
       });
     } catch (error) {

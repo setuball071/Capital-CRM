@@ -1166,8 +1166,21 @@ export class DbStorage implements IStorage {
       }
 
       // Build final query with all parameterized parts
+      // Include folha fields for frontend display when folha join is used
+      const selectFields = needsFolhaJoin 
+        ? sql`p.*, 
+              folha.exc_qtd, 
+              folha.exc_soma, 
+              folha.margem,
+              CASE WHEN (COALESCE(folha.exc_qtd, 0) > 0 OR COALESCE(folha.exc_soma, 0) > 0) THEN true ELSE false END as has_desconto_fora_folha`
+        : sql`p.*, 
+              NULL::integer as exc_qtd, 
+              NULL::numeric as exc_soma, 
+              NULL::numeric as margem,
+              false as has_desconto_fora_folha`;
+
       const query = sql`
-        SELECT DISTINCT p.*
+        SELECT DISTINCT ${selectFields}
         FROM clientes_pessoa p
         ${folhaJoinSql}
         ${contratoJoinSql}
@@ -1175,7 +1188,12 @@ export class DbStorage implements IStorage {
       `;
 
       const result = await db.execute(query);
-      const clientes = result.rows as ClientePessoa[];
+      const clientes = result.rows as (ClientePessoa & { 
+        exc_qtd: number | null; 
+        exc_soma: string | null; 
+        margem: string | null;
+        has_desconto_fora_folha: boolean;
+      })[];
       
       return { clientes, total: clientes.length };
     } else {
