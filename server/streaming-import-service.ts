@@ -514,7 +514,21 @@ class StreamingImportService {
     
     // ORGAO: extrair e normalizar como string (trim, sem conversão numérica)
     const orgaoRaw = this.extractValue(row, headerMap, "orgao");
-    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "DESCONHECIDO";
+    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "";
+
+    // Validação dura: ORGAO é OBRIGATÓRIO para D8 (evita vínculos ambíguos)
+    if (!orgao || orgao.length === 0) {
+      errors.push({
+        importRunId: run.id,
+        rowNumber: run.processedRows + 1,
+        cpf,
+        matricula,
+        errorType: "validation",
+        errorMessage: "ORGAO ausente ou vazio. Campo obrigatório para D8 (evita vínculos ambíguos). Verifique a coluna ORGAO no arquivo.",
+        rawPayload: row,
+      });
+      return false;
+    }
 
     if (!cpf || !matricula) {
       errors.push({
