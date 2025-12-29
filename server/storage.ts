@@ -58,6 +58,7 @@ import {
   type ClienteContrato,
   type InsertClienteContrato,
   type ClientContact,
+  type ClienteTelefone,
   type ClientSnapshot,
   type BaseImportada,
   type InsertBaseImportada,
@@ -205,6 +206,9 @@ export interface IStorage {
     telefone2?: string | null;
     telefone3?: string | null;
   }): Promise<{ pessoasAtualizadas: number; telefonesInseridos: number }>;
+  
+  // Clientes Telefones
+  getTelefonesByPessoaId(pessoaId: number): Promise<ClienteTelefone[]>;
   
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
@@ -1480,6 +1484,14 @@ export class DbStorage implements IStorage {
     }
 
     return { pessoasAtualizadas, telefonesInseridos };
+  }
+
+  // Clientes Telefones
+  async getTelefonesByPessoaId(pessoaId: number): Promise<ClienteTelefone[]> {
+    return await db.select()
+      .from(clientesTelefones)
+      .where(eq(clientesTelefones.pessoaId, pessoaId))
+      .orderBy(sql`${clientesTelefones.principal} DESC, ${clientesTelefones.createdAt} DESC`);
   }
 
   // Clientes Contratos

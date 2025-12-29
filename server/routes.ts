@@ -5135,6 +5135,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Get contratos
       const contratos = await storage.getContratosByPessoaId(pessoaId);
       
+      // Get telefones da tabela clientes_telefones
+      const telefones = await storage.getTelefonesByPessoaId(pessoaId);
+      
       // Build response
       const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
       const folhaHistorico = folhaRegistros.slice(1, 13); // Last 12 months (excluding current)
@@ -5158,7 +5161,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           uf: pessoa.uf,
           municipio: pessoa.municipio,
           data_nascimento: pessoa.dataNascimento || null,
-          telefones_base: pessoa.telefonesBase || [],
+          // Telefones: combina legado (pessoa.telefonesBase) com tabela clientes_telefones
+          telefones_base: telefones.length > 0 
+            ? telefones.map(t => t.telefone) 
+            : (pessoa.telefonesBase || []),
+          telefones_detalhados: telefones.map(t => ({
+            id: t.id,
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          })),
           // Dados bancários do cliente (onde recebe salário)
           banco_codigo: pessoa.bancoCodigo || null,
           agencia: pessoa.agencia || null,
