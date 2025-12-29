@@ -4285,6 +4285,97 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET /api/imports/dados-complementares/template - Baixa planilha modelo para importação de dados complementares
+  app.get("/api/imports/dados-complementares/template", requireAuth, async (req, res) => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "ConsigOne";
+      workbook.created = new Date();
+      
+      const sheet = workbook.addWorksheet("Dados Complementares");
+      
+      // Headers
+      const headers = [
+        "CPF",
+        "DATA_NASCIMENTO",
+        "BANCO_CODIGO",
+        "AGENCIA",
+        "CONTA",
+        "TELEFONE_1",
+        "TELEFONE_2",
+        "TELEFONE_3",
+      ];
+      
+      // Adicionar cabeçalhos
+      sheet.addRow(headers);
+      
+      // Estilizar cabeçalhos
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF2563EB" },
+      };
+      headerRow.alignment = { horizontal: "center" };
+      
+      // Exemplo de linha
+      sheet.addRow([
+        "12345678901",
+        "15/03/1985",
+        "001",
+        "1234",
+        "12345-6",
+        "11999998888",
+        "1133334444",
+        "",
+      ]);
+      
+      // Linha de instruções
+      sheet.addRow([
+        "Obrigatório",
+        "DD/MM/AAAA",
+        "Código banco",
+        "Nº agência",
+        "Nº conta",
+        "Principal",
+        "Opcional",
+        "Opcional",
+      ]);
+      
+      // Estilizar linha de instruções
+      const instructionRow = sheet.getRow(3);
+      instructionRow.font = { italic: true, color: { argb: "FF666666" } };
+      
+      // Ajustar largura das colunas
+      sheet.columns = [
+        { width: 15 }, // CPF
+        { width: 15 }, // DATA_NASCIMENTO
+        { width: 15 }, // BANCO_CODIGO
+        { width: 12 }, // AGENCIA
+        { width: 12 }, // CONTA
+        { width: 14 }, // TELEFONE_1
+        { width: 14 }, // TELEFONE_2
+        { width: 14 }, // TELEFONE_3
+      ];
+      
+      // Formatar colunas como texto para preservar zeros
+      ["A", "C", "D", "E", "F", "G", "H"].forEach((col) => {
+        sheet.getColumn(col).numFmt = "@";
+      });
+      
+      // Gerar buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", 'attachment; filename="modelo_dados_complementares.xlsx"');
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Erro ao gerar template dados complementares:", error);
+      return res.status(500).json({ message: error.message || "Erro ao gerar template" });
+    }
+  });
+
   // POST /api/imports/dados-complementares - Importa dados complementares (telefones, banco, etc)
   // Headers aceitos: CPF, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
   // Ordem das colunas não importa. Outras colunas são ignoradas.
