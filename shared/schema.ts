@@ -408,8 +408,12 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   municipio: varchar("municipio", { length: 150 }),
   dataNascimento: timestamp("data_nascimento"), // data de nascimento do cliente
   telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array (legado)
+  // Nomes descritivos do órgão/upag (para exibição)
+  orgaoNomePessoa: varchar("orgao_nome_pessoa", { length: 255 }), // Nome do órgão vinculado à pessoa
+  upagNomePessoa: varchar("upag_nome_pessoa", { length: 255 }), // Nome da UPAG vinculada à pessoa
   // Dados bancários do cliente (banco onde recebe salário)
   bancoCodigo: varchar("banco_codigo", { length: 20 }),
+  bancoNome: varchar("banco_nome", { length: 100 }), // Nome do banco para exibição
   agencia: varchar("agencia", { length: 20 }),
   conta: varchar("conta", { length: 30 }),
   baseTagUltima: varchar("base_tag_ultima", { length: 100 }),
@@ -519,7 +523,7 @@ export const clientesContratos = pgTable("clientes_contratos", {
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 });
 
-// 4) client_contacts - Contatos do cliente (telefones, emails)
+// 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
 export const clientContacts = pgTable("client_contacts", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -530,6 +534,20 @@ export const clientContacts = pgTable("client_contacts", {
   importRunId: integer("import_run_id"), // Link ao import que criou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 });
+
+// 4b) clientes_telefones - Telefones normalizados do cliente
+// Chave única: (pessoa_id, telefone) - evita duplicatas
+export const clientesTelefones = pgTable("clientes_telefones", {
+  id: serial("id").primaryKey(),
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  telefone: varchar("telefone", { length: 20 }).notNull(), // Telefone normalizado (apenas dígitos)
+  tipo: varchar("tipo", { length: 20 }), // celular, fixo, whatsapp, comercial (opcional)
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  importRunId: integer("import_run_id"), // Rastreabilidade
+  baseTag: varchar("base_tag", { length: 100 }),
+}, (table) => ({
+  pessoaTelefoneIdx: uniqueIndex("idx_clientes_telefones_pessoa_tel").on(table.pessoaId, table.telefone),
+}));
 
 // 5) client_snapshots - Histórico de atualizações para auditoria
 export const clientSnapshots = pgTable("client_snapshots", {
@@ -658,6 +676,8 @@ export type ClienteContrato = typeof clientesContratos.$inferSelect;
 export type InsertClienteContrato = z.infer<typeof insertClienteContratoSchema>;
 
 export type ClientContact = typeof clientContacts.$inferSelect;
+export type ClienteTelefone = typeof clientesTelefones.$inferSelect;
+export type InsertClienteTelefone = typeof clientesTelefones.$inferInsert;
 export type ClientSnapshot = typeof clientSnapshots.$inferSelect;
 
 export type BaseImportada = typeof basesImportadas.$inferSelect;
