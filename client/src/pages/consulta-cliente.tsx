@@ -795,21 +795,6 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
-              {/* DEBUG BLOCK - REMOVER APÓS DIAGNÓSTICO */}
-              {folhaAtual && (
-                <div style={{ background: 'yellow', color: 'black', padding: '10px', marginBottom: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
-                  <strong>DEBUG EXC:</strong><br/>
-                  raw exc_qtd: {String(folhaAtual.exc_qtd)} (typeof: {typeof folhaAtual.exc_qtd})<br/>
-                  raw exc_soma: {String(folhaAtual.exc_soma)} (typeof: {typeof folhaAtual.exc_soma})<br/>
-                  raw margem: {String(folhaAtual.margem)} (typeof: {typeof folhaAtual.margem})<br/>
-                  Number(exc_qtd): {excQtd}<br/>
-                  Number(exc_soma): {excSoma}<br/>
-                  excQtd &gt; 0: {String(excQtd > 0)}<br/>
-                  excSoma &gt; 0: {String(excSoma > 0)}<br/>
-                  <strong>showExcAlert: {String(showExcAlert)}</strong>
-                </div>
-              )}
-
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -860,17 +845,17 @@ export default function ConsultaCliente() {
                             <div className="grid grid-cols-2 gap-4">
                               <div className="bg-muted p-4 rounded-lg">
                                 <p className="text-sm text-muted-foreground">EXC QTD</p>
-                                <p className="text-2xl font-bold">{folhaAtual.exc_qtd ?? 0}</p>
+                                <p className="text-2xl font-bold">{excQtd}</p>
                               </div>
                               <div className="bg-muted p-4 rounded-lg">
                                 <p className="text-sm text-muted-foreground">EXC Soma</p>
-                                <p className="text-2xl font-bold">{formatCurrency(folhaAtual.exc_soma)}</p>
+                                <p className="text-2xl font-bold">{formatCurrency(excSoma)}</p>
                               </div>
                             </div>
                             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-4 rounded-lg">
                               <p className="text-sm text-muted-foreground">Margem real (após desconto fora de folha)</p>
                               <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                                {formatCurrency(folhaAtual.margem)}
+                                {formatCurrency(margemReal)}
                               </p>
                             </div>
                           </div>
