@@ -291,6 +291,7 @@ export default function ConsultaCliente() {
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
+  const [showTelefonesModal, setShowTelefonesModal] = useState(false);
 
   // Listener para resetar estados locais quando dados de clientes são deletados em outra tela
   // Nota: invalidação de queries já é feita na origem (bases-clientes), aqui só resetamos estados locais
@@ -742,19 +743,27 @@ export default function ConsultaCliente() {
                       </p>
                     </div>
                     
-                    {/* Telefones - empilhados verticalmente */}
+                    {/* Telefones - resumo com botão para modal */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Phone className="w-4 h-4" />
                         Telefones
                       </p>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
                         {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
-                          clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
-                            <div key={idx} className="group">
-                              <CopyableField value={tel} label={`Telefone ${idx + 1}`} onCopy={handleCopy} />
-                            </div>
-                          ))
+                          <>
+                            <Badge variant="secondary" data-testid="badge-telefones-count">
+                              {clienteDetalhado.pessoa.telefones_base.length}
+                            </Badge>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setShowTelefonesModal(true)}
+                              data-testid="button-ver-telefones"
+                            >
+                              Ver
+                            </Button>
+                          </>
                         ) : (
                           <span className="text-muted-foreground text-sm">Nenhum telefone</span>
                         )}
@@ -794,6 +803,47 @@ export default function ConsultaCliente() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Modal de Telefones */}
+              <Dialog open={showTelefonesModal} onOpenChange={setShowTelefonesModal}>
+                <DialogContent className="sm:max-w-md" data-testid="modal-telefones">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Phone className="h-5 w-5" />
+                      Telefones do Cliente
+                    </DialogTitle>
+                    <DialogDescription>
+                      {clienteDetalhado.pessoa.telefones_base?.length || 0} telefone(s) cadastrado(s)
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2 mt-4">
+                    {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
+                      clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3 bg-muted rounded-lg group"
+                          data-testid={`telefone-item-${idx}`}
+                        >
+                          <span className="font-mono">{tel}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(tel);
+                              handleCopy(tel, `Telefone ${idx + 1}`);
+                            }}
+                            data-testid={`button-copiar-telefone-${idx}`}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground text-center py-4">Nenhum telefone cadastrado</p>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               <Card>
                 <CardHeader>
