@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,8 @@ interface Filtros {
   banco?: string;
   parcela_min?: number;
   parcela_max?: number;
+  // Filtro de desconto fora de folha
+  desconto_fora_folha?: boolean;
 }
 
 interface FiltrosDisponiveis {
@@ -268,6 +271,9 @@ export default function CompraLista() {
     if (f.banco) parts.push(`Banco: ${f.banco}`);
     if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
       parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
+    }
+    if (f.desconto_fora_folha) {
+      parts.push("Com desconto fora de folha");
     }
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
   };
@@ -553,6 +559,22 @@ export default function CompraLista() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Filtro de desconto fora de folha */}
+              <div className="flex items-center gap-3 mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <Switch
+                  id="desconto-fora-folha"
+                  checked={filtros.desconto_fora_folha === true}
+                  onCheckedChange={(checked) => setFiltros({ ...filtros, desconto_fora_folha: checked ? true : undefined })}
+                  data-testid="switch-desconto-fora-folha"
+                />
+                <Label htmlFor="desconto-fora-folha" className="text-sm font-medium cursor-pointer">
+                  Somente com desconto fora de folha
+                </Label>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  (EXC QTD &gt; 0 ou EXC Soma &gt; 0)
+                </span>
               </div>
 
               <div className="flex gap-4 mt-6">
