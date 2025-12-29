@@ -70,6 +70,10 @@ interface SimulacaoResult {
     orgao: string;
     uf: string;
     sit_func: string;
+    exc_qtd: number | null;
+    exc_soma: number | null;
+    margem: number | null;
+    has_desconto_fora_folha: boolean;
   }>;
 }
 
@@ -684,6 +688,7 @@ export default function CompraLista() {
                           <TableHead>Órgão</TableHead>
                           <TableHead>UF</TableHead>
                           <TableHead>Situação</TableHead>
+                          <TableHead>Obs.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -699,6 +704,13 @@ export default function CompraLista() {
                             <TableCell>{cliente.uf}</TableCell>
                             <TableCell>
                               <Badge variant="secondary">{cliente.sit_func}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {cliente.has_desconto_fora_folha && (
+                                <Badge variant="destructive" className="text-xs" data-testid={`badge-exc-${idx}`}>
+                                  Desc. fora folha
+                                </Badge>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
