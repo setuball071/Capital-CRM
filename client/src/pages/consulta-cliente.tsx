@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -289,6 +290,7 @@ export default function ConsultaCliente() {
   const [searchResults, setSearchResults] = useState<ConsultaResultado[] | null>(null);
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
+  const [showExcModal, setShowExcModal] = useState(false);
 
   // Listener para resetar estados locais quando dados de clientes são deletados em outra tela
   // Nota: invalidação de queries já é feita na origem (bases-clientes), aqui só resetamos estados locais
@@ -798,21 +800,54 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
-                      {/* Alerta de desconto fora de folha */}
+                      {/* Alerta de desconto fora de folha - clicável para abrir modal */}
                       {((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0) && (
-                        <Alert variant="destructive" className="border-2 border-red-500 bg-red-50 dark:bg-red-950" data-testid="alert-exc-fora-folha">
+                        <Alert 
+                          variant="destructive" 
+                          className="border-2 border-red-500 bg-red-50 dark:bg-red-950 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900 transition-colors" 
+                          data-testid="alert-exc-fora-folha"
+                          onClick={() => setShowExcModal(true)}
+                        >
                           <AlertTriangle className="h-5 w-5" />
                           <AlertTitle className="text-lg font-bold">Cliente com desconto fora de folha</AlertTitle>
                           <AlertDescription className="flex gap-4 mt-2">
-                            {(clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 && (
-                              <span className="font-medium">Quantidade: {clienteDetalhado.folha.atual.exc_qtd}</span>
-                            )}
-                            {(clienteDetalhado.folha.atual.exc_soma ?? 0) > 0 && (
-                              <span className="font-medium">Valor: {formatCurrency(clienteDetalhado.folha.atual.exc_soma)}</span>
-                            )}
+                            <span className="text-sm">Clique para ver detalhes</span>
                           </AlertDescription>
                         </Alert>
                       )}
+                      
+                      {/* Modal de detalhes EXC */}
+                      <Dialog open={showExcModal} onOpenChange={setShowExcModal}>
+                        <DialogContent className="sm:max-w-md" data-testid="modal-exc-detalhes">
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2 text-red-600">
+                              <AlertTriangle className="h-5 w-5" />
+                              Desconto Fora de Folha
+                            </DialogTitle>
+                            <DialogDescription>
+                              Há descontos fora do consignado. Use a Margem real para conferência no extrato.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 mt-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-muted p-4 rounded-lg">
+                                <p className="text-sm text-muted-foreground">EXC QTD</p>
+                                <p className="text-2xl font-bold">{clienteDetalhado.folha.atual.exc_qtd ?? 0}</p>
+                              </div>
+                              <div className="bg-muted p-4 rounded-lg">
+                                <p className="text-sm text-muted-foreground">EXC Soma</p>
+                                <p className="text-2xl font-bold">{formatCurrency(clienteDetalhado.folha.atual.exc_soma)}</p>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-4 rounded-lg">
+                              <p className="text-sm text-muted-foreground">Margem real (após desconto fora de folha)</p>
+                              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                                {formatCurrency(clienteDetalhado.folha.atual.margem)}
+                              </p>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* Margem 70% - Compulsória (SIAPE) */}
