@@ -4285,6 +4285,143 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // POST /api/imports/dados-complementares - Importa dados complementares (telefones, banco, etc)
+  // Headers esperados: CPF, data_nascimento, orgao_nome, upag_nome, banco_codigo, agencia, conta, telefone_1, telefone_2, telefone_3
+  app.post("/api/imports/dados-complementares", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo é obrigatório" });
+      }
+
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "Tenant não identificado" });
+      }
+
+      // Mapeamento de headers normalizados para campos do payload
+      const HEADER_MAP: Record<string, string> = {
+        cpf: "cpf",
+        data_nascimento: "dataNascimento",
+        datanascimento: "dataNascimento",
+        orgao_nome: "orgaoNomePessoa",
+        orgaonome: "orgaoNomePessoa",
+        orgao_nome_pessoa: "orgaoNomePessoa",
+        upag_nome: "upagNomePessoa",
+        upagnome: "upagNomePessoa",
+        upag_nome_pessoa: "upagNomePessoa",
+        banco_codigo: "bancoCodigo",
+        bancocodigo: "bancoCodigo",
+        banco: "bancoCodigo",
+        banco_nome: "bancoNome",
+        banconome: "bancoNome",
+        agencia: "agencia",
+        conta: "conta",
+        telefone_1: "telefone1",
+        telefone1: "telefone1",
+        telefone_2: "telefone2",
+        telefone2: "telefone2",
+        telefone_3: "telefone3",
+        telefone3: "telefone3",
+      };
+
+      function normalizeHeader(h: string): string {
+        return h
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+      }
+
+      let rows: Record<string, any>[] = [];
+      const fileName = file.originalname.toLowerCase();
+
+      // Parse CSV ou XLSX
+      if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
+        const Papa = await import("papaparse");
+        const csvContent = file.buffer.toString("utf-8");
+        const parsed = Papa.parse(csvContent, {
+          header: true,
+          skipEmptyLines: true,
+          delimiter: csvContent.includes(";") ? ";" : ",",
+        });
+        rows = parsed.data as Record<string, any>[];
+      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      } else {
+        return res.status(400).json({ message: "Formato de arquivo não suportado. Use CSV, TXT ou XLSX." });
+      }
+
+      // Processar linha a linha
+      const report = {
+        total_linhas: rows.length,
+        atualizados: 0,
+        telefones_inseridos: 0,
+        cpfs_nao_encontrados: 0,
+        erros: [] as { linha: number; cpf: string | null; mensagem: string }[],
+      };
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        try {
+          // Mapear headers
+          const payload: Record<string, any> = {};
+          let cpf: string | null = null;
+
+          for (const [originalHeader, value] of Object.entries(row)) {
+            const normalized = normalizeHeader(originalHeader);
+            const mappedField = HEADER_MAP[normalized];
+            
+            if (normalized === "cpf") {
+              cpf = String(value || "").replace(/\D/g, "").padStart(11, "0");
+            } else if (mappedField) {
+              payload[mappedField] = value;
+            }
+          }
+
+          if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
+            if (report.erros.length < 100) {
+              report.erros.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
+            }
+            continue;
+          }
+
+          // Chamar upsert
+          const result = await storage.upsertDadosComplementaresPorCpf(cpf, tenantId, payload);
+
+          if (result.pessoasAtualizadas === 0 && result.telefonesInseridos === 0) {
+            report.cpfs_nao_encontrados++;
+            if (report.erros.length < 100) {
+              report.erros.push({ linha: i + 2, cpf, mensagem: "CPF não encontrado na base" });
+            }
+          } else {
+            report.atualizados += result.pessoasAtualizadas;
+            report.telefones_inseridos += result.telefonesInseridos;
+          }
+        } catch (err: any) {
+          if (report.erros.length < 100) {
+            report.erros.push({ linha: i + 2, cpf: null, mensagem: err.message || "Erro desconhecido" });
+          }
+        }
+      }
+
+      console.log(`[DadosComplementares] Processado: ${report.total_linhas} linhas, ${report.atualizados} atualizados, ${report.telefones_inseridos} telefones, ${report.cpfs_nao_encontrados} não encontrados`);
+
+      return res.json({
+        success: true,
+        ...report,
+      });
+    } catch (error: any) {
+      console.error("Dados complementares import error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar importação de dados complementares" });
+    }
+  });
+
   // ==================== FAST IMPORT ROUTES (SQL-based, 10-50x faster) ====================
 
   // POST /api/fast-imports/start - Inicia importação rápida com staging tables
