@@ -1040,7 +1040,8 @@ export class DbStorage implements IStorage {
       filtros.margem_35_min !== undefined || filtros.margem_35_max !== undefined ||
       filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
       filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
-      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined
+      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined ||
+      filtros.desconto_fora_folha !== undefined
     );
     
     const needsContratoJoin = !!(
@@ -1134,6 +1135,15 @@ export class DbStorage implements IStorage {
       }
       if (filtros.margem_cartao_beneficio_max !== undefined) {
         whereConditions.push(sql`folha.margem_cartao_beneficio_saldo <= ${filtros.margem_cartao_beneficio_max}`);
+      }
+
+      // Desconto fora de folha conditions (parameterized)
+      // true = com desconto (exc_qtd > 0 OR exc_soma > 0)
+      // false = sem desconto (exc_qtd = 0 AND (exc_soma = 0 OR exc_soma IS NULL))
+      if (filtros.desconto_fora_folha === true) {
+        whereConditions.push(sql`(COALESCE(folha.exc_qtd, 0) > 0 OR COALESCE(folha.exc_soma, 0) > 0)`);
+      } else if (filtros.desconto_fora_folha === false) {
+        whereConditions.push(sql`(COALESCE(folha.exc_qtd, 0) = 0 AND COALESCE(folha.exc_soma, 0) = 0)`);
       }
 
       // Contrato conditions (parameterized)
