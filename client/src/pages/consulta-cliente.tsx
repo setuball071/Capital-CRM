@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -23,6 +24,7 @@ import {
   CreditCard, 
   ChevronLeft, 
   AlertCircle,
+  AlertTriangle,
   Wallet,
   Calendar,
   Lock,
@@ -106,6 +108,10 @@ interface FolhaAtual {
   creditos: number | null;
   debitos: number | null;
   liquido: number | null;
+  // Campos adicionais
+  exc_qtd: number | null;
+  exc_soma: number | null;
+  margem: number | null;
   base_tag: string | null;
   extras_folha: any;
 }
@@ -792,6 +798,22 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
+                      {/* Alerta de desconto fora de folha */}
+                      {((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0) && (
+                        <Alert variant="destructive" className="border-2 border-red-500 bg-red-50 dark:bg-red-950" data-testid="alert-exc-fora-folha">
+                          <AlertTriangle className="h-5 w-5" />
+                          <AlertTitle className="text-lg font-bold">Cliente com desconto fora de folha</AlertTitle>
+                          <AlertDescription className="flex gap-4 mt-2">
+                            {(clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 && (
+                              <span className="font-medium">Quantidade: {clienteDetalhado.folha.atual.exc_qtd}</span>
+                            )}
+                            {(clienteDetalhado.folha.atual.exc_soma ?? 0) > 0 && (
+                              <span className="font-medium">Valor: {formatCurrency(clienteDetalhado.folha.atual.exc_soma)}</span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* Margem 70% - Compulsória (SIAPE) */}
                         <Card className="bg-muted/50" data-testid="card-margem-70">
