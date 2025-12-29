@@ -889,6 +889,16 @@ export default function BasesClientes() {
                     <Download className="w-4 h-4 mr-2" />
                     Modelo Contatos
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = "/api/imports/dados-complementares/template"}
+                    data-testid="button-download-modelo-dados-complementares"
+                    className="justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Modelo Dados Complementares
+                  </Button>
                 </div>
               </div>
               <DialogFooter className="mt-4">
