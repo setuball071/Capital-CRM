@@ -589,9 +589,14 @@ export default function ConsultaCliente() {
             </div>
           ) : clienteDetalhado ? (() => {
             // ═══════════════════════════════════════════════════════════════════════════
-            // VARIÁVEL CENTRALIZADA: folhaAtual - usar em TUDO (cards, EXC, debug)
+            // VARIÁVEIS CENTRALIZADAS - usar em TUDO (cards, EXC, debug)
             // ═══════════════════════════════════════════════════════════════════════════
             const folhaAtual = clienteDetalhado?.folha?.atual ?? null;
+            // Conversão numérica forçada para EXC
+            const excQtd = Number(folhaAtual?.exc_qtd ?? 0);
+            const excSoma = Number(folhaAtual?.exc_soma ?? 0);
+            const margemReal = Number(folhaAtual?.margem ?? 0);
+            const showExcAlert = excQtd > 0 || excSoma > 0;
             
             return (
             <div className="space-y-6">
@@ -790,26 +795,20 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
-              {/* ═══════════════════════════════════════════════════════════════════════════
-                  DEBUG BLOCK - REMOVER APÓS DIAGNÓSTICO
-                  ═══════════════════════════════════════════════════════════════════════════ */}
-              {folhaAtual && (() => {
-                const excQtd = folhaAtual.exc_qtd;
-                const excSoma = folhaAtual.exc_soma;
-                const margemReal = folhaAtual.margem;
-                const showAlert = ((excQtd ?? 0) > 0 || (excSoma ?? 0) > 0);
-                return (
-                  <div style={{ background: 'yellow', color: 'black', padding: '10px', marginBottom: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
-                    <strong>DEBUG EXC:</strong><br/>
-                    exc_qtd: {String(excQtd)} (typeof: {typeof excQtd})<br/>
-                    exc_soma: {String(excSoma)} (typeof: {typeof excSoma})<br/>
-                    margem: {String(margemReal)} (typeof: {typeof margemReal})<br/>
-                    (excQtd ?? 0) &gt; 0: {String((excQtd ?? 0) > 0)}<br/>
-                    (excSoma ?? 0) &gt; 0: {String((excSoma ?? 0) > 0)}<br/>
-                    <strong>showAlert: {String(showAlert)}</strong>
-                  </div>
-                );
-              })()}
+              {/* DEBUG BLOCK - REMOVER APÓS DIAGNÓSTICO */}
+              {folhaAtual && (
+                <div style={{ background: 'yellow', color: 'black', padding: '10px', marginBottom: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
+                  <strong>DEBUG EXC:</strong><br/>
+                  raw exc_qtd: {String(folhaAtual.exc_qtd)} (typeof: {typeof folhaAtual.exc_qtd})<br/>
+                  raw exc_soma: {String(folhaAtual.exc_soma)} (typeof: {typeof folhaAtual.exc_soma})<br/>
+                  raw margem: {String(folhaAtual.margem)} (typeof: {typeof folhaAtual.margem})<br/>
+                  Number(exc_qtd): {excQtd}<br/>
+                  Number(exc_soma): {excSoma}<br/>
+                  excQtd &gt; 0: {String(excQtd > 0)}<br/>
+                  excSoma &gt; 0: {String(excSoma > 0)}<br/>
+                  <strong>showExcAlert: {String(showExcAlert)}</strong>
+                </div>
+              )}
 
               <Card>
                 <CardHeader>
@@ -830,7 +829,7 @@ export default function ConsultaCliente() {
                       {/* ═══════════════════════════════════════════════════════════════════════════
                           DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
                           ═══════════════════════════════════════════════════════════════════════════ */}
-                      {((folhaAtual.exc_qtd ?? 0) > 0 || (folhaAtual.exc_soma ?? 0) > 0) && (
+                      {showExcAlert && (
                         <Alert 
                           variant="destructive" 
                           className="border-2 border-red-500 bg-red-50 dark:bg-red-950 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900 transition-colors" 
