@@ -506,6 +506,10 @@ class StreamingImportService {
     const matricula = preserveMatricula(this.extractValue(row, headerMap, "matricula"));
     const numeroContrato = preserveNumeroContrato(this.extractValue(row, headerMap, "numero_contrato"));
     const banco = run.banco || this.extractValue(row, headerMap, "banco");
+    
+    // ORGAO: extrair e normalizar como string (trim, sem conversão numérica)
+    const orgaoRaw = this.extractValue(row, headerMap, "orgao");
+    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "DESCONHECIDO";
 
     if (!cpf || !matricula) {
       errors.push({
@@ -520,7 +524,7 @@ class StreamingImportService {
       return false;
     }
 
-    const vinculo = await this.findOrCreateVinculo(cpf, matricula, run);
+    const vinculo = await this.findOrCreateVinculo(cpf, matricula, run, undefined, orgao);
     if (!vinculo || !vinculo.pessoaId) {
       errors.push({
         importRunId: run.id,
@@ -669,8 +673,12 @@ class StreamingImportService {
     cpf: string,
     matricula: string,
     run: ImportRun,
-    pessoaId?: number
+    pessoaId?: number,
+    orgao?: string
   ): Promise<{ id: number; pessoaId: number | null } | null> {
+    // ORGAO: normalizar como string, sem conversão numérica
+    const orgaoNorm = orgao ? String(orgao).trim() : "DESCONHECIDO";
+    
     const existing = await db
       .select()
       .from(clientesVinculo)
@@ -678,7 +686,8 @@ class StreamingImportService {
         and(
           run.tenantId ? eq(clientesVinculo.tenantId, run.tenantId) : sql`${clientesVinculo.tenantId} IS NULL`,
           eq(clientesVinculo.cpf, cpf),
-          eq(clientesVinculo.matricula, matricula)
+          eq(clientesVinculo.matricula, matricula),
+          eq(clientesVinculo.orgao, orgaoNorm)
         )
       )
       .limit(1);
@@ -694,12 +703,16 @@ class StreamingImportService {
       return { id: existing[0].id, pessoaId: existing[0].pessoaId };
     }
 
+    // tenantId é obrigatório na tabela, usar 1 como fallback
+    const tenantIdValue = run.tenantId || 1;
+    
     const [created] = await db
       .insert(clientesVinculo)
       .values({
-        tenantId: run.tenantId || null,
+        tenantId: tenantIdValue,
         cpf,
         matricula,
+        orgao: orgaoNorm,
         pessoaId: pessoaId || null,
         convenio: run.convenio || null,
       })
