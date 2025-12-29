@@ -4297,6 +4297,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Headers
       const headers = [
         "CPF",
+        "NOME",
         "DATA_NASCIMENTO",
         "BANCO_CODIGO",
         "AGENCIA",
@@ -4322,6 +4323,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Exemplo de linha
       sheet.addRow([
         "12345678901",
+        "MARIA DA SILVA",
         "15/03/1985",
         "001",
         "1234",
@@ -4334,6 +4336,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Linha de instruções
       sheet.addRow([
         "Obrigatório",
+        "Opcional",
         "DD/MM/AAAA",
         "Código banco",
         "Nº agência",
@@ -4350,6 +4353,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Ajustar largura das colunas
       sheet.columns = [
         { width: 15 }, // CPF
+        { width: 30 }, // NOME
         { width: 15 }, // DATA_NASCIMENTO
         { width: 15 }, // BANCO_CODIGO
         { width: 12 }, // AGENCIA
@@ -4360,7 +4364,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       ];
       
       // Formatar colunas como texto para preservar zeros
-      ["A", "C", "D", "E", "F", "G", "H"].forEach((col) => {
+      ["A", "D", "E", "F", "G", "H", "I"].forEach((col) => {
         sheet.getColumn(col).numFmt = "@";
       });
       
@@ -4392,9 +4396,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       // Mapeamento de headers normalizados para campos do payload
-      // Headers aceitos: CPF, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
+      // Headers aceitos: CPF, NOME, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
       const HEADER_MAP: Record<string, string> = {
         cpf: "cpf",
+        nome: "nome",
         data_nascimento: "dataNascimento",
         datanascimento: "dataNascimento",
         banco_codigo: "bancoCodigo",

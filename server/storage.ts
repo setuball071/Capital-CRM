@@ -198,6 +198,7 @@ export interface IStorage {
   
   // Dados Complementares
   upsertDadosComplementaresPorCpf(cpf: string, tenantId: number, payload: {
+    nome?: string | null;
     dataNascimento?: Date | string | null;
     bancoCodigo?: string | null;
     agencia?: string | null;
@@ -1350,6 +1351,7 @@ export class DbStorage implements IStorage {
     cpf: string,
     tenantId: number,
     payload: {
+      nome?: string | null;
       dataNascimento?: Date | string | null;
       bancoCodigo?: string | null;
       agencia?: string | null;
@@ -1407,6 +1409,11 @@ export class DbStorage implements IStorage {
 
     // Montar objeto de atualização apenas com campos não vazios
     const updateData: Record<string, any> = {};
+    
+    // Nome: só atualiza se vier preenchido (não sobrescreve com vazio)
+    if (payload.nome !== undefined && payload.nome !== null && String(payload.nome).trim()) {
+      updateData.nome = String(payload.nome).trim();
+    }
     
     const dataNasc = parseDataNascimento(payload.dataNascimento);
     if (dataNasc) {
