@@ -452,6 +452,11 @@ class StreamingImportService {
   ): Promise<boolean> {
     const cpf = padCpf(this.extractValue(row, headerMap, "cpf"));
     const matricula = preserveMatricula(this.extractValue(row, headerMap, "matricula"));
+    
+    // ORGAO: extrair e normalizar como string (trim, sem conversão numérica)
+    // Tenta "orgao" primeiro, depois "orgaodesc" como fallback
+    const orgaoRaw = this.extractValue(row, headerMap, "orgao") || this.extractValue(row, headerMap, "orgaodesc");
+    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "DESCONHECIDO";
 
     if (!cpf || !matricula) {
       errors.push({
@@ -466,7 +471,7 @@ class StreamingImportService {
       return false;
     }
 
-    let vinculo: { id: number; pessoaId: number | null } | null = await this.findOrCreateVinculo(cpf, matricula, run);
+    let vinculo: { id: number; pessoaId: number | null } | null = await this.findOrCreateVinculo(cpf, matricula, run, undefined, orgao);
     if (!vinculo || !vinculo.pessoaId) {
       const pessoa = await this.upsertPessoa({
         tenantId: run.tenantId,
@@ -483,7 +488,7 @@ class StreamingImportService {
 
       if (!pessoa) return false;
 
-      vinculo = await this.findOrCreateVinculo(cpf, matricula, run, pessoa.id);
+      vinculo = await this.findOrCreateVinculo(cpf, matricula, run, pessoa.id, orgao);
     }
 
     if (!vinculo || !vinculo.pessoaId) {
