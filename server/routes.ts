@@ -5064,6 +5064,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             creditos: folhaAtual.creditos != null ? parseFloat(folhaAtual.creditos) : null,
             debitos: folhaAtual.debitos != null ? parseFloat(folhaAtual.debitos) : null,
             liquido: folhaAtual.liquido != null ? parseFloat(folhaAtual.liquido) : null,
+            // Campos adicionais: EXC QTD, EXC Soma, Margem (colunas do schema, podem não existir no banco ainda)
+            exc_qtd: (folhaAtual as any).excQtd != null ? (folhaAtual as any).excQtd : null,
+            exc_soma: (folhaAtual as any).excSoma != null ? parseFloat((folhaAtual as any).excSoma) : null,
+            margem: (folhaAtual as any).margem != null ? parseFloat((folhaAtual as any).margem) : null,
             base_tag: folhaAtual.baseTag,
             extras_folha: folhaAtual.extrasFolha,
           } : null,
