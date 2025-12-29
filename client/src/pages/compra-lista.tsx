@@ -565,7 +565,19 @@ export default function CompraLista() {
                 </div>
               </div>
 
-              {/* Filtro de desconto fora de folha */}
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  DESCONTO FORA DE FOLHA (EXC) - Filtro de Busca
+                  ═══════════════════════════════════════════════════════════════════════════
+                  Campos do banco (clientes_folha_mes):
+                    - exc_qtd: INTEGER - quantidade de descontos externos ao consignado
+                    - exc_soma: DECIMAL(15,2) - valor total (R$) dos descontos externos
+                    - margem: DECIMAL(15,2) - margem REAL após descontos externos
+                  
+                  Regra de filtro: Quando ativado, retorna apenas clientes onde:
+                    COALESCE(exc_qtd, 0) > 0 OR COALESCE(exc_soma, 0) > 0
+                  
+                  Resultado: Coluna "EXC" na tabela mostra badge "Desc. fora folha"
+                  ═══════════════════════════════════════════════════════════════════════════ */}
               <div className="flex items-center gap-3 mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <Switch
                   id="desconto-fora-folha"

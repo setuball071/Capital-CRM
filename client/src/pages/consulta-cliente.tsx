@@ -800,7 +800,17 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
-                      {/* Alerta de desconto fora de folha - clicável para abrir modal */}
+                      {/* ═══════════════════════════════════════════════════════════════════════════
+                          DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
+                          ═══════════════════════════════════════════════════════════════════════════
+                          Campos do banco (clientes_folha_mes):
+                            - exc_qtd: quantidade de descontos externos ao consignado
+                            - exc_soma: valor total (R$) dos descontos externos
+                            - margem: margem REAL após descontos externos (usar para conferência no extrato)
+                          
+                          Regra de exibição: Mostrar alerta quando exc_qtd > 0 OU exc_soma > 0
+                          Clique abre modal com EXC QTD, EXC Soma e Margem real detalhados
+                          ═══════════════════════════════════════════════════════════════════════════ */}
                       {((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0) && (
                         <Alert 
                           variant="destructive" 

@@ -1137,9 +1137,20 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`folha.margem_cartao_beneficio_saldo <= ${filtros.margem_cartao_beneficio_max}`);
       }
 
-      // Desconto fora de folha conditions (parameterized)
-      // true = com desconto (exc_qtd > 0 OR exc_soma > 0)
-      // false = sem desconto (exc_qtd = 0 AND (exc_soma = 0 OR exc_soma IS NULL))
+      // ═══════════════════════════════════════════════════════════════════════════
+      // DESCONTO FORA DE FOLHA (EXC) - Regra de Negócio
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Campos usados (tabela clientes_folha_mes):
+      //   - exc_qtd: INTEGER - quantidade de descontos externos ao consignado
+      //   - exc_soma: DECIMAL(15,2) - valor total dos descontos externos (R$)
+      //   - margem: DECIMAL(15,2) - margem real após descontos externos
+      //
+      // Regra: Cliente tem desconto fora de folha quando:
+      //   exc_qtd > 0 (possui descontos) OU exc_soma > 0 (valor descontado)
+      //
+      // Uso prático: A "margem" (campo separado) representa o valor REAL disponível
+      // após subtrair descontos externos. Usar para conferência no extrato bancário.
+      // ═══════════════════════════════════════════════════════════════════════════
       if (filtros.desconto_fora_folha === true) {
         whereConditions.push(sql`(COALESCE(folha.exc_qtd, 0) > 0 OR COALESCE(folha.exc_soma, 0) > 0)`);
       } else if (filtros.desconto_fora_folha === false) {
