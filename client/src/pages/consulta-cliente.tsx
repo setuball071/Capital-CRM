@@ -800,6 +800,15 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
+                      {/* DEBUG: Log valores EXC para verificar se estão chegando */}
+                      {console.log('[DEBUG EXC] folha.atual:', {
+                        exc_qtd: clienteDetalhado.folha.atual.exc_qtd,
+                        exc_soma: clienteDetalhado.folha.atual.exc_soma,
+                        margem: clienteDetalhado.folha.atual.margem,
+                        competencia: clienteDetalhado.folha.atual.competencia,
+                        vinculo_selecionado: clienteDetalhado.vinculo_selecionado,
+                        condicao_alerta: ((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0)
+                      })}
                       {/* ═══════════════════════════════════════════════════════════════════════════
                           DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
                           ═══════════════════════════════════════════════════════════════════════════
