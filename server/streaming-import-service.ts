@@ -52,6 +52,7 @@ export interface ImportJobResult {
 
 const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
+  orgao: "orgao",
   matricula: "matricula",
   nome: "nome",
   banco: "banco",

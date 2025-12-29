@@ -159,6 +159,7 @@ export const TEMPLATE_COLUMNS = {
   ],
   d8_servidor: [
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "ORGAO", key: "orgao", width: 25, required: false, example: "20114", isText: false },
     { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
     { header: "NOME", key: "nome", width: 30, required: false, example: "JOAO DA SILVA SANTOS", isText: false },
     { header: "BANCO", key: "banco", width: 20, required: false, example: "BANCO DO BRASIL", isText: false },
@@ -175,6 +176,7 @@ export const TEMPLATE_COLUMNS = {
   ],
   d8_pensionista: [
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "ORGAO", key: "orgao", width: 25, required: false, example: "20114", isText: false },
     { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
     { header: "NOME", key: "nome", width: 30, required: false, example: "MARIA DA SILVA SANTOS", isText: false },
     { header: "BANCO", key: "banco", width: 20, required: false, example: "CAIXA ECONOMICA", isText: false },
