@@ -4286,7 +4286,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/imports/dados-complementares - Importa dados complementares (telefones, banco, etc)
-  // Headers esperados: CPF, data_nascimento, orgao_nome, upag_nome, banco_codigo, agencia, conta, telefone_1, telefone_2, telefone_3
+  // Headers aceitos: CPF, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
+  // Ordem das colunas não importa. Outras colunas são ignoradas.
   app.post("/api/imports/dados-complementares", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
     try {
       const file = req.file;
@@ -4300,21 +4301,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       // Mapeamento de headers normalizados para campos do payload
+      // Headers aceitos: CPF, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
       const HEADER_MAP: Record<string, string> = {
         cpf: "cpf",
         data_nascimento: "dataNascimento",
         datanascimento: "dataNascimento",
-        orgao_nome: "orgaoNomePessoa",
-        orgaonome: "orgaoNomePessoa",
-        orgao_nome_pessoa: "orgaoNomePessoa",
-        upag_nome: "upagNomePessoa",
-        upagnome: "upagNomePessoa",
-        upag_nome_pessoa: "upagNomePessoa",
         banco_codigo: "bancoCodigo",
         bancocodigo: "bancoCodigo",
-        banco: "bancoCodigo",
-        banco_nome: "bancoNome",
-        banconome: "bancoNome",
         agencia: "agencia",
         conta: "conta",
         telefone_1: "telefone1",
@@ -4359,11 +4352,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
       // Processar linha a linha
       const report = {
-        total_linhas: rows.length,
-        atualizados: 0,
+        linhas_lidas: rows.length,
+        pessoas_atualizadas: 0,
         telefones_inseridos: 0,
         cpfs_nao_encontrados: 0,
-        erros: [] as { linha: number; cpf: string | null; mensagem: string }[],
+        erros_por_linha: [] as { linha: number; cpf: string | null; mensagem: string }[],
       };
 
       for (let i = 0; i < rows.length; i++) {
@@ -4385,8 +4378,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           }
 
           if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
-            if (report.erros.length < 100) {
-              report.erros.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
+            if (report.erros_por_linha.length < 200) {
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
             }
             continue;
           }
@@ -4396,21 +4389,21 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
           if (result.pessoasAtualizadas === 0 && result.telefonesInseridos === 0) {
             report.cpfs_nao_encontrados++;
-            if (report.erros.length < 100) {
-              report.erros.push({ linha: i + 2, cpf, mensagem: "CPF não encontrado na base" });
+            if (report.erros_por_linha.length < 200) {
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF não encontrado na base" });
             }
           } else {
-            report.atualizados += result.pessoasAtualizadas;
+            report.pessoas_atualizadas += result.pessoasAtualizadas;
             report.telefones_inseridos += result.telefonesInseridos;
           }
         } catch (err: any) {
-          if (report.erros.length < 100) {
-            report.erros.push({ linha: i + 2, cpf: null, mensagem: err.message || "Erro desconhecido" });
+          if (report.erros_por_linha.length < 200) {
+            report.erros_por_linha.push({ linha: i + 2, cpf: null, mensagem: err.message || "Erro desconhecido" });
           }
         }
       }
 
-      console.log(`[DadosComplementares] Processado: ${report.total_linhas} linhas, ${report.atualizados} atualizados, ${report.telefones_inseridos} telefones, ${report.cpfs_nao_encontrados} não encontrados`);
+      console.log(`[DadosComplementares] Processado: ${report.linhas_lidas} linhas, ${report.pessoas_atualizadas} atualizados, ${report.telefones_inseridos} telefones, ${report.cpfs_nao_encontrados} não encontrados`);
 
       return res.json({
         success: true,
