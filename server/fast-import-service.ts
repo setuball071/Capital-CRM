@@ -687,7 +687,7 @@ class FastImportService {
     const baseTag = run.baseTag || "";
     
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, data_inicio, data_fim, import_run_id, base_tag)
+      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, started_at, ended_at, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
         p.id,
         COALESCE(s.banco, ${banco}),
@@ -697,8 +697,8 @@ class FastImportService {
         s.saldo_devedor,
         s.prazo_remanescente,
         s.prazo_total,
-        s.data_inicio,
-        s.data_fim,
+        s.data_inicio::timestamp,
+        s.data_fim::timestamp,
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
@@ -713,8 +713,8 @@ class FastImportService {
         saldo_devedor = COALESCE(EXCLUDED.saldo_devedor, clientes_contratos.saldo_devedor),
         parcelas_restantes = COALESCE(EXCLUDED.parcelas_restantes, clientes_contratos.parcelas_restantes),
         prazo_total = COALESCE(EXCLUDED.prazo_total, clientes_contratos.prazo_total),
-        data_inicio = COALESCE(EXCLUDED.data_inicio, clientes_contratos.data_inicio),
-        data_fim = COALESCE(EXCLUDED.data_fim, clientes_contratos.data_fim),
+        started_at = COALESCE(EXCLUDED.started_at, clientes_contratos.started_at),
+        ended_at = COALESCE(EXCLUDED.ended_at, clientes_contratos.ended_at),
         import_run_id = ${run.id},
         base_tag = ${baseTag}
     `);

@@ -521,7 +521,9 @@ export const clientesContratos = pgTable("clientes_contratos", {
   baseTag: varchar("base_tag", { length: 100 }),
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
-});
+}, (table) => ({
+  pessoaContratoIdx: uniqueIndex("idx_contratos_pessoa_numero").on(table.pessoaId, table.numeroContrato),
+}));
 
 // 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
 export const clientContacts = pgTable("client_contacts", {
