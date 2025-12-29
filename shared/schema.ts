@@ -542,6 +542,7 @@ export const clientesTelefones = pgTable("clientes_telefones", {
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
   telefone: varchar("telefone", { length: 20 }).notNull(), // Telefone normalizado (apenas dígitos)
   tipo: varchar("tipo", { length: 20 }), // celular, fixo, whatsapp, comercial (opcional)
+  principal: boolean("principal").default(false), // Telefone_1 = true, demais = false
   createdAt: timestamp("created_at").notNull().defaultNow(),
   importRunId: integer("import_run_id"), // Rastreabilidade
   baseTag: varchar("base_tag", { length: 100 }),

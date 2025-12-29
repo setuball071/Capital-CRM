@@ -198,10 +198,7 @@ export interface IStorage {
   // Dados Complementares
   upsertDadosComplementaresPorCpf(cpf: string, tenantId: number, payload: {
     dataNascimento?: Date | string | null;
-    orgaoNomePessoa?: string | null;
-    upagNomePessoa?: string | null;
     bancoCodigo?: string | null;
-    bancoNome?: string | null;
     agencia?: string | null;
     conta?: string | null;
     telefone1?: string | null;
@@ -1350,10 +1347,7 @@ export class DbStorage implements IStorage {
     tenantId: number,
     payload: {
       dataNascimento?: Date | string | null;
-      orgaoNomePessoa?: string | null;
-      upagNomePessoa?: string | null;
       bancoCodigo?: string | null;
-      bancoNome?: string | null;
       agencia?: string | null;
       conta?: string | null;
       telefone1?: string | null;
@@ -1380,31 +1374,50 @@ export class DbStorage implements IStorage {
       return { pessoasAtualizadas: 0, telefonesInseridos: 0 };
     }
 
+    // Função para normalizar data de nascimento (aceita DD/MM/AAAA e AAAA-MM-DD)
+    function parseDataNascimento(val: Date | string | null | undefined): Date | null {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      
+      const str = String(val).trim();
+      if (!str) return null;
+      
+      // Formato DD/MM/AAAA
+      const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (brMatch) {
+        const [, dia, mes, ano] = brMatch;
+        return new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+      }
+      
+      // Formato AAAA-MM-DD (ISO)
+      const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        const [, ano, mes, dia] = isoMatch;
+        return new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+      }
+      
+      // Tentar parse padrão
+      const parsed = new Date(str);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
     // Montar objeto de atualização apenas com campos não vazios
     const updateData: Record<string, any> = {};
     
-    if (payload.dataNascimento !== undefined && payload.dataNascimento !== null && payload.dataNascimento !== "") {
-      updateData.dataNascimento = typeof payload.dataNascimento === "string" 
-        ? new Date(payload.dataNascimento) 
-        : payload.dataNascimento;
+    const dataNasc = parseDataNascimento(payload.dataNascimento);
+    if (dataNasc) {
+      updateData.dataNascimento = dataNasc;
     }
-    if (payload.orgaoNomePessoa && payload.orgaoNomePessoa.trim()) {
-      updateData.orgaoNomePessoa = payload.orgaoNomePessoa.trim();
+    
+    // Banco, agencia, conta: preservar como text (mantém zeros à esquerda)
+    if (payload.bancoCodigo !== undefined && payload.bancoCodigo !== null && String(payload.bancoCodigo).trim()) {
+      updateData.bancoCodigo = String(payload.bancoCodigo).trim();
     }
-    if (payload.upagNomePessoa && payload.upagNomePessoa.trim()) {
-      updateData.upagNomePessoa = payload.upagNomePessoa.trim();
+    if (payload.agencia !== undefined && payload.agencia !== null && String(payload.agencia).trim()) {
+      updateData.agencia = String(payload.agencia).trim();
     }
-    if (payload.bancoCodigo && payload.bancoCodigo.trim()) {
-      updateData.bancoCodigo = payload.bancoCodigo.trim();
-    }
-    if (payload.bancoNome && payload.bancoNome.trim()) {
-      updateData.bancoNome = payload.bancoNome.trim();
-    }
-    if (payload.agencia && payload.agencia.trim()) {
-      updateData.agencia = payload.agencia.trim();
-    }
-    if (payload.conta && payload.conta.trim()) {
-      updateData.conta = payload.conta.trim();
+    if (payload.conta !== undefined && payload.conta !== null && String(payload.conta).trim()) {
+      updateData.conta = String(payload.conta).trim();
     }
 
     let pessoasAtualizadas = 0;
@@ -1422,24 +1435,41 @@ export class DbStorage implements IStorage {
     }
 
     // Processar telefones: extrair, normalizar e deduplicar
-    const telefonesRaw = [payload.telefone1, payload.telefone2, payload.telefone3]
-      .filter((t): t is string => !!t && t.trim().length > 0)
-      .map(t => t.replace(/\D/g, "")) // Apenas dígitos
-      .filter(t => t.length >= 8); // Mínimo 8 dígitos
-
-    const telefonesUnicos = [...new Set(telefonesRaw)];
+    // telefone1 = principal, telefone2/3 = não principal
+    const telefonesComPrincipal: { telefone: string; principal: boolean }[] = [];
+    const telefonesVistos = new Set<string>();
+    
+    const telefonesRaw = [
+      { val: payload.telefone1, principal: true },
+      { val: payload.telefone2, principal: false },
+      { val: payload.telefone3, principal: false },
+    ];
+    
+    for (const { val, principal } of telefonesRaw) {
+      if (!val || !String(val).trim()) continue;
+      
+      const telNorm = String(val).replace(/\D/g, ""); // Apenas dígitos
+      if (telNorm.length < 8) continue; // Mínimo 8 dígitos
+      
+      // Deduplicar
+      if (telefonesVistos.has(telNorm)) continue;
+      telefonesVistos.add(telNorm);
+      
+      telefonesComPrincipal.push({ telefone: telNorm, principal });
+    }
 
     let telefonesInseridos = 0;
 
     // Inserir telefones para cada pessoa (ON CONFLICT ignora duplicatas)
     for (const pessoa of pessoas) {
-      for (const telefone of telefonesUnicos) {
+      for (const { telefone, principal } of telefonesComPrincipal) {
         try {
           await db.insert(clientesTelefones)
             .values({
               pessoaId: pessoa.id,
               telefone,
               tipo: telefone.length === 11 ? "celular" : "fixo",
+              principal,
             })
             .onConflictDoNothing();
           telefonesInseridos++;
