@@ -587,7 +587,13 @@ export default function ConsultaCliente() {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <span className="ml-2 text-muted-foreground">Carregando detalhes do cliente...</span>
             </div>
-          ) : clienteDetalhado ? (
+          ) : clienteDetalhado ? (() => {
+            // ═══════════════════════════════════════════════════════════════════════════
+            // VARIÁVEL CENTRALIZADA: folhaAtual - usar em TUDO (cards, EXC, debug)
+            // ═══════════════════════════════════════════════════════════════════════════
+            const folhaAtual = clienteDetalhado?.folha?.atual ?? null;
+            
+            return (
             <div className="space-y-6">
               <div className="flex items-center gap-4 flex-wrap">
                 {searchResults && searchResults.length > 1 && (
@@ -787,10 +793,10 @@ export default function ConsultaCliente() {
               {/* ═══════════════════════════════════════════════════════════════════════════
                   DEBUG BLOCK - REMOVER APÓS DIAGNÓSTICO
                   ═══════════════════════════════════════════════════════════════════════════ */}
-              {clienteDetalhado.folha.atual && (() => {
-                const excQtd = clienteDetalhado.folha.atual.exc_qtd;
-                const excSoma = clienteDetalhado.folha.atual.exc_soma;
-                const margemReal = clienteDetalhado.folha.atual.margem;
+              {folhaAtual && (() => {
+                const excQtd = folhaAtual.exc_qtd;
+                const excSoma = folhaAtual.exc_soma;
+                const margemReal = folhaAtual.margem;
                 const showAlert = ((excQtd ?? 0) > 0 || (excSoma ?? 0) > 0);
                 return (
                   <div style={{ background: 'yellow', color: 'black', padding: '10px', marginBottom: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
@@ -812,19 +818,19 @@ export default function ConsultaCliente() {
                     Situação de Folha
                   </CardTitle>
                   <CardDescription>
-                    {clienteDetalhado.folha.atual 
-                      ? `Competência mais recente: ${formatDate(clienteDetalhado.folha.atual.competencia)}`
+                    {folhaAtual 
+                      ? `Competência mais recente: ${formatDate(folhaAtual.competencia)}`
                       : "Nenhum dado de folha disponível"
                     }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {clienteDetalhado.folha.atual ? (
+                  {folhaAtual ? (
                     <div className="space-y-6">
                       {/* ═══════════════════════════════════════════════════════════════════════════
                           DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
                           ═══════════════════════════════════════════════════════════════════════════ */}
-                      {((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0) && (
+                      {((folhaAtual.exc_qtd ?? 0) > 0 || (folhaAtual.exc_soma ?? 0) > 0) && (
                         <Alert 
                           variant="destructive" 
                           className="border-2 border-red-500 bg-red-50 dark:bg-red-950 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900 transition-colors" 
@@ -855,17 +861,17 @@ export default function ConsultaCliente() {
                             <div className="grid grid-cols-2 gap-4">
                               <div className="bg-muted p-4 rounded-lg">
                                 <p className="text-sm text-muted-foreground">EXC QTD</p>
-                                <p className="text-2xl font-bold">{clienteDetalhado.folha.atual.exc_qtd ?? 0}</p>
+                                <p className="text-2xl font-bold">{folhaAtual.exc_qtd ?? 0}</p>
                               </div>
                               <div className="bg-muted p-4 rounded-lg">
                                 <p className="text-sm text-muted-foreground">EXC Soma</p>
-                                <p className="text-2xl font-bold">{formatCurrency(clienteDetalhado.folha.atual.exc_soma)}</p>
+                                <p className="text-2xl font-bold">{formatCurrency(folhaAtual.exc_soma)}</p>
                               </div>
                             </div>
                             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-4 rounded-lg">
                               <p className="text-sm text-muted-foreground">Margem real (após desconto fora de folha)</p>
                               <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                                {formatCurrency(clienteDetalhado.folha.atual.margem)}
+                                {formatCurrency(folhaAtual.margem)}
                               </p>
                             </div>
                           </div>
@@ -880,15 +886,15 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_70)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_70)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_70)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_70)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_70)}</span>
+                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_70)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -901,15 +907,15 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_35)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_35)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_35)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_35)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_35)}</span>
+                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_35)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -922,15 +928,15 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_bruta_5)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_utilizada_5)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_saldo_5)}</span>
+                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_5)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -943,15 +949,15 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_bruta_5)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_beneficio_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_utilizada_5)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_beneficio_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(clienteDetalhado.folha.atual.margem_beneficio_saldo_5)}</span>
+                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_beneficio_saldo_5)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -964,15 +970,15 @@ export default function ConsultaCliente() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Créditos</p>
-                          <p className="text-lg font-semibold text-green-600">{formatCurrency(clienteDetalhado.folha.atual.creditos)}</p>
+                          <p className="text-lg font-semibold text-green-600">{formatCurrency(folhaAtual.creditos)}</p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Débitos</p>
-                          <p className="text-lg font-semibold text-red-600">{formatCurrency(clienteDetalhado.folha.atual.debitos)}</p>
+                          <p className="text-lg font-semibold text-red-600">{formatCurrency(folhaAtual.debitos)}</p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Líquido</p>
-                          <p className="text-lg font-semibold">{formatCurrency(clienteDetalhado.folha.atual.liquido)}</p>
+                          <p className="text-lg font-semibold">{formatCurrency(folhaAtual.liquido)}</p>
                         </div>
                       </div>
 
@@ -1123,7 +1129,8 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
             </div>
-          ) : (
+            )
+          })() : (
             <Card>
               <CardContent className="text-center py-8 text-muted-foreground">
                 <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
