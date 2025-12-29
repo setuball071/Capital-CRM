@@ -784,6 +784,27 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  DEBUG BLOCK - REMOVER APÓS DIAGNÓSTICO
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              {clienteDetalhado.folha.atual && (() => {
+                const excQtd = clienteDetalhado.folha.atual.exc_qtd;
+                const excSoma = clienteDetalhado.folha.atual.exc_soma;
+                const margemReal = clienteDetalhado.folha.atual.margem;
+                const showAlert = ((excQtd ?? 0) > 0 || (excSoma ?? 0) > 0);
+                return (
+                  <div style={{ background: 'yellow', color: 'black', padding: '10px', marginBottom: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
+                    <strong>DEBUG EXC:</strong><br/>
+                    exc_qtd: {String(excQtd)} (typeof: {typeof excQtd})<br/>
+                    exc_soma: {String(excSoma)} (typeof: {typeof excSoma})<br/>
+                    margem: {String(margemReal)} (typeof: {typeof margemReal})<br/>
+                    (excQtd ?? 0) &gt; 0: {String((excQtd ?? 0) > 0)}<br/>
+                    (excSoma ?? 0) &gt; 0: {String((excSoma ?? 0) > 0)}<br/>
+                    <strong>showAlert: {String(showAlert)}</strong>
+                  </div>
+                );
+              })()}
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -800,25 +821,8 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {clienteDetalhado.folha.atual ? (
                     <div className="space-y-6">
-                      {/* DEBUG: Log valores EXC para verificar se estão chegando */}
-                      {console.log('[DEBUG EXC] folha.atual:', {
-                        exc_qtd: clienteDetalhado.folha.atual.exc_qtd,
-                        exc_soma: clienteDetalhado.folha.atual.exc_soma,
-                        margem: clienteDetalhado.folha.atual.margem,
-                        competencia: clienteDetalhado.folha.atual.competencia,
-                        vinculo_selecionado: clienteDetalhado.vinculo_selecionado,
-                        condicao_alerta: ((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0)
-                      })}
                       {/* ═══════════════════════════════════════════════════════════════════════════
                           DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
-                          ═══════════════════════════════════════════════════════════════════════════
-                          Campos do banco (clientes_folha_mes):
-                            - exc_qtd: quantidade de descontos externos ao consignado
-                            - exc_soma: valor total (R$) dos descontos externos
-                            - margem: margem REAL após descontos externos (usar para conferência no extrato)
-                          
-                          Regra de exibição: Mostrar alerta quando exc_qtd > 0 OU exc_soma > 0
-                          Clique abre modal com EXC QTD, EXC Soma e Margem real detalhados
                           ═══════════════════════════════════════════════════════════════════════════ */}
                       {((clienteDetalhado.folha.atual.exc_qtd ?? 0) > 0 || (clienteDetalhado.folha.atual.exc_soma ?? 0) > 0) && (
                         <Alert 
