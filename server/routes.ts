@@ -53,6 +53,9 @@ import {
   MODULE_LIST,
   KANBAN_COLUMNS,
   insertPersonalTaskSchema,
+  nomenclaturas,
+  insertNomenclaturaSchema,
+  NOMENCLATURA_CATEGORIA,
   type User,
   type InsertCoefficientTable,
   type InsertSalesLead,
@@ -853,6 +856,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete agreement error:", error);
       return res.status(500).json({ message: "Erro ao deletar convênio" });
     }
+  });
+
+  // ===== NOMENCLATURAS ROUTES =====
+  // Middleware para master ou admin
+  function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
+    if (!hasRole(req.user, ["master", "admin"])) {
+      return res.status(403).json({ message: "Acesso negado - apenas master ou admin" });
+    }
+    next();
+  }
+
+  // GET list - com filtros por categoria e busca
+  app.get("/api/nomenclaturas", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const { categoria, busca, apenasAtivos } = req.query;
+      
+      let query = db.select().from(nomenclaturas);
+      const conditions: any[] = [];
+      
+      // Filtro por categoria
+      if (categoria && typeof categoria === "string" && NOMENCLATURA_CATEGORIA.includes(categoria as any)) {
+        conditions.push(eq(nomenclaturas.categoria, categoria));
+      }
+      
+      // Filtro apenas ativos
+      if (apenasAtivos === "true") {
+        conditions.push(eq(nomenclaturas.ativo, true));
+      }
+      
+      // Busca por código ou nome
+      if (busca && typeof busca === "string" && busca.trim().length > 0) {
+        const buscaLike = `%${busca.trim().toLowerCase()}%`;
+        conditions.push(
+          or(
+            sql`LOWER(${nomenclaturas.codigo}) LIKE ${buscaLike}`,
+            sql`LOWER(${nomenclaturas.nome}) LIKE ${buscaLike}`
+          )
+        );
+      }
+      
+      const result = conditions.length > 0
+        ? await db.select().from(nomenclaturas).where(and(...conditions)).orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome))
+        : await db.select().from(nomenclaturas).orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome));
+      
+      return res.json(result);
+    } catch (error) {
+      console.error("Get nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclaturas" });
+    }
+  });
+
+  // GET by ID
+  app.get("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [result] = await db.select().from(nomenclaturas).where(eq(nomenclaturas.id, id)).limit(1);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+      
+      return res.json(result);
+    } catch (error) {
+      console.error("Get nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclatura" });
+    }
+  });
+
+  // POST create
+  app.post("/api/nomenclaturas", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const result = insertNomenclaturaSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      // Check if codigo already exists for this categoria
+      const [existing] = await db.select()
+        .from(nomenclaturas)
+        .where(and(
+          eq(nomenclaturas.categoria, result.data.categoria),
+          eq(nomenclaturas.codigo, result.data.codigo)
+        ))
+        .limit(1);
+      
+      if (existing) {
+        return res.status(400).json({ message: "Já existe uma nomenclatura com esse código nesta categoria" });
+      }
+
+      const [created] = await db.insert(nomenclaturas).values(result.data).returning();
+      return res.status(201).json(created);
+    } catch (error) {
+      console.error("Create nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao criar nomenclatura" });
+    }
+  });
+
+  // PUT update
+  app.put("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertNomenclaturaSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      // Check if updating codigo would create duplicate
+      if (result.data.codigo || result.data.categoria) {
+        const [current] = await db.select().from(nomenclaturas).where(eq(nomenclaturas.id, id)).limit(1);
+        if (!current) {
+          return res.status(404).json({ message: "Nomenclatura não encontrada" });
+        }
+        
+        const newCategoria = result.data.categoria || current.categoria;
+        const newCodigo = result.data.codigo || current.codigo;
+        
+        const [existing] = await db.select()
+          .from(nomenclaturas)
+          .where(and(
+            eq(nomenclaturas.categoria, newCategoria),
+            eq(nomenclaturas.codigo, newCodigo),
+            sql`${nomenclaturas.id} != ${id}`
+          ))
+          .limit(1);
+        
+        if (existing) {
+          return res.status(400).json({ message: "Já existe uma nomenclatura com esse código nesta categoria" });
+        }
+      }
+
+      const [updated] = await db.update(nomenclaturas)
+        .set(result.data)
+        .where(eq(nomenclaturas.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar nomenclatura" });
+    }
+  });
+
+  // DELETE (soft delete - set ativo=false)
+  app.delete("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [updated] = await db.update(nomenclaturas)
+        .set({ ativo: false })
+        .where(eq(nomenclaturas.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+
+      return res.json({ message: "Nomenclatura desativada com sucesso" });
+    } catch (error) {
+      console.error("Delete nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao desativar nomenclatura" });
+    }
+  });
+
+  // GET categorias disponíveis
+  app.get("/api/nomenclaturas-categorias", requireAuth, async (req, res) => {
+    return res.json(NOMENCLATURA_CATEGORIA);
   });
 
   // ===== COEFFICIENT TABLES ROUTES =====
