@@ -617,17 +617,33 @@ class StreamingImportService {
       return false;
     }
 
-    // D8 contém nome do cliente - atualizar pessoa se nome estiver disponível e não vazio
+    // D8 Pensionista: só preenche campos vazios (merge suave)
+    // D8 Servidor: atualiza normalmente
+    const isPensionista = run.layoutD8 === "pensionista";
+
+    // Atualizar nome na pessoa - D8 Pensionista só atualiza se nome atual for NULL
     const nomeD8 = this.extractValue(row, headerMap, "nome");
     if (nomeD8 && nomeD8.trim().length > 0 && vinculo.pessoaId) {
-      await db
-        .update(clientesPessoa)
-        .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
-        .where(eq(clientesPessoa.id, vinculo.pessoaId));
+      if (isPensionista) {
+        // Pensionista: só atualiza se nome for NULL
+        await db
+          .update(clientesPessoa)
+          .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
+          .where(and(
+            eq(clientesPessoa.id, vinculo.pessoaId),
+            sql`${clientesPessoa.nome} IS NULL`
+          ));
+      } else {
+        // Servidor: sempre atualiza
+        await db
+          .update(clientesPessoa)
+          .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
+          .where(eq(clientesPessoa.id, vinculo.pessoaId));
+      }
     }
 
     const extras: Record<string, any> = {};
-    if (run.layoutD8 === "pensionista") {
+    if (isPensionista) {
       // Campos específicos D8 Pensionista (14 colunas)
       extras.m_instituidor = preserveMatricula(this.extractValue(row, headerMap, "m_instituidor"));
       extras.ids = this.extractValue(row, headerMap, "ids") || null;
@@ -652,11 +668,11 @@ class StreamingImportService {
       : null;
 
     // Status: usa situacao_contrato (servidor) ou default "ATIVO" (pensionista não tem esse campo)
-    const statusContrato = run.layoutD8 === "pensionista" 
+    const statusContrato = isPensionista 
       ? "ATIVO" 
       : (this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO");
 
-    await this.upsertContrato({
+    const contratoData = {
       pessoaId: vinculo.pessoaId,
       banco,
       numeroContrato,
@@ -667,7 +683,15 @@ class StreamingImportService {
       competencia: run.competencia,
       baseTag: run.baseTag,
       dadosBrutos: Object.keys(extras).length > 0 ? extras : null,
-    });
+    };
+
+    // D8 Pensionista: usa merge suave (só preenche campos NULL)
+    // D8 Servidor: usa upsert normal (sobrescreve)
+    if (isPensionista) {
+      await this.upsertContratoSoftMerge(contratoData);
+    } else {
+      await this.upsertContrato(contratoData);
+    }
 
     return true;
   }
@@ -904,6 +928,69 @@ class StreamingImportService {
     }
 
     await db.insert(clientesContratos).values(data as any);
+  }
+
+  /**
+   * D8 Pensionista: Merge suave - só preenche campos NULL, nunca sobrescreve dados existentes
+   * Chave de merge: (pessoaId + banco + numeroContrato)
+   */
+  private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
+    if (!data.numeroContrato || !data.banco) {
+      // Sem chave de merge, insere normalmente
+      await db.insert(clientesContratos).values(data as any);
+      return;
+    }
+
+    const existing = await db
+      .select()
+      .from(clientesContratos)
+      .where(
+        and(
+          eq(clientesContratos.pessoaId, data.pessoaId),
+          eq(clientesContratos.banco, data.banco),
+          eq(clientesContratos.numeroContrato, data.numeroContrato)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      // Não existe: insere todos os dados
+      await db.insert(clientesContratos).values(data as any);
+      return;
+    }
+
+    // Existe: só preenche campos que são NULL no registro existente
+    const existingRecord = existing[0];
+    const updateData: Record<string, any> = {};
+
+    // Campos que podem ser preenchidos se estiverem NULL
+    const fieldsToMerge = [
+      { key: "tipoContrato", dbField: existingRecord.tipoContrato },
+      { key: "valorParcela", dbField: existingRecord.valorParcela },
+      { key: "parcelasRestantes", dbField: existingRecord.parcelasRestantes },
+      { key: "status", dbField: existingRecord.status },
+      { key: "competencia", dbField: existingRecord.competencia },
+      { key: "dadosBrutos", dbField: existingRecord.dadosBrutos },
+    ];
+
+    for (const field of fieldsToMerge) {
+      if (field.dbField === null && data[field.key] !== null && data[field.key] !== undefined) {
+        updateData[field.key] = data[field.key];
+      }
+    }
+
+    // Sempre atualiza baseTag e importRunId para rastrear a última importação
+    if (data.baseTag) {
+      updateData.baseTag = data.baseTag;
+    }
+
+    // Se houver campos para atualizar, executa o update
+    if (Object.keys(updateData).length > 0) {
+      await db
+        .update(clientesContratos)
+        .set(updateData)
+        .where(eq(clientesContratos.id, existingRecord.id));
+    }
   }
 
   private async upsertContact(clientId: number, tipo: string, valor: string): Promise<void> {
