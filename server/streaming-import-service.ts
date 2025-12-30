@@ -645,24 +645,48 @@ class StreamingImportService {
     // D8 Servidor: atualiza normalmente
     const isPensionista = run.layoutD8 === "pensionista";
 
-    // Atualizar nome na pessoa - D8 Pensionista só atualiza se nome atual for NULL
-    const nomeD8 = this.extractValue(row, headerMap, "nome");
-    if (nomeD8 && nomeD8.trim().length > 0 && vinculo.pessoaId) {
-      if (isPensionista) {
-        // Pensionista: só atualiza se nome for NULL
-        await db
-          .update(clientesPessoa)
-          .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
-          .where(and(
-            eq(clientesPessoa.id, vinculo.pessoaId),
-            sql`${clientesPessoa.nome} IS NULL`
-          ));
-      } else {
-        // Servidor: sempre atualiza
-        await db
-          .update(clientesPessoa)
-          .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
-          .where(eq(clientesPessoa.id, vinculo.pessoaId));
+    // Soft merge para pessoa: preenche nome e uf apenas se NULL/vazio no DB
+    // Aplica para AMBOS layouts (Servidor e Pensionista) - nunca sobrescreve dados existentes
+    const nomeD8Raw = this.extractValue(row, headerMap, "nome");
+    const ufD8Raw = this.extractValue(row, headerMap, "uf");
+    const nomeD8 = nomeD8Raw ? String(nomeD8Raw).trim() : null;
+    const ufD8 = ufD8Raw ? String(ufD8Raw).trim().toUpperCase() : null;
+
+    if (vinculo.pessoaId && (nomeD8 || ufD8)) {
+      // Buscar pessoa atual para verificar campos NULL/vazios
+      const [pessoaAtual] = await db
+        .select({ nome: clientesPessoa.nome, uf: clientesPessoa.uf })
+        .from(clientesPessoa)
+        .where(eq(clientesPessoa.id, vinculo.pessoaId))
+        .limit(1);
+
+      if (pessoaAtual) {
+        const updateFields: Record<string, any> = {};
+
+        // Nome: preenche se atual é NULL ou string vazia
+        if (nomeD8 && nomeD8.length > 0) {
+          const nomeAtual = pessoaAtual.nome?.trim() || "";
+          if (nomeAtual.length === 0) {
+            updateFields.nome = nomeD8;
+          }
+        }
+
+        // UF: preenche se atual é NULL ou string vazia
+        if (ufD8 && ufD8.length > 0 && ufD8.length <= 2) {
+          const ufAtual = pessoaAtual.uf?.trim() || "";
+          if (ufAtual.length === 0) {
+            updateFields.uf = ufD8;
+          }
+        }
+
+        // Só faz update se há campos para preencher
+        if (Object.keys(updateFields).length > 0) {
+          updateFields.atualizadoEm = new Date();
+          await db
+            .update(clientesPessoa)
+            .set(updateFields)
+            .where(eq(clientesPessoa.id, vinculo.pessoaId));
+        }
       }
     }
 
