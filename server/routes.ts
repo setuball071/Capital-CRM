@@ -4267,6 +4267,98 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE /api/d8/import-runs/:id - Apaga SOMENTE contratos gerados por esse import-run
+  // Não apaga pessoas, vínculos, folha nem o import_run em si (mantém rastreabilidade)
+  app.delete("/api/d8/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const userTenantId = req.tenantId;
+      
+      console.log(`[D8-Delete] Starting D8-only delete for run ${runId} (userTenant: ${userTenantId})...`);
+      
+      // Buscar o import_run para validação
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      // Verificar se é um import D8
+      if (run.tipoImport !== 'd8') {
+        return res.status(400).json({ 
+          message: `Este endpoint é exclusivo para imports D8. Tipo encontrado: ${run.tipoImport}` 
+        });
+      }
+      
+      const effectiveTenantId = run.tenantId || userTenantId;
+      const runBaseTag = run.baseTag || "";
+      
+      if (!effectiveTenantId) {
+        console.error(`[D8-Delete] ERROR: Cannot delete - no tenantId found`);
+        return res.status(400).json({ message: "Tenant ID obrigatório" });
+      }
+      
+      console.log(`[D8-Delete] Tenant: ${effectiveTenantId}, base_tag: "${runBaseTag}"`);
+      
+      // Deletar SOMENTE contratos associados a este import_run
+      // Usa import_run_id como fonte primária, e base_tag como fallback para órfãos
+      const result = await db.execute(sql`
+        WITH 
+        -- Identificar pessoas do tenant para isolamento
+        tenant_pessoas AS (
+          SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+        ),
+        -- Deletar contratos: por import_run_id OU por base_tag (órfãos legados)
+        deleted_contratos AS (
+          DELETE FROM clientes_contratos 
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+          RETURNING id, pessoa_id, numero_contrato
+        )
+        -- Retornar count e alguns detalhes
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_contratos) as contratos_count,
+          (SELECT COUNT(DISTINCT pessoa_id) FROM deleted_contratos) as pessoas_afetadas
+      `);
+      
+      const row = result.rows?.[0] as any || {};
+      const deletedContratos = Number(row.contratos_count) || 0;
+      const pessoasAfetadas = Number(row.pessoas_afetadas) || 0;
+      
+      // Atualizar o status do import_run para indicar que contratos foram deletados
+      await db.update(importRuns)
+        .set({ 
+          status: "contratos_deletados",
+          updatedAt: new Date()
+        })
+        .where(eq(importRuns.id, runId));
+      
+      console.log(`[D8-Delete] Completed for run ${runId}:`);
+      console.log(`  - Contratos deletados: ${deletedContratos}`);
+      console.log(`  - Pessoas afetadas: ${pessoasAfetadas}`);
+      
+      return res.json({ 
+        success: true, 
+        message: `${deletedContratos} contratos excluídos com sucesso`,
+        deleted: {
+          contratos: deletedContratos,
+          pessoasAfetadas
+        },
+        importRun: {
+          id: runId,
+          baseTag: runBaseTag,
+          status: "contratos_deletados"
+        }
+      });
+    } catch (error) {
+      console.error("D8 delete contracts error:", error);
+      return res.status(500).json({ message: "Erro ao excluir contratos do D8" });
+    }
+  });
+
   // GET download de TODAS as linhas com erro em CSV (usando import_run_rows)
   app.get("/api/import-runs/:id/rows/errors/download", requireAuth, requireMaster, async (req, res) => {
     try {
