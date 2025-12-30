@@ -422,7 +422,7 @@ class StreamingImportService {
           processedRows: totalProcessed,
           successRows: totalSuccess,
           errorRows: totalErrors,
-          offsetAtual: lastByteOffset,
+          offsetAtual: bytesRead,
           pausedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -590,20 +590,37 @@ class StreamingImportService {
       return false;
     }
 
-    if (!cpf || !matricula) {
+    // Validação clara: rejeitar linha se faltar campos obrigatórios (sem quebrar o lote)
+    const camposFaltando: string[] = [];
+    
+    if (!cpf) {
+      camposFaltando.push("CPF");
+    }
+    if (!matricula) {
+      camposFaltando.push("MATRICULA");
+    }
+    if (!numeroContrato) {
+      camposFaltando.push("NUMERO_CONTRATO");
+    }
+    if (!banco) {
+      camposFaltando.push("BANCO");
+    }
+
+    if (camposFaltando.length > 0) {
       errors.push({
         importRunId: run.id,
         rowNumber: run.processedRows + 1,
-        cpf,
-        matricula,
+        cpf: cpf || null,
+        matricula: matricula || null,
         errorType: "validation",
-        errorMessage: "CPF ou matrícula ausente para D8",
+        errorMessage: `Campos obrigatórios ausentes: ${camposFaltando.join(", ")}. Linha rejeitada.`,
         rawPayload: row,
       });
       return false;
     }
 
-    const vinculo = await this.findOrCreateVinculo(cpf, matricula, run, undefined, orgao);
+    // Neste ponto, cpf e matricula foram validados como não-nulos
+    const vinculo = await this.findOrCreateVinculo(cpf!, matricula!, run, undefined, orgao);
     if (!vinculo || !vinculo.pessoaId) {
       errors.push({
         importRunId: run.id,
