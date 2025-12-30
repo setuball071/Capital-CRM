@@ -63,14 +63,9 @@ const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   tipo_produto: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "pmt",
-  pmt_fmt: "pmt_fmt",
-  saldo_devedor: "saldo_devedor",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo",
-  prazo_total: "prazo",
   situacao_contrato: "situacao_contrato",
-  data_inicio: "data_inicio",
-  data_fim: "data_fim",
 };
 
 // Headers obrigatórios D8 (normalizados - case-insensitive, sem acentos)
@@ -606,15 +601,12 @@ class StreamingImportService {
       extras.matricula_instituidor = preserveMatricula(this.extractValue(row, headerMap, "matricula_instituidor"));
     }
 
-    // PMT: pmt_fmt (texto) tem prioridade sobre pmt (número)
-    const pmtFmt = this.extractValue(row, headerMap, "pmt_fmt");
+    // PMT: usa pmt ou valor_parcela (sem pmt_fmt)
     const pmtNumerico = this.extractValue(row, headerMap, "pmt");
     const valorParcelaRaw = this.extractValue(row, headerMap, "valor_parcela");
     let valorParcela: number | null = null;
     
-    if (pmtFmt && pmtFmt.trim().length > 0) {
-      valorParcela = normalizeBrDecimal(pmtFmt);
-    } else if (pmtNumerico) {
+    if (pmtNumerico) {
       valorParcela = normalizeBrDecimal(pmtNumerico);
     } else if (valorParcelaRaw) {
       valorParcela = normalizeBrDecimal(valorParcelaRaw);
@@ -636,7 +628,6 @@ class StreamingImportService {
       numeroContrato,
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",
       valorParcela,
-      saldoDevedor: normalizeBrDecimal(this.extractValue(row, headerMap, "saldo_devedor")),
       parcelasRestantes,
       status: this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO",
       competencia: run.competencia,

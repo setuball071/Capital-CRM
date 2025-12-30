@@ -80,13 +80,9 @@ const D8_COLUMN_MAP: Record<string, string> = {
   tipo_produto: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "valor_parcela",
-  saldo_devedor: "saldo_devedor",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
-  prazo_total: "prazo_total",
   situacao_contrato: "situacao_contrato",
-  data_inicio: "data_inicio",
-  data_fim: "data_fim",
   m_instituidor: "m_instituidor",
   cpf_instituidor: "cpf_instituidor",
 };
@@ -721,18 +717,14 @@ class FastImportService {
     const baseTag = run.baseTag || "";
     
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, started_at, ended_at, import_run_id, base_tag)
+      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
         p.id,
         COALESCE(s.banco, ${banco}),
         s.numero_contrato,
         s.tipo_contrato,
         s.valor_parcela,
-        s.saldo_devedor,
         s.prazo_remanescente,
-        s.prazo_total,
-        s.data_inicio::timestamp,
-        s.data_fim::timestamp,
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
@@ -744,11 +736,7 @@ class FastImportService {
         banco = COALESCE(EXCLUDED.banco, clientes_contratos.banco),
         tipo_contrato = COALESCE(EXCLUDED.tipo_contrato, clientes_contratos.tipo_contrato),
         valor_parcela = COALESCE(EXCLUDED.valor_parcela, clientes_contratos.valor_parcela),
-        saldo_devedor = COALESCE(EXCLUDED.saldo_devedor, clientes_contratos.saldo_devedor),
         parcelas_restantes = COALESCE(EXCLUDED.parcelas_restantes, clientes_contratos.parcelas_restantes),
-        prazo_total = COALESCE(EXCLUDED.prazo_total, clientes_contratos.prazo_total),
-        started_at = COALESCE(EXCLUDED.started_at, clientes_contratos.started_at),
-        ended_at = COALESCE(EXCLUDED.ended_at, clientes_contratos.ended_at),
         import_run_id = ${run.id},
         base_tag = ${baseTag}
     `);
@@ -892,12 +880,8 @@ class FastImportService {
         numeroContrato: preserveNumeroContrato(getValue("numero_contrato")),
         tipoContrato: getValue("tipo_contrato") || null,
         valorParcela: parseNum(getValue("valor_parcela")),
-        saldoDevedor: parseNum(getValue("saldo_devedor")),
         prazoRemanescente: parseInt(getValue("prazo_remanescente") || "0", 10) || null,
-        prazoTotal: parseInt(getValue("prazo_total") || "0", 10) || null,
         situacaoContrato: getValue("situacao_contrato") || null,
-        dataInicio: getValue("data_inicio") || null,
-        dataFim: getValue("data_fim") || null,
         mInstituidor: getValue("m_instituidor") || null,
         cpfInstituidor: padCpf(getValue("cpf_instituidor")),
         rowNum,
