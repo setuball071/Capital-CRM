@@ -641,6 +641,26 @@ class StreamingImportService {
       return false;
     }
 
+    // Soft merge vinculo.orgao: preenche apenas se atual é "DESCONHECIDO" ou vazio
+    if (orgao && orgao.length > 0 && vinculo.id) {
+      const [vinculoAtual] = await db
+        .select({ orgao: clientesVinculo.orgao })
+        .from(clientesVinculo)
+        .where(eq(clientesVinculo.id, vinculo.id))
+        .limit(1);
+
+      if (vinculoAtual) {
+        const orgaoAtual = vinculoAtual.orgao?.trim() || "";
+        // Só atualiza se orgao atual é vazio ou "DESCONHECIDO"
+        if (orgaoAtual.length === 0 || orgaoAtual.toUpperCase() === "DESCONHECIDO") {
+          await db
+            .update(clientesVinculo)
+            .set({ orgao: orgao, ultimaAtualizacao: new Date() })
+            .where(eq(clientesVinculo.id, vinculo.id));
+        }
+      }
+    }
+
     // D8 Pensionista: só preenche campos vazios (merge suave)
     // D8 Servidor: atualiza normalmente
     const isPensionista = run.layoutD8 === "pensionista";
@@ -722,6 +742,7 @@ class StreamingImportService {
 
     const contratoData = {
       pessoaId: vinculo.pessoaId,
+      vinculoId: vinculo.id, // Liga ao vínculo correto (cpf+matricula+orgao)
       banco,
       numeroContrato,
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",

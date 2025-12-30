@@ -502,10 +502,11 @@ export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
 export type ContractStatus = typeof CONTRACT_STATUS[number];
 
 // 3) clientes_contratos - Cada linha de contrato/cartão/margem
-// Chave única: (pessoaId, banco, tipoContrato, numeroContrato)
+// Chave única: (pessoaId, numeroContrato) - vinculoId para rastreabilidade ao vínculo correto
 export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  vinculoId: integer("vinculo_id").references(() => clientesVinculo.id, { onDelete: "set null" }), // Vínculo CPF+Matrícula+Órgão
   tipoContrato: varchar("tipo_contrato", { length: 50 }), // "consignado", "cartao", "outro", etc.
   banco: varchar("banco", { length: 100 }), // BANCO_DO_EMPRESTIMO da planilha
   valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
