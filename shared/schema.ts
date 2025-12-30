@@ -388,6 +388,31 @@ export type BaseStatus = typeof BASE_STATUS[number];
 export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
 export type PedidoStatus = typeof PEDIDO_STATUS[number];
 
+// Categorias de nomenclatura
+export const NOMENCLATURA_CATEGORIA = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
+export type NomenclaturaCategoria = typeof NOMENCLATURA_CATEGORIA[number];
+
+// Tabela de nomenclaturas - lookup de códigos para nomes (órgãos, UPAGs, etc.)
+export const nomenclaturas = pgTable("nomenclaturas", {
+  id: serial("id").primaryKey(),
+  categoria: varchar("categoria", { length: 50 }).notNull(), // ORGAO, TIPO_CONTRATO, UPAG, UF, OUTRO
+  codigo: varchar("codigo", { length: 100 }).notNull(), // Código do item (ex: "20114" para órgão)
+  nome: varchar("nome", { length: 255 }).notNull(), // Nome descritivo (ex: "MINISTERIO DA FAZENDA")
+  ativo: boolean("ativo").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  categoriaCodIdx: uniqueIndex("idx_nomenclatura_categoria_codigo").on(table.categoria, table.codigo),
+}));
+
+export const insertNomenclaturaSchema = createInsertSchema(nomenclaturas, {
+  categoria: z.enum(NOMENCLATURA_CATEGORIA),
+  codigo: z.string().min(1, { message: "Código é obrigatório" }),
+  nome: z.string().min(1, { message: "Nome é obrigatório" }),
+}).omit({ id: true, createdAt: true });
+
+export type Nomenclatura = typeof nomenclaturas.$inferSelect;
+export type InsertNomenclatura = z.infer<typeof insertNomenclaturaSchema>;
+
 // 1) clientes_pessoa - Dados fixos do indivíduo
 // Chave única composta: (tenant_id, cpf) para isolamento multi-tenant
 export const clientesPessoa = pgTable("clientes_pessoa", {
