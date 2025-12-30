@@ -4300,7 +4300,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       console.log(`[D8-Delete] Tenant: ${effectiveTenantId}, base_tag: "${runBaseTag}"`);
       
-      // Deletar SOMENTE contratos associados a este import_run
+      // FASE 1: Deletar SOMENTE contratos associados a este import_run
       // Usa import_run_id como fonte primária, e base_tag como fallback para órfãos
       const result = await db.execute(sql`
         WITH 
@@ -4328,6 +4328,82 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const deletedContratos = Number(row.contratos_count) || 0;
       const pessoasAfetadas = Number(row.pessoas_afetadas) || 0;
       
+      console.log(`[D8-Delete] Phase 1 - Contratos deletados: ${deletedContratos}`);
+      
+      // FASE 2: Limpeza segura de órfãos criados exclusivamente pelo D8
+      // Regras:
+      // - Apagar vínculo APENAS se não tiver folha E não tiver contratos
+      // - Apagar pessoa APENAS se não tiver vínculos E não tiver contatos
+      const cleanupResult = await db.execute(sql`
+        WITH 
+        -- Identificar vínculos órfãos criados por este import D8 que não têm folha nem contratos
+        deleted_vinculos AS (
+          DELETE FROM clientes_vinculo v
+          WHERE v.tenant_id = ${effectiveTenantId}
+            AND (
+              v.import_run_id = ${runId}
+              OR (v.import_run_id IS NULL AND v.base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+            -- Não tem folhas associadas
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_folha_mes f 
+              WHERE f.vinculo_id = v.id
+            )
+            -- Não tem contratos associados
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_contratos c 
+              WHERE c.vinculo_id = v.id
+            )
+          RETURNING id, pessoa_id
+        ),
+        -- Identificar pessoas órfãs criadas por este import D8 que não têm vínculos nem contatos
+        deleted_pessoas AS (
+          DELETE FROM clientes_pessoa p
+          WHERE p.tenant_id = ${effectiveTenantId}
+            AND (
+              p.import_run_id = ${runId}
+              OR (p.import_run_id IS NULL AND p.base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+            -- Não tem vínculos restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_vinculo v 
+              WHERE v.pessoa_id = p.id
+            )
+            -- Não tem contatos restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM client_contacts c 
+              WHERE c.client_id = p.id
+            )
+            -- Não tem telefones restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_telefones t 
+              WHERE t.pessoa_id = p.id
+            )
+            -- Não tem folhas restantes (via pessoa_id direto)
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_folha_mes f 
+              WHERE f.pessoa_id = p.id
+            )
+            -- Não tem contratos restantes (via pessoa_id direto)
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_contratos c 
+              WHERE c.pessoa_id = p.id
+            )
+          RETURNING id
+        )
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_vinculos) as vinculos_count,
+          (SELECT COUNT(*) FROM deleted_pessoas) as pessoas_count
+      `);
+      
+      const cleanupRow = cleanupResult.rows?.[0] as any || {};
+      const deletedVinculos = Number(cleanupRow.vinculos_count) || 0;
+      const deletedPessoas = Number(cleanupRow.pessoas_count) || 0;
+      
+      console.log(`[D8-Delete] Phase 2 - Cleanup órfãos:`);
+      console.log(`  - Vínculos órfãos: ${deletedVinculos}`);
+      console.log(`  - Pessoas órfãs: ${deletedPessoas}`);
+      
       // Atualizar o status do import_run para indicar que contratos foram deletados
       await db.update(importRuns)
         .set({ 
@@ -4336,16 +4412,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         })
         .where(eq(importRuns.id, runId));
       
-      console.log(`[D8-Delete] Completed for run ${runId}:`);
-      console.log(`  - Contratos deletados: ${deletedContratos}`);
-      console.log(`  - Pessoas afetadas: ${pessoasAfetadas}`);
+      console.log(`[D8-Delete] Completed for run ${runId}`);
       
       return res.json({ 
         success: true, 
         message: `${deletedContratos} contratos excluídos com sucesso`,
         deleted: {
           contratos: deletedContratos,
-          pessoasAfetadas
+          pessoasAfetadas,
+          vinculosOrfaos: deletedVinculos,
+          pessoasOrfas: deletedPessoas
         },
         importRun: {
           id: runId,
