@@ -301,10 +301,10 @@ export default function ConsultaCliente() {
   const [showExcModal, setShowExcModal] = useState(false);
   const [showTelefonesModal, setShowTelefonesModal] = useState(false);
 
-  // Busca nomenclaturas para De-Para (ORGAO e TIPO_CONTRATO)
+  // Busca nomenclaturas para De-Para (ORGAO e TIPO_CONTRATO) - usa endpoint com cache no backend
   const { data: nomenclaturas } = useQuery<Nomenclatura[]>({
-    queryKey: ["/api/nomenclaturas"],
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache
+    queryKey: ["/api/nomenclaturas-cached"],
+    staleTime: 1000 * 60 * 5, // 5 minutos de cache no frontend também
   });
 
   // Função De-Para: retorna nome se existir, senão código original

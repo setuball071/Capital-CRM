@@ -859,6 +859,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== NOMENCLATURAS ROUTES =====
+  
+  // Cache em memória para nomenclaturas ativas (TTL 60s)
+  interface NomenclaturaCacheEntry {
+    data: any[];
+    timestamp: number;
+  }
+  const nomenclaturasCache: Map<string, NomenclaturaCacheEntry> = new Map();
+  const NOMENCLATURAS_CACHE_TTL = 60 * 1000; // 60 segundos
+
+  function invalidateNomenclaturasCache() {
+    nomenclaturasCache.clear();
+  }
+
+  async function getCachedNomenclaturas(categoria?: string): Promise<any[]> {
+    const cacheKey = categoria || "__all__";
+    const cached = nomenclaturasCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < NOMENCLATURAS_CACHE_TTL) {
+      return cached.data;
+    }
+
+    // Buscar do banco apenas ativos
+    let result;
+    if (categoria && NOMENCLATURA_CATEGORIA.includes(categoria as any)) {
+      result = await db.select().from(nomenclaturas).where(
+        and(eq(nomenclaturas.ativo, true), eq(nomenclaturas.categoria, categoria))
+      ).orderBy(asc(nomenclaturas.nome));
+    } else {
+      result = await db.select().from(nomenclaturas)
+        .where(eq(nomenclaturas.ativo, true))
+        .orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome));
+    }
+    nomenclaturasCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
+  }
+
   // Middleware para master ou admin
   function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
     if (!hasRole(req.user, ["master", "admin"])) {
@@ -867,7 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }
 
-  // GET list - com filtros por categoria e busca
+  // GET list - com filtros por categoria e busca (admin - sem cache, mostra todos)
   app.get("/api/nomenclaturas", requireAuth, requireMasterOrAdmin, async (req, res) => {
     try {
       const { categoria, busca, apenasAtivos } = req.query;
@@ -950,6 +987,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const [created] = await db.insert(nomenclaturas).values(result.data).returning();
+      invalidateNomenclaturasCache();
       return res.status(201).json(created);
     } catch (error) {
       console.error("Create nomenclatura error:", error);
@@ -1003,6 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Nomenclatura não encontrada" });
       }
 
+      invalidateNomenclaturasCache();
       return res.json(updated);
     } catch (error) {
       console.error("Update nomenclatura error:", error);
@@ -1024,6 +1063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Nomenclatura não encontrada" });
       }
 
+      invalidateNomenclaturasCache();
       return res.json({ message: "Nomenclatura desativada com sucesso" });
     } catch (error) {
       console.error("Delete nomenclatura error:", error);
@@ -1034,6 +1074,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET categorias disponíveis
   app.get("/api/nomenclaturas-categorias", requireAuth, async (req, res) => {
     return res.json(NOMENCLATURA_CATEGORIA);
+  });
+
+  // GET nomenclaturas ativas COM CACHE (endpoint para frontend De-Para)
+  app.get("/api/nomenclaturas-cached", requireAuth, async (req, res) => {
+    try {
+      const { categoria } = req.query;
+      const result = await getCachedNomenclaturas(categoria as string | undefined);
+      return res.json(result);
+    } catch (error) {
+      console.error("Get cached nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclaturas" });
+    }
   });
 
   // ===== COEFFICIENT TABLES ROUTES =====

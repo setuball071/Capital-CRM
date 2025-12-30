@@ -211,9 +211,9 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"],
   });
 
-  // Nomenclaturas para De-Para de códigos
+  // Nomenclaturas para De-Para de códigos - usa endpoint com cache no backend
   const { data: nomenclaturas } = useQuery<{ id: number; categoria: string; codigo: string; nome: string; ativo: boolean }[]>({
-    queryKey: ["/api/nomenclaturas"],
+    queryKey: ["/api/nomenclaturas-cached"],
     staleTime: 1000 * 60 * 5,
   });
 
