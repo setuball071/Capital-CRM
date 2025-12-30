@@ -4435,6 +4435,136 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET /api/d8/import-runs/:id/preview-delete - Preview do que será apagado
+  app.get("/api/d8/import-runs/:id/preview-delete", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const userTenantId = req.tenantId;
+      
+      // Buscar o import_run para validação
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      if (run.tipoImport !== 'd8') {
+        return res.status(400).json({ 
+          message: `Este endpoint é exclusivo para imports D8. Tipo encontrado: ${run.tipoImport}` 
+        });
+      }
+      
+      const effectiveTenantId = run.tenantId || userTenantId;
+      const runBaseTag = run.baseTag || "";
+      
+      if (!effectiveTenantId) {
+        return res.status(400).json({ message: "Tenant ID obrigatório" });
+      }
+      
+      // Contar o que será apagado (sem efetuar deleção)
+      const previewResult = await db.execute(sql`
+        WITH 
+        tenant_pessoas AS (
+          SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+        ),
+        -- Contratos que serão apagados
+        contratos_para_apagar AS (
+          SELECT id, pessoa_id, vinculo_id
+          FROM clientes_contratos 
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Vínculos candidatos a órfãos (criados por este D8)
+        vinculos_candidatos AS (
+          SELECT v.id, v.pessoa_id
+          FROM clientes_vinculo v
+          WHERE v.tenant_id = ${effectiveTenantId}
+            AND (
+              v.import_run_id = ${runId}
+              OR (v.import_run_id IS NULL AND v.base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Vínculos órfãos: sem folhas e sem contratos (após exclusão)
+        vinculos_orfaos AS (
+          SELECT vc.id
+          FROM vinculos_candidatos vc
+          WHERE NOT EXISTS (
+            SELECT 1 FROM clientes_folha_mes f WHERE f.vinculo_id = vc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_contratos c 
+            WHERE c.vinculo_id = vc.id 
+              AND c.id NOT IN (SELECT id FROM contratos_para_apagar)
+          )
+        ),
+        -- Pessoas candidatas a órfãs (criadas por este D8)
+        pessoas_candidatas AS (
+          SELECT p.id
+          FROM clientes_pessoa p
+          WHERE p.tenant_id = ${effectiveTenantId}
+            AND (
+              p.import_run_id = ${runId}
+              OR (p.import_run_id IS NULL AND p.base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Pessoas órfãs: sem vínculos, sem contatos, sem telefones, sem folhas, sem contratos (após exclusão)
+        pessoas_orfas AS (
+          SELECT pc.id
+          FROM pessoas_candidatas pc
+          WHERE NOT EXISTS (
+            SELECT 1 FROM clientes_vinculo v 
+            WHERE v.pessoa_id = pc.id 
+              AND v.id NOT IN (SELECT id FROM vinculos_orfaos)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM client_contacts c WHERE c.client_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_telefones t WHERE t.pessoa_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_contratos c 
+            WHERE c.pessoa_id = pc.id 
+              AND c.id NOT IN (SELECT id FROM contratos_para_apagar)
+          )
+        )
+        SELECT 
+          (SELECT COUNT(*) FROM contratos_para_apagar) as contratos_count,
+          (SELECT COUNT(DISTINCT pessoa_id) FROM contratos_para_apagar) as pessoas_afetadas,
+          (SELECT COUNT(*) FROM vinculos_orfaos) as vinculos_orfaos_count,
+          (SELECT COUNT(*) FROM pessoas_orfas) as pessoas_orfas_count
+      `);
+      
+      const row = previewResult.rows?.[0] as any || {};
+      
+      return res.json({
+        importRun: {
+          id: runId,
+          tipoImport: run.tipoImport,
+          baseTag: runBaseTag,
+          convenio: run.convenio,
+          status: run.status,
+          arquivoOrigem: run.arquivoOrigem
+        },
+        preview: {
+          contratos: Number(row.contratos_count) || 0,
+          pessoasAfetadas: Number(row.pessoas_afetadas) || 0,
+          vinculosOrfaos: Number(row.vinculos_orfaos_count) || 0,
+          pessoasOrfas: Number(row.pessoas_orfas_count) || 0
+        }
+      });
+    } catch (error) {
+      console.error("D8 preview delete error:", error);
+      return res.status(500).json({ message: "Erro ao gerar preview de exclusão" });
+    }
+  });
+
   // GET download de TODAS as linhas com erro em CSV (usando import_run_rows)
   app.get("/api/import-runs/:id/rows/errors/download", requireAuth, requireMaster, async (req, res) => {
     try {

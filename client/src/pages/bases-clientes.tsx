@@ -144,6 +144,16 @@ export default function BasesClientes() {
   const [selectedImportRun, setSelectedImportRun] = useState<ImportRunWithCounts | null>(null);
   const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
+  
+  // D8 Delete confirmation states
+  const [isD8DeleteDialogOpen, setIsD8DeleteDialogOpen] = useState(false);
+  const [d8DeletePreview, setD8DeletePreview] = useState<{
+    importRun: { id: number; baseTag: string; convenio: string; arquivoOrigem: string };
+    preview: { contratos: number; pessoasAfetadas: number; vinculosOrfaos: number; pessoasOrfas: number };
+  } | null>(null);
+  const [d8DeleteConfirmText, setD8DeleteConfirmText] = useState("");
+  const [isLoadingD8Preview, setIsLoadingD8Preview] = useState(false);
+  const [isDeletingD8, setIsDeletingD8] = useState(false);
 
   const handleDownloadModelo = () => {
     // Headers canônicos conforme modelo XLSX
@@ -405,13 +415,39 @@ export default function BasesClientes() {
     }
   };
 
-  // Excluir SOMENTE os contratos de uma importação D8 (preserva pessoas, vínculos, folha)
-  const deleteD8Contracts = async (runId: number) => {
-    if (!confirm(`Tem certeza que deseja excluir os CONTRATOS da importação D8 #${runId}?\n\nEsta ação:\n• Remove apenas os contratos deste D8\n• Preserva pessoas, vínculos e folhas\n• Remove vínculos/pessoas órfãos se não tiverem outros dados`)) {
-      return;
-    }
+  // Abrir dialog de preview para exclusão D8
+  const openD8DeleteDialog = async (runId: number) => {
+    setIsLoadingD8Preview(true);
+    setD8DeleteConfirmText("");
     try {
-      const response = await fetch(`/api/d8/import-runs/${runId}`, {
+      const response = await fetch(`/api/d8/import-runs/${runId}/preview-delete`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao carregar preview");
+      }
+      const data = await response.json();
+      setD8DeletePreview(data);
+      setIsD8DeleteDialogOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível carregar preview de exclusão.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingD8Preview(false);
+    }
+  };
+
+  // Executar exclusão D8 após confirmação
+  const executeD8Delete = async () => {
+    if (!d8DeletePreview || d8DeleteConfirmText !== "DELETE") return;
+    
+    setIsDeletingD8(true);
+    try {
+      const response = await fetch(`/api/d8/import-runs/${d8DeletePreview.importRun.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -431,12 +467,18 @@ export default function BasesClientes() {
       queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
       // Disparar evento para zerar estados em outras telas
       window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+      // Fechar dialog
+      setIsD8DeleteDialogOpen(false);
+      setD8DeletePreview(null);
+      setD8DeleteConfirmText("");
     } catch (error: any) {
       toast({
         title: "Erro",
         description: error.message || "Não foi possível excluir os contratos D8.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeletingD8(false);
     }
   };
 
@@ -1704,11 +1746,16 @@ export default function BasesClientes() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteD8Contracts(run.id)}
+                          onClick={() => openD8DeleteDialog(run.id)}
+                          disabled={isLoadingD8Preview}
                           title="Excluir apenas contratos D8"
                           data-testid={`button-delete-d8-${run.id}`}
                         >
-                          <XCircle className="w-4 h-4 text-orange-500" />
+                          {isLoadingD8Preview ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-orange-500" />
+                          )}
                         </Button>
                       )}
                       <Button
@@ -1810,6 +1857,105 @@ export default function BasesClientes() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRunDetailOpen(false)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmação de exclusão D8 com digitação de DELETE */}
+      <Dialog open={isD8DeleteDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsD8DeleteDialogOpen(false);
+          setD8DeletePreview(null);
+          setD8DeleteConfirmText("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="w-5 h-5" />
+              Excluir contratos D8
+            </DialogTitle>
+            <DialogDescription>
+              Esta ação remove apenas os contratos importados por este D8, preservando pessoas e vínculos que tenham outros dados.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {d8DeletePreview && (
+            <div className="space-y-4">
+              <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
+                <div><strong>Import Run:</strong> #{d8DeletePreview.importRun.id}</div>
+                <div><strong>Base Tag:</strong> {d8DeletePreview.importRun.baseTag || "-"}</div>
+                <div><strong>Convênio:</strong> {d8DeletePreview.importRun.convenio || "-"}</div>
+                <div><strong>Arquivo:</strong> {d8DeletePreview.importRun.arquivoOrigem || "-"}</div>
+              </div>
+              
+              <div className="bg-orange-50 dark:bg-orange-950 p-3 rounded-md">
+                <h4 className="font-medium text-sm mb-2 text-orange-700 dark:text-orange-300">O que será excluído:</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Contratos:</span>
+                    <span className="font-bold text-orange-600">{d8DeletePreview.preview.contratos.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Pessoas afetadas:</span>
+                    <span className="font-medium">{d8DeletePreview.preview.pessoasAfetadas.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Vínculos órfãos:</span>
+                    <span className="font-medium text-muted-foreground">{d8DeletePreview.preview.vinculosOrfaos.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Pessoas órfãs:</span>
+                    <span className="font-medium text-muted-foreground">{d8DeletePreview.preview.pessoasOrfas.toLocaleString("pt-BR")}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="text-sm">
+                  Para confirmar, digite <strong className="text-orange-600">DELETE</strong> no campo abaixo:
+                </div>
+                <Input
+                  value={d8DeleteConfirmText}
+                  onChange={(e) => setD8DeleteConfirmText(e.target.value.toUpperCase())}
+                  placeholder="Digite DELETE para confirmar"
+                  className="font-mono"
+                  data-testid="input-confirm-d8-delete"
+                />
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsD8DeleteDialogOpen(false);
+                setD8DeletePreview(null);
+                setD8DeleteConfirmText("");
+              }}
+              data-testid="button-cancel-d8-delete"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={executeD8Delete}
+              disabled={d8DeleteConfirmText !== "DELETE" || isDeletingD8}
+              data-testid="button-confirm-d8-delete"
+            >
+              {isDeletingD8 ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir contratos
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
