@@ -305,6 +305,10 @@ class StreamingImportService {
     headerRl.close();
     headerFirstLineStream.destroy();
 
+    // Log detalhado dos headers detectados
+    console.log(`[IMPORT ${run.id}] Headers detectados (${headers.length}):`, headers.join(", "));
+    console.log(`[IMPORT ${run.id}] Mapeamento de colunas:`, JSON.stringify(headerMap, null, 2));
+
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
       const normalizedHeaders = headers.map(h => normalizeCol(h));
@@ -451,6 +455,9 @@ class StreamingImportService {
         updatedAt: new Date(),
       })
       .where(eq(importRuns.id, run.id));
+
+    // Log final com contagem
+    console.log(`[IMPORT ${run.id}] ✅ CONCLUÍDO - Processados: ${totalProcessed} | Sucesso: ${totalSuccess} | Erros: ${totalErrors}`);
 
     return {
       success: true,
