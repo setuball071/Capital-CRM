@@ -67,7 +67,8 @@ export interface FastImportResult {
   report?: FastImportReport;
 }
 
-const D8_COLUMN_MAP: Record<string, string> = {
+// Mapa D8 Servidor (11 colunas)
+const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
   matricula: "matricula",
   nome: "nome",
@@ -83,11 +84,31 @@ const D8_COLUMN_MAP: Record<string, string> = {
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
   situacao_contrato: "situacao_contrato",
-  m_instituidor: "m_instituidor",
-  cpf_instituidor: "cpf_instituidor",
 };
 
-// Headers obrigatórios D8 (normalizados - case-insensitive, sem acentos)
+// Mapa D8 Pensionista (14 colunas específicas)
+const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
+  orgao: "orgao",
+  m_instituidor: "m_instituidor",
+  matricula: "matricula",
+  uf: "uf",
+  nome: "nome",
+  cpf: "cpf",
+  tipo_contrato: "tipo_contrato",
+  tipo_produto: "tipo_contrato",
+  pmt: "valor_parcela",
+  valor_parcela: "valor_parcela",
+  prazo_remanescente: "prazo_remanescente",
+  prazo: "prazo_remanescente",
+  ids: "ids",
+  obs: "obs",
+  regime_juridico: "regime_juridico",
+  numero_contrato: "numero_contrato",
+  n_contrato: "numero_contrato",
+  banco: "banco",
+};
+
+// Headers obrigatórios D8 Servidor (normalizados)
 const D8_REQUIRED_HEADERS = [
   "banco",
   "orgao",
@@ -100,6 +121,18 @@ const D8_REQUIRED_HEADERS = [
   "prazo_remanescente",
   "situacao_contrato",
   "numero_contrato",
+];
+
+// Headers obrigatórios D8 Pensionista (normalizados)
+const D8_PENSIONISTA_REQUIRED_HEADERS = [
+  "orgao",
+  "matricula",
+  "cpf",
+  "tipo_contrato",
+  "pmt",
+  "prazo_remanescente",
+  "numero_contrato",
+  "banco",
 ];
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
@@ -249,13 +282,17 @@ class FastImportService {
     let pausedForResume = false;
     
     const headers = await this.readHeaders(filePath);
-    const columnMap = this.getColumnMap(run.tipoImport);
+    const columnMap = this.getColumnMap(run.tipoImport, run.layoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
     
-    // Validar headers obrigatórios para D8
+    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
       const normalizedHeaders = headers.map(h => normalizeCol(h));
-      const missingHeaders = D8_REQUIRED_HEADERS.filter(req => {
+      const requiredHeaders = run.layoutD8 === "pensionista" 
+        ? D8_PENSIONISTA_REQUIRED_HEADERS 
+        : D8_REQUIRED_HEADERS;
+      
+      const missingHeaders = requiredHeaders.filter(req => {
         // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
         if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
         if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
@@ -265,7 +302,8 @@ class FastImportService {
       });
       
       if (missingHeaders.length > 0) {
-        throw new Error(`Headers obrigatórios D8 ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+        const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
+        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
       }
     }
     
@@ -929,12 +967,12 @@ class FastImportService {
     }
   }
 
-  private getColumnMap(tipoImport: string): Record<string, string> {
+  private getColumnMap(tipoImport: string, layoutD8?: string | null): Record<string, string> {
     switch (tipoImport) {
       case "folha":
         return COLUMN_MAP;
       case "d8":
-        return D8_COLUMN_MAP;
+        return layoutD8 === "pensionista" ? D8_COLUMN_MAP_PENSIONISTA : D8_COLUMN_MAP_SERVIDOR;
       case "contatos":
         return CONTATOS_COLUMN_MAP;
       default:

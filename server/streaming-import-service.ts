@@ -83,12 +83,39 @@ const D8_REQUIRED_HEADERS = [
   "numero_contrato",
 ];
 
+// Mapa D8 Pensionista - 14 colunas específicas
 const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
-  ...D8_COLUMN_MAP_SERVIDOR,
+  orgao: "orgao",
   m_instituidor: "m_instituidor",
-  cpf_instituidor: "cpf_instituidor",
-  matricula_instituidor: "matricula_instituidor",
+  matricula: "matricula",
+  uf: "uf",
+  nome: "nome",
+  cpf: "cpf",
+  tipo_contrato: "tipo_contrato",
+  tipo_produto: "tipo_contrato",
+  pmt: "pmt",
+  valor_parcela: "pmt",
+  prazo_remanescente: "prazo_remanescente",
+  prazo: "prazo_remanescente",
+  ids: "ids",
+  obs: "obs",
+  regime_juridico: "regime_juridico",
+  numero_contrato: "numero_contrato",
+  n_contrato: "numero_contrato",
+  banco: "banco",
 };
+
+// Headers obrigatórios D8 Pensionista (normalizados)
+const D8_PENSIONISTA_REQUIRED_HEADERS = [
+  "orgao",
+  "matricula",
+  "cpf",
+  "tipo_contrato",
+  "pmt",
+  "prazo_remanescente",
+  "numero_contrato",
+  "banco",
+];
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
@@ -278,12 +305,16 @@ class StreamingImportService {
     headerRl.close();
     headerFirstLineStream.destroy();
 
-    // Validar headers obrigatórios para D8
+    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
       const normalizedHeaders = headers.map(h => normalizeCol(h));
-      const missingHeaders = D8_REQUIRED_HEADERS.filter(req => {
+      const requiredHeaders = run.layoutD8 === "pensionista" 
+        ? D8_PENSIONISTA_REQUIRED_HEADERS 
+        : D8_REQUIRED_HEADERS;
+      
+      const missingHeaders = requiredHeaders.filter(req => {
         // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
-        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela") && !normalizedHeaders.includes("pmt_fmt");
+        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
         if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
         if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
         if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
@@ -291,7 +322,8 @@ class StreamingImportService {
       });
       
       if (missingHeaders.length > 0) {
-        throw new Error(`Headers obrigatórios D8 ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+        const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
+        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
       }
     }
 
@@ -596,31 +628,33 @@ class StreamingImportService {
 
     const extras: Record<string, any> = {};
     if (run.layoutD8 === "pensionista") {
+      // Campos específicos D8 Pensionista (14 colunas)
       extras.m_instituidor = preserveMatricula(this.extractValue(row, headerMap, "m_instituidor"));
-      extras.cpf_instituidor = padCpf(this.extractValue(row, headerMap, "cpf_instituidor"));
-      extras.matricula_instituidor = preserveMatricula(this.extractValue(row, headerMap, "matricula_instituidor"));
+      extras.ids = this.extractValue(row, headerMap, "ids") || null;
+      extras.obs = this.extractValue(row, headerMap, "obs") || null;
+      extras.regime_juridico = this.extractValue(row, headerMap, "regime_juridico") || null;
     }
 
-    // PMT: usa pmt ou valor_parcela (sem pmt_fmt)
+    // PMT: usa pmt ou valor_parcela
     const pmtNumerico = this.extractValue(row, headerMap, "pmt");
-    const valorParcelaRaw = this.extractValue(row, headerMap, "valor_parcela");
     let valorParcela: number | null = null;
     
     if (pmtNumerico) {
       valorParcela = normalizeBrDecimal(pmtNumerico);
-    } else if (valorParcelaRaw) {
-      valorParcela = normalizeBrDecimal(valorParcelaRaw);
     }
 
     // Prazo: normaliza para 3 dígitos
-    const prazoRaw = this.extractValue(row, headerMap, "prazo");
     const prazoRemanRaw = this.extractValue(row, headerMap, "prazo_remanescente");
-    const prazoNorm = padPrazo(prazoRaw);
     const prazoRemanNorm = padPrazo(prazoRemanRaw);
     
     const parcelasRestantes = prazoRemanNorm 
       ? parseInt(prazoRemanNorm, 10) || null 
-      : (prazoNorm ? parseInt(prazoNorm, 10) || null : null);
+      : null;
+
+    // Status: usa situacao_contrato (servidor) ou default "ATIVO" (pensionista não tem esse campo)
+    const statusContrato = run.layoutD8 === "pensionista" 
+      ? "ATIVO" 
+      : (this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO");
 
     await this.upsertContrato({
       pessoaId: vinculo.pessoaId,
@@ -629,10 +663,10 @@ class StreamingImportService {
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",
       valorParcela,
       parcelasRestantes,
-      status: this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO",
+      status: statusContrato,
       competencia: run.competencia,
       baseTag: run.baseTag,
-      dadosBrutos: extras.m_instituidor ? extras : null,
+      dadosBrutos: Object.keys(extras).length > 0 ? extras : null,
     });
 
     return true;
