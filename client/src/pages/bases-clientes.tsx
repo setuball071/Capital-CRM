@@ -405,6 +405,41 @@ export default function BasesClientes() {
     }
   };
 
+  // Excluir SOMENTE os contratos de uma importação D8 (preserva pessoas, vínculos, folha)
+  const deleteD8Contracts = async (runId: number) => {
+    if (!confirm(`Tem certeza que deseja excluir os CONTRATOS da importação D8 #${runId}?\n\nEsta ação:\n• Remove apenas os contratos deste D8\n• Preserva pessoas, vínculos e folhas\n• Remove vínculos/pessoas órfãos se não tiverem outros dados`)) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/d8/import-runs/${runId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao excluir contratos D8");
+      }
+      const result = await response.json();
+      toast({
+        title: "Contratos D8 excluídos",
+        description: `Removidos: ${result.deleted.contratos} contratos, ${result.deleted.vinculosOrfaos || 0} vínculos órfãos, ${result.deleted.pessoasOrfas || 0} pessoas órfãs.`,
+      });
+      // Invalidar todos os caches relacionados a clientes
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes/consulta"] });
+      // Disparar evento para zerar estados em outras telas
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível excluir os contratos D8.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const importMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await fetch("/api/bases/import", {
@@ -1665,11 +1700,22 @@ export default function BasesClientes() {
                           <Download className="w-4 h-4 text-destructive" />
                         </Button>
                       )}
+                      {run.tipoImport === 'd8' && run.status !== 'contratos_deletados' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteD8Contracts(run.id)}
+                          title="Excluir apenas contratos D8"
+                          data-testid={`button-delete-d8-${run.id}`}
+                        >
+                          <XCircle className="w-4 h-4 text-orange-500" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteImportRun(run.id)}
-                        title="Excluir importação"
+                        title="Excluir importação completa"
                         data-testid={`button-delete-run-${run.id}`}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
