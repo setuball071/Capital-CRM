@@ -72,6 +72,8 @@ const D8_COLUMN_MAP: Record<string, string> = {
   matricula: "matricula",
   nome: "nome",
   banco: "banco",
+  orgao: "orgao",
+  uf: "uf",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
@@ -88,6 +90,21 @@ const D8_COLUMN_MAP: Record<string, string> = {
   m_instituidor: "m_instituidor",
   cpf_instituidor: "cpf_instituidor",
 };
+
+// Headers obrigatórios D8 (normalizados - case-insensitive, sem acentos)
+const D8_REQUIRED_HEADERS = [
+  "banco",
+  "orgao",
+  "matricula", 
+  "uf",
+  "nome",
+  "cpf",
+  "tipo_contrato",
+  "pmt",
+  "prazo_remanescente",
+  "situacao_contrato",
+  "numero_contrato",
+];
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
@@ -238,6 +255,23 @@ class FastImportService {
     const headers = await this.readHeaders(filePath);
     const columnMap = this.getColumnMap(run.tipoImport);
     const headerMap = this.buildHeaderMap(headers, columnMap);
+    
+    // Validar headers obrigatórios para D8
+    if (run.tipoImport === "d8") {
+      const normalizedHeaders = headers.map(h => normalizeCol(h));
+      const missingHeaders = D8_REQUIRED_HEADERS.filter(req => {
+        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
+        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
+        if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
+        if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
+        if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
+        return !normalizedHeaders.includes(req);
+      });
+      
+      if (missingHeaders.length > 0) {
+        throw new Error(`Headers obrigatórios D8 ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+      }
+    }
     
     const batchBuffer: any[] = [];
     
