@@ -75,6 +75,85 @@ export async function diagnosticarTabela(nomeTabela: string): Promise<void> {
   console.log(`[DIAGNÓSTICO] ========== FIM ${nomeTabela} ==========\n`);
 }
 
+/**
+ * Limpeza de duplicados em clientes_vinculo por chave natural (tenant_id, cpf, matricula, orgao)
+ * Mantém apenas o registro mais recente (maior id) para cada chave natural
+ */
+export async function limparDuplicadosVinculo(tenantId: number): Promise<number> {
+  console.log(`[LIMPEZA] Detectando duplicados em clientes_vinculo para tenant ${tenantId}...`);
+  
+  const result = await db.execute(sql`
+    WITH duplicados AS (
+      SELECT id,
+        ROW_NUMBER() OVER (
+          PARTITION BY tenant_id, cpf, matricula, orgao 
+          ORDER BY id DESC
+        ) as rn
+      FROM clientes_vinculo
+      WHERE tenant_id = ${tenantId}
+    ),
+    ids_para_deletar AS (
+      SELECT id FROM duplicados WHERE rn > 1
+    )
+    DELETE FROM clientes_vinculo
+    WHERE id IN (SELECT id FROM ids_para_deletar)
+    RETURNING id
+  `);
+  
+  const removidos = result.rows.length;
+  console.log(`[LIMPEZA] clientes_vinculo: ${removidos} duplicados removidos (tenant ${tenantId})`);
+  return removidos;
+}
+
+/**
+ * Limpeza de duplicados em clientes_folha_mes por chave natural (vinculo_id, competencia)
+ * Mantém apenas o registro mais recente (maior id) para cada chave natural
+ * Filtra por tenant através da relação com clientes_vinculo
+ */
+export async function limparDuplicadosFolhaMes(tenantId: number): Promise<number> {
+  console.log(`[LIMPEZA] Detectando duplicados em clientes_folha_mes para tenant ${tenantId}...`);
+  
+  const result = await db.execute(sql`
+    WITH duplicados AS (
+      SELECT f.id,
+        ROW_NUMBER() OVER (
+          PARTITION BY f.vinculo_id, f.competencia 
+          ORDER BY f.id DESC
+        ) as rn
+      FROM clientes_folha_mes f
+      INNER JOIN clientes_vinculo v ON v.id = f.vinculo_id
+      WHERE v.tenant_id = ${tenantId}
+    ),
+    ids_para_deletar AS (
+      SELECT id FROM duplicados WHERE rn > 1
+    )
+    DELETE FROM clientes_folha_mes
+    WHERE id IN (SELECT id FROM ids_para_deletar)
+    RETURNING id
+  `);
+  
+  const removidos = result.rows.length;
+  console.log(`[LIMPEZA] clientes_folha_mes: ${removidos} duplicados removidos (tenant ${tenantId})`);
+  return removidos;
+}
+
+/**
+ * Executa limpeza completa de duplicados para Folha (vínculos + folhas mensais)
+ * Retorna total de registros removidos
+ */
+export async function limparDuplicadosFolhaCompleto(tenantId: number): Promise<{ vinculos: number; folhas: number }> {
+  console.log(`[LIMPEZA] Iniciando limpeza completa de duplicados para tenant ${tenantId}...`);
+  
+  // Primeiro limpar folhas (dependem de vínculos)
+  const folhas = await limparDuplicadosFolhaMes(tenantId);
+  
+  // Depois limpar vínculos
+  const vinculos = await limparDuplicadosVinculo(tenantId);
+  
+  console.log(`[LIMPEZA] Total removidos: ${vinculos} vínculos + ${folhas} folhas`);
+  return { vinculos, folhas };
+}
+
 export interface StreamImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
   competencia?: Date;

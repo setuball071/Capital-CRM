@@ -775,6 +775,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Limpeza de duplicados por chave natural (master only)
+  app.post("/api/admin/cleanup-duplicates", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const tenantId = req.body.tenantId as number;
+      if (!tenantId || typeof tenantId !== 'number') {
+        return res.status(400).json({ message: "tenantId é obrigatório e deve ser um número" });
+      }
+
+      const { limparDuplicadosFolhaCompleto } = await import("./streaming-import-service");
+      const result = await limparDuplicadosFolhaCompleto(tenantId);
+
+      return res.json({
+        success: true,
+        tenantId,
+        removidos: {
+          vinculos: result.vinculos,
+          folhas: result.folhas,
+          total: result.vinculos + result.folhas
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Cleanup duplicates error:", error);
+      return res.status(500).json({ message: "Erro ao limpar duplicados" });
+    }
+  });
+
   // Create bank (master only)
   app.post("/api/banks", requireAuth, requireMaster, async (req, res) => {
     try {
