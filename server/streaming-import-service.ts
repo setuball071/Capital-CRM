@@ -28,132 +28,6 @@ import {
 const MAX_LINHAS_POR_EXECUCAO = 1_000_000;
 const BUFFER_SIZE = 100_000;
 
-/**
- * Função utilitária de diagnóstico para verificar constraints e índices de uma tabela
- */
-export async function diagnosticarTabela(nomeTabela: string): Promise<void> {
-  console.log(`\n[DIAGNÓSTICO] ========== ${nomeTabela} ==========`);
-  
-  try {
-    // (a) Constraints únicas
-    const constraints = await db.execute(sql`
-      SELECT conname, pg_get_constraintdef(oid) as definition
-      FROM pg_constraint 
-      WHERE conrelid = ${nomeTabela}::regclass 
-        AND contype IN ('u','x')
-    `);
-    
-    console.log(`[DIAGNÓSTICO] Constraints (u/x) em ${nomeTabela}:`);
-    if (constraints.rows.length === 0) {
-      console.log("  (nenhuma constraint única encontrada)");
-    } else {
-      for (const row of constraints.rows) {
-        console.log(`  - ${row.conname}: ${row.definition}`);
-      }
-    }
-    
-    // (b) Índices
-    const indices = await db.execute(sql`
-      SELECT indexname, indexdef 
-      FROM pg_indexes 
-      WHERE tablename = ${nomeTabela}
-    `);
-    
-    console.log(`[DIAGNÓSTICO] Índices em ${nomeTabela}:`);
-    if (indices.rows.length === 0) {
-      console.log("  (nenhum índice encontrado)");
-    } else {
-      for (const row of indices.rows) {
-        console.log(`  - ${row.indexname}:`);
-        console.log(`    ${row.indexdef}`);
-      }
-    }
-  } catch (error) {
-    console.error(`[DIAGNÓSTICO] Erro ao diagnosticar ${nomeTabela}:`, error);
-  }
-  
-  console.log(`[DIAGNÓSTICO] ========== FIM ${nomeTabela} ==========\n`);
-}
-
-/**
- * Limpeza de duplicados em clientes_vinculo por chave natural (tenant_id, cpf, matricula, orgao)
- * Mantém apenas o registro mais recente (maior id) para cada chave natural
- */
-export async function limparDuplicadosVinculo(tenantId: number): Promise<number> {
-  console.log(`[LIMPEZA] Detectando duplicados em clientes_vinculo para tenant ${tenantId}...`);
-  
-  const result = await db.execute(sql`
-    WITH duplicados AS (
-      SELECT id,
-        ROW_NUMBER() OVER (
-          PARTITION BY tenant_id, cpf, matricula, orgao 
-          ORDER BY id DESC
-        ) as rn
-      FROM clientes_vinculo
-      WHERE tenant_id = ${tenantId}
-    ),
-    ids_para_deletar AS (
-      SELECT id FROM duplicados WHERE rn > 1
-    )
-    DELETE FROM clientes_vinculo
-    WHERE id IN (SELECT id FROM ids_para_deletar)
-    RETURNING id
-  `);
-  
-  const removidos = result.rows.length;
-  console.log(`[LIMPEZA] clientes_vinculo: ${removidos} duplicados removidos (tenant ${tenantId})`);
-  return removidos;
-}
-
-/**
- * Limpeza de duplicados em clientes_folha_mes por chave natural (vinculo_id, competencia)
- * Mantém apenas o registro mais recente (maior id) para cada chave natural
- * Filtra por tenant através da relação com clientes_vinculo
- */
-export async function limparDuplicadosFolhaMes(tenantId: number): Promise<number> {
-  console.log(`[LIMPEZA] Detectando duplicados em clientes_folha_mes para tenant ${tenantId}...`);
-  
-  const result = await db.execute(sql`
-    WITH duplicados AS (
-      SELECT f.id,
-        ROW_NUMBER() OVER (
-          PARTITION BY f.vinculo_id, f.competencia 
-          ORDER BY f.id DESC
-        ) as rn
-      FROM clientes_folha_mes f
-      INNER JOIN clientes_vinculo v ON v.id = f.vinculo_id
-      WHERE v.tenant_id = ${tenantId}
-    ),
-    ids_para_deletar AS (
-      SELECT id FROM duplicados WHERE rn > 1
-    )
-    DELETE FROM clientes_folha_mes
-    WHERE id IN (SELECT id FROM ids_para_deletar)
-    RETURNING id
-  `);
-  
-  const removidos = result.rows.length;
-  console.log(`[LIMPEZA] clientes_folha_mes: ${removidos} duplicados removidos (tenant ${tenantId})`);
-  return removidos;
-}
-
-/**
- * Executa limpeza completa de duplicados para Folha (vínculos + folhas mensais)
- * Retorna total de registros removidos
- */
-export async function limparDuplicadosFolhaCompleto(tenantId: number): Promise<{ vinculos: number; folhas: number }> {
-  console.log(`[LIMPEZA] Iniciando limpeza completa de duplicados para tenant ${tenantId}...`);
-  
-  // Primeiro limpar folhas (dependem de vínculos)
-  const folhas = await limparDuplicadosFolhaMes(tenantId);
-  
-  // Depois limpar vínculos
-  const vinculos = await limparDuplicadosVinculo(tenantId);
-  
-  console.log(`[LIMPEZA] Total removidos: ${vinculos} vínculos + ${folhas} folhas`);
-  return { vinculos, folhas };
-}
-
 export interface StreamImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
   competencia?: Date;
@@ -431,10 +305,6 @@ class StreamingImportService {
     headerRl.close();
     headerFirstLineStream.destroy();
 
-    // Log detalhado dos headers detectados
-    console.log(`[IMPORT ${run.id}] Headers detectados (${headers.length}):`, headers.join(", "));
-    console.log(`[IMPORT ${run.id}] Mapeamento de colunas:`, JSON.stringify(headerMap, null, 2));
-
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
       const normalizedHeaders = headers.map(h => normalizeCol(h));
@@ -552,7 +422,7 @@ class StreamingImportService {
           processedRows: totalProcessed,
           successRows: totalSuccess,
           errorRows: totalErrors,
-          offsetAtual: bytesRead,
+          offsetAtual: lastByteOffset,
           pausedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -582,9 +452,6 @@ class StreamingImportService {
       })
       .where(eq(importRuns.id, run.id));
 
-    // Log final com contagem
-    console.log(`[IMPORT ${run.id}] ✅ CONCLUÍDO - Processados: ${totalProcessed} | Sucesso: ${totalSuccess} | Erros: ${totalErrors}`);
-
     return {
       success: true,
       importRunId: run.id,
@@ -595,56 +462,6 @@ class StreamingImportService {
       pausedForResume: false,
       message: `Import concluído. ${totalSuccess} sucessos, ${totalErrors} erros.`,
     };
-  }
-
-  /**
-   * Gera a chave natural para deduplicação baseada no tipo de import
-   * Folha: cpf + matricula + orgao (vínculo)
-   * D8: cpf + matricula + orgao + banco + numero_contrato
-   * Contatos: cpf + tipo + valor
-   */
-  private generateNaturalKey(row: Record<string, any>, headerMap: Record<string, string>, tipoImport: string): string {
-    const cpf = padCpf(this.extractValue(row, headerMap, "cpf")) || "";
-    const matricula = preserveMatricula(this.extractValue(row, headerMap, "matricula")) || "";
-    const orgao = (this.extractValue(row, headerMap, "orgao") || "").trim();
-    
-    if (tipoImport === "d8") {
-      const banco = (this.extractValue(row, headerMap, "banco") || "").trim();
-      const numeroContrato = preserveNumeroContrato(this.extractValue(row, headerMap, "numero_contrato")) || "";
-      return `${cpf}|${matricula}|${orgao}|${banco}|${numeroContrato}`;
-    } else if (tipoImport === "contatos") {
-      const tipo = (this.extractValue(row, headerMap, "tipo") || "").trim();
-      const valor = (this.extractValue(row, headerMap, "valor") || "").trim();
-      return `${cpf}|${tipo}|${valor}`;
-    }
-    // Folha: chave é o vínculo (cpf + matricula + orgao)
-    return `${cpf}|${matricula}|${orgao}`;
-  }
-
-  /**
-   * Deduplica o buffer mantendo apenas a última ocorrência de cada chave natural
-   * Retorna o buffer deduplicado e a quantidade de linhas descartadas
-   */
-  private deduplicateBuffer(
-    buffer: Record<string, any>[],
-    headerMap: Record<string, string>,
-    tipoImport: string
-  ): { deduplicated: Record<string, any>[]; discardedCount: number } {
-    const keyMap = new Map<string, { row: Record<string, any>; index: number }>();
-    
-    for (let i = 0; i < buffer.length; i++) {
-      const row = buffer[i];
-      const key = this.generateNaturalKey(row, headerMap, tipoImport);
-      keyMap.set(key, { row, index: i });
-    }
-    
-    // Ordenar pelo índice original para manter ordem de processamento
-    const deduplicated = Array.from(keyMap.values())
-      .sort((a, b) => a.index - b.index)
-      .map(v => v.row);
-    
-    const discardedCount = buffer.length - deduplicated.length;
-    return { deduplicated, discardedCount };
   }
 
   private async processBuffer(
@@ -658,18 +475,11 @@ class StreamingImportService {
     ) => Promise<boolean>,
     errors: InsertImportError[]
   ): Promise<{ success: number; error: number }> {
-    // Deduplicar buffer antes de processar (mantém última ocorrência de cada chave natural)
-    const { deduplicated, discardedCount } = this.deduplicateBuffer(buffer, headerMap, run.tipoImport);
-    
-    if (discardedCount > 0) {
-      console.log(`[IMPORT ${run.id}] Deduplicação: ${discardedCount} linhas duplicadas descartadas no batch (mantida última ocorrência)`);
-    }
-    
     let successCount = 0;
     let errorCount = 0;
 
-    for (let i = 0; i < deduplicated.length; i++) {
-      const row = deduplicated[i];
+    for (let i = 0; i < buffer.length; i++) {
+      const row = buffer[i];
       try {
         const success = await processRow(row, headerMap, errors);
         if (success) {
@@ -746,7 +556,7 @@ class StreamingImportService {
     }
 
     const competencia = run.competencia || new Date();
-    await this.upsertFolhaMes(vinculo.id, vinculo.pessoaId, competencia, row, headerMap, run.baseTag, run.id);
+    await this.upsertFolhaMes(vinculo.pessoaId, competencia, row, headerMap, run.baseTag);
 
     return true;
   }
@@ -780,37 +590,20 @@ class StreamingImportService {
       return false;
     }
 
-    // Validação clara: rejeitar linha se faltar campos obrigatórios (sem quebrar o lote)
-    const camposFaltando: string[] = [];
-    
-    if (!cpf) {
-      camposFaltando.push("CPF");
-    }
-    if (!matricula) {
-      camposFaltando.push("MATRICULA");
-    }
-    if (!numeroContrato) {
-      camposFaltando.push("NUMERO_CONTRATO");
-    }
-    if (!banco) {
-      camposFaltando.push("BANCO");
-    }
-
-    if (camposFaltando.length > 0) {
+    if (!cpf || !matricula) {
       errors.push({
         importRunId: run.id,
         rowNumber: run.processedRows + 1,
-        cpf: cpf || null,
-        matricula: matricula || null,
+        cpf,
+        matricula,
         errorType: "validation",
-        errorMessage: `Campos obrigatórios ausentes: ${camposFaltando.join(", ")}. Linha rejeitada.`,
+        errorMessage: "CPF ou matrícula ausente para D8",
         rawPayload: row,
       });
       return false;
     }
 
-    // Neste ponto, cpf e matricula foram validados como não-nulos
-    const vinculo = await this.findOrCreateVinculo(cpf!, matricula!, run, undefined, orgao);
+    const vinculo = await this.findOrCreateVinculo(cpf, matricula, run, undefined, orgao);
     if (!vinculo || !vinculo.pessoaId) {
       errors.push({
         importRunId: run.id,
@@ -824,77 +617,17 @@ class StreamingImportService {
       return false;
     }
 
-    // Soft merge vinculo.orgao: preenche apenas se atual é "DESCONHECIDO" ou vazio
-    if (orgao && orgao.length > 0 && vinculo.id) {
-      const [vinculoAtual] = await db
-        .select({ orgao: clientesVinculo.orgao })
-        .from(clientesVinculo)
-        .where(eq(clientesVinculo.id, vinculo.id))
-        .limit(1);
-
-      if (vinculoAtual) {
-        const orgaoAtual = vinculoAtual.orgao?.trim() || "";
-        // Só atualiza se orgao atual é vazio ou "DESCONHECIDO"
-        if (orgaoAtual.length === 0 || orgaoAtual.toUpperCase() === "DESCONHECIDO") {
-          await db
-            .update(clientesVinculo)
-            .set({ orgao: orgao, ultimaAtualizacao: new Date() })
-            .where(eq(clientesVinculo.id, vinculo.id));
-        }
-      }
-    }
-
-    // D8 Pensionista: só preenche campos vazios (merge suave)
-    // D8 Servidor: atualiza normalmente
-    const isPensionista = run.layoutD8 === "pensionista";
-
-    // Soft merge para pessoa: preenche nome e uf apenas se NULL/vazio no DB
-    // Aplica para AMBOS layouts (Servidor e Pensionista) - nunca sobrescreve dados existentes
-    const nomeD8Raw = this.extractValue(row, headerMap, "nome");
-    const ufD8Raw = this.extractValue(row, headerMap, "uf");
-    const nomeD8 = nomeD8Raw ? String(nomeD8Raw).trim() : null;
-    const ufD8 = ufD8Raw ? String(ufD8Raw).trim().toUpperCase() : null;
-
-    if (vinculo.pessoaId && (nomeD8 || ufD8)) {
-      // Buscar pessoa atual para verificar campos NULL/vazios
-      const [pessoaAtual] = await db
-        .select({ nome: clientesPessoa.nome, uf: clientesPessoa.uf })
-        .from(clientesPessoa)
-        .where(eq(clientesPessoa.id, vinculo.pessoaId))
-        .limit(1);
-
-      if (pessoaAtual) {
-        const updateFields: Record<string, any> = {};
-
-        // Nome: preenche se atual é NULL ou string vazia
-        if (nomeD8 && nomeD8.length > 0) {
-          const nomeAtual = pessoaAtual.nome?.trim() || "";
-          if (nomeAtual.length === 0) {
-            updateFields.nome = nomeD8;
-          }
-        }
-
-        // UF: preenche se atual é NULL ou string vazia
-        if (ufD8 && ufD8.length > 0 && ufD8.length <= 2) {
-          const ufAtual = pessoaAtual.uf?.trim() || "";
-          if (ufAtual.length === 0) {
-            updateFields.uf = ufD8;
-          }
-        }
-
-        // Só faz update se há campos para preencher
-        if (Object.keys(updateFields).length > 0) {
-          updateFields.atualizadoEm = new Date();
-          await db
-            .update(clientesPessoa)
-            .set(updateFields)
-            .where(eq(clientesPessoa.id, vinculo.pessoaId));
-        }
-      }
+    // D8 contém nome do cliente - atualizar pessoa se nome estiver disponível e não vazio
+    const nomeD8 = this.extractValue(row, headerMap, "nome");
+    if (nomeD8 && nomeD8.trim().length > 0 && vinculo.pessoaId) {
+      await db
+        .update(clientesPessoa)
+        .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
+        .where(eq(clientesPessoa.id, vinculo.pessoaId));
     }
 
     const extras: Record<string, any> = {};
-    if (isPensionista) {
+    if (run.layoutD8 === "pensionista") {
       // Campos específicos D8 Pensionista (14 colunas)
       extras.m_instituidor = preserveMatricula(this.extractValue(row, headerMap, "m_instituidor"));
       extras.ids = this.extractValue(row, headerMap, "ids") || null;
@@ -919,13 +652,12 @@ class StreamingImportService {
       : null;
 
     // Status: usa situacao_contrato (servidor) ou default "ATIVO" (pensionista não tem esse campo)
-    const statusContrato = isPensionista 
+    const statusContrato = run.layoutD8 === "pensionista" 
       ? "ATIVO" 
       : (this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO");
 
-    const contratoData = {
+    await this.upsertContrato({
       pessoaId: vinculo.pessoaId,
-      vinculoId: vinculo.id, // Liga ao vínculo correto (cpf+matricula+orgao)
       banco,
       numeroContrato,
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",
@@ -935,15 +667,7 @@ class StreamingImportService {
       competencia: run.competencia,
       baseTag: run.baseTag,
       dadosBrutos: Object.keys(extras).length > 0 ? extras : null,
-    };
-
-    // D8 Pensionista: usa merge suave (só preenche campos NULL)
-    // D8 Servidor: usa upsert normal (sobrescreve)
-    if (isPensionista) {
-      await this.upsertContratoSoftMerge(contratoData);
-    } else {
-      await this.upsertContrato(contratoData);
-    }
+    });
 
     return true;
   }
@@ -1059,41 +783,19 @@ class StreamingImportService {
     // tenantId é obrigatório na tabela, usar 1 como fallback
     const tenantIdValue = run.tenantId || 1;
     
-    const vinculoValues = {
-      tenantId: tenantIdValue,
-      cpf,
-      matricula,
-      orgao: orgaoNorm,
-      pessoaId: pessoaId || null,
-      convenio: run.convenio || null,
-    };
-    
-    // Usar onConflictDoUpdate para upsert atômico - atualiza apenas pessoaId se estava NULL
-    console.log('[UPSERT VINCULO]', { table: 'clientes_vinculo', conflictCols: ['tenant_id', 'cpf', 'matricula', 'orgao'] });
-    try {
-      const [result] = await db
-        .insert(clientesVinculo)
-        .values(vinculoValues)
-        .onConflictDoUpdate({
-          target: [clientesVinculo.tenantId, clientesVinculo.cpf, clientesVinculo.matricula, clientesVinculo.orgao],
-          set: {
-            // Só atualiza pessoaId se o novo valor não é null e o existente é null
-            pessoaId: sql`COALESCE(${clientesVinculo.pessoaId}, ${pessoaId || null})`,
-            ultimaAtualizacao: new Date(),
-          },
-        })
-        .returning();
+    const [created] = await db
+      .insert(clientesVinculo)
+      .values({
+        tenantId: tenantIdValue,
+        cpf,
+        matricula,
+        orgao: orgaoNorm,
+        pessoaId: pessoaId || null,
+        convenio: run.convenio || null,
+      })
+      .returning();
 
-      return { id: result.id, pessoaId: result.pessoaId };
-    } catch (error: any) {
-      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
-        etapa: "vinculo",
-        tabela: "clientes_vinculo",
-        target: "tenant_id, cpf, matricula, orgao",
-        erro: error?.message,
-      });
-      throw error;
-    }
+    return { id: created.id, pessoaId: created.pessoaId };
   }
 
   private async upsertPessoa(data: Record<string, any>): Promise<{ id: number } | null> {
@@ -1123,37 +825,44 @@ class StreamingImportService {
     return { id: created.id };
   }
 
-  /**
-   * Upsert de folha mensal usando ON CONFLICT (vinculo_id, competencia)
-   * Chave única: idx_folha_mes_unique → (vinculo_id, competencia)
-   */
   private async upsertFolhaMes(
-    vinculoId: number,
     pessoaId: number,
     competencia: Date,
     row: Record<string, any>,
     headerMap: Record<string, string>,
-    baseTag: string | null,
-    importRunId?: number
+    baseTag: string | null
   ): Promise<void> {
-    const folhaData = {
-      vinculoId,
+    const existing = await db
+      .select()
+      .from(clientesFolhaMes)
+      .where(
+        and(
+          eq(clientesFolhaMes.pessoaId, pessoaId),
+          eq(clientesFolhaMes.competencia, competencia)
+        )
+      )
+      .limit(1);
+
+    const folhaData: Record<string, any> = {
       pessoaId,
       competencia,
       baseTag,
-      importRunId: importRunId || null,
       salarioBruto: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_bruto")),
       descontosBrutos: normalizeBrDecimal(this.extractValue(row, headerMap, "descontos_brutos")),
       salarioLiquido: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_liquido")),
+      // Margem 5% (COLUMN_MAP mapeia margem_30 → margem_5 para retrocompatibilidade)
       margemBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_bruta")),
       margemUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_utilizada")),
       margemSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_saldo")),
+      // Margem Benefício 5%
       margemBeneficioBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_bruta")),
       margemBeneficioUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_utilizada")),
       margemBeneficioSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_saldo")),
+      // Margem 35%
       margemBruta35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_bruta")),
       margemUtilizada35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_utilizada")),
       margemSaldo35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_saldo")),
+      // Margem 70%
       margemBruta70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_bruta")),
       margemUtilizada70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_utilizada")),
       margemSaldo70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_saldo")),
@@ -1161,126 +870,45 @@ class StreamingImportService {
       margemCartaoBeneficioSaldo: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
     };
 
-    // Upsert atômico: ON CONFLICT (vinculo_id, competencia) DO UPDATE
-    console.log('[UPSERT FOLHA]', { table: 'clientes_folha_mes', conflictCols: ['vinculo_id', 'competencia'] });
-    try {
+    if (existing.length > 0) {
       await db
-        .insert(clientesFolhaMes)
-        .values(folhaData as any)
-        .onConflictDoUpdate({
-          target: [clientesFolhaMes.vinculoId, clientesFolhaMes.competencia],
-          set: {
-            pessoaId: folhaData.pessoaId,
-            baseTag: folhaData.baseTag,
-            importRunId: folhaData.importRunId,
-            salarioBruto: folhaData.salarioBruto,
-            descontosBrutos: folhaData.descontosBrutos,
-            salarioLiquido: folhaData.salarioLiquido,
-            margemBruta5: folhaData.margemBruta5,
-            margemUtilizada5: folhaData.margemUtilizada5,
-            margemSaldo5: folhaData.margemSaldo5,
-            margemBeneficioBruta5: folhaData.margemBeneficioBruta5,
-            margemBeneficioUtilizada5: folhaData.margemBeneficioUtilizada5,
-            margemBeneficioSaldo5: folhaData.margemBeneficioSaldo5,
-            margemBruta35: folhaData.margemBruta35,
-            margemUtilizada35: folhaData.margemUtilizada35,
-            margemSaldo35: folhaData.margemSaldo35,
-            margemBruta70: folhaData.margemBruta70,
-            margemUtilizada70: folhaData.margemUtilizada70,
-            margemSaldo70: folhaData.margemSaldo70,
-            margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
-            margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
-          },
-        });
-    } catch (error: any) {
-      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
-        etapa: "folha_mes",
-        tabela: "clientes_folha_mes",
-        target: "vinculo_id, competencia",
-        erro: error?.message,
-      });
-      throw error;
+        .update(clientesFolhaMes)
+        .set(folhaData)
+        .where(eq(clientesFolhaMes.id, existing[0].id));
+    } else {
+      await db.insert(clientesFolhaMes).values(folhaData as any);
     }
   }
 
   private async upsertContrato(data: Record<string, any>): Promise<void> {
-    // Usar onConflictDoUpdate para upsert atômico
-    // Em caso de conflito, atualiza campos permitidos (parcelas, valor, status) mas preserva dados existentes
-    console.log('[UPSERT D8 SERVIDOR]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
-    try {
-      await db
-        .insert(clientesContratos)
-        .values(data as any)
-        .onConflictDoUpdate({
-          target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
-          set: {
-            // Atualiza campos que podem mudar entre importações
-            valorParcela: sql`COALESCE(${data.valorParcela}, ${clientesContratos.valorParcela})`,
-            parcelasRestantes: sql`COALESCE(${data.parcelasRestantes}, ${clientesContratos.parcelasRestantes})`,
-            status: sql`COALESCE(${data.status}, ${clientesContratos.status})`,
-            // Preserva tipo se já existia, senão usa novo
-            tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
-            // Sempre atualiza rastreabilidade
-            baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
-            importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
-            competencia: data.competencia || sql`${clientesContratos.competencia}`,
-            dadosBrutos: data.dadosBrutos || sql`${clientesContratos.dadosBrutos}`,
-          },
-        });
-    } catch (error: any) {
-      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
-        etapa: "d8_servidor",
-        tabela: "clientes_contratos",
-        target: "pessoa_id, banco, numero_contrato",
-        erro: error?.message,
-      });
-      throw error;
-    }
-  }
+    if (data.numeroContrato && data.banco) {
+      const existing = await db
+        .select()
+        .from(clientesContratos)
+        .where(
+          and(
+            eq(clientesContratos.pessoaId, data.pessoaId),
+            eq(clientesContratos.banco, data.banco),
+            eq(clientesContratos.numeroContrato, data.numeroContrato)
+          )
+        )
+        .limit(1);
 
-  /**
-   * D8 Pensionista: Merge suave - só preenche campos NULL, nunca sobrescreve dados existentes
-   * Chave de merge: (pessoaId + banco + numeroContrato)
-   * Usa onConflictDoUpdate para upsert atômico sem race conditions
-   */
-  private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
-    // Usar onConflictDoUpdate para upsert atômico
-    // Soft merge: só preenche campos que estão NULL no registro existente
-    console.log('[UPSERT D8 PENSIONISTA]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
-    try {
-      await db
-        .insert(clientesContratos)
-        .values(data as any)
-        .onConflictDoUpdate({
-          target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
-          set: {
-            // Soft merge: preserva valores existentes, só preenche NULLs
-            tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
-            valorParcela: sql`COALESCE(${clientesContratos.valorParcela}, ${data.valorParcela})`,
-            parcelasRestantes: sql`COALESCE(${clientesContratos.parcelasRestantes}, ${data.parcelasRestantes})`,
-            status: sql`COALESCE(${clientesContratos.status}, ${data.status})`,
-            competencia: sql`COALESCE(${clientesContratos.competencia}, ${data.competencia})`,
-            dadosBrutos: sql`COALESCE(${clientesContratos.dadosBrutos}, ${data.dadosBrutos}::jsonb)`,
-            // Sempre atualiza rastreabilidade
-            baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
-            importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
-          },
-        });
-    } catch (error: any) {
-      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
-        etapa: "d8_pensionista",
-        tabela: "clientes_contratos",
-        target: "pessoa_id, banco, numero_contrato",
-        erro: error?.message,
-      });
-      throw error;
+      if (existing.length > 0) {
+        await db
+          .update(clientesContratos)
+          .set(data)
+          .where(eq(clientesContratos.id, existing[0].id));
+        return;
+      }
     }
+
+    await db.insert(clientesContratos).values(data as any);
   }
 
   private async upsertContact(clientId: number, tipo: string, valor: string): Promise<void> {
-    // Verificar existência antes de inserir (sem unique index nesta tabela legada)
     const existing = await db
-      .select({ id: clientContacts.id })
+      .select()
       .from(clientContacts)
       .where(
         and(
@@ -1294,7 +922,6 @@ class StreamingImportService {
     if (existing.length === 0) {
       await db.insert(clientContacts).values({ clientId, tipo, valor });
     }
-    // Se já existe, não faz nada (idempotente)
   }
 
   private async updateProgress(

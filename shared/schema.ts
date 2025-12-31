@@ -388,31 +388,6 @@ export type BaseStatus = typeof BASE_STATUS[number];
 export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
 export type PedidoStatus = typeof PEDIDO_STATUS[number];
 
-// Categorias de nomenclatura
-export const NOMENCLATURA_CATEGORIA = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
-export type NomenclaturaCategoria = typeof NOMENCLATURA_CATEGORIA[number];
-
-// Tabela de nomenclaturas - lookup de códigos para nomes (órgãos, UPAGs, etc.)
-export const nomenclaturas = pgTable("nomenclaturas", {
-  id: serial("id").primaryKey(),
-  categoria: varchar("categoria", { length: 50 }).notNull(), // ORGAO, TIPO_CONTRATO, UPAG, UF, OUTRO
-  codigo: varchar("codigo", { length: 100 }).notNull(), // Código do item (ex: "20114" para órgão)
-  nome: varchar("nome", { length: 255 }).notNull(), // Nome descritivo (ex: "MINISTERIO DA FAZENDA")
-  ativo: boolean("ativo").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  categoriaCodIdx: uniqueIndex("idx_nomenclatura_categoria_codigo").on(table.categoria, table.codigo),
-}));
-
-export const insertNomenclaturaSchema = createInsertSchema(nomenclaturas, {
-  categoria: z.enum(NOMENCLATURA_CATEGORIA),
-  codigo: z.string().min(1, { message: "Código é obrigatório" }),
-  nome: z.string().min(1, { message: "Nome é obrigatório" }),
-}).omit({ id: true, createdAt: true });
-
-export type Nomenclatura = typeof nomenclaturas.$inferSelect;
-export type InsertNomenclatura = z.infer<typeof insertNomenclaturaSchema>;
-
 // 1) clientes_pessoa - Dados fixos do indivíduo
 // Chave única composta: (tenant_id, cpf) para isolamento multi-tenant
 export const clientesPessoa = pgTable("clientes_pessoa", {
@@ -478,7 +453,7 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
   // Chave única multi-tenant: (tenant_id, cpf, matricula, orgao)
-  vinculoUnique: uniqueIndex("idx_vinculo_unique").on(table.tenantId, table.cpf, table.matricula, table.orgao),
+  tenantCpfMatOrgaoIdx: uniqueIndex("idx_vinculo_tenant_cpf_mat_orgao").on(table.tenantId, table.cpf, table.matricula, table.orgao),
 }));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
@@ -519,8 +494,7 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   extrasFolha: jsonb("extras_folha"),
 }, (table) => ({
-  // Chave única: (vinculo_id, competencia) - uma folha por vínculo por mês
-  folhaMesUnique: uniqueIndex("idx_folha_mes_unique").on(table.vinculoId, table.competencia),
+  vinculoCompetenciaIdx: uniqueIndex("idx_folha_mes_vinculo_competencia").on(table.vinculoId, table.competencia),
 }));
 
 // Status de contrato
@@ -528,11 +502,10 @@ export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
 export type ContractStatus = typeof CONTRACT_STATUS[number];
 
 // 3) clientes_contratos - Cada linha de contrato/cartão/margem
-// Chave única: (pessoaId, banco, numeroContrato) - identifica contrato unicamente por pessoa+banco+número
+// Chave única: (pessoaId, banco, tipoContrato, numeroContrato)
 export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
-  vinculoId: integer("vinculo_id").references(() => clientesVinculo.id, { onDelete: "set null" }), // Vínculo CPF+Matrícula+Órgão
   tipoContrato: varchar("tipo_contrato", { length: 50 }), // "consignado", "cartao", "outro", etc.
   banco: varchar("banco", { length: 100 }), // BANCO_DO_EMPRESTIMO da planilha
   valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
@@ -549,7 +522,7 @@ export const clientesContratos = pgTable("clientes_contratos", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 }, (table) => ({
-  pessoaBancoContratoIdx: uniqueIndex("idx_contratos_pessoa_banco_numero").on(table.pessoaId, table.banco, table.numeroContrato),
+  pessoaContratoIdx: uniqueIndex("idx_contratos_pessoa_numero").on(table.pessoaId, table.numeroContrato),
 }));
 
 // 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO

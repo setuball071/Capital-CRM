@@ -281,14 +281,6 @@ function CopyableField({
   );
 }
 
-interface Nomenclatura {
-  id: number;
-  categoria: string;
-  codigo: string;
-  nome: string;
-  ativo: boolean;
-}
-
 export default function ConsultaCliente() {
   const { toast } = useToast();
   const [searchType, setSearchType] = useState<"cpf" | "matricula">("cpf");
@@ -300,20 +292,6 @@ export default function ConsultaCliente() {
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
   const [showTelefonesModal, setShowTelefonesModal] = useState(false);
-
-  // Busca nomenclaturas para De-Para (ORGAO e TIPO_CONTRATO) - usa endpoint com cache no backend
-  const { data: nomenclaturas } = useQuery<Nomenclatura[]>({
-    queryKey: ["/api/nomenclaturas-cached"],
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache no frontend também
-  });
-
-  // Função De-Para: retorna nome se existir, senão código original
-  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF", codigo: string | null): string => {
-    if (!codigo) return "-";
-    if (!nomenclaturas) return codigo;
-    const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
-    return found ? found.nome : codigo;
-  };
 
   // Listener para resetar estados locais quando dados de clientes são deletados em outra tela
   // Nota: invalidação de queries já é feita na origem (bases-clientes), aqui só resetamos estados locais
@@ -588,7 +566,7 @@ export default function ConsultaCliente() {
                           )}
                         </div>
                         {resultado.orgao && (
-                          <p className="text-sm text-muted-foreground truncate max-w-md">{mapNomenclatura("ORGAO", resultado.orgao)}</p>
+                          <p className="text-sm text-muted-foreground truncate max-w-md">{resultado.orgao}</p>
                         )}
                       </div>
                       <Button onClick={() => handleSelectPessoa(resultado.pessoa_id)} data-testid={`button-ver-${resultado.pessoa_id}`}>
@@ -657,7 +635,7 @@ export default function ConsultaCliente() {
                           className="flex flex-col items-start h-auto py-2 px-3 text-left"
                           data-testid={`button-vinculo-${vinculo.id}`}
                         >
-                          <span className="font-medium">{mapNomenclatura("ORGAO", vinculo.orgao)}</span>
+                          <span className="font-medium">{vinculo.orgao}</span>
                           <span className="text-xs opacity-80">
                             Mat: {vinculo.matricula} | {vinculo.sit_func || "SEM INFO"}
                           </span>
@@ -746,9 +724,9 @@ export default function ConsultaCliente() {
                         <Building2 className="w-4 h-4" />
                         Órgão
                       </p>
-                      <p>{mapNomenclatura("ORGAO", vinculoAtual?.orgao || clienteDetalhado.pessoa.orgao)}</p>
-                      {(vinculoAtual?.orgao || clienteDetalhado.pessoa.orgaocod) && (
-                        <p className="text-xs text-muted-foreground">Código: {vinculoAtual?.orgao || clienteDetalhado.pessoa.orgaocod}</p>
+                      <p>{vinculoAtual?.orgao || clienteDetalhado.pessoa.orgao || "-"}</p>
+                      {clienteDetalhado.pessoa.orgaocod && (
+                        <p className="text-xs text-muted-foreground">Código: {clienteDetalhado.pessoa.orgaocod}</p>
                       )}
                     </div>
                     <div className="space-y-1">
@@ -1120,7 +1098,7 @@ export default function ConsultaCliente() {
                           <TableRow key={contrato.id} data-testid={`row-contrato-${contrato.id}`}>
                             <TableCell>
                               <Badge variant="outline" className="capitalize">
-                                {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato)}
+                                {contrato.tipo_contrato || "N/D"}
                               </Badge>
                             </TableCell>
                             <TableCell className="group">

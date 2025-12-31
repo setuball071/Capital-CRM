@@ -19,7 +19,6 @@ import BanksPage from "@/pages/banks";
 import CoefficientTablesPage from "@/pages/coefficient-tables";
 import RoteirosPage from "@/pages/roteiros";
 import BasesClientesPage from "@/pages/bases-clientes";
-import NomenclaturasPage from "@/pages/nomenclaturas";
 import SplitTxtCsvPage from "@/pages/split-txt-csv";
 import DividirCsvPage from "@/pages/dividir-csv";
 import CompraListaPage from "@/pages/compra-lista";
@@ -299,9 +298,6 @@ function Router() {
               </Route>
               <Route path="/bases-clientes">
                 {() => <MasterRoute component={BasesClientesPage} />}
-              </Route>
-              <Route path="/nomenclaturas">
-                {() => <MasterRoute component={NomenclaturasPage} />}
               </Route>
               <Route path="/split-txt-csv">
                 {() => <MasterRoute component={SplitTxtCsvPage} />}
