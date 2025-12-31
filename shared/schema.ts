@@ -527,7 +527,7 @@ export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
 export type ContractStatus = typeof CONTRACT_STATUS[number];
 
 // 3) clientes_contratos - Cada linha de contrato/cartão/margem
-// Chave única: (pessoaId, numeroContrato) - vinculoId para rastreabilidade ao vínculo correto
+// Chave única: (pessoaId, banco, numeroContrato) - identifica contrato unicamente por pessoa+banco+número
 export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -548,7 +548,7 @@ export const clientesContratos = pgTable("clientes_contratos", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 }, (table) => ({
-  pessoaContratoIdx: uniqueIndex("idx_contratos_pessoa_numero").on(table.pessoaId, table.numeroContrato),
+  pessoaBancoContratoIdx: uniqueIndex("idx_contratos_pessoa_banco_numero").on(table.pessoaId, table.banco, table.numeroContrato),
 }));
 
 // 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
