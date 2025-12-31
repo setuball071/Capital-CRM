@@ -990,6 +990,7 @@ class StreamingImportService {
     };
     
     // Usar onConflictDoUpdate para upsert atômico - atualiza apenas pessoaId se estava NULL
+    console.log('[UPSERT VINCULO]', { table: 'clientes_vinculo', conflictCols: ['tenant_id', 'cpf', 'matricula', 'orgao'] });
     const [result] = await db
       .insert(clientesVinculo)
       .values(vinculoValues)
@@ -1072,6 +1073,7 @@ class StreamingImportService {
     };
 
     // Upsert atômico: ON CONFLICT (vinculo_id, competencia) DO UPDATE
+    console.log('[UPSERT FOLHA]', { table: 'clientes_folha_mes', conflictCols: ['vinculo_id', 'competencia'] });
     await db
       .insert(clientesFolhaMes)
       .values(folhaData as any)
@@ -1105,6 +1107,7 @@ class StreamingImportService {
   private async upsertContrato(data: Record<string, any>): Promise<void> {
     // Usar onConflictDoUpdate para upsert atômico
     // Em caso de conflito, atualiza campos permitidos (parcelas, valor, status) mas preserva dados existentes
+    console.log('[UPSERT D8 SERVIDOR]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
     await db
       .insert(clientesContratos)
       .values(data as any)
@@ -1134,6 +1137,7 @@ class StreamingImportService {
   private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
     // Usar onConflictDoUpdate para upsert atômico
     // Soft merge: só preenche campos que estão NULL no registro existente
+    console.log('[UPSERT D8 PENSIONISTA]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
     await db
       .insert(clientesContratos)
       .values(data as any)
