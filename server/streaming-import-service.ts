@@ -876,7 +876,6 @@ class StreamingImportService {
     // tenantId é obrigatório na tabela, usar 1 como fallback
     const tenantIdValue = run.tenantId || 1;
     
-    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
     const vinculoValues = {
       tenantId: tenantIdValue,
       cpf,
@@ -885,17 +884,22 @@ class StreamingImportService {
       pessoaId: pessoaId || null,
       convenio: run.convenio || null,
     };
-    console.log("[DEBUG INSERT] Tabela: clientes_vinculo");
-    console.log("[DEBUG INSERT] Colunas:", Object.keys(vinculoValues).join(", "));
-    console.log("[DEBUG INSERT] Valores:", JSON.stringify(vinculoValues));
-    console.log("[DEBUG INSERT] Unique Index: idx_vinculo_tenant_cpf_mat_orgao (tenantId, cpf, matricula, orgao)");
     
-    const [created] = await db
+    // Usar onConflictDoUpdate para upsert atômico - atualiza apenas pessoaId se estava NULL
+    const [result] = await db
       .insert(clientesVinculo)
       .values(vinculoValues)
+      .onConflictDoUpdate({
+        target: [clientesVinculo.tenantId, clientesVinculo.cpf, clientesVinculo.matricula, clientesVinculo.orgao],
+        set: {
+          // Só atualiza pessoaId se o novo valor não é null e o existente é null
+          pessoaId: sql`COALESCE(${clientesVinculo.pessoaId}, ${pessoaId || null})`,
+          ultimaAtualizacao: new Date(),
+        },
+      })
       .returning();
 
-    return { id: created.id, pessoaId: created.pessoaId };
+    return { id: result.id, pessoaId: result.pessoaId };
   }
 
   private async upsertPessoa(data: Record<string, any>): Promise<{ id: number } | null> {
@@ -993,115 +997,61 @@ class StreamingImportService {
   }
 
   private async upsertContrato(data: Record<string, any>): Promise<void> {
-    if (data.numeroContrato && data.banco) {
-      const existing = await db
-        .select()
-        .from(clientesContratos)
-        .where(
-          and(
-            eq(clientesContratos.pessoaId, data.pessoaId),
-            eq(clientesContratos.banco, data.banco),
-            eq(clientesContratos.numeroContrato, data.numeroContrato)
-          )
-        )
-        .limit(1);
-
-      if (existing.length > 0) {
-        await db
-          .update(clientesContratos)
-          .set(data)
-          .where(eq(clientesContratos.id, existing[0].id));
-        return;
-      }
-    }
-
-    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-    console.log("[DEBUG INSERT] Tabela: clientes_contratos (upsertContrato)");
-    console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
-    console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
-    console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
-    
-    await db.insert(clientesContratos).values(data as any);
+    // Usar onConflictDoUpdate para upsert atômico
+    // Em caso de conflito, atualiza campos permitidos (parcelas, valor, status) mas preserva dados existentes
+    await db
+      .insert(clientesContratos)
+      .values(data as any)
+      .onConflictDoUpdate({
+        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+        set: {
+          // Atualiza campos que podem mudar entre importações
+          valorParcela: sql`COALESCE(${data.valorParcela}, ${clientesContratos.valorParcela})`,
+          parcelasRestantes: sql`COALESCE(${data.parcelasRestantes}, ${clientesContratos.parcelasRestantes})`,
+          status: sql`COALESCE(${data.status}, ${clientesContratos.status})`,
+          // Preserva tipo se já existia, senão usa novo
+          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+          // Sempre atualiza rastreabilidade
+          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+          competencia: data.competencia || sql`${clientesContratos.competencia}`,
+          dadosBrutos: data.dadosBrutos || sql`${clientesContratos.dadosBrutos}`,
+        },
+      });
   }
 
   /**
    * D8 Pensionista: Merge suave - só preenche campos NULL, nunca sobrescreve dados existentes
    * Chave de merge: (pessoaId + banco + numeroContrato)
+   * Usa onConflictDoUpdate para upsert atômico sem race conditions
    */
   private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
-    if (!data.numeroContrato || !data.banco) {
-      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-      console.log("[DEBUG INSERT] Tabela: clientes_contratos (softMerge sem chave)");
-      console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
-      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
-      console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
-      
-      // Sem chave de merge, insere normalmente
-      await db.insert(clientesContratos).values(data as any);
-      return;
-    }
-
-    const existing = await db
-      .select()
-      .from(clientesContratos)
-      .where(
-        and(
-          eq(clientesContratos.pessoaId, data.pessoaId),
-          eq(clientesContratos.banco, data.banco),
-          eq(clientesContratos.numeroContrato, data.numeroContrato)
-        )
-      )
-      .limit(1);
-
-    if (existing.length === 0) {
-      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-      console.log("[DEBUG INSERT] Tabela: clientes_contratos (softMerge com chave)");
-      console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
-      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
-      console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
-      
-      // Não existe: insere todos os dados
-      await db.insert(clientesContratos).values(data as any);
-      return;
-    }
-
-    // Existe: só preenche campos que são NULL no registro existente
-    const existingRecord = existing[0];
-    const updateData: Record<string, any> = {};
-
-    // Campos que podem ser preenchidos se estiverem NULL
-    const fieldsToMerge = [
-      { key: "tipoContrato", dbField: existingRecord.tipoContrato },
-      { key: "valorParcela", dbField: existingRecord.valorParcela },
-      { key: "parcelasRestantes", dbField: existingRecord.parcelasRestantes },
-      { key: "status", dbField: existingRecord.status },
-      { key: "competencia", dbField: existingRecord.competencia },
-      { key: "dadosBrutos", dbField: existingRecord.dadosBrutos },
-    ];
-
-    for (const field of fieldsToMerge) {
-      if (field.dbField === null && data[field.key] !== null && data[field.key] !== undefined) {
-        updateData[field.key] = data[field.key];
-      }
-    }
-
-    // Sempre atualiza baseTag e importRunId para rastrear a última importação
-    if (data.baseTag) {
-      updateData.baseTag = data.baseTag;
-    }
-
-    // Se houver campos para atualizar, executa o update
-    if (Object.keys(updateData).length > 0) {
-      await db
-        .update(clientesContratos)
-        .set(updateData)
-        .where(eq(clientesContratos.id, existingRecord.id));
-    }
+    // Usar onConflictDoUpdate para upsert atômico
+    // Soft merge: só preenche campos que estão NULL no registro existente
+    await db
+      .insert(clientesContratos)
+      .values(data as any)
+      .onConflictDoUpdate({
+        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+        set: {
+          // Soft merge: preserva valores existentes, só preenche NULLs
+          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+          valorParcela: sql`COALESCE(${clientesContratos.valorParcela}, ${data.valorParcela})`,
+          parcelasRestantes: sql`COALESCE(${clientesContratos.parcelasRestantes}, ${data.parcelasRestantes})`,
+          status: sql`COALESCE(${clientesContratos.status}, ${data.status})`,
+          competencia: sql`COALESCE(${clientesContratos.competencia}, ${data.competencia})`,
+          dadosBrutos: sql`COALESCE(${clientesContratos.dadosBrutos}, ${data.dadosBrutos}::jsonb)`,
+          // Sempre atualiza rastreabilidade
+          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+        },
+      });
   }
 
   private async upsertContact(clientId: number, tipo: string, valor: string): Promise<void> {
+    // Verificar existência antes de inserir (sem unique index nesta tabela legada)
     const existing = await db
-      .select()
+      .select({ id: clientContacts.id })
       .from(clientContacts)
       .where(
         and(
@@ -1113,14 +1063,9 @@ class StreamingImportService {
       .limit(1);
 
     if (existing.length === 0) {
-      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-      console.log("[DEBUG INSERT] Tabela: client_contacts");
-      console.log("[DEBUG INSERT] Colunas: clientId, tipo, valor");
-      console.log("[DEBUG INSERT] Valores:", JSON.stringify({ clientId, tipo, valor }));
-      console.log("[DEBUG INSERT] Sem Unique Index explícito (usa clientId+tipo+valor como lookup)");
-      
       await db.insert(clientContacts).values({ clientId, tipo, valor });
     }
+    // Se já existe, não faz nada (idempotente)
   }
 
   private async updateProgress(
