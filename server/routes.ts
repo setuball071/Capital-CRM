@@ -714,6 +714,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnóstico de índices e constraints (master only)
+  app.get("/api/admin/db-indexes", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const table = req.query.table as string;
+      if (!table) {
+        return res.status(400).json({ message: "Parâmetro 'table' é obrigatório" });
+      }
+
+      // Validar nome da tabela (só permitir tabelas conhecidas)
+      const allowedTables = [
+        'clientes_vinculo',
+        'clientes_folha_mes', 
+        'clientes_contratos',
+        'clientes_pessoa',
+        'client_contacts',
+        'import_runs'
+      ];
+      if (!allowedTables.includes(table)) {
+        return res.status(400).json({ 
+          message: `Tabela não permitida. Permitidas: ${allowedTables.join(', ')}` 
+        });
+      }
+
+      // (a) Constraints UNIQUE/EXCLUDE via pg_constraint
+      const constraintsResult = await db.execute(sql`
+        SELECT 
+          con.conname AS constraint_name,
+          con.contype AS constraint_type,
+          pg_get_constraintdef(con.oid) AS definition
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE rel.relname = ${table}
+          AND nsp.nspname = 'public'
+          AND con.contype IN ('u', 'x')
+        ORDER BY con.conname
+      `);
+
+      // (b) Índices via pg_indexes
+      const indexesResult = await db.execute(sql`
+        SELECT 
+          indexname AS index_name,
+          indexdef AS definition
+        FROM pg_indexes
+        WHERE tablename = ${table}
+          AND schemaname = 'public'
+        ORDER BY indexname
+      `);
+
+      return res.json({
+        table,
+        constraints: constraintsResult.rows,
+        indexes: indexesResult.rows,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("DB indexes diagnostic error:", error);
+      return res.status(500).json({ message: "Erro ao buscar índices" });
+    }
+  });
+
   // Create bank (master only)
   app.post("/api/banks", requireAuth, requireMaster, async (req, res) => {
     try {
