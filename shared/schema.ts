@@ -454,7 +454,10 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
   // Rastreabilidade para exclusão em cascata
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
-});
+}, (table) => ({
+  // Chave única: CPF - uma pessoa por CPF
+  pessoaCpfIdx: uniqueIndex("idx_pessoa_cpf").on(table.cpf),
+}));
 
 // 2) clientes_vinculo - Vínculos CPF + Matrícula + Órgão (âncora de cruzamento)
 // IMPORTANTE: A chave única é (tenant_id, cpf, matricula, orgao) para isolamento multi-tenant
@@ -549,7 +552,8 @@ export const clientesContratos = pgTable("clientes_contratos", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
 }, (table) => ({
-  pessoaBancoContratoIdx: uniqueIndex("idx_contratos_pessoa_banco_numero").on(table.pessoaId, table.banco, table.numeroContrato),
+  // Chave única: (pessoa_id, numero_contrato) - um contrato é único por pessoa+número
+  pessoaContratoIdx: uniqueIndex("idx_contratos_pessoa_contrato").on(table.pessoaId, table.numeroContrato),
 }));
 
 // 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
@@ -562,7 +566,10 @@ export const clientContacts = pgTable("client_contacts", {
   // Rastreabilidade para exclusão
   importRunId: integer("import_run_id"), // Link ao import que criou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
-});
+}, (table) => ({
+  // Chave única: (client_id, tipo, valor) - evita duplicatas de contato
+  contactsUnique: uniqueIndex("idx_contacts_unique").on(table.clientId, table.tipo, table.valor),
+}));
 
 // 4b) clientes_telefones - Telefones normalizados do cliente
 // Chave única: (pessoa_id, telefone) - evita duplicatas
