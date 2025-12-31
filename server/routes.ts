@@ -4662,7 +4662,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // POST /imports/start - Inicia um job de importação massiva (disk storage)
   app.post("/api/imports/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
     try {
-      const { streamingImportService } = await import("./streaming-import-service");
+      const { streamingImportService, diagnosticarTabela } = await import("./streaming-import-service");
+      
+      // Diagnóstico de constraints/índices para debug
+      console.log("[StreamImport] Iniciando diagnóstico de tabelas...");
+      await diagnosticarTabela("clientes_vinculo");
+      await diagnosticarTabela("clientes_folha_mes");
+      
       const file = req.file;
       const { tipo_import, competencia, banco, layout_d8, convenio } = req.body;
       

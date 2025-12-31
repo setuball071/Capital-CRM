@@ -28,6 +28,53 @@ import {
 const MAX_LINHAS_POR_EXECUCAO = 1_000_000;
 const BUFFER_SIZE = 100_000;
 
+/**
+ * Função utilitária de diagnóstico para verificar constraints e índices de uma tabela
+ */
+export async function diagnosticarTabela(nomeTabela: string): Promise<void> {
+  console.log(`\n[DIAGNÓSTICO] ========== ${nomeTabela} ==========`);
+  
+  try {
+    // (a) Constraints únicas
+    const constraints = await db.execute(sql`
+      SELECT conname, pg_get_constraintdef(oid) as definition
+      FROM pg_constraint 
+      WHERE conrelid = ${nomeTabela}::regclass 
+        AND contype IN ('u','x')
+    `);
+    
+    console.log(`[DIAGNÓSTICO] Constraints (u/x) em ${nomeTabela}:`);
+    if (constraints.rows.length === 0) {
+      console.log("  (nenhuma constraint única encontrada)");
+    } else {
+      for (const row of constraints.rows) {
+        console.log(`  - ${row.conname}: ${row.definition}`);
+      }
+    }
+    
+    // (b) Índices
+    const indices = await db.execute(sql`
+      SELECT indexname, indexdef 
+      FROM pg_indexes 
+      WHERE tablename = ${nomeTabela}
+    `);
+    
+    console.log(`[DIAGNÓSTICO] Índices em ${nomeTabela}:`);
+    if (indices.rows.length === 0) {
+      console.log("  (nenhum índice encontrado)");
+    } else {
+      for (const row of indices.rows) {
+        console.log(`  - ${row.indexname}:`);
+        console.log(`    ${row.indexdef}`);
+      }
+    }
+  } catch (error) {
+    console.error(`[DIAGNÓSTICO] Erro ao diagnosticar ${nomeTabela}:`, error);
+  }
+  
+  console.log(`[DIAGNÓSTICO] ========== FIM ${nomeTabela} ==========\n`);
+}
+
 export interface StreamImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
   competencia?: Date;
