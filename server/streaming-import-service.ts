@@ -1070,20 +1070,30 @@ class StreamingImportService {
     
     // Usar onConflictDoUpdate para upsert atômico - atualiza apenas pessoaId se estava NULL
     console.log('[UPSERT VINCULO]', { table: 'clientes_vinculo', conflictCols: ['tenant_id', 'cpf', 'matricula', 'orgao'] });
-    const [result] = await db
-      .insert(clientesVinculo)
-      .values(vinculoValues)
-      .onConflictDoUpdate({
-        target: [clientesVinculo.tenantId, clientesVinculo.cpf, clientesVinculo.matricula, clientesVinculo.orgao],
-        set: {
-          // Só atualiza pessoaId se o novo valor não é null e o existente é null
-          pessoaId: sql`COALESCE(${clientesVinculo.pessoaId}, ${pessoaId || null})`,
-          ultimaAtualizacao: new Date(),
-        },
-      })
-      .returning();
+    try {
+      const [result] = await db
+        .insert(clientesVinculo)
+        .values(vinculoValues)
+        .onConflictDoUpdate({
+          target: [clientesVinculo.tenantId, clientesVinculo.cpf, clientesVinculo.matricula, clientesVinculo.orgao],
+          set: {
+            // Só atualiza pessoaId se o novo valor não é null e o existente é null
+            pessoaId: sql`COALESCE(${clientesVinculo.pessoaId}, ${pessoaId || null})`,
+            ultimaAtualizacao: new Date(),
+          },
+        })
+        .returning();
 
-    return { id: result.id, pessoaId: result.pessoaId };
+      return { id: result.id, pessoaId: result.pessoaId };
+    } catch (error: any) {
+      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
+        etapa: "vinculo",
+        tabela: "clientes_vinculo",
+        target: "tenant_id, cpf, matricula, orgao",
+        erro: error?.message,
+      });
+      throw error;
+    }
   }
 
   private async upsertPessoa(data: Record<string, any>): Promise<{ id: number } | null> {
@@ -1153,59 +1163,79 @@ class StreamingImportService {
 
     // Upsert atômico: ON CONFLICT (vinculo_id, competencia) DO UPDATE
     console.log('[UPSERT FOLHA]', { table: 'clientes_folha_mes', conflictCols: ['vinculo_id', 'competencia'] });
-    await db
-      .insert(clientesFolhaMes)
-      .values(folhaData as any)
-      .onConflictDoUpdate({
-        target: [clientesFolhaMes.vinculoId, clientesFolhaMes.competencia],
-        set: {
-          pessoaId: folhaData.pessoaId,
-          baseTag: folhaData.baseTag,
-          importRunId: folhaData.importRunId,
-          salarioBruto: folhaData.salarioBruto,
-          descontosBrutos: folhaData.descontosBrutos,
-          salarioLiquido: folhaData.salarioLiquido,
-          margemBruta5: folhaData.margemBruta5,
-          margemUtilizada5: folhaData.margemUtilizada5,
-          margemSaldo5: folhaData.margemSaldo5,
-          margemBeneficioBruta5: folhaData.margemBeneficioBruta5,
-          margemBeneficioUtilizada5: folhaData.margemBeneficioUtilizada5,
-          margemBeneficioSaldo5: folhaData.margemBeneficioSaldo5,
-          margemBruta35: folhaData.margemBruta35,
-          margemUtilizada35: folhaData.margemUtilizada35,
-          margemSaldo35: folhaData.margemSaldo35,
-          margemBruta70: folhaData.margemBruta70,
-          margemUtilizada70: folhaData.margemUtilizada70,
-          margemSaldo70: folhaData.margemSaldo70,
-          margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
-          margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
-        },
+    try {
+      await db
+        .insert(clientesFolhaMes)
+        .values(folhaData as any)
+        .onConflictDoUpdate({
+          target: [clientesFolhaMes.vinculoId, clientesFolhaMes.competencia],
+          set: {
+            pessoaId: folhaData.pessoaId,
+            baseTag: folhaData.baseTag,
+            importRunId: folhaData.importRunId,
+            salarioBruto: folhaData.salarioBruto,
+            descontosBrutos: folhaData.descontosBrutos,
+            salarioLiquido: folhaData.salarioLiquido,
+            margemBruta5: folhaData.margemBruta5,
+            margemUtilizada5: folhaData.margemUtilizada5,
+            margemSaldo5: folhaData.margemSaldo5,
+            margemBeneficioBruta5: folhaData.margemBeneficioBruta5,
+            margemBeneficioUtilizada5: folhaData.margemBeneficioUtilizada5,
+            margemBeneficioSaldo5: folhaData.margemBeneficioSaldo5,
+            margemBruta35: folhaData.margemBruta35,
+            margemUtilizada35: folhaData.margemUtilizada35,
+            margemSaldo35: folhaData.margemSaldo35,
+            margemBruta70: folhaData.margemBruta70,
+            margemUtilizada70: folhaData.margemUtilizada70,
+            margemSaldo70: folhaData.margemSaldo70,
+            margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+            margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+          },
+        });
+    } catch (error: any) {
+      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
+        etapa: "folha_mes",
+        tabela: "clientes_folha_mes",
+        target: "vinculo_id, competencia",
+        erro: error?.message,
       });
+      throw error;
+    }
   }
 
   private async upsertContrato(data: Record<string, any>): Promise<void> {
     // Usar onConflictDoUpdate para upsert atômico
     // Em caso de conflito, atualiza campos permitidos (parcelas, valor, status) mas preserva dados existentes
     console.log('[UPSERT D8 SERVIDOR]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
-    await db
-      .insert(clientesContratos)
-      .values(data as any)
-      .onConflictDoUpdate({
-        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
-        set: {
-          // Atualiza campos que podem mudar entre importações
-          valorParcela: sql`COALESCE(${data.valorParcela}, ${clientesContratos.valorParcela})`,
-          parcelasRestantes: sql`COALESCE(${data.parcelasRestantes}, ${clientesContratos.parcelasRestantes})`,
-          status: sql`COALESCE(${data.status}, ${clientesContratos.status})`,
-          // Preserva tipo se já existia, senão usa novo
-          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
-          // Sempre atualiza rastreabilidade
-          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
-          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
-          competencia: data.competencia || sql`${clientesContratos.competencia}`,
-          dadosBrutos: data.dadosBrutos || sql`${clientesContratos.dadosBrutos}`,
-        },
+    try {
+      await db
+        .insert(clientesContratos)
+        .values(data as any)
+        .onConflictDoUpdate({
+          target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+          set: {
+            // Atualiza campos que podem mudar entre importações
+            valorParcela: sql`COALESCE(${data.valorParcela}, ${clientesContratos.valorParcela})`,
+            parcelasRestantes: sql`COALESCE(${data.parcelasRestantes}, ${clientesContratos.parcelasRestantes})`,
+            status: sql`COALESCE(${data.status}, ${clientesContratos.status})`,
+            // Preserva tipo se já existia, senão usa novo
+            tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+            // Sempre atualiza rastreabilidade
+            baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+            importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+            competencia: data.competencia || sql`${clientesContratos.competencia}`,
+            dadosBrutos: data.dadosBrutos || sql`${clientesContratos.dadosBrutos}`,
+          },
+        });
+    } catch (error: any) {
+      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
+        etapa: "d8_servidor",
+        tabela: "clientes_contratos",
+        target: "pessoa_id, banco, numero_contrato",
+        erro: error?.message,
       });
+      throw error;
+    }
   }
 
   /**
@@ -1217,24 +1247,34 @@ class StreamingImportService {
     // Usar onConflictDoUpdate para upsert atômico
     // Soft merge: só preenche campos que estão NULL no registro existente
     console.log('[UPSERT D8 PENSIONISTA]', { table: 'clientes_contratos', conflictCols: ['pessoa_id', 'banco', 'numero_contrato'] });
-    await db
-      .insert(clientesContratos)
-      .values(data as any)
-      .onConflictDoUpdate({
-        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
-        set: {
-          // Soft merge: preserva valores existentes, só preenche NULLs
-          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
-          valorParcela: sql`COALESCE(${clientesContratos.valorParcela}, ${data.valorParcela})`,
-          parcelasRestantes: sql`COALESCE(${clientesContratos.parcelasRestantes}, ${data.parcelasRestantes})`,
-          status: sql`COALESCE(${clientesContratos.status}, ${data.status})`,
-          competencia: sql`COALESCE(${clientesContratos.competencia}, ${data.competencia})`,
-          dadosBrutos: sql`COALESCE(${clientesContratos.dadosBrutos}, ${data.dadosBrutos}::jsonb)`,
-          // Sempre atualiza rastreabilidade
-          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
-          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
-        },
+    try {
+      await db
+        .insert(clientesContratos)
+        .values(data as any)
+        .onConflictDoUpdate({
+          target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+          set: {
+            // Soft merge: preserva valores existentes, só preenche NULLs
+            tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+            valorParcela: sql`COALESCE(${clientesContratos.valorParcela}, ${data.valorParcela})`,
+            parcelasRestantes: sql`COALESCE(${clientesContratos.parcelasRestantes}, ${data.parcelasRestantes})`,
+            status: sql`COALESCE(${clientesContratos.status}, ${data.status})`,
+            competencia: sql`COALESCE(${clientesContratos.competencia}, ${data.competencia})`,
+            dadosBrutos: sql`COALESCE(${clientesContratos.dadosBrutos}, ${data.dadosBrutos}::jsonb)`,
+            // Sempre atualiza rastreabilidade
+            baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+            importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+          },
+        });
+    } catch (error: any) {
+      console.error("[FAST-IMPORT ON CONFLICT ERROR]", {
+        etapa: "d8_pensionista",
+        tabela: "clientes_contratos",
+        target: "pessoa_id, banco, numero_contrato",
+        erro: error?.message,
       });
+      throw error;
+    }
   }
 
   private async upsertContact(clientId: number, tipo: string, valor: string): Promise<void> {
