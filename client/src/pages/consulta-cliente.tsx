@@ -281,6 +281,14 @@ function CopyableField({
   );
 }
 
+interface Nomenclatura {
+  id: number;
+  categoria: string;
+  codigo: string;
+  nome: string;
+  ativo: boolean;
+}
+
 export default function ConsultaCliente() {
   const { toast } = useToast();
   const [searchType, setSearchType] = useState<"cpf" | "matricula">("cpf");
@@ -291,6 +299,21 @@ export default function ConsultaCliente() {
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
+  const [showTelefonesModal, setShowTelefonesModal] = useState(false);
+
+  // Busca nomenclaturas para De-Para (ORGAO e TIPO_CONTRATO) - usa endpoint com cache no backend
+  const { data: nomenclaturas } = useQuery<Nomenclatura[]>({
+    queryKey: ["/api/nomenclaturas-cached"],
+    staleTime: 1000 * 60 * 5, // 5 minutos de cache no frontend também
+  });
+
+  // Função De-Para: retorna nome se existir, senão código original
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF", codigo: string | null): string => {
+    if (!codigo) return "-";
+    if (!nomenclaturas) return codigo;
+    const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
+    return found ? found.nome : codigo;
+  };
 
   // Listener para resetar estados locais quando dados de clientes são deletados em outra tela
   // Nota: invalidação de queries já é feita na origem (bases-clientes), aqui só resetamos estados locais
@@ -565,7 +588,7 @@ export default function ConsultaCliente() {
                           )}
                         </div>
                         {resultado.orgao && (
-                          <p className="text-sm text-muted-foreground truncate max-w-md">{resultado.orgao}</p>
+                          <p className="text-sm text-muted-foreground truncate max-w-md">{mapNomenclatura("ORGAO", resultado.orgao)}</p>
                         )}
                       </div>
                       <Button onClick={() => handleSelectPessoa(resultado.pessoa_id)} data-testid={`button-ver-${resultado.pessoa_id}`}>
@@ -634,7 +657,7 @@ export default function ConsultaCliente() {
                           className="flex flex-col items-start h-auto py-2 px-3 text-left"
                           data-testid={`button-vinculo-${vinculo.id}`}
                         >
-                          <span className="font-medium">{vinculo.orgao}</span>
+                          <span className="font-medium">{mapNomenclatura("ORGAO", vinculo.orgao)}</span>
                           <span className="text-xs opacity-80">
                             Mat: {vinculo.matricula} | {vinculo.sit_func || "SEM INFO"}
                           </span>
@@ -723,9 +746,9 @@ export default function ConsultaCliente() {
                         <Building2 className="w-4 h-4" />
                         Órgão
                       </p>
-                      <p>{vinculoAtual?.orgao || clienteDetalhado.pessoa.orgao || "-"}</p>
-                      {clienteDetalhado.pessoa.orgaocod && (
-                        <p className="text-xs text-muted-foreground">Código: {clienteDetalhado.pessoa.orgaocod}</p>
+                      <p>{mapNomenclatura("ORGAO", vinculoAtual?.orgao || clienteDetalhado.pessoa.orgao)}</p>
+                      {(vinculoAtual?.orgao || clienteDetalhado.pessoa.orgaocod) && (
+                        <p className="text-xs text-muted-foreground">Código: {vinculoAtual?.orgao || clienteDetalhado.pessoa.orgaocod}</p>
                       )}
                     </div>
                     <div className="space-y-1">
@@ -742,19 +765,27 @@ export default function ConsultaCliente() {
                       </p>
                     </div>
                     
-                    {/* Telefones - empilhados verticalmente */}
+                    {/* Telefones - resumo com botão para modal */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Phone className="w-4 h-4" />
                         Telefones
                       </p>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
                         {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
-                          clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
-                            <div key={idx} className="group">
-                              <CopyableField value={tel} label={`Telefone ${idx + 1}`} onCopy={handleCopy} />
-                            </div>
-                          ))
+                          <>
+                            <Badge variant="secondary" data-testid="badge-telefones-count">
+                              {clienteDetalhado.pessoa.telefones_base.length}
+                            </Badge>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setShowTelefonesModal(true)}
+                              data-testid="button-ver-telefones"
+                            >
+                              Ver
+                            </Button>
+                          </>
                         ) : (
                           <span className="text-muted-foreground text-sm">Nenhum telefone</span>
                         )}
@@ -794,6 +825,47 @@ export default function ConsultaCliente() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Modal de Telefones */}
+              <Dialog open={showTelefonesModal} onOpenChange={setShowTelefonesModal}>
+                <DialogContent className="sm:max-w-md" data-testid="modal-telefones">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Phone className="h-5 w-5" />
+                      Telefones do Cliente
+                    </DialogTitle>
+                    <DialogDescription>
+                      {clienteDetalhado.pessoa.telefones_base?.length || 0} telefone(s) cadastrado(s)
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2 mt-4">
+                    {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
+                      clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3 bg-muted rounded-lg group"
+                          data-testid={`telefone-item-${idx}`}
+                        >
+                          <span className="font-mono">{tel}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(tel);
+                              handleCopy(tel, `Telefone ${idx + 1}`);
+                            }}
+                            data-testid={`button-copiar-telefone-${idx}`}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground text-center py-4">Nenhum telefone cadastrado</p>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               <Card>
                 <CardHeader>
@@ -1048,7 +1120,7 @@ export default function ConsultaCliente() {
                           <TableRow key={contrato.id} data-testid={`row-contrato-${contrato.id}`}>
                             <TableCell>
                               <Badge variant="outline" className="capitalize">
-                                {contrato.tipo_contrato || "N/D"}
+                                {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato)}
                               </Badge>
                             </TableCell>
                             <TableCell className="group">

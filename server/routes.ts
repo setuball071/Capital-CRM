@@ -53,6 +53,9 @@ import {
   MODULE_LIST,
   KANBAN_COLUMNS,
   insertPersonalTaskSchema,
+  nomenclaturas,
+  insertNomenclaturaSchema,
+  NOMENCLATURA_CATEGORIA,
   type User,
   type InsertCoefficientTable,
   type InsertSalesLead,
@@ -852,6 +855,236 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete agreement error:", error);
       return res.status(500).json({ message: "Erro ao deletar convênio" });
+    }
+  });
+
+  // ===== NOMENCLATURAS ROUTES =====
+  
+  // Cache em memória para nomenclaturas ativas (TTL 60s)
+  interface NomenclaturaCacheEntry {
+    data: any[];
+    timestamp: number;
+  }
+  const nomenclaturasCache: Map<string, NomenclaturaCacheEntry> = new Map();
+  const NOMENCLATURAS_CACHE_TTL = 60 * 1000; // 60 segundos
+
+  function invalidateNomenclaturasCache() {
+    nomenclaturasCache.clear();
+  }
+
+  async function getCachedNomenclaturas(categoria?: string): Promise<any[]> {
+    const cacheKey = categoria || "__all__";
+    const cached = nomenclaturasCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < NOMENCLATURAS_CACHE_TTL) {
+      return cached.data;
+    }
+
+    // Buscar do banco apenas ativos
+    let result;
+    if (categoria && NOMENCLATURA_CATEGORIA.includes(categoria as any)) {
+      result = await db.select().from(nomenclaturas).where(
+        and(eq(nomenclaturas.ativo, true), eq(nomenclaturas.categoria, categoria))
+      ).orderBy(asc(nomenclaturas.nome));
+    } else {
+      result = await db.select().from(nomenclaturas)
+        .where(eq(nomenclaturas.ativo, true))
+        .orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome));
+    }
+    nomenclaturasCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
+  }
+
+  // Middleware para master ou admin
+  function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
+    if (!hasRole(req.user, ["master", "admin"])) {
+      return res.status(403).json({ message: "Acesso negado - apenas master ou admin" });
+    }
+    next();
+  }
+
+  // GET list - com filtros por categoria e busca (admin - sem cache, mostra todos)
+  app.get("/api/nomenclaturas", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const { categoria, busca, apenasAtivos } = req.query;
+      
+      let query = db.select().from(nomenclaturas);
+      const conditions: any[] = [];
+      
+      // Filtro por categoria
+      if (categoria && typeof categoria === "string" && NOMENCLATURA_CATEGORIA.includes(categoria as any)) {
+        conditions.push(eq(nomenclaturas.categoria, categoria));
+      }
+      
+      // Filtro apenas ativos
+      if (apenasAtivos === "true") {
+        conditions.push(eq(nomenclaturas.ativo, true));
+      }
+      
+      // Busca por código ou nome
+      if (busca && typeof busca === "string" && busca.trim().length > 0) {
+        const buscaLike = `%${busca.trim().toLowerCase()}%`;
+        conditions.push(
+          or(
+            sql`LOWER(${nomenclaturas.codigo}) LIKE ${buscaLike}`,
+            sql`LOWER(${nomenclaturas.nome}) LIKE ${buscaLike}`
+          )
+        );
+      }
+      
+      const result = conditions.length > 0
+        ? await db.select().from(nomenclaturas).where(and(...conditions)).orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome))
+        : await db.select().from(nomenclaturas).orderBy(asc(nomenclaturas.categoria), asc(nomenclaturas.nome));
+      
+      return res.json(result);
+    } catch (error) {
+      console.error("Get nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclaturas" });
+    }
+  });
+
+  // GET by ID
+  app.get("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [result] = await db.select().from(nomenclaturas).where(eq(nomenclaturas.id, id)).limit(1);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+      
+      return res.json(result);
+    } catch (error) {
+      console.error("Get nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclatura" });
+    }
+  });
+
+  // POST create
+  app.post("/api/nomenclaturas", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const result = insertNomenclaturaSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      // Check if codigo already exists for this categoria
+      const [existing] = await db.select()
+        .from(nomenclaturas)
+        .where(and(
+          eq(nomenclaturas.categoria, result.data.categoria),
+          eq(nomenclaturas.codigo, result.data.codigo)
+        ))
+        .limit(1);
+      
+      if (existing) {
+        return res.status(400).json({ message: "Já existe uma nomenclatura com esse código nesta categoria" });
+      }
+
+      const [created] = await db.insert(nomenclaturas).values(result.data).returning();
+      invalidateNomenclaturasCache();
+      return res.status(201).json(created);
+    } catch (error) {
+      console.error("Create nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao criar nomenclatura" });
+    }
+  });
+
+  // PUT update
+  app.put("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertNomenclaturaSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: result.error.errors,
+        });
+      }
+
+      // Check if updating codigo would create duplicate
+      if (result.data.codigo || result.data.categoria) {
+        const [current] = await db.select().from(nomenclaturas).where(eq(nomenclaturas.id, id)).limit(1);
+        if (!current) {
+          return res.status(404).json({ message: "Nomenclatura não encontrada" });
+        }
+        
+        const newCategoria = result.data.categoria || current.categoria;
+        const newCodigo = result.data.codigo || current.codigo;
+        
+        const [existing] = await db.select()
+          .from(nomenclaturas)
+          .where(and(
+            eq(nomenclaturas.categoria, newCategoria),
+            eq(nomenclaturas.codigo, newCodigo),
+            sql`${nomenclaturas.id} != ${id}`
+          ))
+          .limit(1);
+        
+        if (existing) {
+          return res.status(400).json({ message: "Já existe uma nomenclatura com esse código nesta categoria" });
+        }
+      }
+
+      const [updated] = await db.update(nomenclaturas)
+        .set(result.data)
+        .where(eq(nomenclaturas.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+
+      invalidateNomenclaturasCache();
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar nomenclatura" });
+    }
+  });
+
+  // DELETE (soft delete - set ativo=false)
+  app.delete("/api/nomenclaturas/:id", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [updated] = await db.update(nomenclaturas)
+        .set({ ativo: false })
+        .where(eq(nomenclaturas.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Nomenclatura não encontrada" });
+      }
+
+      invalidateNomenclaturasCache();
+      return res.json({ message: "Nomenclatura desativada com sucesso" });
+    } catch (error) {
+      console.error("Delete nomenclatura error:", error);
+      return res.status(500).json({ message: "Erro ao desativar nomenclatura" });
+    }
+  });
+
+  // GET categorias disponíveis
+  app.get("/api/nomenclaturas-categorias", requireAuth, async (req, res) => {
+    return res.json(NOMENCLATURA_CATEGORIA);
+  });
+
+  // GET nomenclaturas ativas COM CACHE (endpoint para frontend De-Para)
+  app.get("/api/nomenclaturas-cached", requireAuth, async (req, res) => {
+    try {
+      const { categoria } = req.query;
+      const result = await getCachedNomenclaturas(categoria as string | undefined);
+      return res.json(result);
+    } catch (error) {
+      console.error("Get cached nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao buscar nomenclaturas" });
     }
   });
 
@@ -4034,6 +4267,304 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE /api/d8/import-runs/:id - Apaga SOMENTE contratos gerados por esse import-run
+  // Não apaga pessoas, vínculos, folha nem o import_run em si (mantém rastreabilidade)
+  app.delete("/api/d8/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const userTenantId = req.tenantId;
+      
+      console.log(`[D8-Delete] Starting D8-only delete for run ${runId} (userTenant: ${userTenantId})...`);
+      
+      // Buscar o import_run para validação
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      // Verificar se é um import D8
+      if (run.tipoImport !== 'd8') {
+        return res.status(400).json({ 
+          message: `Este endpoint é exclusivo para imports D8. Tipo encontrado: ${run.tipoImport}` 
+        });
+      }
+      
+      const effectiveTenantId = run.tenantId || userTenantId;
+      const runBaseTag = run.baseTag || "";
+      
+      if (!effectiveTenantId) {
+        console.error(`[D8-Delete] ERROR: Cannot delete - no tenantId found`);
+        return res.status(400).json({ message: "Tenant ID obrigatório" });
+      }
+      
+      console.log(`[D8-Delete] Tenant: ${effectiveTenantId}, base_tag: "${runBaseTag}"`);
+      
+      // FASE 1: Deletar SOMENTE contratos associados a este import_run
+      // Usa import_run_id como fonte primária, e base_tag como fallback para órfãos
+      const result = await db.execute(sql`
+        WITH 
+        -- Identificar pessoas do tenant para isolamento
+        tenant_pessoas AS (
+          SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+        ),
+        -- Deletar contratos: por import_run_id OU por base_tag (órfãos legados)
+        deleted_contratos AS (
+          DELETE FROM clientes_contratos 
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+          RETURNING id, pessoa_id, numero_contrato
+        )
+        -- Retornar count e alguns detalhes
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_contratos) as contratos_count,
+          (SELECT COUNT(DISTINCT pessoa_id) FROM deleted_contratos) as pessoas_afetadas
+      `);
+      
+      const row = result.rows?.[0] as any || {};
+      const deletedContratos = Number(row.contratos_count) || 0;
+      const pessoasAfetadas = Number(row.pessoas_afetadas) || 0;
+      
+      console.log(`[D8-Delete] Phase 1 - Contratos deletados: ${deletedContratos}`);
+      
+      // FASE 2: Limpeza segura de órfãos criados exclusivamente pelo D8
+      // Regras:
+      // - Apagar vínculo APENAS se não tiver folha E não tiver contratos
+      // - Apagar pessoa APENAS se não tiver vínculos E não tiver contatos
+      const cleanupResult = await db.execute(sql`
+        WITH 
+        -- Identificar vínculos órfãos criados por este import D8 que não têm folha nem contratos
+        deleted_vinculos AS (
+          DELETE FROM clientes_vinculo v
+          WHERE v.tenant_id = ${effectiveTenantId}
+            AND (
+              v.import_run_id = ${runId}
+              OR (v.import_run_id IS NULL AND v.base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+            -- Não tem folhas associadas
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_folha_mes f 
+              WHERE f.vinculo_id = v.id
+            )
+            -- Não tem contratos associados
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_contratos c 
+              WHERE c.vinculo_id = v.id
+            )
+          RETURNING id, pessoa_id
+        ),
+        -- Identificar pessoas órfãs criadas por este import D8 que não têm vínculos nem contatos
+        deleted_pessoas AS (
+          DELETE FROM clientes_pessoa p
+          WHERE p.tenant_id = ${effectiveTenantId}
+            AND (
+              p.import_run_id = ${runId}
+              OR (p.import_run_id IS NULL AND p.base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+            -- Não tem vínculos restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_vinculo v 
+              WHERE v.pessoa_id = p.id
+            )
+            -- Não tem contatos restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM client_contacts c 
+              WHERE c.client_id = p.id
+            )
+            -- Não tem telefones restantes
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_telefones t 
+              WHERE t.pessoa_id = p.id
+            )
+            -- Não tem folhas restantes (via pessoa_id direto)
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_folha_mes f 
+              WHERE f.pessoa_id = p.id
+            )
+            -- Não tem contratos restantes (via pessoa_id direto)
+            AND NOT EXISTS (
+              SELECT 1 FROM clientes_contratos c 
+              WHERE c.pessoa_id = p.id
+            )
+          RETURNING id
+        )
+        SELECT 
+          (SELECT COUNT(*) FROM deleted_vinculos) as vinculos_count,
+          (SELECT COUNT(*) FROM deleted_pessoas) as pessoas_count
+      `);
+      
+      const cleanupRow = cleanupResult.rows?.[0] as any || {};
+      const deletedVinculos = Number(cleanupRow.vinculos_count) || 0;
+      const deletedPessoas = Number(cleanupRow.pessoas_count) || 0;
+      
+      console.log(`[D8-Delete] Phase 2 - Cleanup órfãos:`);
+      console.log(`  - Vínculos órfãos: ${deletedVinculos}`);
+      console.log(`  - Pessoas órfãs: ${deletedPessoas}`);
+      
+      // Atualizar o status do import_run para indicar que contratos foram deletados
+      await db.update(importRuns)
+        .set({ 
+          status: "contratos_deletados",
+          updatedAt: new Date()
+        })
+        .where(eq(importRuns.id, runId));
+      
+      console.log(`[D8-Delete] Completed for run ${runId}`);
+      
+      return res.json({ 
+        success: true, 
+        message: `${deletedContratos} contratos excluídos com sucesso`,
+        deleted: {
+          contratos: deletedContratos,
+          pessoasAfetadas,
+          vinculosOrfaos: deletedVinculos,
+          pessoasOrfas: deletedPessoas
+        },
+        importRun: {
+          id: runId,
+          baseTag: runBaseTag,
+          status: "contratos_deletados"
+        }
+      });
+    } catch (error) {
+      console.error("D8 delete contracts error:", error);
+      return res.status(500).json({ message: "Erro ao excluir contratos do D8" });
+    }
+  });
+
+  // GET /api/d8/import-runs/:id/preview-delete - Preview do que será apagado
+  app.get("/api/d8/import-runs/:id/preview-delete", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const runId = parseInt(req.params.id);
+      const userTenantId = req.tenantId;
+      
+      // Buscar o import_run para validação
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Import run não encontrado" });
+      }
+      
+      if (run.tipoImport !== 'd8') {
+        return res.status(400).json({ 
+          message: `Este endpoint é exclusivo para imports D8. Tipo encontrado: ${run.tipoImport}` 
+        });
+      }
+      
+      const effectiveTenantId = run.tenantId || userTenantId;
+      const runBaseTag = run.baseTag || "";
+      
+      if (!effectiveTenantId) {
+        return res.status(400).json({ message: "Tenant ID obrigatório" });
+      }
+      
+      // Contar o que será apagado (sem efetuar deleção)
+      const previewResult = await db.execute(sql`
+        WITH 
+        tenant_pessoas AS (
+          SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+        ),
+        -- Contratos que serão apagados
+        contratos_para_apagar AS (
+          SELECT id, pessoa_id, vinculo_id
+          FROM clientes_contratos 
+          WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+            AND (
+              import_run_id = ${runId}
+              OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Vínculos candidatos a órfãos (criados por este D8)
+        vinculos_candidatos AS (
+          SELECT v.id, v.pessoa_id
+          FROM clientes_vinculo v
+          WHERE v.tenant_id = ${effectiveTenantId}
+            AND (
+              v.import_run_id = ${runId}
+              OR (v.import_run_id IS NULL AND v.base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Vínculos órfãos: sem folhas e sem contratos (após exclusão)
+        vinculos_orfaos AS (
+          SELECT vc.id
+          FROM vinculos_candidatos vc
+          WHERE NOT EXISTS (
+            SELECT 1 FROM clientes_folha_mes f WHERE f.vinculo_id = vc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_contratos c 
+            WHERE c.vinculo_id = vc.id 
+              AND c.id NOT IN (SELECT id FROM contratos_para_apagar)
+          )
+        ),
+        -- Pessoas candidatas a órfãs (criadas por este D8)
+        pessoas_candidatas AS (
+          SELECT p.id
+          FROM clientes_pessoa p
+          WHERE p.tenant_id = ${effectiveTenantId}
+            AND (
+              p.import_run_id = ${runId}
+              OR (p.import_run_id IS NULL AND p.base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+            )
+        ),
+        -- Pessoas órfãs: sem vínculos, sem contatos, sem telefones, sem folhas, sem contratos (após exclusão)
+        pessoas_orfas AS (
+          SELECT pc.id
+          FROM pessoas_candidatas pc
+          WHERE NOT EXISTS (
+            SELECT 1 FROM clientes_vinculo v 
+            WHERE v.pessoa_id = pc.id 
+              AND v.id NOT IN (SELECT id FROM vinculos_orfaos)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM client_contacts c WHERE c.client_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_telefones t WHERE t.pessoa_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = pc.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM clientes_contratos c 
+            WHERE c.pessoa_id = pc.id 
+              AND c.id NOT IN (SELECT id FROM contratos_para_apagar)
+          )
+        )
+        SELECT 
+          (SELECT COUNT(*) FROM contratos_para_apagar) as contratos_count,
+          (SELECT COUNT(DISTINCT pessoa_id) FROM contratos_para_apagar) as pessoas_afetadas,
+          (SELECT COUNT(*) FROM vinculos_orfaos) as vinculos_orfaos_count,
+          (SELECT COUNT(*) FROM pessoas_orfas) as pessoas_orfas_count
+      `);
+      
+      const row = previewResult.rows?.[0] as any || {};
+      
+      return res.json({
+        importRun: {
+          id: runId,
+          tipoImport: run.tipoImport,
+          baseTag: runBaseTag,
+          convenio: run.convenio,
+          status: run.status,
+          arquivoOrigem: run.arquivoOrigem
+        },
+        preview: {
+          contratos: Number(row.contratos_count) || 0,
+          pessoasAfetadas: Number(row.pessoas_afetadas) || 0,
+          vinculosOrfaos: Number(row.vinculos_orfaos_count) || 0,
+          pessoasOrfas: Number(row.pessoas_orfas_count) || 0
+        }
+      });
+    } catch (error) {
+      console.error("D8 preview delete error:", error);
+      return res.status(500).json({ message: "Erro ao gerar preview de exclusão" });
+    }
+  });
+
   // GET download de TODAS as linhas com erro em CSV (usando import_run_rows)
   app.get("/api/import-runs/:id/rows/errors/download", requireAuth, requireMaster, async (req, res) => {
     try {
@@ -4131,7 +4662,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // POST /imports/start - Inicia um job de importação massiva (disk storage)
   app.post("/api/imports/start", requireAuth, requireMaster, uploadDisk.single("arquivo"), async (req, res) => {
     try {
-      const { streamingImportService } = await import("./streaming-import-service");
+      const { streamingImportService, diagnosticarTabela } = await import("./streaming-import-service");
+      
+      // Diagnóstico de constraints/índices para debug
+      console.log("[StreamImport] Iniciando diagnóstico de tabelas...");
+      await diagnosticarTabela("clientes_vinculo");
+      await diagnosticarTabela("clientes_folha_mes");
+      
       const file = req.file;
       const { tipo_import, competencia, banco, layout_d8, convenio } = req.body;
       
@@ -4282,6 +4819,232 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error: any) {
       console.error("Get import errors error:", error);
       return res.status(500).json({ message: error.message || "Erro ao buscar erros" });
+    }
+  });
+
+  // GET /api/imports/dados-complementares/template - Baixa planilha modelo para importação de dados complementares
+  app.get("/api/imports/dados-complementares/template", requireAuth, async (req, res) => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "ConsigOne";
+      workbook.created = new Date();
+      
+      const sheet = workbook.addWorksheet("Dados Complementares");
+      
+      // Headers
+      const headers = [
+        "CPF",
+        "NOME",
+        "DATA_NASCIMENTO",
+        "BANCO_CODIGO",
+        "AGENCIA",
+        "CONTA",
+        "TELEFONE_1",
+        "TELEFONE_2",
+        "TELEFONE_3",
+      ];
+      
+      // Adicionar cabeçalhos
+      sheet.addRow(headers);
+      
+      // Estilizar cabeçalhos
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF2563EB" },
+      };
+      headerRow.alignment = { horizontal: "center" };
+      
+      // Exemplo de linha
+      sheet.addRow([
+        "12345678901",
+        "MARIA DA SILVA",
+        "15/03/1985",
+        "001",
+        "1234",
+        "12345-6",
+        "11999998888",
+        "1133334444",
+        "",
+      ]);
+      
+      // Linha de instruções
+      sheet.addRow([
+        "Obrigatório",
+        "Opcional",
+        "DD/MM/AAAA",
+        "Código banco",
+        "Nº agência",
+        "Nº conta",
+        "Principal",
+        "Opcional",
+        "Opcional",
+      ]);
+      
+      // Estilizar linha de instruções
+      const instructionRow = sheet.getRow(3);
+      instructionRow.font = { italic: true, color: { argb: "FF666666" } };
+      
+      // Ajustar largura das colunas
+      sheet.columns = [
+        { width: 15 }, // CPF
+        { width: 30 }, // NOME
+        { width: 15 }, // DATA_NASCIMENTO
+        { width: 15 }, // BANCO_CODIGO
+        { width: 12 }, // AGENCIA
+        { width: 12 }, // CONTA
+        { width: 14 }, // TELEFONE_1
+        { width: 14 }, // TELEFONE_2
+        { width: 14 }, // TELEFONE_3
+      ];
+      
+      // Formatar colunas como texto para preservar zeros
+      ["A", "D", "E", "F", "G", "H", "I"].forEach((col) => {
+        sheet.getColumn(col).numFmt = "@";
+      });
+      
+      // Gerar buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", 'attachment; filename="modelo_dados_complementares.xlsx"');
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Erro ao gerar template dados complementares:", error);
+      return res.status(500).json({ message: error.message || "Erro ao gerar template" });
+    }
+  });
+
+  // POST /api/imports/dados-complementares - Importa dados complementares (telefones, banco, etc)
+  // Headers aceitos: CPF, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
+  // Ordem das colunas não importa. Outras colunas são ignoradas.
+  app.post("/api/imports/dados-complementares", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo é obrigatório" });
+      }
+
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "Tenant não identificado" });
+      }
+
+      // Mapeamento de headers normalizados para campos do payload
+      // Headers aceitos: CPF, NOME, DATA_NASCIMENTO, BANCO_CODIGO, AGENCIA, CONTA, TELEFONE_1, TELEFONE_2, TELEFONE_3
+      const HEADER_MAP: Record<string, string> = {
+        cpf: "cpf",
+        nome: "nome",
+        data_nascimento: "dataNascimento",
+        datanascimento: "dataNascimento",
+        banco_codigo: "bancoCodigo",
+        bancocodigo: "bancoCodigo",
+        agencia: "agencia",
+        conta: "conta",
+        telefone_1: "telefone1",
+        telefone1: "telefone1",
+        telefone_2: "telefone2",
+        telefone2: "telefone2",
+        telefone_3: "telefone3",
+        telefone3: "telefone3",
+      };
+
+      function normalizeHeader(h: string): string {
+        return h
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+      }
+
+      let rows: Record<string, any>[] = [];
+      const fileName = file.originalname.toLowerCase();
+
+      // Parse CSV ou XLSX
+      if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
+        const Papa = await import("papaparse");
+        const csvContent = file.buffer.toString("utf-8");
+        const parsed = Papa.parse(csvContent, {
+          header: true,
+          skipEmptyLines: true,
+          delimiter: csvContent.includes(";") ? ";" : ",",
+        });
+        rows = parsed.data as Record<string, any>[];
+      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      } else {
+        return res.status(400).json({ message: "Formato de arquivo não suportado. Use CSV, TXT ou XLSX." });
+      }
+
+      // Processar linha a linha
+      const report = {
+        linhas_lidas: rows.length,
+        pessoas_atualizadas: 0,
+        telefones_inseridos: 0,
+        cpfs_nao_encontrados: 0,
+        erros_por_linha: [] as { linha: number; cpf: string | null; mensagem: string }[],
+      };
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        try {
+          // Mapear headers
+          const payload: Record<string, any> = {};
+          let cpf: string | null = null;
+
+          for (const [originalHeader, value] of Object.entries(row)) {
+            const normalized = normalizeHeader(originalHeader);
+            const mappedField = HEADER_MAP[normalized];
+            
+            if (normalized === "cpf") {
+              cpf = String(value || "").replace(/\D/g, "").padStart(11, "0");
+            } else if (mappedField) {
+              payload[mappedField] = value;
+            }
+          }
+
+          if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
+            if (report.erros_por_linha.length < 200) {
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
+            }
+            continue;
+          }
+
+          // Chamar upsert
+          const result = await storage.upsertDadosComplementaresPorCpf(cpf, tenantId, payload);
+
+          if (result.pessoasAtualizadas === 0 && result.telefonesInseridos === 0) {
+            report.cpfs_nao_encontrados++;
+            if (report.erros_por_linha.length < 200) {
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF não encontrado na base" });
+            }
+          } else {
+            report.pessoas_atualizadas += result.pessoasAtualizadas;
+            report.telefones_inseridos += result.telefonesInseridos;
+          }
+        } catch (err: any) {
+          if (report.erros_por_linha.length < 200) {
+            report.erros_por_linha.push({ linha: i + 2, cpf: null, mensagem: err.message || "Erro desconhecido" });
+          }
+        }
+      }
+
+      console.log(`[DadosComplementares] Processado: ${report.linhas_lidas} linhas, ${report.pessoas_atualizadas} atualizados, ${report.telefones_inseridos} telefones, ${report.cpfs_nao_encontrados} não encontrados`);
+
+      return res.json({
+        success: true,
+        ...report,
+      });
+    } catch (error: any) {
+      console.error("Dados complementares import error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao processar importação de dados complementares" });
     }
   });
 
@@ -5005,6 +5768,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Get contratos
       const contratos = await storage.getContratosByPessoaId(pessoaId);
       
+      // Get telefones da tabela clientes_telefones
+      const telefones = await storage.getTelefonesByPessoaId(pessoaId);
+      
       // Build response
       const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
       const folhaHistorico = folhaRegistros.slice(1, 13); // Last 12 months (excluding current)
@@ -5028,7 +5794,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           uf: pessoa.uf,
           municipio: pessoa.municipio,
           data_nascimento: pessoa.dataNascimento || null,
-          telefones_base: pessoa.telefonesBase || [],
+          // Telefones: combina legado (pessoa.telefonesBase) com tabela clientes_telefones
+          telefones_base: telefones.length > 0 
+            ? telefones.map(t => t.telefone) 
+            : (pessoa.telefonesBase || []),
+          telefones_detalhados: telefones.map(t => ({
+            id: t.id,
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          })),
           // Dados bancários do cliente (onde recebe salário)
           banco_codigo: pessoa.bancoCodigo || null,
           agencia: pessoa.agencia || null,

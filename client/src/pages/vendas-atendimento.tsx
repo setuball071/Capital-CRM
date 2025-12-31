@@ -211,6 +211,19 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"],
   });
 
+  // Nomenclaturas para De-Para de códigos - usa endpoint com cache no backend
+  const { data: nomenclaturas } = useQuery<{ id: number; categoria: string; codigo: string; nome: string; ativo: boolean }[]>({
+    queryKey: ["/api/nomenclaturas-cached"],
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF", codigo: string | null | undefined): string => {
+    if (!codigo) return "-";
+    if (!nomenclaturas) return codigo;
+    const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
+    return found ? found.nome : codigo;
+  };
+
 
   const { data: leadContacts = [], isLoading: loadingContacts } = useQuery<LeadContact[]>({
     queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"],
@@ -821,7 +834,7 @@ export default function VendasAtendimento() {
                       <TableBody>
                         {atendimentoAtual.contratos.map((contrato, idx) => (
                           <TableRow key={idx}>
-                            <TableCell>{contrato.tipo_contrato || contrato.tipoContrato || "-"}</TableCell>
+                            <TableCell>{mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}</TableCell>
                             <TableCell className="font-medium">{contrato.banco || "-"}</TableCell>
                             <TableCell className="text-right">{formatCurrency(contrato.valor_parcela || contrato.valorParcela)}</TableCell>
                             <TableCell className="text-right">{contrato.parcelas_restantes || contrato.parcelasRestantes || "-"}</TableCell>

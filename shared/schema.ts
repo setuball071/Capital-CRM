@@ -388,6 +388,31 @@ export type BaseStatus = typeof BASE_STATUS[number];
 export const PEDIDO_STATUS = ["pendente", "aprovado", "processando", "concluido", "cancelado"] as const;
 export type PedidoStatus = typeof PEDIDO_STATUS[number];
 
+// Categorias de nomenclatura
+export const NOMENCLATURA_CATEGORIA = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
+export type NomenclaturaCategoria = typeof NOMENCLATURA_CATEGORIA[number];
+
+// Tabela de nomenclaturas - lookup de códigos para nomes (órgãos, UPAGs, etc.)
+export const nomenclaturas = pgTable("nomenclaturas", {
+  id: serial("id").primaryKey(),
+  categoria: varchar("categoria", { length: 50 }).notNull(), // ORGAO, TIPO_CONTRATO, UPAG, UF, OUTRO
+  codigo: varchar("codigo", { length: 100 }).notNull(), // Código do item (ex: "20114" para órgão)
+  nome: varchar("nome", { length: 255 }).notNull(), // Nome descritivo (ex: "MINISTERIO DA FAZENDA")
+  ativo: boolean("ativo").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  categoriaCodIdx: uniqueIndex("idx_nomenclatura_categoria_codigo").on(table.categoria, table.codigo),
+}));
+
+export const insertNomenclaturaSchema = createInsertSchema(nomenclaturas, {
+  categoria: z.enum(NOMENCLATURA_CATEGORIA),
+  codigo: z.string().min(1, { message: "Código é obrigatório" }),
+  nome: z.string().min(1, { message: "Nome é obrigatório" }),
+}).omit({ id: true, createdAt: true });
+
+export type Nomenclatura = typeof nomenclaturas.$inferSelect;
+export type InsertNomenclatura = z.infer<typeof insertNomenclaturaSchema>;
+
 // 1) clientes_pessoa - Dados fixos do indivíduo
 // Chave única composta: (tenant_id, cpf) para isolamento multi-tenant
 export const clientesPessoa = pgTable("clientes_pessoa", {
@@ -408,8 +433,12 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   municipio: varchar("municipio", { length: 150 }),
   dataNascimento: timestamp("data_nascimento"), // data de nascimento do cliente
   telefonesBase: jsonb("telefones_base"), // TELEFONE 1..5 em array (legado)
+  // Nomes descritivos do órgão/upag (para exibição)
+  orgaoNomePessoa: varchar("orgao_nome_pessoa", { length: 255 }), // Nome do órgão vinculado à pessoa
+  upagNomePessoa: varchar("upag_nome_pessoa", { length: 255 }), // Nome da UPAG vinculada à pessoa
   // Dados bancários do cliente (banco onde recebe salário)
   bancoCodigo: varchar("banco_codigo", { length: 20 }),
+  bancoNome: varchar("banco_nome", { length: 100 }), // Nome do banco para exibição
   agencia: varchar("agencia", { length: 20 }),
   conta: varchar("conta", { length: 30 }),
   baseTagUltima: varchar("base_tag_ultima", { length: 100 }),
@@ -449,7 +478,7 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
   // Chave única multi-tenant: (tenant_id, cpf, matricula, orgao)
-  tenantCpfMatOrgaoIdx: uniqueIndex("idx_vinculo_tenant_cpf_mat_orgao").on(table.tenantId, table.cpf, table.matricula, table.orgao),
+  vinculoUnique: uniqueIndex("idx_vinculo_unique").on(table.tenantId, table.cpf, table.matricula, table.orgao),
 }));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
@@ -490,7 +519,8 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   extrasFolha: jsonb("extras_folha"),
 }, (table) => ({
-  vinculoCompetenciaIdx: uniqueIndex("idx_folha_mes_vinculo_competencia").on(table.vinculoId, table.competencia),
+  // Chave única: (vinculo_id, competencia) - uma folha por vínculo por mês
+  folhaMesUnique: uniqueIndex("idx_folha_mes_unique").on(table.vinculoId, table.competencia),
 }));
 
 // Status de contrato
@@ -498,10 +528,11 @@ export const CONTRACT_STATUS = ["ATIVO", "ENCERRADO"] as const;
 export type ContractStatus = typeof CONTRACT_STATUS[number];
 
 // 3) clientes_contratos - Cada linha de contrato/cartão/margem
-// Chave única: (pessoaId, banco, tipoContrato, numeroContrato)
+// Chave única: (pessoaId, banco, numeroContrato) - identifica contrato unicamente por pessoa+banco+número
 export const clientesContratos = pgTable("clientes_contratos", {
   id: serial("id").primaryKey(),
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  vinculoId: integer("vinculo_id").references(() => clientesVinculo.id, { onDelete: "set null" }), // Vínculo CPF+Matrícula+Órgão
   tipoContrato: varchar("tipo_contrato", { length: 50 }), // "consignado", "cartao", "outro", etc.
   banco: varchar("banco", { length: 100 }), // BANCO_DO_EMPRESTIMO da planilha
   valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
@@ -517,9 +548,11 @@ export const clientesContratos = pgTable("clientes_contratos", {
   baseTag: varchar("base_tag", { length: 100 }),
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   dadosBrutos: jsonb("dados_brutos"), // linha completa da planilha
-});
+}, (table) => ({
+  pessoaBancoContratoIdx: uniqueIndex("idx_contratos_pessoa_banco_numero").on(table.pessoaId, table.banco, table.numeroContrato),
+}));
 
-// 4) client_contacts - Contatos do cliente (telefones, emails)
+// 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
 export const clientContacts = pgTable("client_contacts", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
@@ -530,6 +563,21 @@ export const clientContacts = pgTable("client_contacts", {
   importRunId: integer("import_run_id"), // Link ao import que criou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 });
+
+// 4b) clientes_telefones - Telefones normalizados do cliente
+// Chave única: (pessoa_id, telefone) - evita duplicatas
+export const clientesTelefones = pgTable("clientes_telefones", {
+  id: serial("id").primaryKey(),
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
+  telefone: varchar("telefone", { length: 20 }).notNull(), // Telefone normalizado (apenas dígitos)
+  tipo: varchar("tipo", { length: 20 }), // celular, fixo, whatsapp, comercial (opcional)
+  principal: boolean("principal").default(false), // Telefone_1 = true, demais = false
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  importRunId: integer("import_run_id"), // Rastreabilidade
+  baseTag: varchar("base_tag", { length: 100 }),
+}, (table) => ({
+  pessoaTelefoneIdx: uniqueIndex("idx_clientes_telefones_pessoa_tel").on(table.pessoaId, table.telefone),
+}));
 
 // 5) client_snapshots - Histórico de atualizações para auditoria
 export const clientSnapshots = pgTable("client_snapshots", {
@@ -658,6 +706,8 @@ export type ClienteContrato = typeof clientesContratos.$inferSelect;
 export type InsertClienteContrato = z.infer<typeof insertClienteContratoSchema>;
 
 export type ClientContact = typeof clientContacts.$inferSelect;
+export type ClienteTelefone = typeof clientesTelefones.$inferSelect;
+export type InsertClienteTelefone = typeof clientesTelefones.$inferInsert;
 export type ClientSnapshot = typeof clientSnapshots.$inferSelect;
 
 export type BaseImportada = typeof basesImportadas.$inferSelect;

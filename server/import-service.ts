@@ -197,14 +197,24 @@ export function preserveNumeroContrato(value: string | number | null | undefined
 export function normalizeBrDecimal(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;
   
+  // Se já for número, retorna direto
+  if (typeof value === "number") return isNaN(value) ? null : value;
+  
   let str = String(value).trim();
   if (str.length === 0) return null;
   
+  // Remove prefixos de moeda (R$, $, etc) e espaços
+  str = str.replace(/^[R$\s]+/i, "").trim();
+  if (str.length === 0) return null;
+  
+  // Detecta formato brasileiro completo: 1.234,56
   const hasBrFormat = /^\d{1,3}(\.\d{3})*,\d{1,2}$/.test(str);
   
   if (hasBrFormat) {
+    // Formato brasileiro: remove pontos de milhar e troca vírgula por ponto
     str = str.replace(/\./g, "").replace(",", ".");
   } else {
+    // Formato simples ou americano: apenas troca vírgula por ponto
     str = str.replace(/,/g, ".");
   }
   

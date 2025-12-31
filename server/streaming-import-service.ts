@@ -28,6 +28,53 @@ import {
 const MAX_LINHAS_POR_EXECUCAO = 1_000_000;
 const BUFFER_SIZE = 100_000;
 
+/**
+ * Função utilitária de diagnóstico para verificar constraints e índices de uma tabela
+ */
+export async function diagnosticarTabela(nomeTabela: string): Promise<void> {
+  console.log(`\n[DIAGNÓSTICO] ========== ${nomeTabela} ==========`);
+  
+  try {
+    // (a) Constraints únicas
+    const constraints = await db.execute(sql`
+      SELECT conname, pg_get_constraintdef(oid) as definition
+      FROM pg_constraint 
+      WHERE conrelid = ${nomeTabela}::regclass 
+        AND contype IN ('u','x')
+    `);
+    
+    console.log(`[DIAGNÓSTICO] Constraints (u/x) em ${nomeTabela}:`);
+    if (constraints.rows.length === 0) {
+      console.log("  (nenhuma constraint única encontrada)");
+    } else {
+      for (const row of constraints.rows) {
+        console.log(`  - ${row.conname}: ${row.definition}`);
+      }
+    }
+    
+    // (b) Índices
+    const indices = await db.execute(sql`
+      SELECT indexname, indexdef 
+      FROM pg_indexes 
+      WHERE tablename = ${nomeTabela}
+    `);
+    
+    console.log(`[DIAGNÓSTICO] Índices em ${nomeTabela}:`);
+    if (indices.rows.length === 0) {
+      console.log("  (nenhum índice encontrado)");
+    } else {
+      for (const row of indices.rows) {
+        console.log(`  - ${row.indexname}:`);
+        console.log(`    ${row.indexdef}`);
+      }
+    }
+  } catch (error) {
+    console.error(`[DIAGNÓSTICO] Erro ao diagnosticar ${nomeTabela}:`, error);
+  }
+  
+  console.log(`[DIAGNÓSTICO] ========== FIM ${nomeTabela} ==========\n`);
+}
+
 export interface StreamImportOptions {
   tipoImport: "folha" | "d8" | "contatos";
   competencia?: Date;
@@ -56,28 +103,66 @@ const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   matricula: "matricula",
   nome: "nome",
   banco: "banco",
+  uf: "uf",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "pmt",
-  pmt_fmt: "pmt_fmt",
-  saldo_devedor: "saldo_devedor",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo",
-  prazo_total: "prazo",
   situacao_contrato: "situacao_contrato",
-  data_inicio: "data_inicio",
-  data_fim: "data_fim",
 };
 
+// Headers obrigatórios D8 (normalizados - case-insensitive, sem acentos)
+const D8_REQUIRED_HEADERS = [
+  "banco",
+  "orgao",
+  "matricula", 
+  "uf",
+  "nome",
+  "cpf",
+  "tipo_contrato",
+  "pmt",
+  "prazo_remanescente",
+  "situacao_contrato",
+  "numero_contrato",
+];
+
+// Mapa D8 Pensionista - 14 colunas específicas
 const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
-  ...D8_COLUMN_MAP_SERVIDOR,
+  orgao: "orgao",
   m_instituidor: "m_instituidor",
-  cpf_instituidor: "cpf_instituidor",
-  matricula_instituidor: "matricula_instituidor",
+  matricula: "matricula",
+  uf: "uf",
+  nome: "nome",
+  cpf: "cpf",
+  tipo_contrato: "tipo_contrato",
+  tipo_produto: "tipo_contrato",
+  pmt: "pmt",
+  valor_parcela: "pmt",
+  prazo_remanescente: "prazo_remanescente",
+  prazo: "prazo_remanescente",
+  ids: "ids",
+  obs: "obs",
+  regime_juridico: "regime_juridico",
+  numero_contrato: "numero_contrato",
+  n_contrato: "numero_contrato",
+  banco: "banco",
 };
+
+// Headers obrigatórios D8 Pensionista (normalizados)
+const D8_PENSIONISTA_REQUIRED_HEADERS = [
+  "orgao",
+  "matricula",
+  "cpf",
+  "tipo_contrato",
+  "pmt",
+  "prazo_remanescente",
+  "numero_contrato",
+  "banco",
+];
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
@@ -267,6 +352,32 @@ class StreamingImportService {
     headerRl.close();
     headerFirstLineStream.destroy();
 
+    // Log detalhado dos headers detectados
+    console.log(`[IMPORT ${run.id}] Headers detectados (${headers.length}):`, headers.join(", "));
+    console.log(`[IMPORT ${run.id}] Mapeamento de colunas:`, JSON.stringify(headerMap, null, 2));
+
+    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
+    if (run.tipoImport === "d8") {
+      const normalizedHeaders = headers.map(h => normalizeCol(h));
+      const requiredHeaders = run.layoutD8 === "pensionista" 
+        ? D8_PENSIONISTA_REQUIRED_HEADERS 
+        : D8_REQUIRED_HEADERS;
+      
+      const missingHeaders = requiredHeaders.filter(req => {
+        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
+        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
+        if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
+        if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
+        if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
+        return !normalizedHeaders.includes(req);
+      });
+      
+      if (missingHeaders.length > 0) {
+        const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
+        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+      }
+    }
+
     const fileStream = fs.createReadStream(filePath, {
       start: startOffset,
       encoding: "utf8",
@@ -362,7 +473,7 @@ class StreamingImportService {
           processedRows: totalProcessed,
           successRows: totalSuccess,
           errorRows: totalErrors,
-          offsetAtual: lastByteOffset,
+          offsetAtual: bytesRead,
           pausedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -391,6 +502,9 @@ class StreamingImportService {
         updatedAt: new Date(),
       })
       .where(eq(importRuns.id, run.id));
+
+    // Log final com contagem
+    console.log(`[IMPORT ${run.id}] ✅ CONCLUÍDO - Processados: ${totalProcessed} | Sucesso: ${totalSuccess} | Erros: ${totalErrors}`);
 
     return {
       success: true,
@@ -514,22 +628,53 @@ class StreamingImportService {
     
     // ORGAO: extrair e normalizar como string (trim, sem conversão numérica)
     const orgaoRaw = this.extractValue(row, headerMap, "orgao");
-    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "DESCONHECIDO";
+    const orgao = orgaoRaw ? String(orgaoRaw).trim() : "";
 
-    if (!cpf || !matricula) {
+    // Validação dura: ORGAO é OBRIGATÓRIO para D8 (evita vínculos ambíguos)
+    if (!orgao || orgao.length === 0) {
       errors.push({
         importRunId: run.id,
         rowNumber: run.processedRows + 1,
         cpf,
         matricula,
         errorType: "validation",
-        errorMessage: "CPF ou matrícula ausente para D8",
+        errorMessage: "ORGAO ausente ou vazio. Campo obrigatório para D8 (evita vínculos ambíguos). Verifique a coluna ORGAO no arquivo.",
         rawPayload: row,
       });
       return false;
     }
 
-    const vinculo = await this.findOrCreateVinculo(cpf, matricula, run, undefined, orgao);
+    // Validação clara: rejeitar linha se faltar campos obrigatórios (sem quebrar o lote)
+    const camposFaltando: string[] = [];
+    
+    if (!cpf) {
+      camposFaltando.push("CPF");
+    }
+    if (!matricula) {
+      camposFaltando.push("MATRICULA");
+    }
+    if (!numeroContrato) {
+      camposFaltando.push("NUMERO_CONTRATO");
+    }
+    if (!banco) {
+      camposFaltando.push("BANCO");
+    }
+
+    if (camposFaltando.length > 0) {
+      errors.push({
+        importRunId: run.id,
+        rowNumber: run.processedRows + 1,
+        cpf: cpf || null,
+        matricula: matricula || null,
+        errorType: "validation",
+        errorMessage: `Campos obrigatórios ausentes: ${camposFaltando.join(", ")}. Linha rejeitada.`,
+        rawPayload: row,
+      });
+      return false;
+    }
+
+    // Neste ponto, cpf e matricula foram validados como não-nulos
+    const vinculo = await this.findOrCreateVinculo(cpf!, matricula!, run, undefined, orgao);
     if (!vinculo || !vinculo.pessoaId) {
       errors.push({
         importRunId: run.id,
@@ -543,59 +688,126 @@ class StreamingImportService {
       return false;
     }
 
-    // D8 contém nome do cliente - atualizar pessoa se nome estiver disponível e não vazio
-    const nomeD8 = this.extractValue(row, headerMap, "nome");
-    if (nomeD8 && nomeD8.trim().length > 0 && vinculo.pessoaId) {
-      await db
-        .update(clientesPessoa)
-        .set({ nome: nomeD8.trim(), atualizadoEm: new Date() })
-        .where(eq(clientesPessoa.id, vinculo.pessoaId));
+    // Soft merge vinculo.orgao: preenche apenas se atual é "DESCONHECIDO" ou vazio
+    if (orgao && orgao.length > 0 && vinculo.id) {
+      const [vinculoAtual] = await db
+        .select({ orgao: clientesVinculo.orgao })
+        .from(clientesVinculo)
+        .where(eq(clientesVinculo.id, vinculo.id))
+        .limit(1);
+
+      if (vinculoAtual) {
+        const orgaoAtual = vinculoAtual.orgao?.trim() || "";
+        // Só atualiza se orgao atual é vazio ou "DESCONHECIDO"
+        if (orgaoAtual.length === 0 || orgaoAtual.toUpperCase() === "DESCONHECIDO") {
+          await db
+            .update(clientesVinculo)
+            .set({ orgao: orgao, ultimaAtualizacao: new Date() })
+            .where(eq(clientesVinculo.id, vinculo.id));
+        }
+      }
+    }
+
+    // D8 Pensionista: só preenche campos vazios (merge suave)
+    // D8 Servidor: atualiza normalmente
+    const isPensionista = run.layoutD8 === "pensionista";
+
+    // Soft merge para pessoa: preenche nome e uf apenas se NULL/vazio no DB
+    // Aplica para AMBOS layouts (Servidor e Pensionista) - nunca sobrescreve dados existentes
+    const nomeD8Raw = this.extractValue(row, headerMap, "nome");
+    const ufD8Raw = this.extractValue(row, headerMap, "uf");
+    const nomeD8 = nomeD8Raw ? String(nomeD8Raw).trim() : null;
+    const ufD8 = ufD8Raw ? String(ufD8Raw).trim().toUpperCase() : null;
+
+    if (vinculo.pessoaId && (nomeD8 || ufD8)) {
+      // Buscar pessoa atual para verificar campos NULL/vazios
+      const [pessoaAtual] = await db
+        .select({ nome: clientesPessoa.nome, uf: clientesPessoa.uf })
+        .from(clientesPessoa)
+        .where(eq(clientesPessoa.id, vinculo.pessoaId))
+        .limit(1);
+
+      if (pessoaAtual) {
+        const updateFields: Record<string, any> = {};
+
+        // Nome: preenche se atual é NULL ou string vazia
+        if (nomeD8 && nomeD8.length > 0) {
+          const nomeAtual = pessoaAtual.nome?.trim() || "";
+          if (nomeAtual.length === 0) {
+            updateFields.nome = nomeD8;
+          }
+        }
+
+        // UF: preenche se atual é NULL ou string vazia
+        if (ufD8 && ufD8.length > 0 && ufD8.length <= 2) {
+          const ufAtual = pessoaAtual.uf?.trim() || "";
+          if (ufAtual.length === 0) {
+            updateFields.uf = ufD8;
+          }
+        }
+
+        // Só faz update se há campos para preencher
+        if (Object.keys(updateFields).length > 0) {
+          updateFields.atualizadoEm = new Date();
+          await db
+            .update(clientesPessoa)
+            .set(updateFields)
+            .where(eq(clientesPessoa.id, vinculo.pessoaId));
+        }
+      }
     }
 
     const extras: Record<string, any> = {};
-    if (run.layoutD8 === "pensionista") {
+    if (isPensionista) {
+      // Campos específicos D8 Pensionista (14 colunas)
       extras.m_instituidor = preserveMatricula(this.extractValue(row, headerMap, "m_instituidor"));
-      extras.cpf_instituidor = padCpf(this.extractValue(row, headerMap, "cpf_instituidor"));
-      extras.matricula_instituidor = preserveMatricula(this.extractValue(row, headerMap, "matricula_instituidor"));
+      extras.ids = this.extractValue(row, headerMap, "ids") || null;
+      extras.obs = this.extractValue(row, headerMap, "obs") || null;
+      extras.regime_juridico = this.extractValue(row, headerMap, "regime_juridico") || null;
     }
 
-    // PMT: pmt_fmt (texto) tem prioridade sobre pmt (número)
-    const pmtFmt = this.extractValue(row, headerMap, "pmt_fmt");
+    // PMT: usa pmt ou valor_parcela
     const pmtNumerico = this.extractValue(row, headerMap, "pmt");
-    const valorParcelaRaw = this.extractValue(row, headerMap, "valor_parcela");
     let valorParcela: number | null = null;
     
-    if (pmtFmt && pmtFmt.trim().length > 0) {
-      valorParcela = normalizeBrDecimal(pmtFmt);
-    } else if (pmtNumerico) {
+    if (pmtNumerico) {
       valorParcela = normalizeBrDecimal(pmtNumerico);
-    } else if (valorParcelaRaw) {
-      valorParcela = normalizeBrDecimal(valorParcelaRaw);
     }
 
     // Prazo: normaliza para 3 dígitos
-    const prazoRaw = this.extractValue(row, headerMap, "prazo");
     const prazoRemanRaw = this.extractValue(row, headerMap, "prazo_remanescente");
-    const prazoNorm = padPrazo(prazoRaw);
     const prazoRemanNorm = padPrazo(prazoRemanRaw);
     
     const parcelasRestantes = prazoRemanNorm 
       ? parseInt(prazoRemanNorm, 10) || null 
-      : (prazoNorm ? parseInt(prazoNorm, 10) || null : null);
+      : null;
 
-    await this.upsertContrato({
+    // Status: usa situacao_contrato (servidor) ou default "ATIVO" (pensionista não tem esse campo)
+    const statusContrato = isPensionista 
+      ? "ATIVO" 
+      : (this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO");
+
+    const contratoData = {
       pessoaId: vinculo.pessoaId,
+      vinculoId: vinculo.id, // Liga ao vínculo correto (cpf+matricula+orgao)
       banco,
       numeroContrato,
       tipoContrato: this.extractValue(row, headerMap, "tipo_contrato") || "consignado",
       valorParcela,
-      saldoDevedor: normalizeBrDecimal(this.extractValue(row, headerMap, "saldo_devedor")),
       parcelasRestantes,
-      status: this.extractValue(row, headerMap, "situacao_contrato") || "ATIVO",
+      status: statusContrato,
       competencia: run.competencia,
       baseTag: run.baseTag,
-      dadosBrutos: extras.m_instituidor ? extras : null,
-    });
+      dadosBrutos: Object.keys(extras).length > 0 ? extras : null,
+    };
+
+    // D8 Pensionista: usa merge suave (só preenche campos NULL)
+    // D8 Servidor: usa upsert normal (sobrescreve)
+    if (isPensionista) {
+      await this.upsertContratoSoftMerge(contratoData);
+    } else {
+      await this.upsertContrato(contratoData);
+    }
 
     return true;
   }
@@ -711,19 +923,30 @@ class StreamingImportService {
     // tenantId é obrigatório na tabela, usar 1 como fallback
     const tenantIdValue = run.tenantId || 1;
     
-    const [created] = await db
+    const vinculoValues = {
+      tenantId: tenantIdValue,
+      cpf,
+      matricula,
+      orgao: orgaoNorm,
+      pessoaId: pessoaId || null,
+      convenio: run.convenio || null,
+    };
+    
+    // Usar onConflictDoUpdate para upsert atômico - atualiza apenas pessoaId se estava NULL
+    const [result] = await db
       .insert(clientesVinculo)
-      .values({
-        tenantId: tenantIdValue,
-        cpf,
-        matricula,
-        orgao: orgaoNorm,
-        pessoaId: pessoaId || null,
-        convenio: run.convenio || null,
+      .values(vinculoValues)
+      .onConflictDoUpdate({
+        target: [clientesVinculo.tenantId, clientesVinculo.cpf, clientesVinculo.matricula, clientesVinculo.orgao],
+        set: {
+          // Só atualiza pessoaId se o novo valor não é null e o existente é null
+          pessoaId: sql`COALESCE(${clientesVinculo.pessoaId}, ${pessoaId || null})`,
+          ultimaAtualizacao: new Date(),
+        },
       })
       .returning();
 
-    return { id: created.id, pessoaId: created.pessoaId };
+    return { id: result.id, pessoaId: result.pessoaId };
   }
 
   private async upsertPessoa(data: Record<string, any>): Promise<{ id: number } | null> {
@@ -746,6 +969,12 @@ class StreamingImportService {
       return { id: existing[0].id };
     }
 
+    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+    console.log("[DEBUG INSERT] Tabela: clientes_pessoa");
+    console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
+    console.log("[DEBUG INSERT] Valores:", JSON.stringify(data));
+    console.log("[DEBUG INSERT] Sem Unique Index explícito (usa matricula como lookup)");
+    
     const [created] = await db
       .insert(clientesPessoa)
       .values(data as any)
@@ -804,39 +1033,72 @@ class StreamingImportService {
         .set(folhaData)
         .where(eq(clientesFolhaMes.id, existing[0].id));
     } else {
+      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+      console.log("[DEBUG INSERT] Tabela: clientes_folha_mes");
+      console.log("[DEBUG INSERT] Colunas:", Object.keys(folhaData).join(", "));
+      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: folhaData.pessoaId, competencia: folhaData.competencia, baseTag: folhaData.baseTag }));
+      console.log("[DEBUG INSERT] Unique Index: idx_folha_mes_vinculo_competencia (vinculoId, competencia) - MAS AQUI USA pessoaId!");
+      
       await db.insert(clientesFolhaMes).values(folhaData as any);
     }
   }
 
   private async upsertContrato(data: Record<string, any>): Promise<void> {
-    if (data.numeroContrato && data.banco) {
-      const existing = await db
-        .select()
-        .from(clientesContratos)
-        .where(
-          and(
-            eq(clientesContratos.pessoaId, data.pessoaId),
-            eq(clientesContratos.banco, data.banco),
-            eq(clientesContratos.numeroContrato, data.numeroContrato)
-          )
-        )
-        .limit(1);
+    // Usar onConflictDoUpdate para upsert atômico
+    // Em caso de conflito, atualiza campos permitidos (parcelas, valor, status) mas preserva dados existentes
+    await db
+      .insert(clientesContratos)
+      .values(data as any)
+      .onConflictDoUpdate({
+        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+        set: {
+          // Atualiza campos que podem mudar entre importações
+          valorParcela: sql`COALESCE(${data.valorParcela}, ${clientesContratos.valorParcela})`,
+          parcelasRestantes: sql`COALESCE(${data.parcelasRestantes}, ${clientesContratos.parcelasRestantes})`,
+          status: sql`COALESCE(${data.status}, ${clientesContratos.status})`,
+          // Preserva tipo se já existia, senão usa novo
+          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+          // Sempre atualiza rastreabilidade
+          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+          competencia: data.competencia || sql`${clientesContratos.competencia}`,
+          dadosBrutos: data.dadosBrutos || sql`${clientesContratos.dadosBrutos}`,
+        },
+      });
+  }
 
-      if (existing.length > 0) {
-        await db
-          .update(clientesContratos)
-          .set(data)
-          .where(eq(clientesContratos.id, existing[0].id));
-        return;
-      }
-    }
-
-    await db.insert(clientesContratos).values(data as any);
+  /**
+   * D8 Pensionista: Merge suave - só preenche campos NULL, nunca sobrescreve dados existentes
+   * Chave de merge: (pessoaId + banco + numeroContrato)
+   * Usa onConflictDoUpdate para upsert atômico sem race conditions
+   */
+  private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
+    // Usar onConflictDoUpdate para upsert atômico
+    // Soft merge: só preenche campos que estão NULL no registro existente
+    await db
+      .insert(clientesContratos)
+      .values(data as any)
+      .onConflictDoUpdate({
+        target: [clientesContratos.pessoaId, clientesContratos.banco, clientesContratos.numeroContrato],
+        set: {
+          // Soft merge: preserva valores existentes, só preenche NULLs
+          tipoContrato: sql`COALESCE(${clientesContratos.tipoContrato}, ${data.tipoContrato})`,
+          valorParcela: sql`COALESCE(${clientesContratos.valorParcela}, ${data.valorParcela})`,
+          parcelasRestantes: sql`COALESCE(${clientesContratos.parcelasRestantes}, ${data.parcelasRestantes})`,
+          status: sql`COALESCE(${clientesContratos.status}, ${data.status})`,
+          competencia: sql`COALESCE(${clientesContratos.competencia}, ${data.competencia})`,
+          dadosBrutos: sql`COALESCE(${clientesContratos.dadosBrutos}, ${data.dadosBrutos}::jsonb)`,
+          // Sempre atualiza rastreabilidade
+          baseTag: data.baseTag || sql`${clientesContratos.baseTag}`,
+          importRunId: data.importRunId || sql`${clientesContratos.importRunId}`,
+        },
+      });
   }
 
   private async upsertContact(clientId: number, tipo: string, valor: string): Promise<void> {
+    // Verificar existência antes de inserir (sem unique index nesta tabela legada)
     const existing = await db
-      .select()
+      .select({ id: clientContacts.id })
       .from(clientContacts)
       .where(
         and(
@@ -850,6 +1112,7 @@ class StreamingImportService {
     if (existing.length === 0) {
       await db.insert(clientContacts).values({ clientId, tipo, valor });
     }
+    // Se já existe, não faz nada (idempotente)
   }
 
   private async updateProgress(
