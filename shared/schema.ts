@@ -478,7 +478,7 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
   // Chave única multi-tenant: (tenant_id, cpf, matricula, orgao)
-  tenantCpfMatOrgaoIdx: uniqueIndex("idx_vinculo_tenant_cpf_mat_orgao").on(table.tenantId, table.cpf, table.matricula, table.orgao),
+  vinculoUnique: uniqueIndex("idx_vinculo_unique").on(table.tenantId, table.cpf, table.matricula, table.orgao),
 }));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
@@ -519,7 +519,8 @@ export const clientesFolhaMes = pgTable("clientes_folha_mes", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
   extrasFolha: jsonb("extras_folha"),
 }, (table) => ({
-  vinculoCompetenciaIdx: uniqueIndex("idx_folha_mes_vinculo_competencia").on(table.vinculoId, table.competencia),
+  // Chave única: (vinculo_id, competencia) - uma folha por vínculo por mês
+  folhaMesUnique: uniqueIndex("idx_folha_mes_unique").on(table.vinculoId, table.competencia),
 }));
 
 // Status de contrato
