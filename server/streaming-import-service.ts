@@ -610,7 +610,7 @@ class StreamingImportService {
     }
 
     const competencia = run.competencia || new Date();
-    await this.upsertFolhaMes(vinculo.pessoaId, competencia, row, headerMap, run.baseTag);
+    await this.upsertFolhaMes(vinculo.id, vinculo.pessoaId, competencia, row, headerMap, run.baseTag, run.id);
 
     return true;
   }
@@ -969,12 +969,6 @@ class StreamingImportService {
       return { id: existing[0].id };
     }
 
-    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-    console.log("[DEBUG INSERT] Tabela: clientes_pessoa");
-    console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
-    console.log("[DEBUG INSERT] Valores:", JSON.stringify(data));
-    console.log("[DEBUG INSERT] Sem Unique Index explícito (usa matricula como lookup)");
-    
     const [created] = await db
       .insert(clientesPessoa)
       .values(data as any)
@@ -982,44 +976,37 @@ class StreamingImportService {
     return { id: created.id };
   }
 
+  /**
+   * Upsert de folha mensal usando ON CONFLICT (vinculo_id, competencia)
+   * Chave única: idx_folha_mes_unique → (vinculo_id, competencia)
+   */
   private async upsertFolhaMes(
+    vinculoId: number,
     pessoaId: number,
     competencia: Date,
     row: Record<string, any>,
     headerMap: Record<string, string>,
-    baseTag: string | null
+    baseTag: string | null,
+    importRunId?: number
   ): Promise<void> {
-    const existing = await db
-      .select()
-      .from(clientesFolhaMes)
-      .where(
-        and(
-          eq(clientesFolhaMes.pessoaId, pessoaId),
-          eq(clientesFolhaMes.competencia, competencia)
-        )
-      )
-      .limit(1);
-
-    const folhaData: Record<string, any> = {
+    const folhaData = {
+      vinculoId,
       pessoaId,
       competencia,
       baseTag,
+      importRunId: importRunId || null,
       salarioBruto: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_bruto")),
       descontosBrutos: normalizeBrDecimal(this.extractValue(row, headerMap, "descontos_brutos")),
       salarioLiquido: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_liquido")),
-      // Margem 5% (COLUMN_MAP mapeia margem_30 → margem_5 para retrocompatibilidade)
       margemBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_bruta")),
       margemUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_utilizada")),
       margemSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_saldo")),
-      // Margem Benefício 5%
       margemBeneficioBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_bruta")),
       margemBeneficioUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_utilizada")),
       margemBeneficioSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_saldo")),
-      // Margem 35%
       margemBruta35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_bruta")),
       margemUtilizada35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_utilizada")),
       margemSaldo35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_saldo")),
-      // Margem 70%
       margemBruta70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_bruta")),
       margemUtilizada70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_utilizada")),
       margemSaldo70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_saldo")),
@@ -1027,20 +1014,35 @@ class StreamingImportService {
       margemCartaoBeneficioSaldo: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
     };
 
-    if (existing.length > 0) {
-      await db
-        .update(clientesFolhaMes)
-        .set(folhaData)
-        .where(eq(clientesFolhaMes.id, existing[0].id));
-    } else {
-      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
-      console.log("[DEBUG INSERT] Tabela: clientes_folha_mes");
-      console.log("[DEBUG INSERT] Colunas:", Object.keys(folhaData).join(", "));
-      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: folhaData.pessoaId, competencia: folhaData.competencia, baseTag: folhaData.baseTag }));
-      console.log("[DEBUG INSERT] Unique Index: idx_folha_mes_vinculo_competencia (vinculoId, competencia) - MAS AQUI USA pessoaId!");
-      
-      await db.insert(clientesFolhaMes).values(folhaData as any);
-    }
+    // Upsert atômico: ON CONFLICT (vinculo_id, competencia) DO UPDATE
+    await db
+      .insert(clientesFolhaMes)
+      .values(folhaData as any)
+      .onConflictDoUpdate({
+        target: [clientesFolhaMes.vinculoId, clientesFolhaMes.competencia],
+        set: {
+          pessoaId: folhaData.pessoaId,
+          baseTag: folhaData.baseTag,
+          importRunId: folhaData.importRunId,
+          salarioBruto: folhaData.salarioBruto,
+          descontosBrutos: folhaData.descontosBrutos,
+          salarioLiquido: folhaData.salarioLiquido,
+          margemBruta5: folhaData.margemBruta5,
+          margemUtilizada5: folhaData.margemUtilizada5,
+          margemSaldo5: folhaData.margemSaldo5,
+          margemBeneficioBruta5: folhaData.margemBeneficioBruta5,
+          margemBeneficioUtilizada5: folhaData.margemBeneficioUtilizada5,
+          margemBeneficioSaldo5: folhaData.margemBeneficioSaldo5,
+          margemBruta35: folhaData.margemBruta35,
+          margemUtilizada35: folhaData.margemUtilizada35,
+          margemSaldo35: folhaData.margemSaldo35,
+          margemBruta70: folhaData.margemBruta70,
+          margemUtilizada70: folhaData.margemUtilizada70,
+          margemSaldo70: folhaData.margemSaldo70,
+          margemCartaoCreditoSaldo: folhaData.margemCartaoCreditoSaldo,
+          margemCartaoBeneficioSaldo: folhaData.margemCartaoBeneficioSaldo,
+        },
+      });
   }
 
   private async upsertContrato(data: Record<string, any>): Promise<void> {
