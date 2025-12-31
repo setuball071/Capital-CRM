@@ -876,16 +876,23 @@ class StreamingImportService {
     // tenantId é obrigatório na tabela, usar 1 como fallback
     const tenantIdValue = run.tenantId || 1;
     
+    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+    const vinculoValues = {
+      tenantId: tenantIdValue,
+      cpf,
+      matricula,
+      orgao: orgaoNorm,
+      pessoaId: pessoaId || null,
+      convenio: run.convenio || null,
+    };
+    console.log("[DEBUG INSERT] Tabela: clientes_vinculo");
+    console.log("[DEBUG INSERT] Colunas:", Object.keys(vinculoValues).join(", "));
+    console.log("[DEBUG INSERT] Valores:", JSON.stringify(vinculoValues));
+    console.log("[DEBUG INSERT] Unique Index: idx_vinculo_tenant_cpf_mat_orgao (tenantId, cpf, matricula, orgao)");
+    
     const [created] = await db
       .insert(clientesVinculo)
-      .values({
-        tenantId: tenantIdValue,
-        cpf,
-        matricula,
-        orgao: orgaoNorm,
-        pessoaId: pessoaId || null,
-        convenio: run.convenio || null,
-      })
+      .values(vinculoValues)
       .returning();
 
     return { id: created.id, pessoaId: created.pessoaId };
@@ -911,6 +918,12 @@ class StreamingImportService {
       return { id: existing[0].id };
     }
 
+    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+    console.log("[DEBUG INSERT] Tabela: clientes_pessoa");
+    console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
+    console.log("[DEBUG INSERT] Valores:", JSON.stringify(data));
+    console.log("[DEBUG INSERT] Sem Unique Index explícito (usa matricula como lookup)");
+    
     const [created] = await db
       .insert(clientesPessoa)
       .values(data as any)
@@ -969,6 +982,12 @@ class StreamingImportService {
         .set(folhaData)
         .where(eq(clientesFolhaMes.id, existing[0].id));
     } else {
+      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+      console.log("[DEBUG INSERT] Tabela: clientes_folha_mes");
+      console.log("[DEBUG INSERT] Colunas:", Object.keys(folhaData).join(", "));
+      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: folhaData.pessoaId, competencia: folhaData.competencia, baseTag: folhaData.baseTag }));
+      console.log("[DEBUG INSERT] Unique Index: idx_folha_mes_vinculo_competencia (vinculoId, competencia) - MAS AQUI USA pessoaId!");
+      
       await db.insert(clientesFolhaMes).values(folhaData as any);
     }
   }
@@ -996,6 +1015,12 @@ class StreamingImportService {
       }
     }
 
+    // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+    console.log("[DEBUG INSERT] Tabela: clientes_contratos (upsertContrato)");
+    console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
+    console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
+    console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
+    
     await db.insert(clientesContratos).values(data as any);
   }
 
@@ -1005,6 +1030,12 @@ class StreamingImportService {
    */
   private async upsertContratoSoftMerge(data: Record<string, any>): Promise<void> {
     if (!data.numeroContrato || !data.banco) {
+      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+      console.log("[DEBUG INSERT] Tabela: clientes_contratos (softMerge sem chave)");
+      console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
+      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
+      console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
+      
       // Sem chave de merge, insere normalmente
       await db.insert(clientesContratos).values(data as any);
       return;
@@ -1023,6 +1054,12 @@ class StreamingImportService {
       .limit(1);
 
     if (existing.length === 0) {
+      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+      console.log("[DEBUG INSERT] Tabela: clientes_contratos (softMerge com chave)");
+      console.log("[DEBUG INSERT] Colunas:", Object.keys(data).join(", "));
+      console.log("[DEBUG INSERT] Valores (resumo):", JSON.stringify({ pessoaId: data.pessoaId, banco: data.banco, numeroContrato: data.numeroContrato }));
+      console.log("[DEBUG INSERT] Unique Index: idx_contratos_pessoa_numero (pessoaId, numeroContrato)");
+      
       // Não existe: insere todos os dados
       await db.insert(clientesContratos).values(data as any);
       return;
@@ -1076,6 +1113,12 @@ class StreamingImportService {
       .limit(1);
 
     if (existing.length === 0) {
+      // DEBUG: Log antes do INSERT para identificar ON CONFLICT
+      console.log("[DEBUG INSERT] Tabela: client_contacts");
+      console.log("[DEBUG INSERT] Colunas: clientId, tipo, valor");
+      console.log("[DEBUG INSERT] Valores:", JSON.stringify({ clientId, tipo, valor }));
+      console.log("[DEBUG INSERT] Sem Unique Index explícito (usa clientId+tipo+valor como lookup)");
+      
       await db.insert(clientContacts).values({ clientId, tipo, valor });
     }
   }
