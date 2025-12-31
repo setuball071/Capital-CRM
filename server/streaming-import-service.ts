@@ -518,6 +518,56 @@ class StreamingImportService {
     };
   }
 
+  /**
+   * Gera a chave natural para deduplicação baseada no tipo de import
+   * Folha: cpf + matricula + orgao (vínculo)
+   * D8: cpf + matricula + orgao + banco + numero_contrato
+   * Contatos: cpf + tipo + valor
+   */
+  private generateNaturalKey(row: Record<string, any>, headerMap: Record<string, string>, tipoImport: string): string {
+    const cpf = padCpf(this.extractValue(row, headerMap, "cpf")) || "";
+    const matricula = preserveMatricula(this.extractValue(row, headerMap, "matricula")) || "";
+    const orgao = (this.extractValue(row, headerMap, "orgao") || "").trim();
+    
+    if (tipoImport === "d8") {
+      const banco = (this.extractValue(row, headerMap, "banco") || "").trim();
+      const numeroContrato = preserveNumeroContrato(this.extractValue(row, headerMap, "numero_contrato")) || "";
+      return `${cpf}|${matricula}|${orgao}|${banco}|${numeroContrato}`;
+    } else if (tipoImport === "contatos") {
+      const tipo = (this.extractValue(row, headerMap, "tipo") || "").trim();
+      const valor = (this.extractValue(row, headerMap, "valor") || "").trim();
+      return `${cpf}|${tipo}|${valor}`;
+    }
+    // Folha: chave é o vínculo (cpf + matricula + orgao)
+    return `${cpf}|${matricula}|${orgao}`;
+  }
+
+  /**
+   * Deduplica o buffer mantendo apenas a última ocorrência de cada chave natural
+   * Retorna o buffer deduplicado e a quantidade de linhas descartadas
+   */
+  private deduplicateBuffer(
+    buffer: Record<string, any>[],
+    headerMap: Record<string, string>,
+    tipoImport: string
+  ): { deduplicated: Record<string, any>[]; discardedCount: number } {
+    const keyMap = new Map<string, { row: Record<string, any>; index: number }>();
+    
+    for (let i = 0; i < buffer.length; i++) {
+      const row = buffer[i];
+      const key = this.generateNaturalKey(row, headerMap, tipoImport);
+      keyMap.set(key, { row, index: i });
+    }
+    
+    // Ordenar pelo índice original para manter ordem de processamento
+    const deduplicated = Array.from(keyMap.values())
+      .sort((a, b) => a.index - b.index)
+      .map(v => v.row);
+    
+    const discardedCount = buffer.length - deduplicated.length;
+    return { deduplicated, discardedCount };
+  }
+
   private async processBuffer(
     buffer: Record<string, any>[],
     headerMap: Record<string, string>,
@@ -529,11 +579,18 @@ class StreamingImportService {
     ) => Promise<boolean>,
     errors: InsertImportError[]
   ): Promise<{ success: number; error: number }> {
+    // Deduplicar buffer antes de processar (mantém última ocorrência de cada chave natural)
+    const { deduplicated, discardedCount } = this.deduplicateBuffer(buffer, headerMap, run.tipoImport);
+    
+    if (discardedCount > 0) {
+      console.log(`[IMPORT ${run.id}] Deduplicação: ${discardedCount} linhas duplicadas descartadas no batch (mantida última ocorrência)`);
+    }
+    
     let successCount = 0;
     let errorCount = 0;
 
-    for (let i = 0; i < buffer.length; i++) {
-      const row = buffer[i];
+    for (let i = 0; i < deduplicated.length; i++) {
+      const row = deduplicated[i];
       try {
         const success = await processRow(row, headerMap, errors);
         if (success) {
