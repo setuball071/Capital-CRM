@@ -67,73 +67,27 @@ export interface FastImportResult {
   report?: FastImportReport;
 }
 
-// Mapa D8 Servidor (11 colunas)
-const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
+const D8_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
   matricula: "matricula",
   nome: "nome",
   banco: "banco",
-  orgao: "orgao",
-  uf: "uf",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "valor_parcela",
+  saldo_devedor: "saldo_devedor",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
+  prazo_total: "prazo_total",
   situacao_contrato: "situacao_contrato",
-};
-
-// Mapa D8 Pensionista (14 colunas específicas)
-const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
-  orgao: "orgao",
+  data_inicio: "data_inicio",
+  data_fim: "data_fim",
   m_instituidor: "m_instituidor",
-  matricula: "matricula",
-  uf: "uf",
-  nome: "nome",
-  cpf: "cpf",
-  tipo_contrato: "tipo_contrato",
-  tipo_produto: "tipo_contrato",
-  pmt: "valor_parcela",
-  valor_parcela: "valor_parcela",
-  prazo_remanescente: "prazo_remanescente",
-  prazo: "prazo_remanescente",
-  ids: "ids",
-  obs: "obs",
-  regime_juridico: "regime_juridico",
-  numero_contrato: "numero_contrato",
-  n_contrato: "numero_contrato",
-  banco: "banco",
+  cpf_instituidor: "cpf_instituidor",
 };
-
-// Headers obrigatórios D8 Servidor (normalizados)
-const D8_REQUIRED_HEADERS = [
-  "banco",
-  "orgao",
-  "matricula", 
-  "uf",
-  "nome",
-  "cpf",
-  "tipo_contrato",
-  "pmt",
-  "prazo_remanescente",
-  "situacao_contrato",
-  "numero_contrato",
-];
-
-// Headers obrigatórios D8 Pensionista (normalizados)
-const D8_PENSIONISTA_REQUIRED_HEADERS = [
-  "orgao",
-  "matricula",
-  "cpf",
-  "tipo_contrato",
-  "pmt",
-  "prazo_remanescente",
-  "numero_contrato",
-  "banco",
-];
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
@@ -282,30 +236,8 @@ class FastImportService {
     let pausedForResume = false;
     
     const headers = await this.readHeaders(filePath);
-    const columnMap = this.getColumnMap(run.tipoImport, run.layoutD8);
+    const columnMap = this.getColumnMap(run.tipoImport);
     const headerMap = this.buildHeaderMap(headers, columnMap);
-    
-    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
-    if (run.tipoImport === "d8") {
-      const normalizedHeaders = headers.map(h => normalizeCol(h));
-      const requiredHeaders = run.layoutD8 === "pensionista" 
-        ? D8_PENSIONISTA_REQUIRED_HEADERS 
-        : D8_REQUIRED_HEADERS;
-      
-      const missingHeaders = requiredHeaders.filter(req => {
-        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
-        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
-        if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
-        if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
-        if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
-        return !normalizedHeaders.includes(req);
-      });
-      
-      if (missingHeaders.length > 0) {
-        const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
-        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
-      }
-    }
     
     const batchBuffer: any[] = [];
     
@@ -755,14 +687,19 @@ class FastImportService {
     const baseTag = run.baseTag || "";
     
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
+      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, saldo_devedor, parcelas_restantes, prazo_total, situacao, data_inicio, data_fim, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
         p.id,
         COALESCE(s.banco, ${banco}),
         s.numero_contrato,
         s.tipo_contrato,
         s.valor_parcela,
+        s.saldo_devedor,
         s.prazo_remanescente,
+        s.prazo_total,
+        s.situacao_contrato,
+        s.data_inicio,
+        s.data_fim,
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
@@ -774,7 +711,12 @@ class FastImportService {
         banco = COALESCE(EXCLUDED.banco, clientes_contratos.banco),
         tipo_contrato = COALESCE(EXCLUDED.tipo_contrato, clientes_contratos.tipo_contrato),
         valor_parcela = COALESCE(EXCLUDED.valor_parcela, clientes_contratos.valor_parcela),
+        saldo_devedor = COALESCE(EXCLUDED.saldo_devedor, clientes_contratos.saldo_devedor),
         parcelas_restantes = COALESCE(EXCLUDED.parcelas_restantes, clientes_contratos.parcelas_restantes),
+        prazo_total = COALESCE(EXCLUDED.prazo_total, clientes_contratos.prazo_total),
+        situacao = COALESCE(EXCLUDED.situacao, clientes_contratos.situacao),
+        data_inicio = COALESCE(EXCLUDED.data_inicio, clientes_contratos.data_inicio),
+        data_fim = COALESCE(EXCLUDED.data_fim, clientes_contratos.data_fim),
         import_run_id = ${run.id},
         base_tag = ${baseTag}
     `);
@@ -918,8 +860,12 @@ class FastImportService {
         numeroContrato: preserveNumeroContrato(getValue("numero_contrato")),
         tipoContrato: getValue("tipo_contrato") || null,
         valorParcela: parseNum(getValue("valor_parcela")),
+        saldoDevedor: parseNum(getValue("saldo_devedor")),
         prazoRemanescente: parseInt(getValue("prazo_remanescente") || "0", 10) || null,
+        prazoTotal: parseInt(getValue("prazo_total") || "0", 10) || null,
         situacaoContrato: getValue("situacao_contrato") || null,
+        dataInicio: getValue("data_inicio") || null,
+        dataFim: getValue("data_fim") || null,
         mInstituidor: getValue("m_instituidor") || null,
         cpfInstituidor: padCpf(getValue("cpf_instituidor")),
         rowNum,
@@ -967,12 +913,12 @@ class FastImportService {
     }
   }
 
-  private getColumnMap(tipoImport: string, layoutD8?: string | null): Record<string, string> {
+  private getColumnMap(tipoImport: string): Record<string, string> {
     switch (tipoImport) {
       case "folha":
         return COLUMN_MAP;
       case "d8":
-        return layoutD8 === "pensionista" ? D8_COLUMN_MAP_PENSIONISTA : D8_COLUMN_MAP_SERVIDOR;
+        return D8_COLUMN_MAP;
       case "contatos":
         return CONTATOS_COLUMN_MAP;
       default:

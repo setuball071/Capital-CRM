@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 
 // Colunas que DEVEM ser formatadas como TEXTO para não virar notação científica
-const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "ids", "instituidor", "arq_upag", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
+const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "cpf_instituidor", "matricula_instituidor", "instituidor", "arq_upag", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
 
 // Colunas do template Folha Servidor - ordem EXATA conforme especificação do usuário
 // NÃO reordenar, NÃO renomear, NÃO traduzir, NÃO remover espaços ou acentos
@@ -158,33 +158,39 @@ export const TEMPLATE_COLUMNS = {
     { header: "Margem", key: "margem", width: 12, required: false, example: "125,00", isText: false },
   ],
   d8_servidor: [
-    { header: "BANCO", key: "banco", width: 20, required: true, example: "BANCO DO BRASIL", isText: false },
-    { header: "ORGAO", key: "orgao", width: 25, required: true, example: "20114", isText: false },
-    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
-    { header: "UF", key: "uf", width: 5, required: true, example: "DF", isText: false },
-    { header: "NOME", key: "nome", width: 30, required: true, example: "JOAO DA SILVA SANTOS", isText: false },
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
-    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: true, example: "CONSIGNADO", isText: false },
-    { header: "PMT", key: "pmt", width: 15, required: true, example: 328.50, isText: false },
-    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: true, example: "030", isText: true },
-    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: true, example: "ATIVO", isText: false },
-    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: true, example: "00123456789012345", isText: true },
+    { header: "ORGAO", key: "orgao", width: 25, required: false, example: "20114", isText: false },
+    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "NOME", key: "nome", width: 30, required: false, example: "JOAO DA SILVA SANTOS", isText: false },
+    { header: "BANCO", key: "banco", width: 20, required: false, example: "BANCO DO BRASIL", isText: false },
+    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: false, example: "00123456789012345", isText: true },
+    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO", isText: false },
+    { header: "PMT", key: "pmt", width: 15, required: false, example: 328.50, isText: false },
+    { header: "PMT_FMT", key: "pmt_fmt", width: 18, required: false, example: "000000328,50", isText: true },
+    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: 15000.00, isText: false },
+    { header: "PRAZO", key: "prazo", width: 10, required: false, example: "084", isText: true },
+    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "030", isText: true },
+    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO", isText: false },
+    { header: "DATA_INICIO", key: "data_inicio", width: 12, required: false, example: "01/01/2024", isText: false },
+    { header: "DATA_FIM", key: "data_fim", width: 12, required: false, example: "01/01/2027", isText: false },
   ],
   d8_pensionista: [
-    { header: "ORGAO", key: "orgao", width: 25, required: true, example: "20114", isText: false },
-    { header: "M_INSTITUIDOR", key: "m_instituidor", width: 15, required: false, example: "0654321", isText: true },
-    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
-    { header: "UF", key: "uf", width: 5, required: true, example: "DF", isText: false },
-    { header: "NOME", key: "nome", width: 30, required: true, example: "MARIA DA SILVA SANTOS", isText: false },
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
-    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: true, example: "CONSIGNADO", isText: false },
-    { header: "PMT", key: "pmt", width: 15, required: true, example: 300.00, isText: false },
-    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: true, example: "024", isText: true },
-    { header: "IDS", key: "ids", width: 15, required: false, example: "12345", isText: true },
-    { header: "OBS", key: "obs", width: 30, required: false, example: "OBSERVACAO", isText: false },
-    { header: "REGIME_JURIDICO", key: "regime_juridico", width: 15, required: false, example: "ESTATUTARIO", isText: false },
-    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: true, example: "00987654321012345", isText: true },
-    { header: "BANCO", key: "banco", width: 20, required: true, example: "CAIXA ECONOMICA", isText: false },
+    { header: "ORGAO", key: "orgao", width: 25, required: false, example: "20114", isText: false },
+    { header: "MATRICULA", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
+    { header: "NOME", key: "nome", width: 30, required: false, example: "MARIA DA SILVA SANTOS", isText: false },
+    { header: "BANCO", key: "banco", width: 20, required: false, example: "CAIXA ECONOMICA", isText: false },
+    { header: "NUMERO_CONTRATO", key: "numero_contrato", width: 25, required: false, example: "00987654321012345", isText: true },
+    { header: "TIPO_CONTRATO", key: "tipo_contrato", width: 15, required: false, example: "CONSIGNADO", isText: false },
+    { header: "PMT", key: "pmt", width: 15, required: false, example: 300.00, isText: false },
+    { header: "PMT_FMT", key: "pmt_fmt", width: 18, required: false, example: "000000300,00", isText: true },
+    { header: "SALDO_DEVEDOR", key: "saldo_devedor", width: 15, required: false, example: 9000.00, isText: false },
+    { header: "PRAZO", key: "prazo", width: 10, required: false, example: "072", isText: true },
+    { header: "PRAZO_REMANESCENTE", key: "prazo_remanescente", width: 18, required: false, example: "024", isText: true },
+    { header: "SITUACAO_CONTRATO", key: "situacao_contrato", width: 18, required: false, example: "ATIVO", isText: false },
+    { header: "M_INSTITUIDOR", key: "m_instituidor", width: 15, required: false, example: "0654321", isText: true },
+    { header: "CPF_INSTITUIDOR", key: "cpf_instituidor", width: 15, required: false, example: "00098765432", isText: true },
+    { header: "MATRICULA_INSTITUIDOR", key: "matricula_instituidor", width: 20, required: false, example: "0654321", isText: true },
   ],
   contatos: [
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
@@ -394,16 +400,9 @@ export async function generateExcelTemplate(templateType: TemplateType): Promise
     const d8Row = instructionsSheet.addRow({ field: ">>> ORDEM: Importe D8 DEPOIS da Folha <<<" });
     d8Row.getCell(1).font = { bold: true, color: { argb: "FFDC2626" } };
     instructionsSheet.addRow({ field: "O par CPF+MATRICULA deve existir (importado via Folha)" });
+    instructionsSheet.addRow({ field: "PMT_FMT (texto) tem prioridade sobre PMT (numero) se ambos estiverem preenchidos" });
     if (templateType === "d8_pensionista") {
-      instructionsSheet.addRow({ field: ">>> D8 PENSIONISTA: 14 colunas na ordem especifica <<<" });
-      instructionsSheet.addRow({ field: "ORGAO, M_INSTITUIDOR, MATRICULA, UF, NOME, CPF, TIPO_CONTRATO, PMT, PRAZO_REMANESCENTE, IDS, OBS, REGIME_JURIDICO, NUMERO_CONTRATO, BANCO" });
       instructionsSheet.addRow({ field: "M_INSTITUIDOR: matricula do servidor original (para pensoes)" });
-      instructionsSheet.addRow({ field: "IDS: identificador adicional (opcional)" });
-      instructionsSheet.addRow({ field: "OBS: observacoes (opcional)" });
-      instructionsSheet.addRow({ field: "REGIME_JURIDICO: regime juridico do pensionista (opcional)" });
-    } else {
-      instructionsSheet.addRow({ field: ">>> D8 SERVIDOR: 11 colunas obrigatorias <<<" });
-      instructionsSheet.addRow({ field: "BANCO, ORGAO, MATRICULA, UF, NOME, CPF, TIPO_CONTRATO, PMT, PRAZO_REMANESCENTE, SITUACAO_CONTRATO, NUMERO_CONTRATO" });
     }
   } else if (templateType === "contatos") {
     const contatosRow = instructionsSheet.addRow({ field: ">>> ORDEM: Importe Contatos POR ULTIMO <<<" });

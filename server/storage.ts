@@ -13,7 +13,6 @@ import {
   clientesFolhaMes,
   clientesContratos,
   clientContacts,
-  clientesTelefones,
   clientSnapshots,
   basesImportadas,
   pedidosLista,
@@ -58,7 +57,6 @@ import {
   type ClienteContrato,
   type InsertClienteContrato,
   type ClientContact,
-  type ClienteTelefone,
   type ClientSnapshot,
   type BaseImportada,
   type InsertBaseImportada,
@@ -195,21 +193,6 @@ export interface IStorage {
   // Clientes Vínculos
   getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
   getVinculoById(id: number): Promise<ClienteVinculo | undefined>;
-  
-  // Dados Complementares
-  upsertDadosComplementaresPorCpf(cpf: string, tenantId: number, payload: {
-    nome?: string | null;
-    dataNascimento?: Date | string | null;
-    bancoCodigo?: string | null;
-    agencia?: string | null;
-    conta?: string | null;
-    telefone1?: string | null;
-    telefone2?: string | null;
-    telefone3?: string | null;
-  }): Promise<{ pessoasAtualizadas: number; telefonesInseridos: number }>;
-  
-  // Clientes Telefones
-  getTelefonesByPessoaId(pessoaId: number): Promise<ClienteTelefone[]>;
   
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
@@ -1344,161 +1327,6 @@ export class DbStorage implements IStorage {
       .from(clientesVinculo)
       .where(eq(clientesVinculo.id, id));
     return vinculo;
-  }
-
-  // Dados Complementares
-  async upsertDadosComplementaresPorCpf(
-    cpf: string,
-    tenantId: number,
-    payload: {
-      nome?: string | null;
-      dataNascimento?: Date | string | null;
-      bancoCodigo?: string | null;
-      agencia?: string | null;
-      conta?: string | null;
-      telefone1?: string | null;
-      telefone2?: string | null;
-      telefone3?: string | null;
-    }
-  ): Promise<{ pessoasAtualizadas: number; telefonesInseridos: number }> {
-    // Normalizar CPF: apenas dígitos, padStart 11
-    const cpfNorm = cpf.replace(/\D/g, "").padStart(11, "0");
-    
-    if (cpfNorm.length !== 11) {
-      return { pessoasAtualizadas: 0, telefonesInseridos: 0 };
-    }
-
-    // Buscar todas as pessoas com esse CPF no tenant
-    const pessoas = await db.select()
-      .from(clientesPessoa)
-      .where(and(
-        eq(clientesPessoa.cpf, cpfNorm),
-        eq(clientesPessoa.tenantId, tenantId)
-      ));
-
-    if (pessoas.length === 0) {
-      return { pessoasAtualizadas: 0, telefonesInseridos: 0 };
-    }
-
-    // Função para normalizar data de nascimento (aceita DD/MM/AAAA e AAAA-MM-DD)
-    function parseDataNascimento(val: Date | string | null | undefined): Date | null {
-      if (!val) return null;
-      if (val instanceof Date) return val;
-      
-      const str = String(val).trim();
-      if (!str) return null;
-      
-      // Formato DD/MM/AAAA
-      const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (brMatch) {
-        const [, dia, mes, ano] = brMatch;
-        return new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
-      }
-      
-      // Formato AAAA-MM-DD (ISO)
-      const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if (isoMatch) {
-        const [, ano, mes, dia] = isoMatch;
-        return new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
-      }
-      
-      // Tentar parse padrão
-      const parsed = new Date(str);
-      return isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    // Montar objeto de atualização apenas com campos não vazios
-    const updateData: Record<string, any> = {};
-    
-    // Nome: só atualiza se vier preenchido (não sobrescreve com vazio)
-    if (payload.nome !== undefined && payload.nome !== null && String(payload.nome).trim()) {
-      updateData.nome = String(payload.nome).trim();
-    }
-    
-    const dataNasc = parseDataNascimento(payload.dataNascimento);
-    if (dataNasc) {
-      updateData.dataNascimento = dataNasc;
-    }
-    
-    // Banco, agencia, conta: preservar como text (mantém zeros à esquerda)
-    if (payload.bancoCodigo !== undefined && payload.bancoCodigo !== null && String(payload.bancoCodigo).trim()) {
-      updateData.bancoCodigo = String(payload.bancoCodigo).trim();
-    }
-    if (payload.agencia !== undefined && payload.agencia !== null && String(payload.agencia).trim()) {
-      updateData.agencia = String(payload.agencia).trim();
-    }
-    if (payload.conta !== undefined && payload.conta !== null && String(payload.conta).trim()) {
-      updateData.conta = String(payload.conta).trim();
-    }
-
-    let pessoasAtualizadas = 0;
-
-    // Atualizar clientes_pessoa se houver dados
-    if (Object.keys(updateData).length > 0) {
-      updateData.atualizadoEm = new Date();
-      
-      for (const pessoa of pessoas) {
-        await db.update(clientesPessoa)
-          .set(updateData)
-          .where(eq(clientesPessoa.id, pessoa.id));
-        pessoasAtualizadas++;
-      }
-    }
-
-    // Processar telefones: extrair, normalizar e deduplicar
-    // telefone1 = principal, telefone2/3 = não principal
-    const telefonesComPrincipal: { telefone: string; principal: boolean }[] = [];
-    const telefonesVistos = new Set<string>();
-    
-    const telefonesRaw = [
-      { val: payload.telefone1, principal: true },
-      { val: payload.telefone2, principal: false },
-      { val: payload.telefone3, principal: false },
-    ];
-    
-    for (const { val, principal } of telefonesRaw) {
-      if (!val || !String(val).trim()) continue;
-      
-      const telNorm = String(val).replace(/\D/g, ""); // Apenas dígitos
-      if (telNorm.length < 8) continue; // Mínimo 8 dígitos
-      
-      // Deduplicar
-      if (telefonesVistos.has(telNorm)) continue;
-      telefonesVistos.add(telNorm);
-      
-      telefonesComPrincipal.push({ telefone: telNorm, principal });
-    }
-
-    let telefonesInseridos = 0;
-
-    // Inserir telefones para cada pessoa (ON CONFLICT ignora duplicatas)
-    for (const pessoa of pessoas) {
-      for (const { telefone, principal } of telefonesComPrincipal) {
-        try {
-          await db.insert(clientesTelefones)
-            .values({
-              pessoaId: pessoa.id,
-              telefone,
-              tipo: telefone.length === 11 ? "celular" : "fixo",
-              principal,
-            })
-            .onConflictDoNothing();
-          telefonesInseridos++;
-        } catch (err) {
-          // Ignorar erros de duplicata
-        }
-      }
-    }
-
-    return { pessoasAtualizadas, telefonesInseridos };
-  }
-
-  // Clientes Telefones
-  async getTelefonesByPessoaId(pessoaId: number): Promise<ClienteTelefone[]> {
-    return await db.select()
-      .from(clientesTelefones)
-      .where(eq(clientesTelefones.pessoaId, pessoaId))
-      .orderBy(sql`${clientesTelefones.principal} DESC, ${clientesTelefones.createdAt} DESC`);
   }
 
   // Clientes Contratos
