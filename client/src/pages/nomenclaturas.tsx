@@ -478,17 +478,17 @@ export default function NomenclaturasPage() {
                       <AlertCircle className="w-5 h-5 text-orange-500 mt-0.5" />
                     )}
                     <div className="flex-1">
-                      <p className="font-medium">{importResult.message}</p>
-                      <div className="flex gap-4 mt-2 text-sm">
-                        <span className="text-green-600">Inseridos: {importResult.inserted}</span>
-                        <span className="text-blue-600">Atualizados: {importResult.updated}</span>
-                        <span className="text-red-600">Erros: {importResult.errors.length}</span>
+                      <p className="font-medium" data-testid="text-import-message">{importResult.message}</p>
+                      <div className="flex gap-4 mt-2 text-sm flex-wrap">
+                        <span className="text-emerald-600 dark:text-emerald-400" data-testid="text-inserted-count">Inseridos: {importResult.inserted}</span>
+                        <span className="text-sky-600 dark:text-sky-400" data-testid="text-updated-count">Atualizados: {importResult.updated}</span>
+                        <span className="text-destructive" data-testid="text-errors-count">Erros: {importResult.errors.length}</span>
                       </div>
                       {importResult.errors.length > 0 && (
-                        <div className="mt-3 max-h-32 overflow-y-auto">
-                          <p className="text-sm font-medium text-red-600 mb-1">Erros encontrados:</p>
+                        <div className="mt-3 max-h-32 overflow-y-auto" data-testid="container-import-errors">
+                          <p className="text-sm font-medium text-destructive mb-1">Erros encontrados:</p>
                           {importResult.errors.slice(0, 10).map((err, idx) => (
-                            <p key={idx} className="text-xs text-muted-foreground">
+                            <p key={idx} className="text-xs text-muted-foreground" data-testid={`text-error-${idx}`}>
                               Linha {err.linha}: {err.erro}
                             </p>
                           ))}
