@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,13 +26,22 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Pencil, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
 import type { Nomenclatura } from "@shared/schema";
 
 const CATEGORIAS = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
+
+interface ImportResult {
+  message: string;
+  total: number;
+  inserted: number;
+  updated: number;
+  errors: { linha: number; erro: string }[];
+}
 
 export default function NomenclaturasPage() {
   const { toast } = useToast();
@@ -40,6 +49,10 @@ export default function NomenclaturasPage() {
   const [busca, setBusca] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Nomenclatura | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     categoria: "ORGAO" as string,
@@ -106,6 +119,34 @@ export default function NomenclaturasPage() {
     },
   });
 
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/nomenclaturas/import-excel", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Erro ao importar arquivo");
+      }
+      return res.json() as Promise<ImportResult>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
+      setImportResult(data);
+      toast({ 
+        title: "Importação concluída", 
+        description: `${data.inserted} inseridos, ${data.updated} atualizados`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingItem(null);
@@ -141,16 +182,53 @@ export default function NomenclaturasPage() {
     }
   };
 
+  const openImportDialog = () => {
+    setSelectedFile(null);
+    setImportResult(null);
+    setImportDialogOpen(true);
+  };
+
+  const closeImportDialog = () => {
+    setImportDialogOpen(false);
+    setSelectedFile(null);
+    setImportResult(null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const ext = file.name.toLowerCase().split(".").pop();
+      if (ext !== "xlsx" && ext !== "xls") {
+        toast({ title: "Formato inválido", description: "Use arquivos .xlsx ou .xls", variant: "destructive" });
+        return;
+      }
+      setSelectedFile(file);
+      setImportResult(null);
+    }
+  };
+
+  const handleImport = () => {
+    if (selectedFile) {
+      importMutation.mutate(selectedFile);
+    }
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-semibold">Nomenclaturas</h1>
-        <Button onClick={openCreate} data-testid="button-add-nomenclatura">
-          <Plus className="w-4 h-4 mr-2" />
-          Adicionar
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openImportDialog} data-testid="button-import-excel">
+            <Upload className="w-4 h-4 mr-2" />
+            Importar Excel
+          </Button>
+          <Button onClick={openCreate} data-testid="button-add-nomenclatura">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -304,6 +382,144 @@ export default function NomenclaturasPage() {
               {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Salvar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5" />
+              Importar Nomenclaturas por Excel
+            </DialogTitle>
+            <DialogDescription>
+              Faça upload de uma planilha Excel (.xlsx) com as colunas: Categoria, Código, Nome e Ativo
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileSelect}
+                className="hidden"
+                data-testid="input-file-excel"
+              />
+              
+              {selectedFile ? (
+                <div className="space-y-2">
+                  <FileSpreadsheet className="w-10 h-10 mx-auto text-primary" />
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Escolher outro arquivo
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
+                  <p className="text-muted-foreground">Arraste um arquivo ou clique para selecionar</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-select-file"
+                  >
+                    Selecionar Arquivo
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <Card className="bg-muted/50">
+              <CardContent className="p-4">
+                <p className="text-sm font-medium mb-2">Formato esperado da planilha:</p>
+                <div className="text-xs font-mono bg-background rounded p-2 overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-1">Categoria</th>
+                        <th className="text-left p-1">Código</th>
+                        <th className="text-left p-1">Nome</th>
+                        <th className="text-left p-1">Ativo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="p-1">ORGAO</td>
+                        <td className="p-1">20114</td>
+                        <td className="p-1">MINISTÉRIO DA FAZENDA</td>
+                        <td className="p-1">TRUE</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Categorias válidas: ORGAO, TIPO_CONTRATO, UPAG, UF, OUTRO
+                </p>
+              </CardContent>
+            </Card>
+
+            {importResult && (
+              <Card className={importResult.errors.length > 0 ? "border-orange-500" : "border-green-500"}>
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    {importResult.errors.length === 0 ? (
+                      <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-orange-500 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium">{importResult.message}</p>
+                      <div className="flex gap-4 mt-2 text-sm">
+                        <span className="text-green-600">Inseridos: {importResult.inserted}</span>
+                        <span className="text-blue-600">Atualizados: {importResult.updated}</span>
+                        <span className="text-red-600">Erros: {importResult.errors.length}</span>
+                      </div>
+                      {importResult.errors.length > 0 && (
+                        <div className="mt-3 max-h-32 overflow-y-auto">
+                          <p className="text-sm font-medium text-red-600 mb-1">Erros encontrados:</p>
+                          {importResult.errors.slice(0, 10).map((err, idx) => (
+                            <p key={idx} className="text-xs text-muted-foreground">
+                              Linha {err.linha}: {err.erro}
+                            </p>
+                          ))}
+                          {importResult.errors.length > 10 && (
+                            <p className="text-xs text-muted-foreground">
+                              ...e mais {importResult.errors.length - 10} erros
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeImportDialog}>
+              {importResult ? "Fechar" : "Cancelar"}
+            </Button>
+            {!importResult && (
+              <Button
+                onClick={handleImport}
+                disabled={!selectedFile || importMutation.isPending}
+                data-testid="button-import-submit"
+              >
+                {importMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Importar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

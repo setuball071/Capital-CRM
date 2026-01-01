@@ -1071,6 +1071,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST import from Excel
+  app.post("/api/nomenclaturas/import-excel", requireAuth, requireMasterOrAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<any>(sheet);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Planilha vazia" });
+      }
+
+      const results = {
+        total: rows.length,
+        inserted: 0,
+        updated: 0,
+        errors: [] as { linha: number; erro: string }[],
+      };
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const linha = i + 2; // Excel starts at 1, header is 1, first data is 2
+
+        // Normalize column names (case-insensitive)
+        const categoria = String(row.Categoria || row.categoria || row.CATEGORIA || "").trim().toUpperCase();
+        const codigo = String(row.Código || row.Codigo || row.codigo || row.CODIGO || "").trim();
+        const nome = String(row.Nome || row.nome || row.NOME || "").trim();
+        const ativoRaw = row.Ativo ?? row.ativo ?? row.ATIVO ?? "TRUE";
+        const ativo = String(ativoRaw).toUpperCase() === "TRUE" || 
+                     String(ativoRaw) === "1" || 
+                     ativoRaw === true;
+
+        // Validate required fields
+        if (!categoria) {
+          results.errors.push({ linha, erro: "Categoria é obrigatória" });
+          continue;
+        }
+        if (!NOMENCLATURA_CATEGORIA.includes(categoria as any)) {
+          results.errors.push({ linha, erro: `Categoria inválida: ${categoria}. Use: ${NOMENCLATURA_CATEGORIA.join(", ")}` });
+          continue;
+        }
+        if (!codigo) {
+          results.errors.push({ linha, erro: "Código é obrigatório" });
+          continue;
+        }
+        if (!nome) {
+          results.errors.push({ linha, erro: "Nome é obrigatório" });
+          continue;
+        }
+
+        try {
+          // Check if exists
+          const [existing] = await db.select()
+            .from(nomenclaturas)
+            .where(and(
+              eq(nomenclaturas.categoria, categoria),
+              eq(nomenclaturas.codigo, codigo)
+            ))
+            .limit(1);
+
+          if (existing) {
+            // Update
+            await db.update(nomenclaturas)
+              .set({ nome, ativo })
+              .where(eq(nomenclaturas.id, existing.id));
+            results.updated++;
+          } else {
+            // Insert
+            await db.insert(nomenclaturas).values({
+              categoria: categoria as any,
+              codigo,
+              nome,
+              ativo,
+            });
+            results.inserted++;
+          }
+        } catch (dbError: any) {
+          results.errors.push({ linha, erro: dbError.message || "Erro no banco de dados" });
+        }
+      }
+
+      invalidateNomenclaturasCache();
+
+      return res.json({
+        message: `Importação concluída: ${results.inserted} inseridos, ${results.updated} atualizados, ${results.errors.length} erros`,
+        ...results,
+      });
+    } catch (error: any) {
+      console.error("Import nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao processar arquivo: " + (error.message || "Erro desconhecido") });
+    }
+  });
+
   // GET categorias disponíveis
   app.get("/api/nomenclaturas-categorias", requireAuth, async (req, res) => {
     return res.json(NOMENCLATURA_CATEGORIA);
