@@ -81,7 +81,7 @@ export default function NomenclaturasPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      return apiRequest("/api/nomenclaturas", "POST", data);
+      return apiRequest("POST", "/api/nomenclaturas", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
@@ -95,7 +95,7 @@ export default function NomenclaturasPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<typeof formData> }) => {
-      return apiRequest(`/api/nomenclaturas/${id}`, "PUT", data);
+      return apiRequest("PUT", `/api/nomenclaturas/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
@@ -109,7 +109,7 @@ export default function NomenclaturasPage() {
 
   const toggleAtivoMutation = useMutation({
     mutationFn: async ({ id, ativo }: { id: number; ativo: boolean }) => {
-      return apiRequest(`/api/nomenclaturas/${id}`, "PUT", { ativo });
+      return apiRequest("PUT", `/api/nomenclaturas/${id}`, { ativo });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
