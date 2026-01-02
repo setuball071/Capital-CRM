@@ -30,7 +30,18 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Pencil, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Nomenclatura } from "@shared/schema";
 
 const CATEGORIAS = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
@@ -53,6 +64,10 @@ export default function NomenclaturasPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<Nomenclatura | null>(null);
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     categoria: "ORGAO" as string,
@@ -147,6 +162,36 @@ export default function NomenclaturasPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/nomenclaturas/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
+      toast({ title: "Nomenclatura excluída com sucesso" });
+      setDeleteDialogOpen(false);
+      setDeletingItem(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const batchDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return apiRequest("POST", "/api/nomenclaturas/delete-batch", { ids });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/nomenclaturas"] });
+      toast({ title: `${selectedIds.size} nomenclatura(s) excluída(s)` });
+      setBatchDeleteDialogOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingItem(null);
@@ -213,6 +258,39 @@ export default function NomenclaturasPage() {
     }
   };
 
+  const openDeleteDialog = (item: Nomenclatura) => {
+    setDeletingItem(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (deletingItem) {
+      deleteMutation.mutate(deletingItem.id);
+    }
+  };
+
+  const handleBatchDelete = () => {
+    batchDeleteMutation.mutate(Array.from(selectedIds));
+  };
+
+  const toggleSelect = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === nomenclaturas.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(nomenclaturas.map((n) => n.id)));
+    }
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -269,6 +347,20 @@ export default function NomenclaturasPage() {
       </Card>
 
       <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-lg">Lista de Nomenclaturas</CardTitle>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBatchDeleteDialogOpen(true)}
+              data-testid="button-delete-selected"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir Selecionados ({selectedIds.size})
+            </Button>
+          )}
+        </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -282,16 +374,30 @@ export default function NomenclaturasPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedIds.size === nomenclaturas.length && nomenclaturas.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                      data-testid="checkbox-select-all"
+                    />
+                  </TableHead>
                   <TableHead className="w-32">Categoria</TableHead>
                   <TableHead className="w-32">Código</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="w-24 text-center">Ativo</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="w-24 text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {nomenclaturas.map((item) => (
                   <TableRow key={item.id} data-testid={`row-nomenclatura-${item.id}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={() => toggleSelect(item.id)}
+                        data-testid={`checkbox-select-${item.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-sm">{item.categoria}</TableCell>
                     <TableCell className="font-mono">{item.codigo}</TableCell>
                     <TableCell>{item.nome}</TableCell>
@@ -304,15 +410,25 @@ export default function NomenclaturasPage() {
                         data-testid={`switch-ativo-${item.id}`}
                       />
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(item)}
-                        data-testid={`button-edit-${item.id}`}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openEdit(item)}
+                          data-testid={`button-edit-${item.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openDeleteDialog(item)}
+                          data-testid={`button-delete-${item.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -523,6 +639,55 @@ export default function NomenclaturasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a nomenclatura{" "}
+              <strong>{deletingItem?.codigo} - {deletingItem?.nome}</strong>?
+              <br />
+              Esta ação desativará o item (soft delete).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão em Lote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> nomenclatura(s) selecionada(s)?
+              <br />
+              Esta ação desativará os itens (soft delete).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-batch-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBatchDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-batch-delete"
+            >
+              {batchDeleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Excluir {selectedIds.size} item(s)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

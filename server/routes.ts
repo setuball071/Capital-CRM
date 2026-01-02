@@ -1071,6 +1071,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE em lote (soft delete - set ativo=false)
+  app.post("/api/nomenclaturas/delete-batch", requireAuth, requireMasterOrAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Lista de IDs é obrigatória" });
+      }
+
+      const numericIds = ids.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
+      
+      if (numericIds.length === 0) {
+        return res.status(400).json({ message: "Nenhum ID válido fornecido" });
+      }
+
+      const updated = await db.update(nomenclaturas)
+        .set({ ativo: false })
+        .where(inArray(nomenclaturas.id, numericIds))
+        .returning();
+
+      invalidateNomenclaturasCache();
+      return res.json({ 
+        message: `${updated.length} nomenclatura(s) desativada(s) com sucesso`,
+        count: updated.length
+      });
+    } catch (error) {
+      console.error("Delete batch nomenclaturas error:", error);
+      return res.status(500).json({ message: "Erro ao desativar nomenclaturas" });
+    }
+  });
+
   // POST import from Excel
   app.post("/api/nomenclaturas/import-excel", requireAuth, requireMasterOrAdmin, upload.single("file"), async (req, res) => {
     try {
