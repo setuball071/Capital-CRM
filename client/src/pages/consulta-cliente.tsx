@@ -308,10 +308,16 @@ export default function ConsultaCliente() {
   });
 
   // Função De-Para: retorna nome se existir, senão código original
-  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF", codigo: string | null): string => {
+  // Suporta alias de categorias (ex: ARQ. UPAG → UPAG)
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "ARQ. UPAG", codigo: string | null): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
-    const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
+    // Normaliza categoria para busca (ARQ. UPAG → UPAG)
+    const normalizedCategoria = categoria === "ARQ. UPAG" ? "UPAG" : categoria;
+    const found = nomenclaturas.find(n => {
+      const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;
+      return nCategoria === normalizedCategoria && n.codigo === codigo && n.ativo;
+    });
     return found ? found.nome : codigo;
   };
 
