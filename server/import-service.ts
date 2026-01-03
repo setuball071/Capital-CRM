@@ -174,7 +174,9 @@ export function padUpag(value: string | number | null | undefined): string | nul
   if (value === null || value === undefined || value === "") return null;
   const str = String(value).replace(/\D/g, "").trim();
   if (str.length === 0) return null;
-  return str.padStart(9, "0");
+  // Remove zeros à esquerda para normalizar (947 em vez de 000000947)
+  // Mantém pelo menos 1 caractere (para o caso de UPAG = "0")
+  return str.replace(/^0+/, "") || "0";
 }
 
 export function padPrazo(value: string | number | null | undefined): string | null {

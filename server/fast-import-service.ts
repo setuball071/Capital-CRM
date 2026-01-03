@@ -611,7 +611,10 @@ class FastImportService {
         s.matricula,
         s.nome,
         s.orgaodesc,
-        s.upag,
+        -- Normaliza UPAG removendo zeros à esquerda
+        CASE WHEN s.upag IS NOT NULL AND s.upag != '' 
+             THEN LTRIM(s.upag, '0') 
+             ELSE s.upag END,
         s.uf,
         s.municipio,
         ${convenio},
@@ -622,11 +625,17 @@ class FastImportService {
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (cpf) DO UPDATE SET
-        nome = COALESCE(EXCLUDED.nome, clientes_pessoa.nome),
-        orgaodesc = COALESCE(EXCLUDED.orgaodesc, clientes_pessoa.orgaodesc),
-        upag = COALESCE(EXCLUDED.upag, clientes_pessoa.upag),
-        uf = COALESCE(EXCLUDED.uf, clientes_pessoa.uf),
-        municipio = COALESCE(EXCLUDED.municipio, clientes_pessoa.municipio),
+        -- Substitui nome se novo valor não for vazio
+        nome = CASE WHEN EXCLUDED.nome IS NOT NULL AND EXCLUDED.nome != '' 
+                    THEN EXCLUDED.nome ELSE clientes_pessoa.nome END,
+        orgaodesc = CASE WHEN EXCLUDED.orgaodesc IS NOT NULL AND EXCLUDED.orgaodesc != '' 
+                         THEN EXCLUDED.orgaodesc ELSE clientes_pessoa.orgaodesc END,
+        upag = CASE WHEN EXCLUDED.upag IS NOT NULL AND EXCLUDED.upag != '' 
+                    THEN EXCLUDED.upag ELSE clientes_pessoa.upag END,
+        uf = CASE WHEN EXCLUDED.uf IS NOT NULL AND EXCLUDED.uf != '' 
+                  THEN EXCLUDED.uf ELSE clientes_pessoa.uf END,
+        municipio = CASE WHEN EXCLUDED.municipio IS NOT NULL AND EXCLUDED.municipio != '' 
+                         THEN EXCLUDED.municipio ELSE clientes_pessoa.municipio END,
         convenio = ${convenio},
         base_tag_ultima = ${baseTag},
         import_run_id = ${run.id},
@@ -644,7 +653,10 @@ class FastImportService {
         COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'),
         ${convenio},
         p.id,
-        s.upag,
+        -- Normaliza UPAG removendo zeros à esquerda
+        CASE WHEN s.upag IS NOT NULL AND s.upag != '' 
+             THEN LTRIM(s.upag, '0') 
+             ELSE s.upag END,
         s.rjur,
         s.sit_func,
         ${run.id},
@@ -656,9 +668,13 @@ class FastImportService {
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
         pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
-        upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
-        rjur = COALESCE(EXCLUDED.rjur, clientes_vinculo.rjur),
-        sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
+        -- Substitui campos se novo valor não for vazio
+        upag = CASE WHEN EXCLUDED.upag IS NOT NULL AND EXCLUDED.upag != '' 
+                    THEN EXCLUDED.upag ELSE clientes_vinculo.upag END,
+        rjur = CASE WHEN EXCLUDED.rjur IS NOT NULL AND EXCLUDED.rjur != '' 
+                    THEN EXCLUDED.rjur ELSE clientes_vinculo.rjur END,
+        sit_func = CASE WHEN EXCLUDED.sit_func IS NOT NULL AND EXCLUDED.sit_func != '' 
+                        THEN EXCLUDED.sit_func ELSE clientes_vinculo.sit_func END,
         import_run_id = ${run.id},
         base_tag = ${baseTag},
         ultima_atualizacao = NOW()
