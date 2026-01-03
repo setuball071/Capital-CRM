@@ -152,6 +152,10 @@ interface Vinculo {
   ativo: boolean;
   primeira_importacao: string;
   ultima_atualizacao: string;
+  extras_vinculo: {
+    instituidor?: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 interface ClienteDetalhado {
@@ -716,6 +720,19 @@ export default function ConsultaCliente() {
                         <CopyableField value={vinculoAtual?.matricula || clienteDetalhado.pessoa.matricula} label="Matrícula" onCopy={handleCopy} />
                       </p>
                     </div>
+                    {/* Matrícula do Instituidor - exibir apenas para pensionistas */}
+                    {(vinculoAtual?.sit_func?.toUpperCase().includes("PENSÃO") || 
+                      vinculoAtual?.sit_func?.toUpperCase().includes("PENSAO") ||
+                      clienteDetalhado.pessoa.sit_func?.toUpperCase().includes("PENSÃO") ||
+                      clienteDetalhado.pessoa.sit_func?.toUpperCase().includes("PENSAO")) && 
+                     vinculoAtual?.extras_vinculo?.instituidor && (
+                      <div className="space-y-1 group">
+                        <p className="text-sm text-muted-foreground">Matrícula Instituidor</p>
+                        <p className="font-mono" data-testid="text-matricula-instituidor">
+                          <CopyableField value={vinculoAtual.extras_vinculo.instituidor} label="Matrícula Instituidor" onCopy={handleCopy} />
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Convênio</p>
                       <Badge variant="outline">{clienteDetalhado.pessoa.convenio || "-"}</Badge>

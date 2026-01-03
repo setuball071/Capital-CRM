@@ -6020,6 +6020,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           ativo: v.ativo,
           primeira_importacao: v.primeiraImportacao,
           ultima_atualizacao: v.ultimaAtualizacao,
+          extras_vinculo: v.extrasVinculo || null,
         })),
         vinculo_selecionado: vinculoIdEfetivo,
         tem_multiplos_vinculos: vinculos.length > 1,
