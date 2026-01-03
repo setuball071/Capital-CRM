@@ -295,14 +295,46 @@ class StreamingImportService {
   }
 
   private async processD8Stream(run: ImportRun): Promise<ImportJobResult> {
+    // Auto-detectar layout D8 baseado na presença de m_instituidor se não especificado
+    let effectiveLayoutD8 = run.layoutD8;
+    if (!effectiveLayoutD8) {
+      const headers = await this.readFirstLineHeaders(run.arquivoPath!);
+      const normalizedHeaders = headers.map(h => normalizeCol(h));
+      const hasInstituidor = normalizedHeaders.includes("m_instituidor");
+      effectiveLayoutD8 = hasInstituidor ? "pensionista" : "servidor";
+      console.log(`[IMPORT ${run.id}] Auto-detected D8 layout: ${effectiveLayoutD8} (m_instituidor: ${hasInstituidor})`);
+      
+      // Atualizar run com layout detectado
+      await db
+        .update(importRuns)
+        .set({ layoutD8: effectiveLayoutD8, updatedAt: new Date() })
+        .where(eq(importRuns.id, run.id));
+      
+      // Atualizar run local
+      run.layoutD8 = effectiveLayoutD8;
+    }
+    
     const columnMap =
-      run.layoutD8 === "pensionista"
+      effectiveLayoutD8 === "pensionista"
         ? D8_COLUMN_MAP_PENSIONISTA
         : D8_COLUMN_MAP_SERVIDOR;
 
     return this.processGenericStream(run, columnMap, async (row, headerMap, errors) => {
       return this.processD8Row(row, headerMap, run, errors);
     });
+  }
+  
+  private async readFirstLineHeaders(filePath: string): Promise<string[]> {
+    const stream = fs.createReadStream(filePath, { start: 0, end: 20000, encoding: "utf8" });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    let headers: string[] = [];
+    for await (const line of rl) {
+      headers = this.parseCSVLine(line);
+      break;
+    }
+    rl.close();
+    stream.destroy();
+    return headers;
   }
 
   private async processContatosStream(run: ImportRun): Promise<ImportJobResult> {
@@ -357,6 +389,7 @@ class StreamingImportService {
     console.log(`[IMPORT ${run.id}] Mapeamento de colunas:`, JSON.stringify(headerMap, null, 2));
 
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
+    // Nota: effectiveLayoutD8 já foi determinado em processD8Stream
     if (run.tipoImport === "d8") {
       const normalizedHeaders = headers.map(h => normalizeCol(h));
       const requiredHeaders = run.layoutD8 === "pensionista" 

@@ -286,13 +286,28 @@ class FastImportService {
     let pausedForResume = false;
     
     const headers = await this.readHeaders(filePath);
-    const columnMap = this.getColumnMap(run.tipoImport, run.layoutD8);
+    const normalizedHeaders = headers.map(h => normalizeCol(h));
+    
+    // Auto-detectar layout D8 baseado na presença de m_instituidor
+    let effectiveLayoutD8 = run.layoutD8;
+    if (run.tipoImport === "d8" && !effectiveLayoutD8) {
+      const hasInstituidor = normalizedHeaders.includes("m_instituidor");
+      effectiveLayoutD8 = hasInstituidor ? "pensionista" : "servidor";
+      console.log(`[FastImport] Auto-detected D8 layout: ${effectiveLayoutD8} (m_instituidor: ${hasInstituidor})`);
+      
+      // Atualizar run com layout detectado
+      await db
+        .update(importRuns)
+        .set({ layoutD8: effectiveLayoutD8, updatedAt: new Date() })
+        .where(eq(importRuns.id, run.id));
+    }
+    
+    const columnMap = this.getColumnMap(run.tipoImport, effectiveLayoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
     
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
-      const normalizedHeaders = headers.map(h => normalizeCol(h));
-      const requiredHeaders = run.layoutD8 === "pensionista" 
+      const requiredHeaders = effectiveLayoutD8 === "pensionista" 
         ? D8_PENSIONISTA_REQUIRED_HEADERS 
         : D8_REQUIRED_HEADERS;
       
@@ -306,7 +321,7 @@ class FastImportService {
       });
       
       if (missingHeaders.length > 0) {
-        const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
+        const layoutName = effectiveLayoutD8 === "pensionista" ? "Pensionista" : "Servidor";
         throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
       }
     }
