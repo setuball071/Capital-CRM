@@ -1656,6 +1656,8 @@ export const stagingD8 = pgTable("staging_d8", {
   cpf: varchar("cpf", { length: 14 }),
   matricula: varchar("matricula", { length: 50 }),
   nome: varchar("nome", { length: 255 }),
+  natureza: varchar("natureza", { length: 50 }),
+  orgao: varchar("orgao", { length: 20 }),
   banco: varchar("banco", { length: 100 }),
   numeroContrato: varchar("numero_contrato", { length: 100 }),
   tipoContrato: varchar("tipo_contrato", { length: 100 }),

@@ -68,13 +68,15 @@ export interface FastImportResult {
 }
 
 // Mapa D8 Servidor (11 colunas)
+// Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
   matricula: "matricula",
   nome: "nome",
   banco: "banco",
   orgao: "orgao",
-  uf: "uf",
+  uf: "natureza",
+  natureza: "natureza",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
@@ -87,11 +89,13 @@ const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
 };
 
 // Mapa D8 Pensionista (14 colunas específicas)
+// Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
   orgao: "orgao",
   m_instituidor: "m_instituidor",
   matricula: "matricula",
-  uf: "uf",
+  uf: "natureza",
+  natureza: "natureza",
   nome: "nome",
   cpf: "cpf",
   tipo_contrato: "tipo_contrato",
@@ -770,6 +774,27 @@ class FastImportService {
 
     const baseTag = run.baseTag || "";
     
+    // 1. Atualizar clientes_pessoa com nome e natureza do D8
+    const pessoaResult = await db.execute(sql`
+      UPDATE clientes_pessoa p
+      SET 
+        nome = CASE WHEN s.nome IS NOT NULL AND s.nome != '' THEN s.nome ELSE p.nome END,
+        natureza = CASE WHEN s.natureza IS NOT NULL AND s.natureza != '' THEN s.natureza ELSE p.natureza END,
+        import_run_id = ${run.id}
+      FROM (
+        SELECT DISTINCT ON (cpf) cpf, nome, natureza
+        FROM staging_d8
+        WHERE import_run_id = ${run.id}
+          AND cpf IS NOT NULL AND cpf != ''
+        ORDER BY cpf, id DESC
+      ) s
+      WHERE p.cpf = s.cpf
+        AND p.tenant_id = ${tenantId}
+    `);
+
+    console.log(`[FastImport] Pessoas updated from D8: ${pessoaResult.rowCount || 0}`);
+    
+    // 2. Inserir/atualizar contratos
     const contratoResult = await db.execute(sql`
       INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
@@ -930,6 +955,8 @@ class FastImportService {
         cpf: padCpf(getValue("cpf")),
         matricula: preserveMatricula(getValue("matricula")),
         nome: getValue("nome") || null,
+        natureza: getValue("natureza") || null,
+        orgao: getValue("orgao") || null,
         banco: getValue("banco") || run.banco || null,
         numeroContrato: preserveNumeroContrato(getValue("numero_contrato")),
         tipoContrato: getValue("tipo_contrato") || null,
