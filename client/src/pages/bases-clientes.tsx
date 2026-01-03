@@ -22,6 +22,20 @@ import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import type { BaseImportada, ImportRun } from "@shared/schema";
 
+// Queue item type for batch import
+type ImportQueueItem = {
+  id: string;
+  file: File;
+  tipo: string;
+  convenio: string;
+  competencia: string;
+  layoutD8: string;
+  status: "pending" | "processing" | "completed" | "error";
+  progress?: number;
+  result?: any;
+  error?: string;
+};
+
 // Extended type for API response with real counts and rejection reasons
 type ImportRunWithCounts = ImportRun & {
   realCounts?: {
@@ -140,6 +154,12 @@ export default function BasesClientes() {
   const [fastImportStatus, setFastImportStatus] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
   
+  // Import Queue states
+  const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([]);
+  const [isQueueProcessing, setIsQueueProcessing] = useState(false);
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
+  const queueProcessingRef = useRef(false);
+  
   // Import Runs detail states
   const [selectedImportRun, setSelectedImportRun] = useState<ImportRunWithCounts | null>(null);
   const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
@@ -255,12 +275,214 @@ export default function BasesClientes() {
   });
 
   const handleFastImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFastImportFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      // Se múltiplos arquivos, adicionar à fila
+      if (e.target.files.length > 1) {
+        const newItems: ImportQueueItem[] = Array.from(e.target.files).map((file, idx) => ({
+          id: `${Date.now()}-${idx}`,
+          file,
+          tipo: fastImportTipo,
+          convenio: fastImportConvenio,
+          competencia: fastImportCompetencia,
+          layoutD8: fastImportLayoutD8,
+          status: "pending" as const,
+        }));
+        setImportQueue(prev => [...prev, ...newItems]);
+        setFastImportFile(null);
+      } else {
+        setFastImportFile(e.target.files[0]);
+      }
     }
   };
 
+  // Adicionar arquivo único à fila
+  const addToQueue = () => {
+    if (!fastImportFile || !fastImportConvenio || !fastImportCompetencia) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha todos os campos antes de adicionar à fila.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const newItem: ImportQueueItem = {
+      id: `${Date.now()}`,
+      file: fastImportFile,
+      tipo: fastImportTipo,
+      convenio: fastImportConvenio,
+      competencia: fastImportCompetencia,
+      layoutD8: fastImportLayoutD8,
+      status: "pending",
+    };
+    
+    setImportQueue(prev => [...prev, newItem]);
+    setFastImportFile(null);
+    toast({
+      title: "Arquivo adicionado à fila",
+      description: `${newItem.file.name} aguardando processamento.`,
+    });
+  };
+
+  // Remover item da fila
+  const removeFromQueue = (itemId: string) => {
+    setImportQueue(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // Processar um item da fila
+  const processQueueItem = async (item: ImportQueueItem): Promise<{ success: boolean; error?: string }> => {
+    return new Promise((resolve) => {
+      const formData = new FormData();
+      formData.append("arquivo", item.file);
+      formData.append("tipo_import", item.tipo);
+      formData.append("convenio", item.convenio);
+      formData.append("competencia", item.competencia);
+      if (item.tipo === "d8") {
+        formData.append("layout_d8", item.layoutD8);
+        formData.append("banco", "DIVERSOS");
+      }
+
+      fetch("/api/fast-imports/start", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      })
+        .then(res => {
+          if (!res.ok) throw new Error("Erro ao iniciar importação");
+          return res.json();
+        })
+        .then(data => {
+          const runId = data.importRunId;
+          
+          // Polling para processar
+          const pollProcess = async () => {
+            try {
+              const processRes = await apiRequest("POST", `/api/fast-imports/process/${runId}`);
+              const processData = await processRes.json();
+              
+              if (processData.pausedForResume) {
+                setTimeout(pollProcess, 100);
+              } else if (processData.status === "concluida" || processData.phase === "completed") {
+                resolve({ success: true });
+              } else if (processData.status === "erro") {
+                resolve({ success: false, error: processData.message || "Erro no processamento" });
+              } else {
+                setTimeout(pollProcess, 100);
+              }
+            } catch (err: any) {
+              resolve({ success: false, error: err.message });
+            }
+          };
+          
+          pollProcess();
+        })
+        .catch(err => resolve({ success: false, error: err.message }));
+    });
+  };
+
+  // Iniciar processamento da fila
+  const startQueueProcessing = async () => {
+    if (importQueue.length === 0) {
+      toast({
+        title: "Fila vazia",
+        description: "Adicione arquivos à fila primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsQueueProcessing(true);
+    setIsPolling(true);
+    queueProcessingRef.current = true;
+    
+    let completedCount = 0;
+    let processedAny = false;
+    const totalItems = importQueue.length;
+    
+    for (let i = 0; i < totalItems; i++) {
+      if (!queueProcessingRef.current) break;
+      
+      const item = importQueue[i];
+      if (item.status === "completed" || item.status === "error") {
+        if (item.status === "completed") completedCount++;
+        continue;
+      }
+      
+      processedAny = true;
+      setCurrentQueueIndex(i);
+      setImportQueue(prev => prev.map((q, idx) => 
+        idx === i ? { ...q, status: "processing" as const } : q
+      ));
+      
+      const result = await processQueueItem(item);
+      
+      if (result.success) {
+        completedCount++;
+        setImportQueue(prev => prev.map((q, idx) => 
+          idx === i ? { ...q, status: "completed" as const } : q
+        ));
+        toast({
+          title: `Importação ${i + 1}/${totalItems} concluída`,
+          description: item.file.name,
+        });
+      } else {
+        setImportQueue(prev => prev.map((q, idx) => 
+          idx === i ? { ...q, status: "error" as const, error: result.error } : q
+        ));
+        toast({
+          title: `Erro na importação ${i + 1}/${totalItems}`,
+          description: result.error,
+          variant: "destructive",
+        });
+      }
+    }
+    
+    setIsQueueProcessing(false);
+    setIsPolling(false);
+    queueProcessingRef.current = false;
+    
+    // Só invalida cache se processou algo
+    if (processedAny) {
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+    }
+    
+    toast({
+      title: "Fila concluída!",
+      description: `${completedCount} de ${totalItems} importações concluídas.`,
+    });
+  };
+
+  // Pausar fila
+  const pauseQueue = () => {
+    queueProcessingRef.current = false;
+    toast({
+      title: "Fila pausada",
+      description: "A importação atual será concluída, mas as próximas não serão iniciadas.",
+    });
+  };
+
+  // Limpar fila
+  const clearQueue = () => {
+    if (isQueueProcessing) {
+      toast({
+        title: "Aguarde",
+        description: "Pause a fila antes de limpar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setImportQueue([]);
+  };
+
   const handleStartFastImport = async () => {
+    // Se há itens na fila, processar a fila
+    if (importQueue.length > 0) {
+      startQueueProcessing();
+      return;
+    }
+    
+    // Caso contrário, importação única (comportamento original)
     if (!fastImportFile || !fastImportConvenio || !fastImportCompetencia) {
       toast({
         title: "Campos obrigatórios",
@@ -293,6 +515,10 @@ export default function BasesClientes() {
     setFastImportRunId(null);
     setFastImportStatus(null);
     setIsPolling(false);
+    setImportQueue([]);
+    setIsQueueProcessing(false);
+    setCurrentQueueIndex(0);
+    queueProcessingRef.current = false;
     setIsFastImportOpen(false);
   };
 
@@ -1411,22 +1637,6 @@ export default function BasesClientes() {
                 )}
                 
                 <div className="space-y-2">
-                  <Label htmlFor="fast-file">Arquivo CSV *</Label>
-                  <Input
-                    id="fast-file"
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFastImportFileChange}
-                    data-testid="input-fast-file"
-                  />
-                  {fastImportFile && (
-                    <p className="text-sm text-muted-foreground">
-                      Arquivo: {fastImportFile.name} ({(fastImportFile.size / 1024 / 1024).toFixed(2)} MB)
-                    </p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
                   <Label htmlFor="fast-convenio">Convênio *</Label>
                   <ConvenioCombobox
                     value={fastImportConvenio}
@@ -1446,107 +1656,235 @@ export default function BasesClientes() {
                     data-testid="input-fast-competencia"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fast-file">Arquivo(s) CSV</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="fast-file"
+                      type="file"
+                      accept=".csv"
+                      multiple
+                      onChange={handleFastImportFileChange}
+                      className="flex-1"
+                      data-testid="input-fast-file"
+                    />
+                    {fastImportFile && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addToQueue}
+                        data-testid="button-add-to-queue"
+                      >
+                        + Fila
+                      </Button>
+                    )}
+                  </div>
+                  {fastImportFile && (
+                    <p className="text-sm text-muted-foreground">
+                      Arquivo: {fastImportFile.name} ({(fastImportFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Selecione múltiplos arquivos para importar em sequência
+                  </p>
+                </div>
+                
+                {importQueue.length > 0 && (
+                  <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Fila de Importação ({importQueue.length} arquivos)</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearQueue}
+                        className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                        data-testid="button-clear-queue"
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                    <ScrollArea className="h-[120px]">
+                      <div className="space-y-1">
+                        {importQueue.map((item, idx) => (
+                          <div 
+                            key={item.id} 
+                            className="flex items-center justify-between text-sm p-2 rounded bg-background"
+                            data-testid={`queue-item-${idx}`}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="text-muted-foreground w-4">{idx + 1}.</span>
+                              <span className="truncate flex-1">{item.file.name}</span>
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {item.tipo}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeFromQueue(item.id)}
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              data-testid={`button-remove-queue-${idx}`}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4 py-6">
-                <div className="flex items-center justify-center">
-                  <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
-                </div>
-                <div className="text-center">
-                  <p className="font-medium">Processando importação...</p>
-                  {fastImportStatus && (
-                    <>
+                {isQueueProcessing ? (
+                  <>
+                    <div className="flex items-center justify-center">
+                      <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-medium">Processando fila de importação...</p>
                       <p className="text-sm text-muted-foreground mt-2">
-                        Fase: {fastImportStatus.phase === "staging" ? "Carregando dados" : 
-                               fastImportStatus.phase === "merge" ? "Mesclando registros" : 
-                               fastImportStatus.phase === "completed" ? "Concluído" : fastImportStatus.phase}
+                        {importQueue.filter(q => q.status === "completed").length} de {importQueue.length} concluídos
                       </p>
-                      {fastImportStatus.stagedRows > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Linhas carregadas: {fastImportStatus.stagedRows?.toLocaleString("pt-BR")}
-                        </p>
-                      )}
-                      {fastImportStatus.mergedRows > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Registros mesclados: {fastImportStatus.mergedRows?.toLocaleString("pt-BR")}
-                        </p>
-                      )}
-                      {fastImportStatus.elapsedMs > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Tempo: {(fastImportStatus.elapsedMs / 1000).toFixed(1)}s
-                        </p>
-                      )}
-                      
-                      {fastImportStatus.report && (
-                        <div className="mt-4 p-3 bg-muted rounded-lg text-left" data-testid="fast-import-report">
-                          <h4 className="font-medium text-sm mb-2">Relatório da Importação</h4>
-                          <div className="grid grid-cols-3 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Total:</span>
-                              <p className="font-medium">{fastImportStatus.report.totalLinhas?.toLocaleString("pt-BR") || 0}</p>
+                    </div>
+                    <Progress 
+                      value={(importQueue.filter(q => q.status === "completed").length / importQueue.length) * 100} 
+                      className="h-2" 
+                    />
+                    <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
+                      <ScrollArea className="h-[180px]">
+                        <div className="space-y-1">
+                          {importQueue.map((item, idx) => (
+                            <div 
+                              key={item.id} 
+                              className="flex items-center justify-between text-sm p-2 rounded bg-background"
+                              data-testid={`queue-processing-item-${idx}`}
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                {item.status === "completed" && <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />}
+                                {item.status === "processing" && <RefreshCw className="w-4 h-4 text-amber-500 animate-spin shrink-0" />}
+                                {item.status === "error" && <XCircle className="w-4 h-4 text-red-600 shrink-0" />}
+                                {item.status === "pending" && <Clock className="w-4 h-4 text-muted-foreground shrink-0" />}
+                                <span className="truncate flex-1">{item.file.name}</span>
+                              </div>
+                              <Badge 
+                                variant={item.status === "completed" ? "default" : item.status === "error" ? "destructive" : "outline"}
+                                className="text-xs shrink-0"
+                              >
+                                {item.status === "completed" ? "Concluído" : 
+                                 item.status === "processing" ? "Processando" : 
+                                 item.status === "error" ? "Erro" : "Aguardando"}
+                              </Badge>
                             </div>
-                            <div>
-                              <span className="text-muted-foreground">Importadas:</span>
-                              <p className="font-medium text-green-600">{fastImportStatus.report.importadas?.toLocaleString("pt-BR") || 0}</p>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Rejeitadas:</span>
-                              <p className="font-medium text-red-600">{fastImportStatus.report.rejeitadas?.toLocaleString("pt-BR") || 0}</p>
-                            </div>
-                          </div>
-                          {fastImportStatus.report.motivosRejeicao && Object.keys(fastImportStatus.report.motivosRejeicao).length > 0 && (
-                            <div className="mt-3 pt-2 border-t">
-                              <span className="text-xs text-muted-foreground">Motivos de Rejeição:</span>
-                              <ul className="text-xs mt-1 space-y-1">
-                                {Object.entries(fastImportStatus.report.motivosRejeicao).map(([motivo, count]) => (
-                                  <li key={motivo} className="flex justify-between">
-                                    <span className="text-muted-foreground truncate max-w-[200px]">{motivo}</span>
-                                    <span className="font-medium text-red-600">{(count as number).toLocaleString("pt-BR")}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center">
+                      <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-medium">Processando importação...</p>
+                      {fastImportStatus && (
+                        <>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Fase: {fastImportStatus.phase === "staging" ? "Carregando dados" : 
+                                   fastImportStatus.phase === "merge" ? "Mesclando registros" : 
+                                   fastImportStatus.phase === "completed" ? "Concluído" : fastImportStatus.phase}
+                          </p>
+                          {fastImportStatus.stagedRows > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              Linhas carregadas: {fastImportStatus.stagedRows?.toLocaleString("pt-BR")}
+                            </p>
+                          )}
+                          {fastImportStatus.mergedRows > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              Registros mesclados: {fastImportStatus.mergedRows?.toLocaleString("pt-BR")}
+                            </p>
+                          )}
+                          {fastImportStatus.elapsedMs > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Tempo: {(fastImportStatus.elapsedMs / 1000).toFixed(1)}s
+                            </p>
                           )}
                           
-                          {fastImportRunId && (fastImportStatus?.phase === "completed" || fastImportStatus?.status?.startsWith("concluido")) && (
-                            <div className="mt-3 pt-2 border-t flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => {
-                                  viewImportRunDetails(fastImportRunId);
-                                  setIsFastImportOpen(false);
-                                }}
-                                data-testid="button-fast-view-report"
-                              >
-                                <HelpCircle className="w-4 h-4 mr-1" />
-                                Ver Relatório Completo
-                              </Button>
-                              {(fastImportStatus?.errorRows || 0) > 0 && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 text-red-600"
-                                  onClick={() => downloadImportErrors(fastImportRunId)}
-                                  disabled={isDownloadingErrors}
-                                  data-testid="button-fast-download-errors"
-                                >
-                                  <Download className="w-4 h-4 mr-1" />
-                                  Baixar Erros CSV
-                                </Button>
+                          {fastImportStatus.report && (
+                            <div className="mt-4 p-3 bg-muted rounded-lg text-left" data-testid="fast-import-report">
+                              <h4 className="font-medium text-sm mb-2">Relatório da Importação</h4>
+                              <div className="grid grid-cols-3 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Total:</span>
+                                  <p className="font-medium">{fastImportStatus.report.totalLinhas?.toLocaleString("pt-BR") || 0}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Importadas:</span>
+                                  <p className="font-medium text-green-600">{fastImportStatus.report.importadas?.toLocaleString("pt-BR") || 0}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Rejeitadas:</span>
+                                  <p className="font-medium text-red-600">{fastImportStatus.report.rejeitadas?.toLocaleString("pt-BR") || 0}</p>
+                                </div>
+                              </div>
+                              {fastImportStatus.report.motivosRejeicao && Object.keys(fastImportStatus.report.motivosRejeicao).length > 0 && (
+                                <div className="mt-3 pt-2 border-t">
+                                  <span className="text-xs text-muted-foreground">Motivos de Rejeição:</span>
+                                  <ul className="text-xs mt-1 space-y-1">
+                                    {Object.entries(fastImportStatus.report.motivosRejeicao).map(([motivo, count]) => (
+                                      <li key={motivo} className="flex justify-between">
+                                        <span className="text-muted-foreground truncate max-w-[200px]">{motivo}</span>
+                                        <span className="font-medium text-red-600">{(count as number).toLocaleString("pt-BR")}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              
+                              {fastImportRunId && (fastImportStatus?.phase === "completed" || fastImportStatus?.status?.startsWith("concluido")) && (
+                                <div className="mt-3 pt-2 border-t flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => {
+                                      viewImportRunDetails(fastImportRunId);
+                                      setIsFastImportOpen(false);
+                                    }}
+                                    data-testid="button-fast-view-report"
+                                  >
+                                    <HelpCircle className="w-4 h-4 mr-1" />
+                                    Ver Relatório Completo
+                                  </Button>
+                                  {(fastImportStatus?.errorRows || 0) > 0 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="flex-1 text-red-600"
+                                      onClick={() => downloadImportErrors(fastImportRunId)}
+                                      disabled={isDownloadingErrors}
+                                      data-testid="button-fast-download-errors"
+                                    >
+                                      <Download className="w-4 h-4 mr-1" />
+                                      Baixar Erros CSV
+                                    </Button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}
-                        </div>
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
-                <Progress value={fastImportStatus?.phase === "completed" ? 100 : 
-                                 fastImportStatus?.phase === "merge" ? 75 : 
-                                 fastImportStatus?.phase === "staging" ? 25 : 0} 
-                          className="h-2" />
+                    </div>
+                    <Progress value={fastImportStatus?.phase === "completed" ? 100 : 
+                                     fastImportStatus?.phase === "merge" ? 75 : 
+                                     fastImportStatus?.phase === "staging" ? 25 : 0} 
+                              className="h-2" />
+                  </>
+                )}
               </div>
             )}
             
@@ -1562,7 +1900,7 @@ export default function BasesClientes() {
                   </Button>
                   <Button
                     onClick={handleStartFastImport}
-                    disabled={startFastImportMutation.isPending}
+                    disabled={startFastImportMutation.isPending || (!fastImportFile && importQueue.length === 0)}
                     className="bg-amber-600 hover:bg-amber-700"
                     data-testid="button-fast-submit"
                   >
@@ -1570,6 +1908,11 @@ export default function BasesClientes() {
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Iniciando...
+                      </>
+                    ) : importQueue.length > 0 ? (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Iniciar Fila ({importQueue.length})
                       </>
                     ) : (
                       <>
@@ -1580,13 +1923,25 @@ export default function BasesClientes() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsFastImportOpen(false)}
-                  data-testid="button-fast-minimize"
-                >
-                  Minimizar (continua em segundo plano)
-                </Button>
+                <div className="flex gap-2 w-full">
+                  {isQueueProcessing && (
+                    <Button
+                      variant="destructive"
+                      onClick={pauseQueue}
+                      data-testid="button-pause-queue"
+                    >
+                      Pausar Fila
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsFastImportOpen(false)}
+                    className="flex-1"
+                    data-testid="button-fast-minimize"
+                  >
+                    Minimizar (continua em segundo plano)
+                  </Button>
+                </div>
               )}
             </DialogFooter>
           </DialogContent>
