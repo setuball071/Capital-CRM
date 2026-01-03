@@ -221,6 +221,7 @@ export interface IStorage {
   createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
   updateClienteContrato(id: number, data: Partial<InsertClienteContrato>): Promise<ClienteContrato | undefined>;
   getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]>;
+  getContratosByVinculoId(vinculoId: number): Promise<ClienteContrato[]>;
   
   // Bases Importadas
   getAllBasesImportadas(): Promise<BaseImportada[]>;
@@ -1519,6 +1520,13 @@ export class DbStorage implements IStorage {
     return await db.select()
       .from(clientesContratos)
       .where(eq(clientesContratos.pessoaId, pessoaId))
+      .orderBy(sql`${clientesContratos.competencia} DESC`);
+  }
+
+  async getContratosByVinculoId(vinculoId: number): Promise<ClienteContrato[]> {
+    return await db.select()
+      .from(clientesContratos)
+      .where(eq(clientesContratos.vinculoId, vinculoId))
       .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
 

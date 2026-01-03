@@ -5893,8 +5893,20 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
       }
       
-      // Get contratos
-      const contratos = await storage.getContratosByPessoaId(pessoaId);
+      // Get contratos - filtrar por vínculo quando disponível
+      let contratos;
+      if (vinculoIdEfetivo) {
+        // Primeiro tenta por vínculo específico
+        contratos = await storage.getContratosByVinculoId(vinculoIdEfetivo);
+        // Fallback: se não encontrou contratos por vínculo, buscar contratos sem vínculo associado (dados antigos)
+        if (contratos.length === 0) {
+          const todosPessoa = await storage.getContratosByPessoaId(pessoaId);
+          // Incluir apenas contratos que não têm vínculo atribuído ou pertencem a este vínculo
+          contratos = todosPessoa.filter(c => !c.vinculoId || c.vinculoId === vinculoIdEfetivo);
+        }
+      } else {
+        contratos = await storage.getContratosByPessoaId(pessoaId);
+      }
       
       // Get telefones da tabela clientes_telefones
       const telefones = await storage.getTelefonesByPessoaId(pessoaId);
