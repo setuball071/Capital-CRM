@@ -834,9 +834,10 @@ class FastImportService {
     
     // 3. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
     // Incluindo a competência selecionada na importação
+    // IMPORTANTE: DISTINCT ON deve usar (p.id, numero_contrato) para evitar erro ON CONFLICT quando CPF tem múltiplos vínculos
     const contratoResult = await db.execute(sql`
       INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, competencia, import_run_id, base_tag)
-      SELECT DISTINCT ON (COALESCE(v.id, p.id), s.numero_contrato)
+      SELECT DISTINCT ON (p.id, s.numero_contrato)
         p.id,
         v.id,
         COALESCE(s.banco, ${banco}),
@@ -856,6 +857,7 @@ class FastImportService {
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.numero_contrato IS NOT NULL AND s.numero_contrato != ''
+      ORDER BY p.id, s.numero_contrato, v.id NULLS LAST
       ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
         vinculo_id = COALESCE(EXCLUDED.vinculo_id, clientes_contratos.vinculo_id),
         banco = COALESCE(EXCLUDED.banco, clientes_contratos.banco),
