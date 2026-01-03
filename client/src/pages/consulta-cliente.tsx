@@ -980,7 +980,7 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_70)}</span>
+                                <span className={(folhaAtual.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_70)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -1001,7 +1001,7 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_35)}</span>
+                                <span className={(folhaAtual.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_35)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -1022,7 +1022,7 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_saldo_5)}</span>
+                                <span className={(folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_5)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -1043,7 +1043,7 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className="text-green-600">{formatCurrency(folhaAtual.margem_beneficio_saldo_5)}</span>
+                                <span className={(folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_beneficio_saldo_5)}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -1137,7 +1137,7 @@ export default function ConsultaCliente() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Tipo</TableHead>
-                          <TableHead>Banco do Empréstimo</TableHead>
+                          <TableHead>Origem do Desconto</TableHead>
                           <TableHead>Nº Contrato</TableHead>
                           <TableHead>Valor Parcela</TableHead>
                           <TableHead>Saldo Devedor</TableHead>
@@ -1154,7 +1154,7 @@ export default function ConsultaCliente() {
                               </Badge>
                             </TableCell>
                             <TableCell className="group">
-                              <CopyableField value={contrato.banco} label="Banco do Empréstimo" onCopy={handleCopy} />
+                              <CopyableField value={contrato.banco} label="Origem do Desconto" onCopy={handleCopy} />
                             </TableCell>
                             <TableCell className="group font-mono text-sm">
                               <CopyableField value={contrato.numero_contrato} label="Número do Contrato" onCopy={handleCopy} />
