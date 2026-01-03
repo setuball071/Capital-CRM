@@ -749,7 +749,10 @@ export default function ConsultaCliente() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">UPAG</p>
-                      <p>{vinculoAtual?.upag || clienteDetalhado.pessoa.upag || "-"}</p>
+                      <p>{mapNomenclatura("UPAG", vinculoAtual?.upag || clienteDetalhado.pessoa.upag)}</p>
+                      {(vinculoAtual?.upag || clienteDetalhado.pessoa.upag) && (
+                        <p className="text-xs text-muted-foreground">Código: {vinculoAtual?.upag || clienteDetalhado.pessoa.upag}</p>
+                      )}
                     </div>
                     <div className="space-y-1 md:col-span-2">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
