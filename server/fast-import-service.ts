@@ -794,11 +794,13 @@ class FastImportService {
 
     console.log(`[FastImport] Pessoas updated from D8: ${pessoaResult.rowCount || 0}`);
     
-    // 2. Inserir/atualizar contratos
+    // 2. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
+    // Primeiro tenta encontrar o vínculo exato, se não encontrar usa apenas pessoa_id
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
-      SELECT DISTINCT ON (p.id, s.numero_contrato)
+      INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
+      SELECT DISTINCT ON (COALESCE(v.id, p.id), s.numero_contrato)
         p.id,
+        v.id,
         COALESCE(s.banco, ${banco}),
         s.numero_contrato,
         s.tipo_contrato,
@@ -807,11 +809,16 @@ class FastImportService {
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
-      JOIN clientes_pessoa p ON p.cpf = s.cpf
+      JOIN clientes_pessoa p ON p.cpf = s.cpf AND p.tenant_id = ${tenantId}
+      LEFT JOIN clientes_vinculo v ON v.cpf = s.cpf 
+        AND v.tenant_id = ${tenantId}
+        AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
+        AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.numero_contrato IS NOT NULL AND s.numero_contrato != ''
       ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
+        vinculo_id = COALESCE(EXCLUDED.vinculo_id, clientes_contratos.vinculo_id),
         banco = COALESCE(EXCLUDED.banco, clientes_contratos.banco),
         tipo_contrato = COALESCE(EXCLUDED.tipo_contrato, clientes_contratos.tipo_contrato),
         valor_parcela = COALESCE(EXCLUDED.valor_parcela, clientes_contratos.valor_parcela),
