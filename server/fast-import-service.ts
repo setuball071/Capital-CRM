@@ -769,8 +769,10 @@ class FastImportService {
     const banco = run.banco || "DESCONHECIDO";
     // Fallback para tenant 1 (goldcard) para compatibilidade
     const tenantId = run.tenantId || 1;
+    // Usar competência do run (selecionada na importação)
+    const competencia = run.competencia || null;
 
-    console.log(`[FastImport] Starting SQL-based merge for D8...`);
+    console.log(`[FastImport] Starting SQL-based merge for D8 (competencia: ${competencia})...`);
 
     const baseTag = run.baseTag || "";
     
@@ -794,10 +796,31 @@ class FastImportService {
 
     console.log(`[FastImport] Pessoas updated from D8: ${pessoaResult.rowCount || 0}`);
     
-    // 2. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
-    // Primeiro tenta encontrar o vínculo exato, se não encontrar usa apenas pessoa_id
+    // 2. Atualizar extras_vinculo com M_INSTITUIDOR para pensionistas
+    const instituidorResult = await db.execute(sql`
+      UPDATE clientes_vinculo v
+      SET 
+        extras_vinculo = COALESCE(v.extras_vinculo, '{}'::jsonb) || jsonb_build_object('instituidor', s.m_instituidor)
+      FROM (
+        SELECT DISTINCT ON (cpf, matricula, orgao) cpf, matricula, orgao, m_instituidor
+        FROM staging_d8
+        WHERE import_run_id = ${run.id}
+          AND cpf IS NOT NULL AND cpf != ''
+          AND m_instituidor IS NOT NULL AND m_instituidor != ''
+        ORDER BY cpf, matricula, orgao, id DESC
+      ) s
+      WHERE v.cpf = s.cpf
+        AND v.tenant_id = ${tenantId}
+        AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
+        AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
+    `);
+
+    console.log(`[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`);
+    
+    // 3. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
+    // Incluindo a competência selecionada na importação
     const contratoResult = await db.execute(sql`
-      INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, import_run_id, base_tag)
+      INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, competencia, import_run_id, base_tag)
       SELECT DISTINCT ON (COALESCE(v.id, p.id), s.numero_contrato)
         p.id,
         v.id,
@@ -806,6 +829,7 @@ class FastImportService {
         s.tipo_contrato,
         s.valor_parcela,
         s.prazo_remanescente,
+        ${competencia},
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
@@ -823,6 +847,7 @@ class FastImportService {
         tipo_contrato = COALESCE(EXCLUDED.tipo_contrato, clientes_contratos.tipo_contrato),
         valor_parcela = COALESCE(EXCLUDED.valor_parcela, clientes_contratos.valor_parcela),
         parcelas_restantes = COALESCE(EXCLUDED.parcelas_restantes, clientes_contratos.parcelas_restantes),
+        competencia = COALESCE(EXCLUDED.competencia, clientes_contratos.competencia),
         import_run_id = ${run.id},
         base_tag = ${baseTag}
     `);
