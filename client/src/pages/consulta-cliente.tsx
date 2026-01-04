@@ -304,6 +304,18 @@ export default function ConsultaCliente() {
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
   const [showTelefonesModal, setShowTelefonesModal] = useState(false);
+  const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+  
+  // Função para calcular Saldo Devedor usando Tabela Price
+  const calcularSaldoDevedorPrice = (valorParcela: number | null, taxaPercent: number, parcelasRestantes: number | null): number | null => {
+    if (!valorParcela || !parcelasRestantes || taxaPercent <= 0) return null;
+    const i = taxaPercent / 100; // Converter percentual para decimal
+    const n = parcelasRestantes;
+    const pmt = valorParcela;
+    // PV = PMT × (1 - (1 + i)^-n) / i
+    const pv = pmt * (1 - Math.pow(1 + i, -n)) / i;
+    return pv;
+  };
 
   // Busca nomenclaturas para De-Para (ORGAO e TIPO_CONTRATO) - usa endpoint com cache no backend
   const { data: nomenclaturas } = useQuery<Nomenclatura[]>({
@@ -1140,6 +1152,7 @@ export default function ConsultaCliente() {
                           <TableHead>Origem do Desconto</TableHead>
                           <TableHead>Nº Contrato</TableHead>
                           <TableHead>Valor Parcela</TableHead>
+                          <TableHead className="w-24">Taxa (%)</TableHead>
                           <TableHead>Saldo Devedor</TableHead>
                           <TableHead>Parcelas Restantes</TableHead>
                           <TableHead>Competência</TableHead>
@@ -1167,13 +1180,46 @@ export default function ConsultaCliente() {
                                 onCopy={handleCopy}
                               />
                             </TableCell>
-                            <TableCell className="group">
-                              <CopyableField 
-                                value={contrato.saldo_devedor?.toString()} 
-                                displayValue={formatCurrency(contrato.saldo_devedor)}
-                                label="Saldo Devedor" 
-                                onCopy={handleCopy}
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                className="w-20 h-8 text-sm text-center"
+                                value={taxasContratos[contrato.id] || ""}
+                                onChange={(e) => setTaxasContratos(prev => ({
+                                  ...prev,
+                                  [contrato.id]: e.target.value
+                                }))}
+                                data-testid={`input-taxa-${contrato.id}`}
                               />
+                            </TableCell>
+                            <TableCell className="group">
+                              {(() => {
+                                const taxaStr = taxasContratos[contrato.id];
+                                const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                                const saldoCalculado = taxa > 0 
+                                  ? calcularSaldoDevedorPrice(contrato.valor_parcela, taxa, contrato.parcelas_restantes)
+                                  : null;
+                                const saldoExibir = saldoCalculado !== null ? saldoCalculado : contrato.saldo_devedor;
+                                const isCalculado = saldoCalculado !== null;
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <CopyableField 
+                                      value={saldoExibir?.toFixed(2)} 
+                                      displayValue={formatCurrency(saldoExibir)}
+                                      label="Saldo Devedor" 
+                                      onCopy={handleCopy}
+                                    />
+                                    {isCalculado && (
+                                      <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">
+                                        calc
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="group text-center">
                               <CopyableField 
