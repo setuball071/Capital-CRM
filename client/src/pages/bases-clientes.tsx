@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { ConvenioCombobox } from "@/components/convenio-combobox";
@@ -163,6 +163,8 @@ export default function BasesClientes() {
   // Import Runs detail states
   const [selectedImportRun, setSelectedImportRun] = useState<ImportRunWithCounts | null>(null);
   const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
+  const [importRunsPage, setImportRunsPage] = useState(1);
+  const IMPORT_RUNS_PER_PAGE = 15;
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
   
   // D8 Delete confirmation states
@@ -2030,14 +2032,14 @@ export default function BasesClientes() {
               Histórico de Importações Rápidas
             </CardTitle>
             <CardDescription>
-              Rastreabilidade completa de cada linha importada
+              Rastreabilidade completa de cada linha importada ({importRuns.length} importações)
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Arquivo</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Convênio</TableHead>
                   <TableHead>Status</TableHead>
@@ -2048,9 +2050,18 @@ export default function BasesClientes() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {importRuns.slice(0, 10).map((run) => (
+                {importRuns
+                  .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+                  .map((run) => (
                   <TableRow key={run.id} data-testid={`row-import-run-${run.id}`}>
-                    <TableCell className="font-mono">#{run.id}</TableCell>
+                    <TableCell className="max-w-[200px]">
+                      <div className="flex flex-col">
+                        <span className="truncate font-medium" title={run.arquivoOrigem || `Import #${run.id}`}>
+                          {run.arquivoOrigem || `Import #${run.id}`}
+                        </span>
+                        <span className="text-xs text-muted-foreground">#{run.id}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{run.tipoImport}</Badge>
                     </TableCell>
@@ -2127,6 +2138,37 @@ export default function BasesClientes() {
                 ))}
               </TableBody>
             </Table>
+            
+            {/* Paginação */}
+            {importRuns.length > IMPORT_RUNS_PER_PAGE && (
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Página {importRunsPage} de {Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE)}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImportRunsPage(p => Math.max(1, p - 1))}
+                    disabled={importRunsPage === 1}
+                    data-testid="button-prev-page"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImportRunsPage(p => Math.min(Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE), p + 1))}
+                    disabled={importRunsPage >= Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE)}
+                    data-testid="button-next-page"
+                  >
+                    Próxima
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
