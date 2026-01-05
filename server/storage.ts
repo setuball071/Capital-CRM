@@ -1116,13 +1116,8 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`p.sit_func ILIKE ${'%' + filtros.sit_func + '%'}`);
       }
 
-      // Margem 30% conditions (parameterized)
-      if (filtros.margem_30_min !== undefined) {
-        whereConditions.push(sql`folha.margem_saldo_30 >= ${filtros.margem_30_min}`);
-      }
-      if (filtros.margem_30_max !== undefined) {
-        whereConditions.push(sql`folha.margem_saldo_30 <= ${filtros.margem_30_max}`);
-      }
+      // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
+      // Obs: O schema atual usa margem_saldo_5, não margem_saldo_30
 
       // Margem 35% conditions (parameterized)
       if (filtros.margem_35_min !== undefined) {
@@ -1197,15 +1192,17 @@ export class DbStorage implements IStorage {
       // Include folha fields for frontend display when folha join is used
       const selectFields = needsFolhaJoin 
         ? sql`p.*, 
-              folha.exc_qtd, 
-              folha.exc_soma, 
-              folha.margem,
-              CASE WHEN (COALESCE(folha.exc_qtd, 0) > 0 OR COALESCE(folha.exc_soma, 0) > 0) THEN true ELSE false END as has_desconto_fora_folha`
+              folha.margem_saldo_5 as margem_5,
+              folha.margem_saldo_35 as margem_35,
+              folha.margem_saldo_70 as margem_70,
+              folha.margem_cartao_credito_saldo,
+              folha.margem_cartao_beneficio_saldo`
         : sql`p.*, 
-              NULL::integer as exc_qtd, 
-              NULL::numeric as exc_soma, 
-              NULL::numeric as margem,
-              false as has_desconto_fora_folha`;
+              NULL::numeric as margem_5,
+              NULL::numeric as margem_35,
+              NULL::numeric as margem_70,
+              NULL::numeric as margem_cartao_credito_saldo,
+              NULL::numeric as margem_cartao_beneficio_saldo`;
 
       const query = sql`
         SELECT DISTINCT ${selectFields}
@@ -1217,10 +1214,11 @@ export class DbStorage implements IStorage {
 
       const result = await db.execute(query);
       const clientes = result.rows as (ClientePessoa & { 
-        exc_qtd: number | null; 
-        exc_soma: string | null; 
-        margem: string | null;
-        has_desconto_fora_folha: boolean;
+        margem_5: string | null;
+        margem_35: string | null;
+        margem_70: string | null;
+        margem_cartao_credito_saldo: string | null;
+        margem_cartao_beneficio_saldo: string | null;
       })[];
       
       return { clientes, total: clientes.length };
