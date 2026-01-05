@@ -24,6 +24,7 @@ interface ComboboxProps {
   placeholder?: string
   searchPlaceholder?: string
   emptyText?: string
+  clearOptionText?: string
   allowClear?: boolean
   disabled?: boolean
   className?: string
@@ -37,6 +38,7 @@ export function Combobox({
   placeholder = "Selecione...",
   searchPlaceholder = "Buscar...",
   emptyText = "Nenhum item encontrado.",
+  clearOptionText = "Todos",
   allowClear = true,
   disabled = false,
   className,
@@ -63,6 +65,12 @@ export function Combobox({
     } else {
       onValueChange(selectedValue)
     }
+    setOpen(false)
+    setInputValue("")
+  }
+
+  const handleClearSelection = () => {
+    onValueChange(undefined)
     setOpen(false)
     setInputValue("")
   }
@@ -112,6 +120,21 @@ export function Combobox({
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
+              {allowClear && !inputValue && (
+                <CommandItem
+                  value="__clear__"
+                  onSelect={handleClearSelection}
+                  className="cursor-pointer text-muted-foreground"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      !value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {clearOptionText}
+                </CommandItem>
+              )}
               {filteredOptions.map((option) => (
                 <CommandItem
                   key={option}
