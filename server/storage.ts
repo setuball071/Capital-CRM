@@ -191,6 +191,7 @@ export interface IStorage {
   getDistinctConveniosClientes(): Promise<string[]>;
   getDistinctOrgaosClientes(): Promise<string[]>;
   getDistinctUfsClientes(): Promise<string[]>;
+  getDistinctBancosClientes(): Promise<string[]>;
   
   // Clientes Vínculos
   getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
@@ -1058,12 +1059,12 @@ export class DbStorage implements IStorage {
       filtros.margem_35_min !== undefined || filtros.margem_35_max !== undefined ||
       filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
       filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
-      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined ||
-      filtros.desconto_fora_folha !== undefined
+      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined
     );
     
     const needsContratoJoin = !!(
-      filtros.banco || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined
+      filtros.banco || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined ||
+      filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined
     );
 
     // Build pessoa conditions
@@ -1155,26 +1156,6 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`folha.margem_cartao_beneficio_saldo <= ${filtros.margem_cartao_beneficio_max}`);
       }
 
-      // ═══════════════════════════════════════════════════════════════════════════
-      // DESCONTO FORA DE FOLHA (EXC) - Regra de Negócio
-      // ═══════════════════════════════════════════════════════════════════════════
-      // Campos usados (tabela clientes_folha_mes):
-      //   - exc_qtd: INTEGER - quantidade de descontos externos ao consignado
-      //   - exc_soma: DECIMAL(15,2) - valor total dos descontos externos (R$)
-      //   - margem: DECIMAL(15,2) - margem real após descontos externos
-      //
-      // Regra: Cliente tem desconto fora de folha quando:
-      //   exc_qtd > 0 (possui descontos) OU exc_soma > 0 (valor descontado)
-      //
-      // Uso prático: A "margem" (campo separado) representa o valor REAL disponível
-      // após subtrair descontos externos. Usar para conferência no extrato bancário.
-      // ═══════════════════════════════════════════════════════════════════════════
-      if (filtros.desconto_fora_folha === true) {
-        whereConditions.push(sql`(COALESCE(folha.exc_qtd, 0) > 0 OR COALESCE(folha.exc_soma, 0) > 0)`);
-      } else if (filtros.desconto_fora_folha === false) {
-        whereConditions.push(sql`(COALESCE(folha.exc_qtd, 0) = 0 AND COALESCE(folha.exc_soma, 0) = 0)`);
-      }
-
       // Contrato conditions (parameterized)
       if (filtros.banco) {
         whereConditions.push(sql`c.banco ILIKE ${'%' + filtros.banco + '%'}`);
@@ -1184,6 +1165,24 @@ export class DbStorage implements IStorage {
       }
       if (filtros.parcela_max !== undefined) {
         whereConditions.push(sql`c.valor_parcela <= ${filtros.parcela_max}`);
+      }
+      
+      // Filtro de quantidade de contratos via subquery
+      if (filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined) {
+        const minContratos = filtros.qtd_contratos_min ?? 0;
+        const maxContratos = filtros.qtd_contratos_max;
+        
+        if (maxContratos !== undefined) {
+          whereConditions.push(sql`(
+            SELECT COUNT(*) FROM clientes_contratos cc 
+            WHERE cc.pessoa_id = p.id
+          ) BETWEEN ${minContratos} AND ${maxContratos}`);
+        } else {
+          whereConditions.push(sql`(
+            SELECT COUNT(*) FROM clientes_contratos cc 
+            WHERE cc.pessoa_id = p.id
+          ) >= ${minContratos}`);
+        }
       }
 
       // Combine WHERE conditions
@@ -1254,6 +1253,12 @@ export class DbStorage implements IStorage {
     const result = await db.select({ uf: clientesPessoa.uf }).from(clientesPessoa);
     const uniqueUfs = [...new Set(result.map(r => r.uf).filter(Boolean))];
     return uniqueUfs.sort() as string[];
+  }
+
+  async getDistinctBancosClientes(): Promise<string[]> {
+    const result = await db.select({ banco: clientesContratos.banco }).from(clientesContratos);
+    const uniqueBancos = [...new Set(result.map(r => r.banco).filter(Boolean))];
+    return uniqueBancos.sort() as string[];
   }
 
   // Clientes Folha Mês

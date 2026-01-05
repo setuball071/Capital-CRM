@@ -40,14 +40,16 @@ interface Filtros {
   banco?: string;
   parcela_min?: number;
   parcela_max?: number;
-  // Filtro de desconto fora de folha
-  desconto_fora_folha?: boolean;
+  // Filtro de quantidade de contratos
+  qtd_contratos_min?: number;
+  qtd_contratos_max?: number;
 }
 
 interface FiltrosDisponiveis {
   convenios: string[];
   orgaos: string[];
   ufs: string[];
+  bancos: string[];
 }
 
 interface PacotePreco {
@@ -276,8 +278,8 @@ export default function CompraLista() {
     if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
       parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
     }
-    if (f.desconto_fora_folha) {
-      parts.push("Com desconto fora de folha");
+    if (f.qtd_contratos_min !== undefined || f.qtd_contratos_max !== undefined) {
+      parts.push(`Contratos: ${f.qtd_contratos_min ?? 0} - ${f.qtd_contratos_max ?? "∞"}`);
     }
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
   };
@@ -345,13 +347,20 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="orgao">Órgão</Label>
-                  <Input
-                    id="orgao"
-                    placeholder="Digite para filtrar..."
-                    value={filtros.orgao || ""}
-                    onChange={(e) => setFiltros({ ...filtros, orgao: e.target.value || undefined })}
-                    data-testid="input-orgao"
-                  />
+                  <Select
+                    value={filtros.orgao || "all"}
+                    onValueChange={(v) => setFiltros({ ...filtros, orgao: v === "all" ? undefined : v })}
+                  >
+                    <SelectTrigger data-testid="select-orgao">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {filtrosDisponiveis?.orgaos?.map((o) => (
+                        <SelectItem key={o} value={o}>{o}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -414,16 +423,47 @@ export default function CompraLista() {
 
               <div className="border-t pt-4 mt-4">
                 <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Contrato</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="banco">Banco</Label>
-                    <Input
-                      id="banco"
-                      placeholder="Ex: BRADESCO, ITAU"
-                      value={filtros.banco || ""}
-                      onChange={(e) => setFiltros({ ...filtros, banco: e.target.value || undefined })}
-                      data-testid="input-banco"
-                    />
+                    <Select
+                      value={filtros.banco || "all"}
+                      onValueChange={(v) => setFiltros({ ...filtros, banco: v === "all" ? undefined : v })}
+                    >
+                      <SelectTrigger data-testid="select-banco">
+                        <SelectValue placeholder="Todos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {filtrosDisponiveis?.bancos?.map((b) => (
+                          <SelectItem key={b} value={b}>{b}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Qtd. Contratos</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Mín"
+                        value={filtros.qtd_contratos_min ?? ""}
+                        onChange={(e) => setFiltros({ ...filtros, qtd_contratos_min: e.target.value ? parseInt(e.target.value) : undefined })}
+                        data-testid="input-qtd-contratos-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Máx"
+                        value={filtros.qtd_contratos_max ?? ""}
+                        onChange={(e) => setFiltros({ ...filtros, qtd_contratos_max: e.target.value ? parseInt(e.target.value) : undefined })}
+                        data-testid="input-qtd-contratos-max"
+                        className="w-1/2"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -563,34 +603,6 @@ export default function CompraLista() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* ═══════════════════════════════════════════════════════════════════════════
-                  DESCONTO FORA DE FOLHA (EXC) - Filtro de Busca
-                  ═══════════════════════════════════════════════════════════════════════════
-                  Campos do banco (clientes_folha_mes):
-                    - exc_qtd: INTEGER - quantidade de descontos externos ao consignado
-                    - exc_soma: DECIMAL(15,2) - valor total (R$) dos descontos externos
-                    - margem: DECIMAL(15,2) - margem REAL após descontos externos
-                  
-                  Regra de filtro: Quando ativado, retorna apenas clientes onde:
-                    COALESCE(exc_qtd, 0) > 0 OR COALESCE(exc_soma, 0) > 0
-                  
-                  Resultado: Coluna "EXC" na tabela mostra badge "Desc. fora folha"
-                  ═══════════════════════════════════════════════════════════════════════════ */}
-              <div className="flex items-center gap-3 mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <Switch
-                  id="desconto-fora-folha"
-                  checked={filtros.desconto_fora_folha === true}
-                  onCheckedChange={(checked) => setFiltros({ ...filtros, desconto_fora_folha: checked ? true : undefined })}
-                  data-testid="switch-desconto-fora-folha"
-                />
-                <Label htmlFor="desconto-fora-folha" className="text-sm font-medium cursor-pointer">
-                  Somente com desconto fora de folha
-                </Label>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  (EXC QTD &gt; 0 ou EXC Soma &gt; 0)
-                </span>
               </div>
 
               <div className="flex gap-4 mt-6">

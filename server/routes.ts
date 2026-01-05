@@ -5729,8 +5729,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const convenios = await storage.getDistinctConveniosClientes();
       const orgaos = await storage.getDistinctOrgaosClientes();
       const ufs = await storage.getDistinctUfsClientes();
+      const bancos = await storage.getDistinctBancosClientes();
       
-      return res.json({ convenios, orgaos, ufs });
+      return res.json({ convenios, orgaos, ufs, bancos });
     } catch (error) {
       console.error("Get filtros error:", error);
       return res.status(500).json({ message: "Erro ao buscar filtros" });

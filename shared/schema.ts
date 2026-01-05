@@ -759,8 +759,9 @@ export const filtrosPedidoListaSchema = z.object({
   banco: z.string().optional(),
   parcela_min: z.number().optional(),
   parcela_max: z.number().optional(),
-  // Filtro de desconto fora de folha
-  desconto_fora_folha: z.boolean().optional(),
+  // Filtro de quantidade de contratos
+  qtd_contratos_min: z.number().optional(),
+  qtd_contratos_max: z.number().optional(),
 });
 
 export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;
