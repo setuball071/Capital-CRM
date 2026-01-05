@@ -38,6 +38,7 @@ interface Filtros {
   margem_cartao_beneficio_max?: number;
   // Filtros de contrato
   banco?: string;
+  tipo_contrato?: string;
   parcela_min?: number;
   parcela_max?: number;
   // Filtro de quantidade de contratos
@@ -50,6 +51,7 @@ interface FiltrosDisponiveis {
   orgaos: string[];
   ufs: string[];
   bancos: string[];
+  tiposContrato: string[];
 }
 
 interface PacotePreco {
@@ -111,6 +113,7 @@ export default function CompraLista() {
   const [showCampanhaDialog, setShowCampanhaDialog] = useState(false);
   const [campanhaName, setCampanhaName] = useState("");
   const [campanhaDescricao, setCampanhaDescricao] = useState("");
+  const [campanhaLimiteLeads, setCampanhaLimiteLeads] = useState<number | undefined>(undefined);
   const [selectedPacote, setSelectedPacote] = useState<PacotePreco | null>(null);
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
@@ -168,7 +171,7 @@ export default function CompraLista() {
   });
 
   const criarCampanhaMutation = useMutation({
-    mutationFn: async (data: { nome: string; descricao?: string; filtros: Filtros }) => {
+    mutationFn: async (data: { nome: string; descricao?: string; filtros: Filtros; limiteLeads?: number }) => {
       const response = await apiRequest("POST", "/api/vendas/campanhas/criar-de-filtro", data);
       return response.json();
     },
@@ -180,6 +183,7 @@ export default function CompraLista() {
       setShowCampanhaDialog(false);
       setCampanhaName("");
       setCampanhaDescricao("");
+      setCampanhaLimiteLeads(undefined);
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/campanhas"] });
       navigate(`/vendas/campanhas`);
     },
@@ -205,6 +209,7 @@ export default function CompraLista() {
       nome: campanhaName,
       descricao: campanhaDescricao || undefined,
       filtros,
+      limiteLeads: campanhaLimiteLeads,
     });
   };
 
@@ -229,6 +234,7 @@ export default function CompraLista() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "concluido":
+      case "processado":
         return (
           <Badge variant="default" className="bg-green-600">
             <CheckCircle className="w-3 h-3 mr-1" />
@@ -243,24 +249,19 @@ export default function CompraLista() {
           </Badge>
         );
       case "aprovado":
-        return (
-          <Badge variant="default" className="bg-blue-600">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Aprovado
-          </Badge>
-        );
       case "processando":
         return (
-          <Badge variant="secondary">
+          <Badge variant="default" className="bg-blue-600">
             <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Processando
+            Gerando...
           </Badge>
         );
       case "cancelado":
+      case "erro":
         return (
           <Badge variant="destructive">
             <XCircle className="w-3 h-3 mr-1" />
-            Cancelado
+            {status === "erro" ? "Erro" : "Cancelado"}
           </Badge>
         );
       default:
@@ -452,6 +453,24 @@ export default function CompraLista() {
                         <SelectItem value="all">Todos</SelectItem>
                         {filtrosDisponiveis?.bancos?.map((b) => (
                           <SelectItem key={b} value={b}>{b}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tipo_contrato">Tipo de Contrato</Label>
+                    <Select
+                      value={filtros.tipo_contrato || "all"}
+                      onValueChange={(v) => setFiltros({ ...filtros, tipo_contrato: v === "all" ? undefined : v })}
+                    >
+                      <SelectTrigger data-testid="select-tipo-contrato">
+                        <SelectValue placeholder="Todos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {filtrosDisponiveis?.tiposContrato?.map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -887,7 +906,7 @@ export default function CompraLista() {
                           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                         </TableCell>
                         <TableCell>
-                          {pedido.status === "concluido" && pedido.arquivoGeradoEm ? (
+                          {(pedido.status === "processado" || pedido.status === "concluido") && pedido.arquivoGeradoEm ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -897,13 +916,11 @@ export default function CompraLista() {
                               <Download className="w-4 h-4 mr-1" />
                               Baixar
                             </Button>
-                          ) : pedido.status === "processando" ? (
+                          ) : pedido.status === "processando" || pedido.status === "aprovado" ? (
                             <span className="text-sm text-muted-foreground flex items-center gap-1">
                               <Loader2 className="w-3 h-3 animate-spin" />
                               Gerando...
                             </span>
-                          ) : pedido.status === "aprovado" ? (
-                            <span className="text-sm text-muted-foreground">Aguardando...</span>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
@@ -946,6 +963,22 @@ export default function CompraLista() {
                 onChange={(e) => setCampanhaDescricao(e.target.value)}
                 data-testid="input-campanha-descricao"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campanha-limite">Limite de Leads (opcional)</Label>
+              <Input
+                id="campanha-limite"
+                type="number"
+                min={1}
+                max={simulacao?.total || 100000}
+                placeholder={`Máximo: ${simulacao?.total?.toLocaleString("pt-BR") || "todos"}`}
+                value={campanhaLimiteLeads || ""}
+                onChange={(e) => setCampanhaLimiteLeads(e.target.value ? parseInt(e.target.value) : undefined)}
+                data-testid="input-campanha-limite"
+              />
+              <p className="text-xs text-muted-foreground">
+                Deixe em branco para importar todos os {simulacao?.total?.toLocaleString("pt-BR") || 0} leads.
+              </p>
             </div>
           </div>
           <DialogFooter>

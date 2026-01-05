@@ -5730,8 +5730,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const orgaos = await storage.getDistinctOrgaosClientes();
       const ufs = await storage.getDistinctUfsClientes();
       const bancos = await storage.getDistinctBancosClientes();
+      const tiposContrato = await storage.getDistinctTiposContratoClientes();
       
-      return res.json({ convenios, orgaos, ufs, bancos });
+      return res.json({ convenios, orgaos, ufs, bancos, tiposContrato });
     } catch (error) {
       console.error("Get filtros error:", error);
       return res.status(500).json({ message: "Erro ao buscar filtros" });
@@ -7830,7 +7831,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // POST /api/vendas/campanhas/criar-de-filtro - Criar campanha com leads a partir de filtros
   app.post("/api/vendas/campanhas/criar-de-filtro", requireAuth, requireCRMAdmin, async (req, res) => {
     try {
-      const { nome, descricao, filtros } = req.body;
+      const { nome, descricao, filtros, limiteLeads } = req.body;
 
       if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
         return res.status(400).json({ message: "Nome da campanha é obrigatório" });
@@ -7848,6 +7849,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Nenhum cliente encontrado com os filtros selecionados" });
       }
 
+      // Aplicar limite de leads se especificado
+      const limite = limiteLeads && typeof limiteLeads === "number" && limiteLeads > 0 
+        ? Math.min(limiteLeads, clientes.length) 
+        : clientes.length;
+      const clientesLimitados = clientes.slice(0, limite);
+      const totalFinal = clientesLimitados.length;
+
       const campanha = await storage.createSalesCampaign({
         nome: nome.trim(),
         descricao: descricao?.trim() || null,
@@ -7855,13 +7863,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         convenio: validFiltros.convenio || null,
         uf: validFiltros.uf || null,
         status: "ativa",
-        totalLeads: total,
-        leadsDisponiveis: total,
+        totalLeads: totalFinal,
+        leadsDisponiveis: totalFinal,
         leadsDistribuidos: 0,
         createdBy: req.user!.id,
       });
 
-      const leads: InsertSalesLead[] = clientes.map((cliente) => ({
+      const leads: InsertSalesLead[] = clientesLimitados.map((cliente) => ({
         campaignId: campanha.id,
         cpf: cliente.cpf || null,
         nome: cliente.nome,

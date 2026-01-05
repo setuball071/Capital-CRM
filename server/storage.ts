@@ -192,6 +192,7 @@ export interface IStorage {
   getDistinctOrgaosClientes(): Promise<string[]>;
   getDistinctUfsClientes(): Promise<string[]>;
   getDistinctBancosClientes(): Promise<string[]>;
+  getDistinctTiposContratoClientes(): Promise<string[]>;
   
   // Clientes Vínculos
   getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
@@ -1063,7 +1064,7 @@ export class DbStorage implements IStorage {
     );
     
     const needsContratoJoin = !!(
-      filtros.banco || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined ||
+      filtros.banco || filtros.tipo_contrato || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined ||
       filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined
     );
 
@@ -1154,6 +1155,9 @@ export class DbStorage implements IStorage {
       // Contrato conditions (parameterized)
       if (filtros.banco) {
         whereConditions.push(sql`c.banco ILIKE ${'%' + filtros.banco + '%'}`);
+      }
+      if (filtros.tipo_contrato) {
+        whereConditions.push(sql`c.tipo_contrato ILIKE ${'%' + filtros.tipo_contrato + '%'}`);
       }
       if (filtros.parcela_min !== undefined) {
         whereConditions.push(sql`c.valor_parcela >= ${filtros.parcela_min}`);
@@ -1257,6 +1261,12 @@ export class DbStorage implements IStorage {
     const result = await db.select({ banco: clientesContratos.banco }).from(clientesContratos);
     const uniqueBancos = [...new Set(result.map(r => r.banco).filter(Boolean))];
     return uniqueBancos.sort() as string[];
+  }
+
+  async getDistinctTiposContratoClientes(): Promise<string[]> {
+    const result = await db.select({ tipoContrato: clientesContratos.tipoContrato }).from(clientesContratos);
+    const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
+    return uniqueTipos.sort() as string[];
   }
 
   // Clientes Folha Mês
