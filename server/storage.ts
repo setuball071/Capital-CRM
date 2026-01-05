@@ -37,6 +37,7 @@ import {
   aiPrompts,
   personalTasks,
   convenios,
+  nomenclaturas,
   DEFAULT_ROLEPLAY_PROMPT,
   type User,
   type InsertUser,
@@ -1246,6 +1247,23 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctOrgaosClientes(): Promise<string[]> {
+    // Busca nomenclaturas de órgãos cadastradas (nomes completos)
+    const nomenclaturasResult = await db.select({ nome: nomenclaturas.nome })
+      .from(nomenclaturas)
+      .where(and(
+        eq(nomenclaturas.categoria, "ORGAO"),
+        eq(nomenclaturas.ativo, true)
+      ));
+    
+    if (nomenclaturasResult.length > 0) {
+      // Retorna nomes das nomenclaturas ordenados alfabeticamente
+      return nomenclaturasResult
+        .map(r => r.nome)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "pt-BR")) as string[];
+    }
+    
+    // Fallback: busca da tabela de pessoas se não houver nomenclaturas
     const result = await db.select({ orgaodesc: clientesPessoa.orgaodesc }).from(clientesPessoa);
     const uniqueOrgaos = [...new Set(result.map(r => r.orgaodesc).filter(Boolean))];
     return uniqueOrgaos.sort() as string[];
@@ -1258,9 +1276,91 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctBancosClientes(): Promise<string[]> {
-    const result = await db.select({ banco: clientesContratos.banco }).from(clientesContratos);
-    const uniqueBancos = [...new Set(result.map(r => r.banco).filter(Boolean))];
-    return uniqueBancos.sort() as string[];
+    // Funcao auxiliar para normalizar nomes (remover acentos, uppercase, trim)
+    const normalizarNome = (nome: string): string => {
+      return nome
+        .toUpperCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[().,\-]/g, " ") // Remove pontuacao
+        .replace(/\s+/g, " ") // Normaliza espacos
+        .replace(/\s*S\.?A\.?\s*/gi, "") // Remove S.A., SA
+        .replace(/\s*LTDA\.?\s*/gi, "") // Remove LTDA
+        .trim();
+    };
+    
+    // Busca lista de bancos válidos da tabela de nomenclaturas (fonte autoritativa)
+    const nomenclaturasResult = await db.select({ nome: nomenclaturas.nome })
+      .from(nomenclaturas)
+      .where(and(
+        eq(nomenclaturas.categoria, "BANCO"),
+        eq(nomenclaturas.ativo, true)
+      ));
+    
+    // Mapeia nomes normalizados para nomes originais da nomenclatura
+    const bancosValidosMap = new Map<string, string>();
+    nomenclaturasResult.forEach(r => {
+      if (r.nome) {
+        bancosValidosMap.set(normalizarNome(r.nome), r.nome);
+      }
+    });
+    
+    // Se não houver nomenclaturas, usa lista hardcoded como fallback
+    if (bancosValidosMap.size === 0) {
+      const bancosHardcoded = [
+        "BANCO DO BRASIL", "BANCO SANTANDER", "CAIXA ECONOMICA FEDERAL", 
+        "BANCO BRADESCO", "BANCO ITAU", "BANCO BMG", "BANCO PAN", 
+        "BANCO FIBRA", "BANCO PINE", "BANCO DAYCOVAL", "BANCO CETELEM",
+        "SICOOB", "SICREDI", "BANCO MERCANTIL DO BRASIL", "BANCO SAFRA",
+        "BANCO VOTORANTIM", "BANCO INTER", "C6 BANK", "NUBANK",
+        "BANCO ORIGINAL", "BTG PACTUAL", "BANCO MODAL", "BANCO DIGIMAIS",
+        "BANCO DIGIO", "BANCO ALFA", "AGIBANK", "BRB", "BANRISUL",
+        "BNB", "BANPARA", "BANESTES", "BANCO ITAUBANK", "BANCO BONSUCESSO",
+        "BANCO BANDEPE", "BANCO ARBI", "BANCO BARI", "BANCO ABC BRASIL",
+        "BANCO INDUSTRIAL DO BRASIL", "BANCO INDUSTRIAL", "BANCO RENDIMENTO",
+        "BANCO SOFISA", "BANCO TRIANGULO", "BANCO PARANA", "BANCO CCB BRASIL",
+        "ICATU", "BANCO OURINVEST", "PICPAY", "MERCADO PAGO", "PAGBANK",
+        "STONE", "BANCO SEMEAR", "FACTA FINANCEIRA", "BANCO MASTER",
+        "BANCO RIBEIRAO PRETO", "BANCO ITAU BBA", "BANK OF AMERICA",
+        "CREFISA", "CREDITAS", "WILL BANK", "NEON"
+      ];
+      bancosHardcoded.forEach(b => bancosValidosMap.set(normalizarNome(b), b));
+    }
+    
+    // Busca bancos distintos dos contratos do cliente
+    const contratosResult = await db.select({ banco: clientesContratos.banco })
+      .from(clientesContratos);
+    const bancosNosContratos = [...new Set(contratosResult.map(r => r.banco).filter(Boolean))];
+    
+    // Filtra e mapeia bancos dos contratos para nomes padronizados
+    const bancosResultado = new Set<string>();
+    
+    bancosNosContratos.forEach(banco => {
+      if (!banco) return;
+      const bancoNormalizado = normalizarNome(banco);
+      
+      // Busca correspondencia exata primeiro
+      if (bancosValidosMap.has(bancoNormalizado)) {
+        bancosResultado.add(bancosValidosMap.get(bancoNormalizado)!);
+        return;
+      }
+      
+      // Busca correspondencia parcial (nome do banco contem ou esta contido)
+      for (const [normKey, nomeOriginal] of bancosValidosMap) {
+        if (bancoNormalizado.includes(normKey) || normKey.includes(bancoNormalizado)) {
+          bancosResultado.add(nomeOriginal);
+          return;
+        }
+      }
+    });
+    
+    // Se não houver resultados, retorna todos os bancos válidos da nomenclatura
+    if (bancosResultado.size === 0) {
+      return [...bancosValidosMap.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
+    
+    return [...bancosResultado].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
 
   async getDistinctTiposContratoClientes(): Promise<string[]> {
