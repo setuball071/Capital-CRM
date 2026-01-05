@@ -893,9 +893,10 @@ class FastImportService {
   }
 
   private async mergeContatos(run: ImportRun): Promise<{ merged: number; errors: number }> {
-    console.log(`[FastImport] Starting SQL-based merge for contatos...`);
+    console.log(`[FastImport] Starting SQL-based merge for contatos/dados complementares...`);
     const baseTag = run.baseTag || "";
 
+    // 1. Inserir telefones na tabela client_contacts
     const telefone1Result = await db.execute(sql`
       INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
       SELECT p.id, 'telefone', s.telefone_1, ${run.id}, ${baseTag}
@@ -940,10 +941,59 @@ class FastImportService {
       ON CONFLICT (client_id, tipo, valor) DO NOTHING
     `);
 
-    const totalInserted = (telefone1Result.rowCount || 0) + (telefone2Result.rowCount || 0) + 
+    const totalContacts = (telefone1Result.rowCount || 0) + (telefone2Result.rowCount || 0) + 
                           (telefone3Result.rowCount || 0) + (emailResult.rowCount || 0);
 
-    console.log(`[FastImport] Contatos upserted: ${totalInserted}`);
+    console.log(`[FastImport] Contatos upserted: ${totalContacts}`);
+
+    // 2. Atualizar dados complementares na tabela clientes_pessoa
+    // Atualiza data_nascimento, banco_nome, agencia, conta apenas se preenchidos
+    const pessoaUpdateResult = await db.execute(sql`
+      UPDATE clientes_pessoa p
+      SET 
+        data_nascimento = COALESCE(
+          CASE 
+            WHEN s.data_nascimento IS NOT NULL AND s.data_nascimento != '' THEN
+              CASE 
+                WHEN s.data_nascimento ~ '^\d{2}/\d{2}/\d{4}$' THEN 
+                  TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YYYY')
+                WHEN s.data_nascimento ~ '^\d{4}-\d{2}-\d{2}' THEN 
+                  TO_TIMESTAMP(s.data_nascimento, 'YYYY-MM-DD')
+                ELSE NULL
+              END
+            ELSE NULL
+          END,
+          p.data_nascimento
+        ),
+        banco_nome = COALESCE(
+          NULLIF(TRIM(s.banco_nome), ''),
+          p.banco_nome
+        ),
+        agencia = COALESCE(
+          NULLIF(TRIM(s.agencia), ''),
+          p.agencia
+        ),
+        conta = COALESCE(
+          NULLIF(TRIM(s.conta), ''),
+          p.conta
+        ),
+        atualizado_em = NOW()
+      FROM staging_contatos s
+      WHERE p.cpf = s.cpf
+        AND s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+        AND (
+          (s.data_nascimento IS NOT NULL AND s.data_nascimento != '') OR
+          (s.banco_nome IS NOT NULL AND s.banco_nome != '') OR
+          (s.agencia IS NOT NULL AND s.agencia != '') OR
+          (s.conta IS NOT NULL AND s.conta != '')
+        )
+    `);
+
+    const totalPessoaUpdates = pessoaUpdateResult.rowCount || 0;
+    console.log(`[FastImport] Dados complementares (pessoa) atualizados: ${totalPessoaUpdates}`);
+
+    const totalInserted = totalContacts + totalPessoaUpdates;
 
     return { merged: totalInserted, errors: 0 };
   }
@@ -1049,6 +1099,10 @@ class FastImportService {
         cidade: getValue("cidade") || null,
         uf: getValue("uf") || null,
         cep: getValue("cep") || null,
+        dataNascimento: getValue("data_nascimento") || null,
+        bancoNome: getValue("banco_nome") || null,
+        agencia: getValue("agencia") || null,
+        conta: getValue("conta") || null,
         rowNum,
       };
     }

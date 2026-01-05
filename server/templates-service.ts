@@ -185,6 +185,10 @@ export const TEMPLATE_COLUMNS = {
   ],
   contatos: [
     { header: "CPF", key: "cpf", width: 15, required: true, example: "00012345678", isText: true },
+    { header: "DATA_NASCIMENTO", key: "data_nascimento", width: 15, required: false, example: "15/03/1985", isText: false },
+    { header: "BANCO", key: "banco_nome", width: 25, required: false, example: "BANCO DO BRASIL", isText: false },
+    { header: "AGENCIA", key: "agencia", width: 12, required: false, example: "1234", isText: true },
+    { header: "CONTA", key: "conta", width: 15, required: false, example: "12345-6", isText: true },
     { header: "TELEFONE_1", key: "telefone_1", width: 15, required: false, example: "11999998888", isText: true },
     { header: "TELEFONE_2", key: "telefone_2", width: 15, required: false, example: "11988887777", isText: true },
     { header: "TELEFONE_3", key: "telefone_3", width: 15, required: false, example: "1133334444", isText: true },
