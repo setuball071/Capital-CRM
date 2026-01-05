@@ -1192,16 +1192,6 @@ export default function BasesClientes() {
                     className="justify-start"
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    Modelo Contatos
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/imports/dados-complementares/template"}
-                    data-testid="button-download-modelo-dados-complementares"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
                     Modelo Dados Complementares
                   </Button>
                 </div>
@@ -1618,7 +1608,7 @@ export default function BasesClientes() {
                     <SelectContent>
                       <SelectItem value="folha">Folha (Servidor/Pensionista)</SelectItem>
                       <SelectItem value="d8">D8 (Contratos)</SelectItem>
-                      <SelectItem value="contatos">Contatos</SelectItem>
+                      <SelectItem value="contatos">Dados Complementares (Contatos/Endereço)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -418,7 +418,7 @@ export function getTemplateFileName(templateType: TemplateType): string {
     folha_pensionista: "modelo_folha_pensionista.xlsx",
     d8_servidor: "modelo_d8_servidor.xlsx",
     d8_pensionista: "modelo_d8_pensionista.xlsx",
-    contatos: "modelo_contatos.xlsx",
+    contatos: "modelo_dados_complementares.xlsx",
   };
   return names[templateType];
 }
