@@ -111,6 +111,7 @@ export default function CompraLista() {
   const [showCampanhaDialog, setShowCampanhaDialog] = useState(false);
   const [campanhaName, setCampanhaName] = useState("");
   const [campanhaDescricao, setCampanhaDescricao] = useState("");
+  const [selectedPacote, setSelectedPacote] = useState<PacotePreco | null>(null);
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
@@ -127,6 +128,7 @@ export default function CompraLista() {
     },
     onSuccess: (data) => {
       setSimulacao(data);
+      setSelectedPacote(null);
       setIsSimulating(false);
     },
     onError: (error: any) => {
@@ -140,8 +142,11 @@ export default function CompraLista() {
   });
 
   const criarPedidoMutation = useMutation({
-    mutationFn: async (f: Filtros) => {
-      return await apiRequest("POST", "/api/pedidos-lista", { filtros: f });
+    mutationFn: async (data: { filtros: Filtros; pacoteSelecionado?: PacotePreco | null }) => {
+      return await apiRequest("POST", "/api/pedidos-lista", { 
+        filtros: data.filtros,
+        pacoteSelecionado: data.pacoteSelecionado || undefined
+      });
     },
     onSuccess: () => {
       toast({
@@ -150,6 +155,7 @@ export default function CompraLista() {
       });
       setSimulacao(null);
       setFiltros({});
+      setSelectedPacote(null);
       queryClient.invalidateQueries({ queryKey: ["/api/pedidos-lista"] });
     },
     onError: (error: any) => {
@@ -208,7 +214,16 @@ export default function CompraLista() {
   };
 
   const handleCriarPedido = () => {
-    criarPedidoMutation.mutate(filtros);
+    criarPedidoMutation.mutate({ filtros, pacoteSelecionado: selectedPacote });
+  };
+  
+  const getPacoteAtivo = () => {
+    if (!simulacao) return null;
+    return selectedPacote || {
+      nomePacote: simulacao.nomePacote,
+      quantidadeMaxima: simulacao.quantidadePacote,
+      preco: simulacao.precoTotal
+    };
   };
 
   const getStatusBadge = (status: string) => {
@@ -657,46 +672,86 @@ export default function CompraLista() {
                   </div>
                 ) : (
                   <>
-                    {/* Pacote selecionado */}
-                    <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                      <ShoppingCart className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-green-900 dark:text-green-100 text-lg">
-                              {simulacao.nomePacote}
-                            </p>
-                            <p className="text-sm text-green-700 dark:text-green-300">
-                              Atende até {simulacao.quantidadePacote.toLocaleString("pt-BR")} registros
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                              {formatCurrency(simulacao.precoTotal)}
-                            </p>
+                    {/* Pacote selecionado (manual ou automático) */}
+                    {(() => {
+                      const pacoteAtivo = selectedPacote || {
+                        nomePacote: simulacao.nomePacote,
+                        quantidadeMaxima: simulacao.quantidadePacote,
+                        preco: simulacao.precoTotal
+                      };
+                      return (
+                        <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                          <ShoppingCart className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-green-900 dark:text-green-100 text-lg">
+                                  {pacoteAtivo.nomePacote}
+                                  {selectedPacote && (
+                                    <Badge variant="secondary" className="ml-2 text-xs">Seleção manual</Badge>
+                                  )}
+                                </p>
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                  Atende até {pacoteAtivo.quantidadeMaxima.toLocaleString("pt-BR")} registros
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                                  {formatCurrency(pacoteAtivo.preco)}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
-                    {/* Tabela de pacotes disponíveis */}
+                    {/* Tabela de pacotes - clicáveis para seleção */}
                     <div className="p-4 bg-muted/30 rounded-lg">
-                      <p className="text-sm font-medium mb-3">Tabela de pacotes:</p>
+                      <p className="text-sm font-medium mb-3">Escolha um pacote (clique para selecionar):</p>
                       <div className="grid grid-cols-4 gap-2 text-xs">
-                        {simulacao.pacotes.map((p) => (
-                          <div 
-                            key={p.nomePacote} 
-                            className={`p-2 rounded text-center ${
-                              p.nomePacote === simulacao.nomePacote 
-                                ? "bg-green-100 dark:bg-green-900/50 border border-green-400" 
-                                : "bg-background border"
-                            }`}
-                          >
-                            <p className="font-medium">{p.nomePacote}</p>
-                            <p className="text-muted-foreground">{formatCurrency(p.preco)}</p>
-                          </div>
-                        ))}
+                        {simulacao.pacotes.map((p) => {
+                          const isSelected = selectedPacote?.nomePacote === p.nomePacote;
+                          const isAutomatic = !selectedPacote && p.nomePacote === simulacao.nomePacote;
+                          const isActive = isSelected || isAutomatic;
+                          
+                          return (
+                            <button
+                              type="button"
+                              key={p.nomePacote} 
+                              onClick={() => {
+                                if (p.nomePacote === simulacao.nomePacote) {
+                                  setSelectedPacote(null);
+                                } else {
+                                  setSelectedPacote(p);
+                                }
+                              }}
+                              className={`p-2 rounded text-center cursor-pointer transition-colors hover-elevate ${
+                                isActive
+                                  ? "bg-green-100 dark:bg-green-900/50 border-2 border-green-500" 
+                                  : "bg-background border hover:border-green-300"
+                              }`}
+                              data-testid={`button-pacote-${p.nomePacote.toLowerCase().replace(/\s+/g, '-')}`}
+                            >
+                              <p className="font-medium">{p.nomePacote}</p>
+                              <p className="text-muted-foreground">{formatCurrency(p.preco)}</p>
+                              {isAutomatic && !isSelected && (
+                                <Badge variant="outline" className="mt-1 text-[10px]">Sugerido</Badge>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
+                      {selectedPacote && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="mt-2"
+                          onClick={() => setSelectedPacote(null)}
+                        >
+                          Usar pacote sugerido
+                        </Button>
+                      )}
                     </div>
 
                     <div className="text-sm text-muted-foreground mb-4">
@@ -766,7 +821,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Pedido ({simulacao.total.toLocaleString("pt-BR")} registros – {simulacao.nomePacote} – {formatCurrency(simulacao.precoTotal)})
+                            Gerar Pedido ({simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
                           </>
                         )}
                       </Button>

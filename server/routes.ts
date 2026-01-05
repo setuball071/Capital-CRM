@@ -6179,8 +6179,38 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const filtros = result.data;
       const { total } = await storage.searchClientesPessoa(filtros);
       
-      // Calcula preço usando modelo de pacotes
-      const pricing = await calculatePackagePrice(total);
+      // Se o usuário selecionou um pacote manualmente, validamos contra a lista de pacotes do servidor
+      // O cliente envia o nome do pacote, e buscamos o preço autoritativo no servidor
+      const pacoteSelecionadoNome = req.body.pacoteSelecionado?.nomePacote;
+      let nomePacote: string;
+      let precoFinal: number;
+      
+      const pacotesServidor = await getPacotesPreco();
+      
+      if (pacoteSelecionadoNome) {
+        // Buscar o pacote pelo nome na lista autoritativa do servidor
+        const pacoteValido = pacotesServidor.find(p => p.nomePacote === pacoteSelecionadoNome);
+        
+        if (!pacoteValido) {
+          return res.status(400).json({ 
+            message: `Pacote "${pacoteSelecionadoNome}" não encontrado na tabela de preços` 
+          });
+        }
+        
+        // Validar que o pacote selecionado cobre a quantidade de registros
+        if (total > pacoteValido.quantidadeMaxima) {
+          return res.status(400).json({ 
+            message: `Pacote "${pacoteSelecionadoNome}" atende até ${pacoteValido.quantidadeMaxima.toLocaleString('pt-BR')} registros, mas a busca retornou ${total.toLocaleString('pt-BR')} registros. Selecione um pacote maior.` 
+          });
+        }
+        
+        nomePacote = pacoteValido.nomePacote;
+        precoFinal = pacoteValido.preco; // Preço autoritativo do servidor
+      } else {
+        const pricing = await calculatePackagePrice(total, pacotesServidor);
+        nomePacote = pricing.nomePacote;
+        precoFinal = pricing.precoTotal;
+      }
       
       // Create pedido com informações do pacote
       const pedido = await storage.createPedidoLista({
@@ -6189,8 +6219,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         quantidadeRegistros: total,
         tipo: "exportacao_base",
         status: "pendente",
-        nomePacote: pricing.nomePacote,
-        custoEstimado: String(pricing.precoTotal),
+        nomePacote: nomePacote,
+        custoEstimado: String(precoFinal),
         statusFinanceiro: "pendente",
       });
       
