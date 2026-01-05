@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -363,20 +364,15 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="orgao">Órgão</Label>
-                  <Select
-                    value={filtros.orgao || "all"}
-                    onValueChange={(v) => setFiltros({ ...filtros, orgao: v === "all" ? undefined : v })}
-                  >
-                    <SelectTrigger data-testid="select-orgao">
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {filtrosDisponiveis?.orgaos?.map((o) => (
-                        <SelectItem key={o} value={o}>{o}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={filtrosDisponiveis?.orgaos || []}
+                    value={filtros.orgao}
+                    onValueChange={(v) => setFiltros({ ...filtros, orgao: v })}
+                    placeholder="Todos os órgãos"
+                    searchPlaceholder="Buscar órgão..."
+                    emptyText="Nenhum órgão encontrado."
+                    data-testid="combobox-orgao"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -442,20 +438,15 @@ export default function CompraLista() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="banco">Banco</Label>
-                    <Select
-                      value={filtros.banco || "all"}
-                      onValueChange={(v) => setFiltros({ ...filtros, banco: v === "all" ? undefined : v })}
-                    >
-                      <SelectTrigger data-testid="select-banco">
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        {filtrosDisponiveis?.bancos?.map((b) => (
-                          <SelectItem key={b} value={b}>{b}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      options={filtrosDisponiveis?.bancos || []}
+                      value={filtros.banco}
+                      onValueChange={(v) => setFiltros({ ...filtros, banco: v })}
+                      placeholder="Todos os bancos"
+                      searchPlaceholder="Buscar banco..."
+                      emptyText="Nenhum banco encontrado."
+                      data-testid="combobox-banco"
+                    />
                   </div>
 
                   <div className="space-y-2">
