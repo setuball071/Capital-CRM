@@ -1680,7 +1680,7 @@ export const stagingD8 = pgTable("staging_d8", {
 export const stagingContatos = pgTable("staging_contatos", {
   id: serial("id").primaryKey(),
   importRunId: integer("import_run_id").notNull(),
-  cpf: varchar("cpf", { length: 14 }),
+  cpf: varchar("cpf", { length: 20 }),
   telefone1: varchar("telefone_1", { length: 20 }),
   telefone2: varchar("telefone_2", { length: 20 }),
   telefone3: varchar("telefone_3", { length: 20 }),
