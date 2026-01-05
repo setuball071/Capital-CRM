@@ -6331,8 +6331,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId}`);
     
     try {
-      // Ensure exports directory exists
-      const exportsDir = path.join(os.tmpdir(), "exports");
+      // Use persistent exports directory in project root (not /tmp which is volatile)
+      const exportsDir = path.join(process.cwd(), "exports");
       if (!fs.existsSync(exportsDir)) {
         fs.mkdirSync(exportsDir, { recursive: true });
       }
