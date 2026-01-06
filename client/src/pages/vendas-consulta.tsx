@@ -61,6 +61,40 @@ function getMarginColor(bruta: number | null | undefined, saldo: number | null |
   return "text-green-600";
 }
 
+function normalizarTermo(termo: string): string {
+  return termo.replace(/\D/g, "");
+}
+
+function transformFolhaToSnakeCase(folha: any): any {
+  if (!folha) return null;
+  return {
+    ...folha,
+    margem_bruta_5: folha.margemBruta5 ?? folha.margem_bruta_5,
+    margem_saldo_5: folha.margemSaldo5 ?? folha.margem_saldo_5,
+    margem_bruta_35: folha.margemBruta35 ?? folha.margem_bruta_35,
+    margem_saldo_35: folha.margemSaldo35 ?? folha.margem_saldo_35,
+    margem_bruta_70: folha.margemBruta70 ?? folha.margem_bruta_70,
+    margem_saldo_70: folha.margemSaldo70 ?? folha.margem_saldo_70,
+    margem_beneficio_bruta_5: folha.margemBeneficioBruta5 ?? folha.margem_beneficio_bruta_5,
+    margem_beneficio_saldo_5: folha.margemBeneficioSaldo5 ?? folha.margem_beneficio_saldo_5,
+    margem_cartao_credito_saldo: folha.margemCartaoCreditoSaldo ?? folha.margem_cartao_credito_saldo,
+    margem_cartao_beneficio_saldo: folha.margemCartaoBeneficioSaldo ?? folha.margem_cartao_beneficio_saldo,
+  };
+}
+
+function transformContratoToSnakeCase(contrato: any): any {
+  if (!contrato) return null;
+  return {
+    ...contrato,
+    valor_parcela: contrato.valorParcela ?? contrato.valor_parcela,
+    parcelas_restantes: contrato.parcelasRestantes ?? contrato.parcelas_restantes,
+    saldo_devedor: contrato.saldoDevedor ?? contrato.saldo_devedor,
+    tipo_operacao: contrato.tipoOperacao ?? contrato.tipo_operacao,
+    numero_contrato: contrato.numeroContrato ?? contrato.numero_contrato ?? contrato.contrato,
+    banco_nome: contrato.bancoNome ?? contrato.banco_nome ?? contrato.banco,
+  };
+}
+
 export default function VendasConsulta() {
   const { toast } = useToast();
   const [termoBusca, setTermoBusca] = useState("");
@@ -92,8 +126,21 @@ export default function VendasConsulta() {
 
   const buscarMutation = useMutation({
     mutationFn: async (termo: string) => {
-      const res = await apiRequest("POST", "/api/vendas/consulta/buscar", { termo });
-      return res.json();
+      const termoNormalizado = normalizarTermo(termo);
+      if (!termoNormalizado) {
+        throw new Error("CPF ou Matrícula inválido");
+      }
+      const res = await apiRequest("POST", "/api/vendas/consulta/buscar", { termo: termoNormalizado });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Cliente não encontrado");
+      }
+      const data = await res.json();
+      return {
+        ...data,
+        folhaAtual: transformFolhaToSnakeCase(data.folhaAtual),
+        contratos: (data.contratos || []).map(transformContratoToSnakeCase),
+      };
     },
     onSuccess: (data) => {
       setConsultaData(data);
