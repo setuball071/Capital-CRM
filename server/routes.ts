@@ -8453,11 +8453,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // Get campaign info
       const campanha = await storage.getSalesCampaign(assignment.campaignId);
       
+      // Transform folha data to snake_case format expected by frontend
+      const folhaFormatada = folhaAtual ? {
+        competencia: folhaAtual.competencia,
+        margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
+        margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
+        margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
+        margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
+        margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
+        margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
+        margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
+        margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
+        margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
+        margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
+        margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
+        margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
+        margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
+        margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
+        creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
+        debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
+        liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
+        sit_func_no_mes: folhaAtual.sitFuncNoMes,
+        base_tag: folhaAtual.baseTag,
+        extras_folha: folhaAtual.extrasFolha,
+      } : null;
+      
       return res.json({
         assignment: { ...assignment, status: "em_atendimento" },
         lead,
         clienteBase,
-        folhaAtual,
+        folhaAtual: folhaFormatada,
         contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
@@ -8598,11 +8626,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // Get campaign info
       const campanha = await storage.getSalesCampaign(result.assignment.campaignId);
       
+      // Transform folha data to snake_case format expected by frontend
+      const folhaFormatada = folhaAtual ? {
+        competencia: folhaAtual.competencia,
+        margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
+        margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
+        margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
+        margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
+        margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
+        margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
+        margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
+        margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
+        margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
+        margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
+        margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
+        margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
+        margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
+        margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
+        creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
+        debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
+        liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
+        sit_func_no_mes: folhaAtual.sitFuncNoMes,
+        base_tag: folhaAtual.baseTag,
+        extras_folha: folhaAtual.extrasFolha,
+      } : null;
+      
       return res.json({
         assignment: { ...result.assignment, status: finalStatuses.includes(result.assignment.status) ? result.assignment.status : "em_atendimento" },
         lead: result.lead,
         clienteBase,
-        folhaAtual,
+        folhaAtual: folhaFormatada,
         contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
@@ -8764,11 +8820,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // Get campaign info
       const campanha = await storage.getSalesCampaign(result.assignment.campaignId);
       
+      // Transform folha data to snake_case format expected by frontend
+      const folhaFormatada = folhaAtual ? {
+        competencia: folhaAtual.competencia,
+        margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
+        margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
+        margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
+        margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
+        margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
+        margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
+        margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
+        margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
+        margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
+        margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
+        margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
+        margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
+        margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
+        margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
+        creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
+        debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
+        liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
+        sit_func_no_mes: folhaAtual.sitFuncNoMes,
+        base_tag: folhaAtual.baseTag,
+        extras_folha: folhaAtual.extrasFolha,
+      } : null;
+      
       return res.json({
         assignment: result.assignment,
         lead: result.lead,
         clienteBase,
-        folhaAtual,
+        folhaAtual: folhaFormatada,
         contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
