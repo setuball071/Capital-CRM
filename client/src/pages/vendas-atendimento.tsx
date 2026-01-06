@@ -64,6 +64,17 @@ interface AtendimentoData {
       cep?: string;
     };
   };
+  vinculo?: {
+    id: number;
+    pessoaId: number;
+    cpf: string;
+    matricula: string;
+    orgao: string | null;
+    upag: string | null;
+    sitFunc: string | null;
+    rjur: string | null;
+    natureza: string | null;
+  } | null;
 }
 
 function formatCPF(cpf: string | null): string {
@@ -261,7 +272,7 @@ export default function VendasAtendimento() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF", codigo: string | null | undefined): string => {
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
     const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
@@ -717,28 +728,28 @@ export default function VendasAtendimento() {
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Situação Funcional</p>
                       <Badge variant="secondary" data-testid="text-sit-func">
-                        {atendimentoAtual.clienteBase?.sit_func || "-"}
+                        {mapNomenclatura("SIT_FUNC", atendimentoAtual.vinculo?.sitFunc || atendimentoAtual.clienteBase?.sit_func || atendimentoAtual.clienteBase?.sitFunc)}
                       </Badge>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">Regime Jurídico</p>
+                      <p className="text-muted-foreground">Regime Jurídico (REJUR)</p>
                       <p data-testid="text-rjur">
-                        {atendimentoAtual.clienteBase?.rjur || atendimentoAtual.clienteBase?.regime_juridico || "-"}
+                        {mapNomenclatura("RJUR", atendimentoAtual.vinculo?.rjur || atendimentoAtual.clienteBase?.rjur || atendimentoAtual.clienteBase?.regime_juridico)}
                       </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Natureza</p>
                       <p data-testid="text-natureza">
-                        {atendimentoAtual.clienteBase?.natureza || "-"}
+                        {atendimentoAtual.vinculo?.natureza || atendimentoAtual.clienteBase?.natureza || "-"}
                       </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">UPAG</p>
                       <p data-testid="text-upag">
-                        {mapNomenclatura("UPAG", atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod)}
+                        {mapNomenclatura("UPAG", atendimentoAtual.vinculo?.upag || atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod)}
                       </p>
-                      {(atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod) && (
-                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod}</p>
+                      {(atendimentoAtual.vinculo?.upag || atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod) && (
+                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.vinculo?.upag || atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod}</p>
                       )}
                     </div>
                     <div className="space-y-1 md:col-span-2">
@@ -747,10 +758,10 @@ export default function VendasAtendimento() {
                         Órgão
                       </p>
                       <p data-testid="text-orgao">
-                        {mapNomenclatura("ORGAO", atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod)}
+                        {mapNomenclatura("ORGAO", atendimentoAtual.vinculo?.orgao || atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod)}
                       </p>
-                      {(atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod) && (
-                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod}</p>
+                      {(atendimentoAtual.vinculo?.orgao || atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod) && (
+                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.vinculo?.orgao || atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod}</p>
                       )}
                     </div>
                     <div className="space-y-1">

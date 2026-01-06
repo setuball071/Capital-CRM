@@ -8361,14 +8361,45 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let clienteBase = null;
       let folhaAtual = null;
       let contratos: any[] = [];
-      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
+      let higienizacao: { telefones: any[]; emails: string[]; endereco?: any } = { telefones: [], emails: [] };
+      let vinculoAtual: any = null;
       
       if (lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(lead.baseClienteId);
         if (clienteBase) {
-          const folhaRegistros = await storage.getFolhaMesByPessoaId(lead.baseClienteId);
+          // Get vínculos to find sit_func, rjur, orgao, upag
+          const vinculos = await storage.getVinculosByPessoaId(lead.baseClienteId);
+          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+          
+          if (lead.matricula && vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados.find(v => v.matricula === lead.matricula) || vinculosFiltrados[0];
+          } else if (vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados[0];
+          }
+          
+          // Get folha by vínculo when available
+          let folhaRegistros;
+          if (vinculoAtual) {
+            folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoAtual.id);
+            if (folhaRegistros.length === 0) {
+              folhaRegistros = await storage.getFolhaMesByPessoaId(lead.baseClienteId);
+            }
+          } else {
+            folhaRegistros = await storage.getFolhaMesByPessoaId(lead.baseClienteId);
+          }
           folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
-          contratos = await storage.getContratosByPessoaId(lead.baseClienteId);
+          
+          // Get contratos by vínculo when available
+          if (vinculoAtual) {
+            contratos = await storage.getContratosByVinculoId(vinculoAtual.id);
+            if (contratos.length === 0) {
+              const todosPessoa = await storage.getContratosByPessoaId(lead.baseClienteId);
+              contratos = todosPessoa.filter(c => !c.vinculoId || c.vinculoId === vinculoAtual.id);
+            }
+          } else {
+            contratos = await storage.getContratosByPessoaId(lead.baseClienteId);
+          }
           
           const telefones = await storage.getTelefonesByPessoaId(lead.baseClienteId);
           const contatos = await storage.getContactsByClientId(lead.baseClienteId);
@@ -8431,6 +8462,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
         higienizacao,
+        vinculo: vinculoAtual,
       });
     } catch (error) {
       console.error("Proximo lead error:", error);
@@ -8473,14 +8505,45 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let clienteBase = null;
       let folhaAtual = null;
       let contratos: any[] = [];
-      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
+      let higienizacao: { telefones: any[]; emails: string[]; endereco?: any } = { telefones: [], emails: [] };
+      let vinculoAtual: any = null;
       
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
         if (clienteBase) {
-          const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          // Get vínculos to find sit_func, rjur, orgao, upag
+          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
+          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+          
+          if (result.lead.matricula && vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados.find(v => v.matricula === result.lead.matricula) || vinculosFiltrados[0];
+          } else if (vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados[0];
+          }
+          
+          // Get folha by vínculo when available
+          let folhaRegistros;
+          if (vinculoAtual) {
+            folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoAtual.id);
+            if (folhaRegistros.length === 0) {
+              folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+            }
+          } else {
+            folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          }
           folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
-          contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          
+          // Get contratos by vínculo when available
+          if (vinculoAtual) {
+            contratos = await storage.getContratosByVinculoId(vinculoAtual.id);
+            if (contratos.length === 0) {
+              const todosPessoa = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+              contratos = todosPessoa.filter(c => !c.vinculoId || c.vinculoId === vinculoAtual.id);
+            }
+          } else {
+            contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          }
           
           // Get higienização data (telefones e emails)
           const telefones = await storage.getTelefonesByPessoaId(result.lead.baseClienteId);
@@ -8544,6 +8607,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
         higienizacao,
+        vinculo: vinculoAtual,
       });
     } catch (error) {
       console.error("Carregar atendimento error:", error);
@@ -8603,14 +8667,49 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let clienteBase = null;
       let folhaAtual = null;
       let contratos: any[] = [];
-      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
+      let higienizacao: { telefones: any[]; emails: string[]; endereco?: any } = { telefones: [], emails: [] };
+      let vinculoAtual: any = null;
       
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
         if (clienteBase) {
-          const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          // Get vínculos to find sit_func, rjur, orgao, upag
+          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
+          
+          // Filtrar vínculos: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
+          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+          
+          // Select vínculo based on lead's matricula or use first valid one
+          if (result.lead.matricula && vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados.find(v => v.matricula === result.lead.matricula) || vinculosFiltrados[0];
+          } else if (vinculosFiltrados.length > 0) {
+            vinculoAtual = vinculosFiltrados[0];
+          }
+          
+          // Get folha by vínculo when available
+          let folhaRegistros;
+          if (vinculoAtual) {
+            folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoAtual.id);
+            // Fallback: se não encontrou por vínculo, tentar por pessoa
+            if (folhaRegistros.length === 0) {
+              folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+            }
+          } else {
+            folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
+          }
           folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
-          contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          
+          // Get contratos by vínculo when available
+          if (vinculoAtual) {
+            contratos = await storage.getContratosByVinculoId(vinculoAtual.id);
+            if (contratos.length === 0) {
+              const todosPessoa = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+              contratos = todosPessoa.filter(c => !c.vinculoId || c.vinculoId === vinculoAtual.id);
+            }
+          } else {
+            contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          }
           
           // Get higienização data
           const telefones = await storage.getTelefonesByPessoaId(result.lead.baseClienteId);
@@ -8674,6 +8773,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
         higienizacao,
+        vinculo: vinculoAtual,
       });
     } catch (error) {
       console.error("Get atendimento error:", error);
