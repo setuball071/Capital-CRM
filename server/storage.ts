@@ -1066,9 +1066,10 @@ export class DbStorage implements IStorage {
     );
     
     const needsContratoJoin = !!(
-      filtros.banco || filtros.tipo_contrato || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined ||
-      filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined
+      filtros.banco || filtros.tipo_contrato || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined
     );
+    
+    const needsContratoCountFilter = filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined;
 
     // Build pessoa conditions
     const pessoaConditions: any[] = [];
@@ -1086,8 +1087,8 @@ export class DbStorage implements IStorage {
       pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
     }
 
-    // If we need joins, use parameterized SQL query for safety
-    if (needsFolhaJoin || needsContratoJoin) {
+    // If we need joins or count filter, use parameterized SQL query for safety
+    if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter) {
       // Build parameterized query using Drizzle's sql tagged template
       const folhaJoinSql = needsFolhaJoin ? sql`
         INNER JOIN LATERAL (
