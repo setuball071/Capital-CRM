@@ -36,6 +36,12 @@ import {
   type LeadInteraction,
 } from "@shared/schema";
 
+interface HigienizacaoTelefone {
+  telefone: string;
+  tipo: string;
+  principal: boolean | null;
+}
+
 interface AtendimentoData {
   assignment: SalesLeadAssignment;
   lead: SalesLead;
@@ -44,6 +50,10 @@ interface AtendimentoData {
   contratos: any[];
   eventos: SalesLeadEvent[];
   campanha: { id: number; nome: string } | null;
+  higienizacao?: {
+    telefones: HigienizacaoTelefone[];
+    emails: string[];
+  };
 }
 
 function formatCPF(cpf: string | null): string {
@@ -637,10 +647,22 @@ export default function VendasAtendimento() {
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">Data de Nascimento</p>
+                      <p className="text-muted-foreground">Nascimento / Idade</p>
                       <p data-testid="text-data-nascimento">
-                        {atendimentoAtual.clienteBase?.data_nascimento 
-                          ? new Date(atendimentoAtual.clienteBase.data_nascimento).toLocaleDateString("pt-BR")
+                        {atendimentoAtual.clienteBase?.data_nascimento || atendimentoAtual.clienteBase?.dataNascimento
+                          ? (() => {
+                              const dataNasc = atendimentoAtual.clienteBase.data_nascimento || atendimentoAtual.clienteBase.dataNascimento;
+                              const dataFormatada = new Date(dataNasc).toLocaleDateString("pt-BR");
+                              const hoje = new Date();
+                              const nascimento = new Date(dataNasc);
+                              let idade = hoje.getFullYear() - nascimento.getFullYear();
+                              const mesAtual = hoje.getMonth();
+                              const mesNasc = nascimento.getMonth();
+                              if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
+                                idade--;
+                              }
+                              return `${dataFormatada} (${idade} anos)`;
+                            })()
                           : "-"}
                       </p>
                     </div>
@@ -749,7 +771,9 @@ export default function VendasAtendimento() {
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Banco Salário</p>
-                      <p data-testid="text-banco">{atendimentoAtual.clienteBase?.banco_codigo || "-"}</p>
+                      <p data-testid="text-banco">
+                        {atendimentoAtual.clienteBase?.banco_nome || atendimentoAtual.clienteBase?.bancoNome || atendimentoAtual.clienteBase?.banco_codigo || atendimentoAtual.clienteBase?.bancoCodigo || "-"}
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Agência</p>
@@ -896,6 +920,10 @@ export default function VendasAtendimento() {
                         <Phone className="h-3 w-3 mr-1" />
                         Telefones
                       </TabsTrigger>
+                      <TabsTrigger value="emails" className="flex-1" data-testid="tab-emails">
+                        <Mail className="h-3 w-3 mr-1" />
+                        Emails
+                      </TabsTrigger>
                       <TabsTrigger value="endereco" className="flex-1" data-testid="tab-endereco">
                         <MapPin className="h-3 w-3 mr-1" />
                         Endereço
@@ -906,12 +934,40 @@ export default function VendasAtendimento() {
                         <div className="flex items-center justify-center py-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
-                      ) : leadContacts.length === 0 && !atendimentoAtual.lead.telefone1 ? (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sem contatos cadastrados
-                        </div>
                       ) : (
                         <>
+                          {/* Telefones da higienização (dados importados) */}
+                          {atendimentoAtual.higienizacao?.telefones && atendimentoAtual.higienizacao.telefones.length > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                              {atendimentoAtual.higienizacao.telefones.map((tel, idx) => (
+                                <div 
+                                  key={`hig-tel-${idx}`} 
+                                  className="flex items-center gap-2 p-2 border rounded text-sm bg-green-50 dark:bg-green-950/30"
+                                  data-testid={`higienizacao-tel-${idx}`}
+                                >
+                                  {tel.principal && <Star className="h-3 w-3 text-yellow-500 fill-current shrink-0" />}
+                                  <span className="font-medium flex-1 truncate">{formatPhone(tel.telefone)}</span>
+                                  <Badge variant="outline" className="text-xs shrink-0">{tel.tipo}</Badge>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => handleCopyPhone(tel.telefone)}
+                                    data-testid={`button-copy-hig-tel-${idx}`}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Separator className="my-2" />
+                            </>
+                          )}
+                          
+                          {/* Contatos adicionados pelo corretor */}
+                          {leadContacts.length > 0 && (
+                            <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
+                          )}
                           {leadContacts.map((contact) => (
                               <div 
                                 key={contact.id} 
@@ -961,7 +1017,9 @@ export default function VendasAtendimento() {
                                 </div>
                               </div>
                             ))}
-                          {atendimentoAtual.lead.telefone1 && leadContacts.length === 0 && (
+                          
+                          {/* Telefone original do lead (fallback) */}
+                          {atendimentoAtual.lead.telefone1 && leadContacts.length === 0 && (!atendimentoAtual.higienizacao?.telefones || atendimentoAtual.higienizacao.telefones.length === 0) && (
                             <div className="flex items-center gap-2 p-2 border rounded text-sm bg-muted/30">
                               <Badge variant="outline" className="text-xs shrink-0">Original</Badge>
                               <span className="font-medium flex-1">{formatPhone(atendimentoAtual.lead.telefone1)}</span>
@@ -976,6 +1034,13 @@ export default function VendasAtendimento() {
                               </Button>
                             </div>
                           )}
+                          
+                          {/* Mensagem quando não há contatos */}
+                          {leadContacts.length === 0 && (!atendimentoAtual.higienizacao?.telefones || atendimentoAtual.higienizacao.telefones.length === 0) && !atendimentoAtual.lead.telefone1 && (
+                            <div className="text-center py-4 text-muted-foreground text-sm">
+                              Sem telefones cadastrados
+                            </div>
+                          )}
                         </>
                       )}
                       <Button 
@@ -988,6 +1053,49 @@ export default function VendasAtendimento() {
                         <Plus className="h-3 w-3 mr-1" />
                         Novo Contato
                       </Button>
+                    </TabsContent>
+                    <TabsContent value="emails" className="p-4 space-y-2">
+                      {atendimentoAtual.higienizacao?.emails && atendimentoAtual.higienizacao.emails.length > 0 ? (
+                        <>
+                          {atendimentoAtual.higienizacao.emails.map((email, idx) => (
+                            <div 
+                              key={`email-${idx}`} 
+                              className="flex items-center gap-2 p-2 border rounded text-sm bg-blue-50 dark:bg-blue-950/30"
+                              data-testid={`email-item-${idx}`}
+                            >
+                              <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="font-medium flex-1 truncate">{email}</span>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => handleCopyPhone(email)}
+                                data-testid={`button-copy-email-${idx}`}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </>
+                      ) : atendimentoAtual.lead.email ? (
+                        <div className="flex items-center gap-2 p-2 border rounded text-sm bg-muted/30">
+                          <Badge variant="outline" className="text-xs shrink-0">Original</Badge>
+                          <span className="font-medium flex-1">{atendimentoAtual.lead.email}</span>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => handleCopyPhone(atendimentoAtual.lead.email || "")}
+                            data-testid="button-copy-email-original"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Sem emails cadastrados
+                        </div>
+                      )}
                     </TabsContent>
                     <TabsContent value="endereco" className="p-4">
                       <div className="space-y-3 text-sm">

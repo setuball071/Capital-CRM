@@ -8359,11 +8359,60 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Get base cliente data if available
       let clienteBase = null;
+      let folhaAtual = null;
+      let contratos: any[] = [];
+      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
+      
       if (lead.baseClienteId) {
-        const [pessoa] = await db.select().from(clientesPessoa)
-          .where(eq(clientesPessoa.id, lead.baseClienteId));
-        if (pessoa) {
-          clienteBase = await storage.getClientePessoaById(pessoa.id);
+        clienteBase = await storage.getClientePessoaById(lead.baseClienteId);
+        if (clienteBase) {
+          const folhaRegistros = await storage.getFolhaMesByPessoaId(lead.baseClienteId);
+          folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+          contratos = await storage.getContratosByPessoaId(lead.baseClienteId);
+          
+          const telefones = await storage.getTelefonesByPessoaId(lead.baseClienteId);
+          const contatos = await storage.getContactsByClientId(lead.baseClienteId);
+          
+          // Combine and deduplicate telefones (preserve original formatting)
+          const allTelefones = [
+            ...telefones.map(t => ({
+              telefone: t.telefone || '',
+              tipo: t.tipo || 'telefone',
+              principal: t.principal,
+              _normalized: (t.telefone || '').replace(/\D/g, ''),
+            })),
+            ...contatos.filter(c => c.tipo === 'telefone').map(c => ({
+              telefone: c.valor || '',
+              tipo: 'telefone',
+              principal: null,
+              _normalized: (c.valor || '').replace(/\D/g, ''),
+            })),
+          ];
+          const seenTelefones = new Set<string>();
+          const uniqueTelefones = allTelefones.filter(t => {
+            if (!t._normalized || seenTelefones.has(t._normalized)) return false;
+            seenTelefones.add(t._normalized);
+            return true;
+          }).map(t => ({
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          }));
+          
+          // Deduplicate emails (preserve original case)
+          const allEmails = contatos.filter(c => c.tipo === 'email' && c.valor).map(c => c.valor!);
+          const seenEmails = new Set<string>();
+          const uniqueEmails = allEmails.filter(email => {
+            const normalized = email.toLowerCase().trim();
+            if (seenEmails.has(normalized)) return false;
+            seenEmails.add(normalized);
+            return true;
+          });
+          
+          higienizacao = {
+            telefones: uniqueTelefones,
+            emails: uniqueEmails,
+          };
         }
       }
       
@@ -8377,8 +8426,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         assignment: { ...assignment, status: "em_atendimento" },
         lead,
         clienteBase,
+        folhaAtual,
+        contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+        higienizacao,
       });
     } catch (error) {
       console.error("Proximo lead error:", error);
@@ -8421,6 +8473,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let clienteBase = null;
       let folhaAtual = null;
       let contratos: any[] = [];
+      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
       
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
@@ -8428,6 +8481,51 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
           folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
           contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          
+          // Get higienização data (telefones e emails)
+          const telefones = await storage.getTelefonesByPessoaId(result.lead.baseClienteId);
+          const contatos = await storage.getContactsByClientId(result.lead.baseClienteId);
+          
+          // Combine and deduplicate telefones (preserve original formatting)
+          const allTelefones = [
+            ...telefones.map(t => ({
+              telefone: t.telefone || '',
+              tipo: t.tipo || 'telefone',
+              principal: t.principal,
+              _normalized: (t.telefone || '').replace(/\D/g, ''),
+            })),
+            ...contatos.filter(c => c.tipo === 'telefone').map(c => ({
+              telefone: c.valor || '',
+              tipo: 'telefone',
+              principal: null,
+              _normalized: (c.valor || '').replace(/\D/g, ''),
+            })),
+          ];
+          const seenTelefones = new Set<string>();
+          const uniqueTelefones = allTelefones.filter(t => {
+            if (!t._normalized || seenTelefones.has(t._normalized)) return false;
+            seenTelefones.add(t._normalized);
+            return true;
+          }).map(t => ({
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          }));
+          
+          // Deduplicate emails (preserve original case)
+          const allEmails = contatos.filter(c => c.tipo === 'email' && c.valor).map(c => c.valor!);
+          const seenEmails = new Set<string>();
+          const uniqueEmails = allEmails.filter(email => {
+            const normalized = email.toLowerCase().trim();
+            if (seenEmails.has(normalized)) return false;
+            seenEmails.add(normalized);
+            return true;
+          });
+          
+          higienizacao = {
+            telefones: uniqueTelefones,
+            emails: uniqueEmails,
+          };
         }
       }
       
@@ -8445,6 +8543,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+        higienizacao,
       });
     } catch (error) {
       console.error("Carregar atendimento error:", error);
@@ -8504,6 +8603,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let clienteBase = null;
       let folhaAtual = null;
       let contratos: any[] = [];
+      let higienizacao: { telefones: any[]; emails: string[] } = { telefones: [], emails: [] };
       
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
@@ -8511,6 +8611,51 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const folhaRegistros = await storage.getFolhaMesByPessoaId(result.lead.baseClienteId);
           folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
           contratos = await storage.getContratosByPessoaId(result.lead.baseClienteId);
+          
+          // Get higienização data
+          const telefones = await storage.getTelefonesByPessoaId(result.lead.baseClienteId);
+          const contatos = await storage.getContactsByClientId(result.lead.baseClienteId);
+          
+          // Combine and deduplicate telefones (preserve original formatting)
+          const allTelefones = [
+            ...telefones.map(t => ({
+              telefone: t.telefone || '',
+              tipo: t.tipo || 'telefone',
+              principal: t.principal,
+              _normalized: (t.telefone || '').replace(/\D/g, ''),
+            })),
+            ...contatos.filter(c => c.tipo === 'telefone').map(c => ({
+              telefone: c.valor || '',
+              tipo: 'telefone',
+              principal: null,
+              _normalized: (c.valor || '').replace(/\D/g, ''),
+            })),
+          ];
+          const seenTelefones = new Set<string>();
+          const uniqueTelefones = allTelefones.filter(t => {
+            if (!t._normalized || seenTelefones.has(t._normalized)) return false;
+            seenTelefones.add(t._normalized);
+            return true;
+          }).map(t => ({
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          }));
+          
+          // Deduplicate emails (preserve original case)
+          const allEmails = contatos.filter(c => c.tipo === 'email' && c.valor).map(c => c.valor!);
+          const seenEmails = new Set<string>();
+          const uniqueEmails = allEmails.filter(email => {
+            const normalized = email.toLowerCase().trim();
+            if (seenEmails.has(normalized)) return false;
+            seenEmails.add(normalized);
+            return true;
+          });
+          
+          higienizacao = {
+            telefones: uniqueTelefones,
+            emails: uniqueEmails,
+          };
         }
       }
       
@@ -8528,6 +8673,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         contratos,
         eventos,
         campanha: campanha ? { id: campanha.id, nome: campanha.nome } : null,
+        higienizacao,
       });
     } catch (error) {
       console.error("Get atendimento error:", error);

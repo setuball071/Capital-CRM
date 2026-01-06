@@ -1,0 +1,102 @@
+CRM de Vendas (Consulta com Funcionalidades de Atendimento)
+
+Objetivo:
+Transformar a tela atual de consulta de clientes em uma ferramenta de vendas ativa, com funções de atendimento, atualização de dados e integração total com o pipeline (funil de vendas).
+
+🧩 1. Base da Tela
+
+Usar a mesma estrutura da tela de Consulta de Cliente já existente no sistema (em Base de Clientes).
+
+Manter todos os blocos visuais e informações já exibidas lá:
+
+Dados pessoais (Nome, CPF, Matrícula)
+
+Nascimento / Idade
+
+Situação funcional, Regime Jurídico
+
+UPAG, Órgão (com nomenclatura, não apenas código)
+
+Dados bancários
+
+Situação de Folha
+
+Contratos
+
+🔁 2. Integração com Dados Importados
+
+Os dados já importados no sistema precisam ser carregados corretamente nesta tela:
+
+Data de Nascimento
+
+Banco
+
+Endereço
+
+E-mails
+
+Telefones
+
+⚠️ Observação: Mesmo quando a importação mostra 100% sucesso, os dados não estão aparecendo na consulta de vendas. Verificar se os campos estão sendo lidos corretamente, com base no CPF ou Matrícula, e se estão ligados à tabela de dados complementares.
+
+✍️ 3. Área de Atendimento (Painel de Contato)
+
+Manter painel lateral com contatos (telefones e endereços).
+
+Botão "Registrar Atendimento" deve abrir pop-up com:
+
+Tipo de contato
+
+Valor da margem (preenchimento manual)
+
+Observações
+
+Marcador do lead (campo obrigatório)
+
+Após registrar atendimento:
+
+Salvar histórico vinculado ao cliente
+
+Atualizar marcador do lead
+
+🛠️ 4. Edição e Atualização de Dados
+
+Nessa tela (CRM de Vendas), o corretor pode adicionar ou atualizar:
+
+Telefones
+
+E-mails
+
+Endereços
+
+🔐 Isso não deve ser permitido na tela de consulta da base geral (somente nesta, voltada à venda).
+
+Os dados atualizados devem ser salvos no banco de dados complementar vinculado ao cliente.
+
+📈 5. Integração com Pipeline
+
+Todos os marcadores de lead disponíveis no atendimento devem estar também presentes no pipeline como colunas:
+
+Ex: Novo, Em Atendimento, Interessado, Proposta Enviada, Vendido, Retornar Depois etc.
+
+Verificar se há inconsistência:
+
+Hoje, o marcador “Novo” não aparece no pipeline, fazendo leads desaparecerem quando recebem esse status.
+
+Corrigir isso imediatamente para evitar leads "fantasmas".
+
+✅ Conclusão
+
+Esta tela deve funcionar como:
+
+Uma extensão da tela de consulta do cliente (com acesso completo aos dados).
+
+Uma ferramenta de atendimento e vendas ativa, onde os corretores:
+
+Visualizam dados
+
+Atualizam contatos
+
+Realizam anotações
+
+Acompanham cada lead por estágio no funil
