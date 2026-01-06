@@ -76,10 +76,22 @@ interface ClienteDetalhadoPessoa {
   telefones_base: string[] | null;
   // Dados bancários do cliente (onde recebe salário)
   banco_codigo: string | null;
+  banco_nome: string | null;
   agencia: string | null;
   conta: string | null;
   base_tag_ultima: string | null;
   extras_pessoa: any;
+}
+
+interface HigienizacaoTelefone {
+  telefone: string;
+  tipo: string | null;
+  principal: boolean | null;
+}
+
+interface Higienizacao {
+  telefones: HigienizacaoTelefone[];
+  emails: string[];
 }
 
 interface FolhaAtual {
@@ -168,7 +180,7 @@ interface ClienteDetalhado {
   vinculos: Vinculo[];
   vinculo_selecionado: number | null;
   tem_multiplos_vinculos: boolean;
-  higienizacao: null;
+  higienizacao: Higienizacao | null;
 }
 
 function formatCPF(cpf: string | null): string {
@@ -303,7 +315,6 @@ export default function ConsultaCliente() {
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
-  const [showTelefonesModal, setShowTelefonesModal] = useState(false);
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
   
   // Função para calcular Saldo Devedor usando Tabela Price
@@ -797,42 +808,6 @@ export default function ConsultaCliente() {
                       <p className="text-sm text-muted-foreground">Regime Jurídico (REJUR)</p>
                       <p>{vinculoAtual?.rjur || clienteDetalhado.pessoa.rjur || "-"}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        Localização
-                      </p>
-                      <p>
-                        {[clienteDetalhado.pessoa.municipio, clienteDetalhado.pessoa.uf].filter(Boolean).join(" - ") || "-"}
-                      </p>
-                    </div>
-                    
-                    {/* Telefones - resumo com botão para modal */}
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Phone className="w-4 h-4" />
-                        Telefones
-                      </p>
-                      <div className="flex items-center gap-2">
-                        {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
-                          <>
-                            <Badge variant="secondary" data-testid="badge-telefones-count">
-                              {clienteDetalhado.pessoa.telefones_base.length}
-                            </Badge>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setShowTelefonesModal(true)}
-                              data-testid="button-ver-telefones"
-                            >
-                              Ver
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">Nenhum telefone</span>
-                        )}
-                      </div>
-                    </div>
                     
                     {/* Dados Bancários do cliente (onde recebe salário) */}
                     <div className="space-y-1 md:col-span-2">
@@ -840,11 +815,16 @@ export default function ConsultaCliente() {
                         <Landmark className="w-4 h-4" />
                         Dados Bancários
                       </p>
-                      {clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.agencia || clienteDetalhado.pessoa.conta ? (
+                      {clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.agencia || clienteDetalhado.pessoa.conta ? (
                         <div className="grid grid-cols-3 gap-4 text-sm">
                           <div className="group">
                             <span className="text-muted-foreground">Banco: </span>
-                            <CopyableField value={clienteDetalhado.pessoa.banco_codigo} label="Banco" onCopy={handleCopy} />
+                            <CopyableField 
+                              value={clienteDetalhado.pessoa.banco_codigo} 
+                              displayValue={clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.banco_codigo || "-"} 
+                              label="Banco" 
+                              onCopy={handleCopy} 
+                            />
                           </div>
                           <div className="group">
                             <span className="text-muted-foreground">Ag: </span>
@@ -868,46 +848,128 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
-              {/* Modal de Telefones */}
-              <Dialog open={showTelefonesModal} onOpenChange={setShowTelefonesModal}>
-                <DialogContent className="sm:max-w-md" data-testid="modal-telefones">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Phone className="h-5 w-5" />
-                      Telefones do Cliente
-                    </DialogTitle>
-                    <DialogDescription>
-                      {clienteDetalhado.pessoa.telefones_base?.length || 0} telefone(s) cadastrado(s)
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-2 mt-4">
-                    {clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
-                      clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
-                        <div 
-                          key={idx} 
-                          className="flex items-center justify-between p-3 bg-muted rounded-lg group"
-                          data-testid={`telefone-item-${idx}`}
-                        >
-                          <span className="font-mono">{tel}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              navigator.clipboard.writeText(tel);
-                              handleCopy(tel, `Telefone ${idx + 1}`);
-                            }}
-                            data-testid={`button-copiar-telefone-${idx}`}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
+              {/* Seção Dados de Contato / Higienização */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="w-5 h-5" />
+                    Dados de Contato / Higienização
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Telefones */}
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-muted-foreground">Telefones</p>
+                      {clienteDetalhado.higienizacao?.telefones && clienteDetalhado.higienizacao.telefones.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.higienizacao.telefones.map((tel, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`telefone-item-${idx}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm">{tel.telefone}</span>
+                                {tel.principal && (
+                                  <Badge variant="outline" className="text-xs">Principal</Badge>
+                                )}
+                                {tel.tipo && (
+                                  <Badge variant="secondary" className="text-xs">{tel.tipo}</Badge>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(tel.telefone);
+                                  handleCopy(tel.telefone, `Telefone ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-telefone-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-muted-foreground text-center py-4">Nenhum telefone cadastrado</p>
-                    )}
+                      ) : clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`telefone-legado-item-${idx}`}
+                            >
+                              <span className="font-mono text-sm">{tel}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(tel);
+                                  handleCopy(tel, `Telefone ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-telefone-legado-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Nenhum telefone cadastrado</p>
+                      )}
+                    </div>
+                    
+                    {/* E-mails */}
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-muted-foreground">E-mails</p>
+                      {clienteDetalhado.higienizacao?.emails && clienteDetalhado.higienizacao.emails.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.higienizacao.emails.map((email, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`email-item-${idx}`}
+                            >
+                              <span className="text-sm">{email}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(email);
+                                  handleCopy(email, `E-mail ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-email-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Nenhum e-mail cadastrado</p>
+                      )}
+                    </div>
+                    
+                    {/* Endereço Completo */}
+                    <div className="space-y-3 md:col-span-2">
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        Endereço
+                      </p>
+                      {clienteDetalhado.pessoa.municipio || clienteDetalhado.pessoa.uf ? (
+                        <div className="p-3 bg-muted rounded-md">
+                          <p className="text-sm">
+                            {[clienteDetalhado.pessoa.municipio, clienteDetalhado.pessoa.uf].filter(Boolean).join(" - ")}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Endereço não informado</p>
+                      )}
+                    </div>
                   </div>
-                </DialogContent>
-              </Dialog>
+                </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader>

@@ -215,6 +215,9 @@ export interface IStorage {
   // Clientes Telefones
   getTelefonesByPessoaId(pessoaId: number): Promise<ClienteTelefone[]>;
   
+  // Client Contacts (emails, etc from higienização)
+  getContactsByClientId(clientId: number): Promise<ClientContact[]>;
+  
   // Clientes Folha Mês
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
@@ -1640,6 +1643,14 @@ export class DbStorage implements IStorage {
       .from(clientesTelefones)
       .where(eq(clientesTelefones.pessoaId, pessoaId))
       .orderBy(sql`${clientesTelefones.principal} DESC, ${clientesTelefones.createdAt} DESC`);
+  }
+  
+  // Client Contacts (emails from higienização)
+  async getContactsByClientId(clientId: number): Promise<ClientContact[]> {
+    return await db.select()
+      .from(clientContacts)
+      .where(eq(clientContacts.clientId, clientId))
+      .orderBy(sql`${clientContacts.tipo} ASC, ${clientContacts.createdAt} DESC`);
   }
 
   // Clientes Contratos

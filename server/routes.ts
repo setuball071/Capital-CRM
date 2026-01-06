@@ -5914,6 +5914,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Get telefones da tabela clientes_telefones
       const telefones = await storage.getTelefonesByPessoaId(pessoaId);
       
+      // Get contatos (emails) da tabela client_contacts
+      const contatos = await storage.getContactsByClientId(pessoaId);
+      
       // Build response
       const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
       const folhaHistorico = folhaRegistros.slice(1, 13); // Last 12 months (excluding current)
@@ -5949,6 +5952,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           })),
           // Dados bancários do cliente (onde recebe salário)
           banco_codigo: pessoa.bancoCodigo || null,
+          banco_nome: pessoa.bancoNome || null,
           agencia: pessoa.agencia || null,
           conta: pessoa.conta || null,
           base_tag_ultima: pessoa.baseTagUltima,
@@ -6027,7 +6031,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         })),
         vinculo_selecionado: vinculoIdEfetivo,
         tem_multiplos_vinculos: vinculos.length > 1,
-        higienizacao: null, // Reserved for Part 3
+        higienizacao: {
+          telefones: telefones.map(t => ({
+            telefone: t.telefone,
+            tipo: t.tipo,
+            principal: t.principal,
+          })),
+          emails: contatos.filter(c => c.tipo === 'email').map(c => c.valor),
+        },
       });
     } catch (error) {
       console.error("Get cliente details error:", error);
