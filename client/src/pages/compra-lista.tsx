@@ -445,6 +445,8 @@ export default function CompraLista() {
                       placeholder="Todos os bancos"
                       searchPlaceholder="Buscar banco..."
                       emptyText="Nenhum banco encontrado."
+                      creatable={true}
+                      createOptionLabel={(v) => `Usar "${v}"`}
                       data-testid="combobox-banco"
                     />
                   </div>

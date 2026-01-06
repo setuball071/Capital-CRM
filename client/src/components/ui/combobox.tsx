@@ -28,6 +28,8 @@ interface ComboboxProps {
   allowClear?: boolean
   disabled?: boolean
   className?: string
+  creatable?: boolean
+  createOptionLabel?: (inputValue: string) => string
   "data-testid"?: string
 }
 
@@ -42,6 +44,8 @@ export function Combobox({
   allowClear = true,
   disabled = false,
   className,
+  creatable = false,
+  createOptionLabel = (inputValue: string) => `Usar "${inputValue}"`,
   "data-testid": testId,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
@@ -59,6 +63,12 @@ export function Combobox({
     )
   }, [sortedOptions, inputValue])
 
+  const showCreateOption = React.useMemo(() => {
+    if (!creatable || !inputValue.trim()) return false
+    const lowerInput = inputValue.toLowerCase().trim()
+    return !sortedOptions.some(opt => opt.toLowerCase() === lowerInput)
+  }, [creatable, inputValue, sortedOptions])
+
   const handleSelect = (selectedValue: string) => {
     if (selectedValue === value) {
       onValueChange(undefined)
@@ -67,6 +77,15 @@ export function Combobox({
     }
     setOpen(false)
     setInputValue("")
+  }
+
+  const handleCreateOption = () => {
+    const trimmedValue = inputValue.trim()
+    if (trimmedValue) {
+      onValueChange(trimmedValue)
+      setOpen(false)
+      setInputValue("")
+    }
   }
 
   const handleClearSelection = () => {
@@ -151,6 +170,16 @@ export function Combobox({
                   {option}
                 </CommandItem>
               ))}
+              {showCreateOption && (
+                <CommandItem
+                  value={`__create__${inputValue}`}
+                  onSelect={handleCreateOption}
+                  className="cursor-pointer text-primary"
+                >
+                  <span className="mr-2 h-4 w-4 flex items-center justify-center text-xs">+</span>
+                  {createOptionLabel(inputValue.trim())}
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
