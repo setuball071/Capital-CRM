@@ -47,9 +47,15 @@ interface Filtros {
   qtd_contratos_max?: number;
 }
 
+interface OrgaoComCodigo {
+  codigo: string;
+  nome: string;
+}
+
 interface FiltrosDisponiveis {
   convenios: string[];
   orgaos: string[];
+  orgaosComCodigo: OrgaoComCodigo[];
   ufs: string[];
   bancos: string[];
   tiposContrato: string[];
@@ -104,6 +110,83 @@ const UF_LIST = [
   "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN",
   "RO", "RR", "RS", "SC", "SE", "SP", "TO"
 ];
+
+interface OrgaoComboboxProps {
+  orgaosComCodigo: OrgaoComCodigo[];
+  value: string | undefined;
+  onValueChange: (value: string | undefined) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  "data-testid"?: string;
+}
+
+function OrgaoCombobox({
+  orgaosComCodigo,
+  value,
+  onValueChange,
+  placeholder = "Selecione...",
+  searchPlaceholder = "Buscar...",
+  emptyText = "Nenhum item encontrado.",
+  "data-testid": testId,
+}: OrgaoComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+
+  const nomeParaCodigo = orgaosComCodigo.reduce((acc, org) => {
+    acc[org.nome] = org.codigo;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const codigoParaNome = orgaosComCodigo.reduce((acc, org) => {
+    acc[org.codigo] = org.nome;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const nomes = orgaosComCodigo.map(o => o.nome).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  const filteredNomes = inputValue
+    ? nomes.filter(n => n.toLowerCase().includes(inputValue.toLowerCase()))
+    : nomes;
+
+  const nomeExibicao = value ? (codigoParaNome[value] || value) : undefined;
+
+  const handleSelect = (nome: string) => {
+    const codigo = nomeParaCodigo[nome] || nome;
+    if (codigo === value) {
+      onValueChange(undefined);
+    } else {
+      onValueChange(codigo);
+    }
+    setOpen(false);
+    setInputValue("");
+  };
+
+  const handleClear = () => {
+    onValueChange(undefined);
+    setOpen(false);
+    setInputValue("");
+  };
+
+  return (
+    <Combobox
+      options={filteredNomes.length > 0 ? nomes : []}
+      value={nomeExibicao}
+      onValueChange={(nome) => {
+        if (nome) {
+          const codigo = nomeParaCodigo[nome] || nome;
+          onValueChange(codigo);
+        } else {
+          onValueChange(undefined);
+        }
+      }}
+      placeholder={placeholder}
+      searchPlaceholder={searchPlaceholder}
+      emptyText={emptyText}
+      data-testid={testId}
+    />
+  );
+}
 
 export default function CompraLista() {
   const { toast } = useToast();
@@ -364,8 +447,8 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="orgao">Órgão</Label>
-                  <Combobox
-                    options={filtrosDisponiveis?.orgaos || []}
+                  <OrgaoCombobox
+                    orgaosComCodigo={filtrosDisponiveis?.orgaosComCodigo || []}
                     value={filtros.orgao}
                     onValueChange={(v) => setFiltros({ ...filtros, orgao: v })}
                     placeholder="Todos os órgãos"

@@ -191,6 +191,7 @@ export interface IStorage {
   searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
   getDistinctConveniosClientes(): Promise<string[]>;
   getDistinctOrgaosClientes(): Promise<string[]>;
+  getOrgaosWithCodigo(): Promise<{ codigo: string; nome: string }[]>;
   getDistinctUfsClientes(): Promise<string[]>;
   getDistinctBancosClientes(): Promise<string[]>;
   getDistinctTiposContratoClientes(): Promise<string[]>;
@@ -1267,6 +1268,31 @@ export class DbStorage implements IStorage {
     const result = await db.select({ orgaodesc: clientesPessoa.orgaodesc }).from(clientesPessoa);
     const uniqueOrgaos = [...new Set(result.map(r => r.orgaodesc).filter(Boolean))];
     return uniqueOrgaos.sort() as string[];
+  }
+
+  async getOrgaosWithCodigo(): Promise<{ codigo: string; nome: string }[]> {
+    // Busca nomenclaturas de órgãos com código e nome
+    const nomenclaturasResult = await db.select({ 
+      codigo: nomenclaturas.codigo, 
+      nome: nomenclaturas.nome 
+    })
+      .from(nomenclaturas)
+      .where(and(
+        eq(nomenclaturas.categoria, "ORGAO"),
+        eq(nomenclaturas.ativo, true)
+      ));
+    
+    if (nomenclaturasResult.length > 0) {
+      return nomenclaturasResult
+        .filter(r => r.codigo && r.nome)
+        .map(r => ({ codigo: r.codigo!, nome: r.nome! }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    }
+    
+    // Fallback: busca da tabela de pessoas (usa orgaodesc como código e nome)
+    const result = await db.select({ orgaodesc: clientesPessoa.orgaodesc }).from(clientesPessoa);
+    const uniqueOrgaos = [...new Set(result.map(r => r.orgaodesc).filter(Boolean))];
+    return uniqueOrgaos.sort().map(org => ({ codigo: org!, nome: org! }));
   }
 
   async getDistinctUfsClientes(): Promise<string[]> {
