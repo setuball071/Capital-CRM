@@ -1073,6 +1073,8 @@ export class DbStorage implements IStorage {
     );
     
     const needsContratoCountFilter = filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined;
+    
+    const needsIdadeFilter = filtros.idade_min !== undefined || filtros.idade_max !== undefined;
 
     // Build pessoa conditions
     const pessoaConditions: any[] = [];
@@ -1090,8 +1092,8 @@ export class DbStorage implements IStorage {
       pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
     }
 
-    // If we need joins or count filter, use parameterized SQL query for safety
-    if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter) {
+    // If we need joins, count filter, or idade filter, use parameterized SQL query for safety
+    if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter || needsIdadeFilter) {
       // Build parameterized query using Drizzle's sql tagged template
       const folhaJoinSql = needsFolhaJoin ? sql`
         INNER JOIN LATERAL (
@@ -1188,6 +1190,16 @@ export class DbStorage implements IStorage {
             WHERE cc.pessoa_id = p.id
           ) >= ${minContratos}`);
         }
+      }
+
+      // Filtro de idade (calculada a partir de data_nascimento)
+      if (filtros.idade_min !== undefined) {
+        whereConditions.push(sql`p.data_nascimento IS NOT NULL AND 
+          EXTRACT(YEAR FROM AGE(NOW(), p.data_nascimento)) >= ${filtros.idade_min}`);
+      }
+      if (filtros.idade_max !== undefined) {
+        whereConditions.push(sql`p.data_nascimento IS NOT NULL AND 
+          EXTRACT(YEAR FROM AGE(NOW(), p.data_nascimento)) <= ${filtros.idade_max}`);
       }
 
       // Combine WHERE conditions
