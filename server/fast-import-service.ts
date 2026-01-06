@@ -959,6 +959,9 @@ class FastImportService {
                   TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YYYY')
                 WHEN s.data_nascimento ~ '^\d{4}-\d{2}-\d{2}' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'YYYY-MM-DD')
+                WHEN s.data_nascimento ~ '^\d+$' AND LENGTH(s.data_nascimento) <= 6 THEN 
+                  -- Número serial do Excel (dias desde 1899-12-30)
+                  DATE '1899-12-30' + s.data_nascimento::integer
                 ELSE NULL
               END
             ELSE NULL
