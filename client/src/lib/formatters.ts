@@ -38,3 +38,43 @@ export function parseCurrency(value: string): number {
   const cleaned = value.replace(/[^\d,]/g, '').replace(',', '.');
   return parseFloat(cleaned) || 0;
 }
+
+/**
+ * Parse Brazilian currency string or number to number (robust version)
+ * Handles: number, string with R$, string with Brazilian format (1.234,56)
+ * Examples: 
+ *   301.86 => 301.86
+ *   "301.86" => 301.86  
+ *   "R$ 301,86" => 301.86
+ *   "1.530.480,77" => 1530480.77
+ *   "R$ 1.234,56" => 1234.56
+ */
+export function parseCurrencyBR(value: unknown): number {
+  // Already a number
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
+  
+  // Null/undefined/empty
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  
+  const str = String(value).trim();
+  
+  // Check if it's a simple numeric string (like "301.86" from API)
+  // This handles cases where backend returns numeric strings with dot as decimal
+  if (/^-?\d+\.?\d*$/.test(str)) {
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+  }
+  
+  // Handle Brazilian format: remove R$, remove thousand separators (.), replace decimal comma with dot
+  const cleaned = str
+    .replace(/[^\d,.-]/g, '')  // Keep only digits, comma, dot, minus
+    .replace(/\./g, '')         // Remove thousand separators (dots)
+    .replace(',', '.');         // Replace decimal comma with dot
+  
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}

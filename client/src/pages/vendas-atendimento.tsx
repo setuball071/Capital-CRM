@@ -208,10 +208,25 @@ export default function VendasAtendimento() {
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
 
+  // Parse Brazilian currency: handles number, "301.86", "R$ 301,86", "1.530.480,77"
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
     if (typeof value === "number") return isNaN(value) ? 0 : value;
-    const cleaned = String(value).replace("R$", "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+    
+    const str = String(value).trim();
+    
+    // If it's a simple numeric string (e.g., "301.86" from API with dot as decimal)
+    if (/^-?\d+\.?\d*$/.test(str)) {
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : num;
+    }
+    
+    // Handle Brazilian format: "R$ 1.234,56" -> remove R$, remove thousands dots, replace comma with dot
+    const cleaned = str
+      .replace(/[^\d,.-]/g, '')  // Keep only digits, comma, dot, minus
+      .replace(/\./g, '')         // Remove thousand separators (dots)
+      .replace(',', '.');         // Replace decimal comma with dot
+    
     const parsed = parseFloat(cleaned);
     return isNaN(parsed) ? 0 : parsed;
   };

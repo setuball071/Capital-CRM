@@ -1,0 +1,101 @@
+PROMPT – CORREÇÃO DE BUG (PARCELA / SALDO NO RESUMO DE CONTRATOS)
+
+Contexto:
+No módulo CRM de Vendas → Atendimento / Consulta, ao selecionar contratos, o Resumo de Contratos Selecionados está apresentando valores incorretos de Soma das Parcelas e Soma do Saldo Devedor.
+Exemplo: uma parcela de R$ 301,86 está sendo convertida para R$ 30.186,00, indicando erro de conversão numérica.
+
+🎯 Objetivo
+
+Corrigir definitivamente a conversão e soma de valores financeiros no Resumo de Contratos, garantindo consistência com os valores exibidos individualmente nos contratos e com a tela de Consulta de Cliente (Base de Clientes).
+
+🔴 Problema Identificado
+
+Os valores de parcela e saldo devedor estão sendo tratados como strings formatadas (pt-BR) durante o cálculo, gerando erro ao converter para número (parseFloat, Number etc.).
+
+✅ Regras Obrigatórias de Correção
+1️⃣ Separação entre valor numérico e valor formatado
+
+Cada contrato deve possuir:
+
+valor_parcela_raw → number (ex: 301.86)
+
+valor_parcela_formatado → string (ex: "R$ 301,86")
+
+saldo_devedor_raw → number
+
+saldo_devedor_formatado → string
+
+📌 O resumo deve usar exclusivamente os campos _raw.
+
+2️⃣ Normalização obrigatória (caso algum valor ainda chegue como string)
+
+Implementar função padrão para conversão pt-BR → number:
+
+function parseCurrencyBR(value) {
+  if (typeof value === 'number') return value;
+
+  if (!value) return 0;
+
+  return Number(
+    value
+      .toString()
+      .replace(/[^\d,-]/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.')
+  );
+}
+
+
+Uso obrigatório nos cálculos:
+
+totalParcelas += parseCurrencyBR(contrato.valor_parcela);
+totalSaldoDevedor += parseCurrencyBR(contrato.saldo_devedor);
+
+3️⃣ Correção do Resumo de Contratos Selecionados
+
+O resumo deve calcular corretamente:
+
+✅ Soma das Parcelas
+
+✅ Soma do Saldo Devedor
+
+✅ Prazo Médio (média simples das parcelas restantes dos contratos selecionados)
+
+⚠️ Garantir que:
+
+Nenhum valor formatado (R$, . ,) seja usado em cálculos
+
+Não haja divisão por 100 duplicada
+
+Não exista reaplicação de máscara em valores já normalizados
+
+4️⃣ Backend (se aplicável)
+
+Verificar se a API está retornando valores financeiros como string.
+Caso positivo, corrigir para retornar number puro, deixando a formatação apenas para o frontend.
+
+Exemplo correto:
+
+{
+  "valor_parcela": 301.86,
+  "saldo_devedor": 1530480.77,
+  "parcelas_restantes": 96
+}
+
+5️⃣ Testes de Validação (obrigatórios)
+
+Selecionar 1 contrato → resumo deve bater exatamente com a linha
+
+Selecionar múltiplos contratos → soma correta
+
+Valores acima de 1.000 não podem perder casa decimal
+
+Nenhum valor pode virar NaN
+
+✅ Resultado Esperado
+
+Valores do resumo idênticos aos contratos selecionados
+
+Nenhuma distorção decimal
+
+Resumo confiável para uso comercial (simulação, proposta, negociação)
