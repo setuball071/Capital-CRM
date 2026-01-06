@@ -6032,11 +6032,19 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         vinculo_selecionado: vinculoIdEfetivo,
         tem_multiplos_vinculos: vinculos.length > 1,
         higienizacao: {
-          telefones: telefones.map(t => ({
-            telefone: t.telefone,
-            tipo: t.tipo,
-            principal: t.principal,
-          })),
+          // Combina telefones da tabela clientes_telefones com telefones de client_contacts (dados complementares)
+          telefones: [
+            ...telefones.map(t => ({
+              telefone: t.telefone,
+              tipo: t.tipo || 'telefone',
+              principal: t.principal,
+            })),
+            ...contatos.filter(c => c.tipo === 'telefone').map(c => ({
+              telefone: c.valor,
+              tipo: 'telefone',
+              principal: null,
+            })),
+          ],
           emails: contatos.filter(c => c.tipo === 'email').map(c => c.valor),
         },
       });
