@@ -1,0 +1,109 @@
+Prompt para Desenvolvimento - Tela de Atendimento (CRM de Vendas - ALPHA)
+
+1. Modelo da Tela
+
+A nova tela deve ser uma extensão da tela atual de "Consulta Cliente" da área Base de Clientes.
+
+Deve manter o visual já implementado na nova tela de atendimento (lado direito fixo com painel de contato: telefones, e-mails, endereços e botão "Registrar Atendimento").
+
+Estrutura geral:
+
+Dados do Cliente
+
+Situação de Folha
+
+Contratos
+
+Dados de Contato / Higienização
+
+2. Dados do Cliente
+
+Trazer TODOS os dados existentes na tela da consulta do cliente.
+
+Os campos devem incluir:
+
+Nome, CPF, Matrícula
+
+Data de nascimento e idade (com selo de aniversariante do mês, se aplicável)
+
+Situação funcional
+
+Convênio
+
+Natureza
+
+UPAG (mostrar SIGLA e não só o código)
+
+Órgão (mostrar SIGLA e não só o código)
+
+Regime Jurídico (mostrar SIGLA)
+
+Última base
+
+Dados Bancários: Banco, Agência, Conta
+
+3. Situação de Folha
+
+Exibir exatamente como está na Consulta de Cliente, com:
+
+Todas as margens: 70%, 35%, 5%, Benefício 5%
+
+Para cada uma, exibir:
+
+Bruta
+
+Utilizada
+
+Saldo
+
+Exibir também total de créditos, débitos e valor líquido.
+
+4. Contratos
+
+Mostrar os contratos individuais, como no modelo da Consulta de Cliente:
+
+Tipo
+
+Origem do desconto
+
+Nº do contrato
+
+Valor da parcela
+
+Taxa (%) – com opção de editar manualmente
+
+Saldo devedor – deve calcular automaticamente após preencher a taxa
+
+Parcelas restantes
+
+Competência
+
+🆕 Função adicional:
+
+Permitir selecionar contratos individualmente (via checkbox).
+
+Ao selecionar contratos:
+
+Calcular e exibir abaixo da tabela:
+
+Soma total das parcelas selecionadas
+
+Soma total do saldo devedor selecionado
+
+Prazo médio das parcelas selecionadas (baseado nas parcelas restantes)
+
+5. Registrar Atendimento
+
+Manter botão “Registrar Atendimento” como está.
+
+Manter campo de anotações, tipo de contato e marcador do lead.
+
+⚠️ Corrigir:
+
+O marcador “Novo” precisa existir no Pipeline. Se não, quando o vendedor seleciona esse status, o lead desaparece. Adicionar essa coluna no Pipeline!
+
+6. Importante:
+
+Todos os dados apresentados vêm das importações feitas no sistema.
+
+O CRM é uma extensão funcional do banco de dados de clientes, com ferramentas para vendas e higienização da base.

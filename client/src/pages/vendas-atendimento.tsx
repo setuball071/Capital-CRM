@@ -15,10 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
-  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil
+  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator
 } from "lucide-react";
 import { 
   LEAD_STATUS, 
@@ -184,6 +185,17 @@ export default function VendasAtendimento() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
+  const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
+  const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+
+  const calcularSaldoDevedorPrice = (valorParcela: number | null, taxaPercent: number, parcelasRestantes: number | null): number | null => {
+    if (!valorParcela || !parcelasRestantes || taxaPercent <= 0) return null;
+    const i = taxaPercent / 100;
+    const n = parcelasRestantes;
+    const pmt = valorParcela;
+    const pv = pmt * (1 - Math.pow(1 + i, -n)) / i;
+    return pv;
+  };
   const [interactionFormData, setInteractionFormData] = useState({
     tipoContato: "ligacao" as typeof TIPOS_CONTATO_LEAD[number],
     leadMarker: "EM_ATENDIMENTO" as LeadMarker,
@@ -206,6 +218,11 @@ export default function VendasAtendimento() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    setContratosSelecionados(new Set());
+    setTaxasContratos({});
+  }, [atendimentoAtual?.lead?.id]);
 
   const { data: resumo, isLoading: loadingResumo } = useQuery<{
     leadsPendentes: number;
@@ -651,7 +668,7 @@ export default function VendasAtendimento() {
                         <Calendar className="w-4 h-4" />
                         Nascimento / Idade
                       </p>
-                      <div className="flex items-center gap-2" data-testid="text-data-nascimento">
+                      <div className="flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
                         {(() => {
                           const dataNasc = atendimentoAtual.clienteBase?.data_nascimento || atendimentoAtual.clienteBase?.dataNascimento;
                           if (!dataNasc) return <span>-</span>;
@@ -664,10 +681,17 @@ export default function VendasAtendimento() {
                           if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
                             idade--;
                           }
+                          const isAniversarianteDoMes = mesAtual === mesNasc;
                           return (
                             <>
                               <span>{dataFormatada}</span>
                               <Badge variant="secondary">{idade} anos</Badge>
+                              {isAniversarianteDoMes && (
+                                <Badge className="bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200" data-testid="badge-aniversariante">
+                                  <Cake className="w-3 h-3 mr-1" />
+                                  Aniversariante
+                                </Badge>
+                              )}
                             </>
                           );
                         })()}
@@ -716,6 +740,15 @@ export default function VendasAtendimento() {
                       <p className="text-muted-foreground">Convênio</p>
                       <Badge variant="outline" data-testid="text-convenio">
                         {atendimentoAtual.clienteBase?.convenio || "-"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <Database className="w-4 h-4" />
+                        Última Base
+                      </p>
+                      <Badge variant="secondary" data-testid="text-ultima-base">
+                        {atendimentoAtual.clienteBase?.base_tag || atendimentoAtual.folhaAtual?.competencia || "-"}
                       </Badge>
                     </div>
                   </div>
@@ -784,6 +817,7 @@ export default function VendasAtendimento() {
                 </CardHeader>
                 <CardContent>
                   {atendimentoAtual.folhaAtual ? (
+                    <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Margem 70% */}
                       <Card className="bg-muted/50" data-testid="card-margem-70">
@@ -877,6 +911,25 @@ export default function VendasAtendimento() {
                         </CardContent>
                       </Card>
                     </div>
+
+                    {/* Totais: Créditos, Débitos, Líquido */}
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Total Créditos</p>
+                          <p className="font-medium text-green-600">{formatCurrency(atendimentoAtual.folhaAtual.total_creditos)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Total Débitos</p>
+                          <p className="font-medium text-red-600">{formatCurrency(atendimentoAtual.folhaAtual.total_debitos)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Valor Líquido</p>
+                          <p className="font-medium">{formatCurrency(atendimentoAtual.folhaAtual.valor_liquido)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    </>
                   ) : (
                     <div className="text-center py-6 text-muted-foreground">
                       <Briefcase className="w-10 h-10 mx-auto mb-2 opacity-50" />
@@ -901,54 +954,169 @@ export default function VendasAtendimento() {
                 </CardHeader>
                 <CardContent>
                   {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Origem do Desconto</TableHead>
-                          <TableHead>Nº Contrato</TableHead>
-                          <TableHead className="text-right">Valor Parcela</TableHead>
-                          <TableHead className="text-center w-20">Taxa (%)</TableHead>
-                          <TableHead className="text-right">Saldo Devedor</TableHead>
-                          <TableHead className="text-right">Parc. Rest.</TableHead>
-                          <TableHead>Competência</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {atendimentoAtual.contratos.map((contrato, idx) => (
-                          <TableRow key={idx} data-testid={`row-contrato-${idx}`}>
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize text-xs">
-                                {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <CopyableField
-                                value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO}
-                                displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"}
-                                testId={`button-copy-banco-contrato-${idx}`}
-                                toast={toast}
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">
+                              <Checkbox
+                                checked={contratosSelecionados.size === atendimentoAtual.contratos.length && atendimentoAtual.contratos.length > 0}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setContratosSelecionados(new Set(atendimentoAtual.contratos.map((_, idx) => idx)));
+                                  } else {
+                                    setContratosSelecionados(new Set());
+                                  }
+                                }}
+                                data-testid="checkbox-select-all"
                               />
-                            </TableCell>
-                            <TableCell className="font-mono text-xs">
-                              <CopyableField
-                                value={contrato.numero_contrato || contrato.numeroContrato}
-                                displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"}
-                                testId={`button-copy-contrato-${idx}`}
-                                toast={toast}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right">{formatCurrency(contrato.valor_parcela || contrato.valorParcela)}</TableCell>
-                            <TableCell className="text-center text-muted-foreground">
-                              {contrato.taxa ? `${contrato.taxa}%` : "-"}
-                            </TableCell>
-                            <TableCell className="text-right">{formatCurrency(contrato.saldo_devedor || contrato.saldoDevedor)}</TableCell>
-                            <TableCell className="text-right">{contrato.parcelas_restantes || contrato.parcelasRestantes || "-"}</TableCell>
-                            <TableCell>{contrato.competencia || "-"}</TableCell>
+                            </TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Origem do Desconto</TableHead>
+                            <TableHead>Nº Contrato</TableHead>
+                            <TableHead className="text-right">Valor Parcela</TableHead>
+                            <TableHead className="text-center w-20">Taxa (%)</TableHead>
+                            <TableHead className="text-right">Saldo Devedor</TableHead>
+                            <TableHead className="text-right">Parc. Rest.</TableHead>
+                            <TableHead>Competência</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {atendimentoAtual.contratos.map((contrato, idx) => {
+                            const taxaStr = taxasContratos[idx];
+                            const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                            const valorParcela = contrato.valor_parcela || contrato.valorParcela;
+                            const parcelasRestantes = contrato.parcelas_restantes || contrato.parcelasRestantes;
+                            const saldoCalculado = taxa > 0 
+                              ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes)
+                              : null;
+                            const saldoExibir = saldoCalculado !== null ? saldoCalculado : (contrato.saldo_devedor || contrato.saldoDevedor);
+                            const isCalculado = saldoCalculado !== null;
+                            return (
+                              <TableRow key={idx} data-testid={`row-contrato-${idx}`} className={contratosSelecionados.has(idx) ? "bg-muted/50" : ""}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={contratosSelecionados.has(idx)}
+                                    onCheckedChange={(checked) => {
+                                      const newSet = new Set(contratosSelecionados);
+                                      if (checked) {
+                                        newSet.add(idx);
+                                      } else {
+                                        newSet.delete(idx);
+                                      }
+                                      setContratosSelecionados(newSet);
+                                    }}
+                                    data-testid={`checkbox-contrato-${idx}`}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="capitalize text-xs">
+                                    {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  <CopyableField
+                                    value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO}
+                                    displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"}
+                                    testId={`button-copy-banco-contrato-${idx}`}
+                                    toast={toast}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  <CopyableField
+                                    value={contrato.numero_contrato || contrato.numeroContrato}
+                                    displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"}
+                                    testId={`button-copy-contrato-${idx}`}
+                                    toast={toast}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right">{formatCurrency(valorParcela)}</TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    className="w-16 h-8 text-sm text-center"
+                                    value={taxasContratos[idx] || ""}
+                                    onChange={(e) => setTaxasContratos(prev => ({
+                                      ...prev,
+                                      [idx]: e.target.value
+                                    }))}
+                                    data-testid={`input-taxa-${idx}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {formatCurrency(saldoExibir)}
+                                    {isCalculado && (
+                                      <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">
+                                        calc
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
+                                <TableCell>{contrato.competencia || "-"}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+
+                      {/* Resumo dos contratos selecionados */}
+                      {contratosSelecionados.size > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Calculator className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Resumo dos {contratosSelecionados.size} contrato(s) selecionado(s)</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            {(() => {
+                              let somaParcelas = 0;
+                              let somaSaldo = 0;
+                              let totalParcelasRestantes = 0;
+                              let contratosComParcelas = 0;
+                              contratosSelecionados.forEach((idx) => {
+                                const contrato = atendimentoAtual.contratos[idx];
+                                if (!contrato) return;
+                                const valorParcela = contrato.valor_parcela || contrato.valorParcela || 0;
+                                const parcelasRestantes = contrato.parcelas_restantes || contrato.parcelasRestantes || 0;
+                                const taxaStr = taxasContratos[idx];
+                                const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                                const saldoCalculado = taxa > 0 
+                                  ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes)
+                                  : null;
+                                const saldoContrato = saldoCalculado !== null ? saldoCalculado : (contrato.saldo_devedor || contrato.saldoDevedor || 0);
+                                somaParcelas += valorParcela;
+                                somaSaldo += saldoContrato;
+                                if (parcelasRestantes > 0) {
+                                  totalParcelasRestantes += parcelasRestantes;
+                                  contratosComParcelas++;
+                                }
+                              });
+                              const prazoMedio = contratosComParcelas > 0 ? Math.round(totalParcelasRestantes / contratosComParcelas) : 0;
+                              return (
+                                <>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Soma Parcelas</p>
+                                    <p className="font-bold text-lg">{formatCurrency(somaParcelas)}</p>
+                                  </div>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Soma Saldo Devedor</p>
+                                    <p className="font-bold text-lg">{formatCurrency(somaSaldo)}</p>
+                                  </div>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Prazo Médio</p>
+                                    <p className="font-bold text-lg">{prazoMedio} meses</p>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="text-center py-6 text-muted-foreground">
                       <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-50" />
