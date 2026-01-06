@@ -8330,6 +8330,153 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
   
+  // POST /api/vendas/consulta/buscar - Buscar cliente por CPF ou Matrícula para consulta manual
+  app.post("/api/vendas/consulta/buscar", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const { termo } = req.body;
+      
+      if (!termo || typeof termo !== "string" || termo.trim().length < 3) {
+        return res.status(400).json({ message: "Informe CPF ou Matrícula (mínimo 3 caracteres)" });
+      }
+      
+      const termoLimpo = termo.trim().replace(/\D/g, '');
+      
+      // First try to find by CPF
+      let cliente = await storage.getClientePessoaByCpf(termoLimpo);
+      
+      // If not found by CPF, try to find by matrícula through vínculos
+      if (!cliente) {
+        const vinculos = await db.select().from(clientesVinculo)
+          .where(and(
+            eq(clientesVinculo.tenantId, tenantId),
+            eq(clientesVinculo.matricula, termoLimpo)
+          ))
+          .limit(1);
+        
+        if (vinculos.length > 0) {
+          cliente = await storage.getClientePessoaById(vinculos[0].pessoaId);
+        }
+      }
+      
+      if (!cliente) {
+        return res.status(404).json({ message: "Cliente não localizado. Verifique os dados informados ou atualize a Base de Clientes." });
+      }
+      
+      // Get vínculos
+      const vinculos = await storage.getVinculosByPessoaId(cliente.id);
+      const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+      const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+      const vinculoAtual = vinculosFiltrados[0] || null;
+      
+      // Get folha
+      let folhaRegistros;
+      if (vinculoAtual) {
+        folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoAtual.id);
+        if (folhaRegistros.length === 0) {
+          folhaRegistros = await storage.getFolhaMesByPessoaId(cliente.id);
+        }
+      } else {
+        folhaRegistros = await storage.getFolhaMesByPessoaId(cliente.id);
+      }
+      const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+      
+      // Transform folha to snake_case
+      const folhaFormatada = folhaAtual ? {
+        competencia: folhaAtual.competencia,
+        margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
+        margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
+        margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
+        margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
+        margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
+        margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
+        margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
+        margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
+        margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
+        margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
+        margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
+        margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
+        margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
+        margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
+        creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
+        debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
+        liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
+        sit_func_no_mes: folhaAtual.sitFuncNoMes,
+        base_tag: folhaAtual.baseTag,
+        extras_folha: folhaAtual.extrasFolha,
+      } : null;
+      
+      // Get contratos
+      let contratos;
+      if (vinculoAtual) {
+        contratos = await storage.getContratosByVinculoId(vinculoAtual.id);
+        if (contratos.length === 0) {
+          const todosPessoa = await storage.getContratosByPessoaId(cliente.id);
+          contratos = todosPessoa.filter(c => !c.vinculoId || c.vinculoId === vinculoAtual.id);
+        }
+      } else {
+        contratos = await storage.getContratosByPessoaId(cliente.id);
+      }
+      
+      // Get higienização data
+      const telefones = await storage.getTelefonesByPessoaId(cliente.id);
+      const contatos = await storage.getContactsByClientId(cliente.id);
+      
+      // Combine and deduplicate telefones
+      const allTelefones = [
+        ...telefones.map(t => ({
+          telefone: t.telefone || '',
+          tipo: t.tipo || 'telefone',
+          principal: t.principal,
+          _normalized: (t.telefone || '').replace(/\D/g, ''),
+        })),
+        ...contatos.filter(c => c.tipo === 'telefone').map(c => ({
+          telefone: c.valor || '',
+          tipo: 'telefone',
+          principal: null,
+          _normalized: (c.valor || '').replace(/\D/g, ''),
+        })),
+      ];
+      const seenTelefones = new Set<string>();
+      const uniqueTelefones = allTelefones.filter(t => {
+        if (!t._normalized || seenTelefones.has(t._normalized)) return false;
+        seenTelefones.add(t._normalized);
+        return true;
+      }).map(t => ({
+        telefone: t.telefone,
+        tipo: t.tipo,
+        principal: t.principal,
+      }));
+      
+      // Deduplicate emails
+      const allEmails = contatos.filter(c => c.tipo === 'email' && c.valor).map(c => c.valor!);
+      const seenEmails = new Set<string>();
+      const uniqueEmails = allEmails.filter(email => {
+        const normalized = email.toLowerCase().trim();
+        if (seenEmails.has(normalized)) return false;
+        seenEmails.add(normalized);
+        return true;
+      });
+      
+      return res.json({
+        clienteBase: cliente,
+        folhaAtual: folhaFormatada,
+        contratos,
+        higienizacao: {
+          telefones: uniqueTelefones,
+          emails: uniqueEmails,
+        },
+        vinculo: vinculoAtual,
+      });
+    } catch (error) {
+      console.error("Buscar cliente consulta error:", error);
+      return res.status(500).json({ message: "Erro ao buscar cliente" });
+    }
+  });
+
   // POST /api/vendas/atendimento/proximo - Pegar próximo lead
   app.post("/api/vendas/atendimento/proximo", requireAuth, async (req, res) => {
     try {

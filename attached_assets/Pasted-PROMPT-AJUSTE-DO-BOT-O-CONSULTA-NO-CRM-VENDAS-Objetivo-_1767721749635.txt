@@ -1,0 +1,67 @@
+PROMPT – AJUSTE DO BOTÃO "CONSULTA" NO CRM VENDAS
+
+Objetivo:
+Transformar o botão “Consulta” dentro de CRM Vendas em uma extensão direta da tela de Atendimento, com a única diferença sendo o start da tela via pesquisa manual (CPF ou Matrícula), em vez de partir de campanha.
+
+📌 Comportamento esperado
+1️⃣ Estrutura da tela
+
+A tela deve carregar a mesma estrutura e funcionalidades da tela de Atendimento, incluindo:
+
+Dados do Cliente completos
+
+Situação de Folha (margens, crédito, débito, líquido)
+
+Contratos (com cálculo, taxa, seleção, resumo)
+
+Painel de Contato (com edição de telefone, e-mail e endereço)
+
+Registro de Atendimento com marcação do lead
+
+Adição ao Pipeline quando necessário
+
+2️⃣ Diferença fundamental no fluxo
+
+A diferença é que o cliente será buscado manualmente, e não enviado por campanha.
+
+⚙️ Portanto:
+
+Logo ao abrir a tela “Consulta” dentro de CRM Vendas:
+
+Mostrar input para CPF ou Matrícula
+
+Após digitar e buscar, carregar os dados da mesma forma como a tela de Atendimento faz hoje
+
+3️⃣ Não deve registrar atendimento automaticamente
+
+Ao contrário de campanhas, nessa tela a consulta é passiva.
+
+Só gera registro de atendimento se o corretor clicar manualmente no botão "Registrar Atendimento".
+
+4️⃣ Pipeline
+
+Se o corretor marcar o lead com alguma tag e registrar atendimento, o cliente deve ser enviado ao Pipeline normalmente, como se fosse vindo de campanha.
+
+5️⃣ Caso CPF ou Matrícula não sejam encontrados:
+
+Mostrar alerta: “Cliente não localizado. Verifique os dados informados ou atualize a Base de Clientes.”
+
+Opção para voltar e tentar nova busca
+
+6️⃣ Layout
+
+Pode reutilizar o layout já existente da tela de Atendimento.
+Somente incluir a parte de busca no topo:
+
+🔎 Buscar Cliente
+[ Digite CPF ou Matrícula ] [ Botão: Consultar ]
+
+✅ Resumo
+Item	Deve Ter?
+Busca por CPF/Matrícula	✅ Sim
+Dados completos do cliente	✅ Sim
+Contratos, folha, contato	✅ Sim
+Registro de atendimento	✅ Sim (manual)
+Envio ao pipeline	✅ Sim
+Tela idêntica ao Atendimento	✅ Sim
+Fluxo por campanha	❌ Não
