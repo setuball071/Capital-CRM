@@ -113,6 +113,7 @@ const UF_LIST = [
 
 interface OrgaoComboboxProps {
   orgaosComCodigo: OrgaoComCodigo[];
+  orgaosFallback?: string[];
   value: string | undefined;
   onValueChange: (value: string | undefined) => void;
   placeholder?: string;
@@ -123,6 +124,7 @@ interface OrgaoComboboxProps {
 
 function OrgaoCombobox({
   orgaosComCodigo,
+  orgaosFallback = [],
   value,
   onValueChange,
   placeholder = "Selecione...",
@@ -130,8 +132,21 @@ function OrgaoCombobox({
   emptyText = "Nenhum item encontrado.",
   "data-testid": testId,
 }: OrgaoComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState("");
+  const useCodigo = orgaosComCodigo && orgaosComCodigo.length > 0;
+
+  if (!useCodigo) {
+    return (
+      <Combobox
+        options={orgaosFallback}
+        value={value}
+        onValueChange={onValueChange}
+        placeholder={placeholder}
+        searchPlaceholder={searchPlaceholder}
+        emptyText={emptyText}
+        data-testid={testId}
+      />
+    );
+  }
 
   const nomeParaCodigo = orgaosComCodigo.reduce((acc, org) => {
     acc[org.nome] = org.codigo;
@@ -145,32 +160,11 @@ function OrgaoCombobox({
 
   const nomes = orgaosComCodigo.map(o => o.nome).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  const filteredNomes = inputValue
-    ? nomes.filter(n => n.toLowerCase().includes(inputValue.toLowerCase()))
-    : nomes;
-
   const nomeExibicao = value ? (codigoParaNome[value] || value) : undefined;
-
-  const handleSelect = (nome: string) => {
-    const codigo = nomeParaCodigo[nome] || nome;
-    if (codigo === value) {
-      onValueChange(undefined);
-    } else {
-      onValueChange(codigo);
-    }
-    setOpen(false);
-    setInputValue("");
-  };
-
-  const handleClear = () => {
-    onValueChange(undefined);
-    setOpen(false);
-    setInputValue("");
-  };
 
   return (
     <Combobox
-      options={filteredNomes.length > 0 ? nomes : []}
+      options={nomes}
       value={nomeExibicao}
       onValueChange={(nome) => {
         if (nome) {
@@ -449,6 +443,7 @@ export default function CompraLista() {
                   <Label htmlFor="orgao">Órgão</Label>
                   <OrgaoCombobox
                     orgaosComCodigo={filtrosDisponiveis?.orgaosComCodigo || []}
+                    orgaosFallback={filtrosDisponiveis?.orgaos || []}
                     value={filtros.orgao}
                     onValueChange={(v) => setFiltros({ ...filtros, orgao: v })}
                     placeholder="Todos os órgãos"
