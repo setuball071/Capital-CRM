@@ -608,16 +608,16 @@ export default function VendasAtendimento() {
           <div className="grid gap-6 lg:grid-cols-3">
             {/* COLUNA ESQUERDA - Dados do Cliente */}
             <div className="lg:col-span-2 space-y-4">
-              {/* Dados Pessoais */}
+              {/* Dados do Cliente - Exatamente como Consulta Cliente */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <User className="h-4 w-4" />
-                    Dados Pessoais
+                    Dados do Cliente
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
                     <div className="space-y-1">
                       <p className="text-muted-foreground">CPF</p>
                       <p className="font-mono" data-testid="text-cpf">
@@ -647,30 +647,70 @@ export default function VendasAtendimento() {
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">Nascimento / Idade</p>
-                      <p data-testid="text-data-nascimento">
-                        {atendimentoAtual.clienteBase?.data_nascimento || atendimentoAtual.clienteBase?.dataNascimento
-                          ? (() => {
-                              const dataNasc = atendimentoAtual.clienteBase.data_nascimento || atendimentoAtual.clienteBase.dataNascimento;
-                              const dataFormatada = new Date(dataNasc).toLocaleDateString("pt-BR");
-                              const hoje = new Date();
-                              const nascimento = new Date(dataNasc);
-                              let idade = hoje.getFullYear() - nascimento.getFullYear();
-                              const mesAtual = hoje.getMonth();
-                              const mesNasc = nascimento.getMonth();
-                              if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
-                                idade--;
-                              }
-                              return `${dataFormatada} (${idade} anos)`;
-                            })()
-                          : "-"}
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        Nascimento / Idade
                       </p>
+                      <div className="flex items-center gap-2" data-testid="text-data-nascimento">
+                        {(() => {
+                          const dataNasc = atendimentoAtual.clienteBase?.data_nascimento || atendimentoAtual.clienteBase?.dataNascimento;
+                          if (!dataNasc) return <span>-</span>;
+                          const dataFormatada = new Date(dataNasc).toLocaleDateString("pt-BR");
+                          const hoje = new Date();
+                          const nascimento = new Date(dataNasc);
+                          let idade = hoje.getFullYear() - nascimento.getFullYear();
+                          const mesAtual = hoje.getMonth();
+                          const mesNasc = nascimento.getMonth();
+                          if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
+                            idade--;
+                          }
+                          return (
+                            <>
+                              <span>{dataFormatada}</span>
+                              <Badge variant="secondary">{idade} anos</Badge>
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Situação Funcional</p>
-                      <p data-testid="text-sit-func">
+                      <Badge variant="secondary" data-testid="text-sit-func">
                         {atendimentoAtual.clienteBase?.sit_func || "-"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Regime Jurídico</p>
+                      <p data-testid="text-rjur">
+                        {atendimentoAtual.clienteBase?.rjur || atendimentoAtual.clienteBase?.regime_juridico || "-"}
                       </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Natureza</p>
+                      <p data-testid="text-natureza">
+                        {atendimentoAtual.clienteBase?.natureza || "-"}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">UPAG</p>
+                      <p data-testid="text-upag">
+                        {mapNomenclatura("UPAG", atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod)}
+                      </p>
+                      {(atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod) && (
+                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.clienteBase?.upag || atendimentoAtual.clienteBase?.undpagadoracod}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <Building className="w-4 h-4" />
+                        Órgão
+                      </p>
+                      <p data-testid="text-orgao">
+                        {mapNomenclatura("ORGAO", atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod)}
+                      </p>
+                      {(atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod) && (
+                        <p className="text-xs text-muted-foreground">Código: {atendimentoAtual.clienteBase?.orgao || atendimentoAtual.clienteBase?.orgaocod}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Convênio</p>
@@ -681,84 +721,7 @@ export default function VendasAtendimento() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Parcelas por Banco - Resumo de empréstimos */}
-              {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <ShoppingCart className="h-4 w-4" />
-                      Parcelas por Banco
-                    </CardTitle>
-                    <CardDescription>Resumo de descontos em folha por banco</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Banco</TableHead>
-                          <TableHead className="text-right">Total Parcela</TableHead>
-                          <TableHead className="text-right">Saldo Devedor</TableHead>
-                          <TableHead className="text-right">Qtd</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(() => {
-                          const porBanco: Record<string, { parcela: number; saldo: number; qtd: number }> = {};
-                          atendimentoAtual.contratos.forEach((c) => {
-                            const banco = c.banco || c.BANCO_DO_EMPRESTIMO || "Não Informado";
-                            if (!porBanco[banco]) {
-                              porBanco[banco] = { parcela: 0, saldo: 0, qtd: 0 };
-                            }
-                            porBanco[banco].parcela += (c.valor_parcela || c.valorParcela || 0);
-                            porBanco[banco].saldo += (c.saldo_devedor || c.saldoDevedor || 0);
-                            porBanco[banco].qtd += 1;
-                          });
-                          return Object.entries(porBanco).map(([banco, dados]) => (
-                            <TableRow key={banco}>
-                              <TableCell className="font-medium">{banco}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(dados.parcela)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(dados.saldo)}</TableCell>
-                              <TableCell className="text-right">{dados.qtd}</TableCell>
-                            </TableRow>
-                          ));
-                        })()}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Lotação */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Building className="h-4 w-4" />
-                    Lotação
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Convênio</p>
-                      <p data-testid="text-convenio-lotacao">{atendimentoAtual.clienteBase?.convenio || "-"}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Órgão</p>
-                      <p data-testid="text-orgao">{atendimentoAtual.clienteBase?.orgao || "-"}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">UF</p>
-                      <p data-testid="text-uf">{atendimentoAtual.clienteBase?.uf || atendimentoAtual.lead.uf || "-"}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Município</p>
-                      <p data-testid="text-municipio">{atendimentoAtual.clienteBase?.municipio || atendimentoAtual.lead.cidade || "-"}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
+              
               {/* Dados Bancários */}
               <Card>
                 <CardHeader className="pb-3">
@@ -770,106 +733,230 @@ export default function VendasAtendimento() {
                 <CardContent>
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">Banco Salário</p>
+                      <p className="text-muted-foreground">Banco</p>
                       <p data-testid="text-banco">
-                        {atendimentoAtual.clienteBase?.banco_nome || atendimentoAtual.clienteBase?.bancoNome || atendimentoAtual.clienteBase?.banco_codigo || atendimentoAtual.clienteBase?.bancoCodigo || "-"}
+                        <CopyableField
+                          value={atendimentoAtual.clienteBase?.banco_codigo || atendimentoAtual.clienteBase?.bancoCodigo}
+                          displayValue={atendimentoAtual.clienteBase?.banco_nome || atendimentoAtual.clienteBase?.bancoNome || atendimentoAtual.clienteBase?.banco_codigo || atendimentoAtual.clienteBase?.bancoCodigo || "-"}
+                          testId="button-copy-banco"
+                          toast={toast}
+                        />
                       </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Agência</p>
-                      <p data-testid="text-agencia">{atendimentoAtual.clienteBase?.agencia || "-"}</p>
+                      <p data-testid="text-agencia">
+                        <CopyableField
+                          value={atendimentoAtual.clienteBase?.agencia}
+                          displayValue={atendimentoAtual.clienteBase?.agencia || "-"}
+                          testId="button-copy-agencia"
+                          toast={toast}
+                        />
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Conta</p>
-                      <p data-testid="text-conta">{atendimentoAtual.clienteBase?.conta || "-"}</p>
+                      <p data-testid="text-conta">
+                        <CopyableField
+                          value={atendimentoAtual.clienteBase?.conta}
+                          displayValue={atendimentoAtual.clienteBase?.conta || "-"}
+                          testId="button-copy-conta"
+                          toast={toast}
+                        />
+                      </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Margens */}
-              {atendimentoAtual.folhaAtual && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Briefcase className="h-4 w-4" />
-                      Folha / Margens
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-                      {(atendimentoAtual.folhaAtual.margem_saldo_70 !== null || atendimentoAtual.folhaAtual.margemSaldo70 !== null) && (
-                        <div className="p-3 border rounded-lg bg-muted/30">
-                          <p className="text-xs text-muted-foreground mb-1">Margem 70%</p>
-                          <p className="text-lg font-bold text-green-600">
-                            {formatCurrency(atendimentoAtual.folhaAtual.margem_saldo_70 ?? atendimentoAtual.folhaAtual.margemSaldo70)}
-                          </p>
-                        </div>
-                      )}
-                      {(atendimentoAtual.folhaAtual.margem_saldo_35 !== null || atendimentoAtual.folhaAtual.margemSaldo35 !== null) && (
-                        <div className="p-3 border rounded-lg bg-muted/30">
-                          <p className="text-xs text-muted-foreground mb-1">Margem 35%</p>
-                          <p className="text-lg font-bold text-blue-600">
-                            {formatCurrency(atendimentoAtual.folhaAtual.margem_saldo_35 ?? atendimentoAtual.folhaAtual.margemSaldo35)}
-                          </p>
-                        </div>
-                      )}
-                      {(atendimentoAtual.folhaAtual.margem_cartao_credito_saldo !== null || atendimentoAtual.folhaAtual.margemCartaoCreditoSaldo !== null) && (
-                        <div className="p-3 border rounded-lg bg-muted/30">
-                          <p className="text-xs text-muted-foreground mb-1">Cartão Crédito 5%</p>
-                          <p className="text-lg font-bold text-purple-600">
-                            {formatCurrency(atendimentoAtual.folhaAtual.margem_cartao_credito_saldo ?? atendimentoAtual.folhaAtual.margemCartaoCreditoSaldo)}
-                          </p>
-                        </div>
-                      )}
-                      {(atendimentoAtual.folhaAtual.margem_cartao_beneficio_saldo !== null || atendimentoAtual.folhaAtual.margemCartaoBeneficioSaldo !== null) && (
-                        <div className="p-3 border rounded-lg bg-muted/30">
-                          <p className="text-xs text-muted-foreground mb-1">Cartão Benefício 5%</p>
-                          <p className="text-lg font-bold text-orange-600">
-                            {formatCurrency(atendimentoAtual.folhaAtual.margem_cartao_beneficio_saldo ?? atendimentoAtual.folhaAtual.margemCartaoBeneficioSaldo)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Situação de Folha - 4 Cards com Bruta/Utilizada/Saldo */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Situação de Folha
+                  </CardTitle>
+                  <CardDescription>
+                    {atendimentoAtual.folhaAtual?.competencia
+                      ? `Competência: ${atendimentoAtual.folhaAtual.competencia}`
+                      : "Dados de folha não disponíveis"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {atendimentoAtual.folhaAtual ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Margem 70% */}
+                      <Card className="bg-muted/50" data-testid="card-margem-70">
+                        <CardContent className="p-4">
+                          <p className="text-sm font-medium mb-2">Margem 70%</p>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Bruta:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_bruta_70 ?? atendimentoAtual.folhaAtual.margemBruta70)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Utilizada:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_utilizada_70 ?? atendimentoAtual.folhaAtual.margemUtilizada70)}</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>Saldo:</span>
+                              <span className={(atendimentoAtual.folhaAtual.margem_saldo_70 ?? atendimentoAtual.folhaAtual.margemSaldo70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(atendimentoAtual.folhaAtual.margem_saldo_70 ?? atendimentoAtual.folhaAtual.margemSaldo70)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
 
-              {/* Contratos */}
-              {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Contratos / Descontos em Folha
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                      {/* Margem 35% */}
+                      <Card className="bg-muted/50" data-testid="card-margem-35">
+                        <CardContent className="p-4">
+                          <p className="text-sm font-medium mb-2">Margem 35%</p>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Bruta:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_bruta_35 ?? atendimentoAtual.folhaAtual.margemBruta35)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Utilizada:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_utilizada_35 ?? atendimentoAtual.folhaAtual.margemUtilizada35)}</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>Saldo:</span>
+                              <span className={(atendimentoAtual.folhaAtual.margem_saldo_35 ?? atendimentoAtual.folhaAtual.margemSaldo35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(atendimentoAtual.folhaAtual.margem_saldo_35 ?? atendimentoAtual.folhaAtual.margemSaldo35)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Margem 5% - Cartão Crédito */}
+                      <Card className="bg-muted/50" data-testid="card-margem-5">
+                        <CardContent className="p-4">
+                          <p className="text-sm font-medium mb-2">Margem 5%</p>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Bruta:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_bruta_5)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Utilizada:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_utilizada_5)}</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>Saldo:</span>
+                              <span className={(atendimentoAtual.folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(atendimentoAtual.folhaAtual.margem_saldo_5)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Margem Benefício 5% */}
+                      <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
+                        <CardContent className="p-4">
+                          <p className="text-sm font-medium mb-2">Benefício 5%</p>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Bruta:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_beneficio_bruta_5)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Utilizada:</span>
+                              <span>{formatCurrency(atendimentoAtual.folhaAtual.margem_beneficio_utilizada_5)}</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>Saldo:</span>
+                              <span className={(atendimentoAtual.folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(atendimentoAtual.folhaAtual.margem_beneficio_saldo_5)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <Briefcase className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p>Nenhum dado de folha disponível para este cliente.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Contratos - Tabela Completa sem resumo */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Contratos
+                  </CardTitle>
+                  <CardDescription>
+                    {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0
+                      ? `${atendimentoAtual.contratos.length} contrato(s) encontrado(s)`
+                      : "Nenhum contrato registrado"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {atendimentoAtual.contratos && atendimentoAtual.contratos.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Tipo de Produto</TableHead>
-                          <TableHead>Banco do Empréstimo</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Origem do Desconto</TableHead>
+                          <TableHead>Nº Contrato</TableHead>
                           <TableHead className="text-right">Valor Parcela</TableHead>
-                          <TableHead className="text-right">Parcelas Rest.</TableHead>
+                          <TableHead className="text-center w-20">Taxa (%)</TableHead>
+                          <TableHead className="text-right">Saldo Devedor</TableHead>
+                          <TableHead className="text-right">Parc. Rest.</TableHead>
                           <TableHead>Competência</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {atendimentoAtual.contratos.map((contrato, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}</TableCell>
-                            <TableCell className="font-medium">{contrato.banco || "-"}</TableCell>
+                          <TableRow key={idx} data-testid={`row-contrato-${idx}`}>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize text-xs">
+                                {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <CopyableField
+                                value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO}
+                                displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"}
+                                testId={`button-copy-banco-contrato-${idx}`}
+                                toast={toast}
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              <CopyableField
+                                value={contrato.numero_contrato || contrato.numeroContrato}
+                                displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"}
+                                testId={`button-copy-contrato-${idx}`}
+                                toast={toast}
+                              />
+                            </TableCell>
                             <TableCell className="text-right">{formatCurrency(contrato.valor_parcela || contrato.valorParcela)}</TableCell>
+                            <TableCell className="text-center text-muted-foreground">
+                              {contrato.taxa ? `${contrato.taxa}%` : "-"}
+                            </TableCell>
+                            <TableCell className="text-right">{formatCurrency(contrato.saldo_devedor || contrato.saldoDevedor)}</TableCell>
                             <TableCell className="text-right">{contrato.parcelas_restantes || contrato.parcelasRestantes || "-"}</TableCell>
                             <TableCell>{contrato.competencia || "-"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
-                  </CardContent>
-                </Card>
-              )}
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p>Nenhum contrato registrado para este cliente.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Histórico de Contatos */}
               {atendimentoAtual.eventos && atendimentoAtual.eventos.length > 0 && (

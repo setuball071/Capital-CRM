@@ -1,0 +1,103 @@
+Etapa 7 – CRM de Vendas (Consulta + Atendimento + Dados)
+
+Objetivo:
+Transformar a tela de CRM de Vendas em uma extensão exata da consulta de cliente já existente na Base de Clientes, com adição de funcionalidades de atendimento, edição de dados e integração com o pipeline de vendas.
+
+🧩 1. Base visual e estrutural
+
+Usar exatamente o mesmo modelo da tela de Consulta Cliente (Base de Clientes).
+
+Não resumir os dados — trazer tudo como está na consulta, sem agregações.
+
+👤 2. Organização da Tela (estrutura)
+A. Dados do Cliente
+
+CPF, Matrícula, Nome
+
+Data de Nascimento e Idade (com cálculo automático)
+
+Situação Funcional, Regime Jurídico
+
+Natureza, UPAG, Órgão (com nomenclatura)
+
+Convenio
+
+B. Dados Bancários
+
+Banco, Agência, Conta
+
+C. Situação de Folha
+
+Reproduzir o mesmo componente usado na tela de Consulta Cliente, com as margens:
+
+Margem 70%, 35%, Cartão Crédito 5%, Benefício 5%
+
+Mostrar: Bruta, Utilizada, Saldo
+
+D. Contratos
+
+Trazer todos os contratos da folha, sem resumo por banco.
+
+Mostrar:
+
+Tipo
+
+Origem de Desconto
+
+Nº Contrato
+
+Valor Parcela
+
+Taxa
+
+Saldo Devedor
+
+Parcelas Restantes
+
+Competência
+
+🧠 3. Funcionalidades de Atendimento (Painel à direita)
+
+Manter o painel lateral com:
+
+Telefones
+
+E-mails
+
+Endereços
+
+Botão "Registrar Atendimento" abre pop-up com:
+
+Tipo de contato
+
+Valor margem
+
+Observações
+
+Marcador de lead (obrigatório)
+
+⚠️ Cada atendimento registrado atualiza o status do lead e envia para o pipeline.
+
+✏️ 4. Permitir Edição dos Dados no CRM de Vendas
+
+Somente nesta tela, o corretor pode atualizar:
+
+Telefones
+
+E-mails
+
+Endereços
+
+Esses dados são salvos no banco de dados complementar, sem afetar os dados brutos da base.
+
+🔁 5. Integração com Pipeline
+
+Todos os marcadores de lead usados no atendimento devem aparecer como colunas no pipeline.
+
+Exemplo: Novo, Em Atendimento, Interessado, Proposta Enviada, Vendido, Não Atende, etc.
+
+Se um marcador for usado e não estiver no pipeline, o lead "some", por isso:
+
+Corrigir e sincronizar marcadores com colunas do pipeline.
+
+Incluir marcador "Novo" como padrão no funil.
