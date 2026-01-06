@@ -820,7 +820,7 @@ export default function ConsultaCliente() {
                           <div className="group">
                             <span className="text-muted-foreground">Banco: </span>
                             <CopyableField 
-                              value={clienteDetalhado.pessoa.banco_codigo} 
+                              value={clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.banco_nome} 
                               displayValue={clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.banco_codigo || "-"} 
                               label="Banco" 
                               onCopy={handleCopy} 
@@ -843,129 +843,6 @@ export default function ConsultaCliente() {
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Última Base</p>
                       <Badge>{clienteDetalhado.pessoa.base_tag_ultima || "-"}</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Seção Dados de Contato / Higienização */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Phone className="w-5 h-5" />
-                    Dados de Contato / Higienização
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Telefones */}
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-muted-foreground">Telefones</p>
-                      {clienteDetalhado.higienizacao?.telefones && clienteDetalhado.higienizacao.telefones.length > 0 ? (
-                        <div className="space-y-2">
-                          {clienteDetalhado.higienizacao.telefones.map((tel, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                              data-testid={`telefone-item-${idx}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm">{tel.telefone}</span>
-                                {tel.principal && (
-                                  <Badge variant="outline" className="text-xs">Principal</Badge>
-                                )}
-                                {tel.tipo && (
-                                  <Badge variant="secondary" className="text-xs">{tel.tipo}</Badge>
-                                )}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(tel.telefone);
-                                  handleCopy(tel.telefone, `Telefone ${idx + 1}`);
-                                }}
-                                data-testid={`button-copiar-telefone-${idx}`}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
-                        <div className="space-y-2">
-                          {clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                              data-testid={`telefone-legado-item-${idx}`}
-                            >
-                              <span className="font-mono text-sm">{tel}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(tel);
-                                  handleCopy(tel, `Telefone ${idx + 1}`);
-                                }}
-                                data-testid={`button-copiar-telefone-legado-${idx}`}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">Nenhum telefone cadastrado</p>
-                      )}
-                    </div>
-                    
-                    {/* E-mails */}
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-muted-foreground">E-mails</p>
-                      {clienteDetalhado.higienizacao?.emails && clienteDetalhado.higienizacao.emails.length > 0 ? (
-                        <div className="space-y-2">
-                          {clienteDetalhado.higienizacao.emails.map((email, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                              data-testid={`email-item-${idx}`}
-                            >
-                              <span className="text-sm">{email}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(email);
-                                  handleCopy(email, `E-mail ${idx + 1}`);
-                                }}
-                                data-testid={`button-copiar-email-${idx}`}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">Nenhum e-mail cadastrado</p>
-                      )}
-                    </div>
-                    
-                    {/* Endereço Completo */}
-                    <div className="space-y-3 md:col-span-2">
-                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        Endereço
-                      </p>
-                      {clienteDetalhado.pessoa.municipio || clienteDetalhado.pessoa.uf ? (
-                        <div className="p-3 bg-muted rounded-md">
-                          <p className="text-sm">
-                            {[clienteDetalhado.pessoa.municipio, clienteDetalhado.pessoa.uf].filter(Boolean).join(" - ")}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">Endereço não informado</p>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -1304,21 +1181,122 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
-              <Card className="border-dashed">
+              {/* Seção Dados de Contato / Higienização - movida para o final */}
+              <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-muted-foreground">
-                    <Lock className="w-5 h-5" />
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="w-5 h-5" />
                     Dados de Contato / Higienização
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p className="mb-4">Higienização ainda não configurada. (Parte 3 do projeto)</p>
-                    <Button disabled data-testid="button-higienizacao">
-                      <Lock className="w-4 h-4 mr-2" />
-                      Consultar dados externos (Lemit)
-                    </Button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Telefones */}
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-muted-foreground">Telefones</p>
+                      {clienteDetalhado.higienizacao?.telefones && clienteDetalhado.higienizacao.telefones.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.higienizacao.telefones.map((tel, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`telefone-item-${idx}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm">{tel.telefone}</span>
+                                {tel.principal && (
+                                  <Badge variant="outline" className="text-xs">Principal</Badge>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(tel.telefone);
+                                  handleCopy(tel.telefone, `Telefone ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-telefone-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : clienteDetalhado.pessoa.telefones_base && clienteDetalhado.pessoa.telefones_base.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.pessoa.telefones_base.map((tel, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`telefone-legado-item-${idx}`}
+                            >
+                              <span className="font-mono text-sm">{tel}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(tel);
+                                  handleCopy(tel, `Telefone ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-telefone-legado-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Nenhum telefone cadastrado</p>
+                      )}
+                    </div>
+                    
+                    {/* E-mails */}
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-muted-foreground">E-mails</p>
+                      {clienteDetalhado.higienizacao?.emails && clienteDetalhado.higienizacao.emails.length > 0 ? (
+                        <div className="space-y-2">
+                          {clienteDetalhado.higienizacao.emails.map((email, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                              data-testid={`email-item-${idx}`}
+                            >
+                              <span className="text-sm">{email}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(email);
+                                  handleCopy(email, `E-mail ${idx + 1}`);
+                                }}
+                                data-testid={`button-copiar-email-${idx}`}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Nenhum e-mail cadastrado</p>
+                      )}
+                    </div>
+                    
+                    {/* Endereço Completo */}
+                    <div className="space-y-3 md:col-span-2">
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        Endereço
+                      </p>
+                      {clienteDetalhado.pessoa.municipio || clienteDetalhado.pessoa.uf ? (
+                        <div className="p-3 bg-muted rounded-md">
+                          <p className="text-sm">
+                            {[clienteDetalhado.pessoa.municipio, clienteDetalhado.pessoa.uf].filter(Boolean).join(" - ")}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">Endereço não informado</p>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
