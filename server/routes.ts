@@ -44,6 +44,7 @@ import {
   salesLeadEvents,
   leadInteractions,
   clientesPessoa,
+  clientesVinculo,
   importRuns,
   insertSalesCampaignSchema,
   insertSalesLeadSchema,
