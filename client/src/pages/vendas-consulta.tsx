@@ -17,8 +17,30 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save
+  Plus, Pencil, Trash2, Save, SkipForward
 } from "lucide-react";
+
+const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
+type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
+
+const MARCADORES_CONSULTA = [
+  "em_atendimento",
+  "interesse",
+  "agendar_retorno", 
+  "sem_interesse",
+  "vendido",
+  "concluido"
+] as const;
+type MarcadorConsulta = typeof MARCADORES_CONSULTA[number];
+
+const MARCADOR_LABELS: Record<MarcadorConsulta, string> = {
+  em_atendimento: "Em Atendimento",
+  interesse: "Interesse",
+  agendar_retorno: "Agendar Retorno",
+  sem_interesse: "Sem Interesse",
+  vendido: "Vendido",
+  concluido: "Concluído",
+};
 
 interface HigienizacaoTelefone {
   telefone: string;
@@ -143,7 +165,14 @@ export default function VendasConsulta() {
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
   
-  const [observacao, setObservacao] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [interactionFormData, setInteractionFormData] = useState({
+    tipoContato: "ligacao" as TipoContatoConsulta,
+    marcador: "em_atendimento" as MarcadorConsulta,
+    margemValor: "",
+    propostaValorEstimado: "",
+    observacao: "",
+  });
 
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -196,7 +225,6 @@ export default function VendasConsulta() {
   useEffect(() => {
     setContratosSelecionados(new Set());
     setTaxasContratos({});
-    setObservacao("");
   }, [consultaData?.clienteBase?.cpf]);
 
   const buscarMutation = useMutation({
@@ -324,17 +352,39 @@ export default function VendasConsulta() {
     },
   });
 
-  const salvarObservacaoMutation = useMutation({
-    mutationFn: async (obs: string) => {
+  const registrarInteracaoMutation = useMutation({
+    mutationFn: async (data: {
+      tipoContato: string;
+      marcador: string;
+      margemValor: string;
+      propostaValorEstimado: string;
+      observacao: string;
+    }) => {
       if (!clientId) throw new Error("Cliente não identificado");
-      return apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obs });
+      
+      const tipoLabel = data.tipoContato === "ligacao" ? "Ligação" : 
+                        data.tipoContato === "whatsapp" ? "WhatsApp" : "Outro";
+      const marcadorLabel = MARCADOR_LABELS[data.marcador as MarcadorConsulta] || data.marcador;
+      const margem = data.margemValor ? `R$ ${parseFloat(data.margemValor).toFixed(2)}` : "-";
+      const proposta = data.propostaValorEstimado ? `R$ ${parseFloat(data.propostaValorEstimado).toFixed(2)}` : "-";
+      
+      const obsFormatada = `[ATENDIMENTO] Tipo: ${tipoLabel} | Marcador: ${marcadorLabel} | Margem: ${margem} | Proposta: ${proposta}${data.observacao ? ` | Obs: ${data.observacao}` : ""}`;
+      
+      return apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obsFormatada });
     },
     onSuccess: () => {
-      toast({ title: "Observação registrada!" });
-      setObservacao("");
+      toast({ title: "Atendimento registrado!" });
+      setDrawerOpen(false);
+      setInteractionFormData({
+        tipoContato: "ligacao",
+        marcador: "em_atendimento",
+        margemValor: "",
+        propostaValorEstimado: "",
+        observacao: "",
+      });
     },
     onError: () => {
-      toast({ title: "Erro ao registrar observação", variant: "destructive" });
+      toast({ title: "Erro ao registrar atendimento", variant: "destructive" });
     },
   });
 
@@ -394,12 +444,8 @@ export default function VendasConsulta() {
     setAddContactOpen(true);
   };
 
-  const handleSalvarObservacao = () => {
-    if (!observacao.trim()) {
-      toast({ title: "Digite uma observação", variant: "destructive" });
-      return;
-    }
-    salvarObservacaoMutation.mutate(observacao.trim());
+  const handleRegistrarInteracao = () => {
+    registrarInteracaoMutation.mutate(interactionFormData);
   };
 
   if (!consultaData) {
@@ -1233,40 +1279,127 @@ export default function VendasConsulta() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Registrar Observação
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Textarea
-                    placeholder="Digite uma observação sobre o atendimento..."
-                    value={observacao}
-                    onChange={(e) => setObservacao(e.target.value)}
-                    rows={3}
-                    data-testid="textarea-observacao"
-                  />
-                  <Button 
-                    className="w-full" 
-                    onClick={handleSalvarObservacao}
-                    disabled={salvarObservacaoMutation.isPending || !observacao.trim()}
-                    data-testid="button-salvar-observacao"
-                  >
-                    {salvarObservacaoMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-2" />
-                    )}
-                    Salvar Observação
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>
       </div>
+
+      {/* BOTÃO FIXO - Registrar Atendimento */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          className="px-6 py-6 text-base font-bold shadow-lg"
+          onClick={() => setDrawerOpen(true)}
+          data-testid="button-registrar-atendimento"
+        >
+          <MessageSquare className="h-5 w-5 mr-2" />
+          Registrar Atendimento
+        </Button>
+      </div>
+
+      {/* Dialog Registrar Interação */}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Registrar Interação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label className="text-sm">Tipo de Contato *</Label>
+                <Select
+                  value={interactionFormData.tipoContato}
+                  onValueChange={(v) => setInteractionFormData({ ...interactionFormData, tipoContato: v as TipoContatoConsulta })}
+                >
+                  <SelectTrigger data-testid="select-tipo-contato-interacao">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ligacao">Ligação</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm">Marcador do Lead *</Label>
+                <Select
+                  value={interactionFormData.marcador}
+                  onValueChange={(v) => setInteractionFormData({ ...interactionFormData, marcador: v as MarcadorConsulta })}
+                >
+                  <SelectTrigger data-testid="select-marcador">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MARCADORES_CONSULTA.map((marker) => (
+                      <SelectItem key={marker} value={marker}>{MARCADOR_LABELS[marker]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label className="text-sm">Valor da Margem (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={interactionFormData.margemValor}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, margemValor: e.target.value })}
+                  placeholder="0,00"
+                  data-testid="input-margem-valor"
+                />
+              </div>
+              <div>
+                <Label className="text-sm">Proposta Estimada (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={interactionFormData.propostaValorEstimado}
+                  onChange={(e) => setInteractionFormData({ ...interactionFormData, propostaValorEstimado: e.target.value })}
+                  placeholder="0,00"
+                  data-testid="input-proposta-estimada"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm">Observações</Label>
+              <Textarea
+                value={interactionFormData.observacao}
+                onChange={(e) => setInteractionFormData({ ...interactionFormData, observacao: e.target.value })}
+                placeholder="Detalhes do atendimento..."
+                rows={3}
+                data-testid="textarea-observacao-interacao"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDrawerOpen(false)}
+              data-testid="button-cancelar-interacao"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleRegistrarInteracao}
+              disabled={registrarInteracaoMutation.isPending}
+              data-testid="button-salvar-interacao"
+            >
+              {registrarInteracaoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Save className="h-4 w-4 mr-2" />
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
         <DialogContent>
