@@ -5,20 +5,34 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
-  Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star
+  Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
+  Plus, Pencil, Trash2, Save
 } from "lucide-react";
 
 interface HigienizacaoTelefone {
   telefone: string;
   tipo: string;
   principal: boolean | null;
+}
+
+interface ClientContact {
+  id: number;
+  clientId: number;
+  type: string;
+  value: string;
+  label: string | null;
+  isPrimary: boolean;
 }
 
 interface ConsultaData {
@@ -49,6 +63,7 @@ interface ConsultaData {
     rjur: string | null;
     natureza: string | null;
   } | null;
+  pessoaId?: number;
 }
 
 function formatCPF(cpf: string | null): string {
@@ -123,6 +138,12 @@ export default function VendasConsulta() {
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+  
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
+  
+  const [observacao, setObservacao] = useState("");
 
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -165,9 +186,17 @@ export default function VendasConsulta() {
     return found ? found.nome : codigo;
   };
 
+  const clientId = consultaData?.pessoaId || consultaData?.vinculo?.pessoaId;
+
+  const { data: clientContacts = [], isLoading: loadingContacts, refetch: refetchContacts } = useQuery<ClientContact[]>({
+    queryKey: ["/api/clientes", clientId, "contacts"],
+    enabled: !!clientId,
+  });
+
   useEffect(() => {
     setContratosSelecionados(new Set());
     setTaxasContratos({});
+    setObservacao("");
   }, [consultaData?.clienteBase?.cpf]);
 
   const buscarMutation = useMutation({
@@ -238,6 +267,77 @@ export default function VendasConsulta() {
     },
   });
 
+  const createContactMutation = useMutation({
+    mutationFn: async (data: { type: string; value: string; label?: string }) => {
+      if (!clientId) throw new Error("Cliente não identificado");
+      return apiRequest("POST", `/api/clientes/${clientId}/contacts`, data);
+    },
+    onSuccess: () => {
+      refetchContacts();
+      toast({ title: "Contato salvo!" });
+      setAddContactOpen(false);
+      setNewContact({ tipo: "phone", valor: "", label: "" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao salvar contato", variant: "destructive" });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: number; type?: string; label?: string; value?: string }) => {
+      return apiRequest("PUT", `/api/clientes/contacts/${id}`, data);
+    },
+    onSuccess: () => {
+      refetchContacts();
+      toast({ title: "Contato atualizado!" });
+      setEditingContact(null);
+      setAddContactOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar contato", variant: "destructive" });
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/clientes/contacts/${id}`);
+    },
+    onSuccess: () => {
+      refetchContacts();
+      toast({ title: "Contato removido!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao remover contato", variant: "destructive" });
+    },
+  });
+
+  const setPrimaryContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("POST", `/api/clientes/contacts/${id}/primary`);
+    },
+    onSuccess: () => {
+      refetchContacts();
+      toast({ title: "Contato definido como principal!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao definir como principal", variant: "destructive" });
+    },
+  });
+
+  const salvarObservacaoMutation = useMutation({
+    mutationFn: async (obs: string) => {
+      if (!clientId) throw new Error("Cliente não identificado");
+      return apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obs });
+    },
+    onSuccess: () => {
+      toast({ title: "Observação registrada!" });
+      setObservacao("");
+    },
+    onError: () => {
+      toast({ title: "Erro ao registrar observação", variant: "destructive" });
+    },
+  });
+
   const handleBuscar = () => {
     if (!termoBusca.trim()) {
       toast({ title: "Atenção", description: "Digite CPF ou Matrícula", variant: "destructive" });
@@ -253,6 +353,53 @@ export default function VendasConsulta() {
     } catch {
       toast({ title: "Erro ao copiar", variant: "destructive" });
     }
+  };
+
+  const handleAddContact = () => {
+    if (!newContact.valor.trim()) {
+      toast({ title: "Informe o valor do contato", variant: "destructive" });
+      return;
+    }
+    if (editingContact) {
+      updateContactMutation.mutate({
+        id: editingContact.id,
+        type: newContact.tipo,
+        value: newContact.valor,
+        label: newContact.label || undefined,
+      });
+    } else {
+      createContactMutation.mutate({
+        type: newContact.tipo,
+        value: newContact.valor,
+        label: newContact.label || undefined,
+      });
+    }
+  };
+
+  const handleDeleteContact = (contact: ClientContact) => {
+    if (window.confirm(`Tem certeza que deseja excluir este contato?\n${contact.value}`)) {
+      deleteContactMutation.mutate(contact.id);
+    }
+  };
+
+  const openEditContact = (contact: ClientContact) => {
+    setEditingContact(contact);
+    setNewContact({ tipo: contact.type, valor: contact.value, label: contact.label || "" });
+    setAddContactOpen(true);
+  };
+
+  const openNewContact = (tipo: string = "phone") => {
+    setEditingContact(null);
+    setNewContact({ tipo, valor: "", label: "" });
+    setAddContactOpen(true);
+  };
+
+  const handleSalvarObservacao = () => {
+    if (!observacao.trim()) {
+      toast({ title: "Digite uma observação", variant: "destructive" });
+      return;
+    }
+    salvarObservacaoMutation.mutate(observacao.trim());
   };
 
   if (!consultaData) {
@@ -295,6 +442,9 @@ export default function VendasConsulta() {
       </div>
     );
   }
+
+  const phoneContacts = clientContacts.filter(c => c.type === "phone");
+  const emailContacts = clientContacts.filter(c => c.type === "email");
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
@@ -840,65 +990,201 @@ export default function VendasConsulta() {
                       </TabsTrigger>
                     </TabsList>
                     <TabsContent value="telefones" className="p-4 space-y-2">
-                      {consultaData.higienizacao?.telefones && consultaData.higienizacao.telefones.length > 0 ? (
+                      {loadingContacts ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
                         <>
-                          <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
-                          {consultaData.higienizacao.telefones.map((tel, idx) => (
+                          {consultaData.higienizacao?.telefones && consultaData.higienizacao.telefones.length > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                              {consultaData.higienizacao.telefones.map((tel, idx) => (
+                                <div 
+                                  key={`hig-tel-${idx}`} 
+                                  className="flex items-center gap-2 p-2 border rounded text-sm bg-green-50 dark:bg-green-950/30"
+                                  data-testid={`higienizacao-tel-${idx}`}
+                                >
+                                  {tel.principal && <Star className="h-3 w-3 text-yellow-500 fill-current shrink-0" />}
+                                  <span className="font-medium flex-1 truncate">{formatPhone(tel.telefone)}</span>
+                                  <Badge variant="outline" className="text-xs shrink-0">{tel.tipo}</Badge>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => handleCopyPhone(tel.telefone)}
+                                    data-testid={`button-copy-hig-tel-${idx}`}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Separator className="my-2" />
+                            </>
+                          )}
+                          
+                          {phoneContacts.length > 0 && (
+                            <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
+                          )}
+                          {phoneContacts.map((contact) => (
                             <div 
-                              key={`hig-tel-${idx}`} 
-                              className="flex items-center gap-2 p-2 border rounded text-sm bg-green-50 dark:bg-green-950/30"
-                              data-testid={`higienizacao-tel-${idx}`}
+                              key={contact.id} 
+                              className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                              data-testid={`contact-item-${contact.id}`}
                             >
-                              {tel.principal && <Star className="h-3 w-3 text-yellow-500 fill-current shrink-0" />}
-                              <span className="font-medium flex-1 truncate">{formatPhone(tel.telefone)}</span>
-                              <Badge variant="outline" className="text-xs shrink-0">{tel.tipo}</Badge>
-                              <Button 
-                                size="icon" 
-                                variant="ghost"
-                                className="h-7 w-7"
-                                onClick={() => handleCopyPhone(tel.telefone)}
-                                data-testid={`button-copy-hig-tel-${idx}`}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
+                              <span className="font-medium flex-1 truncate">{formatPhone(contact.value)}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => handleCopyPhone(contact.value)}
+                                  data-testid={`button-copy-contact-${contact.id}`}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditContact(contact)}
+                                  data-testid={`button-edit-contact-${contact.id}`}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
+                                  onClick={() => setPrimaryContactMutation.mutate(contact.id)}
+                                  data-testid={`button-primary-contact-${contact.id}`}
+                                >
+                                  <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive"
+                                  onClick={() => handleDeleteContact(contact)}
+                                  data-testid={`button-delete-contact-${contact.id}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
+                          
+                          {phoneContacts.length === 0 && (!consultaData.higienizacao?.telefones || consultaData.higienizacao.telefones.length === 0) && (
+                            <div className="text-center py-4 text-muted-foreground text-sm">
+                              Sem telefones cadastrados
+                            </div>
+                          )}
                         </>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sem telefones cadastrados
-                        </div>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => openNewContact("phone")}
+                        data-testid="button-novo-telefone"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Novo Telefone
+                      </Button>
                     </TabsContent>
                     <TabsContent value="emails" className="p-4 space-y-2">
-                      {consultaData.higienizacao?.emails && consultaData.higienizacao.emails.length > 0 ? (
+                      {loadingContacts ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
                         <>
-                          <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
-                          {consultaData.higienizacao.emails.map((email, idx) => (
+                          {consultaData.higienizacao?.emails && consultaData.higienizacao.emails.length > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                              {consultaData.higienizacao.emails.map((email, idx) => (
+                                <div 
+                                  key={`email-${idx}`} 
+                                  className="flex items-center gap-2 p-2 border rounded text-sm bg-blue-50 dark:bg-blue-950/30"
+                                  data-testid={`email-item-${idx}`}
+                                >
+                                  <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="font-medium flex-1 truncate">{email}</span>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => handleCopyPhone(email)}
+                                    data-testid={`button-copy-email-${idx}`}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Separator className="my-2" />
+                            </>
+                          )}
+                          
+                          {emailContacts.length > 0 && (
+                            <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
+                          )}
+                          {emailContacts.map((contact) => (
                             <div 
-                              key={`email-${idx}`} 
-                              className="flex items-center gap-2 p-2 border rounded text-sm bg-blue-50 dark:bg-blue-950/30"
-                              data-testid={`email-item-${idx}`}
+                              key={contact.id} 
+                              className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                              data-testid={`email-contact-item-${contact.id}`}
                             >
                               <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="font-medium flex-1 truncate">{email}</span>
-                              <Button 
-                                size="icon" 
-                                variant="ghost"
-                                className="h-7 w-7"
-                                onClick={() => handleCopyPhone(email)}
-                                data-testid={`button-copy-email-${idx}`}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
+                              <span className="font-medium flex-1 truncate">{contact.value}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => handleCopyPhone(contact.value)}
+                                  data-testid={`button-copy-email-contact-${contact.id}`}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditContact(contact)}
+                                  data-testid={`button-edit-email-${contact.id}`}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive"
+                                  onClick={() => handleDeleteContact(contact)}
+                                  data-testid={`button-delete-email-${contact.id}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
+                          
+                          {emailContacts.length === 0 && (!consultaData.higienizacao?.emails || consultaData.higienizacao.emails.length === 0) && (
+                            <div className="text-center py-4 text-muted-foreground text-sm">
+                              Sem emails cadastrados
+                            </div>
+                          )}
                         </>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sem emails cadastrados
-                        </div>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => openNewContact("email")}
+                        data-testid="button-novo-email"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Novo Email
+                      </Button>
                     </TabsContent>
                     <TabsContent value="endereco" className="p-4 space-y-2">
                       {consultaData.higienizacao?.endereco ? (
@@ -946,10 +1232,97 @@ export default function VendasConsulta() {
                   </Tabs>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Registrar Observação
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Textarea
+                    placeholder="Digite uma observação sobre o atendimento..."
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                    rows={3}
+                    data-testid="textarea-observacao"
+                  />
+                  <Button 
+                    className="w-full" 
+                    onClick={handleSalvarObservacao}
+                    disabled={salvarObservacaoMutation.isPending || !observacao.trim()}
+                    data-testid="button-salvar-observacao"
+                  >
+                    {salvarObservacaoMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar Observação
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       </div>
+
+      <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingContact ? "Editar Contato" : "Novo Contato"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select value={newContact.tipo} onValueChange={(v) => setNewContact(prev => ({ ...prev, tipo: v }))}>
+                <SelectTrigger data-testid="select-tipo-contato">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="phone">Telefone</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{newContact.tipo === "email" ? "Email" : "Número"}</Label>
+              <Input
+                placeholder={newContact.tipo === "email" ? "email@exemplo.com" : "(00) 00000-0000"}
+                value={newContact.valor}
+                onChange={(e) => setNewContact(prev => ({ ...prev, valor: e.target.value }))}
+                data-testid="input-valor-contato"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Rótulo (opcional)</Label>
+              <Input
+                placeholder="Ex: Pessoal, Trabalho, Recado..."
+                value={newContact.label}
+                onChange={(e) => setNewContact(prev => ({ ...prev, label: e.target.value }))}
+                data-testid="input-label-contato"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddContactOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAddContact}
+              disabled={createContactMutation.isPending || updateContactMutation.isPending}
+              data-testid="button-confirmar-contato"
+            >
+              {(createContactMutation.isPending || updateContactMutation.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              {editingContact ? "Atualizar" : "Adicionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

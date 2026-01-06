@@ -45,6 +45,7 @@ import {
   leadInteractions,
   clientesPessoa,
   clientesVinculo,
+  clientContacts,
   importRuns,
   insertSalesCampaignSchema,
   insertSalesLeadSchema,
@@ -8471,10 +8472,180 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           emails: uniqueEmails,
         },
         vinculo: vinculoAtual,
+        pessoaId: cliente.id,
       });
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);
       return res.status(500).json({ message: "Erro ao buscar cliente" });
+    }
+  });
+
+  // GET /api/clientes/:clientId/contacts - Listar contatos do cliente
+  app.get("/api/clientes/:clientId/contacts", requireAuth, async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const contacts = await db.select().from(clientContacts)
+        .where(eq(clientContacts.clientId, clientId))
+        .orderBy(desc(clientContacts.isPrimary), clientContacts.createdAt);
+      
+      return res.json(contacts);
+    } catch (error) {
+      console.error("Get client contacts error:", error);
+      return res.status(500).json({ message: "Erro ao buscar contatos" });
+    }
+  });
+
+  // POST /api/clientes/:clientId/contacts - Adicionar contato ao cliente
+  app.post("/api/clientes/:clientId/contacts", requireAuth, async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { type, value, label } = req.body;
+      if (!type || !value) {
+        return res.status(400).json({ message: "Tipo e valor são obrigatórios" });
+      }
+      
+      const [contact] = await db.insert(clientContacts).values({
+        clientId,
+        type,
+        value,
+        label: label || null,
+        isPrimary: false,
+        createdAt: new Date(),
+      }).returning();
+      
+      return res.json(contact);
+    } catch (error) {
+      console.error("Create client contact error:", error);
+      return res.status(500).json({ message: "Erro ao criar contato" });
+    }
+  });
+
+  // PUT /api/clientes/contacts/:id - Atualizar contato
+  app.put("/api/clientes/contacts/:id", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { type, value, label } = req.body;
+      const updateData: any = {};
+      if (type !== undefined) updateData.type = type;
+      if (value !== undefined) updateData.value = value;
+      if (label !== undefined) updateData.label = label;
+      
+      const [updated] = await db.update(clientContacts)
+        .set(updateData)
+        .where(eq(clientContacts.id, contactId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update client contact error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar contato" });
+    }
+  });
+
+  // DELETE /api/clientes/contacts/:id - Deletar contato
+  app.delete("/api/clientes/contacts/:id", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      await db.delete(clientContacts).where(eq(clientContacts.id, contactId));
+      
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Delete client contact error:", error);
+      return res.status(500).json({ message: "Erro ao deletar contato" });
+    }
+  });
+
+  // POST /api/clientes/contacts/:id/primary - Definir contato como principal
+  app.post("/api/clientes/contacts/:id/primary", requireAuth, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      // Get the contact to find the clientId
+      const [contact] = await db.select().from(clientContacts)
+        .where(eq(clientContacts.id, contactId))
+        .limit(1);
+      
+      if (!contact) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      
+      // Reset all contacts for this client to not primary
+      await db.update(clientContacts)
+        .set({ isPrimary: false })
+        .where(eq(clientContacts.clientId, contact.clientId));
+      
+      // Set this contact as primary
+      await db.update(clientContacts)
+        .set({ isPrimary: true })
+        .where(eq(clientContacts.id, contactId));
+      
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Set primary contact error:", error);
+      return res.status(500).json({ message: "Erro ao definir contato principal" });
+    }
+  });
+
+  // POST /api/clientes/:clientId/observacao - Registrar observação do cliente
+  app.post("/api/clientes/:clientId/observacao", requireAuth, async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const { observacao } = req.body;
+      if (!observacao || typeof observacao !== "string" || !observacao.trim()) {
+        return res.status(400).json({ message: "Observação é obrigatória" });
+      }
+      
+      // Get existing notes
+      const [cliente] = await db.select().from(clientesPessoa)
+        .where(eq(clientesPessoa.id, clientId))
+        .limit(1);
+      
+      if (!cliente) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      const now = new Date().toISOString();
+      const userName = req.user?.name || req.user?.username || "Sistema";
+      const novaObs = `[${now}] ${userName}: ${observacao.trim()}`;
+      
+      const existingNotes = cliente.notes ? String(cliente.notes) : "";
+      const updatedNotes = existingNotes ? `${novaObs}\n${existingNotes}` : novaObs;
+      
+      await db.update(clientesPessoa)
+        .set({ notes: updatedNotes })
+        .where(eq(clientesPessoa.id, clientId));
+      
+      return res.json({ success: true, notes: updatedNotes });
+    } catch (error) {
+      console.error("Register observacao error:", error);
+      return res.status(500).json({ message: "Erro ao registrar observação" });
     }
   });
 
