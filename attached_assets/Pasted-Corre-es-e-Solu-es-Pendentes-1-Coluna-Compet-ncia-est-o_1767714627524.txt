@@ -1,0 +1,89 @@
+Correções e Soluções Pendentes
+1. 🟨 Coluna "Competência" está ocupando espaço e quebrando o layout
+
+Problema: Quebra de layout por excesso de colunas.
+Solução:
+
+Remover a coluna Competência da grid de contratos.
+
+Aplicar overflow-x: auto na tabela, se ainda necessário.
+
+Reduzir min-width de colunas menos críticas (ex: Origem do Desconto).
+
+2. 🟥 Soma das parcelas está retornando NaN
+
+Problema: Bug no cálculo automático da soma das parcelas.
+Causa provável:
+
+Campo Valor Parcela está vindo como string formatada com R$ e . ou ,, que não é parseável diretamente como número.
+
+Solução de código (JS/TS):
+
+const parseCurrency = (value) => {
+  if (!value) return 0;
+  return parseFloat(value.replace("R$", "").replace(/\./g, "").replace(",", "."));
+};
+
+const somaParcelas = contratosSelecionados.reduce((acc, contrato) => {
+  return acc + parseCurrency(contrato.valorParcela);
+}, 0);
+
+
+Valide sempre se o campo está vazio ou mal formatado.
+
+3. 🟥 Margem 5% (Cartão) e Benefício 5% não estão aparecendo
+
+Problema: Essas margens existem na base (com dados), mas não são renderizadas.
+Causa provável:
+
+O backend não está enviando os dados OU
+
+O frontend tem lógica condicional que só renderiza se valores forem acima de zero e está barrando exibição.
+
+Solução:
+
+No frontend, renderizar todos os tipos de margem, mesmo que estejam zerados.
+
+No backend, garantir que os campos de bruta, utilizada, e saldo estão vindo mesmo que com 0.
+
+4. 🟥 Dados do cliente incompletos
+
+Problemas reportados:
+
+Situação Funcional, Regime Jurídico, Órgão e UPAG estão vindo como código ou vazios.
+
+Solução:
+
+Backend: revisar se os dados estão vindo da base de forma mapeada corretamente (tabela de nomenclaturas).
+
+Frontend: verificar se está usando o nome da sigla (nome) ao invés do id.
+Exemplo:
+
+cliente.regime_juridico.nome ?? cliente.regime_juridico
+
+5. 🟨 Campos "Email" e "Endereço" no Painel de Contato estão vazios
+
+Problema: Mesmo após atualização, essas abas aparecem vazias sem opção de adicionar.
+
+Solução:
+
+Garantir que os componentes de Novo Email e Novo Endereço estão implementados e exibidos condicionalmente com a aba ativa.
+
+Validar se o useEffect de fetch de dados está buscando também os campos de email e endereço.
+
+6. 🟨 Painel de Contato: Adicionar função de edição
+
+Solução:
+
+Ativar onClick ou Edit nos registros de telefone, email e endereço para que possam ser alterados inline ou via modal.
+
+🆕 Extras para considerar
+✅ Implementar botão "Salvar Atualizações"
+
+Ao atualizar dados de telefone, email ou endereço, mostrar um toast de confirmação + salvar em tempo real na base do cliente.
+
+✅ Validar Pipeline vs Marcadores
+
+Sincronizar os marcadores do atendimento com os estágios do Pipeline.
+
+Ex: Se Novo não existe como coluna no Pipeline, o lead desaparece.
