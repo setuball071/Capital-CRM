@@ -670,7 +670,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     const { passwordHash: _, ...userWithoutPassword } = req.user!;
-    return res.json({ user: userWithoutPassword });
+    
+    // Buscar permissões do usuário
+    const permissions = await storage.getUserPermissions(req.user!.id);
+    
+    // Converter para um mapa de módulo -> permissões
+    const permissionsMap: Record<string, { canView: boolean; canEdit: boolean; canDelegate: boolean }> = {};
+    for (const perm of permissions) {
+      permissionsMap[perm.module] = {
+        canView: perm.canView,
+        canEdit: perm.canEdit,
+        canDelegate: perm.canDelegate,
+      };
+    }
+    
+    return res.json({ 
+      user: userWithoutPassword,
+      permissions: permissionsMap,
+    });
   });
 
   // ===== BANKS ROUTES =====
@@ -3497,7 +3514,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   }
 
   // GET bases importadas - Master only
-  app.get("/api/bases", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/bases", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const bases = await storage.getAllBasesImportadas();
       return res.json(bases);
@@ -3508,7 +3525,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // DELETE base importada - Master only
-  app.delete("/api/bases/:id", requireAuth, requireMaster, async (req: any, res) => {
+  app.delete("/api/bases/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -3556,7 +3573,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST importar base - Master only - Background processing for large files
-  app.post("/api/bases/import", requireAuth, requireMaster, upload.single("arquivo"), async (req, res) => {
+  app.post("/api/bases/import", requireAuth, requireModuleAccess("modulo_base_clientes"), upload.single("arquivo"), async (req, res) => {
     try {
       const file = req.file;
       const { convenio, competencia, nome_base } = req.body;
@@ -4073,7 +4090,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET status de um import run específico - MASTER ONLY
-  app.get("/api/import-runs/:id/status", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs/:id/status", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const { importService } = await import("./import-service");
       const runId = parseInt(req.params.id);
@@ -4091,7 +4108,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET erros de um import run - MASTER ONLY
-  app.get("/api/import-runs/:id/errors", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs/:id/errors", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const { importService } = await import("./import-service");
       const runId = parseInt(req.params.id);
@@ -4113,7 +4130,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET download de erros em CSV - MASTER ONLY
-  app.get("/api/import-runs/:id/errors/download", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs/:id/errors/download", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const { importService } = await import("./import-service");
       const runId = parseInt(req.params.id);
@@ -4141,7 +4158,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET lista de import runs - MASTER ONLY
-  app.get("/api/import-runs", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runs = await db.select().from(importRuns).orderBy(desc(importRuns.createdAt)).limit(50);
       return res.json(runs);
@@ -4152,7 +4169,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET detalhes de um import run específico
-  app.get("/api/import-runs/:id", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
@@ -4188,7 +4205,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET todas as linhas de um import run (com paginação)
-  app.get("/api/import-runs/:id/rows", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/import-runs/:id/rows", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
@@ -4229,7 +4246,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // DELETE excluir import run e TODOS os dados finais associados (cascata completa)
   // IMPORTANTE: Usa BOTH import_run_id E base_tag para capturar registros órfãos legados
-  app.delete("/api/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
+  app.delete("/api/import-runs/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const runId = parseInt(req.params.id);
       const userTenantId = req.tenantId;
@@ -4399,7 +4416,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // DELETE /api/d8/import-runs/:id - Apaga SOMENTE contratos gerados por esse import-run
   // Não apaga pessoas, vínculos, folha nem o import_run em si (mantém rastreabilidade)
-  app.delete("/api/d8/import-runs/:id", requireAuth, requireMaster, async (req: any, res) => {
+  app.delete("/api/d8/import-runs/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const runId = parseInt(req.params.id);
       const userTenantId = req.tenantId;
@@ -5472,7 +5489,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/split/runs - Listar jobs de split do tenant
-  app.get("/api/split/runs", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/split/runs", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const user = req.user as User;
       const tenantId = (req as any).tenantId || user.tenantId || 1;
@@ -5488,7 +5505,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/split/download/:id/:filename - Download arquivo CSV gerado
-  app.get("/api/split/download/:id/:filename", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/split/download/:id/:filename", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       const filename = req.params.filename;
@@ -5525,7 +5542,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ==================== CSV SPLIT ROUTES (Dividir CSV em partes com header) ====================
 
   // POST /api/csv-split/start - Iniciar novo job de split CSV/XLSX (async - returns immediately)
-  app.post("/api/csv-split/start", requireAuth, requireMaster, uploadCsvXlsx.single("arquivo"), async (req, res) => {
+  app.post("/api/csv-split/start", requireAuth, requireModuleAccess("modulo_base_clientes"), uploadCsvXlsx.single("arquivo"), async (req, res) => {
     try {
       const user = req.user as User;
       const tenantId = (req as any).tenantId || user.tenantId || 1;
@@ -5573,7 +5590,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/csv-split/status/:id - Consultar status do job de split CSV
-  app.get("/api/csv-split/status/:id", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/csv-split/status/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       if (isNaN(runId)) {
@@ -5615,7 +5632,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/csv-split/runs - Listar jobs de split CSV do tenant
-  app.get("/api/csv-split/runs", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/csv-split/runs", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const user = req.user as User;
       const tenantId = (req as any).tenantId || user.tenantId || 1;
@@ -5631,7 +5648,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/csv-split/reset/:id - Resetar job de split CSV para retomar
-  app.post("/api/csv-split/reset/:id", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/csv-split/reset/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       if (isNaN(runId)) {
@@ -5653,7 +5670,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/csv-split/download/:id/:filename - Download arquivo CSV gerado
-  app.get("/api/csv-split/download/:id/:filename", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/csv-split/download/:id/:filename", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
       const filename = req.params.filename;
@@ -5686,7 +5703,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET /api/csv-split/download-zip/:id - Download ZIP com todas as partes
-  app.get("/api/csv-split/download-zip/:id", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/csv-split/download-zip/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const runId = parseInt(req.params.id);
 
@@ -5726,7 +5743,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ==================== END CSV SPLIT ROUTES ====================
 
   // GET filtros disponíveis para clientes - MASTER ONLY
-  app.get("/api/clientes/filtros", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/clientes/filtros", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const convenios = await storage.getDistinctConveniosClientes();
       const orgaos = await storage.getDistinctOrgaosClientes();
@@ -5743,7 +5760,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET convênios disponíveis para consulta de clientes - MASTER ONLY
-  app.get("/api/clientes/filtros/convenios", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/clientes/filtros/convenios", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const convenios = await storage.getDistinctConveniosClientes();
       return res.json(convenios);
@@ -5755,7 +5772,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
   // CRÍTICO: Sempre filtra por tenant_id derivado do usuário autenticado
-  app.get("/api/clientes/consulta", requireAuth, requireMaster, async (req: any, res) => {
+  app.get("/api/clientes/consulta", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const { cpf, matricula, convenio, base } = req.query;
       // CRÍTICO: Usar req.tenantId que é derivado do usuário autenticado pelo requireAuth
@@ -5848,7 +5865,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET detalhes completos de um cliente - MASTER ONLY
-  app.get("/api/clientes/:pessoaId", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/clientes/:pessoaId", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const pessoaId = parseInt(req.params.pessoaId);
       const vinculoIdParam = req.query.vinculoId ? parseInt(req.query.vinculoId as string) : null;
@@ -6059,7 +6076,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== PRICING SETTINGS ENDPOINTS (MODELO DE PACOTES) =====
 
   // GET pricing settings - Master only - Retorna tabela de pacotes
-  app.get("/api/pricing-settings", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/pricing-settings", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
     try {
       const pacotes = await getPacotesPreco();
       
@@ -6084,7 +6101,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET all pacotes from database (for admin editing)
-  app.get("/api/pacotes-preco/all", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/pacotes-preco/all", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
     try {
       const result = await db
         .select()
@@ -6098,7 +6115,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // PUT update a pacote - Master only
-  app.put("/api/pacotes-preco/:id", requireAuth, requireMaster, async (req, res) => {
+  app.put("/api/pacotes-preco/:id", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -6140,7 +6157,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== PEDIDOS LISTA ENDPOINTS =====
 
   // POST simular pedido de lista - MASTER ONLY
-  app.post("/api/pedidos-lista/simular", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/pedidos-lista/simular", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
@@ -6187,7 +6204,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST criar pedido de lista - MASTER ONLY
-  app.post("/api/pedidos-lista", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
@@ -6263,7 +6280,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET pedidos de lista - MASTER ONLY
-  app.get("/api/pedidos-lista", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
       // Master sees all
       const pedidos = await storage.getAllPedidosLista();
@@ -6278,7 +6295,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
   
   // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY
-  app.get("/api/pedidos-lista/admin", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/pedidos-lista/admin", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
 
       const pedidos = await storage.getAllPedidosListaWithUser();
@@ -6308,7 +6325,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/pedidos-lista/:id/aprovar - Aprovar pedido - MASTER ONLY
-  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
 
       const id = parseInt(req.params.id);
@@ -6432,7 +6449,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   }
 
   // GET /api/pedidos-lista/:id/download - Download generated file - MASTER ONLY
-  app.get("/api/pedidos-lista/:id/download", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/pedidos-lista/:id/download", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -6469,7 +6486,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/pedidos-lista/:id/rejeitar - Rejeitar pedido - MASTER ONLY
-  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
     try {
 
       const id = parseInt(req.params.id);

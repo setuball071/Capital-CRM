@@ -85,7 +85,7 @@ function HomePage() {
   return <Redirect to="/welcome" />;
 }
 
-// Protected route that only allows master users
+// Protected route that only allows master users (fallback)
 function MasterRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
 
@@ -102,6 +102,35 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
   }
 
   if (user.role !== "master") {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+// Protected route that checks module permissions
+import type { ModuleName } from "@shared/schema";
+
+function ModuleRoute({ component: Component, module, accessType = "view" }: { 
+  component: React.ComponentType; 
+  module: ModuleName;
+  accessType?: "view" | "edit" | "delegate";
+}) {
+  const { user, isLoading, hasModuleAccess } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  if (!hasModuleAccess(module, accessType)) {
     return <Redirect to="/" />;
   }
 
@@ -278,13 +307,13 @@ function Router() {
                 {() => <ProtectedRoute component={WelcomePage} />}
               </Route>
               <Route path="/simulador-compra">
-                {() => <ProtectedRoute component={CalculatorPage} />}
+                {() => <ModuleRoute component={CalculatorPage} module="modulo_simulador" />}
               </Route>
               <Route path="/profile">
                 {() => <ProtectedRoute component={ProfilePage} />}
               </Route>
               <Route path="/users">
-                {() => <ProtectedRoute component={UsersPage} />}
+                {() => <ModuleRoute component={UsersPage} module="modulo_config_usuarios" />}
               </Route>
               <Route path="/agreements">
                 {() => <MasterRoute component={AgreementsPage} />}
@@ -296,64 +325,64 @@ function Router() {
                 {() => <MasterRoute component={CoefficientTablesPage} />}
               </Route>
               <Route path="/roteiros">
-                {() => <RoteirosRoute component={RoteirosPage} />}
+                {() => <ModuleRoute component={RoteirosPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/bases-clientes">
-                {() => <MasterRoute component={BasesClientesPage} />}
+                {() => <ModuleRoute component={BasesClientesPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/nomenclaturas">
-                {() => <MasterRoute component={NomenclaturasPage} />}
+                {() => <ModuleRoute component={NomenclaturasPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/split-txt-csv">
-                {() => <MasterRoute component={SplitTxtCsvPage} />}
+                {() => <ModuleRoute component={SplitTxtCsvPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/dividir-csv">
-                {() => <MasterRoute component={DividirCsvPage} />}
+                {() => <ModuleRoute component={DividirCsvPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/compra-lista">
-                {() => <MasterRoute component={CompraListaPage} />}
+                {() => <ModuleRoute component={CompraListaPage} module="modulo_compra_lista" />}
               </Route>
               <Route path="/consulta-cliente">
-                {() => <MasterRoute component={ConsultaClientePage} />}
+                {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/admin-pedidos-lista">
-                {() => <MasterRoute component={AdminPedidosListaPage} />}
+                {() => <ModuleRoute component={AdminPedidosListaPage} module="modulo_compra_lista" />}
               </Route>
               <Route path="/config-precos">
-                {() => <MasterRoute component={ConfigPrecosPage} />}
+                {() => <ModuleRoute component={ConfigPrecosPage} module="modulo_config_precos" />}
               </Route>
               <Route path="/academia/fundamentos">
-                {() => <ProtectedRoute component={AcademiaFundamentosPage} />}
+                {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
               </Route>
               <Route path="/academia/quiz">
-                {() => <ProtectedRoute component={AcademiaQuizPage} />}
+                {() => <ModuleRoute component={AcademiaQuizPage} module="modulo_academia" />}
               </Route>
               <Route path="/academia/roleplay">
-                {() => <ProtectedRoute component={AcademiaRoleplayPage} />}
+                {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" />}
               </Route>
               <Route path="/academia/abordagem">
-                {() => <ProtectedRoute component={AcademiaAbordagemPage} />}
+                {() => <ModuleRoute component={AcademiaAbordagemPage} module="modulo_academia" />}
               </Route>
               <Route path="/academia/admin">
-                {() => <AcademiaAdminRoute component={AcademiaAdminPage} />}
+                {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
               </Route>
               <Route path="/vendas/campanhas">
-                {() => <CRMAdminRoute component={VendasCampanhasPage} />}
+                {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_crm_vendas_campanhas" />}
               </Route>
               <Route path="/vendas/atendimento">
-                {() => <ProtectedRoute component={VendasAtendimentoPage} />}
+                {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_crm_vendas_atendimento" />}
               </Route>
               <Route path="/vendas/agenda">
-                {() => <ProtectedRoute component={VendasAgendaPage} />}
+                {() => <ModuleRoute component={VendasAgendaPage} module="modulo_crm_vendas_atendimento" />}
               </Route>
               <Route path="/vendas/pipeline">
-                {() => <ProtectedRoute component={VendasPipelinePage} />}
+                {() => <ModuleRoute component={VendasPipelinePage} module="modulo_crm_vendas_atendimento" />}
               </Route>
               <Route path="/vendas/gestao-pipeline">
-                {() => <CRMAdminRoute component={VendasGestaoPipelinePage} />}
+                {() => <ModuleRoute component={VendasGestaoPipelinePage} module="modulo_crm_vendas_campanhas" />}
               </Route>
               <Route path="/vendas/consulta">
-                {() => <ProtectedRoute component={VendasConsultaPage} />}
+                {() => <ModuleRoute component={VendasConsultaPage} module="modulo_crm_vendas_atendimento" />}
               </Route>
               <Route path="/config-prompts">
                 {() => <ProtectedRoute component={ConfigPromptsPage} />}

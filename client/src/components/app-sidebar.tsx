@@ -1,7 +1,6 @@
 import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import {
@@ -17,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ROLE_LABELS, type UserRole, type UserPermission } from "@shared/schema";
+import { ROLE_LABELS, type UserRole, type ModuleName } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 interface MenuSection {
@@ -55,7 +54,7 @@ function getModuleForUrl(url: string): string | undefined {
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, hasModuleAccess } = useAuth();
   const { tenant, logoUrl } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -67,27 +66,16 @@ export function AppSidebar() {
     crmvendas: false,
   });
 
-  const { data: permissions = [] } = useQuery<UserPermission[]>({
-    queryKey: ["/api/permissions/my"],
-    enabled: !!user && user.role !== "master",
-  });
-
   if (!user) return null;
 
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const hasModulePermission = (module: string): boolean => {
-    if (isMaster) return true;
-    const permission = permissions.find(p => p.module === module);
-    return permission?.canView === true;
-  };
-
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string }): boolean => {
     if (item.masterOnly && !isMaster) return false;
-    const module = getModuleForUrl(item.url);
+    const module = item.module || getModuleForUrl(item.url);
     if (!module) return true;
-    return hasModulePermission(module);
+    return hasModuleAccess(module as ModuleName);
   };
 
   const menuSections: MenuSection[] = [
