@@ -80,12 +80,12 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component using custom logo image - larger than other icons (w-7 h-7 vs w-4 h-4 for others)
+  // Wolf icon component using custom logo image - larger than other icons (w-8 h-8 vs w-4 h-4 for others)
   const WolfIcon = ({ className }: { className?: string }) => (
     <img 
       src={wolfLogoUrl} 
       alt="Alpha" 
-      className="!w-7 !h-7 shrink-0"
+      className="!w-8 !h-8 shrink-0"
     />
   );
 
@@ -237,7 +237,9 @@ export function AppSidebar() {
                         >
                           <div className="flex items-center gap-2">
                             <section.icon className="h-4 w-4" />
-                            <span>{section.title}</span>
+                            <span className={section.title === "ALPHA" ? "font-bold" : ""}>
+                              {section.title}
+                            </span>
                           </div>
                           <ChevronDown 
                             className={cn(
