@@ -85,11 +85,26 @@ export const tenantThemeSchema = z.object({
   secondaryColor: z.string().optional(), // Cor secundária (destaques)
   accentColor: z.string().optional(),
   backgroundColor: z.string().optional(),
-  textColor: z.string().optional(),
+  textColor: z.string().optional(), // Cor de texto principal
+  borderColor: z.string().optional(), // Cor de bordas/divisórias
+  successColor: z.string().optional(), // Cor de status sucesso
+  errorColor: z.string().optional(), // Cor de status erro
+  warningColor: z.string().optional(), // Cor de status alerta
   headerColor: z.string().optional(),
   sidebarColor: z.string().optional(),
   loginBgColor: z.string().optional(), // Cor de fundo da tela de login
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
+  // Tipografia avançada
+  fontSize: z.string().optional(), // Tamanho da fonte (px ou rem)
+  fontWeight: z.string().optional(), // Peso da fonte (400, 500, 600, 700)
+  fontColor: z.string().optional(), // Cor da fonte principal
+  customFontUrl: z.string().optional(), // URL de fonte externa (Google Fonts)
+  welcomeText: z.string().optional(), // Texto de boas-vindas
+  footerText: z.string().optional(), // Texto do rodapé
+  showSlogan: z.boolean().optional(), // Exibir ou ocultar slogan
+  // Metadados de edição
+  lastEditedBy: z.string().optional(), // Nome do usuário que editou
+  lastEditedAt: z.string().optional(), // Data/hora da última edição
 });
 
 export type TenantTheme = z.infer<typeof tenantThemeSchema>;
@@ -98,10 +113,8 @@ export type TenantTheme = z.infer<typeof tenantThemeSchema>;
 export const tenantBrandingSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(255),
   slogan: z.string().max(255).optional(),
-  fontFamily: z.enum(["Inter", "Roboto", "Montserrat", "Poppins", "Open Sans"]).optional(),
-  primaryColor: z.string().optional(),
-  secondaryColor: z.string().optional(),
-  loginBgColor: z.string().optional(),
+  fontFamily: z.string().optional(),
+  themeJson: tenantThemeSchema.optional(),
 });
 
 export type TenantBranding = z.infer<typeof tenantBrandingSchema>;

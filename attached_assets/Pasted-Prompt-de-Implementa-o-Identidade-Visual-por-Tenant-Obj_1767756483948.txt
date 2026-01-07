@@ -1,0 +1,119 @@
+Prompt de Implementação — Identidade Visual por Tenant
+
+Objetivo:
+Melhorar a tela de Identidade Visual, garantindo clareza sobre o tenant editado, segurança nas alterações, e mais opções de personalização com melhor usabilidade.
+
+🔐 1. Identificação do Tenant Editado
+
+Exibir no topo da página:
+
+Edição da Identidade Visual: [NOME DO TENANT ATUAL]
+
+
+Adicionar campo informativo visível apenas para usuários com acesso a múltiplos tenants.
+
+Toda personalização deve ser salva e aplicada apenas no tenant atual.
+
+🛡️ 2. Segurança e Permissões
+
+Acesso somente para perfis com permissão específica: Gestão Visual.
+
+Impedir que alterações feitas em um tenant afetem outros tenants.
+
+🎨 3. Funcionalidades Avançadas de Customização
+A. Logotipos
+
+Upload de:
+
+Logo do menu lateral
+
+Logo da tela de login
+
+Favicon
+
+Mostrar pré-visualização após upload.
+
+Instruções visíveis:
+"Formatos permitidos: PNG, SVG - Tamanho máximo: 2MB"
+
+B. Paleta de Cores
+
+Campos já existentes:
+
+Cor Primária
+
+Cor Secundária
+
+Cor de Fundo do Login
+
+Novos campos a adicionar:
+
+Cor de Texto Principal
+
+Cor de Borda/Divisórias
+
+Cor para Status (Sucesso, Erro, Alerta)
+
+Todos campos devem permitir:
+
+Seletor visual de cor
+
+Input manual de HEX ou RGB
+
+C. Tipografia e Textos
+
+Campos já existentes:
+
+Fonte Principal (dropdown com fontes padrão)
+
+Nome do Sistema
+
+Slogan / Subtítulo
+
+Melhorias:
+
+Permitir adicionar fontes externas via link (ex: Google Fonts)
+
+Adicionar campos para:
+
+Tamanho da fonte principal
+
+Peso da fonte
+
+Cor da fonte
+
+Campo opcional de Texto de Boas-vindas
+
+Campo de Rodapé (mensagens, política de privacidade, etc.)
+
+Checkbox para exibir ou ocultar o slogan
+
+D. Pré-visualização da Tela de Login
+
+Manter seção de pré-visualização.
+
+Adicionar opção de alternar visualização:
+
+Desktop | Tablet | Mobile
+
+♻️ 4. Outras Funcionalidades
+
+Botão de "Restaurar Padrões":
+
+Texto: "↺ Restaurar padrão do sistema"
+
+Restaura todas configurações do tenant para o visual padrão da plataforma.
+
+Histórico de Edições:
+
+Mostrar:
+
+Última alteração feita por [Nome do Usuário] em [Data/Hora]
+
+⚙️ Validação e Aplicação
+
+Botão "Salvar e Aplicar" deve aplicar apenas no tenant atual.
+
+Recarregar a pré-visualização após salvar.
+
+Ao aplicar, atualizar instantaneamente a tela de login e menus.
