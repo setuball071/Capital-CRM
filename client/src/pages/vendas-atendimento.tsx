@@ -101,23 +101,41 @@ function formatPhone(phone: string | null | undefined): string {
   return phone;
 }
 
+function formatProperName(name: string | null | undefined): string {
+  if (!name) return "";
+  const prepositions = ["de", "da", "do", "das", "dos", "e"];
+  return name
+    .toLowerCase()
+    .split(" ")
+    .map((word, index) => {
+      if (index > 0 && prepositions.includes(word)) {
+        return word;
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 function CopyableField({ 
   value, 
   displayValue, 
   testId, 
   className = "",
-  toast 
+  toast,
+  formatOnCopy
 }: { 
   value: string | null | undefined; 
   displayValue: string; 
   testId: string;
   className?: string;
   toast: ReturnType<typeof useToast>["toast"];
+  formatOnCopy?: (value: string) => string;
 }) {
   const handleCopy = async () => {
     if (!value || value === "-") return;
     try {
-      await navigator.clipboard.writeText(value);
+      const textToCopy = formatOnCopy ? formatOnCopy(value) : value;
+      await navigator.clipboard.writeText(textToCopy);
       toast({ title: "Copiado!" });
     } catch {
       toast({ title: "Erro ao copiar", variant: "destructive" });
@@ -623,8 +641,15 @@ export default function VendasAtendimento() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-bold" data-testid="text-cliente-nome">
+                <h1 className="text-2xl font-bold inline-flex items-center gap-2" data-testid="text-cliente-nome">
                   {atendimentoAtual.clienteBase?.nome || atendimentoAtual.lead.nome}
+                  <CopyableField
+                    value={atendimentoAtual.clienteBase?.nome || atendimentoAtual.lead.nome}
+                    displayValue=""
+                    testId="button-copy-nome-header"
+                    toast={toast}
+                    formatOnCopy={formatProperName}
+                  />
                 </h1>
                 <Badge variant="default" data-testid="badge-status">Em Atendimento</Badge>
                 {atendimentoAtual.campanha && (
@@ -703,7 +728,13 @@ export default function VendasAtendimento() {
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Nome</p>
                       <p className="font-medium" data-testid="text-nome">
-                        {atendimentoAtual.clienteBase?.nome || atendimentoAtual.lead.nome}
+                        <CopyableField
+                          value={atendimentoAtual.clienteBase?.nome || atendimentoAtual.lead.nome}
+                          displayValue={atendimentoAtual.clienteBase?.nome || atendimentoAtual.lead.nome || "-"}
+                          testId="button-copy-nome"
+                          toast={toast}
+                          formatOnCopy={formatProperName}
+                        />
                       </p>
                     </div>
                     <div className="space-y-1">

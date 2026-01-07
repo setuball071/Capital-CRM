@@ -246,26 +246,43 @@ function verificarAniversarioNoMes(dataNascimento: string | null): boolean {
   }
 }
 
-// Componente para dados copiáveis com tooltip - não usa hooks internos
+function formatProperName(name: string | null | undefined): string {
+  if (!name) return "";
+  const prepositions = ["de", "da", "do", "das", "dos", "e"];
+  return name
+    .toLowerCase()
+    .split(" ")
+    .map((word, index) => {
+      if (index > 0 && prepositions.includes(word)) {
+        return word;
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 function CopyableField({ 
   value, 
   displayValue, 
   label,
-  onCopy 
+  onCopy,
+  formatOnCopy
 }: { 
   value: string | null | undefined; 
   displayValue?: string;
   label?: string;
   onCopy?: (text: string, label?: string) => void;
+  formatOnCopy?: (value: string) => string;
 }) {
   const [copied, setCopied] = useState(false);
   
   const handleCopy = async () => {
     if (!value) return;
     try {
-      await navigator.clipboard.writeText(value);
+      const textToCopy = formatOnCopy ? formatOnCopy(value) : value;
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
-      if (onCopy) onCopy(value, label);
+      if (onCopy) onCopy(textToCopy, label);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
@@ -723,7 +740,7 @@ export default function ConsultaCliente() {
                     <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">Nome</p>
                       <p className="font-medium" data-testid="text-nome">
-                        <CopyableField value={clienteDetalhado.pessoa.nome} label="Nome" onCopy={handleCopy} />
+                        <CopyableField value={clienteDetalhado.pessoa.nome} label="Nome" onCopy={handleCopy} formatOnCopy={formatProperName} />
                       </p>
                     </div>
                     <div className="space-y-1 group">
