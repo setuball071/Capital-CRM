@@ -586,19 +586,22 @@ export const clientesContratos = pgTable("clientes_contratos", {
   pessoaContratoIdx: uniqueIndex("idx_contratos_pessoa_contrato").on(table.pessoaId, table.numeroContrato),
 }));
 
-// 4) client_contacts - Contatos do cliente (telefones, emails) - LEGADO
+// 4) client_contacts - Contatos do cliente (telefones, emails)
 export const clientContacts = pgTable("client_contacts", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clientesPessoa.id, { onDelete: "cascade" }).notNull(),
-  tipo: varchar("tipo", { length: 20 }).notNull(), // telefone, email
-  valor: varchar("valor", { length: 255 }).notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // phone, email
+  value: varchar("value", { length: 255 }).notNull(),
+  label: varchar("label", { length: 100 }), // Etiqueta opcional (ex: "Whatsapp", "Trabalho")
+  isPrimary: boolean("is_primary").default(false), // Contato principal
+  isManual: boolean("is_manual").default(false), // Telefone adicionado manualmente (Hot)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   // Rastreabilidade para exclusão
   importRunId: integer("import_run_id"), // Link ao import que criou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
-  // Chave única: (client_id, tipo, valor) - evita duplicatas de contato
-  contactsUnique: uniqueIndex("idx_contacts_unique").on(table.clientId, table.tipo, table.valor),
+  // Chave única: (client_id, type, value) - evita duplicatas de contato
+  contactsUnique: uniqueIndex("idx_contacts_unique").on(table.clientId, table.type, table.value),
 }));
 
 // 4b) clientes_telefones - Telefones normalizados do cliente

@@ -1,0 +1,24 @@
+Prompt – Persistência de Telefones no Painel de Contato
+📌 Contexto:
+Atualmente, ao adicionar manualmente um número de telefone no Painel de Contato do cliente (em "Consulta" ou "Atendimento"), esse dado não está sendo salvo permanentemente. Ao realizar uma nova consulta ou reprocessar a base, o telefone desaparece, obrigando o operador a repetir o trabalho de higienização.
+🛠️ Regras e Ajustes Necessários:
+Persistência permanente de dados manuais:
+Telefones adicionados manualmente no painel de contato devem ser armazenados em base de dados persistente vinculada ao CPF do cliente.
+Esses dados não devem ser sobrescritos ou apagados ao fazer uma nova consulta, reimportação ou atualização de dados da base externa.
+Regra de prioridade:
+Telefones manuais devem ter prioridade sobre dados externos.
+Se houver duplicidade entre um telefone da nova consulta e um telefone já salvo manualmente, não duplicar.
+Se o telefone for novo e não existir na base manual, adicionar normalmente ao painel.
+Evitar perda de dados em atualizações:
+Garantir que, ao consultar novamente o cliente, os dados de telefone já salvos (manual/importado) sejam mantidos visíveis e utilizáveis no painel.
+Telefones devem estar disponíveis em qualquer área do sistema onde o cliente seja acessado (Consulta, Atendimento, Pipeline).
+Identificação visual (para telefones adicionados manualmente)
+Telefones adicionados manualmente no painel de contato devem ter uma identificação visual especial, como:
+Um ícone 🔥 (fogo) ou selo “Hot”, indicando que aquele número foi higienizado e validado manualmente, logo é mais confiável.
+Alternativamente, usar um badge com cor de destaque (ex: verde ou laranja) com o texto:
+Hot
+Essa marcação ajuda o operador a priorizar o uso desses contatos em campanhas e atendimentos, pois são números com maior chance de sucesso.
+A marcação deve estar visível no painel de contato, tanto na visualização quanto na edição de telefones.
+💡 Observações:
+Isso deve funcionar tanto em consultas avulsas quanto em clientes acessados por campanhas, CRM ou atualizações automáticas de dados.
+A regra de persistência vale também para endereços e e-mails, se esses campos forem usados no painel de contato.
