@@ -90,10 +90,15 @@ export default function AdminBrandingPage() {
   useEffect(() => {
     if (tenantData) {
       const theme = tenantData.themeJson as TenantTheme | null;
+      const storedFontFamily = (tenantData as any).fontFamily || "Inter";
+      const hasValidCustomFont = storedFontFamily === "custom" && theme?.customFontUrl;
+      const effectiveFontFamily = hasValidCustomFont ? "custom" : 
+        (storedFontFamily === "custom" ? "Inter" : storedFontFamily);
+      
       setFormData({
         name: tenantData.name || "",
         slogan: (tenantData as any).slogan || "",
-        fontFamily: (tenantData as any).fontFamily || "Inter",
+        fontFamily: effectiveFontFamily,
         customFontUrl: theme?.customFontUrl || "",
         primaryColor: theme?.primaryColor || "#3b82f6",
         secondaryColor: theme?.secondaryColor || "#10b981",
@@ -138,7 +143,7 @@ export default function AdminBrandingPage() {
       return apiRequest("PUT", `/api/tenant/branding`, {
         name: data.name,
         slogan: data.slogan,
-        fontFamily: data.fontFamily === "custom" ? data.customFontUrl : data.fontFamily,
+        fontFamily: data.fontFamily,
         themeJson,
       });
     },
@@ -199,6 +204,14 @@ export default function AdminBrandingPage() {
   });
 
   const handleSave = () => {
+    if (formData.fontFamily === "custom" && !formData.customFontUrl.trim()) {
+      toast({ 
+        title: "URL da fonte obrigatória", 
+        description: "Informe a URL do Google Fonts ou selecione outra fonte.",
+        variant: "destructive"
+      });
+      return;
+    }
     saveBrandingMutation.mutate(formData);
   };
 
