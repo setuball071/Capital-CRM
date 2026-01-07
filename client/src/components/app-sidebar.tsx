@@ -1,7 +1,7 @@
 import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import {
@@ -80,13 +80,16 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component using custom logo image - larger than other icons (w-8 h-8 vs w-4 h-4 for others)
+  // Wolf icon component using custom logo image - larger than other icons but aligned to same space
   const WolfIcon = ({ className }: { className?: string }) => (
-    <img 
-      src={wolfLogoUrl} 
-      alt="Alpha" 
-      className="!w-8 !h-8 shrink-0"
-    />
+    <div className="w-4 h-4 flex items-center justify-center relative">
+      <img 
+        src={wolfLogoUrl} 
+        alt="Alpha" 
+        className="w-7 h-7 absolute"
+        style={{ left: '-6px', top: '-6px' }}
+      />
+    </div>
   );
 
   const menuSections: MenuSection[] = [
@@ -163,14 +166,15 @@ export function AppSidebar() {
     },
   ];
 
+  const getSectionKey = (title: string) => title.toLowerCase().replace(/ /g, '');
+
   const toggleSection = (sectionTitle: string) => {
+    const key = getSectionKey(sectionTitle);
     setOpenSections(prev => ({
       ...prev,
-      [sectionTitle.toLowerCase().replace(/ /g, '')]: !prev[sectionTitle.toLowerCase().replace(/ /g, '')]
+      [key]: !prev[key]
     }));
   };
-
-  const getSectionKey = (title: string) => title.toLowerCase().replace(/ /g, '');
 
   const handleLogout = async () => {
     await logout();
@@ -221,12 +225,11 @@ export function AppSidebar() {
               {filteredSections.map((section) => {
                 const sectionKey = getSectionKey(section.title);
                 const isOpen = openSections[sectionKey] ?? false;
-                const hasActiveItem = section.items.some(item => location === item.url);
 
                 return (
                   <Collapsible
                     key={section.title}
-                    open={isOpen || hasActiveItem}
+                    open={isOpen}
                     onOpenChange={() => toggleSection(section.title)}
                   >
                     <SidebarMenuItem>
@@ -244,7 +247,7 @@ export function AppSidebar() {
                           <ChevronDown 
                             className={cn(
                               "h-4 w-4 transition-transform duration-200",
-                              (isOpen || hasActiveItem) && "rotate-180"
+                              isOpen && "rotate-180"
                             )} 
                           />
                         </SidebarMenuButton>
