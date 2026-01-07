@@ -82,7 +82,7 @@ export function AppSidebar() {
 
   // Wolf icon component - larger than other icons, preserves aspect ratio
   const WolfIcon = ({ className }: { className?: string }) => (
-    <div className="relative flex items-center justify-center h-4 w-4 overflow-visible" style={{ marginLeft: '-6px', marginRight: '-6px' }}>
+    <div className="relative flex items-center justify-center h-4 w-4 overflow-visible" style={{ marginLeft: '-4px', marginRight: '2px' }}>
       <img 
         src={wolfLogoUrl} 
         alt="Alpha" 
