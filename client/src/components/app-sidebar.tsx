@@ -1,4 +1,5 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot } from "lucide-react";
+import { GiWolfHowl } from "react-icons/gi";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -32,7 +33,7 @@ interface MenuSection {
 }
 
 const MODULE_URL_MAPPING: Record<string, string[]> = {
-  modulo_simulador: ["/calculator", "/simulador-compra"],
+  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-amortizacao", "/simulador-portabilidade"],
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv"],
   modulo_compra_lista: ["/compra-lista"],
@@ -59,11 +60,12 @@ export function AppSidebar() {
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
-    cadastros: false,
+    simuladores: false,
+    operacional: false,
     clientes: false,
     admin: false,
     academia: false,
-    crmvendas: false,
+    alpha: false,
   });
 
   if (!user) return null;
@@ -78,18 +80,30 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
+  // Wolf icon component wrapper for lucide compatibility
+  const WolfIcon = ({ className }: { className?: string }) => (
+    <GiWolfHowl className={className} />
+  );
+
   const menuSections: MenuSection[] = [
     {
       title: "Principal",
       icon: Home,
       items: [
-        { title: "Início", url: "/", icon: Home },
-        { title: "Kanban Pessoal", url: "/kanban", icon: Kanban },
-        { title: "Simulador Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador" },
+        // "Início" removido pois é redundante estar dentro de "Principal"
       ],
     },
     {
-      title: "Cadastros",
+      title: "Simuladores",
+      icon: Calculator,
+      items: [
+        { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador" },
+        { title: "Simulador de Amortização", url: "/simulador-amortizacao", icon: TrendingDown, module: "modulo_simulador" },
+        { title: "Simulador de Portabilidade", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador" },
+      ],
+    },
+    {
+      title: "Operacional",
       icon: FileText,
       items: [
         { title: "Convênios", url: "/agreements", icon: FileText, masterOnly: true },
@@ -114,7 +128,7 @@ export function AppSidebar() {
       items: [
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, masterOnly: true },
-        { title: "Dividir CSV", url: "/dividir-csv", icon: Scissors, masterOnly: true },
+        { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },
@@ -132,8 +146,8 @@ export function AppSidebar() {
       ],
     },
     {
-      title: "CRM Vendas",
-      icon: Target,
+      title: "ALPHA",
+      icon: WolfIcon,
       items: [
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_crm_vendas_campanhas" },
         { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_crm_vendas_atendimento" },

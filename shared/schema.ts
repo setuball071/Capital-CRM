@@ -11,9 +11,12 @@ export const tenants = pgTable("tenants", {
   id: serial("id").primaryKey(),
   key: varchar("key", { length: 50 }).notNull().unique(), // e.g., "goldcard", "consigcore"
   name: varchar("name", { length: 255 }).notNull(), // Display name
-  logoUrl: varchar("logo_url", { length: 500 }),
+  logoUrl: varchar("logo_url", { length: 500 }), // Logo menu lateral
+  logoLoginUrl: varchar("logo_login_url", { length: 500 }), // Logo tela de login
   faviconUrl: varchar("favicon_url", { length: 500 }),
-  themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, etc }
+  slogan: varchar("slogan", { length: 255 }), // Slogan/subtítulo exibido no login
+  fontFamily: varchar("font_family", { length: 100 }).default("Inter"), // Fonte base
+  themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, loginBgColor, etc }
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -78,16 +81,30 @@ export type InsertUserTenant = z.infer<typeof insertUserTenantSchema>;
 
 // Theme schema for validation
 export const tenantThemeSchema = z.object({
-  primaryColor: z.string().optional(),
-  secondaryColor: z.string().optional(),
+  primaryColor: z.string().optional(), // Cor primária (botões, menus)
+  secondaryColor: z.string().optional(), // Cor secundária (destaques)
   accentColor: z.string().optional(),
   backgroundColor: z.string().optional(),
   textColor: z.string().optional(),
   headerColor: z.string().optional(),
   sidebarColor: z.string().optional(),
+  loginBgColor: z.string().optional(), // Cor de fundo da tela de login
+  loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
 });
 
 export type TenantTheme = z.infer<typeof tenantThemeSchema>;
+
+// Schema para atualização de personalização visual
+export const tenantBrandingSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(255),
+  slogan: z.string().max(255).optional(),
+  fontFamily: z.enum(["Inter", "Roboto", "Montserrat", "Poppins", "Open Sans"]).optional(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  loginBgColor: z.string().optional(),
+});
+
+export type TenantBranding = z.infer<typeof tenantBrandingSchema>;
 
 // ===== USER SYSTEM =====
 
