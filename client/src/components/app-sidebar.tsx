@@ -80,14 +80,16 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component using custom logo image - larger than other icons using scale transform
+  // Wolf icon component - larger than other icons but aligned via negative margins
   const WolfIcon = ({ className }: { className?: string }) => (
-    <img 
-      src={wolfLogoUrl} 
-      alt="Alpha" 
-      className={cn("h-4 w-4", className)}
-      style={{ transform: 'scale(1.8)', transformOrigin: 'center' }}
-    />
+    <div className="relative flex items-center justify-center h-4 w-4 overflow-visible">
+      <img 
+        src={wolfLogoUrl} 
+        alt="Alpha" 
+        className="h-8 w-8"
+        style={{ margin: '-8px' }}
+      />
+    </div>
   );
 
   const menuSections: MenuSection[] = [
