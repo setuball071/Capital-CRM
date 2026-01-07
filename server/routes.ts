@@ -6581,7 +6581,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       // Check if file is ready
-      if (pedido.status !== "processado" || !pedido.arquivoPath) {
+      if (pedido.status !== "processado") {
         return res.status(400).json({ 
           message: pedido.status === "aprovado" 
             ? "O arquivo ainda está sendo gerado. Aguarde alguns instantes."
@@ -6589,14 +6589,74 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         });
       }
 
-      // Check if file exists
-      if (!fs.existsSync(pedido.arquivoPath)) {
-        return res.status(404).json({ message: "Arquivo não encontrado no servidor" });
+      // Check if file exists - if not, regenerate it dynamically
+      let filePath = pedido.arquivoPath;
+      if (!filePath || !fs.existsSync(filePath)) {
+        console.log(`[PedidoLista] File not found, regenerating for pedido ${id}`);
+        
+        // Regenerate file dynamically
+        const exportsDir = path.join(process.cwd(), "exports");
+        if (!fs.existsSync(exportsDir)) {
+          fs.mkdirSync(exportsDir, { recursive: true });
+        }
+        
+        // Get filtered clients using stored filters
+        const filtros = pedido.filtrosUsados || {};
+        const { clientes } = await storage.searchClientesPessoa(filtros);
+        
+        // Get folha data for each client
+        const clientesComFolha = await Promise.all(
+          clientes.map(async (cliente) => {
+            const folhas = await storage.getFolhaMesByPessoaId(cliente.id);
+            const folhaAtual = folhas.length > 0 ? folhas[0] : null;
+            return { ...cliente, folhaAtual };
+          })
+        );
+        
+        // Generate CSV content
+        const headers = [
+          "CPF", "Matricula", "Nome", "Convenio", "Orgao", "UF", "Municipio",
+          "Situacao Funcional", "Telefones",
+          "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
+          "Liquido"
+        ];
+        
+        const rows = clientesComFolha.map(c => [
+          c.cpf || "",
+          c.matricula || "",
+          c.nome || "",
+          c.convenio || "",
+          c.orgaodesc || "",
+          c.uf || "",
+          c.municipio || "",
+          c.sitFunc || "",
+          Array.isArray(c.telefonesBase) ? c.telefonesBase.join("; ") : "",
+          c.folhaAtual?.margemSaldo70 || "",
+          c.folhaAtual?.margemSaldo35 || "",
+          c.folhaAtual?.margemCartaoCreditoSaldo || "",
+          c.folhaAtual?.margemCartaoBeneficioSaldo || "",
+          c.folhaAtual?.liquido || "",
+        ]);
+        
+        // Create CSV string
+        const csvContent = [
+          headers.join(";"),
+          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
+        ].join("\n");
+        
+        // Write file
+        const fileName = `lista-clientes-${id}-${Date.now()}.csv`;
+        filePath = path.join(exportsDir, fileName);
+        fs.writeFileSync(filePath, "\ufeff" + csvContent, "utf-8"); // BOM for Excel compatibility
+        
+        // Update pedido with new file path
+        await storage.updatePedidoLista(id, { arquivoPath: filePath });
+        console.log(`[PedidoLista] File regenerated: ${filePath}`);
       }
 
       // Send file
       const fileName = `lista-clientes-${id}.csv`;
-      res.download(pedido.arquivoPath, fileName);
+      res.download(filePath, fileName);
       
     } catch (error) {
       console.error("Download pedido error:", error);
