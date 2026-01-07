@@ -480,12 +480,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
         key: req.tenant.key,
         name: req.tenant.name,
         logoUrl: req.tenant.logoUrl,
+        logoLoginUrl: (req.tenant as any).logoLoginUrl,
         faviconUrl: req.tenant.faviconUrl,
+        slogan: (req.tenant as any).slogan,
+        fontFamily: (req.tenant as any).fontFamily,
         theme: req.tenant.themeJson,
       });
     } catch (error) {
       console.error("Get tenant error:", error);
       res.status(500).json({ message: "Erro ao buscar configuração do tenant" });
+    }
+  });
+
+  // Get current tenant for branding page (requires auth)
+  app.get("/api/tenant/current", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      const [tenantData] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      if (!tenantData) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      res.json(tenantData);
+    } catch (error) {
+      console.error("Get current tenant error:", error);
+      res.status(500).json({ message: "Erro ao buscar tenant" });
+    }
+  });
+
+  // Update tenant branding (Master only)
+  app.put("/api/tenant/branding", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      const { name, slogan, fontFamily, themeJson } = req.body;
+      
+      const result = await db.update(tenants)
+        .set({
+          name,
+          slogan,
+          fontFamily,
+          themeJson,
+        })
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      res.json(result[0]);
+    } catch (error) {
+      console.error("Update branding error:", error);
+      res.status(500).json({ message: "Erro ao atualizar identidade visual" });
+    }
+  });
+
+  // Upload tenant logo (Master only)
+  app.post("/api/tenant/logo", requireAuth, requireMaster, upload.single("file"), async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const file = req.file;
+      const type = req.body.type as "sidebar" | "login" | "favicon";
+      
+      if (!tenantId) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      if (!file) {
+        return res.status(400).json({ message: "Arquivo não enviado" });
+      }
+      
+      if (!["sidebar", "login", "favicon"].includes(type)) {
+        return res.status(400).json({ message: "Tipo inválido. Use: sidebar, login ou favicon" });
+      }
+      
+      // Save file to uploads folder
+      const fs = await import("fs");
+      const path = await import("path");
+      
+      const uploadsDir = path.join(process.cwd(), "uploads", "logos");
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const ext = path.extname(file.originalname) || ".png";
+      const filename = `tenant_${tenantId}_${type}_${Date.now()}${ext}`;
+      const filepath = path.join(uploadsDir, filename);
+      
+      fs.writeFileSync(filepath, file.buffer);
+      
+      // Generate URL for the uploaded file
+      const logoUrl = `/uploads/logos/${filename}`;
+      
+      // Update tenant with new logo URL based on type
+      const updateData: any = {};
+      if (type === "sidebar") {
+        updateData.logoUrl = logoUrl;
+      } else if (type === "login") {
+        updateData.logoLoginUrl = logoUrl;
+      } else if (type === "favicon") {
+        updateData.faviconUrl = logoUrl;
+      }
+      
+      const result = await db.update(tenants)
+        .set(updateData)
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      
+      res.json({ 
+        message: "Logo atualizado com sucesso", 
+        url: logoUrl,
+        tenant: result[0]
+      });
+    } catch (error) {
+      console.error("Upload logo error:", error);
+      res.status(500).json({ message: "Erro ao fazer upload do logo" });
     }
   });
 

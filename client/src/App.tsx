@@ -39,7 +39,9 @@ import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import VendasConsultaPage from "@/pages/vendas-consulta";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import AdminTenantsPage from "@/pages/admin-tenants";
-import KanbanPage from "@/pages/kanban";
+import AdminBrandingPage from "@/pages/admin-branding";
+import SimuladorAmortizacaoPage from "@/pages/simulador-amortizacao";
+import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -390,8 +392,14 @@ function Router() {
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
               </Route>
-              <Route path="/kanban">
-                {() => <ProtectedRoute component={KanbanPage} />}
+              <Route path="/admin/branding">
+                {() => <MasterRoute component={AdminBrandingPage} />}
+              </Route>
+              <Route path="/simulador-amortizacao">
+                {() => <ModuleRoute component={SimuladorAmortizacaoPage} module="modulo_simulador" />}
+              </Route>
+              <Route path="/simulador-portabilidade">
+                {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}
               </Route>
               <Route component={NotFound} />
             </Switch>
