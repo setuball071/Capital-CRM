@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,15 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useLocation } from "wouter";
 
+const TIPOS_CLIENTE = ["todos", "servidor", "pensionista"] as const;
+type TipoCliente = typeof TIPOS_CLIENTE[number];
+
+const TIPO_CLIENTE_LABELS: Record<TipoCliente, string> = {
+  todos: "Todos",
+  servidor: "Servidor",
+  pensionista: "Pensionista",
+};
+
 interface Filtros {
   convenio?: string;
   orgao?: string;
@@ -26,6 +35,7 @@ interface Filtros {
   idade_min?: number;
   idade_max?: number;
   sit_func?: string;
+  tipo_cliente?: TipoCliente;
   // Filtros de margem
   margem_30_min?: number;
   margem_30_max?: number;
@@ -198,6 +208,19 @@ export default function CompraLista() {
     queryKey: ["/api/clientes/filtros"],
   });
 
+  // Nomenclaturas para filtros dinâmicos
+  const { data: nomenclaturas } = useQuery<{ id: number; categoria: string; codigo: string; nome: string; ativo: boolean }[]>({
+    queryKey: ["/api/nomenclaturas-cached"],
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const situacoesFuncionais = useMemo(() => {
+    if (!nomenclaturas) return [];
+    return nomenclaturas
+      .filter(n => n.categoria === "SIT_FUNC" && n.ativo)
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [nomenclaturas]);
+
   const { data: pedidos = [], isLoading: isLoadingPedidos } = useQuery<PedidoLista[]>({
     queryKey: ["/api/pedidos-lista"],
   });
@@ -356,6 +379,7 @@ export default function CompraLista() {
       parts.push(`Idade: ${f.idade_min || 0} - ${f.idade_max || 99}`);
     }
     if (f.sit_func) parts.push(`Situação: ${f.sit_func}`);
+    if (f.tipo_cliente && f.tipo_cliente !== "todos") parts.push(`Tipo: ${TIPO_CLIENTE_LABELS[f.tipo_cliente]}`);
     if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
       parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
     }
@@ -501,13 +525,41 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="sit_func">Situação Funcional</Label>
-                  <Input
-                    id="sit_func"
-                    placeholder="Ex: ATIVO, APOSENTADO"
-                    value={filtros.sit_func || ""}
-                    onChange={(e) => setFiltros({ ...filtros, sit_func: e.target.value || undefined })}
-                    data-testid="input-sit-func"
-                  />
+                  <Select
+                    value={filtros.sit_func || "all"}
+                    onValueChange={(v) => setFiltros({ ...filtros, sit_func: v === "all" ? undefined : v })}
+                  >
+                    <SelectTrigger data-testid="select-situacao-funcional">
+                      <SelectValue placeholder="Todas as situações" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as Situações</SelectItem>
+                      {situacoesFuncionais.map((sit) => (
+                        <SelectItem key={sit.codigo} value={sit.codigo}>
+                          {sit.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="tipo_cliente">Tipo de Cliente</Label>
+                  <Select
+                    value={filtros.tipo_cliente || "todos"}
+                    onValueChange={(v) => setFiltros({ ...filtros, tipo_cliente: v as TipoCliente })}
+                  >
+                    <SelectTrigger data-testid="select-tipo-cliente">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_CLIENTE.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {TIPO_CLIENTE_LABELS[tipo]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
