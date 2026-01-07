@@ -19,15 +19,6 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useLocation } from "wouter";
 
-const TIPOS_CLIENTE = ["todos", "servidor", "pensionista"] as const;
-type TipoCliente = typeof TIPOS_CLIENTE[number];
-
-const TIPO_CLIENTE_LABELS: Record<TipoCliente, string> = {
-  todos: "Todos",
-  servidor: "Servidor",
-  pensionista: "Pensionista",
-};
-
 interface Filtros {
   convenio?: string;
   orgao?: string;
@@ -35,7 +26,6 @@ interface Filtros {
   idade_min?: number;
   idade_max?: number;
   sit_func?: string;
-  tipo_cliente?: TipoCliente;
   // Filtros de margem
   margem_30_min?: number;
   margem_30_max?: number;
