@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
-  Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, MapPin,
+  Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator
 } from "lucide-react";
 import { 
@@ -207,7 +207,7 @@ export default function VendasAtendimento() {
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
-  
+
   // Parse Brazilian currency: handles number, "301.86", "R$ 301,86", "1.530.480,77"
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -451,9 +451,7 @@ export default function VendasAtendimento() {
 
   const proximoMutation = useMutation({
     mutationFn: async (campaignId?: number) => {
-      const body: any = {};
-      if (campaignId !== undefined) body.campaignId = campaignId;
-      const res = await apiRequest("POST", "/api/vendas/atendimento/proximo", body);
+      const res = await apiRequest("POST", "/api/vendas/atendimento/proximo", { campaignId });
       return res.json() as Promise<AtendimentoData>;
     },
     onSuccess: (data) => {

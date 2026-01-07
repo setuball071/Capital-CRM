@@ -463,7 +463,7 @@ export default function VendasConsulta() {
             <p className="text-muted-foreground text-center mb-6 max-w-md">
               Digite o CPF ou Matrícula do cliente para consultar dados completos, contratos e margens disponíveis.
             </p>
-            <div className="w-full max-w-lg space-y-4">
+            <div className="w-full max-w-md space-y-4">
               <div className="flex gap-2">
                 <Input
                   placeholder="Digite CPF ou Matrícula..."

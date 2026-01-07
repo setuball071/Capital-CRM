@@ -1091,12 +1091,6 @@ export class DbStorage implements IStorage {
     if (filtros.sit_func) {
       pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
     }
-    // Filtro tipo_cliente: servidor vs pensionista
-    if (filtros.tipo_cliente === "servidor") {
-      pessoaConditions.push(sql`UPPER(${clientesPessoa.sitFunc}) NOT LIKE '%PENSIONISTA%'`);
-    } else if (filtros.tipo_cliente === "pensionista") {
-      pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%PENSIONISTA%`));
-    }
 
     // If we need joins, count filter, or idade filter, use parameterized SQL query for safety
     if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter || needsIdadeFilter) {
@@ -1129,12 +1123,6 @@ export class DbStorage implements IStorage {
       }
       if (filtros.sit_func) {
         whereConditions.push(sql`p.sit_func ILIKE ${'%' + filtros.sit_func + '%'}`);
-      }
-      // Filtro tipo_cliente: servidor vs pensionista (raw SQL)
-      if (filtros.tipo_cliente === "servidor") {
-        whereConditions.push(sql`UPPER(p.sit_func) NOT LIKE '%PENSIONISTA%'`);
-      } else if (filtros.tipo_cliente === "pensionista") {
-        whereConditions.push(sql`p.sit_func ILIKE '%PENSIONISTA%'`);
       }
 
       // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
