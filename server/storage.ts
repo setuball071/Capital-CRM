@@ -1682,7 +1682,7 @@ export class DbStorage implements IStorage {
     return await db.select()
       .from(clientContacts)
       .where(eq(clientContacts.clientId, clientId))
-      .orderBy(sql`${clientContacts.tipo} ASC, ${clientContacts.createdAt} DESC`);
+      .orderBy(sql`${clientContacts.type} ASC, ${clientContacts.createdAt} DESC`);
   }
 
   // Clientes Contratos
