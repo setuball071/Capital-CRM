@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,8 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
-  Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
-  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator, Filter
+  Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, MapPin,
+  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator
 } from "lucide-react";
 import { 
   LEAD_STATUS, 
@@ -36,15 +36,6 @@ import {
   type LeadMarker,
   type LeadInteraction,
 } from "@shared/schema";
-
-const TIPOS_CLIENTE_ATENDIMENTO = ["todos", "servidor", "pensionista"] as const;
-type TipoClienteAtendimento = typeof TIPOS_CLIENTE_ATENDIMENTO[number];
-
-const TIPO_CLIENTE_LABELS_ATENDIMENTO: Record<TipoClienteAtendimento, string> = {
-  todos: "Todos",
-  servidor: "Servidor",
-  pensionista: "Pensionista",
-};
 
 interface HigienizacaoTelefone {
   telefone: string;
@@ -217,10 +208,6 @@ export default function VendasAtendimento() {
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
   
-  const [filtroSituacaoFuncional, setFiltroSituacaoFuncional] = useState<string>("todos");
-  const [filtroTipoCliente, setFiltroTipoCliente] = useState<TipoClienteAtendimento>("todos");
-  const [mostrarFiltrosAvancados, setMostrarFiltrosAvancados] = useState(false);
-
   // Parse Brazilian currency: handles number, "301.86", "R$ 301,86", "1.530.480,77"
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -299,13 +286,6 @@ export default function VendasAtendimento() {
     queryKey: ["/api/nomenclaturas-cached"],
     staleTime: 1000 * 60 * 5,
   });
-
-  const situacoesFuncionais = useMemo(() => {
-    if (!nomenclaturas) return [];
-    return nomenclaturas
-      .filter(n => n.categoria === "SIT_FUNC" && n.ativo)
-      .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [nomenclaturas]);
 
   const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
@@ -470,15 +450,9 @@ export default function VendasAtendimento() {
   };
 
   const proximoMutation = useMutation({
-    mutationFn: async (params: { campaignId?: number; situacaoFuncional?: string; tipoCliente?: string } = {}) => {
+    mutationFn: async (campaignId?: number) => {
       const body: any = {};
-      if (params.campaignId !== undefined) body.campaignId = params.campaignId;
-      if (params.situacaoFuncional && params.situacaoFuncional !== "todos") {
-        body.situacaoFuncional = params.situacaoFuncional;
-      }
-      if (params.tipoCliente && params.tipoCliente !== "todos") {
-        body.tipoCliente = params.tipoCliente;
-      }
+      if (campaignId !== undefined) body.campaignId = campaignId;
       const res = await apiRequest("POST", "/api/vendas/atendimento/proximo", body);
       return res.json() as Promise<AtendimentoData>;
     },
@@ -538,7 +512,7 @@ export default function VendasAtendimento() {
     try {
       await registerInteractionMutation.mutateAsync(interactionFormData);
       setDrawerOpen(false);
-      proximoMutation.mutate({ situacaoFuncional: filtroSituacaoFuncional, tipoCliente: filtroTipoCliente });
+      proximoMutation.mutate(undefined);
     } catch {
       // Error already handled by mutation
     }
@@ -594,63 +568,6 @@ export default function VendasAtendimento() {
               Clique no botão abaixo para carregar o próximo lead da fila e iniciar o atendimento.
             </p>
 
-            <div className="w-full max-w-lg mb-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMostrarFiltrosAvancados(!mostrarFiltrosAvancados)}
-                className="w-full justify-center text-muted-foreground mb-2"
-                data-testid="button-toggle-filtros-atendimento"
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros Avançados
-                {mostrarFiltrosAvancados ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
-              </Button>
-              
-              {mostrarFiltrosAvancados && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Situação Funcional</Label>
-                    <Select
-                      value={filtroSituacaoFuncional}
-                      onValueChange={setFiltroSituacaoFuncional}
-                    >
-                      <SelectTrigger data-testid="select-situacao-funcional-atendimento">
-                        <SelectValue placeholder="Todas as situações" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todas as Situações</SelectItem>
-                        {situacoesFuncionais.map((sit) => (
-                          <SelectItem key={sit.codigo} value={sit.codigo}>
-                            {sit.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Tipo de Cliente</Label>
-                    <Select
-                      value={filtroTipoCliente}
-                      onValueChange={(v) => setFiltroTipoCliente(v as TipoClienteAtendimento)}
-                    >
-                      <SelectTrigger data-testid="select-tipo-cliente-atendimento">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIPOS_CLIENTE_ATENDIMENTO.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {TIPO_CLIENTE_LABELS_ATENDIMENTO[tipo]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {campanhasDisponiveis && campanhasDisponiveis.length > 0 ? (
               <div className="space-y-4 w-full max-w-md">
                 <div className="grid gap-2">
@@ -659,7 +576,7 @@ export default function VendasAtendimento() {
                       key={camp.id}
                       variant="outline"
                       className="w-full justify-between"
-                      onClick={() => proximoMutation.mutate({ campaignId: camp.id, situacaoFuncional: filtroSituacaoFuncional, tipoCliente: filtroTipoCliente })}
+                      onClick={() => proximoMutation.mutate(camp.id)}
                       disabled={proximoMutation.isPending || camp.leadsPendentes === 0}
                       data-testid={`button-campanha-${camp.id}`}
                     >
@@ -672,7 +589,7 @@ export default function VendasAtendimento() {
                 <Button
                   size="lg"
                   className="w-full"
-                  onClick={() => proximoMutation.mutate({ situacaoFuncional: filtroSituacaoFuncional, tipoCliente: filtroTipoCliente })}
+                  onClick={() => proximoMutation.mutate(undefined)}
                   disabled={proximoMutation.isPending}
                   data-testid="button-proximo-qualquer"
                 >
@@ -684,7 +601,7 @@ export default function VendasAtendimento() {
             ) : (
               <Button
                 size="lg"
-                onClick={() => proximoMutation.mutate({ situacaoFuncional: filtroSituacaoFuncional, tipoCliente: filtroTipoCliente })}
+                onClick={() => proximoMutation.mutate(undefined)}
                 disabled={proximoMutation.isPending}
                 data-testid="button-iniciar"
               >
