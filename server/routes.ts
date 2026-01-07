@@ -8652,8 +8652,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         value,
         label: label || null,
         isPrimary: false,
+        isManual: true,
         createdAt: new Date(),
-      }).returning();
+      }).onConflictDoNothing().returning();
+      
+      if (!contact) {
+        return res.status(409).json({ message: "Este contato já existe para este cliente" });
+      }
       
       return res.json(contact);
     } catch (error) {
