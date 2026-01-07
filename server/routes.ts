@@ -10088,6 +10088,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         label: label?.trim() || null,
         value: value.trim(),
         isPrimary: isPrimary || false,
+        isManual: true,
         createdBy: userId,
       });
       

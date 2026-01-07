@@ -1283,6 +1283,7 @@ export const leadContacts = pgTable("lead_contacts", {
   label: varchar("label", { length: 100 }), // opcional - legado
   value: varchar("value", { length: 255 }).notNull(), // telefone/email/endereco
   isPrimary: boolean("is_primary").notNull().default(false),
+  isManual: boolean("is_manual").notNull().default(false), // Telefone adicionado manualmente (Hot)
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

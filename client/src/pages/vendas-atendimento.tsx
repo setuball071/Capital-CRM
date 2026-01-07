@@ -1300,9 +1300,14 @@ export default function VendasAtendimento() {
                           {leadContacts.map((contact) => (
                               <div 
                                 key={contact.id} 
-                                className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                                className={`flex items-center gap-2 p-2 border rounded text-sm hover-elevate ${contact.isManual ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30" : ""}`}
                                 data-testid={`contact-item-${contact.id}`}
                               >
+                                {contact.isManual && (
+                                  <Badge variant="secondary" className="bg-orange-500 text-white text-[10px] px-1.5 py-0 shrink-0">
+                                    Hot
+                                  </Badge>
+                                )}
                                 <span className="font-medium flex-1 truncate">
                                   {contact.type === "phone" ? formatPhone(contact.value) : contact.value}
                                 </span>
