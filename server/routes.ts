@@ -4418,9 +4418,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           RETURNING id
         ),
         -- 3. Deletar contacts: por import_run_id OU por base_tag
+        -- IMPORTANTE: Não deletar contatos manuais (is_manual = true) - estes devem persistir
         deleted_contacts AS (
           DELETE FROM client_contacts 
           WHERE client_id IN (SELECT id FROM tenant_pessoas)
+            AND (is_manual = false OR is_manual IS NULL)
             AND (
               import_run_id = ${runId}
               OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')

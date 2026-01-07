@@ -1781,10 +1781,12 @@ export class DbStorage implements IStorage {
       ),
       -- 3. Deletar contacts da base_tag que pertencem a pessoas do tenant
       -- NOTA: client_contacts usa client_id (não pessoa_id) como FK para clientes_pessoa
+      -- IMPORTANTE: Não deletar contatos manuais (is_manual = true) - estes devem persistir
       deleted_contacts AS (
         DELETE FROM client_contacts 
         WHERE base_tag = ${baseTag}
           AND client_id IN (SELECT id FROM tenant_pessoas)
+          AND (is_manual = false OR is_manual IS NULL)
         RETURNING id
       ),
       -- 4. Deletar vinculos da base_tag que pertencem ao tenant
