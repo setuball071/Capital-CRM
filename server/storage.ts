@@ -1175,20 +1175,40 @@ export class DbStorage implements IStorage {
       }
       
       // Filtro de quantidade de contratos via subquery
+      // Conta contratos do cliente na base especificada ou na base_tag_ultima do cliente
       if (filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined) {
         const minContratos = filtros.qtd_contratos_min ?? 0;
         const maxContratos = filtros.qtd_contratos_max;
         
-        if (maxContratos !== undefined) {
-          whereConditions.push(sql`(
-            SELECT COUNT(*) FROM clientes_contratos cc 
-            WHERE cc.pessoa_id = p.id
-          ) BETWEEN ${minContratos} AND ${maxContratos}`);
+        // Se base_tag for especificada, filtra apenas contratos dessa base específica
+        // Caso contrário, conta TODOS os contratos do cliente (comportamento original)
+        // Isso garante que "0 contratos" significa realmente nenhum contrato registrado
+        if (filtros.base_tag) {
+          // Filtrar por base específica
+          if (maxContratos !== undefined) {
+            whereConditions.push(sql`(
+              SELECT COUNT(*) FROM clientes_contratos cc 
+              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${filtros.base_tag}
+            ) BETWEEN ${minContratos} AND ${maxContratos}`);
+          } else {
+            whereConditions.push(sql`(
+              SELECT COUNT(*) FROM clientes_contratos cc 
+              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${filtros.base_tag}
+            ) >= ${minContratos}`);
+          }
         } else {
-          whereConditions.push(sql`(
-            SELECT COUNT(*) FROM clientes_contratos cc 
-            WHERE cc.pessoa_id = p.id
-          ) >= ${minContratos}`);
+          // Sem base específica: contar todos os contratos do cliente
+          if (maxContratos !== undefined) {
+            whereConditions.push(sql`(
+              SELECT COUNT(*) FROM clientes_contratos cc 
+              WHERE cc.pessoa_id = p.id
+            ) BETWEEN ${minContratos} AND ${maxContratos}`);
+          } else {
+            whereConditions.push(sql`(
+              SELECT COUNT(*) FROM clientes_contratos cc 
+              WHERE cc.pessoa_id = p.id
+            ) >= ${minContratos}`);
+          }
         }
       }
 

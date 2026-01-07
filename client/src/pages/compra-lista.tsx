@@ -20,6 +20,7 @@ import { ptBR } from "date-fns/locale";
 import { useLocation } from "wouter";
 
 interface Filtros {
+  base_tag?: string;
   convenio?: string;
   orgao?: string;
   uf?: string;
@@ -373,7 +374,11 @@ export default function CompraLista() {
       parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
     }
     if (f.qtd_contratos_min !== undefined || f.qtd_contratos_max !== undefined) {
-      parts.push(`Contratos: ${f.qtd_contratos_min ?? 0} - ${f.qtd_contratos_max ?? "∞"}`);
+      if (f.qtd_contratos_min === 0 && f.qtd_contratos_max === 0) {
+        parts.push("SEM CONTRATOS (0)");
+      } else {
+        parts.push(`Contratos: ${f.qtd_contratos_min ?? 0} - ${f.qtd_contratos_max ?? "∞"}`);
+      }
     }
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
   };
@@ -548,7 +553,25 @@ export default function CompraLista() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-xs">Qtd. Contratos</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Qtd. Contratos</Label>
+                      <Button
+                        type="button"
+                        variant={filtros.qtd_contratos_min === 0 && filtros.qtd_contratos_max === 0 ? "default" : "outline"}
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => {
+                          if (filtros.qtd_contratos_min === 0 && filtros.qtd_contratos_max === 0) {
+                            setFiltros({ ...filtros, qtd_contratos_min: undefined, qtd_contratos_max: undefined });
+                          } else {
+                            setFiltros({ ...filtros, qtd_contratos_min: 0, qtd_contratos_max: 0 });
+                          }
+                        }}
+                        data-testid="button-zero-contratos"
+                      >
+                        {filtros.qtd_contratos_min === 0 && filtros.qtd_contratos_max === 0 ? "0 Contratos" : "Sem Contratos"}
+                      </Button>
+                    </div>
                     <div className="flex gap-2">
                       <Input
                         type="number"
@@ -569,6 +592,12 @@ export default function CompraLista() {
                         className="w-1/2"
                       />
                     </div>
+                    {filtros.qtd_contratos_min === 0 && filtros.qtd_contratos_max === 0 && (
+                      <Badge variant="secondary" className="mt-1" data-testid="badge-zero-contratos">
+                        <AlertCircle className="w-3 h-3 mr-1" />
+                        Filtrando apenas clientes SEM contratos registrados
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="space-y-2">

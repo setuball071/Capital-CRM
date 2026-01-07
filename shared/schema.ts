@@ -733,6 +733,8 @@ export type UpdatePacotePreco = z.infer<typeof updatePacotePrecoSchema>;
 // ===== FILTROS PARA PEDIDOS LISTA =====
 
 export const filtrosPedidoListaSchema = z.object({
+  // Filtros de contexto (base para filtrar contratos)
+  base_tag: z.string().optional(),
   // Filtros de pessoa
   convenio: z.string().optional(),
   orgao: z.string().optional(),
