@@ -1,5 +1,5 @@
 import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot } from "lucide-react";
-import { GiWolfHowl } from "react-icons/gi";
+import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -80,9 +80,14 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component wrapper for lucide compatibility
+  // Wolf icon component using custom logo image - slightly larger than other icons
   const WolfIcon = ({ className }: { className?: string }) => (
-    <GiWolfHowl className={className} />
+    <img 
+      src={wolfLogoUrl} 
+      alt="Alpha" 
+      className={cn("w-5 h-5", className)}
+      style={{ filter: "brightness(0) invert(1)" }}
+    />
   );
 
   const menuSections: MenuSection[] = [
