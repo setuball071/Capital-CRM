@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/components/tenant-theme-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
+  const { tenant, logoLoginUrl, slogan, fontFamily, loginBgColor } = useTenant();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +36,6 @@ export default function LoginPage() {
         title: "Login realizado com sucesso!",
         description: "Redirecionando...",
       });
-      // Router will automatically redirect to "/" when user state is set
     } catch (error: any) {
       toast({
         title: "Erro ao fazer login",
@@ -46,13 +47,37 @@ export default function LoginPage() {
     }
   };
 
+  const systemName = tenant?.name || "CRM Pro";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ 
+        backgroundColor: loginBgColor,
+        fontFamily: fontFamily,
+      }}
+    >
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">CRM pro</CardTitle>
-          <CardDescription>
-            Entre com suas credenciais para acessar o sistema
+        <CardHeader className="space-y-1 text-center">
+          {logoLoginUrl && (
+            <div className="flex justify-center mb-4">
+              <img 
+                src={logoLoginUrl} 
+                alt={systemName} 
+                className="h-16 w-auto max-w-[200px] object-contain"
+                data-testid="img-login-logo"
+              />
+            </div>
+          )}
+          <CardTitle 
+            className="text-2xl font-bold"
+            style={{ fontFamily }}
+            data-testid="text-system-name"
+          >
+            {systemName}
+          </CardTitle>
+          <CardDescription style={{ fontFamily }}>
+            {slogan || "Entre com suas credenciais para acessar o sistema"}
           </CardDescription>
         </CardHeader>
         <CardContent>

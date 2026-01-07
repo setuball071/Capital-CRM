@@ -24,7 +24,10 @@ interface TenantBranding {
   key: string;
   name: string;
   logoUrl: string | null;
+  logoLoginUrl: string | null;
   faviconUrl: string | null;
+  slogan: string | null;
+  fontFamily: string | null;
   theme: TenantTheme | null;
 }
 
@@ -33,7 +36,10 @@ interface TenantApiResponse {
   key?: string;
   name?: string;
   logoUrl?: string | null;
+  logoLoginUrl?: string | null;
   faviconUrl?: string | null;
+  slogan?: string | null;
+  fontFamily?: string | null;
   theme?: TenantTheme | null;
   tenant?: null;
   development?: boolean;
@@ -44,7 +50,11 @@ interface TenantContextValue {
   tenant: TenantBranding | null;
   isLoading: boolean;
   logoUrl: string;
+  logoLoginUrl: string;
   faviconUrl: string;
+  slogan: string;
+  fontFamily: string;
+  loginBgColor: string;
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -150,12 +160,19 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
     key: rawData.key || "",
     name: rawData.name || "",
     logoUrl: rawData.logoUrl || null,
+    logoLoginUrl: rawData.logoLoginUrl || null,
     faviconUrl: rawData.faviconUrl || null,
+    slogan: rawData.slogan || null,
+    fontFamily: rawData.fontFamily || null,
     theme: rawData.theme || null,
   } : null;
   
   const logoUrl = tenant?.logoUrl || "/branding/logo.png";
+  const logoLoginUrl = tenant?.logoLoginUrl || tenant?.logoUrl || "/branding/logo.png";
   const faviconUrl = tenant?.faviconUrl || "/branding/favicon.png";
+  const slogan = tenant?.slogan || "";
+  const fontFamily = tenant?.fontFamily || "Inter";
+  const loginBgColor = (tenant?.theme as any)?.loginBgColor || "#1e293b";
   
   useEffect(() => {
     if (isLoading) return;
@@ -179,7 +196,16 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   }, [tenant?.name]);
   
   return (
-    <TenantContext.Provider value={{ tenant: tenant || null, isLoading, logoUrl, faviconUrl }}>
+    <TenantContext.Provider value={{ 
+      tenant: tenant || null, 
+      isLoading, 
+      logoUrl, 
+      logoLoginUrl,
+      faviconUrl,
+      slogan,
+      fontFamily,
+      loginBgColor,
+    }}>
       {children}
     </TenantContext.Provider>
   );

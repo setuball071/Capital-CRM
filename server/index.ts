@@ -69,6 +69,10 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Serve static files from uploads directory (for tenant logos)
+import nodePath from "path";
+app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
