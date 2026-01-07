@@ -80,13 +80,12 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component using custom logo image - slightly larger than other icons
+  // Wolf icon component using custom logo image - slightly larger than other icons (w-5 h-5 vs w-4 h-4 for others)
   const WolfIcon = ({ className }: { className?: string }) => (
     <img 
       src={wolfLogoUrl} 
       alt="Alpha" 
-      className={cn("w-5 h-5", className)}
-      style={{ filter: "brightness(0) invert(1)" }}
+      className={cn("w-5 h-5 shrink-0", className)}
     />
   );
 
