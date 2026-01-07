@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Filter, ChevronDown, ChevronUp
+  Plus, Pencil, Trash2, Save, SkipForward
 } from "lucide-react";
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
@@ -154,25 +154,12 @@ function CopyableField({
   );
 }
 
-const TIPOS_CLIENTE = ["todos", "servidor", "pensionista"] as const;
-type TipoCliente = typeof TIPOS_CLIENTE[number];
-
-const TIPO_CLIENTE_LABELS: Record<TipoCliente, string> = {
-  todos: "Todos",
-  servidor: "Servidor",
-  pensionista: "Pensionista",
-};
-
 export default function VendasConsulta() {
   const { toast } = useToast();
   const [termoBusca, setTermoBusca] = useState("");
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
-  
-  const [filtroSituacaoFuncional, setFiltroSituacaoFuncional] = useState<string>("todos");
-  const [filtroTipoCliente, setFiltroTipoCliente] = useState<TipoCliente>("todos");
-  const [mostrarFiltrosAvancados, setMostrarFiltrosAvancados] = useState(false);
   
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
@@ -221,13 +208,6 @@ export default function VendasConsulta() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const situacoesFuncionais = useMemo(() => {
-    if (!nomenclaturas) return [];
-    return nomenclaturas
-      .filter(n => n.categoria === "SIT_FUNC" && n.ativo)
-      .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [nomenclaturas]);
-
   const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
@@ -248,19 +228,12 @@ export default function VendasConsulta() {
   }, [consultaData?.clienteBase?.cpf]);
 
   const buscarMutation = useMutation({
-    mutationFn: async (params: { termo: string; situacaoFuncional?: string; tipoCliente?: string }) => {
-      const termoNormalizado = params.termo.replace(/\D/g, "");
+    mutationFn: async (termo: string) => {
+      const termoNormalizado = termo.replace(/\D/g, "");
       if (!termoNormalizado) {
         throw new Error("CPF ou Matrícula inválido");
       }
-      const body: any = { termo: termoNormalizado };
-      if (params.situacaoFuncional && params.situacaoFuncional !== "todos") {
-        body.situacaoFuncional = params.situacaoFuncional;
-      }
-      if (params.tipoCliente && params.tipoCliente !== "todos") {
-        body.tipoCliente = params.tipoCliente;
-      }
-      const res = await apiRequest("POST", "/api/vendas/consulta/buscar", body);
+      const res = await apiRequest("POST", "/api/vendas/consulta/buscar", { termo: termoNormalizado });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Cliente não encontrado");
@@ -420,11 +393,7 @@ export default function VendasConsulta() {
       toast({ title: "Atenção", description: "Digite CPF ou Matrícula", variant: "destructive" });
       return;
     }
-    buscarMutation.mutate({
-      termo: termoBusca.trim(),
-      situacaoFuncional: filtroSituacaoFuncional,
-      tipoCliente: filtroTipoCliente,
-    });
+    buscarMutation.mutate(termoBusca.trim());
   };
 
   const handleCopyPhone = async (phone: string) => {
@@ -513,61 +482,6 @@ export default function VendasConsulta() {
                   Consultar
                 </Button>
               </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMostrarFiltrosAvancados(!mostrarFiltrosAvancados)}
-                className="w-full justify-center text-muted-foreground"
-                data-testid="button-toggle-filtros"
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros Avançados
-                {mostrarFiltrosAvancados ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
-              </Button>
-              
-              {mostrarFiltrosAvancados && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Situação Funcional</Label>
-                    <Select
-                      value={filtroSituacaoFuncional}
-                      onValueChange={setFiltroSituacaoFuncional}
-                    >
-                      <SelectTrigger data-testid="select-situacao-funcional">
-                        <SelectValue placeholder="Todas as situações" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todas as Situações</SelectItem>
-                        {situacoesFuncionais.map((sit) => (
-                          <SelectItem key={sit.codigo} value={sit.codigo}>
-                            {sit.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Tipo de Cliente</Label>
-                    <Select
-                      value={filtroTipoCliente}
-                      onValueChange={(v) => setFiltroTipoCliente(v as TipoCliente)}
-                    >
-                      <SelectTrigger data-testid="select-tipo-cliente">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIPOS_CLIENTE.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {TIPO_CLIENTE_LABELS[tipo]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
