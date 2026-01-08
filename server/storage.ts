@@ -877,7 +877,7 @@ export class DbStorage implements IStorage {
           eq(roteirosBancarios.tipoOperacao, tipoOperacao)
         ));
       
-      // Extract dados from roteiro
+      // Extract dados from roteiro (complete structure with new fields)
       const dados = {
         publico_alvo: roteiro.publico_alvo || [],
         publico_nao_atendido: roteiro.publico_nao_atendido || [],
@@ -887,6 +887,10 @@ export class DbStorage implements IStorage {
         portais_acesso: roteiro.portais_acesso || [],
         regras_especiais: roteiro.regras_especiais || [],
         detalhes_adicionais: roteiro.detalhes_adicionais || [],
+        flags_operacionais: roteiro.flags_operacionais || {},
+        limites_por_subgrupo: roteiro.limites_por_subgrupo || [],
+        perguntas_frequentes_mapeadas: roteiro.perguntas_frequentes_mapeadas || [],
+        metadados_busca: roteiro.metadados_busca || {},
       };
       
       // Insert new record

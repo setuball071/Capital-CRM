@@ -267,7 +267,7 @@ export const faixaIdadeSchema = z.object({
   idade_minima: z.number().nullable(),
   idade_maxima: z.number().nullable(),
   limite_parcela: z.number().nullable(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().default(""),
 });
 
 // Schema for limites operacionais
@@ -275,47 +275,96 @@ export const limitesOperacionaisSchema = z.object({
   prazo_minimo_meses: z.number().nullable(),
   prazo_maximo_meses: z.number().nullable(),
   parcela_minima: z.number().nullable(),
-  valor_minimo_liberado: z.string().optional(),
-  margem_especifica: z.string().optional(),
+  valor_minimo_liberado: z.string().optional().default(""),
+  margem_especifica: z.string().optional().default(""),
   margem_negativa_permitida: z.boolean().nullable(),
-  descricao_margem_negativa: z.string().optional(),
+  descricao_margem_negativa: z.string().optional().default(""),
 });
 
 // Schema for portal de acesso
 export const portalAcessoSchema = z.object({
-  orgao_ou_segmento: z.string().optional(),
-  nome_portal: z.string().optional(),
-  link_portal: z.string().optional(),
-  instrucoes_acesso: z.string().optional(),
-  observacoes: z.string().optional(),
+  orgao_ou_segmento: z.string().optional().default(""),
+  nome_portal: z.string().optional().default(""),
+  link_portal: z.string().optional().default(""),
+  instrucoes_acesso: z.string().optional().default(""),
+  observacoes: z.string().optional().default(""),
 });
 
-// Schema for dados field in roteiro bancário
+// Schema for flags operacionais (boolean indicators)
+export const flagsOperacionaisSchema = z.object({
+  aceita_spc_serasa: z.boolean().nullable(),
+  aceita_acao_judicial: z.boolean().nullable(),
+  aceita_margem_zerada: z.boolean().nullable(),
+  aceita_margem_negativa: z.boolean().nullable(),
+  aceita_clt: z.boolean().nullable(),
+  aceita_temporario: z.boolean().nullable(),
+  aceita_pensionista_temporario: z.boolean().nullable(),
+  aceita_procuracao: z.boolean().nullable(),
+  aceita_analfabeto: z.boolean().nullable(),
+  exige_senha_averbacao: z.boolean().nullable(),
+  pagamento_somente_conta_contracheque: z.boolean().nullable(),
+});
+
+// Schema for limites por subgrupo
+export const limiteSubgrupoSchema = z.object({
+  subgrupo: z.string().optional().default(""),
+  prazo_maximo_meses: z.number().nullable(),
+  idade_maxima: z.number().nullable(),
+  margem_seguranca: z.string().optional().default(""),
+  tabela_especifica: z.string().optional().default(""),
+  observacoes: z.string().optional().default(""),
+});
+
+// Schema for perguntas frequentes mapeadas
+export const perguntaFrequenteSchema = z.object({
+  pergunta: z.string().optional().default(""),
+  resposta: z.string().optional().default(""),
+});
+
+// Schema for metadados de busca (AI search optimization)
+export const metadadosBuscaSchema = z.object({
+  produto: z.string().optional().default(""),
+  convenio_principal: z.string().optional().default(""),
+  publico_chave: z.array(z.string()).optional().default([]),
+  risco_operacional: z.string().optional().default(""),
+  complexidade_operacional: z.string().optional().default(""),
+  exige_analise_manual: z.boolean().nullable(),
+});
+
+// Schema for dados field in roteiro bancário (complete structure)
 export const roteiroDadosSchema = z.object({
-  publico_alvo: z.array(z.string()).optional(),
-  publico_nao_atendido: z.array(z.string()).optional(),
-  faixas_idade: z.array(faixaIdadeSchema).optional(),
+  publico_alvo: z.array(z.string()).optional().default([]),
+  publico_nao_atendido: z.array(z.string()).optional().default([]),
+  faixas_idade: z.array(faixaIdadeSchema).optional().default([]),
   limites_operacionais: limitesOperacionaisSchema.optional(),
-  documentacao_obrigatoria: z.array(z.string()).optional(),
-  portais_acesso: z.array(portalAcessoSchema).optional(),
-  regras_especiais: z.array(z.string()).optional(),
-  detalhes_adicionais: z.array(z.string()).optional(),
+  documentacao_obrigatoria: z.array(z.string()).optional().default([]),
+  portais_acesso: z.array(portalAcessoSchema).optional().default([]),
+  regras_especiais: z.array(z.string()).optional().default([]),
+  detalhes_adicionais: z.array(z.string()).optional().default([]),
+  flags_operacionais: flagsOperacionaisSchema.optional(),
+  limites_por_subgrupo: z.array(limiteSubgrupoSchema).optional().default([]),
+  perguntas_frequentes_mapeadas: z.array(perguntaFrequenteSchema).optional().default([]),
+  metadados_busca: metadadosBuscaSchema.optional(),
 });
 
-// Schema for individual roteiro in import
+// Schema for individual roteiro in import (complete structure)
 export const roteiroImportItemSchema = z.object({
   banco: z.string().min(1, { message: "Banco é obrigatório" }),
   convenio: z.string().min(1, { message: "Convênio é obrigatório" }),
-  segmento: z.string().optional(),
+  segmento: z.string().optional().default(""),
   tipo_operacao: z.string().optional().default("Não especificado"),
-  publico_alvo: z.array(z.string()).optional(),
-  publico_nao_atendido: z.array(z.string()).optional(),
-  faixas_idade: z.array(faixaIdadeSchema).optional(),
+  publico_alvo: z.array(z.string()).optional().default([]),
+  publico_nao_atendido: z.array(z.string()).optional().default([]),
+  faixas_idade: z.array(faixaIdadeSchema).optional().default([]),
   limites_operacionais: limitesOperacionaisSchema.optional(),
-  documentacao_obrigatoria: z.array(z.string()).optional(),
-  portais_acesso: z.array(portalAcessoSchema).optional(),
-  regras_especiais: z.array(z.string()).optional(),
-  detalhes_adicionais: z.array(z.string()).optional(),
+  documentacao_obrigatoria: z.array(z.string()).optional().default([]),
+  portais_acesso: z.array(portalAcessoSchema).optional().default([]),
+  regras_especiais: z.array(z.string()).optional().default([]),
+  detalhes_adicionais: z.array(z.string()).optional().default([]),
+  flags_operacionais: flagsOperacionaisSchema.optional(),
+  limites_por_subgrupo: z.array(limiteSubgrupoSchema).optional().default([]),
+  perguntas_frequentes_mapeadas: z.array(perguntaFrequenteSchema).optional().default([]),
+  metadados_busca: metadadosBuscaSchema.optional(),
 });
 
 // Schema for import JSON request
@@ -326,6 +375,10 @@ export const roteirosImportSchema = z.object({
 export type RoteiroImportItem = z.infer<typeof roteiroImportItemSchema>;
 export type RoteirosImport = z.infer<typeof roteirosImportSchema>;
 export type RoteiroDados = z.infer<typeof roteiroDadosSchema>;
+export type FlagsOperacionais = z.infer<typeof flagsOperacionaisSchema>;
+export type LimiteSubgrupo = z.infer<typeof limiteSubgrupoSchema>;
+export type PerguntaFrequente = z.infer<typeof perguntaFrequenteSchema>;
+export type MetadadosBusca = z.infer<typeof metadadosBuscaSchema>;
 
 // ===== SELECT TYPES =====
 

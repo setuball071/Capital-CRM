@@ -350,7 +350,7 @@ export default function RoteirosPage() {
             <DialogHeader>
               <DialogTitle>Importar Roteiros</DialogTitle>
               <DialogDescription>
-                Cole o JSON dos roteiros ou envie um arquivo .json
+                Cole o JSON dos roteiros ou envie um arquivo .json. Use o formato expandido com flags_operacionais, limites_por_subgrupo, perguntas_frequentes e metadados_busca.
               </DialogDescription>
             </DialogHeader>
             
