@@ -53,16 +53,14 @@ import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission,
 import { Separator } from "@/components/ui/separator";
 import { Building2 } from "lucide-react";
 
+// Module translations - ordered to match sidebar menu
 const MODULE_TRANSLATIONS: Record<string, string> = {
-  modulo_simulador: "CRM pro",
-  modulo_roteiros: "Roteiro Bancário",
+  modulo_simulador: "Simuladores",
+  modulo_roteiros: "Operacional",
   modulo_base_clientes: "Base de Clientes",
-  modulo_compra_lista: "Compra de Lista",
-  modulo_crm_vendas_campanhas: "CRM Campanhas",
-  modulo_crm_vendas_atendimento: "CRM Atendimento",
-  modulo_academia: "Academia",
-  modulo_config_usuarios: "Config. Usuários",
-  modulo_config_precos: "Config. Preços",
+  modulo_config_usuarios: "Administração",
+  modulo_academia: "Treinamento",
+  modulo_alpha: "ALPHA",
 };
 
 type PermissionState = { module: string; canView: boolean; canEdit: boolean; canDelegate: boolean };

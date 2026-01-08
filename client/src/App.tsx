@@ -253,16 +253,16 @@ function Router() {
                 {() => <ModuleRoute component={DividirCsvPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/compra-lista">
-                {() => <ModuleRoute component={CompraListaPage} module="modulo_compra_lista" />}
+                {() => <ModuleRoute component={CompraListaPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/consulta-cliente">
                 {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/admin-pedidos-lista">
-                {() => <ModuleRoute component={AdminPedidosListaPage} module="modulo_compra_lista" />}
+                {() => <ModuleRoute component={AdminPedidosListaPage} module="modulo_base_clientes" accessType="edit" />}
               </Route>
               <Route path="/config-precos">
-                {() => <ModuleRoute component={ConfigPrecosPage} module="modulo_config_precos" />}
+                {() => <ModuleRoute component={ConfigPrecosPage} module="modulo_config_usuarios" accessType="edit" />}
               </Route>
               <Route path="/academia/fundamentos">
                 {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
@@ -280,22 +280,22 @@ function Router() {
                 {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
               </Route>
               <Route path="/vendas/campanhas">
-                {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_crm_vendas_campanhas" />}
+                {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/atendimento">
-                {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_crm_vendas_atendimento" />}
+                {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/agenda">
-                {() => <ModuleRoute component={VendasAgendaPage} module="modulo_crm_vendas_atendimento" />}
+                {() => <ModuleRoute component={VendasAgendaPage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/pipeline">
-                {() => <ModuleRoute component={VendasPipelinePage} module="modulo_crm_vendas_atendimento" />}
+                {() => <ModuleRoute component={VendasPipelinePage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/gestao-pipeline">
-                {() => <ModuleRoute component={VendasGestaoPipelinePage} module="modulo_crm_vendas_campanhas" />}
+                {() => <ModuleRoute component={VendasGestaoPipelinePage} module="modulo_alpha" accessType="edit" />}
               </Route>
               <Route path="/vendas/consulta">
-                {() => <ModuleRoute component={VendasConsultaPage} module="modulo_crm_vendas_atendimento" />}
+                {() => <ModuleRoute component={VendasConsultaPage} module="modulo_alpha" />}
               </Route>
               <Route path="/config-prompts">
                 {() => <ProtectedRoute component={ConfigPromptsPage} />}

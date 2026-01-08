@@ -48,6 +48,25 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
 
 The architecture emphasizes client-side calculations for performance and determinism, a modular design for extensibility (e.g., `IStorage` interface), and robust authentication/authorization with granular control. AI integration is central to advanced features like intelligent search, sales training, and CRM functionalities.
 
+### Permission System (Updated 2026-01-08)
+
+The application uses a profile-based permission system with the following modules:
+
+| Module Key | Display Name | Description |
+|------------|-------------|-------------|
+| modulo_simulador | Simuladores | Credit simulators (purchase, amortization, portability) |
+| modulo_roteiros | Operacional | Bank procedures/scripts management |
+| modulo_base_clientes | Base de Clientes | Client database import, consultation, list purchases |
+| modulo_config_usuarios | Administração | User management, pricing configuration |
+| modulo_academia | Treinamento | Sales training (fundamentals, quiz, roleplay, scripts) |
+| modulo_alpha | ALPHA | Sales CRM (campaigns, pipeline, lead management) |
+
+**Key permission behaviors:**
+- `isMaster=true` flag grants full access (only global bypass)
+- Non-master users require explicit profile permissions for each module
+- Migration function in `server/seed.ts` automatically converts legacy module permissions to new structure
+- Removed modules: `modulo_compra_lista` (→ modulo_base_clientes), `modulo_crm_vendas_*` (→ modulo_alpha), `modulo_config_precos` (→ modulo_config_usuarios)
+
 ## External Dependencies
 
 ### Third-Party UI Libraries

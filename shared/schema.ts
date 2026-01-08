@@ -1223,16 +1223,17 @@ export type TipoContato = keyof typeof TIPOS_CONTATO;
 
 // ===== USER PERMISSIONS =====
 
+// Module list - ordered to match sidebar menu
+// Removed: modulo_compra_lista (future sub-permission of modulo_base_clientes)
+// Removed: modulo_crm_vendas_campanhas, modulo_crm_vendas_atendimento (reorganized into modulo_alpha)
+// Removed: modulo_config_precos (future sub-permission of modulo_config_usuarios)
 export const MODULE_LIST = [
-  "modulo_simulador",
-  "modulo_roteiros",
-  "modulo_base_clientes",
-  "modulo_compra_lista",
-  "modulo_crm_vendas_campanhas",
-  "modulo_crm_vendas_atendimento",
-  "modulo_academia",
-  "modulo_config_usuarios",
-  "modulo_config_precos",
+  "modulo_simulador",        // Simuladores
+  "modulo_roteiros",         // Operacional
+  "modulo_base_clientes",    // Base de Clientes
+  "modulo_config_usuarios",  // Administração
+  "modulo_academia",         // Treinamento
+  "modulo_alpha",            // ALPHA (new - consolidates CRM features)
 ] as const;
 
 export type ModuleName = typeof MODULE_LIST[number];

@@ -2,8 +2,18 @@ import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { log } from "./vite";
 import { db } from "./storage";
-import { nomenclaturas } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { nomenclaturas, userPermissions } from "@shared/schema";
+import { eq, and, or, inArray } from "drizzle-orm";
+
+// Module migration mapping: old module name -> new module name
+const MODULE_MIGRATION_MAP: Record<string, string> = {
+  modulo_compra_lista: "modulo_base_clientes",
+  modulo_crm_vendas_campanhas: "modulo_alpha",
+  modulo_crm_vendas_atendimento: "modulo_alpha",
+  modulo_config_precos: "modulo_config_usuarios",
+  modulo_crm_admin: "modulo_alpha",
+  modulo_crm: "modulo_alpha",
+};
 
 // Lista de bancos brasileiros válidos para seed
 const BANCOS_BRASILEIROS = [
@@ -113,8 +123,72 @@ export async function seedDatabase() {
     // Seed de bancos na tabela de nomenclaturas
     await seedBancos();
     
+    // Migrate old module permissions to new structure
+    await migrateModulePermissions();
+    
   } catch (error) {
     console.error("Erro seed:", error);
+  }
+}
+
+// Migrate old module permissions to new module structure
+async function migrateModulePermissions() {
+  try {
+    const oldModules = Object.keys(MODULE_MIGRATION_MAP);
+    
+    // Find all permissions with old module names
+    const oldPermissions = await db.select()
+      .from(userPermissions)
+      .where(inArray(userPermissions.module, oldModules));
+    
+    if (oldPermissions.length === 0) {
+      return;
+    }
+    
+    log(`Migrando ${oldPermissions.length} permissões de módulos antigos...`);
+    
+    for (const perm of oldPermissions) {
+      const newModule = MODULE_MIGRATION_MAP[perm.module];
+      if (!newModule) continue;
+      
+      // Check if user already has permission for new module
+      const [existing] = await db.select()
+        .from(userPermissions)
+        .where(and(
+          eq(userPermissions.userId, perm.userId),
+          eq(userPermissions.module, newModule)
+        ));
+      
+      if (existing) {
+        // Merge permissions (OR the flags)
+        await db.update(userPermissions)
+          .set({
+            canView: existing.canView || perm.canView,
+            canEdit: existing.canEdit || perm.canEdit,
+            canDelegate: existing.canDelegate || perm.canDelegate,
+          })
+          .where(eq(userPermissions.id, existing.id));
+      } else {
+        // Create new permission with new module name
+        await db.insert(userPermissions)
+          .values({
+            userId: perm.userId,
+            module: newModule,
+            canView: perm.canView,
+            canEdit: perm.canEdit,
+            canDelegate: perm.canDelegate,
+          })
+          .onConflictDoNothing();
+      }
+      
+      // Delete old permission
+      await db.delete(userPermissions)
+        .where(eq(userPermissions.id, perm.id));
+    }
+    
+    log(`Migração de permissões concluída.`);
+  } catch (error) {
+    console.error("Erro ao migrar permissões:", error);
   }
 }
 

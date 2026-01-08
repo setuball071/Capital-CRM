@@ -32,16 +32,14 @@ interface MenuSection {
   }[];
 }
 
+// Module URL mapping - matches new module structure
 const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-amortizacao", "/simulador-portabilidade"],
   modulo_roteiros: ["/roteiros"],
-  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv"],
-  modulo_compra_lista: ["/compra-lista"],
-  modulo_crm_vendas_campanhas: ["/vendas/campanhas", "/vendas/gestao-pipeline"],
-  modulo_crm_vendas_atendimento: ["/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta"],
-  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin"],
-  modulo_config_usuarios: ["/users"],
-  modulo_config_precos: ["/config-precos", "/pricing"],
+  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv"],
+  modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista"],
+  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts"],
+  modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline"],
 };
 
 function getModuleForUrl(url: string): string | undefined {
@@ -124,7 +122,7 @@ export function AppSidebar() {
       items: [
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes" },
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
-        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_compra_lista" },
+        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes" },
         { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes" },
       ],
     },
@@ -135,7 +133,7 @@ export function AppSidebar() {
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, masterOnly: true },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },
-        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_precos" },
+        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_usuarios" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },
       ],
@@ -155,12 +153,12 @@ export function AppSidebar() {
       title: "ALPHA",
       icon: WolfIcon,
       items: [
-        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_crm_vendas_campanhas" },
-        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_crm_vendas_atendimento" },
-        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_crm_vendas_atendimento" },
-        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_crm_vendas_atendimento" },
-        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_crm_vendas_atendimento" },
-        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_crm_vendas_campanhas", masterOnly: false },
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha" },
+        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha" },
+        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha" },
+        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha" },
+        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha" },
+        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha" },
       ],
     },
   ];

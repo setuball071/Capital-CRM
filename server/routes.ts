@@ -6374,7 +6374,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== PRICING SETTINGS ENDPOINTS (MODELO DE PACOTES) =====
 
   // GET pricing settings - Master only - Retorna tabela de pacotes
-  app.get("/api/pricing-settings", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
+  app.get("/api/pricing-settings", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
     try {
       const pacotes = await getPacotesPreco();
       
@@ -6399,7 +6399,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET all pacotes from database (for admin editing)
-  app.get("/api/pacotes-preco/all", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
+  app.get("/api/pacotes-preco/all", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
     try {
       const result = await db
         .select()
@@ -6413,7 +6413,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // PUT update a pacote - Master only
-  app.put("/api/pacotes-preco/:id", requireAuth, requireModuleAccess("modulo_config_precos"), async (req, res) => {
+  app.put("/api/pacotes-preco/:id", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -6455,7 +6455,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== PEDIDOS LISTA ENDPOINTS =====
 
   // POST simular pedido de lista - MASTER ONLY
-  app.post("/api/pedidos-lista/simular", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.post("/api/pedidos-lista/simular", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
@@ -6502,7 +6502,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST criar pedido de lista - MASTER ONLY
-  app.post("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.post("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
 
       const result = filtrosPedidoListaSchema.safeParse(req.body.filtros || req.body);
@@ -6578,7 +6578,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET pedidos de lista - MASTER ONLY
-  app.get("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.get("/api/pedidos-lista", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       // Master sees all
       const pedidos = await storage.getAllPedidosLista();
@@ -6593,7 +6593,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
   
   // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY
-  app.get("/api/pedidos-lista/admin", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.get("/api/pedidos-lista/admin", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
 
       const pedidos = await storage.getAllPedidosListaWithUser();
@@ -6623,7 +6623,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/pedidos-lista/:id/aprovar - Aprovar pedido - MASTER ONLY
-  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.post("/api/pedidos-lista/:id/aprovar", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
 
       const id = parseInt(req.params.id);
@@ -6747,7 +6747,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   }
 
   // GET /api/pedidos-lista/:id/download - Download generated file - MASTER ONLY
-  app.get("/api/pedidos-lista/:id/download", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.get("/api/pedidos-lista/:id/download", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -6844,7 +6844,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // POST /api/pedidos-lista/:id/rejeitar - Rejeitar pedido - MASTER ONLY
-  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, requireModuleAccess("modulo_compra_lista"), async (req, res) => {
+  app.post("/api/pedidos-lista/:id/rejeitar", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
 
       const id = parseInt(req.params.id);
@@ -8131,8 +8131,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== CRM DE VENDAS =====
   
-  // Middleware para acesso administrativo ao CRM - REFACTORED to use profile-based permissions
-  // Now checks for modulo_crm_admin permission instead of role
+  // Middleware para acesso administrativo ao ALPHA - REFACTORED to use profile-based permissions
+  // Now checks for modulo_alpha permission with edit access
   async function requireCRMAdmin(req: Request, res: Response, next: NextFunction) {
     if (!req.user) {
       return res.status(401).json({ message: "Não autorizado" });
@@ -8140,29 +8140,29 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     
     // isMaster has full access
     if (req.user.isMaster) {
-      logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", true, "isMaster=true");
+      logPermissionCheck(req.user.id, req.user.name, "modulo_alpha", "edit", true, "isMaster=true");
       return next();
     }
     
-    // Check profile-based permission for CRM admin
-    const hasAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_crm_admin");
+    // Check profile-based permission for ALPHA admin (edit access)
+    const hasAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_alpha");
     if (!hasAccess) {
-      logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", false, "No profile permission");
-      return res.status(403).json({ message: "Acesso negado - você não tem permissão de administração do CRM" });
+      logPermissionCheck(req.user.id, req.user.name, "modulo_alpha", "edit", false, "No profile permission");
+      return res.status(403).json({ message: "Acesso negado - você não tem permissão de administração do ALPHA" });
     }
     
-    logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", true, "Profile permission granted");
+    logPermissionCheck(req.user.id, req.user.name, "modulo_alpha", "edit", true, "Profile permission granted");
     next();
   }
   
   // GET /api/vendas/campanhas - Listar campanhas
-  // REFACTORED: Uses profile-based permission modulo_crm
+  // REFACTORED: Uses profile-based permission modulo_alpha
   app.get("/api/vendas/campanhas", requireAuth, async (req, res) => {
     try {
-      // Check permission: isMaster or modulo_crm access
-      const hasAccess = req.user!.isMaster || await storage.hasModuleAccess(req.user!.id, "modulo_crm");
+      // Check permission: isMaster or modulo_alpha access
+      const hasAccess = req.user!.isMaster || await storage.hasModuleAccess(req.user!.id, "modulo_alpha");
       if (!hasAccess) {
-        logPermissionCheck(req.user!.id, req.user!.name, "modulo_crm", "view", false, "No permission for campanhas");
+        logPermissionCheck(req.user!.id, req.user!.name, "modulo_alpha", "view", false, "No permission for campanhas");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -9229,10 +9229,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Atendimento não encontrado" });
       }
       
-      // Verify ownership - REFACTORED: Use isMaster or modulo_crm permission
-      const canViewOthers = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_crm");
+      // Verify ownership - REFACTORED: Use isMaster or modulo_alpha permission
+      const canViewOthers = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_alpha");
       if (result.assignment.userId !== userId && !canViewOthers) {
-        logPermissionCheck(userId, req.user!.name, "modulo_crm", "edit", false, "Cannot view other user's assignment");
+        logPermissionCheck(userId, req.user!.name, "modulo_alpha", "edit", false, "Cannot view other user's assignment");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -9432,10 +9432,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Atendimento não encontrado" });
       }
       
-      // Verify ownership - REFACTORED: Use isMaster or modulo_crm permission
-      const canViewOthersAssignment = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_crm");
+      // Verify ownership - REFACTORED: Use isMaster or modulo_alpha permission
+      const canViewOthersAssignment = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_alpha");
       if (result.assignment.userId !== userId && !canViewOthersAssignment) {
-        logPermissionCheck(userId, req.user!.name, "modulo_crm", "edit", false, "Cannot view other user's assignment");
+        logPermissionCheck(userId, req.user!.name, "modulo_alpha", "edit", false, "Cannot view other user's assignment");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
