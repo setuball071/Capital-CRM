@@ -1,0 +1,213 @@
+{
+"roteiros": [
+{
+"banco": "PH Tech",
+"convenio": "GOV_SP",
+"segmento": "Servidor Estadual",
+"tipo_operacao": "cartao_beneficio",
+"publico_alvo": [
+"Servidores efetivos ativos (VINC 7)",
+"Servidores estatutários (VINC 16)",
+"Servidores concursados (VINC 2)",
+"Servidores inativos (VINC 1)",
+"Pensão especial (VINC 9)",
+"Complemento de pensão (VINC 30)",
+"Complemento de aposentadoria (VINC 29)",
+"Servidores com estabilidade constitucional Lei 500/74 (VINC 8)",
+"Servidores celetistas (VINC 4) com mínimo de 3 anos de admissão",
+"Servidores das autarquias atendidas: AGEM, AGEMCAMP, ARSESP, ARTESP, DAEE, DER, DETRAN, HCFMB, HCFMUSP, HCRP, IMESC, SEFAZ, PMESP",
+"Servidores das autarquias atendidas: ALESP, CBPM, Centro Paula Souza, FOSP, IPESP, MPESP, PGE, SEADE, TCE, TJM, HCFAMEMA"
+],
+"publico_nao_atendido": [
+"Comissionados",
+"Cedidos",
+"Temporários",
+"Guarda especial temporário",
+"Estagiários",
+"Requisitados",
+"Contratados",
+"Procuração, curatela ou tutela",
+"Analfabetos ou assinatura a rogo",
+"Clientes com restrição judicial",
+"Vínculos não previstos neste roteiro"
+],
+"faixas_idade": [
+{
+"idade_minima": null,
+"idade_maxima": 74,
+"limite_parcela": null,
+"observacoes": "Servidores estatutários, efetivos e Lei 500/74: término do contrato até 74 anos, 11 meses e 29 dias, prazo 96 meses, PMT mínima R$ 50,00 e valor máximo de contrato R$ 80.000,00."
+},
+{
+"idade_minima": null,
+"idade_maxima": 63,
+"limite_parcela": null,
+"observacoes": "Servidores celetistas: término do contrato até 63 anos, 11 meses e 29 dias, prazo 96 meses, PMT mínima R$ 50,00 e valor máximo de contrato R$ 80.000,00. Desconto do INSS em folha."
+}
+],
+"limites_operacionais": {
+"prazo_minimo_meses": 96,
+"prazo_maximo_meses": 96,
+"parcela_minima": 50.0,
+"valor_minimo_liberado": "R$ 500,00",
+"margem_especifica": "Utilizar até 98% da margem consignável disponível",
+"margem_negativa_permitida": null,
+"descricao_margem_negativa": ""
+},
+"documentacao_obrigatoria": [
+"Documento oficial de identificação com foto (RG, CNH, RNE, Carteira Funcional, Carteira Militar ou Passaporte)",
+"CPF",
+"Comprovante de renda (último contracheque ou os 3 últimos, conforme necessidade)"
+],
+"portais_acesso": [
+{
+"orgao_ou_segmento": "Governo do Estado de São Paulo",
+"nome_portal": "Portal do Consignado",
+"link_portal": "https://www.portaldoconsignado.org.br/home",
+"instrucoes_acesso": "Servidor deve autorizar no portal a consulta de margem, oscilação da margem bruta e dados funcionais.",
+"observacoes": ""
+}
+],
+"regras_especiais": [
+"Data de corte: dia 10",
+"Permitido 1 contrato por modalidade e por matrícula",
+"Limite de saque: 100% do limite destinado para saque",
+"Margem de segurança: utilizar até 98% da margem disponível"
+],
+"detalhes_adicionais": [
+"Roteiro Externo – Governo do Estado de São Paulo – Cartão Benefício",
+"Versão 2025_01 – Atualizado em 01/10/2025",
+"Publicação inicial em 28/07/2025",
+"Inclusão do órgão PMESP em 01/10/2025"
+],
+"flags_operacionais": {
+"aceita_spc_serasa": null,
+"aceita_acao_judicial": false,
+"aceita_margem_zerada": true,
+"aceita_margem_negativa": null,
+"aceita_clt": true,
+"aceita_temporario": false,
+"aceita_pensionista_temporario": false,
+"aceita_procuracao": false,
+"aceita_analfabeto": false,
+"exige_senha_averbacao": true,
+"pagamento_somente_conta_contracheque": true
+},
+"limites_por_subgrupo": [],
+"perguntas_frequentes_mapeadas": [],
+"metadados_busca": {
+"produto": "cartao_beneficio",
+"convenio_principal": "GOV_SP",
+"publico_chave": [
+"estatutario",
+"celetista",
+"aposentado",
+"pensionista"
+],
+"risco_operacional": "medio",
+"complexidade_operacional": "media",
+"exige_analise_manual": true
+}
+},
+{
+"banco": "PH Tech",
+"convenio": "GOV_SP",
+"segmento": "Servidor Estadual",
+"tipo_operacao": "cartao_consignado",
+"publico_alvo": [
+"Servidores efetivos ativos (VINC 7)",
+"Servidores estatutários (VINC 16)",
+"Servidores concursados (VINC 2)",
+"Servidores inativos (VINC 1)",
+"Servidores com estabilidade constitucional Lei 500/74 (VINC 8)",
+"Servidores celetistas (VINC 4) com mínimo de 3 anos de admissão"
+],
+"publico_nao_atendido": [
+"Comissionados",
+"Cedidos",
+"Temporários",
+"Guarda especial temporário",
+"Estagiários",
+"Requisitados",
+"Contratados",
+"Procuração, curatela ou tutela",
+"Analfabetos ou assinatura a rogo",
+"Clientes com restrição judicial",
+"Vínculos não previstos neste roteiro"
+],
+"faixas_idade": [
+{
+"idade_minima": null,
+"idade_maxima": 74,
+"limite_parcela": null,
+"observacoes": "Servidores estatutários, efetivos e Lei 500/74: término do contrato até 74 anos, 11 meses e 29 dias."
+},
+{
+"idade_minima": null,
+"idade_maxima": 63,
+"limite_parcela": null,
+"observacoes": "Servidores celetistas: término do contrato até 63 anos, 11 meses e 29 dias."
+}
+],
+"limites_operacionais": {
+"prazo_minimo_meses": 96,
+"prazo_maximo_meses": 96,
+"parcela_minima": 50.0,
+"valor_minimo_liberado": "R$ 500,00",
+"margem_especifica": "Utilizar até 98% da margem consignável disponível",
+"margem_negativa_permitida": null,
+"descricao_margem_negativa": ""
+},
+"documentacao_obrigatoria": [
+"Documento oficial de identificação com foto",
+"CPF",
+"Comprovante de renda (contracheque)"
+],
+"portais_acesso": [
+{
+"orgao_ou_segmento": "Governo do Estado de São Paulo",
+"nome_portal": "Portal do Consignado",
+"link_portal": "https://www.portaldoconsignado.org.br/home",
+"instrucoes_acesso": "Servidor deve autorizar no portal a consulta de margem, oscilação da margem bruta e dados funcionais.",
+"observacoes": ""
+}
+],
+"regras_especiais": [
+"Data de corte: dia 10",
+"Permitido 1 contrato por modalidade e por matrícula",
+"Margem de segurança: utilizar até 98% da margem disponível"
+],
+"detalhes_adicionais": [
+"Roteiro Externo – Governo do Estado de São Paulo – Cartão Consignado",
+"Versão 2025_01 – Atualizado em 01/10/2025"
+],
+"flags_operacionais": {
+"aceita_spc_serasa": null,
+"aceita_acao_judicial": false,
+"aceita_margem_zerada": true,
+"aceita_margem_negativa": null,
+"aceita_clt": true,
+"aceita_temporario": false,
+"aceita_pensionista_temporario": false,
+"aceita_procuracao": false,
+"aceita_analfabeto": false,
+"exige_senha_averbacao": true,
+"pagamento_somente_conta_contracheque": true
+},
+"limites_por_subgrupo": [],
+"perguntas_frequentes_mapeadas": [],
+"metadados_busca": {
+"produto": "cartao_consignado",
+"convenio_principal": "GOV_SP",
+"publico_chave": [
+"estatutario",
+"celetista",
+"aposentado"
+],
+"risco_operacional": "medio",
+"complexidade_operacional": "media",
+"exige_analise_manual": true
+}
+}
+]
+}
