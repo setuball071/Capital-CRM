@@ -1,0 +1,154 @@
+{
+  "roteiros": [
+    {
+      "banco": "CAPITAL CONSIG",
+      "convenio": "GOV_SP",
+      "segmento": "Servidor Estadual",
+      "tipo_operacao": "cartao_beneficio",
+
+      "publico_alvo": [
+        "Servidores estatutários ativos do Governo do Estado de São Paulo",
+        "Aposentados vinculados ao SPPREV",
+        "Pensionistas vinculados ao SPPREV",
+        "Servidores da Polícia Militar do Estado de São Paulo",
+        "Servidores admitidos CLT com desconto do INSS em folha, conforme regras específicas do convênio"
+      ],
+
+      "publico_nao_atendido": [
+        "Comissionados",
+        "Estagiários",
+        "Contratados",
+        "Requisitados",
+        "Servidores cedidos",
+        "Guarda especial temporário",
+        "Temporários não caracterizados como estágio probatório",
+        "Analfabetos",
+        "Assinatura a rogo",
+        "Procuração ou curatela"
+      ],
+
+      "faixas_idade": [
+        {
+          "idade_minima": 18,
+          "idade_maxima": 69,
+          "limite_parcela": 3800.0,
+          "observacoes": "Até 69 anos, 11 meses e 29 dias, parcela máxima aproximada de R$ 3.800,00."
+        },
+        {
+          "idade_minima": 18,
+          "idade_maxima": 55,
+          "limite_parcela": 3800.0,
+          "observacoes": "Para servidores admitidos CLT INSS: até 55 anos, 11 meses e 29 dias."
+        }
+      ],
+
+      "limites_operacionais": {
+        "prazo_minimo_meses": 96,
+        "prazo_maximo_meses": 96,
+        "parcela_minima": 30.0,
+        "valor_minimo_liberado": "R$ 500,00",
+        "margem_especifica": "15% de margem consignável destinada ao Cartão Benefício",
+        "margem_negativa_permitida": true,
+        "descricao_margem_negativa": "Permitida apenas para Novo Complementar, sem exigência de troco mínimo."
+      },
+
+      "documentacao_obrigatoria": [
+        "Documento oficial com foto (RG, CNH, Carteira Funcional ou Militar)",
+        "CPF",
+        "Comprovante de residência emitido nos últimos 90 dias",
+        "Contracheque atualizado",
+        "Para CLT INSS: obrigatórios os 3 últimos contracheques"
+      ],
+
+      "portais_acesso": [
+        {
+          "orgao_ou_segmento": "Governo do Estado de São Paulo",
+          "nome_portal": "Portal do Servidor – Consignações",
+          "link_portal": "",
+          "instrucoes_acesso": "Acessar o Portal do Servidor, menu Consignações, opção Pesquisar Margem.",
+          "observacoes": "Utilizado para consulta de margem consignável e extrato de consignações."
+        }
+      ],
+
+      "regras_especiais": [
+        "Margem de segurança de 10% da margem bruta, limitada a R$ 20,00, para secretarias estaduais e PMSP",
+        "SPPREV não possui margem de segurança",
+        "Data de vencimento da parcela: dia 25",
+        "Data de corte: Original dia 07, Novo dia 05, Novo Complementar dia 29",
+        "Canal de desconto: EAGLE",
+        "Forma de pagamento padrão: conta do contracheque"
+      ],
+
+      "detalhes_adicionais": [
+        "Roteiro Operacional Externo – Governo de São Paulo – Cartão Benefício",
+        "Complementado por manual de consulta no Portal do Servidor",
+        "Produto sujeito à análise de crédito interna"
+      ],
+
+      "flags_operacionais": {
+        "aceita_spc_serasa": true,
+        "aceita_acao_judicial": false,
+        "aceita_margem_zerada": true,
+        "aceita_margem_negativa": true,
+        "aceita_clt": true,
+        "aceita_temporario": false,
+        "aceita_pensionista_temporario": false,
+        "aceita_procuracao": false,
+        "aceita_analfabeto": false,
+        "exige_senha_averbacao": false,
+        "pagamento_somente_conta_contracheque": true
+      },
+
+      "limites_por_subgrupo": [
+        {
+          "subgrupo": "SPPREV",
+          "prazo_maximo_meses": null,
+          "idade_maxima": null,
+          "margem_seguranca": "Não possui",
+          "tabela_especifica": "",
+          "observacoes": "Utiliza integralmente a margem disponível do portal."
+        },
+        {
+          "subgrupo": "PMSP",
+          "prazo_maximo_meses": null,
+          "idade_maxima": null,
+          "margem_seguranca": "10% limitada a R$ 20,00",
+          "tabela_especifica": "GOV SP PMSP",
+          "observacoes": ""
+        },
+        {
+          "subgrupo": "CLT INSS",
+          "prazo_maximo_meses": 96,
+          "idade_maxima": 55,
+          "margem_seguranca": "",
+          "tabela_especifica": "",
+          "observacoes": "Obrigatório anexar 3 últimos contracheques."
+        }
+      ],
+
+      "perguntas_frequentes_mapeadas": [
+        {
+          "pergunta": "Qual a margem do Cartão Benefício?",
+          "resposta": "15% conforme Decreto nº 66.622/2022."
+        },
+        {
+          "pergunta": "Aceita ação judicial?",
+          "resposta": "Não, clientes com ação judicial ativa são restritos."
+        },
+        {
+          "pergunta": "SPPREV possui margem de segurança?",
+          "resposta": "Não, utiliza 100% da margem disponível."
+        }
+      ],
+
+      "metadados_busca": {
+        "produto": "cartao_beneficio",
+        "convenio_principal": "GOV_SP",
+        "publico_chave": ["estatutario", "aposentado", "pensionista"],
+        "risco_operacional": "medio",
+        "complexidade_operacional": "alta",
+        "exige_analise_manual": true
+      }
+    }
+  ]
+}
