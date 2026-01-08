@@ -1,5 +1,5 @@
-// @ts-ignore - pdf-parse types are problematic but the library works
-import pdfParse from "pdf-parse";
+// Use dynamic require for pdf-parse as it doesn't support ESM properly
+const pdfParse = require("pdf-parse");
 import { openai } from "./openaiClient";
 import { roteirosImportSchema, type RoteirosImport } from "@shared/schema";
 
