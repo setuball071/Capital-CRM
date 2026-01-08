@@ -179,6 +179,21 @@ const uploadTxt = multer({
   },
 });
 
+// Configure multer for PDF uploads (roteiros AI extraction)
+const uploadPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit for PDFs
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "application/pdf") {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido. Use arquivo PDF."));
+    }
+  },
+});
+
 // ============ ASYNC RESET JOB SYSTEM ============
 interface ResetJobStep {
   name: string;
@@ -3071,6 +3086,48 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error) {
       console.error("Import roteiros error:", error);
       return res.status(500).json({ message: "Erro ao importar roteiros" });
+    }
+  });
+
+  // Import roteiros from PDF using AI extraction
+  app.post("/api/roteiros/importar-pdf", requireAuth, requireRoteirosAccess, uploadPdf.single("file"), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      }
+
+      if (req.file.mimetype !== "application/pdf") {
+        return res.status(400).json({ message: "O arquivo deve ser um PDF" });
+      }
+
+      if (req.file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ message: "O arquivo deve ter no máximo 10MB" });
+      }
+
+      const { processPdfBuffer } = await import("./roteiros-pdf-service");
+      const result = await processPdfBuffer(req.file.buffer);
+
+      if (!result.success) {
+        return res.status(400).json({
+          message: result.error || "Erro ao processar PDF",
+          rawText: result.rawText,
+          roteiros: result.roteiros,
+          validationErrors: result.validationErrors,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Extração concluída: ${result.roteiros?.roteiros.length || 0} roteiro(s) encontrado(s)`,
+        roteiros: result.roteiros,
+        rawText: result.rawText,
+      });
+    } catch (error: any) {
+      console.error("Import PDF roteiros error:", error);
+      return res.status(500).json({ 
+        message: error.message || "Erro ao processar PDF",
+        error: error.message 
+      });
     }
   });
 

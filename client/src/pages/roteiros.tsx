@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X, Pencil, Sparkles, Loader2, Trash2 } from "lucide-react";
+import { Upload, Search, ChevronDown, ChevronUp, ExternalLink, FileText, AlertCircle, Check, X, Pencil, Sparkles, Loader2, Trash2, FileUp, Bot, Eye, Edit2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,15 @@ interface IASearchResponse {
   sugestoes: string[];
 }
 
+interface PdfExtractionResult {
+  success: boolean;
+  message: string;
+  roteiros?: { roteiros: any[] };
+  rawText?: string;
+  error?: string;
+  validationErrors?: any[];
+}
+
 export default function RoteirosPage() {
   const { toast } = useToast();
   const [selectedRoteiro, setSelectedRoteiro] = useState<RoteiroBancario | null>(null);
@@ -122,6 +131,14 @@ export default function RoteirosPage() {
   
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [roteiroToDelete, setRoteiroToDelete] = useState<RoteiroBancario | null>(null);
+
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfExtractionResult, setPdfExtractionResult] = useState<PdfExtractionResult | null>(null);
+  const [extractedJsonEdit, setExtractedJsonEdit] = useState("");
+  const [isPdfExtracting, setIsPdfExtracting] = useState(false);
+  const [showRawText, setShowRawText] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const { data: roteiros = [], isLoading } = useQuery<RoteiroBancario[]>({
     queryKey: ["/api/roteiros"],
@@ -244,6 +261,112 @@ export default function RoteirosPage() {
     }
   };
 
+  const handlePdfFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type !== "application/pdf") {
+        toast({
+          title: "Arquivo inválido",
+          description: "Por favor, selecione um arquivo PDF",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPdfFile(file);
+      setPdfExtractionResult(null);
+      setExtractedJsonEdit("");
+      setShowRawText(false);
+    }
+  };
+
+  const handlePdfExtract = async () => {
+    if (!pdfFile) {
+      toast({
+        title: "Nenhum arquivo",
+        description: "Por favor, selecione um arquivo PDF",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPdfExtracting(true);
+    setPdfExtractionResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", pdfFile);
+
+      const response = await fetch("/api/roteiros/importar-pdf", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const result = await response.json();
+      setPdfExtractionResult(result);
+      
+      if (result.roteiros) {
+        setExtractedJsonEdit(JSON.stringify(result.roteiros, null, 2));
+      }
+
+      if (result.success) {
+        toast({
+          title: "Extração concluída",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Extração com problemas",
+          description: result.error || result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erro na extração",
+        description: error.message || "Erro ao processar PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPdfExtracting(false);
+    }
+  };
+
+  const handleImportExtractedJson = () => {
+    if (!extractedJsonEdit.trim()) {
+      toast({
+        title: "JSON vazio",
+        description: "Não há dados para importar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(extractedJsonEdit);
+      importMutation.mutate(JSON.stringify(parsed));
+      setPdfDialogOpen(false);
+      setPdfFile(null);
+      setPdfExtractionResult(null);
+      setExtractedJsonEdit("");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    } catch {
+      toast({
+        title: "JSON inválido",
+        description: "O JSON editado não é válido",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetPdfDialog = () => {
+    setPdfFile(null);
+    setPdfExtractionResult(null);
+    setExtractedJsonEdit("");
+    setShowRawText(false);
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
+  };
+
   const openEditDialog = (roteiro: RoteiroBancario) => {
     setEditingRoteiro(roteiro);
     setEditBanco(roteiro.banco);
@@ -339,58 +462,224 @@ export default function RoteirosPage() {
           </p>
         </div>
         
-        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-import-json">
-              <Upload className="w-4 h-4 mr-2" />
-              Importar JSON
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Importar Roteiros</DialogTitle>
-              <DialogDescription>
-                Cole o JSON dos roteiros ou envie um arquivo .json. Use o formato expandido com flags_operacionais, limites_por_subgrupo, perguntas_frequentes e metadados_busca.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div>
-                <Label>Arquivo JSON (opcional)</Label>
-                <Input
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileUpload}
-                  data-testid="input-file-upload"
-                />
-              </div>
+        <div className="flex flex-wrap gap-2">
+          <Dialog open={pdfDialogOpen} onOpenChange={(open) => {
+            setPdfDialogOpen(open);
+            if (!open) resetPdfDialog();
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="default" data-testid="button-import-pdf">
+                <Bot className="w-4 h-4 mr-2" />
+                Importar PDF via IA
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Bot className="w-5 h-5" />
+                  Importar Roteiro de PDF via IA
+                </DialogTitle>
+                <DialogDescription>
+                  Faça upload de um PDF de roteiro bancário. A IA vai extrair automaticamente as informações e converter para o formato do sistema.
+                </DialogDescription>
+              </DialogHeader>
               
-              <div>
-                <Label>JSON</Label>
-                <Textarea
-                  value={jsonInput}
-                  onChange={(e) => setJsonInput(e.target.value)}
-                  placeholder='{"roteiros": [...]}'
-                  className="h-64 font-mono text-sm"
-                  data-testid="input-json-content"
-                />
+              <div className="space-y-4">
+                <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                  <FileUp className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                  <Label htmlFor="pdf-upload" className="cursor-pointer">
+                    <span className="text-primary font-medium">Clique para selecionar</span>
+                    <span className="text-muted-foreground"> ou arraste um arquivo PDF</span>
+                  </Label>
+                  <Input
+                    id="pdf-upload"
+                    ref={pdfInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handlePdfFileSelect}
+                    className="hidden"
+                    data-testid="input-pdf-upload"
+                  />
+                  {pdfFile && (
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">{pdfFile.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({(pdfFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {!pdfExtractionResult && (
+                  <Button 
+                    onClick={handlePdfExtract} 
+                    disabled={!pdfFile || isPdfExtracting}
+                    className="w-full"
+                    data-testid="button-extract-pdf"
+                  >
+                    {isPdfExtracting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Extraindo com IA...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Extrair Dados com IA
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {pdfExtractionResult && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {pdfExtractionResult.success ? (
+                          <Badge className="bg-green-500/10 text-green-600 border-green-200">
+                            <Check className="w-3 h-3 mr-1" />
+                            Extração bem-sucedida
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Extração com problemas
+                          </Badge>
+                        )}
+                        {pdfExtractionResult.roteiros && (
+                          <span className="text-sm text-muted-foreground">
+                            {pdfExtractionResult.roteiros.roteiros.length} roteiro(s) encontrado(s)
+                          </span>
+                        )}
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setShowRawText(!showRawText)}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        {showRawText ? "Ocultar texto" : "Ver texto extraído"}
+                      </Button>
+                    </div>
+
+                    {showRawText && pdfExtractionResult.rawText && (
+                      <div className="bg-muted p-3 rounded-lg max-h-40 overflow-y-auto">
+                        <pre className="text-xs whitespace-pre-wrap font-mono">
+                          {pdfExtractionResult.rawText.substring(0, 3000)}
+                          {pdfExtractionResult.rawText.length > 3000 && "..."}
+                        </pre>
+                      </div>
+                    )}
+
+                    {pdfExtractionResult.validationErrors && (
+                      <div className="bg-destructive/10 p-3 rounded-lg">
+                        <h4 className="font-medium text-destructive mb-2">Erros de validação:</h4>
+                        <ul className="text-sm text-destructive space-y-1">
+                          {pdfExtractionResult.validationErrors.slice(0, 5).map((err: any, idx: number) => (
+                            <li key={idx}>• {err.path?.join(" → ")}: {err.message}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="flex items-center gap-2">
+                          <Edit2 className="w-4 h-4" />
+                          JSON Extraído (editável)
+                        </Label>
+                      </div>
+                      <Textarea
+                        value={extractedJsonEdit}
+                        onChange={(e) => setExtractedJsonEdit(e.target.value)}
+                        className="h-64 font-mono text-xs"
+                        placeholder="JSON extraído aparecerá aqui..."
+                        data-testid="textarea-extracted-json"
+                      />
+                    </div>
+
+                    <DialogFooter className="flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={resetPdfDialog}>
+                        Nova Extração
+                      </Button>
+                      <Button 
+                        onClick={handleImportExtractedJson}
+                        disabled={!extractedJsonEdit.trim() || importMutation.isPending}
+                        data-testid="button-confirm-pdf-import"
+                      >
+                        {importMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Importando...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4 mr-2" />
+                            Confirmar Importação
+                          </>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
               </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-import-json">
+                <Upload className="w-4 h-4 mr-2" />
+                Importar JSON
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Importar Roteiros</DialogTitle>
+                <DialogDescription>
+                  Cole o JSON dos roteiros ou envie um arquivo .json. Use o formato expandido com flags_operacionais, limites_por_subgrupo, perguntas_frequentes e metadados_busca.
+                </DialogDescription>
+              </DialogHeader>
               
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={handleImport} 
-                  disabled={importMutation.isPending}
-                  data-testid="button-confirm-import"
-                >
-                  {importMutation.isPending ? "Importando..." : "Importar"}
-                </Button>
+              <div className="space-y-4">
+                <div>
+                  <Label>Arquivo JSON (opcional)</Label>
+                  <Input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    data-testid="input-file-upload"
+                  />
+                </div>
+                
+                <div>
+                  <Label>JSON</Label>
+                  <Textarea
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                    placeholder='{"roteiros": [...]}'
+                    className="h-64 font-mono text-sm"
+                    data-testid="input-json-content"
+                  />
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={importMutation.isPending}
+                    data-testid="button-confirm-import"
+                  >
+                    {importMutation.isPending ? "Importando..." : "Importar"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Tabs defaultValue="lista" className="space-y-4">
