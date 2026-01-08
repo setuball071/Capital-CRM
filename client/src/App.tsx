@@ -79,8 +79,8 @@ function HomePage() {
     return <Redirect to="/login" />;
   }
 
-  // Only master goes to dashboard, others go to welcome page
-  if (user.role === "master") {
+  // Only isMaster users go to dashboard, others go to welcome page
+  if (user.isMaster) {
     return <Redirect to="/dashboard" />;
   }
   
@@ -103,7 +103,7 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
     return <Redirect to="/login" />;
   }
 
-  if (user.role !== "master") {
+  if (!user.isMaster) {
     return <Redirect to="/" />;
   }
 
@@ -139,101 +139,12 @@ function ModuleRoute({ component: Component, module, accessType = "view" }: {
   return <Component />;
 }
 
-// Protected route for Academia Admin (master and coordenacao)
-function AcademiaAdminRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Redirect to="/login" />;
-  }
-
-  const allowedRoles = ["master", "coordenacao"];
-  if (!allowedRoles.includes(user.role)) {
-    return <Redirect to="/" />;
-  }
-
-  return <Component />;
-}
-
-// Protected route for roteiros (master, atendimento, operacional only)
-function RoteirosRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Redirect to="/login" />;
-  }
-
-  const allowedRoles = ["master", "atendimento", "operacional"];
-  if (!allowedRoles.includes(user.role)) {
-    return <Redirect to="/" />;
-  }
-
-  return <Component />;
-}
-
-// Protected route for compra lista (coordenacao and master only)
-function CompraListaRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Redirect to="/login" />;
-  }
-
-  const allowedRoles = ["master", "coordenacao"];
-  if (!allowedRoles.includes(user.role)) {
-    return <Redirect to="/" />;
-  }
-
-  return <Component />;
-}
-
-// Protected route for CRM admin (master, atendimento only)
-function CRMAdminRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Redirect to="/login" />;
-  }
-
-  const allowedRoles = ["master", "atendimento"];
-  if (!allowedRoles.includes(user.role)) {
-    return <Redirect to="/" />;
-  }
-
-  return <Component />;
-}
+// REFACTORED: All legacy role-based routes removed
+// Use ModuleRoute with appropriate module permissions instead:
+// - AcademiaAdminRoute -> ModuleRoute with modulo_academia + edit access
+// - RoteirosRoute -> ModuleRoute with modulo_roteiros
+// - CompraListaRoute -> ModuleRoute with modulo_bases + edit access
+// - CRMAdminRoute -> ModuleRoute with modulo_crm + edit access
 
 function PublicRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();

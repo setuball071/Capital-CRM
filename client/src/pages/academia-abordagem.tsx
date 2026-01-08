@@ -65,7 +65,7 @@ const ESTILOS_TOM = [
 
 export default function AcademiaAbordagem() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, hasModuleAccess } = useAuth();
   const [canal, setCanal] = useState<string>("whatsapp");
   const [tipoCliente, setTipoCliente] = useState<string>("");
   const [produtoFoco, setProdutoFoco] = useState<string>("");
@@ -74,9 +74,9 @@ export default function AcademiaAbordagem() {
   const [abordagem, setAbordagem] = useState<AbordagemGerada | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
 
-  const isMaster = user?.role === "master";
-  const isCoordinator = user?.role === "coordenacao";
-  const canBypassQuiz = isMaster || isCoordinator;
+  // REFACTORED: Use profile-based permissions for quiz bypass
+  // isMaster or users with edit access to modulo_academia can bypass quiz
+  const canBypassQuiz = user?.isMaster === true || hasModuleAccess("modulo_academia", "edit");
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],

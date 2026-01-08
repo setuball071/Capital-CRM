@@ -53,7 +53,7 @@ interface AvaliacaoFinal {
 
 export default function AcademiaRoleplay() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, hasModuleAccess } = useAuth();
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [inputMensagem, setInputMensagem] = useState("");
   const [sessaoId, setSessaoId] = useState<number | null>(null);
@@ -68,10 +68,9 @@ export default function AcademiaRoleplay() {
   const [sessaoFinalizada, setSessaoFinalizada] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const isMaster = user?.role === "master";
-  const isCoordinator = user?.role === "coordenacao";
-  const isAtendimento = user?.role === "atendimento";
-  const canBypassQuiz = isMaster || isCoordinator || isAtendimento;
+  // REFACTORED: Use profile-based permissions for quiz bypass
+  // isMaster or users with edit access to modulo_academia can bypass quiz
+  const canBypassQuiz = user?.isMaster === true || hasModuleAccess("modulo_academia", "edit");
 
   const { data: perfilData, isLoading: loadingPerfil } = useQuery<Perfil>({
     queryKey: ["/api/academia/perfil"],

@@ -102,7 +102,7 @@ const MODELO_COLUNAS = {
 export default function BasesClientes() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isMaster = user?.role === "master";
+  const isMaster = user?.isMaster === true;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isModeloOpen, setIsModeloOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);

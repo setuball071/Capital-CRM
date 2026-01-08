@@ -60,13 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Função helper para verificar acesso a módulos
-  // Master tem acesso total a todos os módulos
+  // REFACTORED: Agora usa exclusivamente isMaster flag + permissões de perfil
+  // Não há mais herança baseada em role
   const hasModuleAccess = (module: ModuleName, accessType: "view" | "edit" | "delegate" = "view"): boolean => {
-    // Masters sempre têm acesso total
-    if (user?.role === "master") {
+    // isMaster sempre tem acesso total a todos os módulos
+    if (user?.isMaster) {
       return true;
     }
     
+    // Para todos os outros usuários, verificar permissões baseadas no perfil
     const perm = permissions[module];
     if (!perm) return false;
     

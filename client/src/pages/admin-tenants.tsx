@@ -134,7 +134,8 @@ export default function AdminTenantsPage() {
     setNewDomain({ ...newDomain, domain: value });
   };
 
-  const isMaster = currentUser?.role === "master";
+  // REFACTORED: Use isMaster flag instead of role check
+  const isMaster = currentUser?.isMaster === true;
 
   const { data: tenants = [], isLoading: isLoadingTenants } = useQuery<Tenant[]>({
     queryKey: ["/api/admin/tenants"],
