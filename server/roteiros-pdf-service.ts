@@ -1,7 +1,10 @@
-// Use dynamic require for pdf-parse as it doesn't support ESM properly
-const pdfParse = require("pdf-parse");
+import { createRequire } from "module";
 import { openai } from "./openaiClient";
 import { roteirosImportSchema, type RoteirosImport } from "@shared/schema";
+
+// pdf-parse doesn't support ESM properly, use createRequire
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 const ROTEIRO_EXTRACTION_PROMPT = `Você é um especialista em análise de documentos bancários brasileiros. Sua tarefa é extrair informações de roteiros operacionais de bancos e convertê-los em um formato JSON estruturado.
 
