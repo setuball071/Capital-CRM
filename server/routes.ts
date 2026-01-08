@@ -293,69 +293,213 @@ function requireMaster(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// Role-based master check (for backward compatibility with existing role-based permissions)
+// Role-based master check - REFACTORED to use isMaster flag instead of role
+// This is for administrative functions that require true system admin access
 function requireMasterRole(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master"])) {
+  if (!req.user?.isMaster) {
+    logPermissionCheck(req.user?.id || 0, req.user?.name || "unknown", "admin", "master", false, "isMaster=false");
     return res.status(403).json({ message: "Acesso negado - apenas administradores" });
   }
+  logPermissionCheck(req.user.id, req.user.name, "admin", "master", true, "isMaster=true");
   next();
 }
 
-// Master, Atendimento or Operacional middleware (can view/manage coefficient tables and agreements)
-function requireTableAccess(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master", "atendimento", "operacional"])) {
-    return res.status(403).json({ message: "Acesso negado" });
+// Table access middleware - REFACTORED to use profile-based permissions
+// Now checks for modulo_tabelas_coeficientes permission instead of role
+async function requireTableAccess(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Não autorizado" });
   }
+  
+  // isMaster has full access
+  if (req.user.isMaster) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_tabelas_coeficientes", "view", true, "isMaster=true");
+    return next();
+  }
+  
+  // Check profile-based permission for tables module
+  const hasAccess = await storage.hasModuleAccess(req.user.id, "modulo_tabelas_coeficientes");
+  if (!hasAccess) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_tabelas_coeficientes", "view", false, "No profile permission");
+    return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar tabelas de coeficientes" });
+  }
+  
+  logPermissionCheck(req.user.id, req.user.name, "modulo_tabelas_coeficientes", "view", true, "Profile permission granted");
   next();
 }
 
-// Users management access middleware (master, atendimento, coordenacao, or users with modulo_config_usuarios canEdit permission)
+// Users management access middleware - REFACTORED to use profile-based permissions
+// Now checks for modulo_config_usuarios permission instead of role
 async function requireUserManagementAccess(req: Request, res: Response, next: NextFunction) {
-  // Master, atendimento, coordenacao have access by role
-  if (hasRole(req.user, ["master", "atendimento", "coordenacao"])) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Não autorizado" });
+  }
+  
+  // isMaster has full access
+  if (req.user.isMaster) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_config_usuarios", "edit", true, "isMaster=true");
     return next();
   }
   
   // Check if user has modulo_config_usuarios permission with canEdit
-  if (req.user) {
-    const hasConfigEditAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_config_usuarios");
-    if (hasConfigEditAccess) {
-      return next();
-    }
+  const hasConfigEditAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_config_usuarios");
+  if (hasConfigEditAccess) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_config_usuarios", "edit", true, "Profile permission granted");
+    return next();
   }
   
+  logPermissionCheck(req.user.id, req.user.name, "modulo_config_usuarios", "edit", false, "No edit permission");
   return res.status(403).json({ message: "Acesso negado - você não tem permissão para gerenciar usuários" });
 }
 
 // Legacy alias for backward compatibility
 const requireManagerAccess = requireUserManagementAccess;
 
-// Academia access middleware (master, atendimento, operacional, coordenacao, vendedor)
-function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) {
-  if (!hasRole(req.user, ["master", "atendimento", "operacional", "coordenacao", "vendedor"])) {
+// Academia access middleware - REFACTORED to use profile-based permissions
+// Now checks for modulo_academia permission instead of role
+async function requireAcademiaAccess(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Não autorizado" });
+  }
+  
+  // isMaster has full access
+  if (req.user.isMaster) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_academia", "view", true, "isMaster=true");
+    return next();
+  }
+  
+  // Check profile-based permission for academia module
+  const hasAccess = await storage.hasModuleAccess(req.user.id, "modulo_academia");
+  if (!hasAccess) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_academia", "view", false, "No profile permission");
     return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar o Treinamento" });
   }
+  
+  logPermissionCheck(req.user.id, req.user.name, "modulo_academia", "view", true, "Profile permission granted");
   next();
 }
 
+// ===== PERMISSION DIAGNOSTIC LOGGING =====
+// Temporary diagnostic logging for permission failures (set to true to enable)
+const PERMISSION_DEBUG = true;
+
+function logPermissionCheck(userId: number, userName: string, module: string, accessType: string, granted: boolean, reason: string) {
+  if (PERMISSION_DEBUG) {
+    const status = granted ? "✓ GRANTED" : "✗ DENIED";
+    console.log(`[PERMISSION] ${status} | User: ${userName} (ID:${userId}) | Module: ${module} | Access: ${accessType} | Reason: ${reason}`);
+  }
+}
+
 // Module access middleware - checks if user has permission to access a specific module
-function requireModuleAccess(module: string) {
+// REFACTORED: Permissions are now EXCLUSIVELY profile-based. Role does NOT grant automatic access.
+// The only exception is users with isMaster=true flag, which have full system access.
+function requireModuleAccess(module: string, accessType: "view" | "edit" = "view") {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ message: "Não autorizado" });
     }
     
-    // Master has access to all modules
-    if (req.user.role === "master") {
+    const userId = req.user.id;
+    const userName = req.user.name;
+    
+    // ONLY isMaster flag grants full bypass (true system administrators)
+    if (req.user.isMaster) {
+      logPermissionCheck(userId, userName, module, accessType, true, "isMaster=true (system admin)");
       return next();
     }
     
-    const hasAccess = await storage.hasModuleAccess(req.user.id, module);
-    if (!hasAccess) {
-      return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar este módulo" });
+    // Check profile-based permissions exclusively
+    let hasAccess = false;
+    if (accessType === "edit") {
+      hasAccess = await storage.hasModuleEditAccess(userId, module);
+    } else {
+      hasAccess = await storage.hasModuleAccess(userId, module);
     }
+    
+    if (!hasAccess) {
+      logPermissionCheck(userId, userName, module, accessType, false, "No profile permission found");
+      return res.status(403).json({ 
+        message: "Acesso negado - você não tem permissão para acessar este módulo",
+        module,
+        accessType
+      });
+    }
+    
+    logPermissionCheck(userId, userName, module, accessType, true, "Profile permission granted");
     next();
   };
+}
+
+// Generic permission check middleware for specific actions
+// Example: requirePermission("modulo_crm", "edit") 
+function requirePermission(module: string, accessType: "view" | "edit" | "delegate" = "view") {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    
+    const userId = req.user.id;
+    const userName = req.user.name;
+    
+    // ONLY isMaster grants full bypass
+    if (req.user.isMaster) {
+      logPermissionCheck(userId, userName, module, accessType, true, "isMaster=true (system admin)");
+      return next();
+    }
+    
+    // Check specific permission level
+    const permissions = await storage.getUserPermissions(userId);
+    const perm = permissions.find(p => p.module === module);
+    
+    let hasAccess = false;
+    if (perm) {
+      switch (accessType) {
+        case "view":
+          hasAccess = perm.canView || perm.canEdit || perm.canDelegate;
+          break;
+        case "edit":
+          hasAccess = perm.canEdit || perm.canDelegate;
+          break;
+        case "delegate":
+          hasAccess = perm.canDelegate;
+          break;
+      }
+    }
+    
+    if (!hasAccess) {
+      logPermissionCheck(userId, userName, module, accessType, false, `Permission check failed (perm exists: ${!!perm})`);
+      return res.status(403).json({ 
+        message: `Acesso negado - você não tem permissão de ${accessType} para este módulo`,
+        module,
+        accessType
+      });
+    }
+    
+    logPermissionCheck(userId, userName, module, accessType, true, "Permission granted via profile");
+    next();
+  };
+}
+
+// Helper to check permission in code (not middleware)
+async function checkUserPermission(userId: number, isMaster: boolean, module: string, accessType: "view" | "edit" | "delegate" = "view"): Promise<boolean> {
+  // isMaster bypasses all checks
+  if (isMaster) return true;
+  
+  const permissions = await storage.getUserPermissions(userId);
+  const perm = permissions.find(p => p.module === module);
+  
+  if (!perm) return false;
+  
+  switch (accessType) {
+    case "view":
+      return perm.canView || perm.canEdit || perm.canDelegate;
+    case "edit":
+      return perm.canEdit || perm.canDelegate;
+    case "delegate":
+      return perm.canDelegate;
+    default:
+      return false;
+  }
 }
 
 // ===== PRICING CALCULATION - MODELO DE PACOTES =====
@@ -1032,12 +1176,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return result;
   }
 
-  // Middleware para master ou admin
-  function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
-    if (!hasRole(req.user, ["master", "admin"])) {
-      return res.status(403).json({ message: "Acesso negado - apenas master ou admin" });
+  // Middleware para configurações do sistema - REFACTORED to use profile-based permissions
+  // Now checks for modulo_config_sistema permission (nomenclaturas, etc.)
+  async function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
+    if (!req.user) {
+      return res.status(401).json({ message: "Não autorizado" });
     }
-    next();
+    
+    // isMaster has full access
+    if (req.user.isMaster) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_config_sistema", "edit", true, "isMaster=true");
+      return next();
+    }
+    
+    // Check profile-based permission for system config
+    const hasAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_config_sistema");
+    if (hasAccess) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_config_sistema", "edit", true, "Profile permission granted");
+      return next();
+    }
+    
+    logPermissionCheck(req.user.id, req.user.name, "modulo_config_sistema", "edit", false, "No profile permission");
+    return res.status(403).json({ message: "Acesso negado - você não tem permissão para configurações do sistema" });
   }
 
   // GET list - com filtros por categoria e busca (admin - sem cache, mostra todos)
@@ -1557,10 +1717,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all coordenadores (for selecting manager when creating vendedor)
-  // Accessible by master and atendimento (they can assign vendedores to coordenadores)
+  // REFACTORED: Now uses profile-based permission modulo_config_usuarios
   app.get("/api/users/coordenadores", requireAuth, async (req, res) => {
     try {
-      if (!hasRole(req.user, ["master", "atendimento"])) {
+      // Check permission: isMaster or modulo_config_usuarios access
+      const hasAccess = req.user!.isMaster || await storage.hasModuleAccess(req.user!.id, "modulo_config_usuarios");
+      if (!hasAccess) {
+        logPermissionCheck(req.user!.id, req.user!.name, "modulo_config_usuarios", "view", false, "No permission for coordenadores list");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -2330,11 +2493,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== ROTEIROS BANCÁRIOS ROUTES =====
   
-  // Middleware for roteiros access (master, atendimento, operacional only)
-  function requireRoteirosAccess(req: Request, res: Response, next: NextFunction) {
-    if (!hasRole(req.user, ["master", "atendimento", "operacional"])) {
+  // Middleware for roteiros access - REFACTORED to use profile-based permissions
+  // Now checks for modulo_roteiros permission instead of role
+  async function requireRoteirosAccess(req: Request, res: Response, next: NextFunction) {
+    if (!req.user) {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    
+    // isMaster has full access
+    if (req.user.isMaster) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "view", true, "isMaster=true");
+      return next();
+    }
+    
+    // Check profile-based permission for roteiros module
+    const hasAccess = await storage.hasModuleAccess(req.user.id, "modulo_roteiros");
+    if (!hasAccess) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "view", false, "No profile permission");
       return res.status(403).json({ message: "Acesso negado - você não tem permissão para acessar roteiros bancários" });
     }
+    
+    logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "view", true, "Profile permission granted");
     next();
   }
 
@@ -7952,21 +8131,38 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== CRM DE VENDAS =====
   
-  // Middleware para acesso ao CRM (master, atendimento)
-  function requireCRMAdmin(req: Request, res: Response, next: NextFunction) {
-    if (!hasRole(req.user, ["master", "atendimento"])) {
-      return res.status(403).json({ message: "Acesso negado - apenas administradores do CRM" });
+  // Middleware para acesso administrativo ao CRM - REFACTORED to use profile-based permissions
+  // Now checks for modulo_crm_admin permission instead of role
+  async function requireCRMAdmin(req: Request, res: Response, next: NextFunction) {
+    if (!req.user) {
+      return res.status(401).json({ message: "Não autorizado" });
     }
+    
+    // isMaster has full access
+    if (req.user.isMaster) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", true, "isMaster=true");
+      return next();
+    }
+    
+    // Check profile-based permission for CRM admin
+    const hasAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_crm_admin");
+    if (!hasAccess) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", false, "No profile permission");
+      return res.status(403).json({ message: "Acesso negado - você não tem permissão de administração do CRM" });
+    }
+    
+    logPermissionCheck(req.user.id, req.user.name, "modulo_crm_admin", "edit", true, "Profile permission granted");
     next();
   }
   
   // GET /api/vendas/campanhas - Listar campanhas
+  // REFACTORED: Uses profile-based permission modulo_crm
   app.get("/api/vendas/campanhas", requireAuth, async (req, res) => {
     try {
-      const userRole = req.user!.role as UserRole;
-      
-      // Admin/Atendimento veem todas, vendedor não vê campanhas diretamente
-      if (!hasRole(req.user, ["master", "atendimento", "coordenacao"])) {
+      // Check permission: isMaster or modulo_crm access
+      const hasAccess = req.user!.isMaster || await storage.hasModuleAccess(req.user!.id, "modulo_crm");
+      if (!hasAccess) {
+        logPermissionCheck(req.user!.id, req.user!.name, "modulo_crm", "view", false, "No permission for campanhas");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -9033,8 +9229,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Atendimento não encontrado" });
       }
       
-      // Verify ownership
-      if (result.assignment.userId !== userId && !hasRole(req.user, ["master", "atendimento"])) {
+      // Verify ownership - REFACTORED: Use isMaster or modulo_crm permission
+      const canViewOthers = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_crm");
+      if (result.assignment.userId !== userId && !canViewOthers) {
+        logPermissionCheck(userId, req.user!.name, "modulo_crm", "edit", false, "Cannot view other user's assignment");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -9234,8 +9432,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Atendimento não encontrado" });
       }
       
-      // Verify ownership
-      if (result.assignment.userId !== userId && !hasRole(req.user, ["master", "atendimento"])) {
+      // Verify ownership - REFACTORED: Use isMaster or modulo_crm permission
+      const canViewOthersAssignment = req.user!.isMaster || await storage.hasModuleEditAccess(userId, "modulo_crm");
+      if (result.assignment.userId !== userId && !canViewOthersAssignment) {
+        logPermissionCheck(userId, req.user!.name, "modulo_crm", "edit", false, "Cannot view other user's assignment");
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -10794,19 +10994,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // GET /api/ai-prompts/roleplay/team/:teamId - Histórico de prompts da equipe
+  // REFACTORED: Uses isMaster flag + team manager check instead of role
   app.get("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
     try {
       const teamId = parseInt(req.params.teamId);
-      const userRole = req.user!.role as UserRole;
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-      if (userRole === "coordenacao") {
+      const userId = req.user!.id;
+      
+      // isMaster has full access
+      if (!req.user!.isMaster) {
+        // Check if user manages this team
         const team = await storage.getTeam(teamId);
-        if (!team || team.managerUserId !== req.user!.id) {
+        if (!team || team.managerUserId !== userId) {
+          logPermissionCheck(userId, req.user!.name, "modulo_prompts", "view", false, "Not team manager");
           return res.status(403).json({ message: "Você não gerencia esta equipe" });
         }
       }
+      
       const prompts = await storage.getTeamRoleplayPrompts(teamId);
       return res.json(prompts);
     } catch (error) {
@@ -10816,19 +11019,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // POST /api/ai-prompts/roleplay/team/:teamId - Salvar prompt de equipe (Coordenador ou Master)
+  // REFACTORED: Uses isMaster flag + team manager check instead of role
   app.post("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
     try {
       const teamId = parseInt(req.params.teamId);
-      const userRole = req.user!.role as UserRole;
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-      if (userRole === "coordenacao") {
+      const userId = req.user!.id;
+      
+      // isMaster has full access
+      if (!req.user!.isMaster) {
+        // Check if user manages this team
         const team = await storage.getTeam(teamId);
-        if (!team || team.managerUserId !== req.user!.id) {
+        if (!team || team.managerUserId !== userId) {
+          logPermissionCheck(userId, req.user!.name, "modulo_prompts", "edit", false, "Not team manager");
           return res.status(403).json({ message: "Você não gerencia esta equipe" });
         }
       }
+      
       const { promptText } = req.body;
       if (!promptText || promptText.trim().length < 10) {
         return res.status(400).json({ message: "Prompt muito curto (mínimo 10 caracteres)" });
@@ -10842,19 +11048,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // DELETE /api/ai-prompts/roleplay/team/:teamId - Resetar prompt da equipe (volta para global)
+  // REFACTORED: Uses isMaster flag + team manager check instead of role
   app.delete("/api/ai-prompts/roleplay/team/:teamId", requireAuth, async (req, res) => {
     try {
       const teamId = parseInt(req.params.teamId);
-      const userRole = req.user!.role as UserRole;
-      if (!hasRole(req.user, ["master", "coordenacao"])) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-      if (userRole === "coordenacao") {
+      const userId = req.user!.id;
+      
+      // isMaster has full access
+      if (!req.user!.isMaster) {
+        // Check if user manages this team
         const team = await storage.getTeam(teamId);
-        if (!team || team.managerUserId !== req.user!.id) {
+        if (!team || team.managerUserId !== userId) {
+          logPermissionCheck(userId, req.user!.name, "modulo_prompts", "edit", false, "Not team manager");
           return res.status(403).json({ message: "Você não gerencia esta equipe" });
         }
       }
+      
       await storage.resetTeamRoleplayPrompt(teamId);
       return res.json({ message: "Prompt da equipe resetado. Agora usa o prompt global." });
     } catch (error) {
