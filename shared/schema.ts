@@ -537,6 +537,8 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   extrasPessoa: jsonb("extras_pessoa"), // tudo que não for mapeado diretamente
   // Rastreabilidade para exclusão em cascata
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
+  // Observações/notas de atendimento
+  notes: text("notes"), // Histórico de observações do cliente
 }, (table) => ({
   // Chave única: CPF - uma pessoa por CPF
   pessoaCpfIdx: uniqueIndex("idx_pessoa_cpf").on(table.cpf),
