@@ -1,0 +1,85 @@
+Correção do Extrator de Roteiros PDF via IA
+📌 Contexto:
+
+Ao realizar o upload de um PDF de roteiro bancário, o sistema exibe erro de extração com a mensagem:
+
+"Erro ao extrair texto do PDF. Verifique se o arquivo é um PDF válido."
+
+Além disso, há erros registrados no console, incluindo:
+
+500 Internal Server Error (endpoint: /importar-pdf)
+
+401 Unauthorized (endpoint: /auth/me)
+
+Falhas no carregamento do módulo responsável por processar o texto
+
+Problemas relacionados a permissões ou tokens expirados
+
+✅ Objetivo:
+
+Corrigir todo o fluxo de importação de PDFs por IA, garantindo extração bem-sucedida e conversão correta para JSON.
+
+🧩 Etapas para Correção
+
+Validação do Arquivo PDF:
+
+Garantir que o backend aceite PDFs com texto extraível (não apenas imagens).
+
+Se o PDF estiver protegido ou for imagem, retornar mensagem clara: "Este PDF não contém texto legível. Por favor, envie um PDF com texto."
+
+Backend (API de Extração):
+
+Verificar endpoint /importar-pdf:
+
+Corrigir erro 500 (Internal Server Error).
+
+Corrigir erro 401 (verificar autenticação e permissões do token).
+
+Incluir logs claros em caso de falha de parsing com o arquivo.
+
+IA - Conversão para JSON:
+
+Usar modelo já implementado para roteiros na pesquisa inteligente.
+
+Garantir que os campos extraídos sigam a estrutura:
+
+{
+  "convenio": "EXEMPLO",
+  "segmento": "INSS",
+  "limite": "R$ 200.000,00",
+  "documentação": ["RG", "CPF"],
+  "observações": "...",
+  "flags": {
+    "exige_senha": true,
+    "aceita_portabilidade": false
+  }
+}
+
+
+Frontend:
+
+Se a extração falhar, exibir mensagem detalhada sobre o motivo.
+
+Permitir edição manual do JSON extraído.
+
+Corrigir botão “Confirmar Importação” (estava travado).
+
+Melhorias Sugeridas:
+
+Adicionar visualização do PDF (preview).
+
+Incluir botão “Nova Extração” para tentar de novo com o mesmo arquivo.
+
+Se o JSON não for gerado, permitir inserir manualmente o conteúdo e seguir com a importação.
+
+✅ Teste Esperado:
+
+Upload de PDF válido com texto extraível.
+
+IA extrai conteúdo com sucesso e preenche JSON automaticamente.
+
+Permitir edição e confirmação.
+
+Importação finaliza sem erro.
+
+Log de atividade registrando ação com nome do usuário, data e resultado.

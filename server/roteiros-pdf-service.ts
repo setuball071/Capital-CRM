@@ -1,10 +1,6 @@
-import { createRequire } from "module";
 import { openai } from "./openaiClient";
 import { roteirosImportSchema, type RoteirosImport } from "@shared/schema";
-
-// pdf-parse doesn't support ESM properly, use createRequire
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const ROTEIRO_EXTRACTION_PROMPT = `Você é um especialista em análise de documentos bancários brasileiros. Sua tarefa é extrair informações de roteiros operacionais de bancos e convertê-los em um formato JSON estruturado.
 
@@ -71,10 +67,44 @@ export interface PdfExtractionResult {
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   try {
-    const data = await pdfParse(buffer);
-    return data.text;
-  } catch (error) {
+    console.log("[PDF-Parse] Extracting text from PDF buffer, size:", buffer.length);
+    
+    // Convert Buffer to Uint8Array for pdfjs-dist
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Load the PDF document
+    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+    const pdfDocument = await loadingTask.promise;
+    
+    console.log("[PDF-Parse] PDF loaded, pages:", pdfDocument.numPages);
+    
+    let fullText = '';
+    
+    // Extract text from each page
+    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Combine all text items
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += pageText + '\n';
+    }
+    
+    console.log("[PDF-Parse] Text extracted, length:", fullText.length);
+    
+    if (!fullText.trim()) {
+      throw new Error("Este PDF não contém texto legível. Por favor, envie um PDF com texto.");
+    }
+    
+    return fullText;
+  } catch (error: any) {
     console.error("[PDF-Parse] Error extracting text:", error);
+    if (error.message?.includes("não contém texto")) {
+      throw error;
+    }
     throw new Error("Erro ao extrair texto do PDF. Verifique se o arquivo é um PDF válido.");
   }
 }
