@@ -10083,28 +10083,37 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // POST /api/crm/cliente/criar-lead-direto - Create a lead from consultation (auto campaign "Atendimento Direto")
   app.post("/api/crm/cliente/criar-lead-direto", requireAuth, async (req, res) => {
     try {
-      const { pessoaId, marcador } = req.body;
+      console.log("[criar-lead-direto] Request body:", JSON.stringify(req.body));
+      const { pessoaId, marcador, margemValor, propostaValorEstimado, observacoes, tipoContato } = req.body;
       const userId = req.user!.id;
       
+      console.log("[criar-lead-direto] userId:", userId, "pessoaId:", pessoaId, "marcador:", marcador);
+      
       if (!pessoaId) {
+        console.log("[criar-lead-direto] Error: pessoaId is missing");
         return res.status(400).json({ message: "pessoaId é obrigatório" });
       }
 
       const pessoa = await storage.getClientePessoaById(pessoaId);
       if (!pessoa) {
+        console.log("[criar-lead-direto] Error: pessoa not found for id:", pessoaId);
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
+      console.log("[criar-lead-direto] Found pessoa:", pessoa.nome);
 
       // Use user's tenantId, or pessoa's tenantId, or user's own tenantId from profile
       let tenantId = req.tenantId || pessoa.tenantId || req.user!.tenantId;
+      console.log("[criar-lead-direto] Initial tenantId resolution:", tenantId, "(req:", req.tenantId, ", pessoa:", pessoa.tenantId, ", user:", req.user!.tenantId, ")");
       
       // If still no tenant, try to get or create a default one
       if (!tenantId) {
-        // Check if there's a default tenant
+        console.log("[criar-lead-direto] No tenant found, trying default...");
         const defaultTenant = await db.select().from(tenants).limit(1);
         if (defaultTenant.length > 0) {
           tenantId = defaultTenant[0].id;
+          console.log("[criar-lead-direto] Using default tenant:", tenantId);
         } else {
+          console.log("[criar-lead-direto] Error: No tenants in system");
           return res.status(400).json({ message: "Nenhum tenant configurado no sistema" });
         }
       }
@@ -10187,6 +10196,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       };
       const leadMarker = marcadorMap[marcador] || "NOVO";
 
+      console.log("[criar-lead-direto] Creating new lead with marker:", leadMarker);
+      
       const [newLead] = await db.insert(salesLeads).values({
         tenantId: tenantId,
         campaignId,
@@ -10201,7 +10212,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         leadMarker,
         assignedTo: userId,
         status: "ATRIBUIDO",
+        currentMargin: margemValor ? String(margemValor) : null,
+        currentProposal: propostaValorEstimado ? String(propostaValorEstimado) : null,
+        observacoes: observacoes || null,
+        ultimoContatoEm: new Date(),
+        ultimoTipoContato: tipoContato || null,
       }).returning();
+
+      console.log("[criar-lead-direto] Lead created with id:", newLead.id);
 
       // Create assignment for this user (REQUIRED for pipeline visibility)
       await db.insert(salesLeadAssignments).values({
@@ -10211,10 +10229,32 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         dataUltimoAtendimento: new Date(),
       });
 
+      console.log("[criar-lead-direto] Assignment created for user:", userId);
+
+      // Create interaction record
+      await db.insert(leadInteractions).values({
+        leadId: newLead.id,
+        userId,
+        tipoContato: tipoContato || "outro",
+        leadMarker,
+        observacao: observacoes || null,
+        margemValor: margemValor ? String(margemValor) : null,
+        propostaValorEstimado: propostaValorEstimado ? String(propostaValorEstimado) : null,
+      });
+
+      console.log("[criar-lead-direto] Interaction created successfully");
+
       return res.json({ message: "Lead criado com sucesso", leadId: newLead.id });
-    } catch (error) {
-      console.error("Create lead direto error:", error);
-      return res.status(500).json({ message: "Erro ao criar lead" });
+    } catch (error: unknown) {
+      const err = error as Error & { code?: string; detail?: string };
+      console.error("[criar-lead-direto] Error:", err.message, err.code, err.detail);
+      console.error("[criar-lead-direto] Stack:", err.stack);
+      return res.status(500).json({ 
+        message: "Erro ao criar lead", 
+        error: err.message,
+        code: err.code,
+        detail: err.detail 
+      });
     }
   });
 

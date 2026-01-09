@@ -397,16 +397,40 @@ export default function VendasConsulta() {
       
       // Also create lead in pipeline if requested (uses auto "Atendimento Direto" campaign)
       if (data.addToPipeline) {
-        const leadRes = await apiRequest("POST", "/api/crm/cliente/criar-lead-direto", {
-          pessoaId: clientId,
-          marcador: data.marcador,
-        });
-        // If lead already exists, that's okay - we continue
-        if (!leadRes.ok) {
-          const err = await leadRes.json().catch(() => ({}));
-          if (!err.message?.includes("já existe")) {
-            throw new Error(err.message || "Erro ao criar lead");
+        try {
+          // Use fetch directly to handle errors manually
+          const leadRes = await fetch("/api/crm/cliente/criar-lead-direto", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pessoaId: clientId,
+              marcador: data.marcador,
+              margemValor: data.margemValor,
+              propostaValorEstimado: data.propostaValorEstimado,
+              observacoes: data.observacao,
+              tipoContato: data.tipoContato,
+            }),
+            credentials: "include",
+          });
+          
+          const leadData = await leadRes.json().catch(() => ({}));
+          
+          if (!leadRes.ok) {
+            // If lead already exists, that's okay - we continue
+            if (leadData.message?.includes("já existe")) {
+              console.log("Lead já existe no pipeline, continuando...");
+            } else {
+              console.error("Erro ao criar lead:", leadData);
+              throw new Error(leadData.message || "Erro ao criar lead no pipeline");
+            }
+          } else {
+            console.log("Lead criado/atualizado com sucesso:", leadData);
           }
+        } catch (err: unknown) {
+          const error = err as Error;
+          console.error("Erro ao adicionar ao pipeline:", error);
+          // Don't throw - just show a warning, the interaction was still saved
+          throw new Error(error.message || "Erro ao adicionar ao pipeline de vendas");
         }
       }
       
