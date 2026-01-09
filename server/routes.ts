@@ -10147,8 +10147,28 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       if (existingLead.length > 0) {
         const leadId = existingLead[0].id;
-        // Lead already exists - just assign to current user if not assigned
-        if (!existingLead[0].assignedTo && leadId) {
+        // Lead already exists - ensure assignment exists for current user
+        const existingAssignment = await db
+          .select()
+          .from(salesLeadAssignments)
+          .where(and(
+            eq(salesLeadAssignments.leadId, leadId),
+            eq(salesLeadAssignments.userId, userId)
+          ))
+          .limit(1);
+        
+        if (existingAssignment.length === 0) {
+          // Create assignment for this user
+          await db.insert(salesLeadAssignments).values({
+            leadId,
+            userId,
+            status: "em_atendimento",
+            dataUltimoAtendimento: new Date(),
+          });
+        }
+        
+        // Update lead assignedTo if not set
+        if (!existingLead[0].assignedTo) {
           await db.update(salesLeads)
             .set({ assignedTo: userId })
             .where(eq(salesLeads.id, leadId));
@@ -10179,9 +10199,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         uf: pessoa.uf || null,
         baseClienteId: pessoaId,
         leadMarker,
-        assignedTo: userId, // Auto-assign to current user
+        assignedTo: userId,
         status: "ATRIBUIDO",
       }).returning();
+
+      // Create assignment for this user (REQUIRED for pipeline visibility)
+      await db.insert(salesLeadAssignments).values({
+        leadId: newLead.id,
+        userId,
+        status: "em_atendimento",
+        dataUltimoAtendimento: new Date(),
+      });
 
       return res.json({ message: "Lead criado com sucesso", leadId: newLead.id });
     } catch (error) {
