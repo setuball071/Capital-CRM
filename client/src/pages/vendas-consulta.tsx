@@ -14,11 +14,18 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward
+  Plus, Pencil, Trash2, Save, SkipForward, Target
 } from "lucide-react";
+
+interface Campaign {
+  id: number;
+  nome: string;
+  status: string;
+}
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
 type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
@@ -185,12 +192,20 @@ export default function VendasConsulta() {
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
   
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addToPipeline, setAddToPipeline] = useState(true);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
   const [interactionFormData, setInteractionFormData] = useState({
     tipoContato: "ligacao" as TipoContatoConsulta,
     marcador: "em_atendimento" as MarcadorConsulta,
     margemValor: "",
     propostaValorEstimado: "",
     observacao: "",
+  });
+
+  // Fetch available campaigns for pipeline
+  const { data: campaigns = [] } = useQuery<Campaign[]>({
+    queryKey: ["/api/crm/campaigns"],
+    staleTime: 1000 * 60 * 5,
   });
 
   const parseCurrency = (value: string | number | null | undefined): number => {
@@ -378,6 +393,8 @@ export default function VendasConsulta() {
       margemValor: string;
       propostaValorEstimado: string;
       observacao: string;
+      addToPipeline: boolean;
+      campaignId: string;
     }) => {
       if (!clientId) throw new Error("Cliente não identificado");
       
@@ -389,7 +406,25 @@ export default function VendasConsulta() {
       
       const obsFormatada = `[ATENDIMENTO] Tipo: ${tipoLabel} | Marcador: ${marcadorLabel} | Margem: ${margem} | Proposta: ${proposta}${data.observacao ? ` | Obs: ${data.observacao}` : ""}`;
       
-      return apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obsFormatada });
+      // Save notes
+      await apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obsFormatada });
+      
+      // Also create lead in pipeline if requested
+      if (data.addToPipeline && data.campaignId) {
+        const leadRes = await apiRequest("POST", "/api/crm/cliente/criar-lead", {
+          pessoaId: clientId,
+          campaignId: parseInt(data.campaignId),
+        });
+        // If lead already exists, that's okay - we continue
+        if (!leadRes.ok) {
+          const err = await leadRes.json().catch(() => ({}));
+          if (!err.message?.includes("já existe")) {
+            throw new Error(err.message || "Erro ao criar lead");
+          }
+        }
+      }
+      
+      return { success: true };
     },
     onSuccess: () => {
       toast({ title: "Atendimento registrado!" });
@@ -401,9 +436,12 @@ export default function VendasConsulta() {
         propostaValorEstimado: "",
         observacao: "",
       });
+      setAddToPipeline(true);
+      setSelectedCampaignId("");
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
     },
-    onError: () => {
-      toast({ title: "Erro ao registrar atendimento", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: error.message || "Erro ao registrar atendimento", variant: "destructive" });
     },
   });
 
@@ -464,7 +502,11 @@ export default function VendasConsulta() {
   };
 
   const handleRegistrarInteracao = () => {
-    registrarInteracaoMutation.mutate(interactionFormData);
+    registrarInteracaoMutation.mutate({
+      ...interactionFormData,
+      addToPipeline,
+      campaignId: selectedCampaignId,
+    });
   };
 
   if (!consultaData) {
@@ -1416,6 +1458,49 @@ export default function VendasConsulta() {
                 data-testid="textarea-observacao-interacao"
               />
             </div>
+
+            <Separator />
+
+            {/* Add to Pipeline Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Adicionar ao Pipeline de Vendas</Label>
+                </div>
+                <Switch
+                  checked={addToPipeline}
+                  onCheckedChange={setAddToPipeline}
+                  data-testid="switch-add-pipeline"
+                />
+              </div>
+              
+              {addToPipeline && (
+                <div>
+                  <Label className="text-sm">Selecione a Campanha *</Label>
+                  <Select
+                    value={selectedCampaignId}
+                    onValueChange={setSelectedCampaignId}
+                  >
+                    <SelectTrigger data-testid="select-campanha">
+                      <SelectValue placeholder="Escolha uma campanha..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {campaigns.filter(c => c.status === "ACTIVE").map((campaign) => (
+                        <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                          {campaign.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {campaigns.filter(c => c.status === "ACTIVE").length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Nenhuma campanha ativa. Crie uma campanha no CRM de Vendas.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -1427,7 +1512,7 @@ export default function VendasConsulta() {
             </Button>
             <Button
               onClick={handleRegistrarInteracao}
-              disabled={registrarInteracaoMutation.isPending}
+              disabled={registrarInteracaoMutation.isPending || (addToPipeline && !selectedCampaignId)}
               data-testid="button-salvar-interacao"
             >
               {registrarInteracaoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
