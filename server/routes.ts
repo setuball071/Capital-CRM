@@ -10084,15 +10084,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.post("/api/crm/cliente/criar-lead-direto", requireAuth, async (req, res) => {
     try {
       const { pessoaId, marcador } = req.body;
-      const userTenantId = req.tenantId;
       const userId = req.user!.id;
       
       if (!pessoaId) {
         return res.status(400).json({ message: "pessoaId é obrigatório" });
-      }
-
-      if (!userTenantId) {
-        return res.status(400).json({ message: "Tenant não identificado" });
       }
 
       const pessoa = await storage.getClientePessoaById(pessoaId);
@@ -10100,12 +10095,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
 
+      // Use user's tenantId, or pessoa's tenantId, or user's own tenantId from profile
+      let tenantId = req.tenantId || pessoa.tenantId || req.user!.tenantId;
+      
+      // If still no tenant, try to get or create a default one
+      if (!tenantId) {
+        // Check if there's a default tenant
+        const defaultTenant = await db.select().from(tenants).limit(1);
+        if (defaultTenant.length > 0) {
+          tenantId = defaultTenant[0].id;
+        } else {
+          return res.status(400).json({ message: "Nenhum tenant configurado no sistema" });
+        }
+      }
+
       // Find or create "Atendimento Direto" campaign for this tenant
       let campaign = await db
         .select()
         .from(salesCampaigns)
         .where(and(
-          eq(salesCampaigns.tenantId, userTenantId),
+          eq(salesCampaigns.tenantId, tenantId),
           eq(salesCampaigns.nome, "Atendimento Direto")
         ))
         .limit(1);
@@ -10115,7 +10124,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (campaign.length === 0) {
         // Create the default campaign
         const [newCampaign] = await db.insert(salesCampaigns).values({
-          tenantId: userTenantId,
+          tenantId: tenantId,
           nome: "Atendimento Direto",
           descricao: "Leads originados de consultas diretas na tela de consulta",
           status: "ACTIVE",
@@ -10158,7 +10167,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const leadMarker = marcadorMap[marcador] || "NOVO";
 
       const [newLead] = await db.insert(salesLeads).values({
-        tenantId: userTenantId,
+        tenantId: tenantId,
         campaignId,
         cpf: pessoa.cpf || null,
         nome: pessoa.nome || "Nome não informado",
