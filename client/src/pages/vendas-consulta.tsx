@@ -21,12 +21,6 @@ import {
   Plus, Pencil, Trash2, Save, SkipForward, Target
 } from "lucide-react";
 
-interface Campaign {
-  id: number;
-  nome: string;
-  status: string;
-}
-
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
 type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
 
@@ -193,19 +187,12 @@ export default function VendasConsulta() {
   
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
   const [interactionFormData, setInteractionFormData] = useState({
     tipoContato: "ligacao" as TipoContatoConsulta,
     marcador: "em_atendimento" as MarcadorConsulta,
     margemValor: "",
     propostaValorEstimado: "",
     observacao: "",
-  });
-
-  // Fetch available campaigns for pipeline
-  const { data: campaigns = [] } = useQuery<Campaign[]>({
-    queryKey: ["/api/crm/campaigns"],
-    staleTime: 1000 * 60 * 5,
   });
 
   const parseCurrency = (value: string | number | null | undefined): number => {
@@ -394,7 +381,6 @@ export default function VendasConsulta() {
       propostaValorEstimado: string;
       observacao: string;
       addToPipeline: boolean;
-      campaignId: string;
     }) => {
       if (!clientId) throw new Error("Cliente não identificado");
       
@@ -409,11 +395,11 @@ export default function VendasConsulta() {
       // Save notes
       await apiRequest("POST", `/api/clientes/${clientId}/observacao`, { observacao: obsFormatada });
       
-      // Also create lead in pipeline if requested
-      if (data.addToPipeline && data.campaignId) {
-        const leadRes = await apiRequest("POST", "/api/crm/cliente/criar-lead", {
+      // Also create lead in pipeline if requested (uses auto "Atendimento Direto" campaign)
+      if (data.addToPipeline) {
+        const leadRes = await apiRequest("POST", "/api/crm/cliente/criar-lead-direto", {
           pessoaId: clientId,
-          campaignId: parseInt(data.campaignId),
+          marcador: data.marcador,
         });
         // If lead already exists, that's okay - we continue
         if (!leadRes.ok) {
@@ -437,7 +423,6 @@ export default function VendasConsulta() {
         observacao: "",
       });
       setAddToPipeline(true);
-      setSelectedCampaignId("");
       queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
     },
     onError: (error: Error) => {
@@ -505,7 +490,6 @@ export default function VendasConsulta() {
     registrarInteracaoMutation.mutate({
       ...interactionFormData,
       addToPipeline,
-      campaignId: selectedCampaignId,
     });
   };
 
@@ -1462,44 +1446,16 @@ export default function VendasConsulta() {
             <Separator />
 
             {/* Add to Pipeline Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  <Label className="text-sm font-medium">Adicionar ao Pipeline de Vendas</Label>
-                </div>
-                <Switch
-                  checked={addToPipeline}
-                  onCheckedChange={setAddToPipeline}
-                  data-testid="switch-add-pipeline"
-                />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                <Label className="text-sm font-medium">Adicionar ao Pipeline de Vendas</Label>
               </div>
-              
-              {addToPipeline && (
-                <div>
-                  <Label className="text-sm">Selecione a Campanha *</Label>
-                  <Select
-                    value={selectedCampaignId}
-                    onValueChange={setSelectedCampaignId}
-                  >
-                    <SelectTrigger data-testid="select-campanha">
-                      <SelectValue placeholder="Escolha uma campanha..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {campaigns.filter(c => c.status === "ACTIVE").map((campaign) => (
-                        <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                          {campaign.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {campaigns.filter(c => c.status === "ACTIVE").length === 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Nenhuma campanha ativa. Crie uma campanha no CRM de Vendas.
-                    </p>
-                  )}
-                </div>
-              )}
+              <Switch
+                checked={addToPipeline}
+                onCheckedChange={setAddToPipeline}
+                data-testid="switch-add-pipeline"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -1512,7 +1468,7 @@ export default function VendasConsulta() {
             </Button>
             <Button
               onClick={handleRegistrarInteracao}
-              disabled={registrarInteracaoMutation.isPending || (addToPipeline && !selectedCampaignId)}
+              disabled={registrarInteracaoMutation.isPending}
               data-testid="button-salvar-interacao"
             >
               {registrarInteracaoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

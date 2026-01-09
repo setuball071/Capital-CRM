@@ -10080,6 +10080,106 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // POST /api/crm/cliente/criar-lead-direto - Create a lead from consultation (auto campaign "Atendimento Direto")
+  app.post("/api/crm/cliente/criar-lead-direto", requireAuth, async (req, res) => {
+    try {
+      const { pessoaId, marcador } = req.body;
+      const userTenantId = req.tenantId;
+      const userId = req.user!.id;
+      
+      if (!pessoaId) {
+        return res.status(400).json({ message: "pessoaId é obrigatório" });
+      }
+
+      if (!userTenantId) {
+        return res.status(400).json({ message: "Tenant não identificado" });
+      }
+
+      const pessoa = await storage.getClientePessoaById(pessoaId);
+      if (!pessoa) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+
+      // Find or create "Atendimento Direto" campaign for this tenant
+      let campaign = await db
+        .select()
+        .from(salesCampaigns)
+        .where(and(
+          eq(salesCampaigns.tenantId, userTenantId),
+          eq(salesCampaigns.nome, "Atendimento Direto")
+        ))
+        .limit(1);
+
+      let campaignId: number;
+      
+      if (campaign.length === 0) {
+        // Create the default campaign
+        const [newCampaign] = await db.insert(salesCampaigns).values({
+          tenantId: userTenantId,
+          nome: "Atendimento Direto",
+          descricao: "Leads originados de consultas diretas na tela de consulta",
+          status: "ACTIVE",
+          criadoPor: userId,
+        }).returning();
+        campaignId = newCampaign.id;
+      } else {
+        campaignId = campaign[0].id;
+      }
+
+      // Check if lead already exists for this pessoa in this campaign
+      const existingLead = await db
+        .select()
+        .from(salesLeads)
+        .where(and(
+          eq(salesLeads.baseClienteId, pessoaId),
+          eq(salesLeads.campaignId, campaignId)
+        ))
+        .limit(1);
+
+      if (existingLead.length > 0) {
+        // Lead already exists - just assign to current user if not assigned
+        if (!existingLead[0].assignedTo) {
+          await db.update(salesLeads)
+            .set({ assignedTo: userId })
+            .where(eq(salesLeads.id, existingLead[0].id));
+        }
+        return res.json({ message: "Lead já existe no pipeline", leadId: existingLead[0].id, existing: true });
+      }
+
+      // Map marcador from consultation to lead marker
+      const marcadorMap: Record<string, string> = {
+        em_atendimento: "EM_CONTATO",
+        interesse: "INTERESSE",
+        agendar_retorno: "AGENDAMENTO",
+        sem_interesse: "SEM_INTERESSE",
+        vendido: "FECHADO",
+        concluido: "FECHADO",
+      };
+      const leadMarker = marcadorMap[marcador] || "NOVO";
+
+      const [newLead] = await db.insert(salesLeads).values({
+        tenantId: userTenantId,
+        campaignId,
+        cpf: pessoa.cpf || null,
+        nome: pessoa.nome || "Nome não informado",
+        telefone1: (pessoa.telefonesBase as string[] | null)?.[0] || null,
+        telefone2: (pessoa.telefonesBase as string[] | null)?.[1] || null,
+        telefone3: (pessoa.telefonesBase as string[] | null)?.[2] || null,
+        cidade: pessoa.municipio || null,
+        uf: pessoa.uf || null,
+        baseClienteId: pessoaId,
+        leadMarker,
+        assignedTo: userId, // Auto-assign to current user
+        status: "ATRIBUIDO",
+      }).returning();
+
+      return res.json({ message: "Lead criado com sucesso", leadId: newLead.id });
+    } catch (error) {
+      console.error("Create lead direto error:", error);
+      return res.status(500).json({ message: "Erro ao criar lead" });
+    }
+  });
+
   // ===== CAMPAIGN MANAGEMENT ENDPOINTS =====
 
   // GET /api/crm/campaigns/:id/distribution - Get lead distribution by marker
