@@ -10146,13 +10146,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .limit(1);
 
       if (existingLead.length > 0) {
+        const leadId = existingLead[0].id;
         // Lead already exists - just assign to current user if not assigned
-        if (!existingLead[0].assignedTo) {
+        if (!existingLead[0].assignedTo && leadId) {
           await db.update(salesLeads)
             .set({ assignedTo: userId })
-            .where(eq(salesLeads.id, existingLead[0].id));
+            .where(eq(salesLeads.id, leadId));
         }
-        return res.json({ message: "Lead já existe no pipeline", leadId: existingLead[0].id, existing: true });
+        return res.json({ message: "Lead já existe no pipeline", leadId, existing: true });
       }
 
       // Map marcador from consultation to lead marker
