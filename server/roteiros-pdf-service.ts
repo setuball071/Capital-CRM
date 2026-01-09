@@ -22,7 +22,7 @@ CAMPOS INFORMATIVOS (extraia do texto quando disponível):
 - regras_especiais: Array de strings com regras importantes
 - detalhes_adicionais: Array de strings com informações extras
 
-FLAGS OPERACIONAIS (valores booleanos ou null quando não especificado):
+FLAGS OPERACIONAIS (valores booleanos - APENAS true ou false, NUNCA null):
 - flags_operacionais: Objeto com {
     aceita_spc_serasa, aceita_acao_judicial, aceita_margem_zerada, aceita_margem_negativa,
     aceita_clt, aceita_temporario, aceita_pensionista_temporario, aceita_procuracao,
@@ -45,14 +45,23 @@ METADADOS PARA BUSCA:
     exige_analise_manual: boolean
   }
 
+REGRAS DE FORMATAÇÃO DE TIPOS (OBRIGATÓRIO):
+1. Campos de IDADE (idade_minima, idade_maxima): números inteiros SEM aspas (ex: 75, 18, 80)
+2. Campos de PRAZO em meses (prazo_minimo_meses, prazo_maximo_meses): números inteiros SEM aspas (ex: 12, 84, 96)
+3. Campos de VALOR MONETÁRIO (parcela_minima, valor_minimo_liberado, limite_parcela): strings formatadas com R$ (ex: "R$ 2.000,00")
+4. Campos de PERCENTUAL (margem_especifica, margem_seguranca): strings com símbolo % (ex: "5%", "30%")
+5. Campos BOOLEANOS (todas as flags): apenas true ou false, NUNCA null ou string
+6. Campos de TEXTO: strings não vazias
+7. Campos de ARRAY: arrays não vazios, ou OMITIR o campo se não houver dados
+
 INSTRUÇÕES:
 1. Retorne APENAS um objeto JSON válido no formato: {"roteiros": [...]}
 2. Se o documento contiver múltiplos produtos/operações, crie um roteiro separado para cada um
-3. Use valores null para campos numéricos/booleanos quando a informação não estiver disponível
-4. Use strings vazias "" ou arrays vazios [] para campos de texto/lista quando não houver informação
-5. Mantenha a fidelidade ao texto original - não invente informações
-6. Identifique corretamente o banco e convênio pelo contexto do documento
-7. Extraia perguntas frequentes baseadas em dúvidas comuns mencionadas no roteiro
+3. NÃO inclua campos vazios, nulos ou sem informação - OMITA o campo completamente
+4. Mantenha a fidelidade ao texto original - não invente informações
+5. Identifique corretamente o banco e convênio pelo contexto do documento
+6. Extraia perguntas frequentes baseadas em dúvidas comuns mencionadas no roteiro
+7. O JSON deve ser diretamente validável pelo schema do sistema
 
 TEXTO DO DOCUMENTO:
 `;
