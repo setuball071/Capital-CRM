@@ -688,11 +688,18 @@ export default function VendasPipeline() {
                 <div>
                   <Label className="text-muted-foreground">CPF</Label>
                   <div className="flex items-center gap-1">
-                    <p>{formatCPF(selectedLead.cpf)}</p>
-                    {selectedLead.cpf && (
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.cpf!)}>
-                        <Copy className="h-3 w-3" />
-                      </Button>
+                    {selectedLead.cpf ? (
+                      <a 
+                        href={`/vendas/consulta?cpf=${selectedLead.cpf.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-medium"
+                        data-testid="link-cpf-consulta"
+                      >
+                        {formatCPF(selectedLead.cpf)}
+                      </a>
+                    ) : (
+                      <p>-</p>
                     )}
                   </div>
                 </div>
