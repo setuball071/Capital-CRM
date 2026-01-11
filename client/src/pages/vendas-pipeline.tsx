@@ -166,12 +166,10 @@ function LeadCard({ lead, onCardClick, onDragStart }: LeadCardProps) {
             <p className="font-medium text-sm truncate" data-testid={`text-lead-nome-${lead.id}`}>
               {lead.nome}
             </p>
-            {lead.telefone1 && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3" />
-                {formatPhone(lead.telefone1)}
-              </p>
-            )}
+            <p className={`text-xs flex items-center gap-1 mt-0.5 ${lead.telefone1 ? 'text-primary font-medium' : 'text-muted-foreground italic'}`}>
+              <Phone className="h-3 w-3" />
+              {lead.telefone1 ? formatPhone(lead.telefone1) : 'Sem telefone'}
+            </p>
             <div className="flex items-center gap-1 mt-1 flex-wrap">
               <Badge variant="outline" className="text-xs">
                 {lead.campaignNome}
