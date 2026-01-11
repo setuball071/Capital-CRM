@@ -9848,8 +9848,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .limit(1);
       
       let leadId: number;
+      let leadCampaignId: number;
       if (existingLeads.length > 0) {
         leadId = existingLeads[0].id;
+        leadCampaignId = existingLeads[0].campaignId;
       } else {
         // Create new lead from pessoa
         const [newLead] = await db.insert(salesLeads).values({
@@ -9865,6 +9867,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           leadMarker: "NOVO",
         }).returning();
         leadId = newLead.id;
+        leadCampaignId = campaignId;
       }
       
       // Update lead marker and values
@@ -9908,6 +9911,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         await db.insert(salesLeadAssignments).values({
           leadId,
           userId,
+          campaignId: leadCampaignId,
           status: "em_atendimento",
           dataUltimoAtendimento: new Date(),
         });
@@ -10171,6 +10175,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           await db.insert(salesLeadAssignments).values({
             leadId,
             userId,
+            campaignId,
             status: "em_atendimento",
             dataUltimoAtendimento: new Date(),
           });
@@ -10225,6 +10230,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       await db.insert(salesLeadAssignments).values({
         leadId: newLead.id,
         userId,
+        campaignId,
         status: "em_atendimento",
         dataUltimoAtendimento: new Date(),
       });

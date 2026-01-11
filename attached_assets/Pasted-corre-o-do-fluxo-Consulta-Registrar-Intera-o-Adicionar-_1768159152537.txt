@@ -1,0 +1,127 @@
+correção do fluxo “Consulta → Registrar Interação → Adicionar ao Pipeline”
+Contexto do problema
+
+Ao salvar uma interação no modal de “Registrar Interação” dentro da tela de Consulta de Cliente (/vendas/consulta) o sistema está exibindo:
+
+Erro ao criar lead
+500 Internal Server Error
+
+
+Esse erro está ocorrendo porque a chamada ao endpoint responsável por criar o lead no pipeline está falhando ou não está recebendo dados válidos.
+Ou seja, a tela de consulta não está conseguindo criar/atualizar o lead no backend corretamente, impedindo a inclusão do lead no pipeline.
+
+🎯 Comportamento esperado
+
+Quando o usuário está na tela:
+
+/vendas/consulta
+
+
+e faz o seguinte:
+
+✔️ Preenche Tipo de Contato
+✔️ Seleciona Marcador de Lead
+✔️ Preenche Valor da Margem / Proposta Estimada
+✔️ Marca “Adicionar ao Pipeline de Vendas”
+✔️ Clica em Salvar
+
+→ O sistema deve criar ou atualizar o lead no Pipeline, com os dados da interação.
+
+→ O Pipeline (Kanban) deve ser atualizado com:
+
+Nome do cliente
+
+CPF
+
+Último marcador
+
+Última interação
+
+Dados calculados (margem, proposta, etc.)
+
+Posição correta no funil conforme marcador
+
+🛠️ Regras de Resolução Técnica
+1️⃣ Corrigir o endpoint que está falhando
+
+O backend está retornando erro 500 na rota:
+
+POST /api/crm/cliente/criar-lead-direto
+
+
+A correção deve garantir que essa rota:
+
+✔️ Aceite requisições vindas da tela /vendas/consulta
+✔️ Crie um novo lead se ele não existir no pipeline
+✔️ Atualize o lead existente se ele já estiver no pipeline
+✔️ Relacione a interação corretamente com o lead
+
+Essa rota deve:
+
+Validar corretamente os campos obrigatórios
+
+Não retornar erro quando userId estiver presente
+
+Não checar tipo de origem (campanha) para criar o lead
+
+Retornar JSON válido com ID do lead
+
+2️⃣ Normalizar dados antes de criar o lead
+
+Garantir que os dados enviados ao backend sejam do tipo esperado:
+
+Campo	Tipo Esperado	Observação
+tipo_contato	string	deve conter um valor válido do cadastro
+marcador_lead	string	um dos status existentes (ex: “Interesse”, “Em Atendimento”)
+valor_margem	number	Float ou decimal
+proposta_estimada	number	Float ou decimal
+adicionar_pipeline	boolean	Deve ser true
+cpf / matricula / client	string	Identificação para criar ou atualizar lead
+3️⃣ Atualizar o mutation do front
+
+No frontend, o código que chama essa API está em algo como:
+
+await mutationFn(values)
+
+
+Mas está enviando a requisição para a API errada ou com payload malformatado.
+
+Ele deve chamar algo parecido com:
+
+POST /api/crm/cliente/criar-ou-atualizar-lead
+{
+  cpf: cliente.cpf,
+  nome: cliente.nome,
+  tipoContato: values.tipo_contato,
+  marcador: values.marcador_lead,
+  valorMargem: values.valor_margem,
+  propostaEstimada: values.proposta_estimada,
+  observacoes: values.observacoes,
+  pipeline: true
+}
+
+
+Ou seja, não apenas criar interação — criar/atualizar o lead e associar a interação.
+
+4️⃣ Testes obrigatórios
+
+Após implementar, validar:
+
+Caso	Resultado Esperado
+Consultar cliente sem campanha	Lead criado no pipeline
+Consultar cliente já no pipeline	Lead atualizado
+Marcador diferente	Lead movimentado para coluna correta
+Sem marcar pipeline	Lead NÃO deve ser criado
+🧪 Critérios de aceitação (QA)
+
+🔹 Clicar “Salvar” com “Adicionar ao pipeline” → lead criado no funil
+🔹 Log de erro detalhado caso algo falhe
+🔹 Dados da interação exibidos no pipeline
+🔹 Sem duplicação de lead ao editar e salvar novamente
+
+✅ Mensagem Final para Devs
+
+Corrigir o endpoint que cria o lead para aceitar requisições da tela de consulta (sem dependência de campanha).
+Normalizar a criação/atualização do lead no backend.
+Ajustar o frontend para enviar payload adequado e tratar respostas sem erro 500.
+Garantir que o pipeline seja atualizado corretamente.
