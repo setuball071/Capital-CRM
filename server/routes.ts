@@ -9800,6 +9800,64 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // POST /api/crm/leads/:id/move-quick - Movimentação rápida de lead sem observação obrigatória
+  app.post("/api/crm/leads/:id/move-quick", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { marker } = req.body;
+      
+      if (!marker) {
+        return res.status(400).json({ message: "Marcador é obrigatório" });
+      }
+      
+      // Validate marker is a valid LEAD_MARKER
+      if (!LEAD_MARKERS.includes(marker)) {
+        return res.status(400).json({ message: "Marcador inválido" });
+      }
+      
+      // Cannot move to NOVO
+      if (marker === "NOVO") {
+        return res.status(400).json({ message: "Não é possível mover para NOVO" });
+      }
+      
+      // Update lead marker directly
+      await db.update(salesLeads)
+        .set({
+          leadMarker: marker,
+          ultimoContatoEm: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(salesLeads.id, leadId));
+      
+      // Update assignment status based on marker
+      const assignments = await storage.getAssignmentsByUser(userId);
+      const assignment = assignments.find(a => a.leadId === leadId);
+      
+      if (assignment) {
+        let newStatus = "em_atendimento";
+        if (["VENDIDO"].includes(marker)) {
+          newStatus = "vendido";
+        } else if (["NAO_ATENDE", "TELEFONE_INVALIDO", "ENGANO", "SEM_INTERESSE"].includes(marker)) {
+          newStatus = "descartado";
+        }
+        
+        await storage.updateSalesLeadAssignment(assignment.id, {
+          status: newStatus,
+          dataUltimoAtendimento: new Date(),
+        });
+      }
+      
+      return res.json({ 
+        success: true,
+        message: "Lead movido com sucesso" 
+      });
+    } catch (error) {
+      console.error("Quick move lead error:", error);
+      return res.status(500).json({ message: "Erro ao mover lead" });
+    }
+  });
+
   // POST /api/crm/consulta/registrar-atendimento - Registrar atendimento a partir de consulta de cliente
   app.post("/api/crm/consulta/registrar-atendimento", requireAuth, async (req, res) => {
     try {

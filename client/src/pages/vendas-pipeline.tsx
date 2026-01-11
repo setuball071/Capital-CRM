@@ -321,7 +321,7 @@ export default function VendasPipeline() {
       observacao?: string;
       motivo?: string;
       retornoEm?: string;
-      contactId: number;
+      contactId?: number;
       margemValor: string;
       propostaValorEstimado: string;
     }) => {
@@ -404,29 +404,56 @@ export default function VendasPipeline() {
       return;
     }
 
-    // Sempre abrir modal para registrar atendimento com os campos obrigatórios
-    setSelectedLead(draggedLead);
-    setNewMarker(marker);
-    setMoveDialogOpen(true);
-    
-    // Buscar contatos do lead
-    try {
-      const response = await fetch(`/api/crm/leads/${draggedLead.id}/contacts`);
-      if (response.ok) {
-        const contacts = await response.json();
-        setLeadContacts(contacts);
-        const primary = contacts.find((c: LeadContact) => c.isPrimary);
-        if (primary) {
-          setContactId(String(primary.id));
-        } else if (contacts.length > 0) {
-          setContactId(String(contacts[0].id));
+    // Para marcadores que exigem motivo, abrir modal
+    if (MARKERS_REQUIRING_MOTIVO.includes(marker)) {
+      setSelectedLead(draggedLead);
+      setNewMarker(marker);
+      setMoveDialogOpen(true);
+      
+      // Buscar contatos do lead
+      try {
+        const response = await fetch(`/api/crm/leads/${draggedLead.id}/contacts`);
+        if (response.ok) {
+          const contacts = await response.json();
+          setLeadContacts(contacts);
+          const primary = contacts.find((c: LeadContact) => c.isPrimary);
+          if (primary) {
+            setContactId(String(primary.id));
+          } else if (contacts.length > 0) {
+            setContactId(String(contacts[0].id));
+          }
         }
+      } catch (error) {
+        console.error("Erro ao buscar contatos:", error);
       }
-    } catch (error) {
-      console.error("Erro ao buscar contatos:", error);
+      
+      setDraggedLead(null);
+      return;
     }
-    
+
+    // Movimentação direta sem modal para marcadores normais
+    const leadToMove = draggedLead;
     setDraggedLead(null);
+    
+    try {
+      const response = await fetch(`/api/crm/leads/${leadToMove.id}/move-quick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marker }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        toast({ title: error.message || "Erro ao mover lead", variant: "destructive" });
+        return;
+      }
+      
+      toast({ title: `Lead movido para ${LEAD_MARKER_LABELS[marker]}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+    } catch (error) {
+      console.error("Erro ao mover lead:", error);
+      toast({ title: "Erro ao mover lead", variant: "destructive" });
+    }
   };
 
   const handleMoveSubmit = () => {
