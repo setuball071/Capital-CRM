@@ -10171,16 +10171,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const leadId = existingLead[0].id;
         console.log("[criar-lead-direto] Lead already exists with id:", leadId, "- updating...");
         
-        // Update existing lead with new data
+        // Update existing lead with new data - map consultation markers to pipeline LEAD_MARKERS
         const marcadorMap: Record<string, string> = {
-          em_atendimento: "EM_CONTATO",
-          interesse: "INTERESSE",
-          agendar_retorno: "AGENDAMENTO",
+          em_atendimento: "EM_ATENDIMENTO",
+          interesse: "INTERESSADO",
+          agendar_retorno: "AGUARDANDO_RETORNO",
           sem_interesse: "SEM_INTERESSE",
-          vendido: "FECHADO",
-          concluido: "FECHADO",
+          vendido: "VENDIDO",
+          concluido: "VENDIDO",
         };
         const leadMarker = marcadorMap[marcador] || existingLead[0].leadMarker || "NOVO";
+        console.log("[criar-lead-direto] Mapped marcador:", marcador, "->", leadMarker);
         
         // Update the lead with new interaction data
         await db.update(salesLeads)
@@ -10248,18 +10249,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         });
       }
 
-      // Map marcador from consultation to lead marker
+      // Map marcador from consultation to lead marker (LEAD_MARKERS from schema)
       const marcadorMap: Record<string, string> = {
-        em_atendimento: "EM_CONTATO",
-        interesse: "INTERESSE",
-        agendar_retorno: "AGENDAMENTO",
+        em_atendimento: "EM_ATENDIMENTO",
+        interesse: "INTERESSADO",
+        agendar_retorno: "AGUARDANDO_RETORNO",
         sem_interesse: "SEM_INTERESSE",
-        vendido: "FECHADO",
-        concluido: "FECHADO",
+        vendido: "VENDIDO",
+        concluido: "VENDIDO",
       };
       const leadMarker = marcadorMap[marcador] || "NOVO";
 
-      console.log("[criar-lead-direto] Creating new lead with marker:", leadMarker);
+      console.log("[criar-lead-direto] Mapped marcador:", marcador, "-> leadMarker:", leadMarker);
       
       const [newLead] = await db.insert(salesLeads).values({
         tenantId: tenantId,
