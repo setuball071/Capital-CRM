@@ -10103,7 +10103,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         console.log("[criar-lead-direto] Error: pessoa not found for id:", pessoaId);
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
-      console.log("[criar-lead-direto] Found pessoa:", pessoa.nome);
+      console.log("[criar-lead-direto] Found pessoa id:", pessoa.id, "nome:", pessoa.nome || "(sem nome)", "cpf:", pessoa.cpf || "(sem cpf)");
 
       // Use user's tenantId, or pessoa's tenantId, or user's own tenantId from profile
       let tenantId = req.tenantId || pessoa.tenantId || req.user!.tenantId;
@@ -10123,6 +10123,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       // Find or create "Atendimento Direto" campaign for this tenant
+      console.log("[criar-lead-direto] Looking for campaign with tenantId:", tenantId);
+      
       let campaign = await db
         .select()
         .from(salesCampaigns)
@@ -10135,6 +10137,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let campaignId: number;
       
       if (campaign.length === 0) {
+        console.log("[criar-lead-direto] Creating new campaign for tenant:", tenantId);
         // Create the default campaign
         const [newCampaign] = await db.insert(salesCampaigns).values({
           tenantId: tenantId,
@@ -10144,11 +10147,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           criadoPor: userId,
         }).returning();
         campaignId = newCampaign.id;
+        console.log("[criar-lead-direto] Created campaign with id:", campaignId);
       } else {
         campaignId = campaign[0].id;
+        console.log("[criar-lead-direto] Found existing campaign with id:", campaignId);
       }
 
       // Check if lead already exists for this pessoa in this campaign
+      console.log("[criar-lead-direto] Checking for existing lead with pessoaId:", pessoaId, "campaignId:", campaignId);
+      
       const existingLead = await db
         .select()
         .from(salesLeads)
@@ -10158,9 +10165,40 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         ))
         .limit(1);
 
+      console.log("[criar-lead-direto] Existing lead check result:", existingLead.length > 0 ? `Found lead id ${existingLead[0].id}` : "No existing lead");
+
       if (existingLead.length > 0) {
         const leadId = existingLead[0].id;
-        // Lead already exists - ensure assignment exists for current user
+        console.log("[criar-lead-direto] Lead already exists with id:", leadId, "- updating...");
+        
+        // Update existing lead with new data
+        const marcadorMap: Record<string, string> = {
+          em_atendimento: "EM_CONTATO",
+          interesse: "INTERESSE",
+          agendar_retorno: "AGENDAMENTO",
+          sem_interesse: "SEM_INTERESSE",
+          vendido: "FECHADO",
+          concluido: "FECHADO",
+        };
+        const leadMarker = marcadorMap[marcador] || existingLead[0].leadMarker || "NOVO";
+        
+        // Update the lead with new interaction data
+        await db.update(salesLeads)
+          .set({
+            leadMarker,
+            currentMargin: margemValor ? String(margemValor) : existingLead[0].currentMargin,
+            currentProposal: propostaValorEstimado ? String(propostaValorEstimado) : existingLead[0].currentProposal,
+            observacoes: observacoes || existingLead[0].observacoes,
+            ultimoContatoEm: new Date(),
+            ultimoTipoContato: tipoContato || existingLead[0].ultimoTipoContato,
+            assignedTo: existingLead[0].assignedTo || userId,
+            updatedAt: new Date(),
+          })
+          .where(eq(salesLeads.id, leadId));
+        
+        console.log("[criar-lead-direto] Lead updated successfully");
+        
+        // Check for existing assignment
         const existingAssignment = await db
           .select()
           .from(salesLeadAssignments)
@@ -10171,7 +10209,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           .limit(1);
         
         if (existingAssignment.length === 0) {
-          // Create assignment for this user
+          console.log("[criar-lead-direto] Creating assignment for user:", userId);
           await db.insert(salesLeadAssignments).values({
             leadId,
             userId,
@@ -10179,15 +10217,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             status: "em_atendimento",
             dataUltimoAtendimento: new Date(),
           });
+        } else {
+          console.log("[criar-lead-direto] Assignment already exists, updating...");
+          await db.update(salesLeadAssignments)
+            .set({
+              status: "em_atendimento",
+              dataUltimoAtendimento: new Date(),
+            })
+            .where(eq(salesLeadAssignments.id, existingAssignment[0].id));
         }
         
-        // Update lead assignedTo if not set
-        if (!existingLead[0].assignedTo) {
-          await db.update(salesLeads)
-            .set({ assignedTo: userId })
-            .where(eq(salesLeads.id, leadId));
-        }
-        return res.json({ message: "Lead já existe no pipeline", leadId, existing: true });
+        // Create interaction record for this update
+        await db.insert(leadInteractions).values({
+          leadId,
+          userId,
+          tipoContato: tipoContato || "outro",
+          leadMarker,
+          observacao: observacoes || null,
+          margemValor: margemValor ? String(margemValor) : null,
+          propostaValorEstimado: propostaValorEstimado ? String(propostaValorEstimado) : null,
+        });
+        
+        console.log("[criar-lead-direto] Interaction created for existing lead");
+        
+        return res.json({ 
+          success: true,
+          message: "Lead atualizado com sucesso", 
+          leadId, 
+          updated: true 
+        });
       }
 
       // Map marcador from consultation to lead marker
@@ -10250,7 +10308,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       console.log("[criar-lead-direto] Interaction created successfully");
 
-      return res.json({ message: "Lead criado com sucesso", leadId: newLead.id });
+      return res.json({ 
+        success: true,
+        message: "Lead criado com sucesso", 
+        leadId: newLead.id,
+        created: true
+      });
     } catch (error: unknown) {
       const err = error as Error & { code?: string; detail?: string };
       console.error("[criar-lead-direto] Error:", err.message, err.code, err.detail);

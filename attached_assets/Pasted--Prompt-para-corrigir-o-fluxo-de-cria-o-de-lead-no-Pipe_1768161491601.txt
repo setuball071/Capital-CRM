@@ -1,0 +1,119 @@
+✔ Prompt para corrigir o fluxo de criação de lead no Pipeline
+Objetivo:
+
+Permitir que, ao registrar uma interação na tela de Consulta de Cliente com a opção Adicionar ao Pipeline de Vendas ativa, o lead seja:
+
+Criado no Pipeline, se ainda não existir
+
+Atualizado no Pipeline, se já existir
+
+A interação registrada seja associada ao lead corretamente
+
+Evitar erros ao tentar criar duplicados
+
+Comportamento esperado após correção
+
+👉 Na tela: /vendas/consulta/:cpf
+
+Usuário preenche:
+
+Tipo de contato
+
+Marcador de lead
+
+Valor de margem
+
+Proposta estimada
+
+Ativa “Adicionar ao Pipeline”
+
+Clica “Salvar”
+
+➡ Resultado esperado:
+
+Lead aparece imediatamente no pipeline
+
+Status do lead reflete o marcador selecionado
+
+Interação fica registrada e visível no histórico do lead
+
+Não ocorre erro 500 em tentativas subsequentes
+
+🔧 Ajustes técnicos necessários no backend
+1. Endpoint deve ser idempotente
+
+Se o lead já existe:
+
+Deve retornar sucesso e atualizar o lead
+
+Não criar duplicado
+
+Não retornar erro 500
+
+Exemplo de fluxo:
+
+if (leadExists) {
+   updateLead(leadId, interactionData);
+   return { success: true, updated: true };
+}
+
+createLead(leadData);
+return { success: true, created: true };
+
+2. Validação dos dados no backend
+
+Campos obrigatórios:
+
+{
+  "cpf": "string",
+  "nome": "string",
+  "tipoContato": "string",
+  "marcador": "string",
+  "valorMargem": "number",
+  "propostaEstimada": "number",
+  "observacoes": "string",
+  "adicionarPipeline": true
+}
+
+
+⚠ Atenção:
+
+valorMargem e propostaEstimada são numbers, não strings
+
+Backend deve rejeitar somente se realmente faltar campo obrigatório
+
+3. Resposta do backend
+
+O backend deve sempre retornar um JSON claro como:
+
+{
+  "success": true,
+  "leadId": "123456",
+  "message": "Lead criado/atualizado com sucesso"
+}
+
+
+Não deve retornar:
+
+"success": true com dados inconsistentes
+
+Resposta sem leadId
+
+4. Ajustes no frontend
+
+Aceitar resposta da API e em seguida:
+
+Atualizar o pipeline localmente
+
+Redirecionar ou atualizar a tela de pipeline se aberta em outra aba
+
+Mostrar feedback visual claro:
+
+“Lead salvo e adicionado ao pipeline com sucesso”
+
+🧪 Casos de Teste Obrigatórios
+Cenário	Esperado
+Lead novo via consulta	Lead aparece no pipeline
+Lead existente no pipeline	Lead é atualizado
+Tentar criar o mesmo lead novamente	Sistema não falha, atualiza
+Sem opção de pipeline	Lead salva apenas interação
