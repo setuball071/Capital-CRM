@@ -701,9 +701,13 @@ export default function VendasPipeline() {
                   <p>{selectedLead.campaignNome}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Telefone 1</Label>
+                  <Label className="text-muted-foreground flex items-center gap-1">
+                    <Phone className="h-3 w-3" /> Telefone 1
+                  </Label>
                   <div className="flex items-center gap-1">
-                    <p>{formatPhone(selectedLead.telefone1)}</p>
+                    <p className={selectedLead.telefone1 ? 'text-primary font-medium' : ''}>
+                      {formatPhone(selectedLead.telefone1)}
+                    </p>
                     {selectedLead.telefone1 && (
                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.telefone1!)}>
                         <Copy className="h-3 w-3" />
@@ -712,9 +716,33 @@ export default function VendasPipeline() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Telefone 2</Label>
-                  <p>{formatPhone(selectedLead.telefone2)}</p>
+                  <Label className="text-muted-foreground flex items-center gap-1">
+                    <Phone className="h-3 w-3" /> Telefone 2
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    <p className={selectedLead.telefone2 ? 'text-primary font-medium' : ''}>
+                      {formatPhone(selectedLead.telefone2)}
+                    </p>
+                    {selectedLead.telefone2 && (
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.telefone2!)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
+                {selectedLead.telefone3 && (
+                  <div>
+                    <Label className="text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3" /> Telefone 3
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <p className="text-primary font-medium">{formatPhone(selectedLead.telefone3)}</p>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(selectedLead.telefone3!)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <Label className="text-muted-foreground">Cidade/UF</Label>
                   <p>{selectedLead.cidade || "-"} {selectedLead.uf ? `/ ${selectedLead.uf}` : ""}</p>
