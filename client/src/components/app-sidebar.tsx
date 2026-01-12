@@ -162,11 +162,11 @@ export function AppSidebar() {
       icon: WolfIcon,
       items: [
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
-        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
         { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
         { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
-        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "pipeline" },
-        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
+        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
       ],
     },
   ];

@@ -59,7 +59,7 @@ The application uses a granular sub-item permission system with the following mo
 | modulo_base_clientes | Base de Clientes | consulta, importacao, compra_lista |
 | modulo_config_usuarios | Administração | usuarios, ambientes, precos |
 | modulo_academia | Treinamento | fundamentos, quiz, roleplay, scripts, dashboard |
-| modulo_alpha | ALPHA | campanhas, pipeline, consulta |
+| modulo_alpha | ALPHA | campanhas, atendimento, pipeline, consulta, agenda, gestao_pipeline |
 
 **Key permission behaviors:**
 - `isMaster=true` flag grants full access (only global bypass - zero role inheritance)

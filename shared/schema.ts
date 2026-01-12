@@ -1326,8 +1326,11 @@ export const MODULE_SUB_ITEMS = {
   ],
   modulo_alpha: [
     { key: "campanhas", label: "Campanhas" },
-    { key: "pipeline", label: "Pipeline de Vendas" },
-    { key: "consulta", label: "Consulta Rápida" },
+    { key: "atendimento", label: "Atendimento" },
+    { key: "pipeline", label: "Pipeline" },
+    { key: "consulta", label: "Consulta" },
+    { key: "agenda", label: "Agenda" },
+    { key: "gestao_pipeline", label: "Gestão Pipeline" },
   ],
 } as const;
 
