@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -176,6 +177,11 @@ function CopyableField({
 
 export default function VendasConsulta() {
   const { toast } = useToast();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const cpfFromUrl = urlParams.get("cpf");
+  const hasAutoSearched = useRef(false);
+  
   const [termoBusca, setTermoBusca] = useState("");
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
@@ -315,6 +321,15 @@ export default function VendasConsulta() {
       });
     },
   });
+
+  // Auto-search when cpf is passed via URL parameter
+  useEffect(() => {
+    if (cpfFromUrl && !hasAutoSearched.current) {
+      hasAutoSearched.current = true;
+      setTermoBusca(cpfFromUrl);
+      buscarMutation.mutate(cpfFromUrl);
+    }
+  }, [cpfFromUrl]);
 
   const createContactMutation = useMutation({
     mutationFn: async (data: { type: string; value: string; label?: string }) => {
