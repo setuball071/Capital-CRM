@@ -742,7 +742,7 @@ export default function UsersPage() {
                     ) : (
                       <div className="border rounded-md">
                         <Accordion type="multiple" className="w-full">
-                          {(isMaster ? modules : delegatableModules).map((module) => {
+                          {(isMaster ? modules : delegatableModules).filter(m => m !== "modulo_alpha").map((module) => {
                             const subItems = MODULE_SUB_ITEMS[module as ModuleName] || [];
                             const modulePermissions = permissions.filter(p => p.module.startsWith(module + "."));
                             const hasAnyView = modulePermissions.some(p => p.canView);
@@ -810,6 +810,47 @@ export default function UsersPage() {
                             );
                           })}
                         </Accordion>
+                        
+                        {/* ALPHA sub-items displayed as individual top-level rows */}
+                        {(isMaster ? modules : delegatableModules).includes("modulo_alpha") && (
+                          <div className="border-t">
+                            {MODULE_SUB_ITEMS.modulo_alpha.map((subItem: { key: string; label: string }) => {
+                              const subItemKey = getSubItemPermissionKey("modulo_alpha", subItem.key);
+                              const perm = permissions.find(p => p.module === subItemKey);
+                              if (!perm) return null;
+                              
+                              return (
+                                <div key={subItemKey} className="flex items-center justify-between py-3 px-4 border-b last:border-b-0" data-testid={`permission-row-${subItemKey}`}>
+                                  <span className="font-medium">{subItem.label}</span>
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        id={`view-${subItemKey}`}
+                                        checked={perm.canView}
+                                        onCheckedChange={(checked) => updatePermission(subItemKey, 'canView', !!checked)}
+                                        data-testid={`checkbox-view-${subItemKey}`}
+                                      />
+                                      <Label htmlFor={`view-${subItemKey}`} className="text-xs text-muted-foreground cursor-pointer">
+                                        Visualizar
+                                      </Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        id={`edit-${subItemKey}`}
+                                        checked={perm.canEdit}
+                                        onCheckedChange={(checked) => updatePermission(subItemKey, 'canEdit', !!checked)}
+                                        data-testid={`checkbox-edit-${subItemKey}`}
+                                      />
+                                      <Label htmlFor={`edit-${subItemKey}`} className="text-xs text-muted-foreground cursor-pointer">
+                                        Editar
+                                      </Label>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
