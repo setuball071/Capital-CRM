@@ -293,9 +293,17 @@ export default function AdminBrandingPage() {
             <div className="space-y-2">
               <Label>Logo do Menu Lateral</Label>
               <div className="flex items-center gap-4">
-                {tenantData?.logoUrl && (
-                  <div className="h-12 w-32 bg-muted rounded flex items-center justify-center p-2">
-                    <img src={tenantData.logoUrl} alt="Logo atual" className="max-h-full max-w-full object-contain" />
+                {(logoFile || tenantData?.logoUrl) && (
+                  <div className="h-12 w-32 bg-muted rounded flex items-center justify-center p-2 relative">
+                    <img 
+                      src={logoFile ? URL.createObjectURL(logoFile) : tenantData?.logoUrl || ""} 
+                      alt="Logo atual" 
+                      className="max-h-full max-w-full object-contain" 
+                      data-testid="img-logo-sidebar"
+                    />
+                    {logoFile && (
+                      <span className="absolute -top-1 -right-1 bg-yellow-500 text-xs text-white px-1 rounded">Novo</span>
+                    )}
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
@@ -305,14 +313,23 @@ export default function AdminBrandingPage() {
                   </Button>
                 </div>
               </div>
+              {logoFile && <p className="text-xs text-muted-foreground">Clique no botão de upload para salvar o novo logo</p>}
             </div>
 
             <div className="space-y-2">
               <Label>Logo da Tela de Login</Label>
               <div className="flex items-center gap-4">
-                {(tenantData as any)?.logoLoginUrl && (
-                  <div className="h-12 w-32 bg-muted rounded flex items-center justify-center p-2">
-                    <img src={(tenantData as any).logoLoginUrl} alt="Logo login atual" className="max-h-full max-w-full object-contain" />
+                {(logoLoginFile || (tenantData as any)?.logoLoginUrl) && (
+                  <div className="h-12 w-32 bg-muted rounded flex items-center justify-center p-2 relative">
+                    <img 
+                      src={logoLoginFile ? URL.createObjectURL(logoLoginFile) : (tenantData as any)?.logoLoginUrl || ""} 
+                      alt="Logo login atual" 
+                      className="max-h-full max-w-full object-contain"
+                      data-testid="img-logo-login"
+                    />
+                    {logoLoginFile && (
+                      <span className="absolute -top-1 -right-1 bg-yellow-500 text-xs text-white px-1 rounded">Novo</span>
+                    )}
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
@@ -322,14 +339,23 @@ export default function AdminBrandingPage() {
                   </Button>
                 </div>
               </div>
+              {logoLoginFile && <p className="text-xs text-muted-foreground">Clique no botão de upload para salvar o novo logo</p>}
             </div>
 
             <div className="space-y-2">
               <Label>Favicon</Label>
               <div className="flex items-center gap-4">
-                {tenantData?.faviconUrl && (
-                  <div className="h-12 w-12 bg-muted rounded flex items-center justify-center p-2">
-                    <img src={tenantData.faviconUrl} alt="Favicon atual" className="max-h-full max-w-full object-contain" />
+                {(faviconFile || tenantData?.faviconUrl) && (
+                  <div className="h-12 w-12 bg-muted rounded flex items-center justify-center p-2 relative">
+                    <img 
+                      src={faviconFile ? URL.createObjectURL(faviconFile) : tenantData?.faviconUrl || ""} 
+                      alt="Favicon atual" 
+                      className="max-h-full max-w-full object-contain"
+                      data-testid="img-favicon"
+                    />
+                    {faviconFile && (
+                      <span className="absolute -top-1 -right-1 bg-yellow-500 text-xs text-white px-1 rounded">Novo</span>
+                    )}
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
@@ -339,6 +365,7 @@ export default function AdminBrandingPage() {
                   </Button>
                 </div>
               </div>
+              {faviconFile && <p className="text-xs text-muted-foreground">Clique no botão de upload para salvar o novo favicon</p>}
             </div>
           </CardContent>
         </Card>
