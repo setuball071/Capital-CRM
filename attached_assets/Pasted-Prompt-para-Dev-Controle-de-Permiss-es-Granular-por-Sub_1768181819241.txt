@@ -1,0 +1,78 @@
+Prompt para Dev: Controle de Permissões Granular por Sub-itens
+
+Objetivo:
+Reestruturar o sistema de permissões para que cada usuário tenha controle de acesso não só por "bloco" (ex: Simuladores), mas também por sub-itens dentro de cada bloco (ex: Simulador de Compra, Simulador de Amortização etc). Isso deve incluir as permissões de visualização e edição.
+
+🧱 1. ESTRUTURA DE DADOS (BACKEND)
+
+Nova estrutura do objeto de permissões do usuário:
+
+{
+  "Simuladores": {
+    "Simulador de Compra": { "visualizar": true, "editar": true },
+    "Simulador de Amortização": { "visualizar": false, "editar": false },
+    "Simulador de Portabilidade": { "visualizar": true, "editar": false }
+  },
+  "Operacional": {
+    "Convênios": { "visualizar": true, "editar": false },
+    "Bancos": { "visualizar": false, "editar": false },
+    "Tabelas de Coeficientes": { "visualizar": true, "editar": true },
+    "Roteiros Bancários": { "visualizar": true, "editar": false }
+  },
+  ...
+}
+
+
+Cada módulo agora é um objeto contendo seus sub-itens com permissões binárias (true/false) para visualizar e editar.
+
+🖥️ 2. INTERFACE (FRONTEND)
+
+Ajustes na tela de edição de usuário (admin):
+
+Expandir cada módulo (como já é feito com accordion ou dropdown).
+
+Dentro, listar os sub-itens com checkboxes duplos:
+
+📌 “Visualizar” (checkbox)
+
+✏️ “Editar” (checkbox)
+
+Exemplo visual:
+
+▸ Simuladores
+   [✔] Visualizar  Simulador de Compra      [✔] Editar
+   [ ] Visualizar  Simulador de Amortização  [ ] Editar
+   [✔] Visualizar  Simulador de Portabilidade[ ] Editar
+
+
+Os dados devem ser salvos como no novo modelo (JSON por sub-item).
+
+🔒 3. APLICAÇÃO DAS PERMISSÕES
+
+Em toda a plataforma, o controle de acesso deve funcionar assim:
+
+Se o sub-item não tiver "visualizar": true, ele não deve aparecer no menu.
+
+Se "editar": false, os campos dentro das telas desse item devem estar desabilitados ou ocultos para esse usuário.
+
+Os blocos (Simuladores, Operacional etc) só devem aparecer se ao menos um sub-item estiver visível.
+
+🧠 4. FUTURAS EXPANSÕES
+
+A lógica deve suportar novos sub-itens automaticamente: ao adicionar um novo item no menu, ele deve ser registrado no painel de permissões sem necessidade de reprogramação manual.
+
+Sugestão: manter uma constante com todos os sub-itens disponíveis para leitura dinâmica no painel de edição.
+
+✅ Checklist para o Dev
+
+ Atualizar estrutura do backend para armazenar permissões por sub-item.
+
+ Atualizar painel de edição de usuário para exibir e salvar permissões por sub-itens.
+
+ Esconder itens do menu e bloquear funcionalidades conforme permissões.
+
+ Ocultar blocos que não possuem sub-itens visíveis.
+
+ Garantir retrocompatibilidade com usuários antigos (preencher com defaults se necessário).
+
+ Testar com diferentes perfis (admin, vendedor, gestor etc).

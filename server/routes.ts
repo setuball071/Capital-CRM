@@ -53,6 +53,10 @@ import {
   LEAD_MARKERS,
   TIPOS_CONTATO,
   MODULE_LIST,
+  MODULE_SUB_ITEMS,
+  MODULE_LABELS,
+  parsePermissionKey,
+  getSubItemPermissionKey,
   KANBAN_COLUMNS,
   insertPersonalTaskSchema,
   nomenclaturas,
@@ -1893,13 +1897,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== USER PERMISSIONS ROUTES =====
 
-  // Get list of available modules
+  // Helper to validate permission keys (accepts both module-level and sub-item keys)
+  function isValidPermissionKey(key: string): boolean {
+    const { module, subItem } = parsePermissionKey(key);
+    
+    // Check if module is valid
+    if (!MODULE_LIST.includes(module as any)) {
+      return false;
+    }
+    
+    // If it's a sub-item key, validate the sub-item
+    if (subItem) {
+      const moduleSubItems = MODULE_SUB_ITEMS[module as keyof typeof MODULE_SUB_ITEMS];
+      if (!moduleSubItems) return false;
+      return moduleSubItems.some((item: { key: string }) => item.key === subItem);
+    }
+    
+    return true;
+  }
+
+  // Get list of available modules (legacy - returns just module names)
   app.get("/api/permissions/modules", requireAuth, async (req, res) => {
     try {
       return res.json(MODULE_LIST);
     } catch (error) {
       console.error("Get modules error:", error);
       return res.status(500).json({ message: "Erro ao buscar lista de módulos" });
+    }
+  });
+
+  // Get full permission structure with sub-items
+  app.get("/api/permissions/structure", requireAuth, async (req, res) => {
+    try {
+      const structure = MODULE_LIST.map(module => ({
+        key: module,
+        label: MODULE_LABELS[module],
+        subItems: MODULE_SUB_ITEMS[module].map((item: { key: string; label: string }) => ({
+          key: getSubItemPermissionKey(module, item.key),
+          label: item.label,
+        })),
+      }));
+      return res.json(structure);
+    } catch (error) {
+      console.error("Get permission structure error:", error);
+      return res.status(500).json({ message: "Erro ao buscar estrutura de permissões" });
     }
   });
 
@@ -1954,9 +1995,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      // Validate request body
+      // Validate request body - accepts both module-level and sub-item keys
       const permissionsSchema = z.array(z.object({
-        module: z.string().refine(m => MODULE_LIST.includes(m as any), { message: "Módulo inválido" }),
+        module: z.string().refine(m => isValidPermissionKey(m), { message: "Módulo ou sub-item inválido" }),
         canView: z.boolean(),
         canEdit: z.boolean(),
         canDelegate: z.boolean().optional().default(false),

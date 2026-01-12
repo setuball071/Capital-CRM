@@ -28,6 +28,7 @@ interface MenuSection {
     url: string;
     icon: React.ComponentType<{ className?: string }>;
     module?: string;
+    subItem?: string;
     masterOnly?: boolean;
   }[];
 }
@@ -53,7 +54,7 @@ function getModuleForUrl(url: string): string | undefined {
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
-  const { user, logout, hasModuleAccess } = useAuth();
+  const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
   const { tenant, logoUrl } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -71,10 +72,17 @@ export function AppSidebar() {
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string }): boolean => {
     if (item.masterOnly && !isMaster) return false;
     const module = item.module || getModuleForUrl(item.url);
     if (!module) return true;
+    
+    // If sub-item is specified, check granular permission
+    if (item.subItem) {
+      return hasSubItemAccess(module as ModuleName, item.subItem);
+    }
+    
+    // Otherwise fall back to module-level access
     return hasModuleAccess(module as ModuleName);
   };
 
@@ -101,29 +109,29 @@ export function AppSidebar() {
       title: "Simuladores",
       icon: Calculator,
       items: [
-        { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador" },
-        { title: "Simulador de Amortização", url: "/simulador-amortizacao", icon: TrendingDown, module: "modulo_simulador" },
-        { title: "Simulador de Portabilidade", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador" },
+        { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
+        { title: "Simulador de Amortização", url: "/simulador-amortizacao", icon: TrendingDown, module: "modulo_simulador", subItem: "simulador_amortizacao" },
+        { title: "Simulador de Portabilidade", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
       ],
     },
     {
       title: "Operacional",
       icon: FileText,
       items: [
-        { title: "Convênios", url: "/agreements", icon: FileText, masterOnly: true },
-        { title: "Bancos", url: "/banks", icon: Landmark, masterOnly: true },
-        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, masterOnly: true },
-        { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros" },
+        { title: "Convênios", url: "/agreements", icon: FileText, module: "modulo_roteiros", subItem: "convenios" },
+        { title: "Bancos", url: "/banks", icon: Landmark, module: "modulo_roteiros", subItem: "bancos" },
+        { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, module: "modulo_roteiros", subItem: "tabelas_coeficientes" },
+        { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros", subItem: "roteiros_bancarios" },
       ],
     },
     {
       title: "Base de Clientes",
       icon: Database,
       items: [
-        { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes" },
+        { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes", subItem: "importacao" },
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
-        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes" },
-        { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes" },
+        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },
+        { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes", subItem: "consulta" },
       ],
     },
     {
@@ -131,34 +139,34 @@ export function AppSidebar() {
       icon: Settings,
       items: [
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
-        { title: "Ambientes", url: "/admin/tenants", icon: Building2, masterOnly: true },
+        { title: "Ambientes", url: "/admin/tenants", icon: Building2, module: "modulo_config_usuarios", subItem: "ambientes" },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },
-        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_usuarios" },
-        { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios" },
-        { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia" },
+        { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_usuarios", subItem: "precos" },
+        { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
+        { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
       ],
     },
     {
       title: "Treinamento",
       icon: GraduationCap,
       items: [
-        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, module: "modulo_academia" },
-        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia" },
-        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia" },
-        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia" },
-        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia" },
+        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
+        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia", subItem: "quiz" },
+        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
+        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
+        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia", subItem: "dashboard" },
       ],
     },
     {
       title: "ALPHA",
       icon: WolfIcon,
       items: [
-        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha" },
-        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha" },
-        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha" },
-        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha" },
-        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha" },
-        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha" },
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
+        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
+        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "pipeline" },
       ],
     },
   ];

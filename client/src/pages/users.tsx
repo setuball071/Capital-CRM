@@ -48,20 +48,23 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check } from "lucide-react";
-import { type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission, type Tenant } from "@shared/schema";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown } from "lucide-react";
+import { 
+  type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission, type Tenant,
+  MODULE_LIST, MODULE_SUB_ITEMS, MODULE_LABELS, getSubItemPermissionKey, parsePermissionKey,
+  type ModuleName,
+} from "@shared/schema";
 import { Separator } from "@/components/ui/separator";
 import { Building2 } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
-// Module translations - ordered to match sidebar menu
-const MODULE_TRANSLATIONS: Record<string, string> = {
-  modulo_simulador: "Simuladores",
-  modulo_roteiros: "Operacional",
-  modulo_base_clientes: "Base de Clientes",
-  modulo_config_usuarios: "Administração",
-  modulo_academia: "Treinamento",
-  modulo_alpha: "ALPHA",
-};
+// Module translations - kept for compatibility, now using MODULE_LABELS from schema
+const MODULE_TRANSLATIONS: Record<string, string> = MODULE_LABELS;
 
 type PermissionState = { module: string; canView: boolean; canEdit: boolean; canDelegate: boolean };
 
@@ -158,6 +161,7 @@ export default function UsersPage() {
   });
 
   // Initialize permissions when user permissions are loaded or modules change
+  // NEW: Now expands to sub-item level permissions
   useEffect(() => {
     if (editingUser && modules.length > 0) {
       const existingPermissions = userPermissions || [];
@@ -166,12 +170,27 @@ export default function UsersPage() {
       // For non-master users, only show delegatable modules
       const modulesToShow = isMaster ? modules : delegatableModules;
       
-      const initialPermissions: PermissionState[] = modulesToShow.map(module => ({
-        module,
-        canView: permissionMap.get(module)?.canView ?? false,
-        canEdit: permissionMap.get(module)?.canEdit ?? false,
-        canDelegate: permissionMap.get(module)?.canDelegate ?? false,
-      }));
+      // Build permissions for all sub-items of each module
+      const initialPermissions: PermissionState[] = [];
+      
+      for (const module of modulesToShow) {
+        const subItems = MODULE_SUB_ITEMS[module as ModuleName];
+        if (subItems) {
+          for (const subItem of subItems) {
+            const subItemKey = getSubItemPermissionKey(module as ModuleName, subItem.key);
+            // Check for specific sub-item permission first, then fall back to module-level permission
+            const existingSubItem = permissionMap.get(subItemKey);
+            const existingModule = permissionMap.get(module);
+            
+            initialPermissions.push({
+              module: subItemKey,
+              canView: existingSubItem?.canView ?? existingModule?.canView ?? false,
+              canEdit: existingSubItem?.canEdit ?? existingModule?.canEdit ?? false,
+              canDelegate: existingSubItem?.canDelegate ?? existingModule?.canDelegate ?? false,
+            });
+          }
+        }
+      }
       
       setPermissions(initialPermissions);
     }
@@ -713,7 +732,7 @@ export default function UsersPage() {
                     <Label className="text-base font-semibold">Permissões de Acesso</Label>
                     <p className="text-sm text-muted-foreground">
                       {isMaster 
-                        ? "Configure quais módulos este usuário pode acessar e editar."
+                        ? "Configure quais sub-itens de cada módulo este usuário pode acessar e editar."
                         : `Você pode delegar acesso aos seguintes módulos: ${delegatableModules.map(m => MODULE_TRANSLATIONS[m] || m).join(", ")}.`}
                     </p>
                     {isLoadingPermissions ? (
@@ -722,54 +741,75 @@ export default function UsersPage() {
                       </div>
                     ) : (
                       <div className="border rounded-md">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className={isMaster && hasConfigUsuariosEdit ? "w-[40%]" : "w-[50%]"}>Módulo</TableHead>
-                              <TableHead className="text-center">Visualizar</TableHead>
-                              <TableHead className="text-center">Editar</TableHead>
-                              {isMaster && hasConfigUsuariosEdit && (
-                                <TableHead className="text-center">Pode Delegar</TableHead>
-                              )}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {permissions.map((perm) => (
-                              <TableRow key={perm.module} data-testid={`permission-row-${perm.module}`}>
-                                <TableCell className="font-medium">
-                                  {MODULE_TRANSLATIONS[perm.module] || perm.module}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Checkbox
-                                    checked={perm.canView}
-                                    onCheckedChange={(checked) => updatePermission(perm.module, 'canView', !!checked)}
-                                    data-testid={`checkbox-view-${perm.module}`}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Checkbox
-                                    checked={perm.canEdit}
-                                    onCheckedChange={(checked) => updatePermission(perm.module, 'canEdit', !!checked)}
-                                    data-testid={`checkbox-edit-${perm.module}`}
-                                  />
-                                </TableCell>
-                                {isMaster && hasConfigUsuariosEdit && (
-                                  <TableCell className="text-center">
-                                    {perm.module !== 'modulo_config_usuarios' ? (
-                                      <Checkbox
-                                        checked={perm.canDelegate}
-                                        onCheckedChange={(checked) => updatePermission(perm.module, 'canDelegate', !!checked)}
-                                        data-testid={`checkbox-delegate-${perm.module}`}
-                                      />
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">-</span>
-                                    )}
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                        <Accordion type="multiple" className="w-full">
+                          {(isMaster ? modules : delegatableModules).map((module) => {
+                            const subItems = MODULE_SUB_ITEMS[module as ModuleName] || [];
+                            const modulePermissions = permissions.filter(p => p.module.startsWith(module + "."));
+                            const hasAnyView = modulePermissions.some(p => p.canView);
+                            const hasAnyEdit = modulePermissions.some(p => p.canEdit);
+                            
+                            return (
+                              <AccordionItem key={module} value={module} data-testid={`permission-accordion-${module}`}>
+                                <AccordionTrigger className="px-4 hover:no-underline">
+                                  <div className="flex items-center justify-between w-full pr-4">
+                                    <span className="font-medium">{MODULE_LABELS[module as ModuleName]}</span>
+                                    <div className="flex items-center gap-2">
+                                      {hasAnyView && (
+                                        <Badge variant="outline" className="text-xs">
+                                          {modulePermissions.filter(p => p.canView).length}/{subItems.length} visíveis
+                                        </Badge>
+                                      )}
+                                      {hasAnyEdit && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          {modulePermissions.filter(p => p.canEdit).length} editáveis
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="px-4 pb-4">
+                                  <div className="space-y-2">
+                                    {subItems.map((subItem: { key: string; label: string }) => {
+                                      const subItemKey = getSubItemPermissionKey(module as ModuleName, subItem.key);
+                                      const perm = permissions.find(p => p.module === subItemKey);
+                                      if (!perm) return null;
+                                      
+                                      return (
+                                        <div key={subItemKey} className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50" data-testid={`permission-row-${subItemKey}`}>
+                                          <span className="text-sm">{subItem.label}</span>
+                                          <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                id={`view-${subItemKey}`}
+                                                checked={perm.canView}
+                                                onCheckedChange={(checked) => updatePermission(subItemKey, 'canView', !!checked)}
+                                                data-testid={`checkbox-view-${subItemKey}`}
+                                              />
+                                              <Label htmlFor={`view-${subItemKey}`} className="text-xs text-muted-foreground cursor-pointer">
+                                                Visualizar
+                                              </Label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                id={`edit-${subItemKey}`}
+                                                checked={perm.canEdit}
+                                                onCheckedChange={(checked) => updatePermission(subItemKey, 'canEdit', !!checked)}
+                                                data-testid={`checkbox-edit-${subItemKey}`}
+                                              />
+                                              <Label htmlFor={`edit-${subItemKey}`} className="text-xs text-muted-foreground cursor-pointer">
+                                                Editar
+                                              </Label>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            );
+                          })}
+                        </Accordion>
                       </div>
                     )}
                   </div>

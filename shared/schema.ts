@@ -1293,6 +1293,71 @@ export const MODULE_LIST = [
 
 export type ModuleName = typeof MODULE_LIST[number];
 
+// Sub-items for each module - granular permission control
+// Format: module.subitem (e.g., "modulo_simulador.simulador_compra")
+export const MODULE_SUB_ITEMS = {
+  modulo_simulador: [
+    { key: "simulador_compra", label: "Simulador de Compra" },
+    { key: "simulador_amortizacao", label: "Simulador de Amortização" },
+    { key: "simulador_portabilidade", label: "Simulador de Portabilidade" },
+  ],
+  modulo_roteiros: [
+    { key: "convenios", label: "Convênios" },
+    { key: "bancos", label: "Bancos" },
+    { key: "tabelas_coeficientes", label: "Tabelas de Coeficientes" },
+    { key: "roteiros_bancarios", label: "Roteiros Bancários" },
+  ],
+  modulo_base_clientes: [
+    { key: "consulta", label: "Consulta de Clientes" },
+    { key: "importacao", label: "Importação de Bases" },
+    { key: "compra_lista", label: "Compra de Lista" },
+  ],
+  modulo_config_usuarios: [
+    { key: "usuarios", label: "Gestão de Usuários" },
+    { key: "ambientes", label: "Gestão de Ambientes" },
+    { key: "precos", label: "Configuração de Preços" },
+  ],
+  modulo_academia: [
+    { key: "fundamentos", label: "Fundamentos" },
+    { key: "quiz", label: "Quiz" },
+    { key: "roleplay", label: "Role Play" },
+    { key: "scripts", label: "Scripts de Venda" },
+    { key: "dashboard", label: "Dashboard Admin" },
+  ],
+  modulo_alpha: [
+    { key: "campanhas", label: "Campanhas" },
+    { key: "pipeline", label: "Pipeline de Vendas" },
+    { key: "consulta", label: "Consulta Rápida" },
+  ],
+} as const;
+
+// Helper type for sub-item keys
+export type SubItemKey<M extends ModuleName> = typeof MODULE_SUB_ITEMS[M][number]["key"];
+
+// Module labels for display
+export const MODULE_LABELS: Record<ModuleName, string> = {
+  modulo_simulador: "Simuladores",
+  modulo_roteiros: "Operacional",
+  modulo_base_clientes: "Base de Clientes",
+  modulo_config_usuarios: "Administração",
+  modulo_academia: "Treinamento",
+  modulo_alpha: "ALPHA",
+};
+
+// Helper to get full permission key (module.subitem)
+export function getSubItemPermissionKey(module: ModuleName, subItem: string): string {
+  return `${module}.${subItem}`;
+}
+
+// Helper to parse permission key into module and subItem
+export function parsePermissionKey(key: string): { module: string; subItem: string | null } {
+  const parts = key.split(".");
+  if (parts.length === 2) {
+    return { module: parts[0], subItem: parts[1] };
+  }
+  return { module: key, subItem: null };
+}
+
 export const userPermissions = pgTable("user_permissions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
