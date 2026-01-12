@@ -48,24 +48,37 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
 
 The architecture emphasizes client-side calculations for performance and determinism, a modular design for extensibility (e.g., `IStorage` interface), and robust authentication/authorization with granular control. AI integration is central to advanced features like intelligent search, sales training, and CRM functionalities.
 
-### Permission System (Updated 2026-01-08)
+### Permission System (Updated 2026-01-12)
 
-The application uses a profile-based permission system with the following modules:
+The application uses a granular sub-item permission system with the following modules and sub-items:
 
-| Module Key | Display Name | Description |
-|------------|-------------|-------------|
-| modulo_simulador | Simuladores | Credit simulators (purchase, amortization, portability) |
-| modulo_roteiros | Operacional | Bank procedures/scripts management |
-| modulo_base_clientes | Base de Clientes | Client database import, consultation, list purchases |
-| modulo_config_usuarios | Administração | User management, pricing configuration |
-| modulo_academia | Treinamento | Sales training (fundamentals, quiz, roleplay, scripts) |
-| modulo_alpha | ALPHA | Sales CRM (campaigns, pipeline, lead management) |
+| Module Key | Display Name | Sub-Items |
+|------------|-------------|-----------|
+| modulo_simulador | Simuladores | simulador_compra, simulador_amortizacao, simulador_portabilidade |
+| modulo_roteiros | Operacional | convenios, bancos, tabelas_coeficientes, roteiros_bancarios |
+| modulo_base_clientes | Base de Clientes | consulta, importacao, compra_lista |
+| modulo_config_usuarios | Administração | usuarios, ambientes, precos |
+| modulo_academia | Treinamento | fundamentos, quiz, roleplay, scripts, dashboard |
+| modulo_alpha | ALPHA | campanhas, pipeline, consulta |
 
 **Key permission behaviors:**
-- `isMaster=true` flag grants full access (only global bypass)
-- Non-master users require explicit profile permissions for each module
-- Migration function in `server/seed.ts` automatically converts legacy module permissions to new structure
-- Removed modules: `modulo_compra_lista` (→ modulo_base_clientes), `modulo_crm_vendas_*` (→ modulo_alpha), `modulo_config_precos` (→ modulo_config_usuarios)
+- `isMaster=true` flag grants full access (only global bypass - zero role inheritance)
+- Non-master users require explicit permissions for each sub-item (format: `module.subitem`)
+- Each sub-item has independent `canView` and `canEdit` flags
+- Backwards compatibility: `hasSubItemAccess()` falls back to module-level permissions for legacy users
+- UI: Accordion-based permission editor with expandable modules showing individual sub-item checkboxes
+- Sidebar menu items are filtered based on sub-item permissions
+- When a user is edited, legacy module permissions are migrated to sub-item permissions
+- Backend validation rejects invalid module or sub-item keys
+
+**Permission key format:**
+- Sub-item level: `modulo_simulador.simulador_compra`
+- Module level (legacy): `modulo_simulador`
+
+**API Endpoints:**
+- GET /api/permissions/structure - Returns full module/sub-item hierarchy
+- GET /api/users/:id/permissions - Get user's permissions
+- PUT /api/users/:id/permissions - Save user's permissions
 
 ## External Dependencies
 
