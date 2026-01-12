@@ -198,6 +198,30 @@ const uploadPdf = multer({
   },
 });
 
+// Configure multer for logo/image uploads (PNG, SVG, ICO - max 2MB)
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024, // 2MB limit for logos
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = [
+      "image/png",
+      "image/svg+xml",
+      "image/x-icon",
+      "image/vnd.microsoft.icon",
+    ];
+    const allowedExtensions = [".png", ".svg", ".ico"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de arquivo inválido. Use PNG, SVG ou ICO (máximo 2MB)."));
+    }
+  },
+});
+
 // ============ ASYNC RESET JOB SYSTEM ============
 interface ResetJobStep {
   name: string;
@@ -707,7 +731,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Upload tenant logo (Master only)
-  app.post("/api/tenant/logo", requireAuth, requireMaster, upload.single("file"), async (req: any, res) => {
+  // Uses uploadLogo multer config that accepts PNG, SVG, ICO (max 2MB)
+  app.post("/api/tenant/logo", requireAuth, requireMaster, uploadLogo.single("file"), async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       const file = req.file;
@@ -718,30 +743,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!file) {
-        return res.status(400).json({ message: "Arquivo não enviado" });
+        return res.status(400).json({ message: "Arquivo não enviado. Formatos aceitos: PNG, SVG, ICO (máximo 2MB)" });
       }
       
       if (!["sidebar", "login", "favicon"].includes(type)) {
         return res.status(400).json({ message: "Tipo inválido. Use: sidebar, login ou favicon" });
       }
       
-      // Save file to uploads folder
-      const fs = await import("fs");
-      const path = await import("path");
+      // Save file to uploads folder with tenant-specific naming
+      const fsModule = await import("fs");
+      const pathModule = await import("path");
       
-      const uploadsDir = path.join(process.cwd(), "uploads", "logos");
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      const uploadsDir = pathModule.join(process.cwd(), "uploads", "logos");
+      if (!fsModule.existsSync(uploadsDir)) {
+        fsModule.mkdirSync(uploadsDir, { recursive: true });
       }
       
-      const ext = path.extname(file.originalname) || ".png";
-      const filename = `tenant_${tenantId}_${type}_${Date.now()}${ext}`;
-      const filepath = path.join(uploadsDir, filename);
+      // Use semantic naming: logo-{type}-{tenantId}.{ext}
+      const ext = pathModule.extname(file.originalname).toLowerCase() || ".png";
+      const filename = `logo-${type}-${tenantId}${ext}`;
+      const filepath = pathModule.join(uploadsDir, filename);
       
-      fs.writeFileSync(filepath, file.buffer);
+      // Delete any existing file with different extension for this tenant/type
+      const possibleExts = [".png", ".svg", ".ico"];
+      for (const existingExt of possibleExts) {
+        if (existingExt !== ext) {
+          const oldFilePath = pathModule.join(uploadsDir, `logo-${type}-${tenantId}${existingExt}`);
+          if (fsModule.existsSync(oldFilePath)) {
+            try {
+              fsModule.unlinkSync(oldFilePath);
+            } catch (e) {
+              console.warn(`Could not delete old logo file: ${oldFilePath}`);
+            }
+          }
+        }
+      }
       
-      // Generate URL for the uploaded file
-      const logoUrl = `/uploads/logos/${filename}`;
+      fsModule.writeFileSync(filepath, file.buffer);
+      
+      // Generate URL for the uploaded file with cache-busting timestamp
+      const logoUrl = `/uploads/logos/${filename}?t=${Date.now()}`;
       
       // Update tenant with new logo URL based on type
       const updateData: any = {};
@@ -763,8 +804,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         url: logoUrl,
         tenant: result[0]
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload logo error:", error);
+      if (error.message && error.message.includes("Formato de arquivo inválido")) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: "Erro ao fazer upload do logo" });
     }
   });
