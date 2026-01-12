@@ -10990,6 +10990,54 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // DELETE /api/crm/leads/:id - Excluir lead do pipeline
+  app.delete("/api/crm/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const currentUserId = req.user!.id;
+      const userRole = req.user!.role;
+
+      // Verificar se o lead existe
+      const [lead] = await db
+        .select()
+        .from(salesLeads)
+        .where(eq(salesLeads.id, leadId));
+
+      if (!lead) {
+        return res.status(404).json({ message: "Lead não encontrado" });
+      }
+
+      // Verificar permissões: master pode excluir qualquer lead, outros apenas seus próprios
+      if (userRole !== "master") {
+        const [assignment] = await db
+          .select()
+          .from(salesLeadAssignments)
+          .where(and(
+            eq(salesLeadAssignments.leadId, leadId),
+            eq(salesLeadAssignments.userId, currentUserId)
+          ));
+
+        if (!assignment) {
+          return res.status(403).json({ message: "Você não tem permissão para excluir este lead" });
+        }
+      }
+
+      // Excluir em ordem: interações -> atribuições -> lead
+      await db.delete(leadInteractions).where(eq(leadInteractions.leadId, leadId));
+      await db.delete(salesLeadAssignments).where(eq(salesLeadAssignments.leadId, leadId));
+      await db.delete(salesLeads).where(eq(salesLeads.id, leadId));
+
+      return res.json({ success: true, message: "Lead excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete lead error:", error);
+      return res.status(500).json({ message: "Erro ao excluir lead" });
+    }
+  });
+
   // GET /api/crm/pipeline/overview - Visão macro para gestores
   app.get("/api/crm/pipeline/overview", requireAuth, async (req, res) => {
     try {

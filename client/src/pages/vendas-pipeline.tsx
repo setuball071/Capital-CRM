@@ -17,8 +17,18 @@ import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
-  ArrowRight, Check, Copy, ArrowLeft
+  ArrowRight, Check, Copy, ArrowLeft, Trash2
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   LEAD_MARKERS, 
   LEAD_MARKER_LABELS, 
@@ -286,6 +296,8 @@ export default function VendasPipeline() {
   const [draggedLead, setDraggedLead] = useState<PipelineLead | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSecondary, setShowSecondary] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<PipelineLead | null>(null);
   
   const [newMarker, setNewMarker] = useState<LeadMarker>("EM_ATENDIMENTO");
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
@@ -345,6 +357,38 @@ export default function VendasPipeline() {
       toast({ title: "Erro ao mover lead", description: error.message, variant: "destructive" });
     },
   });
+
+  const deleteLeadMutation = useMutation({
+    mutationFn: async (leadId: number) => {
+      const res = await apiRequest("DELETE", `/api/crm/leads/${leadId}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Erro ao excluir lead");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      toast({ title: "Lead excluído com sucesso" });
+      setDeleteDialogOpen(false);
+      setDetailsOpen(false);
+      setLeadToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir lead", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleDeleteLead = () => {
+    if (leadToDelete) {
+      deleteLeadMutation.mutate(leadToDelete.id);
+    }
+  };
+
+  const openDeleteDialog = (lead: PipelineLead) => {
+    setLeadToDelete(lead);
+    setDeleteDialogOpen(true);
+  };
 
   const resetMoveForm = () => {
     setNewMarker("EM_ATENDIMENTO");
@@ -818,7 +862,16 @@ export default function VendasPipeline() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2">
+            <Button 
+              variant="destructive" 
+              onClick={() => openDeleteDialog(selectedLead!)}
+              className="mr-auto"
+              data-testid="button-delete-lead"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </Button>
             <Button variant="outline" onClick={() => setDetailsOpen(false)}>
               Fechar
             </Button>
@@ -829,6 +882,37 @@ export default function VendasPipeline() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog de confirmação de exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o lead <strong>{leadToDelete?.nome}</strong>? 
+              Esta ação não pode ser desfeita e todas as interações associadas serão removidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLeadToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteLead}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLeadMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteLeadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
         <DialogContent className="max-w-md">
