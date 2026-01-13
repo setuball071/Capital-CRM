@@ -645,6 +645,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== TENANT RESOLUTION MIDDLEWARE =====
   app.use(resolveTenant);
 
+  // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
+  // Catches database connection errors and returns user-friendly messages
+  const handleDatabaseError = (error: any, res: Response): boolean => {
+    const errorMessage = error?.message || String(error);
+    
+    // Check for connection pool exhaustion
+    if (errorMessage.includes("remaining connection slots")) {
+      console.error("[DB] Connection pool exhausted:", errorMessage);
+      res.status(503).json({ 
+        message: "Sistema temporariamente sobrecarregado. Por favor, aguarde alguns segundos e tente novamente." 
+      });
+      return true;
+    }
+    
+    // Check for connection timeout
+    if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
+      console.error("[DB] Connection timeout:", errorMessage);
+      res.status(504).json({ 
+        message: "A conexão com o banco de dados expirou. Por favor, tente novamente." 
+      });
+      return true;
+    }
+    
+    // Check for connection refused
+    if (errorMessage.includes("fetch failed") || errorMessage.includes("ECONNREFUSED")) {
+      console.error("[DB] Connection failed:", errorMessage);
+      res.status(503).json({ 
+        message: "Não foi possível conectar ao banco de dados. Por favor, tente novamente em alguns instantes." 
+      });
+      return true;
+    }
+    
+    return false;
+  };
+
   // ===== TENANT ROUTES =====
   
   // Get current tenant branding/config (public - based on domain)

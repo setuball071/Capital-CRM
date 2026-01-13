@@ -1,6 +1,47 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq, and, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
+
+// Neon connection caching is enabled by default for better connection handling
+
+// Utility: Retry wrapper with exponential backoff for database operations
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 100
+): Promise<T> {
+  let lastError: Error | undefined;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      const errorMessage = error?.message || String(error);
+      
+      // Check if it's a connection exhaustion error (retryable)
+      const isRetryable = 
+        errorMessage.includes("remaining connection slots") ||
+        errorMessage.includes("connection refused") ||
+        errorMessage.includes("timeout") ||
+        errorMessage.includes("fetch failed") ||
+        errorMessage.includes("ECONNRESET") ||
+        errorMessage.includes("ETIMEDOUT");
+      
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff with jitter
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+      console.warn(`[DB] Connection error, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries}): ${errorMessage.substring(0, 100)}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 import {
   users,
   banks,
