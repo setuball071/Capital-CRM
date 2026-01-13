@@ -26,6 +26,7 @@ interface TenantBranding {
   logoUrl: string | null;
   logoLoginUrl: string | null;
   faviconUrl: string | null;
+  logoHeight: number | null;
   slogan: string | null;
   fontFamily: string | null;
   theme: TenantTheme | null;
@@ -38,6 +39,7 @@ interface TenantApiResponse {
   logoUrl?: string | null;
   logoLoginUrl?: string | null;
   faviconUrl?: string | null;
+  logoHeight?: number | null;
   slogan?: string | null;
   fontFamily?: string | null;
   theme?: TenantTheme | null;
@@ -52,6 +54,7 @@ interface TenantContextValue {
   logoUrl: string;
   logoLoginUrl: string;
   faviconUrl: string;
+  logoHeight: number;
   slogan: string;
   fontFamily: string;
   loginBgColor: string;
@@ -162,6 +165,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
     logoUrl: rawData.logoUrl || null,
     logoLoginUrl: rawData.logoLoginUrl || null,
     faviconUrl: rawData.faviconUrl || null,
+    logoHeight: rawData.logoHeight || null,
     slogan: rawData.slogan || null,
     fontFamily: rawData.fontFamily || null,
     theme: rawData.theme || null,
@@ -170,6 +174,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const logoUrl = tenant?.logoUrl || "/branding/logo.png";
   const logoLoginUrl = tenant?.logoLoginUrl || tenant?.logoUrl || "/branding/logo.png";
   const faviconUrl = tenant?.faviconUrl || "/branding/favicon.png";
+  const logoHeight = tenant?.logoHeight || 64;
   const slogan = tenant?.slogan || "";
   const fontFamily = tenant?.fontFamily || "Inter";
   const loginBgColor = (tenant?.theme as any)?.loginBgColor || "#1e293b";
@@ -202,6 +207,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
       logoUrl, 
       logoLoginUrl,
       faviconUrl,
+      logoHeight,
       slogan,
       fontFamily,
       loginBgColor,

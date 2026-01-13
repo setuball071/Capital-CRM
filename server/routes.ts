@@ -704,6 +704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logoUrl: req.tenant.logoUrl,
         logoLoginUrl: (req.tenant as any).logoLoginUrl,
         faviconUrl: req.tenant.faviconUrl,
+        logoHeight: (req.tenant as any).logoHeight || 64,
         slogan: (req.tenant as any).slogan,
         fontFamily: (req.tenant as any).fontFamily,
         theme: req.tenant.themeJson,
@@ -742,15 +743,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
-      const { name, slogan, fontFamily, themeJson } = req.body;
+      const { name, slogan, fontFamily, logoHeight, themeJson } = req.body;
+      
+      const updateData: any = {
+        name,
+        slogan,
+        fontFamily,
+        themeJson,
+      };
+      
+      // Only update logoHeight if provided and valid
+      if (logoHeight !== undefined && logoHeight !== null) {
+        updateData.logoHeight = Math.min(Math.max(parseInt(logoHeight) || 64, 32), 120);
+      }
       
       const result = await db.update(tenants)
-        .set({
-          name,
-          slogan,
-          fontFamily,
-          themeJson,
-        })
+        .set(updateData)
         .where(eq(tenants.id, tenantId))
         .returning();
       

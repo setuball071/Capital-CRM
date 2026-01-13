@@ -14,6 +14,7 @@ export const tenants = pgTable("tenants", {
   logoUrl: varchar("logo_url", { length: 500 }), // Logo menu lateral
   logoLoginUrl: varchar("logo_login_url", { length: 500 }), // Logo tela de login
   faviconUrl: varchar("favicon_url", { length: 500 }),
+  logoHeight: integer("logo_height").default(64), // Altura da logo no menu lateral (px)
   slogan: varchar("slogan", { length: 255 }), // Slogan/subtítulo exibido no login
   fontFamily: varchar("font_family", { length: 100 }).default("Inter"), // Fonte base
   themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, loginBgColor, etc }

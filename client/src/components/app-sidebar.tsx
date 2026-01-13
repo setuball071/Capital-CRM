@@ -55,7 +55,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
-  const { tenant, logoUrl } = useTenant();
+  const { tenant, logoUrl, logoHeight } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
@@ -206,18 +206,23 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-border bg-background">
-      <SidebarHeader className="border-b border-border p-4">
-        <div className="flex items-center gap-3">
-          {!logoFailed && (
+      <SidebarHeader className="border-b border-border">
+        <div 
+          className="w-full flex items-center justify-center px-3 py-4"
+          style={{ minHeight: `${Math.max(logoHeight + 16, 48)}px` }}
+          data-testid="sidebar-logo-container"
+        >
+          {!logoFailed && logoUrl ? (
             <img 
               src={logoUrl} 
               alt={tenant?.name || "Logo"} 
-              className="h-8 w-auto max-w-[140px] object-contain"
+              className="max-w-full object-contain"
+              style={{ maxHeight: `${logoHeight}px`, display: 'block' }}
               onError={() => setLogoFailed(true)}
+              data-testid="sidebar-logo-image"
             />
-          )}
-          {(logoFailed || !tenant?.logoUrl) && (
-            <span className="text-base font-semibold text-foreground">
+          ) : (
+            <span className="text-lg font-semibold text-foreground text-center">
               {tenant?.name || "GoldCard"}
             </span>
           )}

@@ -62,6 +62,7 @@ export default function AdminBrandingPage() {
     slogan: "",
     fontFamily: "Inter",
     customFontUrl: "",
+    logoHeight: 64,
     primaryColor: "#3b82f6",
     secondaryColor: "#10b981",
     loginBgColor: "#1e293b",
@@ -100,6 +101,7 @@ export default function AdminBrandingPage() {
         slogan: (tenantData as any).slogan || "",
         fontFamily: effectiveFontFamily,
         customFontUrl: theme?.customFontUrl || "",
+        logoHeight: (tenantData as any).logoHeight || 64,
         primaryColor: theme?.primaryColor || "#3b82f6",
         secondaryColor: theme?.secondaryColor || "#10b981",
         loginBgColor: theme?.loginBgColor || "#1e293b",
@@ -144,6 +146,7 @@ export default function AdminBrandingPage() {
         name: data.name,
         slogan: data.slogan,
         fontFamily: data.fontFamily,
+        logoHeight: data.logoHeight,
         themeJson,
       });
     },
@@ -366,6 +369,34 @@ export default function AdminBrandingPage() {
                 </div>
               </div>
               {faviconFile && <p className="text-xs text-muted-foreground">Clique no botão de upload para salvar o novo favicon</p>}
+            </div>
+
+            <div className="space-y-2 pt-4 border-t">
+              <Label htmlFor="logoHeight">Altura do Logo no Menu (px)</Label>
+              <div className="flex items-center gap-4">
+                <Input 
+                  id="logoHeight"
+                  type="range"
+                  min={32}
+                  max={120}
+                  value={formData.logoHeight}
+                  onChange={(e) => setFormData({ ...formData, logoHeight: parseInt(e.target.value) })}
+                  className="flex-1"
+                  data-testid="input-logo-height"
+                />
+                <Input 
+                  type="number"
+                  min={32}
+                  max={120}
+                  value={formData.logoHeight}
+                  onChange={(e) => setFormData({ ...formData, logoHeight: parseInt(e.target.value) || 64 })}
+                  className="w-20"
+                />
+                <span className="text-sm text-muted-foreground">px</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Define a altura máxima do logo no menu lateral (32-120px). Recomendado: 64-80px para logos com proporção horizontal.
+              </p>
             </div>
           </CardContent>
         </Card>
