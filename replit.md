@@ -92,7 +92,14 @@ The application supports comprehensive white-label branding per tenant:
 - showSlogan toggle (optional display of slogan on login)
 - Welcome text, footer text for login page
 - Theme colors (primaryColor, textColor, loginBgColor, etc.)
+- **Sidebar customization** (sidebarBgColor, sidebarFontColor) - custom background and font colors for the navigation menu
 - All toggle settings stored in themeJson for persistence
+
+**Sidebar Color Customization:**
+- sidebarBgColor: Background color of the sidebar navigation menu (hex format, e.g., #1e3a5f)
+- sidebarFontColor: Font/icon color in the sidebar (hex format, e.g., #ffffff)
+- Colors are converted from hex to HSL and applied to CSS variables --sidebar and --sidebar-foreground
+- Proper contrast should be maintained between background and font colors
 
 **Development Mode Tenant Persistence:**
 After login, a `devTenantId` cookie is set that persists across logout. This ensures the login page shows the correct tenant branding for testing:
