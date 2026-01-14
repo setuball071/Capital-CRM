@@ -284,6 +284,27 @@ export default function CompraLista() {
     },
   });
 
+  const cancelarPedidoMutation = useMutation({
+    mutationFn: async (pedidoId: number) => {
+      const response = await apiRequest("POST", `/api/pedidos-lista/${pedidoId}/cancelar`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Pedido cancelado",
+        description: data.message || "O pedido foi cancelado com sucesso.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/pedidos-lista"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao cancelar",
+        description: error.message || "Ocorreu um erro ao cancelar o pedido.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCriarCampanha = () => {
     if (!campanhaName.trim()) {
       toast({
@@ -1026,10 +1047,22 @@ export default function CompraLista() {
                               Baixar
                             </Button>
                           ) : pedido.status === "processando" || pedido.status === "aprovado" ? (
-                            <span className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Gerando...
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Gerando...
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => cancelarPedidoMutation.mutate(pedido.id)}
+                                disabled={cancelarPedidoMutation.isPending}
+                                data-testid={`button-cancel-${pedido.id}`}
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </Button>
+                            </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}

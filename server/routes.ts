@@ -6965,6 +6965,41 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // POST /api/pedidos-lista/:id/cancelar - Cancelar pedido travado - MASTER ONLY
+  app.post("/api/pedidos-lista/:id/cancelar", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const pedido = await storage.getPedidoLista(id);
+      if (!pedido) {
+        return res.status(404).json({ message: "Pedido não encontrado" });
+      }
+
+      // Only allow canceling pedidos in processing states
+      const cancelableStatuses = ["aprovado", "processando"];
+      if (!cancelableStatuses.includes(pedido.status)) {
+        return res.status(400).json({ 
+          message: `Apenas pedidos em processamento podem ser cancelados. Status atual: ${pedido.status}` 
+        });
+      }
+
+      // Update status to cancelado
+      await storage.updatePedidoListaStatus(id, "cancelado");
+      console.log(`[PedidoLista] Pedido ${id} canceled by user`);
+      
+      return res.json({
+        message: "Pedido cancelado com sucesso.",
+        pedido: { id, status: "cancelado" },
+      });
+    } catch (error) {
+      console.error("Cancel pedido error:", error);
+      return res.status(500).json({ message: "Erro ao cancelar pedido" });
+    }
+  });
+
   // Function to generate CSV file for approved pedido - STREAMING/CHUNKED VERSION
   async function generatePedidoListaFile(pedidoId: number, pedido: any) {
     const startTime = Date.now();
@@ -7018,6 +7053,19 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         // Check timeout
         if (Date.now() - startTime > MAX_TIMEOUT_MS) {
           throw new Error(`Timeout: export exceeded ${MAX_TIMEOUT_MS / 1000 / 60} minutes`);
+        }
+        
+        // Check if cancelled (re-fetch status from DB)
+        const currentPedido = await storage.getPedidoLista(pedidoId);
+        if (currentPedido?.status === "cancelado") {
+          console.log(`[PedidoLista] Pedido ${pedidoId} was cancelled, aborting generation`);
+          // Close stream and clean up partial file
+          writeStream.end();
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`[PedidoLista] Deleted partial file: ${filePath}`);
+          }
+          return; // Exit without updating status (keep it as cancelado)
         }
         
         const chunkLimit = Math.min(CHUNK_SIZE, recordsToExport - processedCount);
