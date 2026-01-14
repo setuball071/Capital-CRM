@@ -50,6 +50,8 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
     - **Deterministic pagination**: ORDER BY p.id ensures no duplicate/missing rows across chunks
     - **Package auto-limit**: When user selects package smaller than results (e.g., 5,000 package with 38,610 matches), system caps export at package limit
     - **API options**: `searchClientesPessoa()` supports `skipCount`, `countOnly`, `limit`, `offset` for flexible optimization
+    - **Batched ID queries**: `getLatestFolhaMesByPessoaIds()` batches IDs into chunks of 1000 to avoid PostgreSQL's ~1664 ANY() expression limit
+    - **Reprocess capability**: POST /api/pedidos-lista/:id/reprocessar endpoint allows retrying failed orders
 
 ### System Design Choices
 

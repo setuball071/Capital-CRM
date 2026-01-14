@@ -1607,18 +1607,27 @@ export class DbStorage implements IStorage {
       return new Map();
     }
     
-    // Use DISTINCT ON to get the latest folha for each pessoa_id in one query
-    const result = await db.execute(sql`
-      SELECT DISTINCT ON (f.pessoa_id) f.*
-      FROM clientes_folha_mes f
-      WHERE f.pessoa_id = ANY(${pessoaIds})
-      ORDER BY f.pessoa_id, f.competencia DESC
-    `);
-    
     const folhasMap = new Map<number, ClienteFolhaMes>();
-    for (const row of result.rows) {
-      const pessoaId = row.pessoa_id as number;
-      folhasMap.set(pessoaId, row as unknown as ClienteFolhaMes);
+    
+    // PostgreSQL has a limit of ~1664 entries in ANY() expressions
+    // Batch IDs into chunks to avoid this limit
+    const BATCH_SIZE = 1000;
+    
+    for (let i = 0; i < pessoaIds.length; i += BATCH_SIZE) {
+      const batchIds = pessoaIds.slice(i, i + BATCH_SIZE);
+      
+      // Use DISTINCT ON to get the latest folha for each pessoa_id in one query
+      const result = await db.execute(sql`
+        SELECT DISTINCT ON (f.pessoa_id) f.*
+        FROM clientes_folha_mes f
+        WHERE f.pessoa_id = ANY(${batchIds})
+        ORDER BY f.pessoa_id, f.competencia DESC
+      `);
+      
+      for (const row of result.rows) {
+        const pessoaId = row.pessoa_id as number;
+        folhasMap.set(pessoaId, row as unknown as ClienteFolhaMes);
+      }
     }
     
     return folhasMap;

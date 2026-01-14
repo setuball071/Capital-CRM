@@ -6925,6 +6925,46 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // POST /api/pedidos-lista/:id/reprocessar - Reprocessar pedido com erro - MASTER ONLY
+  app.post("/api/pedidos-lista/:id/reprocessar", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const pedido = await storage.getPedidoLista(id);
+      if (!pedido) {
+        return res.status(404).json({ message: "Pedido não encontrado" });
+      }
+
+      if (pedido.status !== "erro") {
+        return res.status(400).json({ message: `Apenas pedidos com erro podem ser reprocessados. Status atual: ${pedido.status}` });
+      }
+
+      // Reset status to aprovado and start processing again
+      await storage.updatePedidoListaStatus(id, "aprovado");
+      
+      // Start async file generation (fire-and-forget)
+      generatePedidoListaFile(id, pedido).catch(async (err) => {
+        console.error("[PedidoLista] Error reprocessing file:", err);
+        try {
+          await storage.updatePedidoLista(id, { status: "erro" });
+        } catch (e) {
+          console.error("[PedidoLista] Failed to update status on error:", e);
+        }
+      });
+      
+      return res.json({
+        message: "Pedido enviado para reprocessamento. O arquivo está sendo gerado.",
+        pedido: { id, status: "aprovado" },
+      });
+    } catch (error) {
+      console.error("Reprocess pedido error:", error);
+      return res.status(500).json({ message: "Erro ao reprocessar pedido" });
+    }
+  });
+
   // Function to generate CSV file for approved pedido - STREAMING/CHUNKED VERSION
   async function generatePedidoListaFile(pedidoId: number, pedido: any) {
     console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId}`);

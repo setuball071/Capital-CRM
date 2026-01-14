@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, CheckCircle, XCircle, Clock, AlertCircle, ShieldCheck, Users } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, AlertCircle, ShieldCheck, Users, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -84,6 +84,26 @@ export default function AdminPedidosLista() {
       toast({
         title: "Erro ao rejeitar",
         description: error.message || "Não foi possível rejeitar o pedido.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reprocessarMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest("POST", `/api/pedidos-lista/${id}/reprocessar`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pedidos-lista/admin"] });
+      toast({
+        title: "Pedido reenviado",
+        description: "O pedido foi enviado para reprocessamento.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao reprocessar",
+        description: error.message || "Não foi possível reprocessar o pedido.",
         variant: "destructive",
       });
     },
@@ -292,6 +312,7 @@ export default function AdminPedidosLista() {
                   <TableHead className="text-right">Custo Estimado</TableHead>
                   <TableHead className="text-right">Custo Final</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -318,6 +339,25 @@ export default function AdminPedidosLista() {
                       {formatCurrency(pedido.custo_final)}
                     </TableCell>
                     <TableCell>{getStatusBadge(pedido.status)}</TableCell>
+                    <TableCell className="text-right">
+                      {pedido.status === "erro" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() => reprocessarMutation.mutate(pedido.id)}
+                          disabled={reprocessarMutation.isPending}
+                          data-testid={`button-reprocessar-${pedido.id}`}
+                        >
+                          {reprocessarMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4" />
+                          )}
+                          Reprocessar
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
