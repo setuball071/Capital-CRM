@@ -50,6 +50,8 @@ const DEFAULT_THEME: TenantTheme = {
   fontColor: "#1f2937",
   showSlogan: true,
   showSystemName: true,
+  sidebarBgColor: "#ffffff",
+  sidebarFontColor: "#1f2937",
 };
 
 export default function AdminBrandingPage() {
@@ -79,6 +81,8 @@ export default function AdminBrandingPage() {
     footerText: "",
     showSlogan: true,
     showSystemName: true,
+    sidebarBgColor: "#ffffff",
+    sidebarFontColor: "#1f2937",
   });
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -119,6 +123,8 @@ export default function AdminBrandingPage() {
         footerText: theme?.footerText || "",
         showSlogan: theme?.showSlogan !== false,
         showSystemName: theme?.showSystemName !== false,
+        sidebarBgColor: theme?.sidebarBgColor || "#ffffff",
+        sidebarFontColor: theme?.sidebarFontColor || "#1f2937",
       });
     }
   }, [tenantData]);
@@ -142,6 +148,8 @@ export default function AdminBrandingPage() {
         footerText: data.footerText,
         showSlogan: data.showSlogan,
         showSystemName: data.showSystemName,
+        sidebarBgColor: data.sidebarBgColor,
+        sidebarFontColor: data.sidebarFontColor,
         lastEditedBy: user?.name || "Desconhecido",
         lastEditedAt: new Date().toISOString(),
       };
@@ -494,6 +502,29 @@ export default function AdminBrandingPage() {
                 <div className="flex gap-2">
                   <Input id="warningColor" type="color" value={formData.warningColor} onChange={(e) => setFormData({ ...formData, warningColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-warning-color" />
                   <Input type="text" value={formData.warningColor} onChange={(e) => setFormData({ ...formData, warningColor: e.target.value })} className="flex-1" placeholder="#f59e0b" />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium mb-4">Menu Lateral (Sidebar)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sidebarBgColor">Cor do Fundo do Menu Lateral</Label>
+                  <div className="flex gap-2">
+                    <Input id="sidebarBgColor" type="color" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-sidebar-bg-color" />
+                    <Input type="text" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="flex-1" placeholder="#ffffff" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Cor de fundo do menu de navegação</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sidebarFontColor">Cor da Fonte do Menu Lateral</Label>
+                  <div className="flex gap-2">
+                    <Input id="sidebarFontColor" type="color" value={formData.sidebarFontColor} onChange={(e) => setFormData({ ...formData, sidebarFontColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-sidebar-font-color" />
+                    <Input type="text" value={formData.sidebarFontColor} onChange={(e) => setFormData({ ...formData, sidebarFontColor: e.target.value })} className="flex-1" placeholder="#1f2937" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Cor do texto e ícones no menu</p>
                 </div>
               </div>
             </div>

@@ -95,6 +95,8 @@ export const tenantThemeSchema = z.object({
   sidebarColor: z.string().optional(),
   loginBgColor: z.string().optional(), // Cor de fundo da tela de login
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
+  sidebarBgColor: z.string().optional(), // Cor de fundo do menu lateral
+  sidebarFontColor: z.string().optional(), // Cor da fonte do menu lateral
   // Tipografia avançada
   fontSize: z.string().optional(), // Tamanho da fonte (px ou rem)
   fontWeight: z.string().optional(), // Peso da fonte (400, 500, 600, 700)
