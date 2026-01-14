@@ -229,7 +229,8 @@ export interface IStorage {
   getClientesByCpf(cpf: string, tenantId: number, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
-  searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }>;
+  searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number }): Promise<{ clientes: ClientePessoa[]; total: number }>;
+  countClientesPessoa(filtros: FiltrosPedidoLista): Promise<number>;
   getDistinctConveniosClientes(): Promise<string[]>;
   getDistinctOrgaosClientes(): Promise<string[]>;
   getOrgaosWithCodigo(): Promise<{ codigo: string; nome: string }[]>;
@@ -263,6 +264,7 @@ export interface IStorage {
   createClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   upsertClienteFolhaMes(data: InsertClienteFolhaMes): Promise<ClienteFolhaMes>;
   getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]>;
+  getLatestFolhaMesByPessoaIds(pessoaIds: number[]): Promise<Map<number, ClienteFolhaMes>>;
   getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]>;
   
   // Clientes Contratos
@@ -1103,7 +1105,14 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
-  async searchClientesPessoa(filtros: FiltrosPedidoLista): Promise<{ clientes: ClientePessoa[]; total: number }> {
+  async countClientesPessoa(filtros: FiltrosPedidoLista): Promise<number> {
+    // Dedicated count query - more efficient than searchClientesPessoa with limit=0
+    const { total } = await this.searchClientesPessoa(filtros, { countOnly: true });
+    return total;
+  }
+
+  async searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number; skipCount?: boolean; countOnly?: boolean }): Promise<{ clientes: ClientePessoa[]; total: number }> {
+    const { limit, offset, skipCount, countOnly } = options || {};
     // Check if we need folha or contrato joins
     const needsFolhaJoin = !!(
       filtros.margem_30_min !== undefined || filtros.margem_30_max !== undefined ||
@@ -1291,12 +1300,38 @@ export class DbStorage implements IStorage {
               NULL::numeric as margem_cartao_credito_saldo,
               NULL::numeric as margem_cartao_beneficio_saldo`;
 
+      // Get count - skip only if explicitly requested (for export chunking)
+      let total = 0;
+      
+      if (!skipCount) {
+        const countQuery = sql`
+          SELECT COUNT(DISTINCT p.id) as total
+          FROM clientes_pessoa p
+          ${folhaJoinSql}
+          ${contratoJoinSql}
+          ${whereSql}
+        `;
+        const countResult = await db.execute(countQuery);
+        total = Number(countResult.rows[0]?.total || 0);
+      }
+      
+      // If countOnly, return just the count without loading data
+      if (countOnly) {
+        return { clientes: [], total };
+      }
+
+      // Build pagination clause with deterministic ordering
+      const paginationSql = limit !== undefined 
+        ? sql`ORDER BY p.id LIMIT ${limit} OFFSET ${offset || 0}`
+        : sql`ORDER BY p.id`;
+
       const query = sql`
         SELECT DISTINCT ${selectFields}
         FROM clientes_pessoa p
         ${folhaJoinSql}
         ${contratoJoinSql}
         ${whereSql}
+        ${paginationSql}
       `;
 
       const result = await db.execute(query);
@@ -1308,17 +1343,39 @@ export class DbStorage implements IStorage {
         margem_cartao_beneficio_saldo: string | null;
       })[];
       
-      return { clientes, total: clientes.length };
+      return { clientes, total };
     } else {
       // Simple query without joins using Drizzle's query builder
-      let clientes: ClientePessoa[];
-      if (pessoaConditions.length > 0) {
-        clientes = await db.select().from(clientesPessoa).where(and(...pessoaConditions));
-      } else {
-        clientes = await db.select().from(clientesPessoa);
+      // Get count unless explicitly skipped
+      let total = 0;
+      
+      if (!skipCount) {
+        const countResult = pessoaConditions.length > 0
+          ? await db.select({ count: sql`COUNT(*)` }).from(clientesPessoa).where(and(...pessoaConditions))
+          : await db.select({ count: sql`COUNT(*)` }).from(clientesPessoa);
+        total = Number(countResult[0]?.count || 0);
       }
       
-      return { clientes, total: clientes.length };
+      // If countOnly, return just the count
+      if (countOnly) {
+        return { clientes: [], total };
+      }
+      
+      // Build query with pagination and deterministic ordering
+      let query = db.select().from(clientesPessoa);
+      if (pessoaConditions.length > 0) {
+        query = query.where(and(...pessoaConditions)) as any;
+      }
+      query = query.orderBy(clientesPessoa.id) as any;
+      if (limit !== undefined) {
+        query = query.limit(limit) as any;
+        if (offset !== undefined) {
+          query = query.offset(offset) as any;
+        }
+      }
+      
+      const clientes = await query;
+      return { clientes, total };
     }
   }
 
@@ -1543,6 +1600,28 @@ export class DbStorage implements IStorage {
       .from(clientesFolhaMes)
       .where(eq(clientesFolhaMes.pessoaId, pessoaId))
       .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+  }
+  
+  async getLatestFolhaMesByPessoaIds(pessoaIds: number[]): Promise<Map<number, ClienteFolhaMes>> {
+    if (pessoaIds.length === 0) {
+      return new Map();
+    }
+    
+    // Use DISTINCT ON to get the latest folha for each pessoa_id in one query
+    const result = await db.execute(sql`
+      SELECT DISTINCT ON (f.pessoa_id) f.*
+      FROM clientes_folha_mes f
+      WHERE f.pessoa_id = ANY(${pessoaIds})
+      ORDER BY f.pessoa_id, f.competencia DESC
+    `);
+    
+    const folhasMap = new Map<number, ClienteFolhaMes>();
+    for (const row of result.rows) {
+      const pessoaId = row.pessoa_id as number;
+      folhasMap.set(pessoaId, row as unknown as ClienteFolhaMes);
+    }
+    
+    return folhasMap;
   }
   
   async getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]> {

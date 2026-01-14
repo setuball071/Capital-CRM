@@ -43,6 +43,13 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
       4. Physically deletes the import_run (not just marks as deleted)
       5. All operations are atomic - complete success or complete rollback
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
+*   **High-Performance Client Database Export System**: Optimized streaming export system for generating client lists with package-based pricing. Features:
+    - **Chunked/streaming processing**: 5,000 records per chunk to avoid memory issues with large datasets
+    - **Optimized query patterns**: Single upfront COUNT query, then chunked data fetches with `skipCount: true`
+    - **Bulk folha lookups**: `getLatestFolhaMesByPessoaIds()` uses DISTINCT ON for efficient single-query data fetch
+    - **Deterministic pagination**: ORDER BY p.id ensures no duplicate/missing rows across chunks
+    - **Package auto-limit**: When user selects package smaller than results (e.g., 5,000 package with 38,610 matches), system caps export at package limit
+    - **API options**: `searchClientesPessoa()` supports `skipCount`, `countOnly`, `limit`, `offset` for flexible optimization
 
 ### System Design Choices
 

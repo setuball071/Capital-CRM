@@ -6925,69 +6925,115 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // Function to generate CSV file for approved pedido
+  // Function to generate CSV file for approved pedido - STREAMING/CHUNKED VERSION
   async function generatePedidoListaFile(pedidoId: number, pedido: any) {
     console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId}`);
     
+    const CHUNK_SIZE = 5000; // Process 5000 records at a time
+    
     try {
+      // Update status to processing
+      await storage.updatePedidoListaStatus(pedidoId, "processando");
+      
       // Use persistent exports directory in project root (not /tmp which is volatile)
       const exportsDir = path.join(process.cwd(), "exports");
       if (!fs.existsSync(exportsDir)) {
         fs.mkdirSync(exportsDir, { recursive: true });
       }
       
-      // Get filtered clients using stored filters
+      // Get filtered clients - first just count to know the total
       const filtros = pedido.filtrosUsados || {};
-      const { clientes } = await storage.searchClientesPessoa(filtros);
+      const totalCount = await storage.countClientesPessoa(filtros);
       
-      console.log(`[PedidoLista] Found ${clientes.length} clients for pedido ${pedidoId}`);
+      // Apply package limit if specified
+      const packageLimit = pedido.quantidadeRegistros || totalCount;
+      const recordsToExport = Math.min(totalCount, packageLimit);
       
-      // Get folha data for each client
-      const clientesComFolha = await Promise.all(
-        clientes.map(async (cliente) => {
-          const folhas = await storage.getFolhaMesByPessoaId(cliente.id);
-          const folhaAtual = folhas.length > 0 ? folhas[0] : null;
-          return { ...cliente, folhaAtual };
-        })
-      );
+      console.log(`[PedidoLista] Total matching: ${totalCount}, exporting: ${recordsToExport} for pedido ${pedidoId}`);
       
-      // Generate CSV content
+      // Create write stream for incremental file writing
+      const fileName = `lista-clientes-${pedidoId}-${Date.now()}.csv`;
+      const filePath = path.join(exportsDir, fileName);
+      const writeStream = fs.createWriteStream(filePath, { encoding: 'utf-8' });
+      
+      // Write BOM for Excel compatibility
+      writeStream.write('\ufeff');
+      
+      // Write headers
       const headers = [
         "CPF", "Matricula", "Nome", "Convenio", "Orgao", "UF", "Municipio",
         "Situacao Funcional", "Telefones",
         "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
         "Liquido"
       ];
+      writeStream.write(headers.join(";") + "\n");
       
-      const rows = clientesComFolha.map(c => [
-        c.cpf || "",
-        c.matricula || "",
-        c.nome || "",
-        c.convenio || "",
-        c.orgaodesc || "",
-        c.uf || "",
-        c.municipio || "",
-        c.sitFunc || "",
-        Array.isArray(c.telefonesBase) ? c.telefonesBase.join("; ") : "",
-        c.folhaAtual?.margemSaldo70 || "",
-        c.folhaAtual?.margemSaldo35 || "",
-        c.folhaAtual?.margemCartaoCreditoSaldo || "",
-        c.folhaAtual?.margemCartaoBeneficioSaldo || "",
-        c.folhaAtual?.liquido || "",
-      ]);
+      // Process in chunks
+      let processedCount = 0;
+      let offset = 0;
       
-      // Create CSV string
-      const csvContent = [
-        headers.join(";"),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
-      ].join("\n");
+      while (processedCount < recordsToExport) {
+        const chunkLimit = Math.min(CHUNK_SIZE, recordsToExport - processedCount);
+        
+        console.log(`[PedidoLista] Processing chunk: offset=${offset}, limit=${chunkLimit} for pedido ${pedidoId}`);
+        
+        // Fetch chunk with pagination (skipCount=true for export chunks to avoid repeated COUNT queries)
+        const { clientes } = await storage.searchClientesPessoa(filtros, { 
+          limit: chunkLimit, 
+          offset,
+          skipCount: true
+        });
+        
+        if (clientes.length === 0) {
+          console.log(`[PedidoLista] No more records at offset ${offset}`);
+          break;
+        }
+        
+        // Get folha data for this chunk in bulk (single query instead of N+1)
+        const clienteIds = clientes.map(c => c.id);
+        const folhasByPessoaId = await storage.getLatestFolhaMesByPessoaIds(clienteIds);
+        
+        // Write chunk to file
+        for (const cliente of clientes) {
+          const folhaAtual = folhasByPessoaId.get(cliente.id);
+          
+          const row = [
+            cliente.cpf || "",
+            cliente.matricula || "",
+            cliente.nome || "",
+            cliente.convenio || "",
+            cliente.orgaodesc || "",
+            cliente.uf || "",
+            cliente.municipio || "",
+            cliente.sitFunc || "",
+            Array.isArray(cliente.telefonesBase) ? cliente.telefonesBase.join("; ") : "",
+            folhaAtual?.margemSaldo70 || "",
+            folhaAtual?.margemSaldo35 || "",
+            folhaAtual?.margemCartaoCreditoSaldo || "",
+            folhaAtual?.margemCartaoBeneficioSaldo || "",
+            folhaAtual?.liquido || "",
+          ];
+          
+          const csvRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";");
+          writeStream.write(csvRow + "\n");
+        }
+        
+        // Use actual rows consumed for accurate tracking
+        const rowsConsumed = clientes.length;
+        processedCount += rowsConsumed;
+        offset += rowsConsumed;
+        
+        console.log(`[PedidoLista] Progress: ${processedCount}/${recordsToExport} (${Math.round(processedCount/recordsToExport*100)}%)`);
+      }
       
-      // Write file
-      const fileName = `lista-clientes-${pedidoId}-${Date.now()}.csv`;
-      const filePath = path.join(exportsDir, fileName);
-      fs.writeFileSync(filePath, "\ufeff" + csvContent, "utf-8"); // BOM for Excel compatibility
+      // Close the stream
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+        writeStream.end();
+      });
       
-      console.log(`[PedidoLista] File generated: ${filePath}`);
+      console.log(`[PedidoLista] File generated: ${filePath} (${processedCount} records)`);
       
       // Update pedido with file info
       await storage.updatePedidoLista(pedidoId, {
@@ -6997,9 +7043,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         custoFinal: pedido.custoEstimado, // Set custo_final = custo_estimado by default
       });
       
-      console.log(`[PedidoLista] Pedido ${pedidoId} updated with file path`);
-      
-      // TODO: Implement cleanup routine for files older than 30 days
+      console.log(`[PedidoLista] Pedido ${pedidoId} completed successfully`);
       
     } catch (error) {
       console.error(`[PedidoLista] Error generating file for pedido ${pedidoId}:`, error);
@@ -7030,68 +7074,22 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         });
       }
 
-      // Check if file exists - if not, regenerate it dynamically
+      // Check if file exists - if not, regenerate it using chunked streaming
       let filePath = pedido.arquivoPath;
       if (!filePath || !fs.existsSync(filePath)) {
         console.log(`[PedidoLista] File not found, regenerating for pedido ${id}`);
         
-        // Regenerate file dynamically
-        const exportsDir = path.join(process.cwd(), "exports");
-        if (!fs.existsSync(exportsDir)) {
-          fs.mkdirSync(exportsDir, { recursive: true });
+        // Regenerate using the same chunked approach as generatePedidoListaFile
+        await generatePedidoListaFile(id, pedido);
+        
+        // Reload pedido to get the new file path
+        const updatedPedido = await storage.getPedidoLista(id);
+        filePath = updatedPedido?.arquivoPath || null;
+        
+        if (!filePath || !fs.existsSync(filePath)) {
+          return res.status(500).json({ message: "Erro ao regenerar arquivo" });
         }
         
-        // Get filtered clients using stored filters
-        const filtros = pedido.filtrosUsados || {};
-        const { clientes } = await storage.searchClientesPessoa(filtros);
-        
-        // Get folha data for each client
-        const clientesComFolha = await Promise.all(
-          clientes.map(async (cliente) => {
-            const folhas = await storage.getFolhaMesByPessoaId(cliente.id);
-            const folhaAtual = folhas.length > 0 ? folhas[0] : null;
-            return { ...cliente, folhaAtual };
-          })
-        );
-        
-        // Generate CSV content
-        const headers = [
-          "CPF", "Matricula", "Nome", "Convenio", "Orgao", "UF", "Municipio",
-          "Situacao Funcional", "Telefones",
-          "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
-          "Liquido"
-        ];
-        
-        const rows = clientesComFolha.map(c => [
-          c.cpf || "",
-          c.matricula || "",
-          c.nome || "",
-          c.convenio || "",
-          c.orgaodesc || "",
-          c.uf || "",
-          c.municipio || "",
-          c.sitFunc || "",
-          Array.isArray(c.telefonesBase) ? c.telefonesBase.join("; ") : "",
-          c.folhaAtual?.margemSaldo70 || "",
-          c.folhaAtual?.margemSaldo35 || "",
-          c.folhaAtual?.margemCartaoCreditoSaldo || "",
-          c.folhaAtual?.margemCartaoBeneficioSaldo || "",
-          c.folhaAtual?.liquido || "",
-        ]);
-        
-        // Create CSV string
-        const csvContent = [
-          headers.join(";"),
-          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
-        ].join("\n");
-        
-        // Write file
-        const fileName = `lista-clientes-${id}-${Date.now()}.csv`;
-        filePath = path.join(exportsDir, fileName);
-        fs.writeFileSync(filePath, "\ufeff" + csvContent, "utf-8"); // BOM for Excel compatibility
-        
-        // Update pedido with new file path
-        await storage.updatePedidoLista(id, { arquivoPath: filePath });
         console.log(`[PedidoLista] File regenerated: ${filePath}`);
       }
 
