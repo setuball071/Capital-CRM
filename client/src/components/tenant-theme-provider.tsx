@@ -16,6 +16,8 @@ interface TenantTheme {
   cardForeground?: string;
   sidebar?: string;
   sidebarForeground?: string;
+  sidebarBgColor?: string;
+  sidebarFontColor?: string;
   radius?: string;
 }
 
@@ -132,6 +134,21 @@ function applyThemeVariables(theme: TenantTheme) {
       root.style.setProperty(cssVar, value);
     }
   });
+  
+  // Apply sidebar colors from branding settings (sidebarBgColor/sidebarFontColor)
+  // These take precedence over the theme's sidebar/sidebarForeground if set
+  if (theme.sidebarBgColor) {
+    const sidebarBg = parseColor(theme.sidebarBgColor);
+    if (sidebarBg) {
+      root.style.setProperty("--sidebar", sidebarBg);
+    }
+  }
+  if (theme.sidebarFontColor) {
+    const sidebarFg = parseColor(theme.sidebarFontColor);
+    if (sidebarFg) {
+      root.style.setProperty("--sidebar-foreground", sidebarFg);
+    }
+  }
   
   if (theme.radius) {
     root.style.setProperty("--radius", theme.radius);
