@@ -375,8 +375,9 @@ export default function VendasAtendimento() {
   });
 
   const setPrimaryContactMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest("POST", `/api/crm/contacts/${id}/primary`);
+    mutationFn: async (contactId: number) => {
+      if (!atendimentoAtual?.lead?.id) throw new Error("Nenhum lead ativo");
+      return apiRequest("POST", `/api/crm/contacts/${contactId}/primary`, { leadId: atendimentoAtual.lead.id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "contacts"] });
