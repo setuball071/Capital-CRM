@@ -87,9 +87,12 @@ The application supports comprehensive white-label branding per tenant:
 **Customizable Elements:**
 - System name, slogan, font family
 - Login/app logos (PNG/SVG, max 2MB), favicon (ICO/PNG/SVG)
-- Logo height (32-120px), showSystemName toggle
+- Logo height (32-120px)
+- showSystemName toggle (optional display of system name on login)
+- showSlogan toggle (optional display of slogan on login)
 - Welcome text, footer text for login page
-- Theme colors (primaryColor, textColor, etc.)
+- Theme colors (primaryColor, textColor, loginBgColor, etc.)
+- All toggle settings stored in themeJson for persistence
 
 **Development Mode Tenant Persistence:**
 After login, a `devTenantId` cookie is set that persists across logout. This ensures the login page shows the correct tenant branding for testing:

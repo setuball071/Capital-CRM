@@ -1039,13 +1039,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Determine tenant ID for session
+      let sessionTenantId = req.tenantId;
+      
+      // In development mode without domain-based tenant, determine user's tenant
+      if (!sessionTenantId && process.env.NODE_ENV === "development") {
+        const userTenantList = await getUserTenants(user.id);
+        if (userTenantList.length > 0) {
+          sessionTenantId = userTenantList[0].id;
+        }
+      }
+      
       // Set session and save it
       req.session.userId = user.id;
-      req.session.tenantId = req.tenantId; // Store tenant in session
+      req.session.tenantId = sessionTenantId; // Store tenant in session
       
       // Set dev tenant cookie for persistence across logout (development only)
-      if (process.env.NODE_ENV === "development" && req.tenantId) {
-        res.cookie("devTenantId", req.tenantId.toString(), { 
+      if (process.env.NODE_ENV === "development" && sessionTenantId) {
+        res.cookie("devTenantId", sessionTenantId.toString(), { 
           maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           httpOnly: false,
           sameSite: "lax"

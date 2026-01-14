@@ -61,7 +61,9 @@ export default function LoginPage() {
 
   const systemName = tenant?.name || "CRM Pro";
   const hasLogo = !!logoLoginUrl && logoLoginUrl !== "/branding/logo.png";
-  const shouldShowSystemName = showSystemName || !hasLogo;
+  // Show system name only if explicitly enabled via checkbox
+  // If no logo and no system name, we still need something visible
+  const shouldShowSystemName = showSystemName !== false;
 
   return (
     <div 
