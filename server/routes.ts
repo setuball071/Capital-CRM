@@ -6967,9 +6967,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
 
   // Function to generate CSV file for approved pedido - STREAMING/CHUNKED VERSION
   async function generatePedidoListaFile(pedidoId: number, pedido: any) {
-    console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId}`);
+    const startTime = Date.now();
+    console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId} at ${new Date().toISOString()}`);
     
     const CHUNK_SIZE = 5000; // Process 5000 records at a time
+    const MAX_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max timeout
     
     try {
       // Update status to processing
@@ -7013,9 +7015,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       let offset = 0;
       
       while (processedCount < recordsToExport) {
+        // Check timeout
+        if (Date.now() - startTime > MAX_TIMEOUT_MS) {
+          throw new Error(`Timeout: export exceeded ${MAX_TIMEOUT_MS / 1000 / 60} minutes`);
+        }
+        
         const chunkLimit = Math.min(CHUNK_SIZE, recordsToExport - processedCount);
         
-        console.log(`[PedidoLista] Processing chunk: offset=${offset}, limit=${chunkLimit} for pedido ${pedidoId}`);
+        console.log(`[PedidoLista] Processing chunk: offset=${offset}, limit=${chunkLimit} for pedido ${pedidoId} (elapsed: ${Math.round((Date.now() - startTime) / 1000)}s)`);
         
         // Fetch chunk with pagination (skipCount=true for export chunks to avoid repeated COUNT queries)
         const { clientes } = await storage.searchClientesPessoa(filtros, { 
@@ -7085,9 +7092,18 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       console.log(`[PedidoLista] Pedido ${pedidoId} completed successfully`);
       
-    } catch (error) {
-      console.error(`[PedidoLista] Error generating file for pedido ${pedidoId}:`, error);
-      await storage.updatePedidoLista(pedidoId, { status: "erro" });
+    } catch (error: any) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.error(`[PedidoLista] ERROR for pedido ${pedidoId} after ${elapsed}s:`, error?.message || error);
+      console.error(`[PedidoLista] Stack trace:`, error?.stack);
+      
+      try {
+        await storage.updatePedidoLista(pedidoId, { status: "erro" });
+        console.log(`[PedidoLista] Status updated to 'erro' for pedido ${pedidoId}`);
+      } catch (updateError) {
+        console.error(`[PedidoLista] Failed to update status to 'erro':`, updateError);
+      }
+      
       throw error;
     }
   }

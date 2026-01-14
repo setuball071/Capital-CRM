@@ -1613,6 +1613,10 @@ export class DbStorage implements IStorage {
     // Batch IDs into chunks to avoid this limit
     const BATCH_SIZE = 1000;
     
+    // Helper to convert snake_case to camelCase
+    const snakeToCamel = (str: string): string => 
+      str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    
     for (let i = 0; i < pessoaIds.length; i += BATCH_SIZE) {
       const batchIds = pessoaIds.slice(i, i + BATCH_SIZE);
       
@@ -1626,7 +1630,14 @@ export class DbStorage implements IStorage {
       
       for (const row of result.rows) {
         const pessoaId = row.pessoa_id as number;
-        folhasMap.set(pessoaId, row as unknown as ClienteFolhaMes);
+        
+        // Transform snake_case keys to camelCase to match TypeScript type
+        const transformed: Record<string, any> = {};
+        for (const [key, value] of Object.entries(row)) {
+          transformed[snakeToCamel(key)] = value;
+        }
+        
+        folhasMap.set(pessoaId, transformed as ClienteFolhaMes);
       }
     }
     
