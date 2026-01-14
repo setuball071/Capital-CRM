@@ -15,7 +15,19 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
-  const { tenant, logoLoginUrl, slogan, fontFamily, loginBgColor } = useTenant();
+  const { 
+    tenant, 
+    logoLoginUrl, 
+    slogan, 
+    fontFamily, 
+    loginBgColor,
+    primaryColor,
+    textColor,
+    welcomeText,
+    footerText,
+    showSlogan,
+    showSystemName,
+  } = useTenant();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,39 +60,69 @@ export default function LoginPage() {
   };
 
   const systemName = tenant?.name || "CRM Pro";
+  const hasLogo = !!logoLoginUrl && logoLoginUrl !== "/branding/logo.png";
+  const shouldShowSystemName = showSystemName || !hasLogo;
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center p-4"
+      className="min-h-screen flex flex-col items-center justify-center p-4"
       style={{ 
         backgroundColor: loginBgColor,
         fontFamily: fontFamily,
       }}
+      data-testid="login-container"
     >
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          {logoLoginUrl && (
-            <div className="flex justify-center mb-4">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="space-y-3 text-center pb-2">
+          {hasLogo && (
+            <div className="flex justify-center mb-2">
               <img 
                 src={logoLoginUrl} 
                 alt={systemName} 
-                className="h-16 w-auto max-w-[200px] object-contain"
+                className="h-20 w-auto max-w-[240px] object-contain"
                 data-testid="img-login-logo"
               />
             </div>
           )}
-          <CardTitle 
-            className="text-2xl font-bold"
-            style={{ fontFamily }}
-            data-testid="text-system-name"
-          >
-            {systemName}
-          </CardTitle>
-          <CardDescription style={{ fontFamily }}>
-            {slogan || "Entre com suas credenciais para acessar o sistema"}
-          </CardDescription>
+          
+          {shouldShowSystemName && (
+            <CardTitle 
+              className="text-2xl font-bold"
+              style={{ fontFamily, color: textColor }}
+              data-testid="text-system-name"
+            >
+              {systemName}
+            </CardTitle>
+          )}
+          
+          {showSlogan && slogan && (
+            <CardDescription 
+              style={{ fontFamily }}
+              className="text-base"
+              data-testid="text-slogan"
+            >
+              {slogan}
+            </CardDescription>
+          )}
+          
+          {welcomeText && (
+            <p 
+              className="text-sm text-muted-foreground"
+              style={{ fontFamily }}
+              data-testid="text-welcome"
+            >
+              {welcomeText}
+            </p>
+          )}
+          
+          {!showSlogan && !slogan && !welcomeText && (
+            <CardDescription style={{ fontFamily }}>
+              Entre com suas credenciais para acessar o sistema
+            </CardDescription>
+          )}
         </CardHeader>
-        <CardContent>
+        
+        <CardContent className="pt-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -111,6 +153,10 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full"
+              style={{ 
+                backgroundColor: primaryColor,
+                borderColor: primaryColor,
+              }}
               disabled={isLoading}
               data-testid="button-login"
             >
@@ -126,6 +172,16 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      
+      {footerText && (
+        <p 
+          className="mt-6 text-sm text-white/60 text-center max-w-md"
+          style={{ fontFamily }}
+          data-testid="text-footer"
+        >
+          {footerText}
+        </p>
+      )}
     </div>
   );
 }

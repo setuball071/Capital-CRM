@@ -49,6 +49,7 @@ const DEFAULT_THEME: TenantTheme = {
   fontWeight: "400",
   fontColor: "#1f2937",
   showSlogan: true,
+  showSystemName: true,
 };
 
 export default function AdminBrandingPage() {
@@ -77,6 +78,7 @@ export default function AdminBrandingPage() {
     welcomeText: "",
     footerText: "",
     showSlogan: true,
+    showSystemName: true,
   });
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -116,6 +118,7 @@ export default function AdminBrandingPage() {
         welcomeText: theme?.welcomeText || "",
         footerText: theme?.footerText || "",
         showSlogan: theme?.showSlogan !== false,
+        showSystemName: theme?.showSystemName !== false,
       });
     }
   }, [tenantData]);
@@ -138,6 +141,7 @@ export default function AdminBrandingPage() {
         welcomeText: data.welcomeText,
         footerText: data.footerText,
         showSlogan: data.showSlogan,
+        showSystemName: data.showSystemName,
         lastEditedBy: user?.name || "Desconhecido",
         lastEditedAt: new Date().toISOString(),
       };
@@ -580,6 +584,14 @@ export default function AdminBrandingPage() {
               <Label htmlFor="showSlogan" className="text-sm font-normal cursor-pointer">Exibir slogan na tela de login</Label>
             </div>
 
+            <div className="flex items-center space-x-2">
+              <Checkbox id="showSystemName" checked={formData.showSystemName} onCheckedChange={(checked) => setFormData({ ...formData, showSystemName: !!checked })} data-testid="checkbox-show-system-name" />
+              <Label htmlFor="showSystemName" className="text-sm font-normal cursor-pointer">Exibir nome do sistema na tela de login</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Desmarque esta opção se a logo já contém o nome do sistema para evitar texto duplicado.
+            </p>
+
             <div className="space-y-2">
               <Label htmlFor="welcomeText">Texto de Boas-vindas (opcional)</Label>
               <Input id="welcomeText" value={formData.welcomeText} onChange={(e) => setFormData({ ...formData, welcomeText: e.target.value })} placeholder="Bem-vindo ao nosso sistema!" data-testid="input-welcome-text" />
@@ -622,9 +634,11 @@ export default function AdminBrandingPage() {
                   ) : (
                     <div className="h-16 w-32 rounded flex items-center justify-center mb-4 text-white font-bold" style={{ backgroundColor: formData.primaryColor }}>LOGO</div>
                   )}
-                  <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: formData.fontFamily !== "custom" ? formData.fontFamily : undefined, fontSize: formData.fontSize, fontWeight: formData.fontWeight as any }}>
-                    {formData.name || "Nome do Sistema"}
-                  </h2>
+                  {formData.showSystemName && (
+                    <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: formData.fontFamily !== "custom" ? formData.fontFamily : undefined, fontSize: formData.fontSize, fontWeight: formData.fontWeight as any }}>
+                      {formData.name || "Nome do Sistema"}
+                    </h2>
+                  )}
                   {formData.showSlogan && formData.slogan && (
                     <p className="text-white/80" style={{ fontFamily: formData.fontFamily !== "custom" ? formData.fontFamily : undefined }}>{formData.slogan}</p>
                   )}

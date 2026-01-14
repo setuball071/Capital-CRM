@@ -683,31 +683,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== TENANT ROUTES =====
   
   // Get current tenant branding/config (public - based on domain)
-  app.get("/api/tenant", async (req, res) => {
+  app.get("/api/tenant", async (req: any, res) => {
     try {
-      if (!req.tenant) {
-        // In development, return a default tenant or null
-        if (process.env.NODE_ENV === "development") {
-          return res.json({ 
-            tenant: null,
-            development: true,
-            message: "No tenant configured for this domain"
-          });
+      let tenant = req.tenant;
+      
+      // In development mode without a resolved tenant, try multiple fallbacks
+      if (!tenant && process.env.NODE_ENV === "development") {
+        // Priority 1: Session tenantId (authenticated users)
+        const sessionTenantId = req.session?.tenantId;
+        if (sessionTenantId) {
+          const [sessionTenant] = await db.select().from(tenants).where(
+            and(eq(tenants.id, sessionTenantId), eq(tenants.isActive, true))
+          ).limit(1);
+          tenant = sessionTenant || null;
         }
+        
+        // Priority 2: Dev tenant cookie (persists across logout for testing)
+        if (!tenant) {
+          // Safe cookie parsing that handles cookies with '=' in values
+          const cookieHeader = req.headers.cookie || "";
+          let devTenantId: string | null = null;
+          
+          try {
+            for (const cookie of cookieHeader.split(";")) {
+              const trimmed = cookie.trim();
+              const eqIndex = trimmed.indexOf("=");
+              if (eqIndex > 0) {
+                const key = trimmed.substring(0, eqIndex);
+                const value = trimmed.substring(eqIndex + 1);
+                if (key === "devTenantId") {
+                  devTenantId = decodeURIComponent(value);
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore cookie parsing errors
+          }
+          
+          if (devTenantId && !isNaN(parseInt(devTenantId))) {
+            const [cookieTenant] = await db.select().from(tenants).where(
+              and(eq(tenants.id, parseInt(devTenantId)), eq(tenants.isActive, true))
+            ).limit(1);
+            tenant = cookieTenant || null;
+          }
+        }
+        
+        // Priority 3: Fall back to first active tenant
+        if (!tenant) {
+          const [fallbackTenant] = await db.select().from(tenants).where(eq(tenants.isActive, true)).limit(1);
+          tenant = fallbackTenant || null;
+        }
+      }
+      
+      if (!tenant) {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
+      // Note: devTenantId cookie is only set during login, not here
+      // This prevents overwriting the user's actual tenant with a fallback tenant
+      
       res.json({
-        id: req.tenant.id,
-        key: req.tenant.key,
-        name: req.tenant.name,
-        logoUrl: req.tenant.logoUrl,
-        logoLoginUrl: (req.tenant as any).logoLoginUrl,
-        faviconUrl: req.tenant.faviconUrl,
-        logoHeight: (req.tenant as any).logoHeight || 64,
-        slogan: (req.tenant as any).slogan,
-        fontFamily: (req.tenant as any).fontFamily,
-        theme: req.tenant.themeJson,
+        id: tenant.id,
+        key: tenant.key,
+        name: tenant.name,
+        logoUrl: tenant.logoUrl,
+        logoLoginUrl: (tenant as any).logoLoginUrl,
+        faviconUrl: tenant.faviconUrl,
+        logoHeight: (tenant as any).logoHeight || 64,
+        slogan: (tenant as any).slogan,
+        fontFamily: (tenant as any).fontFamily,
+        theme: tenant.themeJson,
       });
     } catch (error) {
       console.error("Get tenant error:", error);
@@ -996,6 +1042,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set session and save it
       req.session.userId = user.id;
       req.session.tenantId = req.tenantId; // Store tenant in session
+      
+      // Set dev tenant cookie for persistence across logout (development only)
+      if (process.env.NODE_ENV === "development" && req.tenantId) {
+        res.cookie("devTenantId", req.tenantId.toString(), { 
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+          httpOnly: false,
+          sameSite: "lax"
+        });
+      }
       
       // Save session before responding
       req.session.save((err) => {

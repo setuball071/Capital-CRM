@@ -58,6 +58,13 @@ interface TenantContextValue {
   slogan: string;
   fontFamily: string;
   loginBgColor: string;
+  primaryColor: string;
+  secondaryColor: string;
+  textColor: string;
+  welcomeText: string;
+  footerText: string;
+  showSlogan: boolean;
+  showSystemName: boolean;
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -177,7 +184,16 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const logoHeight = tenant?.logoHeight || 64;
   const slogan = tenant?.slogan || "";
   const fontFamily = tenant?.fontFamily || "Inter";
-  const loginBgColor = (tenant?.theme as any)?.loginBgColor || "#1e293b";
+  
+  const themeData = tenant?.theme as any;
+  const loginBgColor = themeData?.loginBgColor || "#1e293b";
+  const primaryColor = themeData?.primaryColor || "#3b82f6";
+  const secondaryColor = themeData?.secondaryColor || "#10b981";
+  const textColor = themeData?.textColor || "#1f2937";
+  const welcomeText = themeData?.welcomeText || "";
+  const footerText = themeData?.footerText || "";
+  const showSlogan = themeData?.showSlogan !== false;
+  const showSystemName = themeData?.showSystemName !== false;
   
   useEffect(() => {
     if (isLoading) return;
@@ -211,6 +227,13 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
       slogan,
       fontFamily,
       loginBgColor,
+      primaryColor,
+      secondaryColor,
+      textColor,
+      welcomeText,
+      footerText,
+      showSlogan,
+      showSystemName,
     }}>
       {children}
     </TenantContext.Provider>

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { apiRequest } from "./queryClient";
+import { apiRequest, queryClient } from "./queryClient";
 import type { User, ModuleName } from "@shared/schema";
 import { MODULE_SUB_ITEMS, parsePermissionKey, getSubItemPermissionKey } from "@shared/schema";
 
@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await apiRequest("POST", "/api/auth/logout");
     setUser(null);
     setPermissions({});
+    // Invalidate tenant cache to force refetch with new session state
+    queryClient.invalidateQueries({ queryKey: ["/api/tenant"] });
   };
 
   // Helper para verificar permissão dada a chave e tipo de acesso

@@ -80,6 +80,27 @@ The application uses a granular sub-item permission system with the following mo
 - GET /api/users/:id/permissions - Get user's permissions
 - PUT /api/users/:id/permissions - Save user's permissions
 
+### Multi-Tenant Branding System
+
+The application supports comprehensive white-label branding per tenant:
+
+**Customizable Elements:**
+- System name, slogan, font family
+- Login/app logos (PNG/SVG, max 2MB), favicon (ICO/PNG/SVG)
+- Logo height (32-120px), showSystemName toggle
+- Welcome text, footer text for login page
+- Theme colors (primaryColor, textColor, etc.)
+
+**Development Mode Tenant Persistence:**
+After login, a `devTenantId` cookie is set that persists across logout. This ensures the login page shows the correct tenant branding for testing:
+1. Session tenantId (authenticated users) - highest priority
+2. devTenantId cookie (persists 7 days after logout)
+3. First active tenant (final fallback)
+
+**Cache Invalidation:**
+- Logout invalidates `/api/tenant` query cache to force refetch with devTenantId cookie
+- This prevents stale cached tenant data from showing after logout
+
 ## External Dependencies
 
 ### Third-Party UI Libraries

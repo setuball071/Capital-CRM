@@ -103,6 +103,7 @@ export const tenantThemeSchema = z.object({
   welcomeText: z.string().optional(), // Texto de boas-vindas
   footerText: z.string().optional(), // Texto do rodapé
   showSlogan: z.boolean().optional(), // Exibir ou ocultar slogan
+  showSystemName: z.boolean().optional(), // Exibir ou ocultar nome do sistema na tela de login
   // Metadados de edição
   lastEditedBy: z.string().optional(), // Nome do usuário que editou
   lastEditedAt: z.string().optional(), // Data/hora da última edição
