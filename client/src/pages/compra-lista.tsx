@@ -225,16 +225,25 @@ export default function CompraLista() {
 
   const criarPedidoMutation = useMutation({
     mutationFn: async (data: { filtros: Filtros; pacoteSelecionado?: PacotePreco | null }) => {
-      return await apiRequest("POST", "/api/pedidos-lista", { 
+      const response = await apiRequest("POST", "/api/pedidos-lista", { 
         filtros: data.filtros,
         pacoteSelecionado: data.pacoteSelecionado || undefined
       });
+      return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Pedido criado",
-        description: "Seu pedido de lista foi criado com sucesso.",
-      });
+    onSuccess: (data: { message: string; pedido: { quantidade: number; quantidadeOriginal?: number; corteFoiAplicado?: boolean } }) => {
+      // Se houve corte automático, mostrar mensagem informativa
+      if (data.pedido?.corteFoiAplicado && data.pedido?.quantidadeOriginal) {
+        toast({
+          title: "Pedido criado com corte automático",
+          description: `Serão exportados ${data.pedido.quantidade.toLocaleString('pt-BR')} de ${data.pedido.quantidadeOriginal.toLocaleString('pt-BR')} registros disponíveis.`,
+        });
+      } else {
+        toast({
+          title: "Pedido criado",
+          description: data.message || "Seu pedido de lista foi criado com sucesso.",
+        });
+      }
       setSimulacao(null);
       setFiltros({});
       setSelectedPacote(null);

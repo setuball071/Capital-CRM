@@ -6776,6 +6776,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       const pacotesServidor = await getPacotesPreco();
       
+      // Quantidade efetiva que será exportada (pode ser limitada pelo pacote)
+      let quantidadeEfetiva = total;
+      
       if (pacoteSelecionadoNome) {
         // Buscar o pacote pelo nome na lista autoritativa do servidor
         const pacoteValido = pacotesServidor.find(p => p.nomePacote === pacoteSelecionadoNome);
@@ -6786,11 +6789,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           });
         }
         
-        // Validar que o pacote selecionado cobre a quantidade de registros
+        // Se o total excede o limite do pacote, aplicar corte automático
+        // O pedido será gerado com a quantidade limitada ao tamanho do pacote
         if (total > pacoteValido.quantidadeMaxima) {
-          return res.status(400).json({ 
-            message: `Pacote "${pacoteSelecionadoNome}" atende até ${pacoteValido.quantidadeMaxima.toLocaleString('pt-BR')} registros, mas a busca retornou ${total.toLocaleString('pt-BR')} registros. Selecione um pacote maior.` 
-          });
+          quantidadeEfetiva = pacoteValido.quantidadeMaxima;
+          console.log(`[Pedido] Corte automático aplicado: ${total.toLocaleString('pt-BR')} -> ${quantidadeEfetiva.toLocaleString('pt-BR')} registros (pacote ${pacoteValido.nomePacote})`);
         }
         
         nomePacote = pacoteValido.nomePacote;
@@ -6802,10 +6805,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
       
       // Create pedido com informações do pacote
+      // Usar quantidadeEfetiva (limitada pelo pacote) em vez de total
       const pedido = await storage.createPedidoLista({
         coordenadorId: req.user!.id,
         filtrosUsados: filtros,
-        quantidadeRegistros: total,
+        quantidadeRegistros: quantidadeEfetiva,
         tipo: "exportacao_base",
         status: "pendente",
         nomePacote: nomePacote,
@@ -6813,11 +6817,18 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         statusFinanceiro: "pendente",
       });
       
+      // Informar se houve corte na quantidade
+      const corteFoiAplicado = quantidadeEfetiva < total;
+      
       return res.json({
-        message: "Pedido criado com sucesso",
+        message: corteFoiAplicado 
+          ? `Pedido criado com sucesso. Foi aplicado corte automático: ${quantidadeEfetiva.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} registros serão exportados.`
+          : "Pedido criado com sucesso",
         pedido: {
           id: pedido.id,
-          quantidade: total,
+          quantidade: quantidadeEfetiva,
+          quantidadeOriginal: corteFoiAplicado ? total : undefined,
+          corteFoiAplicado,
           status: pedido.status,
           criadoEm: pedido.criadoEm,
         },

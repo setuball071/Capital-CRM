@@ -1,0 +1,109 @@
+{
+"roteiros": [
+{
+"banco": "BANCO INTER",
+"convenio": "SIAPE",
+"segmento": "Servidor Federal",
+"tipo_operacao": "credito_novo",
+"publico_alvo": [
+"Servidores públicos federais estatutários",
+"Servidores civis ativos efetivos",
+"Militares ativos",
+"Militares inativos",
+"Aposentados do SIAPE",
+"Pensionistas vitalícios",
+"Pensionistas temporários do gênero feminino, conforme regras do convênio",
+"Beneficiários de pensão vitalícia",
+"Servidores com situação funcional Ativo Permanente",
+"Servidores com situação funcional Ativo em Outro Órgão, conforme regras",
+"Servidores cedidos SUS (Lei 8.270), conforme averbação no órgão de origem"
+],
+"publico_nao_atendido": [
+"Comissionados",
+"Celetistas",
+"Servidores temporários",
+"Pensionistas alimentícios",
+"Curatelados ou tutelados",
+"Contratados",
+"Analfabetos ou impossibilitados de assinar",
+"Servidores vinculados a UPAGs não atendidas",
+"Servidores com situação funcional não atendida conforme quadro do roteiro"
+],
+"faixas_idade": [
+{
+"idade_minima": 21,
+"idade_maxima": 65,
+"limite_parcela": null,
+"observacoes": "De 21 até 65 anos e 11 meses ao final do contrato, valor máximo de empréstimo até R$ 270.000,00."
+},
+{
+"idade_minima": 66,
+"idade_maxima": 69,
+"limite_parcela": null,
+"observacoes": "De 66 até 69 anos e 11 meses ao final do contrato, valor máximo de empréstimo até R$ 230.000,00."
+},
+{
+"idade_minima": 70,
+"idade_maxima": 75,
+"limite_parcela": null,
+"observacoes": "De 70 até 75 anos e 11 meses ao final do contrato, valor máximo de empréstimo até R$ 190.000,00."
+},
+{
+"idade_minima": 76,
+"idade_maxima": 79,
+"limite_parcela": null,
+"observacoes": "De 76 até 79 anos e 11 meses ao final do contrato, valor máximo de empréstimo até R$ 110.000,00. Preferencialmente com seguro."
+}
+],
+"limites_operacionais": {
+"prazo_minimo_meses": null,
+"prazo_maximo_meses": 96,
+"parcela_minima": null,
+"valor_minimo_liberado": "",
+"margem_especifica": "Margem consignável conforme regras do convênio SIAPE",
+"margem_negativa_permitida": null,
+"descricao_margem_negativa": ""
+},
+"documentacao_obrigatoria": [
+"Contracheque mais recente e legível",
+"Documento oficial de identificação com foto (RG, CNH, RNE ou documento militar)",
+"CPF",
+"Comprovante de residência conforme regras de assinatura",
+"Print da calculadora de margem para servidores efetivos comissionados"
+],
+"portais_acesso": [
+{
+"orgao_ou_segmento": "SIAPE",
+"nome_portal": "SIGEPE / Portal SIAPENET",
+"link_portal": "https://www.siape.gov.br/Portal/Consignataria.asp
+",
+"instrucoes_acesso": "Servidor deve gerar autorização no SIGEPE Servidor e Pensionista para consulta e averbação da margem.",
+"observacoes": "A autorização tem validade de 30 dias."
+},
+{
+"orgao_ou_segmento": "Transparência",
+"nome_portal": "Portal da Transparência",
+"link_portal": "www.portaltransparencia.gov.br/servidores/servidor-lista-servidores.asp
+",
+"instrucoes_acesso": "Consulta de validação do CPF do servidor ativo.",
+"observacoes": "O site não disponibiliza dados de aposentados e pensionistas."
+}
+],
+"regras_especiais": [
+"Quantidade máxima de 9 contratos por matrícula",
+"Para produto Novo, limite de idade até 77 anos e 11 meses",
+"Margem de segurança de R$ 50,00 conforme regras do convênio",
+"Para refinanciamento, troco mínimo de R$ 300,00",
+"Crédito disponibilizado exclusivamente na conta informada no contracheque",
+"Dispensada apresentação de extrato bancário quando a conta for do Banco Inter",
+"Formalização por assinatura eletrônica ou manual"
+],
+"detalhes_adicionais": [
+"Roteiro Operacional SIAPE – Banco Inter",
+"Consulta e averbação da margem dependem de anuência do servidor",
+"Pensionistas temporários atendidos conforme Lei 8.112/90 e regras específicas",
+"UPAGs não atendidas seguem lista específica do roteiro"
+]
+}
+]
+}
