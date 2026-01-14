@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await apiRequest("POST", "/api/auth/login", { email, password });
     const data = await response.json();
     setUser(data.user);
+    // Invalidate tenant cache to refetch with new session/cookie context
+    queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
     // Após login, recarregar permissões
     await checkAuth();
   };
@@ -60,7 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setPermissions({});
     // Invalidate tenant cache to force refetch with new session state
-    queryClient.invalidateQueries({ queryKey: ["/api/tenant"] });
+    // Use partial key match to invalidate all host-specific tenant caches
+    queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
   };
 
   // Helper para verificar permissão dada a chave e tipo de acesso

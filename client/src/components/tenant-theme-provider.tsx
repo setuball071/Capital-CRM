@@ -160,9 +160,24 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const [appliedTheme, setAppliedTheme] = useState(false);
   
   const { data: rawData, isLoading } = useQuery<TenantApiResponse>({
-    queryKey: ["/api/tenant"],
+    queryKey: ["/api/tenant", window.location.host],
+    queryFn: async () => {
+      // Add cache-busting headers to ensure fresh response after login/logout
+      const res = await fetch("/api/tenant", { 
+        credentials: "include",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      });
+      if (!res.ok) {
+        return null as unknown as TenantApiResponse;
+      }
+      return res.json();
+    },
     retry: 1,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0, // Always refetch to ensure correct tenant per domain
+    refetchOnMount: "always",
   });
   
   const tenant: TenantBranding | null = rawData?.id ? {
@@ -211,10 +226,13 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   }, [faviconUrl]);
   
   useEffect(() => {
-    if (tenant?.name) {
-      document.title = tenant.name;
+    // Update document title based on tenant data
+    // Use name, or fall back to key, or default to "Sistema"
+    if (rawData?.id) {
+      const title = rawData.name || rawData.key || "Sistema";
+      document.title = title;
     }
-  }, [tenant?.name]);
+  }, [rawData?.id, rawData?.name, rawData?.key]);
   
   return (
     <TenantContext.Provider value={{ 
