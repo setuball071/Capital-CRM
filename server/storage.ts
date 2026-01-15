@@ -1151,13 +1151,19 @@ export class DbStorage implements IStorage {
     // If we need joins, count filter, or idade filter, use parameterized SQL query for safety
     if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter || needsIdadeFilter) {
       // Build parameterized query using Drizzle's sql tagged template
+      // Usar DISTINCT ON é muito mais eficiente que LATERAL join para buscar última folha
+      // OTIMIZAÇÃO: Quando sit_func é usado, filtramos DENTRO do subquery para melhor performance
+      const folhaSitFuncFilter = filtros.sit_func 
+        ? sql`WHERE sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`
+        : sql``;
+      
       const folhaJoinSql = needsFolhaJoin ? sql`
-        INNER JOIN LATERAL (
-          SELECT * FROM clientes_folha_mes f
-          WHERE f.pessoa_id = p.id
-          ORDER BY f.competencia DESC
-          LIMIT 1
-        ) folha ON true
+        INNER JOIN (
+          SELECT DISTINCT ON (pessoa_id) *
+          FROM clientes_folha_mes
+          ${folhaSitFuncFilter}
+          ORDER BY pessoa_id, competencia DESC
+        ) folha ON folha.pessoa_id = p.id
       ` : sql``;
       
       const contratoJoinSql = needsContratoJoin ? sql`
@@ -1177,10 +1183,8 @@ export class DbStorage implements IStorage {
       if (filtros.uf) {
         whereConditions.push(sql`p.uf = ${filtros.uf}`);
       }
-      if (filtros.sit_func) {
-        // Situação funcional está na tabela de folha (sit_func_no_mes)
-        whereConditions.push(sql`folha.sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`);
-      }
+      // sit_func já é filtrado dentro do subquery de folha para melhor performance
+      // Não precisa repetir aqui
 
       // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
       // Obs: O schema atual usa margem_saldo_5, não margem_saldo_30
