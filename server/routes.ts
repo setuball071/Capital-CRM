@@ -7003,38 +7003,69 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // Function to generate CSV file for approved pedido - STREAMING/CHUNKED VERSION
   async function generatePedidoListaFile(pedidoId: number, pedido: any) {
     const startTime = Date.now();
-    console.log(`[PedidoLista] Starting file generation for pedido ${pedidoId} at ${new Date().toISOString()}`);
+    console.log(`[PedidoLista] ========== STARTING FILE GENERATION ==========`);
+    console.log(`[PedidoLista] Pedido ID: ${pedidoId}`);
+    console.log(`[PedidoLista] Start time: ${new Date().toISOString()}`);
+    console.log(`[PedidoLista] Filtros: ${JSON.stringify(pedido.filtrosUsados || {})}`);
     
     const CHUNK_SIZE = 5000; // Process 5000 records at a time
     const MAX_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max timeout
     
+    let writeStream: fs.WriteStream | null = null;
+    let filePath: string = "";
+    let streamError: Error | null = null;
+    
     try {
       // Update status to processing
+      console.log(`[PedidoLista] Updating status to 'processando'...`);
       await storage.updatePedidoListaStatus(pedidoId, "processando");
       
       // Use persistent exports directory in project root (not /tmp which is volatile)
       const exportsDir = path.join(process.cwd(), "exports");
+      console.log(`[PedidoLista] Exports directory: ${exportsDir}`);
+      
       if (!fs.existsSync(exportsDir)) {
+        console.log(`[PedidoLista] Creating exports directory...`);
         fs.mkdirSync(exportsDir, { recursive: true });
       }
+      console.log(`[PedidoLista] Exports directory exists: ${fs.existsSync(exportsDir)}`);
       
       // Get filtered clients - first just count to know the total
       const filtros = pedido.filtrosUsados || {};
+      console.log(`[PedidoLista] Counting clients with filtros...`);
       const totalCount = await storage.countClientesPessoa(filtros);
+      console.log(`[PedidoLista] Total count from DB: ${totalCount}`);
       
       // Apply package limit if specified
       const packageLimit = pedido.quantidadeRegistros || totalCount;
       const recordsToExport = Math.min(totalCount, packageLimit);
       
-      console.log(`[PedidoLista] Total matching: ${totalCount}, exporting: ${recordsToExport} for pedido ${pedidoId}`);
+      console.log(`[PedidoLista] Package limit: ${packageLimit}, Records to export: ${recordsToExport}`);
+      
+      if (recordsToExport === 0) {
+        console.log(`[PedidoLista] WARNING: No records to export, marking as processado with empty file`);
+      }
       
       // Create write stream for incremental file writing
       const fileName = `lista-clientes-${pedidoId}-${Date.now()}.csv`;
-      const filePath = path.join(exportsDir, fileName);
-      const writeStream = fs.createWriteStream(filePath, { encoding: 'utf-8' });
+      filePath = path.join(exportsDir, fileName);
+      console.log(`[PedidoLista] Creating file: ${filePath}`);
+      
+      writeStream = fs.createWriteStream(filePath, { encoding: 'utf-8' });
+      
+      // Set up stream error handler to capture errors during writes
+      writeStream.on('error', (err) => {
+        console.error(`[PedidoLista] STREAM ERROR: ${err.message}`);
+        streamError = err;
+      });
       
       // Write BOM for Excel compatibility
-      writeStream.write('\ufeff');
+      console.log(`[PedidoLista] Writing BOM and headers...`);
+      const bomWritten = writeStream.write('\ufeff');
+      if (!bomWritten) {
+        console.log(`[PedidoLista] Backpressure on BOM write, waiting for drain...`);
+        await new Promise(resolve => writeStream!.once('drain', resolve));
+      }
       
       // Write headers
       const headers = [
@@ -7043,16 +7074,28 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
         "Liquido"
       ];
-      writeStream.write(headers.join(";") + "\n");
+      const headerWritten = writeStream.write(headers.join(";") + "\n");
+      if (!headerWritten) {
+        console.log(`[PedidoLista] Backpressure on header write, waiting for drain...`);
+        await new Promise(resolve => writeStream!.once('drain', resolve));
+      }
+      console.log(`[PedidoLista] Headers written successfully`);
       
       // Process in chunks
       let processedCount = 0;
       let offset = 0;
+      let clientesWithoutFolha = 0;
       
       while (processedCount < recordsToExport) {
+        // Check for stream errors
+        if (streamError) {
+          throw streamError;
+        }
+        
         // Check timeout
-        if (Date.now() - startTime > MAX_TIMEOUT_MS) {
-          throw new Error(`Timeout: export exceeded ${MAX_TIMEOUT_MS / 1000 / 60} minutes`);
+        const elapsed = Date.now() - startTime;
+        if (elapsed > MAX_TIMEOUT_MS) {
+          throw new Error(`Timeout: export exceeded ${MAX_TIMEOUT_MS / 1000 / 60} minutes (elapsed: ${Math.round(elapsed / 1000)}s)`);
         }
         
         // Check if cancelled (re-fetch status from DB)
@@ -7070,67 +7113,112 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         
         const chunkLimit = Math.min(CHUNK_SIZE, recordsToExport - processedCount);
         
-        console.log(`[PedidoLista] Processing chunk: offset=${offset}, limit=${chunkLimit} for pedido ${pedidoId} (elapsed: ${Math.round((Date.now() - startTime) / 1000)}s)`);
+        console.log(`[PedidoLista] ---- CHUNK START ----`);
+        console.log(`[PedidoLista] Offset: ${offset}, Limit: ${chunkLimit}, Elapsed: ${Math.round(elapsed / 1000)}s`);
         
         // Fetch chunk with pagination (skipCount=true for export chunks to avoid repeated COUNT queries)
+        console.log(`[PedidoLista] Fetching clientes chunk...`);
         const { clientes } = await storage.searchClientesPessoa(filtros, { 
           limit: chunkLimit, 
           offset,
           skipCount: true
         });
         
+        console.log(`[PedidoLista] Fetched ${clientes.length} clientes`);
+        
         if (clientes.length === 0) {
-          console.log(`[PedidoLista] No more records at offset ${offset}`);
+          console.log(`[PedidoLista] No more records at offset ${offset}, ending loop`);
           break;
         }
         
         // Get folha data for this chunk in bulk (single query instead of N+1)
         const clienteIds = clientes.map(c => c.id);
+        console.log(`[PedidoLista] Fetching folha data for ${clienteIds.length} clientes...`);
         const folhasByPessoaId = await storage.getLatestFolhaMesByPessoaIds(clienteIds);
+        console.log(`[PedidoLista] Got ${folhasByPessoaId.size} folhas for ${clienteIds.length} clientes`);
         
         // Write chunk to file
+        let chunkRowsWritten = 0;
         for (const cliente of clientes) {
-          const folhaAtual = folhasByPessoaId.get(cliente.id);
-          
-          const row = [
-            cliente.cpf || "",
-            cliente.matricula || "",
-            cliente.nome || "",
-            cliente.convenio || "",
-            cliente.orgaodesc || "",
-            cliente.uf || "",
-            cliente.municipio || "",
-            cliente.sitFunc || "",
-            Array.isArray(cliente.telefonesBase) ? cliente.telefonesBase.join("; ") : "",
-            folhaAtual?.margemSaldo70 || "",
-            folhaAtual?.margemSaldo35 || "",
-            folhaAtual?.margemCartaoCreditoSaldo || "",
-            folhaAtual?.margemCartaoBeneficioSaldo || "",
-            folhaAtual?.liquido || "",
-          ];
-          
-          const csvRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";");
-          writeStream.write(csvRow + "\n");
+          try {
+            const folhaAtual = folhasByPessoaId.get(cliente.id);
+            
+            if (!folhaAtual) {
+              clientesWithoutFolha++;
+            }
+            
+            const row = [
+              cliente.cpf || "",
+              cliente.matricula || "",
+              cliente.nome || "",
+              cliente.convenio || "",
+              cliente.orgaodesc || "",
+              cliente.uf || "",
+              cliente.municipio || "",
+              cliente.sitFunc || "",
+              Array.isArray(cliente.telefonesBase) ? cliente.telefonesBase.join("; ") : "",
+              folhaAtual?.margemSaldo70 ?? "",
+              folhaAtual?.margemSaldo35 ?? "",
+              folhaAtual?.margemCartaoCreditoSaldo ?? "",
+              folhaAtual?.margemCartaoBeneficioSaldo ?? "",
+              folhaAtual?.liquido ?? "",
+            ];
+            
+            const csvRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";");
+            const written = writeStream.write(csvRow + "\n");
+            
+            // Handle backpressure
+            if (!written) {
+              await new Promise(resolve => writeStream!.once('drain', resolve));
+            }
+            
+            chunkRowsWritten++;
+          } catch (rowError: any) {
+            console.error(`[PedidoLista] ERROR writing row for cliente ${cliente.id}:`, rowError?.message);
+            // Continue with next row instead of failing entire export
+          }
         }
+        
+        console.log(`[PedidoLista] Wrote ${chunkRowsWritten} rows in this chunk`);
         
         // Use actual rows consumed for accurate tracking
         const rowsConsumed = clientes.length;
         processedCount += rowsConsumed;
         offset += rowsConsumed;
         
-        console.log(`[PedidoLista] Progress: ${processedCount}/${recordsToExport} (${Math.round(processedCount/recordsToExport*100)}%)`);
+        const progressPct = Math.round(processedCount / recordsToExport * 100);
+        console.log(`[PedidoLista] Progress: ${processedCount}/${recordsToExport} (${progressPct}%)`);
+        console.log(`[PedidoLista] ---- CHUNK END ----`);
       }
       
+      console.log(`[PedidoLista] Loop completed. Total processed: ${processedCount}`);
+      console.log(`[PedidoLista] Clientes without folha data: ${clientesWithoutFolha}`);
+      
       // Close the stream
+      console.log(`[PedidoLista] Closing write stream...`);
       await new Promise<void>((resolve, reject) => {
-        writeStream.on('finish', resolve);
-        writeStream.on('error', reject);
-        writeStream.end();
+        writeStream!.on('finish', () => {
+          console.log(`[PedidoLista] Write stream finished successfully`);
+          resolve();
+        });
+        writeStream!.on('error', (err) => {
+          console.error(`[PedidoLista] Write stream error on close:`, err);
+          reject(err);
+        });
+        writeStream!.end();
       });
       
-      console.log(`[PedidoLista] File generated: ${filePath} (${processedCount} records)`);
+      // Verify file was created
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        console.log(`[PedidoLista] File created: ${filePath}`);
+        console.log(`[PedidoLista] File size: ${stats.size} bytes`);
+      } else {
+        throw new Error(`File was not created at ${filePath}`);
+      }
       
       // Update pedido with file info
+      console.log(`[PedidoLista] Updating pedido with file info...`);
       await storage.updatePedidoLista(pedidoId, {
         arquivoPath: filePath,
         arquivoGeradoEm: new Date(),
@@ -7138,7 +7226,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         custoFinal: pedido.custoEstimado, // Set custo_final = custo_estimado by default
       });
       
-      console.log(`[PedidoLista] Pedido ${pedidoId} completed successfully`);
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      console.log(`[PedidoLista] ========== COMPLETED SUCCESSFULLY ==========`);
+      console.log(`[PedidoLista] Pedido ${pedidoId} completed in ${totalTime}s`);
+      console.log(`[PedidoLista] Total records: ${processedCount}, File: ${filePath}`);
       
     } catch (error: any) {
       const elapsed = Math.round((Date.now() - startTime) / 1000);

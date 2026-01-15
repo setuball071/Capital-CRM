@@ -1604,42 +1604,53 @@ export class DbStorage implements IStorage {
   
   async getLatestFolhaMesByPessoaIds(pessoaIds: number[]): Promise<Map<number, ClienteFolhaMes>> {
     if (pessoaIds.length === 0) {
+      console.log(`[Storage] getLatestFolhaMesByPessoaIds called with empty array, returning empty Map`);
       return new Map();
     }
     
     const folhasMap = new Map<number, ClienteFolhaMes>();
     
-    // PostgreSQL has a limit of ~1664 entries in ANY() expressions
+    // PostgreSQL has a limit of ~1664 entries in IN clauses
     // Batch IDs into chunks to avoid this limit
     const BATCH_SIZE = 1000;
     
-    // Helper to convert snake_case to camelCase
-    const snakeToCamel = (str: string): string => 
-      str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    console.log(`[Storage] getLatestFolhaMesByPessoaIds called with ${pessoaIds.length} IDs`);
     
     for (let i = 0; i < pessoaIds.length; i += BATCH_SIZE) {
       const batchIds = pessoaIds.slice(i, i + BATCH_SIZE);
       
-      // Use DISTINCT ON to get the latest folha for each pessoa_id in one query
-      const result = await db.execute(sql`
-        SELECT DISTINCT ON (f.pessoa_id) f.*
-        FROM clientes_folha_mes f
-        WHERE f.pessoa_id = ANY(${batchIds})
-        ORDER BY f.pessoa_id, f.competencia DESC
-      `);
+      if (batchIds.length === 0) {
+        console.log(`[Storage] Skipping empty batch at index ${i}`);
+        continue;
+      }
       
-      for (const row of result.rows) {
-        const pessoaId = row.pessoa_id as number;
+      console.log(`[Storage] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, size: ${batchIds.length}`);
+      
+      try {
+        // Use Drizzle's safe inArray() for parameterized queries
+        // Then get the latest folha per pessoa using a subquery approach
+        const allFolhasForBatch = await db.select()
+          .from(clientesFolhaMes)
+          .where(inArray(clientesFolhaMes.pessoaId, batchIds))
+          .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
         
-        // Transform snake_case keys to camelCase to match TypeScript type
-        const transformed: Record<string, any> = {};
-        for (const [key, value] of Object.entries(row)) {
-          transformed[snakeToCamel(key)] = value;
+        console.log(`[Storage] Batch returned ${allFolhasForBatch.length} total folha records`);
+        
+        // Group by pessoaId and keep only the latest (first due to ORDER BY DESC)
+        for (const folha of allFolhasForBatch) {
+          if (!folhasMap.has(folha.pessoaId)) {
+            folhasMap.set(folha.pessoaId, folha);
+          }
         }
         
-        folhasMap.set(pessoaId, transformed as ClienteFolhaMes);
+        console.log(`[Storage] Map now has ${folhasMap.size} unique pessoa entries`);
+      } catch (batchError: any) {
+        console.error(`[Storage] Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError?.message);
+        throw batchError;
       }
     }
+    
+    console.log(`[Storage] Total folhas returned: ${folhasMap.size} out of ${pessoaIds.length} requested`);
     
     return folhasMap;
   }
