@@ -1198,20 +1198,20 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`folha.margem_saldo_70 <= ${filtros.margem_70_max}`);
       }
 
-      // Margem cartão crédito conditions (parameterized)
+      // Margem cartão crédito 5% conditions (parameterized) - campo correto: margem_saldo_5
       if (filtros.margem_cartao_credito_min !== undefined) {
-        whereConditions.push(sql`folha.margem_cartao_credito_saldo >= ${filtros.margem_cartao_credito_min}`);
+        whereConditions.push(sql`folha.margem_saldo_5 >= ${filtros.margem_cartao_credito_min}`);
       }
       if (filtros.margem_cartao_credito_max !== undefined) {
-        whereConditions.push(sql`folha.margem_cartao_credito_saldo <= ${filtros.margem_cartao_credito_max}`);
+        whereConditions.push(sql`folha.margem_saldo_5 <= ${filtros.margem_cartao_credito_max}`);
       }
 
-      // Margem cartão benefício conditions (parameterized)
+      // Margem cartão benefício 5% conditions (parameterized) - campo correto: margem_beneficio_saldo_5
       if (filtros.margem_cartao_beneficio_min !== undefined) {
-        whereConditions.push(sql`folha.margem_cartao_beneficio_saldo >= ${filtros.margem_cartao_beneficio_min}`);
+        whereConditions.push(sql`folha.margem_beneficio_saldo_5 >= ${filtros.margem_cartao_beneficio_min}`);
       }
       if (filtros.margem_cartao_beneficio_max !== undefined) {
-        whereConditions.push(sql`folha.margem_cartao_beneficio_saldo <= ${filtros.margem_cartao_beneficio_max}`);
+        whereConditions.push(sql`folha.margem_beneficio_saldo_5 <= ${filtros.margem_cartao_beneficio_max}`);
       }
 
       // Contrato conditions (parameterized)
@@ -1288,17 +1288,17 @@ export class DbStorage implements IStorage {
       // Include folha fields for frontend display when folha join is used
       const selectFields = needsFolhaJoin 
         ? sql`p.*, 
-              folha.margem_saldo_5 as margem_5,
+              folha.margem_saldo_5 as margem_cartao_credito_5,
+              folha.margem_beneficio_saldo_5 as margem_cartao_beneficio_5,
               folha.margem_saldo_35 as margem_35,
               folha.margem_saldo_70 as margem_70,
-              folha.margem_cartao_credito_saldo,
-              folha.margem_cartao_beneficio_saldo`
+              folha.sit_func_no_mes as sit_func_folha`
         : sql`p.*, 
-              NULL::numeric as margem_5,
+              NULL::numeric as margem_cartao_credito_5,
+              NULL::numeric as margem_cartao_beneficio_5,
               NULL::numeric as margem_35,
               NULL::numeric as margem_70,
-              NULL::numeric as margem_cartao_credito_saldo,
-              NULL::numeric as margem_cartao_beneficio_saldo`;
+              NULL::text as sit_func_folha`;
 
       // Get count - skip only if explicitly requested (for export chunking)
       let total = 0;
@@ -1336,11 +1336,11 @@ export class DbStorage implements IStorage {
 
       const result = await db.execute(query);
       const clientes = result.rows as (ClientePessoa & { 
-        margem_5: string | null;
+        margem_cartao_credito_5: string | null;
+        margem_cartao_beneficio_5: string | null;
         margem_35: string | null;
         margem_70: string | null;
-        margem_cartao_credito_saldo: string | null;
-        margem_cartao_beneficio_saldo: string | null;
+        sit_func_folha: string | null;
       })[];
       
       return { clientes, total };
