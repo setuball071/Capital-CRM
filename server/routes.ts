@@ -7152,11 +7152,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               cliente.nome || "",
               cliente.convenio || "",
               cliente.orgaodesc || "",
-              folhaAtual?.sitFunc ?? cliente.sitFunc ?? "",
-              folhaAtual?.margem70Saldo ?? "",
-              folhaAtual?.margem35Saldo ?? "",
-              folhaAtual?.margem5Saldo ?? "",
-              folhaAtual?.margemBeneficio5Saldo ?? "",
+              folhaAtual?.sitFuncNoMes ?? cliente.sitFunc ?? "",
+              folhaAtual?.margemSaldo70 ?? "",
+              folhaAtual?.margemSaldo35 ?? "",
+              folhaAtual?.margemSaldo5 ?? "",
+              folhaAtual?.margemBeneficioSaldo5 ?? "",
             ];
             
             const csvRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";");
