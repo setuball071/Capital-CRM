@@ -7067,12 +7067,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         await new Promise(resolve => writeStream!.once('drain', resolve));
       }
       
-      // Write headers
+      // Write headers - adjusted per user request
       const headers = [
-        "CPF", "Matricula", "Nome", "Convenio", "Orgao", "UF", "Municipio",
-        "Situacao Funcional", "Telefones",
-        "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%",
-        "Liquido"
+        "CPF", "Matricula", "Nome", "Convenio", "Orgao",
+        "Situacao Funcional",
+        "Margem 70%", "Margem 35%", "Margem Cartao Credito 5%", "Margem Cartao Beneficio 5%"
       ];
       const headerWritten = writeStream.write(headers.join(";") + "\n");
       if (!headerWritten) {
@@ -7153,15 +7152,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               cliente.nome || "",
               cliente.convenio || "",
               cliente.orgaodesc || "",
-              cliente.uf || "",
-              cliente.municipio || "",
-              cliente.sitFunc || "",
-              Array.isArray(cliente.telefonesBase) ? cliente.telefonesBase.join("; ") : "",
-              folhaAtual?.margemSaldo70 ?? "",
-              folhaAtual?.margemSaldo35 ?? "",
-              folhaAtual?.margemCartaoCreditoSaldo ?? "",
-              folhaAtual?.margemCartaoBeneficioSaldo ?? "",
-              folhaAtual?.liquido ?? "",
+              folhaAtual?.sitFunc ?? cliente.sitFunc ?? "",
+              folhaAtual?.margem70Saldo ?? "",
+              folhaAtual?.margem35Saldo ?? "",
+              folhaAtual?.margem5Saldo ?? "",
+              folhaAtual?.margemBeneficio5Saldo ?? "",
             ];
             
             const csvRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";");
