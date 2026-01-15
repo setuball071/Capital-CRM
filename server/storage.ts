@@ -1114,12 +1114,14 @@ export class DbStorage implements IStorage {
   async searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number; skipCount?: boolean; countOnly?: boolean }): Promise<{ clientes: ClientePessoa[]; total: number }> {
     const { limit, offset, skipCount, countOnly } = options || {};
     // Check if we need folha or contrato joins
+    // sit_func também requer join com folha pois os dados estão em sit_func_no_mes
     const needsFolhaJoin = !!(
       filtros.margem_30_min !== undefined || filtros.margem_30_max !== undefined ||
       filtros.margem_35_min !== undefined || filtros.margem_35_max !== undefined ||
       filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
       filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
-      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined
+      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined ||
+      filtros.sit_func
     );
     
     const needsContratoJoin = !!(
@@ -1176,7 +1178,8 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`p.uf = ${filtros.uf}`);
       }
       if (filtros.sit_func) {
-        whereConditions.push(sql`p.sit_func ILIKE ${'%' + filtros.sit_func + '%'}`);
+        // Situação funcional está na tabela de folha (sit_func_no_mes)
+        whereConditions.push(sql`folha.sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`);
       }
 
       // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
