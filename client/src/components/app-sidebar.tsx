@@ -55,7 +55,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
-  const { tenant, logoUrl, logoHeight } = useTenant();
+  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
@@ -204,8 +204,14 @@ export function AppSidebar() {
 
   const filteredSections = getFilteredSections();
 
+  const sidebarStyle = useSidebarGradient && sidebarGradient 
+    ? { background: sidebarGradient }
+    : sidebarBgColor && sidebarBgColor !== "#ffffff"
+      ? { backgroundColor: sidebarBgColor }
+      : undefined;
+
   return (
-    <Sidebar className="border-r border-border bg-background">
+    <Sidebar className="border-r border-border" style={sidebarStyle}>
       <SidebarHeader className="border-b border-border">
         <div 
           className="w-full flex items-center justify-center px-3 py-4"

@@ -83,6 +83,11 @@ export default function AdminBrandingPage() {
     showSystemName: true,
     sidebarBgColor: "#ffffff",
     sidebarFontColor: "#1f2937",
+    sidebarGradient: "",
+    loginGradient: "",
+    primaryGradient: "",
+    useSidebarGradient: false,
+    useLoginGradient: false,
   });
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -125,6 +130,11 @@ export default function AdminBrandingPage() {
         showSystemName: theme?.showSystemName !== false,
         sidebarBgColor: theme?.sidebarBgColor || "#ffffff",
         sidebarFontColor: theme?.sidebarFontColor || "#1f2937",
+        sidebarGradient: theme?.sidebarGradient || "",
+        loginGradient: theme?.loginGradient || "",
+        primaryGradient: theme?.primaryGradient || "",
+        useSidebarGradient: theme?.useSidebarGradient === true,
+        useLoginGradient: theme?.useLoginGradient === true,
       });
     }
   }, [tenantData]);
@@ -150,6 +160,11 @@ export default function AdminBrandingPage() {
         showSystemName: data.showSystemName,
         sidebarBgColor: data.sidebarBgColor,
         sidebarFontColor: data.sidebarFontColor,
+        sidebarGradient: data.sidebarGradient,
+        loginGradient: data.loginGradient,
+        primaryGradient: data.primaryGradient,
+        useSidebarGradient: data.useSidebarGradient,
+        useLoginGradient: data.useLoginGradient,
         lastEditedBy: user?.name || "Desconhecido",
         lastEditedAt: new Date().toISOString(),
       };
@@ -254,6 +269,11 @@ export default function AdminBrandingPage() {
       footerText: "",
       sidebarBgColor: DEFAULT_THEME.sidebarBgColor || "#ffffff",
       sidebarFontColor: DEFAULT_THEME.sidebarFontColor || "#1f2937",
+      sidebarGradient: "",
+      loginGradient: "",
+      primaryGradient: "",
+      useSidebarGradient: false,
+      useLoginGradient: false,
     });
     toast({ title: "Padrões restaurados", description: "Clique em Salvar para aplicar." });
   };
@@ -526,8 +546,8 @@ export default function AdminBrandingPage() {
                 <div className="space-y-2">
                   <Label htmlFor="sidebarBgColor">Cor do Fundo do Menu Lateral</Label>
                   <div className="flex gap-2">
-                    <Input id="sidebarBgColor" type="color" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-sidebar-bg-color" />
-                    <Input type="text" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="flex-1" placeholder="#ffffff" />
+                    <Input id="sidebarBgColor" type="color" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-sidebar-bg-color" disabled={formData.useSidebarGradient} />
+                    <Input type="text" value={formData.sidebarBgColor} onChange={(e) => setFormData({ ...formData, sidebarBgColor: e.target.value })} className="flex-1" placeholder="#ffffff" disabled={formData.useSidebarGradient} />
                   </div>
                   <p className="text-xs text-muted-foreground">Cor de fundo do menu de navegação</p>
                 </div>
@@ -541,6 +561,81 @@ export default function AdminBrandingPage() {
                   <p className="text-xs text-muted-foreground">Cor do texto e ícones no menu</p>
                 </div>
               </div>
+
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox 
+                    id="useSidebarGradient" 
+                    checked={formData.useSidebarGradient} 
+                    onCheckedChange={(checked) => setFormData({ ...formData, useSidebarGradient: checked === true })}
+                    data-testid="checkbox-use-sidebar-gradient"
+                  />
+                  <Label htmlFor="useSidebarGradient" className="font-medium cursor-pointer">
+                    Usar gradiente no menu lateral
+                  </Label>
+                </div>
+                {formData.useSidebarGradient && (
+                  <div className="space-y-2">
+                    <Label htmlFor="sidebarGradient">Gradiente CSS do Menu</Label>
+                    <Input 
+                      id="sidebarGradient" 
+                      type="text" 
+                      value={formData.sidebarGradient} 
+                      onChange={(e) => setFormData({ ...formData, sidebarGradient: e.target.value })} 
+                      placeholder="linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)"
+                      data-testid="input-sidebar-gradient"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Exemplo: linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)
+                    </p>
+                    {formData.sidebarGradient && (
+                      <div 
+                        className="h-12 rounded-md border"
+                        style={{ background: formData.sidebarGradient }}
+                        data-testid="preview-sidebar-gradient"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium mb-4">Tela de Login</h4>
+              <div className="flex items-center gap-3 mb-4">
+                <Checkbox 
+                  id="useLoginGradient" 
+                  checked={formData.useLoginGradient} 
+                  onCheckedChange={(checked) => setFormData({ ...formData, useLoginGradient: checked === true })}
+                  data-testid="checkbox-use-login-gradient"
+                />
+                <Label htmlFor="useLoginGradient" className="font-medium cursor-pointer">
+                  Usar gradiente na tela de login
+                </Label>
+              </div>
+              {formData.useLoginGradient && (
+                <div className="space-y-2">
+                  <Label htmlFor="loginGradient">Gradiente CSS do Login</Label>
+                  <Input 
+                    id="loginGradient" 
+                    type="text" 
+                    value={formData.loginGradient} 
+                    onChange={(e) => setFormData({ ...formData, loginGradient: e.target.value })} 
+                    placeholder="linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)"
+                    data-testid="input-login-gradient"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Quando ativo, substitui a "Cor de Fundo do Login" por este gradiente
+                  </p>
+                  {formData.loginGradient && (
+                    <div 
+                      className="h-12 rounded-md border"
+                      style={{ background: formData.loginGradient }}
+                      data-testid="preview-login-gradient"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

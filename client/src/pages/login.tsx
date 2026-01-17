@@ -27,6 +27,8 @@ export default function LoginPage() {
     footerText,
     showSlogan,
     showSystemName,
+    loginGradient,
+    useLoginGradient,
   } = useTenant();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,13 +67,14 @@ export default function LoginPage() {
   // If no logo and no system name, we still need something visible
   const shouldShowSystemName = showSystemName !== false;
 
+  const loginBackgroundStyle = useLoginGradient && loginGradient 
+    ? { background: loginGradient, fontFamily }
+    : { backgroundColor: loginBgColor, fontFamily };
+
   return (
     <div 
       className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ 
-        backgroundColor: loginBgColor,
-        fontFamily: fontFamily,
-      }}
+      style={loginBackgroundStyle}
       data-testid="login-container"
     >
       <Card className="w-full max-w-md shadow-xl">
