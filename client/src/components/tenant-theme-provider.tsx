@@ -67,6 +67,12 @@ interface TenantContextValue {
   footerText: string;
   showSlogan: boolean;
   showSystemName: boolean;
+  sidebarGradient: string;
+  loginGradient: string;
+  primaryGradient: string;
+  useSidebarGradient: boolean;
+  useLoginGradient: boolean;
+  sidebarBgColor: string;
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -226,6 +232,12 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const footerText = themeData?.footerText || "";
   const showSlogan = themeData?.showSlogan !== false;
   const showSystemName = themeData?.showSystemName !== false;
+  const sidebarGradient = themeData?.sidebarGradient || "";
+  const loginGradient = themeData?.loginGradient || "";
+  const primaryGradient = themeData?.primaryGradient || "";
+  const useSidebarGradient = themeData?.useSidebarGradient === true;
+  const useLoginGradient = themeData?.useLoginGradient === true;
+  const sidebarBgColor = themeData?.sidebarBgColor || "#ffffff";
   
   useEffect(() => {
     if (isLoading) return;
@@ -269,6 +281,12 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
       footerText,
       showSlogan,
       showSystemName,
+      sidebarGradient,
+      loginGradient,
+      primaryGradient,
+      useSidebarGradient,
+      useLoginGradient,
+      sidebarBgColor,
     }}>
       {children}
     </TenantContext.Provider>

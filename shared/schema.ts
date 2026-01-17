@@ -111,6 +111,12 @@ export const tenantThemeSchema = z.object({
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
   sidebarBgColor: z.string().optional(), // Cor de fundo do menu lateral
   sidebarFontColor: z.string().optional(), // Cor da fonte do menu lateral
+  // Gradientes CSS
+  sidebarGradient: z.string().optional(), // CSS gradient para sidebar (ex: linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%))
+  loginGradient: z.string().optional(), // CSS gradient para tela de login
+  primaryGradient: z.string().optional(), // Gradiente primário para botões
+  useSidebarGradient: z.boolean().optional(), // Usar gradiente no sidebar
+  useLoginGradient: z.boolean().optional(), // Usar gradiente no login
   // Tipografia avançada
   fontSize: z.string().optional(), // Tamanho da fonte (px ou rem)
   fontWeight: z.string().optional(), // Peso da fonte (400, 500, 600, 700)
