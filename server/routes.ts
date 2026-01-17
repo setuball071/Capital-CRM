@@ -11956,10 +11956,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // PUT /api/admin/tenants/:id - Update tenant
-  app.put("/api/admin/tenants/:id", requireAuth, requireMaster, async (req, res) => {
+  app.put("/api/admin/tenants/:id", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.id;
       const { name, logoUrl, faviconUrl, themeJson, isActive } = req.body;
+      
+      // Log detalhado para auditoria
+      console.log(`[TENANT-ADMIN-UPDATE] userId=${userId} tenantId=${id} timestamp=${new Date().toISOString()}`);
+      console.log(`[TENANT-ADMIN-UPDATE] Data: name="${name}" logoUrl="${logoUrl}" faviconUrl="${faviconUrl}" isActive=${isActive}`);
       
       const result = await db.update(tenants)
         .set({
@@ -11968,17 +11973,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           faviconUrl,
           themeJson,
           isActive,
+          updatedAt: new Date(), // Sempre atualizar timestamp
         })
         .where(eq(tenants.id, id))
         .returning();
       
       if (result.length === 0) {
+        console.log(`[TENANT-ADMIN-UPDATE] FAILED - Tenant ${id} not found`);
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
+      console.log(`[TENANT-ADMIN-UPDATE] SUCCESS - Tenant ${id} updated. New updatedAt: ${result[0].updatedAt}`);
       res.json(result[0]);
     } catch (error) {
-      console.error("Update tenant error:", error);
+      console.error("[TENANT-ADMIN-UPDATE] ERROR:", error);
       res.status(500).json({ message: "Erro ao atualizar tenant" });
     }
   });
