@@ -34,6 +34,7 @@ import {
   users,
   tenants,
   tenantDomains,
+  tenantAuditLog,
   userTenants,
   teams,
   teamMembers,
@@ -680,6 +681,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return false;
   };
 
+  // Helper function to log tenant audit entries
+  async function logTenantAudit(
+    tenantId: number,
+    userId: number | null,
+    action: string,
+    changedFields: Record<string, { before: any; after: any }>,
+    ipAddress?: string
+  ) {
+    try {
+      await db.insert(tenantAuditLog).values({
+        tenantId,
+        userId,
+        action,
+        changedFields,
+        ipAddress: ipAddress || null,
+      });
+      console.log(`[TENANT-AUDIT] Logged ${action} for tenant ${tenantId} by user ${userId}`);
+    } catch (error) {
+      console.error(`[TENANT-AUDIT] Failed to log audit entry:`, error);
+    }
+  }
+
   // ===== TENANT ROUTES =====
   
   // Get current tenant branding/config (public - based on domain)
@@ -786,8 +809,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
+      const ipAddress = req.ip || req.connection?.remoteAddress;
       
       if (!tenantId) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
+      
+      // Fetch current tenant state for audit
+      const [currentTenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      if (!currentTenant) {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
@@ -820,6 +850,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
+      // Record audit with before/after values
+      const changedFields: Record<string, { before: any; after: any }> = {};
+      if (currentTenant.name !== name) changedFields.name = { before: currentTenant.name, after: name };
+      if ((currentTenant as any).slogan !== slogan) changedFields.slogan = { before: (currentTenant as any).slogan, after: slogan };
+      if ((currentTenant as any).fontFamily !== fontFamily) changedFields.fontFamily = { before: (currentTenant as any).fontFamily, after: fontFamily };
+      if ((currentTenant as any).logoHeight !== updateData.logoHeight) changedFields.logoHeight = { before: (currentTenant as any).logoHeight, after: updateData.logoHeight };
+      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(themeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: themeJson };
+      
+      if (Object.keys(changedFields).length > 0) {
+        await logTenantAudit(tenantId, userId, "BRANDING_UPDATE", changedFields, ipAddress);
+      }
+      
       console.log(`[TENANT-BRANDING-UPDATE] SUCCESS - Tenant ${tenantId} updated. New updatedAt: ${result[0].updatedAt}`);
       res.json(result[0]);
     } catch (error) {
@@ -834,6 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
+      const ipAddress = req.ip || req.connection?.remoteAddress;
       const file = req.file;
       const type = req.body.type as "sidebar" | "login" | "favicon";
       
@@ -850,6 +893,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!["sidebar", "login", "favicon"].includes(type)) {
         return res.status(400).json({ message: "Tipo inválido. Use: sidebar, login ou favicon" });
       }
+      
+      // Fetch current tenant for audit
+      const [currentTenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
       
       // Save file to uploads folder with tenant-specific naming
       const fsModule = await import("fs");
@@ -892,12 +938,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: any = {
         updatedAt: new Date(), // Sempre atualizar timestamp
       };
+      let fieldName = "";
+      let oldValue = "";
       if (type === "sidebar") {
         updateData.logoUrl = logoUrl;
+        fieldName = "logoUrl";
+        oldValue = currentTenant?.logoUrl || "";
       } else if (type === "login") {
         updateData.logoLoginUrl = logoUrl;
+        fieldName = "logoLoginUrl";
+        oldValue = (currentTenant as any)?.logoLoginUrl || "";
       } else if (type === "favicon") {
         updateData.faviconUrl = logoUrl;
+        fieldName = "faviconUrl";
+        oldValue = currentTenant?.faviconUrl || "";
       }
       
       console.log(`[TENANT-LOGO-UPLOAD] Updating tenant ${tenantId} with: ${JSON.stringify(updateData)}`);
@@ -906,6 +960,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set(updateData)
         .where(eq(tenants.id, tenantId))
         .returning();
+      
+      // Record audit
+      await logTenantAudit(tenantId, userId, "LOGO_UPLOAD", {
+        [fieldName]: { before: oldValue, after: logoUrl },
+        type: { before: null, after: type },
+      }, ipAddress);
       
       console.log(`[TENANT-LOGO-UPLOAD] SUCCESS - Tenant ${tenantId} logo updated. New updatedAt: ${result[0]?.updatedAt}`);
       
@@ -11960,7 +12020,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     try {
       const id = parseInt(req.params.id);
       const userId = req.user?.id;
+      const ipAddress = req.ip || req.connection?.remoteAddress;
       const { name, logoUrl, faviconUrl, themeJson, isActive } = req.body;
+      
+      // Fetch current tenant for audit
+      const [currentTenant] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+      if (!currentTenant) {
+        return res.status(404).json({ message: "Tenant não encontrado" });
+      }
       
       // Log detalhado para auditoria
       console.log(`[TENANT-ADMIN-UPDATE] userId=${userId} tenantId=${id} timestamp=${new Date().toISOString()}`);
@@ -11983,11 +12050,54 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
+      // Record audit with before/after values
+      const changedFields: Record<string, { before: any; after: any }> = {};
+      if (currentTenant.name !== name) changedFields.name = { before: currentTenant.name, after: name };
+      if (currentTenant.logoUrl !== logoUrl) changedFields.logoUrl = { before: currentTenant.logoUrl, after: logoUrl };
+      if (currentTenant.faviconUrl !== faviconUrl) changedFields.faviconUrl = { before: currentTenant.faviconUrl, after: faviconUrl };
+      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(themeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: themeJson };
+      if (currentTenant.isActive !== isActive) changedFields.isActive = { before: currentTenant.isActive, after: isActive };
+      
+      if (Object.keys(changedFields).length > 0) {
+        await logTenantAudit(id, userId, "ADMIN_UPDATE", changedFields, ipAddress);
+      }
+      
       console.log(`[TENANT-ADMIN-UPDATE] SUCCESS - Tenant ${id} updated. New updatedAt: ${result[0].updatedAt}`);
       res.json(result[0]);
     } catch (error) {
       console.error("[TENANT-ADMIN-UPDATE] ERROR:", error);
       res.status(500).json({ message: "Erro ao atualizar tenant" });
+    }
+  });
+
+  // GET /api/admin/tenants/:id/audit - Get tenant audit log
+  app.get("/api/admin/tenants/:id/audit", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      
+      const result = await db
+        .select({
+          id: tenantAuditLog.id,
+          tenantId: tenantAuditLog.tenantId,
+          userId: tenantAuditLog.userId,
+          userName: users.name,
+          userEmail: users.email,
+          action: tenantAuditLog.action,
+          changedFields: tenantAuditLog.changedFields,
+          ipAddress: tenantAuditLog.ipAddress,
+          createdAt: tenantAuditLog.createdAt,
+        })
+        .from(tenantAuditLog)
+        .leftJoin(users, eq(tenantAuditLog.userId, users.id))
+        .where(eq(tenantAuditLog.tenantId, id))
+        .orderBy(desc(tenantAuditLog.createdAt))
+        .limit(limit);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Get tenant audit log error:", error);
+      res.status(500).json({ message: "Erro ao buscar histórico de auditoria" });
     }
   });
 

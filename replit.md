@@ -120,6 +120,14 @@ After login, a `devTenantId` cookie is set that persists across logout. This ens
 - Logout invalidates `/api/tenant` query cache to force refetch with devTenantId cookie
 - This prevents stale cached tenant data from showing after logout
 
+**Tenant Branding Audit System (Updated 2026-01-17):**
+- All branding changes are tracked with before/after values in `tenant_audit_log` table
+- `updated_at` column on tenants table tracks last modification timestamp
+- Console logs with `[TENANT-BRANDING-UPDATE]`, `[TENANT-LOGO-UPLOAD]`, `[TENANT-ADMIN-UPDATE]` tags
+- Audit API endpoint: GET /api/admin/tenants/:id/audit - Returns audit history with user info
+- Tracked fields: name, slogan, fontFamily, logoHeight, themeJson, logoUrl, logoLoginUrl, faviconUrl, isActive
+- No automatic processes overwrite tenant branding data - seed.ts does NOT touch tenants table
+
 ## External Dependencies
 
 ### Third-Party UI Libraries

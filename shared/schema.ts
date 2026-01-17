@@ -23,6 +23,19 @@ export const tenants = pgTable("tenants", {
   updatedAt: timestamp("updated_at").defaultNow(), // Rastrear última modificação de branding
 });
 
+// Tenant Audit Log - track all branding changes
+export const tenantAuditLog = pgTable("tenant_audit_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  action: varchar("action", { length: 50 }).notNull(), // BRANDING_UPDATE, LOGO_UPLOAD, ADMIN_UPDATE
+  changedFields: jsonb("changed_fields"), // { field: { before: old, after: new } }
+  ipAddress: varchar("ip_address", { length: 45 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type TenantAuditLog = typeof tenantAuditLog.$inferSelect;
+
 // Tenant Domains - maps domains to tenants
 export const tenantDomains = pgTable("tenant_domains", {
   id: serial("id").primaryKey(),
