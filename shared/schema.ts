@@ -20,6 +20,7 @@ export const tenants = pgTable("tenants", {
   themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, loginBgColor, etc }
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(), // Rastrear última modificação de branding
 });
 
 // Tenant Domains - maps domains to tenants

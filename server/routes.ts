@@ -785,17 +785,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/tenant/branding", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
+      const userId = req.user?.id;
+      
       if (!tenantId) {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
       const { name, slogan, fontFamily, logoHeight, themeJson } = req.body;
       
+      // Log detalhado para auditoria
+      console.log(`[TENANT-BRANDING-UPDATE] userId=${userId} tenantId=${tenantId} timestamp=${new Date().toISOString()}`);
+      console.log(`[TENANT-BRANDING-UPDATE] Data: name="${name}" slogan="${slogan}" fontFamily="${fontFamily}" logoHeight=${logoHeight}`);
+      
       const updateData: any = {
         name,
         slogan,
         fontFamily,
         themeJson,
+        updatedAt: new Date(), // Sempre atualizar timestamp
       };
       
       // Only update logoHeight if provided and valid
@@ -809,12 +816,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
       
       if (result.length === 0) {
+        console.log(`[TENANT-BRANDING-UPDATE] FAILED - Tenant ${tenantId} not found`);
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
+      console.log(`[TENANT-BRANDING-UPDATE] SUCCESS - Tenant ${tenantId} updated. New updatedAt: ${result[0].updatedAt}`);
       res.json(result[0]);
     } catch (error) {
-      console.error("Update branding error:", error);
+      console.error("[TENANT-BRANDING-UPDATE] ERROR:", error);
       res.status(500).json({ message: "Erro ao atualizar identidade visual" });
     }
   });
@@ -824,8 +833,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/tenant/logo", requireAuth, requireMaster, uploadLogo.single("file"), async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
+      const userId = req.user?.id;
       const file = req.file;
       const type = req.body.type as "sidebar" | "login" | "favicon";
+      
+      console.log(`[TENANT-LOGO-UPLOAD] userId=${userId} tenantId=${tenantId} type=${type} timestamp=${new Date().toISOString()}`);
       
       if (!tenantId) {
         return res.status(404).json({ message: "Tenant não encontrado" });
@@ -853,6 +865,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filename = `logo-${type}-${tenantId}${ext}`;
       const filepath = pathModule.join(uploadsDir, filename);
       
+      console.log(`[TENANT-LOGO-UPLOAD] Saving file to: ${filepath}`);
+      
       // Delete any existing file with different extension for this tenant/type
       const possibleExts = [".png", ".svg", ".ico"];
       for (const existingExt of possibleExts) {
@@ -861,8 +875,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (fsModule.existsSync(oldFilePath)) {
             try {
               fsModule.unlinkSync(oldFilePath);
+              console.log(`[TENANT-LOGO-UPLOAD] Deleted old file: ${oldFilePath}`);
             } catch (e) {
-              console.warn(`Could not delete old logo file: ${oldFilePath}`);
+              console.warn(`[TENANT-LOGO-UPLOAD] Could not delete old logo file: ${oldFilePath}`);
             }
           }
         }
@@ -874,7 +889,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logoUrl = `/uploads/logos/${filename}?t=${Date.now()}`;
       
       // Update tenant with new logo URL based on type
-      const updateData: any = {};
+      const updateData: any = {
+        updatedAt: new Date(), // Sempre atualizar timestamp
+      };
       if (type === "sidebar") {
         updateData.logoUrl = logoUrl;
       } else if (type === "login") {
@@ -883,10 +900,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.faviconUrl = logoUrl;
       }
       
+      console.log(`[TENANT-LOGO-UPLOAD] Updating tenant ${tenantId} with: ${JSON.stringify(updateData)}`);
+      
       const result = await db.update(tenants)
         .set(updateData)
         .where(eq(tenants.id, tenantId))
         .returning();
+      
+      console.log(`[TENANT-LOGO-UPLOAD] SUCCESS - Tenant ${tenantId} logo updated. New updatedAt: ${result[0]?.updatedAt}`);
       
       res.json({ 
         message: "Logo atualizado com sucesso", 
@@ -894,7 +915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenant: result[0]
       });
     } catch (error: any) {
-      console.error("Upload logo error:", error);
+      console.error("[TENANT-LOGO-UPLOAD] ERROR:", error);
       if (error.message && error.message.includes("Formato de arquivo inválido")) {
         return res.status(400).json({ message: error.message });
       }
