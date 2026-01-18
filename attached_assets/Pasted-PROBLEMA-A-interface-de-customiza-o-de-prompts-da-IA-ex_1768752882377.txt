@@ -1,0 +1,76 @@
+PROBLEMA: A interface de customização de prompts da IA existe, mas mesmo alterando o prompt, o comportamento da IA não muda (continua igual).
+
+CAUSA PROVÁVEL:
+- Prompt editado não está sendo carregado corretamente
+- Sistema está usando prompt hardcoded em vez do customizado
+- Prompt está salvando mas não sendo aplicado nas chamadas da API
+
+LOCALIZAÇÃO:
+- Tabela: ai_prompts (armazena prompts customizados)
+- Backend: função que busca o prompt antes de chamar OpenAI
+- Interface: página de configuração de prompts
+
+SOLUÇÃO:
+
+1. VERIFICAR SE PROMPT ESTÁ SENDO SALVO:
+   - Editar prompt na interface
+   - Verificar no banco se salvou: SELECT * FROM ai_prompts WHERE type='roleplay' AND is_active=true;
+   - Se não salvou → problema no endpoint de save
+
+2. GARANTIR QUE SISTEMA USA PROMPT DO BANCO:
+```typescript
+   // ERRADO (hardcoded):
+   const systemPrompt = "Você é um cliente servidor público..."; // ❌ fixo
+   
+   // CORRETO (do banco):
+   const prompt = await db.select()
+     .from(aiPrompts)
+     .where(eq(aiPrompts.type, 'roleplay'))
+     .where(eq(aiPrompts.isActive, true))
+     .orderBy(desc(aiPrompts.version))
+     .limit(1);
+   
+   const systemPrompt = prompt?.promptText || DEFAULT_ROLEPLAY_PROMPT; // ✅ do banco
+```
+
+3. VERIFICAR ESCOPO DO PROMPT:
+   - Se sistema tem prompts por EQUIPE (teamId)
+   - Garantir que está buscando prompt correto:
+     * Prompt da equipe do usuário (se scope='team')
+     * Prompt global (se scope='global')
+```typescript
+   // Buscar prompt específico da equipe OU global
+   const prompt = await db.select()
+     .from(aiPrompts)
+     .where(eq(aiPrompts.type, 'roleplay'))
+     .where(
+       or(
+         and(eq(aiPrompts.scope, 'team'), eq(aiPrompts.teamId, userTeamId)),
+         eq(aiPrompts.scope, 'global')
+       )
+     )
+     .where(eq(aiPrompts.isActive, true))
+     .orderBy(desc(aiPrompts.updatedAt))
+     .limit(1);
+```
+
+4. CACHE PODE ESTAR ATRAPALHANDO:
+   - Se sistema faz cache do prompt, limpar cache ao salvar novo
+   - Ou desabilitar cache de prompts (recarregar sempre do banco)
+
+5. ADICIONAR LOG PARA DEBUG:
+```typescript
+   console.log('Prompt sendo usado:', systemPrompt.substring(0, 100) + '...');
+```
+
+6. TESTAR MUDANÇA ÓBVIA:
+   - Editar prompt e colocar algo muito diferente
+   - Exemplo: "Você é um robô espacial que fala sempre sobre Marte"
+   - Se IA mudar comportamento → está funcionando
+   - Se não mudar → não está carregando prompt customizado
+
+TESTE FINAL:
+1. Editar prompt: adicionar instrução clara "Sempre comece suas respostas com 'OLÁ TESTE'"
+2. Iniciar roleplay
+3. IA deve começar com "OLÁ TESTE..."
+4. Se funcionar → prompt está sendo aplicado ✓
