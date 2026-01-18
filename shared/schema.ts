@@ -1540,6 +1540,8 @@ export const aiPrompts = pgTable("ai_prompts", {
   type: varchar("type", { length: 50 }).notNull(), // 'roleplay'
   scope: varchar("scope", { length: 20 }).notNull(), // 'global' | 'team'
   teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }), // null para global
+  variante: varchar("variante", { length: 50 }), // identificador da variante (receptivo, indeciso, etc)
+  descricaoVariante: text("descricao_variante"), // descrição amigável da variante
   promptText: text("prompt_text").notNull(),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),

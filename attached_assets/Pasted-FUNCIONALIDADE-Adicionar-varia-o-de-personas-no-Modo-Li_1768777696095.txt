@@ -1,0 +1,403 @@
+FUNCIONALIDADE: Adicionar variação de personas no Modo Livre do Roleplay. Permitir que o sistema escolha aleatoriamente entre 5 personas diferentes, mantendo a avaliação livre (genérica) existente.
+
+CONTEXTO ATUAL:
+- Modo Livre usa 1 prompt global (ai_prompts com scope='global')
+- Usuário pode customizar esse prompt
+- Avaliação é genérica (não usa critérios específicos)
+- Modo Níveis (separado) tem 5 personas com progressão estruturada
+
+OBJETIVO:
+Permitir que Modo Livre tenha múltiplas personas (5 opções), onde:
+- IA escolhe aleatoriamente uma persona a cada nova sessão
+- Cada persona pode ser customizada separadamente
+- Avaliação continua sendo genérica (não muda)
+- Não afeta sistema de progressão por níveis
+
+IMPLEMENTAÇÃO:
+
+1. EXPANDIR TABELA ai_prompts PARA SUPORTAR VARIANTES:
+```sql
+   -- Adicionar coluna para identificar variantes de um tipo
+   ALTER TABLE ai_prompts 
+   ADD COLUMN IF NOT EXISTS variante VARCHAR(50),
+   ADD COLUMN IF NOT EXISTS descricao_variante TEXT;
+   
+   -- Índice para buscar variantes
+   CREATE INDEX IF NOT EXISTS idx_prompts_type_variante 
+   ON ai_prompts(type, scope, variante, is_active);
+```
+
+2. POPULAR COM 5 VARIANTES DE PERSONAS PARA MODO LIVRE:
+
+   Migration/Seed para cada tenant:
+```typescript
+   const VARIANTES_MODO_LIVRE = [
+     {
+       variante: 'receptivo',
+       descricaoVariante: 'Cliente Receptivo - Fácil de atender',
+       promptText: `Você é um cliente receptivo e educado, interessado em crédito consignado.
+       
+COMPORTAMENTO:
+- Receptivo e educado
+- Já decidiu que quer fazer empréstimo
+- Faz perguntas básicas mas aceita bem explicações
+- Não tem objeções fortes
+- Confia em quem explica bem
+
+OBJEÇÕES LEVES:
+- "Será que o banco é confiável?"
+- "Quanto tempo demora?"
+- "Preciso pensar um pouco..."
+
+Mantenha conversa natural e aceite a proposta se o corretor explicar bem.`
+     },
+     {
+       variante: 'indeciso',
+       descricaoVariante: 'Cliente Indeciso - Compara opções',
+       promptText: `Você é um cliente indeciso que está pesquisando.
+       
+COMPORTAMENTO:
+- Educado mas indeciso
+- Está comparando bancos
+- Pede tempo para pensar
+- Quer garantias e informações detalhadas
+- Menciona "outro banco ofereceu..."
+
+OBJEÇÕES MODERADAS:
+- "Preciso falar com minha esposa..."
+- "O outro banco ofereceu taxa menor"
+- "Não sei se é o momento..."
+
+Use as objeções gradualmente e aceite se o corretor for persuasivo.`
+     },
+     {
+       variante: 'desconfiado',
+       descricaoVariante: 'Cliente Desconfiado - Testa conhecimento',
+       promptText: `Você é um cliente desconfiado que já teve má experiência.
+       
+COMPORTAMENTO:
+- Desconfiado e direto
+- Faz perguntas incisivas sobre taxas
+- Pede tudo por escrito
+- Testa conhecimento do corretor
+- Menciona que "já foi enganado"
+
+OBJEÇÕES DIFÍCEIS:
+- "Já fui enganado antes, como confiar?"
+- "Qual a taxa REAL? Com IOF e tudo?"
+- "Vocês ganham comissão, né? Quanto?"
+
+Suavize se o corretor for transparente e demonstrar conhecimento.`
+     },
+     {
+       variante: 'emocional',
+       descricaoVariante: 'Cliente Emocional - Situação urgente',
+       promptText: `Você é um cliente com necessidade urgente e emotivo.
+       
+COMPORTAMENTO:
+- Emocionalmente abalado (situação urgente)
+- Alterna entre querer fechar rápido e ter medo
+- Faz muitas perguntas sobre "e se não conseguir pagar?"
+- Interrompe bastante
+- Quer parcela baixa
+
+OBJEÇÕES COMPLEXAS:
+- "E se eu perder o emprego?"
+- "Não posso comprometer mais que R$ 300/mês"
+- "Minha família disse que é cilada..."
+
+Demonstre ansiedade mas aceite se o corretor for empático e claro.`
+     },
+     {
+       variante: 'tecnico',
+       descricaoVariante: 'Cliente Técnico - Expert que testa',
+       promptText: `Você é um cliente muito técnico que conhece o mercado.
+       
+COMPORTAMENTO:
+- Usa termos técnicos (CET, IOF, anatocismo)
+- Faz perguntas capciosas
+- Testa conhecimento regulatório
+- Não precisa realmente de dinheiro, está testando
+- Critica o mercado
+
+OBJEÇÕES EXTREMAS:
+- "Me explica a diferença entre taxa nominal e efetiva"
+- "Vocês seguem a Resolução 4.935 do Bacen?"
+- "Qual o CET máximo permitido por lei?"
+
+Não vai fechar negócio. Se corretor demonstrar conhecimento, elogie discretamente.`
+     }
+   ];
+   
+   // Inserir cada variante
+   for (const variante of VARIANTES_MODO_LIVRE) {
+     await db.insert(aiPrompts).values({
+       type: 'roleplay',
+       scope: 'global',
+       teamId: null,
+       variante: variante.variante,
+       descricaoVariante: variante.descricaoVariante,
+       promptText: variante.promptText,
+       version: 1,
+       isActive: true,
+       updatedAt: new Date(),
+     });
+   }
+```
+
+3. INTERFACE DE GESTÃO DAS VARIANTES:
+
+   Atualizar aba "Prompt Global" para mostrar as 5 variantes:
+```tsx
+   function PromptGlobalManager() {
+     const [variantes, setVariantes] = useState([]);
+     const [varianteEditando, setVarianteEditando] = useState(null);
+     
+     useEffect(() => {
+       carregarVariantes();
+     }, []);
+     
+     async function carregarVariantes() {
+       const res = await fetch('/api/ai-prompts?type=roleplay&scope=global');
+       const data = await res.json();
+       setVariantes(data);
+     }
+     
+     return (
+       <div className="space-y-6">
+         <Alert>
+           <Shuffle className="h-4 w-4" />
+           <AlertTitle>Modo Livre com Variação de Personas</AlertTitle>
+           <AlertDescription>
+             O sistema escolherá aleatoriamente uma destas personas a cada nova sessão.
+             Você pode customizar cada uma individualmente.
+           </AlertDescription>
+         </Alert>
+         
+         <div className="grid gap-4">
+           {variantes.map(v => (
+             <Card key={v.id}>
+               <CardHeader>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <CardTitle className="flex items-center gap-2">
+                       <Shuffle className="h-4 w-4" />
+                       Variante: {v.variante}
+                     </CardTitle>
+                     <CardDescription>{v.descricaoVariante}</CardDescription>
+                   </div>
+                   <div className="flex gap-2">
+                     <Button 
+                       variant="outline" 
+                       size="sm"
+                       onClick={() => setVarianteEditando(v)}
+                     >
+                       <Edit className="mr-2 h-4 w-4" />
+                       Editar
+                     </Button>
+                     <Switch 
+                       checked={v.isActive}
+                       onCheckedChange={(checked) => toggleVariante(v.id, checked)}
+                     />
+                   </div>
+                 </div>
+               </CardHeader>
+               {varianteEditando?.id === v.id && (
+                 <CardContent>
+                   <Textarea
+                     value={v.promptText}
+                     onChange={(e) => updateVariante(v.id, e.target.value)}
+                     rows={12}
+                     className="font-mono text-sm"
+                   />
+                   <div className="flex gap-2 mt-4">
+                     <Button onClick={() => salvarVariante(v)}>
+                       Salvar Alterações
+                     </Button>
+                     <Button 
+                       variant="outline" 
+                       onClick={() => setVarianteEditando(null)}
+                     >
+                       Cancelar
+                     </Button>
+                   </div>
+                 </CardContent>
+               )}
+             </Card>
+           ))}
+         </div>
+       </div>
+     );
+   }
+```
+
+4. LÓGICA DE SELEÇÃO ALEATÓRIA AO INICIAR MODO LIVRE:
+```typescript
+   async function iniciarModoLivre(userId: number, cenarioCustomizado?: string) {
+     // Buscar todas as variantes ativas
+     const variantes = await db.select()
+       .from(aiPrompts)
+       .where(eq(aiPrompts.type, 'roleplay'))
+       .where(eq(aiPrompts.scope, 'global'))
+       .where(eq(aiPrompts.isActive, true));
+     
+     if (variantes.length === 0) {
+       throw new Error('Nenhuma variante de prompt ativa encontrada');
+     }
+     
+     // ✅ ESCOLHER ALEATORIAMENTE
+     const varianteSorteada = variantes[Math.floor(Math.random() * variantes.length)];
+     
+     let systemPrompt = varianteSorteada.promptText;
+     
+     // Se usuário definiu cenário customizado, adicionar
+     if (cenarioCustomizado) {
+       systemPrompt += `\n\nCENÁRIO CUSTOMIZADO PELO USUÁRIO:\n${cenarioCustomizado}`;
+     }
+     
+     // Criar sessão
+     const sessao = await db.insert(roleplaySessoes).values({
+       userId,
+       modo: 'livre',
+       status: 'ativa',
+       cenario: cenarioCustomizado || `Persona: ${varianteSorteada.descricaoVariante}`,
+       historicoConversa: [
+         { role: 'system', content: systemPrompt }
+       ],
+       createdAt: new Date(),
+     }).returning();
+     
+     return {
+       sessao,
+       personaSorteada: varianteSorteada.descricaoVariante
+     };
+   }
+```
+
+5. MOSTRAR QUAL PERSONA FOI SORTEADA (OPCIONAL):
+
+   Na tela de roleplay, pode mostrar um badge discreto:
+```tsx
+   function RoleplayHeader({ sessao }) {
+     return (
+       <div className="flex items-center justify-between">
+         <div>
+           <h2>Roleplay - Modo Livre</h2>
+           {sessao.cenario && (
+             <Badge variant="outline" className="mt-2">
+               <Shuffle className="mr-1 h-3 w-3" />
+               {sessao.cenario}
+             </Badge>
+           )}
+         </div>
+       </div>
+     );
+   }
+```
+
+6. AVALIAÇÃO CONTINUA GENÉRICA (NÃO MEXER):
+
+   A avaliação do modo livre continua usando o sistema atual:
+```typescript
+   async function avaliarModoLivre(sessao) {
+     // Sistema atual - avaliação genérica
+     // NÃO usa critérios específicos
+     // NÃO afeta progressão de níveis
+     
+     const promptAvaliacao = `
+Avalie esta sessão de roleplay de crédito consignado.
+
+Forneça:
+- Nota geral (0-10)
+- Pontos fortes (3-5 pontos)
+- Pontos a melhorar (3-5 pontos)
+- Feedback geral
+
+Histórico: ${JSON.stringify(sessao.historicoConversa)}
+
+Retorne JSON:
+{
+  "notaGeral": 8.5,
+  "pontosFortes": ["...", "..."],
+  "pontosMelhorar": ["...", "..."],
+  "feedback": "..."
+}
+`;
+     
+     const response = await openai.chat.completions.create({
+       model: "gpt-4",
+       messages: [{ role: "user", content: promptAvaliacao }],
+       temperature: 0.3,
+     });
+     
+     const avaliacao = JSON.parse(response.choices[0].message.content);
+     
+     // Salvar avaliação (sem nivel_avaliado, sem aprovado_proximo_nivel)
+     await db.insert(roleplayAvaliacoes).values({
+       sessaoId: sessao.id,
+       userId: sessao.userId,
+       notaGlobal: avaliacao.notaGeral,
+       pontosFortes: avaliacao.pontosFortes,
+       pontosMelhorar: avaliacao.pontosMelhorar,
+       comentarioGeral: avaliacao.feedback,
+       createdAt: new Date(),
+     });
+     
+     return avaliacao;
+   }
+```
+
+7. API ENDPOINTS:
+```typescript
+   // Buscar variantes para edição
+   app.get('/api/ai-prompts', requireAuth, async (req, res) => {
+     const { type, scope } = req.query;
+     
+     const prompts = await db.select()
+       .from(aiPrompts)
+       .where(eq(aiPrompts.type, type))
+       .where(eq(aiPrompts.scope, scope))
+       .orderBy(asc(aiPrompts.variante));
+     
+     res.json(prompts);
+   });
+   
+   // Atualizar variante
+   app.put('/api/ai-prompts/:id', requireAuth, requireAdmin, async (req, res) => {
+     const { id } = req.params;
+     const { promptText, isActive } = req.body;
+     
+     await db.update(aiPrompts)
+       .set({ 
+         promptText, 
+         isActive,
+         updatedAt: new Date(),
+         version: sql`version + 1`
+       })
+       .where(eq(aiPrompts.id, id));
+     
+     res.json({ success: true });
+   });
+```
+
+RESUMO DO SISTEMA COMPLETO:
+
+📌 MODO LIVRE (aleatório):
+- 5 variantes de personas customizáveis
+- Escolha aleatória a cada sessão
+- Avaliação genérica (sem critérios)
+- Não afeta progressão
+
+📌 MODO NÍVEIS (estruturado):
+- 5 níveis fixos com progressão
+- Usuário escolhe qual nível treinar
+- Avaliação com critérios específicos
+- Desbloqueia próximo nível se aprovado
+
+TESTE:
+1. Acessar Config. Prompts IA → aba "Prompt Global"
+2. Ver 5 variantes (receptivo, indeciso, desconfiado, emocional, técnico)
+3. Editar uma variante e salvar
+4. Iniciar Modo Livre 5 vezes → verificar que personas variam aleatoriamente
+5. Avaliação deve ser genérica (não mencionar critérios específicos)
+6. Progresso de níveis não deve ser afetado
