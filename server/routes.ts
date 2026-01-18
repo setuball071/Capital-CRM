@@ -7324,6 +7324,39 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   }
 
+  // Helper function to generate descriptive filename from filters
+  function gerarNomeArquivoLista(filtros: any, dataPedido: Date | null): string {
+    const parts: string[] = [];
+    
+    // Extract main filter values
+    if (filtros?.convenio) parts.push(String(filtros.convenio));
+    if (filtros?.uf) parts.push(String(filtros.uf));
+    if (filtros?.orgao && !filtros?.convenio) parts.push(String(filtros.orgao));
+    if (filtros?.situacaoFuncional) parts.push(String(filtros.situacaoFuncional));
+    
+    // Format date
+    const data = dataPedido 
+      ? new Date(dataPedido).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+    
+    // Build filename
+    let nome: string;
+    if (parts.length > 0) {
+      nome = `Lista_${parts.join('_')}_${data}.csv`;
+    } else {
+      nome = `Lista_Geral_${data}.csv`;
+    }
+    
+    // Sanitize: remove invalid characters, replace spaces with underscores, limit length
+    nome = nome
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_.-]/g, '_')
+      .replace(/_+/g, '_')
+      .substring(0, 100);
+    
+    return nome;
+  }
+
   // GET /api/pedidos-lista/:id/download - Download generated file - MASTER ONLY
   app.get("/api/pedidos-lista/:id/download", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
@@ -7365,8 +7398,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         console.log(`[PedidoLista] File regenerated: ${filePath}`);
       }
 
-      // Send file
-      const fileName = `lista-clientes-${id}.csv`;
+      // Generate descriptive filename based on filters
+      const fileName = gerarNomeArquivoLista(pedido.filtrosUsados, pedido.criadoEm);
+      console.log(`[PedidoLista] Download file: ${fileName}`);
       res.download(filePath, fileName);
       
     } catch (error) {

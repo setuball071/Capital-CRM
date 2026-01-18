@@ -1,0 +1,62 @@
+PROBLEMA: Quando o usuário baixa o arquivo CSV de um pedido de lista, o arquivo é salvo com um nome genérico ou ID. Precisa salvar com um nome descritivo baseado nos filtros da pesquisa.
+
+CONTEXTO:
+- Tabela: pedidos_lista
+- Campo: filtrosUsados (JSONB) - contém os filtros aplicados na pesquisa
+- Rota de download: provavelmente /api/pedidos-lista/:id/download ou similar
+- Arquivo gerado: arquivoPath no banco
+
+SOLUÇÃO NECESSÁRIA:
+
+1. GERAR NOME DESCRITIVO DO ARQUIVO:
+   - Usar informações dos filtros para criar nome legível
+   - Formato sugerido: "Lista_{Convenio}_{UF}_{DataPedido}.csv"
+   - Exemplos:
+     * "Lista_SIAPE_SP_2026-01-18.csv"
+     * "Lista_INSS_RJ_2026-01-18.csv"
+     * "Lista_Geral_2026-01-18.csv" (se sem filtros específicos)
+
+2. LÓGICA DE NOMENCLATURA:
+   - Extrair do filtrosUsados os campos principais:
+     * convenio (se existir)
+     * uf (se existir)
+     * orgao (se existir)
+   - Combinar em ordem de prioridade:
+     * Se tem convenio + uf: "Lista_{convenio}_{uf}_{data}"
+     * Se tem só convenio: "Lista_{convenio}_{data}"
+     * Se tem só uf: "Lista_{uf}_{data}"
+     * Se sem filtros: "Lista_Geral_{data}"
+
+3. SANITIZAR NOME DO ARQUIVO:
+   - Remover caracteres especiais inválidos para nome de arquivo
+   - Substituir espaços por underscores
+   - Limitar tamanho a 100 caracteres
+   - Exemplo: "Gov SP" → "Gov_SP"
+
+4. APLICAR NO DOWNLOAD:
+   - Ao fazer download, usar header Content-Disposition com o nome gerado:
+```javascript
+   res.setHeader('Content-Disposition', `attachment; filename="${nomeGerado}"`);
+```
+
+5. CÓDIGO ESPERADO (exemplo):
+```typescript
+   function gerarNomeArquivo(filtros: any): string {
+     const parts = [];
+     if (filtros.convenio) parts.push(filtros.convenio);
+     if (filtros.uf) parts.push(filtros.uf);
+     
+     const data = new Date().toISOString().split('T')[0]; // 2026-01-18
+     const nome = parts.length > 0 
+       ? `Lista_${parts.join('_')}_${data}.csv`
+       : `Lista_Geral_${data}.csv`;
+     
+     // Sanitizar
+     return nome.replace(/[^a-zA-Z0-9_.-]/g, '_');
+   }
+```
+
+TESTE:
+- Criar pedido com filtro de "SIAPE" e "SP" → arquivo deve se chamar "Lista_SIAPE_SP_2026-01-18.csv"
+- Criar pedido sem filtros → arquivo deve se chamar "Lista_Geral_2026-01-18.csv"
+- Verificar que caracteres especiais são removidos corretamente
