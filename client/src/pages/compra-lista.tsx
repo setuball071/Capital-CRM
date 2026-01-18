@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
+import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,7 +41,7 @@ interface Filtros {
   margem_cartao_beneficio_max?: number;
   // Filtros de contrato
   banco?: string;
-  tipo_contrato?: string;
+  tipos_contrato?: string[];
   parcela_min?: number;
   parcela_max?: number;
   // Filtro de quantidade de contratos
@@ -578,7 +579,7 @@ export default function CompraLista() {
                     <Combobox
                       options={filtrosDisponiveis?.bancos || []}
                       value={filtros.banco}
-                      onValueChange={(v) => setFiltros({ ...filtros, banco: v, tipo_contrato: undefined })}
+                      onValueChange={(v) => setFiltros({ ...filtros, banco: v, tipos_contrato: [] })}
                       placeholder="Todos os bancos"
                       searchPlaceholder="Buscar banco..."
                       emptyText="Nenhum banco encontrado."
@@ -590,24 +591,22 @@ export default function CompraLista() {
 
                   <div className="space-y-2">
                     <Label htmlFor="tipo_contrato">Tipo de Contrato</Label>
-                    <Select
-                      value={filtros.tipo_contrato || "all"}
-                      onValueChange={(v) => setFiltros({ ...filtros, tipo_contrato: v === "all" ? undefined : v })}
+                    <MultiSelectCombobox
+                      options={tiposContratoFiltrados}
+                      value={filtros.tipos_contrato || []}
+                      onValueChange={(v) => setFiltros({ ...filtros, tipos_contrato: v.length > 0 ? v : undefined })}
+                      placeholder={isLoadingTipos ? "Carregando..." : "Todos"}
+                      searchPlaceholder="Buscar tipo..."
+                      emptyText="Nenhum tipo encontrado."
                       disabled={isLoadingTipos}
-                    >
-                      <SelectTrigger data-testid="select-tipo-contrato">
-                        <SelectValue placeholder={isLoadingTipos ? "Carregando..." : (filtros.banco ? "Selecione" : "Todos")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        {tiposContratoFiltrados.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      data-testid="multiselect-tipo-contrato"
+                    />
                     {filtros.banco && tiposContratoFiltrados.length > 0 && (
                       <p className="text-xs text-muted-foreground">
                         {tiposContratoFiltrados.length} tipo(s) disponível(is) para {filtros.banco}
+                        {filtros.tipos_contrato && filtros.tipos_contrato.length > 0 && (
+                          <> • {filtros.tipos_contrato.length} selecionado(s)</>
+                        )}
                       </p>
                     )}
                   </div>

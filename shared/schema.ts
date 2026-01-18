@@ -886,7 +886,7 @@ export const filtrosPedidoListaSchema = z.object({
   margem_cartao_beneficio_max: z.number().optional(),
   // Filtros de contrato
   banco: z.string().optional(),
-  tipo_contrato: z.string().optional(),
+  tipos_contrato: z.array(z.string()).optional(),
   parcela_min: z.number().optional(),
   parcela_max: z.number().optional(),
   // Filtro de quantidade de contratos
