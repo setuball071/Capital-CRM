@@ -65,6 +65,29 @@ interface AvaliacaoFinal {
   pontos_melhorar: string[];
   nivel_sugerido: number;
   aprovado_para_proximo_nivel: boolean;
+  // Modo Níveis specific fields
+  modo?: string;
+  nivelAvaliado?: number;
+  notaMinima?: number;
+  aprovado?: boolean;
+  proximoNivel?: number;
+  nomePersona?: string;
+}
+
+interface NivelProgresso {
+  nivel: number;
+  nome: string;
+  descricao: string;
+  notaMinima: number;
+  status: "concluido" | "disponivel" | "bloqueado";
+  aprovado: boolean;
+  melhorNota: number | null;
+  tentativas: number;
+}
+
+interface ProgressoNiveis {
+  nivelAtual: number;
+  niveis: NivelProgresso[];
 }
 
 export default function AcademiaRoleplay() {
@@ -90,6 +113,12 @@ export default function AcademiaRoleplay() {
   // Fetch nivel prompts for Modo Níveis
   const { data: nivelPrompts, isLoading: loadingNivelPrompts } = useQuery<RoleplayNivelPrompt[]>({
     queryKey: ["/api/roleplay-niveis/prompts"],
+    enabled: modoRoleplay === "selecao" || modoRoleplay === "niveis",
+  });
+
+  // Fetch progression progress for Modo Níveis
+  const { data: progressoNiveis, refetch: refetchProgresso } = useQuery<ProgressoNiveis>({
+    queryKey: ["/api/academia/niveis/progresso"],
     enabled: modoRoleplay === "selecao" || modoRoleplay === "niveis",
   });
 
@@ -217,6 +246,7 @@ export default function AcademiaRoleplay() {
     onSuccess: (data) => {
       setAvaliacaoFinal(data);
       queryClient.invalidateQueries({ queryKey: ["/api/academia/perfil"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/academia/niveis/progresso"] });
     },
     onError: () => {
       toast({
@@ -254,6 +284,7 @@ export default function AcademiaRoleplay() {
     setModoRoleplay("selecao");
     setPersonaAtual(null);
     queryClient.invalidateQueries({ queryKey: ["/api/academia/perfil"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/academia/niveis/progresso"] });
   };
   
   const handleSelecionarModoLivre = () => {
@@ -473,22 +504,40 @@ export default function AcademiaRoleplay() {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))
                 ) : (
-                  nivelPrompts?.map((prompt) => (
-                    <Button
-                      key={prompt.nivel}
-                      variant="outline"
-                      size="sm"
-                      className="flex-col h-auto py-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelecionarModoNiveis(prompt.nivel);
-                      }}
-                      disabled={!prompt.isActive}
-                      data-testid={`button-nivel-${prompt.nivel}`}
-                    >
-                      <span className="font-bold">{prompt.nivel}</span>
-                    </Button>
-                  ))
+                  nivelPrompts?.map((prompt) => {
+                    const progresso = progressoNiveis?.niveis?.find(n => n.nivel === prompt.nivel);
+                    const status = progresso?.status || (prompt.nivel === 1 ? "disponivel" : "bloqueado");
+                    const isBloqueado = status === "bloqueado";
+                    const isConcluido = status === "concluido";
+                    
+                    return (
+                      <Button
+                        key={prompt.nivel}
+                        variant={isConcluido ? "default" : "outline"}
+                        size="sm"
+                        className={`flex-col h-auto py-2 relative ${isConcluido ? "bg-green-600 hover:bg-green-700" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isBloqueado) {
+                            handleSelecionarModoNiveis(prompt.nivel);
+                          }
+                        }}
+                        disabled={!prompt.isActive || isBloqueado}
+                        data-testid={`button-nivel-${prompt.nivel}`}
+                      >
+                        {isConcluido && (
+                          <CheckCircle className="h-3 w-3 absolute top-1 right-1" />
+                        )}
+                        {isBloqueado && (
+                          <Lock className="h-3 w-3 absolute top-1 right-1" />
+                        )}
+                        <span className="font-bold">{prompt.nivel}</span>
+                        {progresso?.melhorNota !== null && progresso?.melhorNota !== undefined && (
+                          <span className="text-[10px] opacity-70">{progresso.melhorNota.toFixed(1)}</span>
+                        )}
+                      </Button>
+                    );
+                  })
                 )}
               </div>
             </CardFooter>
@@ -504,29 +553,57 @@ export default function AcademiaRoleplay() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {nivelPrompts.map((prompt) => (
-                  <div key={prompt.nivel} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                    <Badge variant="outline" className="shrink-0">
-                      Nível {prompt.nivel}
-                    </Badge>
-                    <div className="flex-1">
-                      <p className="font-medium">{prompt.nome}</p>
-                      <p className="text-sm text-muted-foreground">{prompt.descricao}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Target className="h-3 w-3" />
-                          Nota mínima: {prompt.notaMinima}
-                        </span>
-                        {prompt.tempoLimiteMinutos && (
+                {nivelPrompts.map((prompt) => {
+                  const progresso = progressoNiveis?.niveis?.find(n => n.nivel === prompt.nivel);
+                  const status = progresso?.status || (prompt.nivel === 1 ? "disponivel" : "bloqueado");
+                  
+                  return (
+                    <div 
+                      key={prompt.nivel} 
+                      className={`flex items-start gap-3 p-3 rounded-lg ${
+                        status === "concluido" ? "bg-green-500/10 border border-green-500/30" : 
+                        status === "bloqueado" ? "bg-muted/30 opacity-60" : 
+                        "bg-muted/50"
+                      }`}
+                    >
+                      <Badge 
+                        variant={status === "concluido" ? "default" : "outline"} 
+                        className={`shrink-0 ${status === "concluido" ? "bg-green-600" : ""}`}
+                      >
+                        {status === "concluido" && <CheckCircle className="h-3 w-3 mr-1" />}
+                        {status === "bloqueado" && <Lock className="h-3 w-3 mr-1" />}
+                        Nível {prompt.nivel}
+                      </Badge>
+                      <div className="flex-1">
+                        <p className="font-medium">{prompt.nome}</p>
+                        <p className="text-sm text-muted-foreground">{prompt.descricao}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {prompt.tempoLimiteMinutos} min
+                            <Target className="h-3 w-3" />
+                            Nota mínima: {prompt.notaMinima}
                           </span>
-                        )}
+                          {prompt.tempoLimiteMinutos && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {prompt.tempoLimiteMinutos} min
+                            </span>
+                          )}
+                          {progresso?.melhorNota !== null && progresso?.melhorNota !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <Award className="h-3 w-3" />
+                              Melhor nota: {progresso.melhorNota.toFixed(1)}
+                            </span>
+                          )}
+                          {progresso?.tentativas ? (
+                            <span className="flex items-center gap-1">
+                              {progresso.tentativas} tentativa{progresso.tentativas !== 1 ? 's' : ''}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -902,7 +979,42 @@ export default function AcademiaRoleplay() {
                   </div>
                 )}
 
-                {avaliacaoFinal.aprovado_para_proximo_nivel && (
+                {/* Modo Níveis: Progressão */}
+                {avaliacaoFinal.modo === "niveis" && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium">
+                        Avaliação do Nível {avaliacaoFinal.nivelAvaliado}: {avaliacaoFinal.nomePersona}
+                      </span>
+                      <Badge variant="outline">
+                        Nota mínima: {avaliacaoFinal.notaMinima}
+                      </Badge>
+                    </div>
+                    
+                    {avaliacaoFinal.aprovado ? (
+                      <Alert className="bg-green-50 border-green-200 dark:bg-green-900/20">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <AlertDescription className="text-green-700 dark:text-green-400">
+                          <span className="font-semibold">APROVADO!</span> Parabéns! 
+                          {avaliacaoFinal.proximoNivel && avaliacaoFinal.proximoNivel !== avaliacaoFinal.nivelAvaliado && (
+                            <span> O Nível {avaliacaoFinal.proximoNivel} foi desbloqueado.</span>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-900/20">
+                        <Target className="h-4 w-4 text-orange-600" />
+                        <AlertDescription className="text-orange-700 dark:text-orange-400">
+                          <span className="font-semibold">Não aprovado.</span> Sua nota foi {avaliacaoFinal.nota_global?.toFixed(1)}, 
+                          mas a nota mínima é {avaliacaoFinal.notaMinima}. Tente novamente!
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
+
+                {/* Modo Livre: Aprovação genérica */}
+                {avaliacaoFinal.modo !== "niveis" && avaliacaoFinal.aprovado_para_proximo_nivel && (
                   <Alert className="bg-green-50 border-green-200 dark:bg-green-900/20">
                     <AlertDescription className="text-green-700 dark:text-green-400">
                       Parabéns! Você está pronto para o próximo nível!

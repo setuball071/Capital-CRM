@@ -7983,6 +7983,27 @@ Responda EXCLUSIVAMENTE em JSON:
 
         // Save evaluation if we have a session
         if (sessaoId) {
+          // Get session details to check mode
+          const [sessaoAtual] = await db.select().from(roleplaySessoes).where(eq(roleplaySessoes.id, sessaoId)).limit(1);
+          const sessaoModo = sessaoAtual?.modo || "livre";
+          const sessaoNivelTreinado = sessaoAtual?.nivelTreinado || nivelAtual;
+          
+          // For Modo Níveis, check if passed based on nivel-specific nota mínima
+          let aprovadoProximoNivel = avaliacao.aprovado_para_proximo_nivel || false;
+          let notaMinimaNivel = 7.0; // Default
+          let nivelConfig: any = null;
+          
+          if (sessaoModo === "niveis") {
+            // Get nivel configuration for nota mínima
+            nivelConfig = await storage.getRoleplayNivelPrompt(sessaoNivelTreinado, tenantId);
+            if (nivelConfig) {
+              notaMinimaNivel = nivelConfig.notaMinima || 7.0;
+              // Check if passed based on nota mínima
+              aprovadoProximoNivel = (avaliacao.nota_global || 0) >= notaMinimaNivel;
+              console.log(`[Academia] Modo Níveis: nivel=${sessaoNivelTreinado}, nota=${avaliacao.nota_global}, minima=${notaMinimaNivel}, aprovado=${aprovadoProximoNivel}`);
+            }
+          }
+          
           await db.insert(roleplayAvaliacoes).values({
             sessaoId,
             userId,
@@ -7996,16 +8017,54 @@ Responda EXCLUSIVAMENTE em JSON:
             pontosFortes: avaliacao.pontos_fortes || [],
             pontosMelhorar: avaliacao.pontos_melhorar || [],
             nivelSugerido: avaliacao.nivel_sugerido,
-            aprovadoProximoNivel: avaliacao.aprovado_para_proximo_nivel || false,
+            nivelAvaliado: sessaoModo === "niveis" ? sessaoNivelTreinado : null,
+            aprovadoProximoNivel: aprovadoProximoNivel,
+            criteriosAtendidos: avaliacao.criterios_atendidos || {},
           });
 
-          // Marcar sessão como finalizada (se ainda não estiver)
+          // Marcar sessão como finalizada com dados de aprovação
           await db.update(roleplaySessoes)
-            .set({ status: "finalizada", finalizadoEm: new Date() })
+            .set({ 
+              status: "finalizada", 
+              finalizadoEm: new Date(),
+              aprovado: aprovadoProximoNivel,
+              notaFinal: String(avaliacao.nota_global || 0),
+            })
             .where(and(
               eq(roleplaySessoes.id, sessaoId),
               eq(roleplaySessoes.status, "ativa")
             ));
+
+          // For Modo Níveis: Update vendedor's nivelAtual if passed
+          if (sessaoModo === "niveis" && aprovadoProximoNivel) {
+            const [vendedorAcademia] = await db.select()
+              .from(vendedoresAcademia)
+              .where(eq(vendedoresAcademia.userId, userId))
+              .limit(1);
+            
+            if (vendedorAcademia) {
+              // Only advance if user is still on this level (prevent skipping)
+              if (vendedorAcademia.nivelAtual === sessaoNivelTreinado && sessaoNivelTreinado < 5) {
+                await db.update(vendedoresAcademia)
+                  .set({ 
+                    nivelAtual: sessaoNivelTreinado + 1,
+                    atualizadoEm: new Date(),
+                  })
+                  .where(eq(vendedoresAcademia.userId, userId));
+                console.log(`[Academia] User ${userId} advanced to level ${sessaoNivelTreinado + 1}`);
+              }
+            } else {
+              // Create vendedor profile with next level
+              await db.insert(vendedoresAcademia).values({
+                userId,
+                nivelAtual: sessaoNivelTreinado + 1,
+                quizAprovado: false,
+                criadoEm: new Date(),
+                atualizadoEm: new Date(),
+              });
+              console.log(`[Academia] Created profile for user ${userId} at level ${sessaoNivelTreinado + 1}`);
+            }
+          }
 
           // Update user's average score from all evaluations
           const avaliacoes = await db.select().from(roleplayAvaliacoes).where(eq(roleplayAvaliacoes.userId, userId));
@@ -8027,6 +8086,19 @@ Responda EXCLUSIVAMENTE em JSON:
                 atualizadoEm: new Date(),
               })
               .where(eq(vendedoresAcademia.userId, userId));
+          }
+          
+          // Return enhanced response for Modo Níveis
+          if (sessaoModo === "niveis") {
+            return res.json({
+              ...avaliacao,
+              modo: sessaoModo,
+              nivelAvaliado: sessaoNivelTreinado,
+              notaMinima: notaMinimaNivel,
+              aprovado: aprovadoProximoNivel,
+              proximoNivel: aprovadoProximoNivel && sessaoNivelTreinado < 5 ? sessaoNivelTreinado + 1 : sessaoNivelTreinado,
+              nomePersona: nivelConfig?.nome || `Nível ${sessaoNivelTreinado}`,
+            });
           }
         }
 
@@ -8105,6 +8177,67 @@ Responda EXCLUSIVAMENTE em JSON:
     } catch (error) {
       console.error("Get academia perfil error:", error);
       return res.status(500).json({ message: "Erro ao buscar perfil" });
+    }
+  });
+
+  // GET /api/academia/niveis/progresso - Progresso do vendedor nos níveis
+  app.get("/api/academia/niveis/progresso", requireAuth, requireAcademiaAccess, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const tenantId = req.user!.tenantId || 1;
+      
+      // Get or create vendedor profile
+      let [vendedor] = await db.select().from(vendedoresAcademia).where(eq(vendedoresAcademia.userId, userId)).limit(1);
+      
+      if (!vendedor) {
+        [vendedor] = await db.insert(vendedoresAcademia).values({
+          userId,
+          nivelAtual: 1,
+          quizAprovado: false,
+          totalSimulacoes: 0,
+        }).returning();
+      }
+      
+      const nivelAtual = vendedor.nivelAtual || 1;
+      
+      // Get all nivel prompts
+      const nivelPrompts = await storage.getRoleplayNivelPrompts(tenantId);
+      
+      // Get all evaluations with nivelAvaliado for Modo Níveis
+      const avaliacoes = await db.select()
+        .from(roleplayAvaliacoes)
+        .where(eq(roleplayAvaliacoes.userId, userId))
+        .orderBy(sql`${roleplayAvaliacoes.criadoEm} DESC`);
+      
+      // Build progress for each level
+      const niveis = [1, 2, 3, 4, 5].map(n => {
+        const nivelPrompt = nivelPrompts.find(p => p.nivel === n);
+        const avaliacoesDoNivel = avaliacoes.filter(a => a.nivelAvaliado === n);
+        const aprovado = avaliacoesDoNivel.some(a => a.aprovadoProximoNivel);
+        const melhorNota = avaliacoesDoNivel.length > 0 
+          ? Math.max(...avaliacoesDoNivel.map(a => parseFloat(a.notaGlobal)))
+          : null;
+        
+        return {
+          nivel: n,
+          nome: nivelPrompt?.nome || `Nível ${n}`,
+          descricao: nivelPrompt?.descricao || "",
+          notaMinima: nivelPrompt?.notaMinima || 7.0,
+          status: n < nivelAtual ? "concluido" : 
+                  n === nivelAtual ? "disponivel" : "bloqueado",
+          aprovado,
+          melhorNota,
+          tentativas: avaliacoesDoNivel.length,
+        };
+      });
+      
+      return res.json({
+        nivelAtual,
+        niveis,
+      });
+    } catch (error) {
+      console.error("Get niveis progresso error:", error);
+      return res.status(500).json({ message: "Erro ao buscar progresso" });
     }
   });
 

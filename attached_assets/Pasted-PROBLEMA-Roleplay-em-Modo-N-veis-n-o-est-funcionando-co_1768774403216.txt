@@ -1,0 +1,337 @@
+PROBLEMA: Roleplay em Modo Níveis não está funcionando corretamente. Ao finalizar teste de um nível, a avaliação usa o sistema genérico do modo livre em vez dos critérios específicos do nível, e não salva o progresso (não desbloqueia próximo nível).
+
+COMPORTAMENTO ATUAL (ERRADO):
+1. Usuário inicia Nível 1 (Maria das Graças)
+2. Completa o roleplay
+3. Recebe avaliação genérica (não usa critérios do nível)
+4. Volta para tela de níveis → continua no mesmo nível, como se não tivesse testado
+5. Progresso não é salvo
+
+COMPORTAMENTO ESPERADO (CORRETO):
+1. Usuário inicia Nível 1
+2. Completa roleplay com a persona Maria das Graças
+3. IA avalia baseada nos critérios específicos do Nível 1
+4. Se nota >= 7.0 → APROVADO → Nível 2 desbloqueado
+5. Volta para tela → mostra Nível 1 concluído (✅) e Nível 2 disponível (🔓)
+6. Progresso salvo no banco
+
+CORREÇÕES NECESSÁRIAS:
+
+1. GARANTIR QUE SESSÃO SALVA O MODO E NÍVEL CORRETAMENTE:
+
+   Ao iniciar roleplay no modo níveis:
+```typescript
+   async function iniciarRoleplayNivel(userId: number, nivel: number) {
+     // Buscar prompt do nível
+     const nivelPrompt = await db.select()
+       .from(roleplayNivelPrompts)
+       .where(eq(roleplayNivelPrompts.nivel, nivel))
+       .where(eq(roleplayNivelPrompts.tenantId, tenantId))
+       .limit(1);
+     
+     if (!nivelPrompt) {
+       throw new Error(`Nível ${nivel} não encontrado`);
+     }
+     
+     // Criar sessão COM modo e nivel_treinado
+     const sessao = await db.insert(roleplaySessoes).values({
+       userId,
+       modo: 'niveis',  // ✅ CRÍTICO: deve ser 'niveis', não 'livre'
+       nivelTreinado: nivel,  // ✅ CRÍTICO: salvar qual nível está sendo treinado
+       status: 'ativa',
+       historicoConversa: [
+         { role: 'system', content: nivelPrompt.promptCompleto }
+       ],
+       createdAt: new Date(),
+     }).returning();
+     
+     return sessao;
+   }
+```
+
+2. AVALIAÇÃO DEVE VERIFICAR O MODO DA SESSÃO:
+
+   Quando finalizar e avaliar:
+```typescript
+   async function avaliarSessaoRoleplay(sessaoId: number) {
+     const sessao = await db.select()
+       .from(roleplaySessoes)
+       .where(eq(roleplaySessoes.id, sessaoId))
+       .limit(1);
+     
+     if (!sessao) throw new Error('Sessão não encontrada');
+     
+     // ✅ VERIFICAR O MODO
+     if (sessao.modo === 'niveis') {
+       // Avaliar usando critérios específicos do nível
+       return await avaliarComCriteriosDoNivel(sessao);
+     } else {
+       // Avaliar usando sistema genérico (modo livre)
+       return await avaliarModoLivre(sessao);
+     }
+   }
+   
+   async function avaliarComCriteriosDoNivel(sessao) {
+     const nivel = sessao.nivelTreinado;
+     
+     // Buscar configuração do nível
+     const nivelConfig = await db.select()
+       .from(roleplayNivelPrompts)
+       .where(eq(roleplayNivelPrompts.nivel, nivel))
+       .where(eq(roleplayNivelPrompts.tenantId, sessao.tenantId))
+       .limit(1);
+     
+     if (!nivelConfig) throw new Error(`Config do nível ${nivel} não encontrada`);
+     
+     // Montar prompt de avaliação ESPECÍFICO DO NÍVEL
+     const promptAvaliacao = `
+Você é um avaliador de treinamento de vendas de crédito consignado.
+
+Analise esta sessão de roleplay do NÍVEL ${nivel}: ${nivelConfig.nome}.
+
+CRITÉRIOS ESPECÍFICOS DESTE NÍVEL:
+${nivelConfig.criteriosAprovacao.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+NOTA MÍNIMA PARA APROVAÇÃO: ${nivelConfig.notaMinima}/10
+
+HISTÓRICO DA CONVERSA:
+${JSON.stringify(sessao.historicoConversa)}
+
+AVALIE e retorne APENAS um JSON válido (sem markdown, sem explicações):
+{
+  "notaGeral": 7.5,
+  "aprovado": true,
+  "pontosFortes": ["Ponto 1", "Ponto 2"],
+  "pontosMelhorar": ["Melhoria 1", "Melhoria 2"],
+  "criteriosAtendidos": {
+    "criterio1": true,
+    "criterio2": false,
+    ...
+  },
+  "feedback": "Texto detalhado do feedback"
+}
+`;
+     
+     // Chamar OpenAI para avaliar
+     const response = await openai.chat.completions.create({
+       model: "gpt-4",
+       messages: [
+         { role: "user", content: promptAvaliacao }
+       ],
+       temperature: 0.3, // Mais determinístico para avaliação
+     });
+     
+     // Parsear resposta
+     const avaliacaoText = response.choices[0].message.content;
+     const avaliacao = JSON.parse(avaliacaoText);
+     
+     // Verificar se passou baseado na nota mínima do nível
+     const passou = avaliacao.notaGeral >= nivelConfig.notaMinima;
+     
+     // Salvar avaliação no banco
+     await db.insert(roleplayAvaliacoes).values({
+       sessaoId: sessao.id,
+       userId: sessao.userId,
+       nivelAvaliado: nivel,  // ✅ SALVAR qual nível foi avaliado
+       notaGlobal: avaliacao.notaGeral,
+       aprovadoProximoNivel: passou,  // ✅ CRÍTICO: define se desbloqueou
+       pontosFortes: avaliacao.pontosFortes,
+       pontosMelhorar: avaliacao.pontosMelhorar,
+       comentarioGeral: avaliacao.feedback,
+       criteriosAtendidos: avaliacao.criteriosAtendidos,
+       createdAt: new Date(),
+     });
+     
+     // ✅ SE PASSOU, ATUALIZAR NÍVEL DO VENDEDOR
+     if (passou) {
+       const vendedorAcademia = await db.select()
+         .from(vendedoresAcademia)
+         .where(eq(vendedoresAcademia.userId, sessao.userId))
+         .limit(1);
+       
+       if (vendedorAcademia && vendedorAcademia.nivelAtual === nivel) {
+         // Só avança se ainda estiver nesse nível (evita pular)
+         await db.update(vendedoresAcademia)
+           .set({ 
+             nivelAtual: nivel + 1,
+             atualizadoEm: new Date()
+           })
+           .where(eq(vendedoresAcademia.userId, sessao.userId));
+       } else if (!vendedorAcademia) {
+         // Se não existe registro, criar
+         await db.insert(vendedoresAcademia).values({
+           userId: sessao.userId,
+           nivelAtual: nivel + 1,
+           quizAprovado: false,
+           criadoEm: new Date(),
+           atualizadoEm: new Date(),
+         });
+       }
+     }
+     
+     // Atualizar sessão como finalizada
+     await db.update(roleplaySessoes)
+       .set({ 
+         status: 'finalizada',
+         aprovado: passou,
+         notaFinal: avaliacao.notaGeral,
+         finalizadoEm: new Date()
+       })
+       .where(eq(roleplaySessoes.id, sessao.id));
+     
+     return {
+       ...avaliacao,
+       passou,
+       nivelAtual: nivel,
+       proximoNivel: passou ? nivel + 1 : nivel,
+     };
+   }
+```
+
+3. TELA DE RESULTADO APÓS AVALIAÇÃO:
+
+   Quando mostrar resultado, incluir informação de progressão:
+```tsx
+   function ResultadoAvaliacaoNivel({ avaliacao }) {
+     return (
+       <Card>
+         <CardHeader>
+           <CardTitle>
+             Avaliação - Nível {avaliacao.nivelAtual}: {avaliacao.nomePersona}
+           </CardTitle>
+         </CardHeader>
+         <CardContent className="space-y-6">
+           {/* Nota */}
+           <div className="text-center">
+             <div className="text-6xl font-bold">
+               {avaliacao.notaGeral.toFixed(1)}/10
+             </div>
+             {avaliacao.passou ? (
+               <Badge className="mt-4" variant="success">
+                 ✅ APROVADO!
+               </Badge>
+             ) : (
+               <Badge className="mt-4" variant="destructive">
+                 ❌ Não aprovado (mínimo: {avaliacao.notaMinima})
+               </Badge>
+             )}
+           </div>
+           
+           {/* Pontos Fortes */}
+           <div>
+             <h3 className="font-semibold mb-2">✅ Pontos Fortes:</h3>
+             <ul className="list-disc pl-5 space-y-1">
+               {avaliacao.pontosFortes.map((p, i) => (
+                 <li key={i}>{p}</li>
+               ))}
+             </ul>
+           </div>
+           
+           {/* Pontos a Melhorar */}
+           <div>
+             <h3 className="font-semibold mb-2">⚠️ Pontos a Melhorar:</h3>
+             <ul className="list-disc pl-5 space-y-1">
+               {avaliacao.pontosMelhorar.map((p, i) => (
+                 <li key={i}>{p}</li>
+               ))}
+             </ul>
+           </div>
+           
+           {/* Feedback Detalhado */}
+           <div>
+             <h3 className="font-semibold mb-2">📝 Feedback:</h3>
+             <p className="text-sm text-muted-foreground">{avaliacao.feedback}</p>
+           </div>
+           
+           {/* Progressão */}
+           {avaliacao.passou && (
+             <Alert>
+               <Trophy className="h-4 w-4" />
+               <AlertTitle>🎓 Nível {avaliacao.proximoNivel} Desbloqueado!</AlertTitle>
+               <AlertDescription>
+                 Parabéns! Você pode agora treinar no próximo nível.
+               </AlertDescription>
+             </Alert>
+           )}
+           
+           {/* Botões */}
+           <div className="flex gap-3">
+             <Button onClick={() => tentarNovamente(avaliacao.nivelAtual)}>
+               Tentar Nível {avaliacao.nivelAtual} Novamente
+             </Button>
+             {avaliacao.passou && (
+               <Button variant="default" onClick={() => irParaNivel(avaliacao.proximoNivel)}>
+                 Ir para Nível {avaliacao.proximoNivel}
+               </Button>
+             )}
+           </div>
+         </CardContent>
+       </Card>
+     );
+   }
+```
+
+4. INTERFACE DE SELEÇÃO DEVE VERIFICAR PROGRESSO:
+
+   Ao carregar tela de níveis:
+```typescript
+   async function carregarProgressoNiveis(userId: number) {
+     // Buscar nível atual do vendedor
+     const vendedor = await db.select()
+       .from(vendedoresAcademia)
+       .where(eq(vendedoresAcademia.userId, userId))
+       .limit(1);
+     
+     const nivelAtual = vendedor?.nivelAtual || 1;
+     
+     // Buscar histórico de avaliações
+     const avaliacoes = await db.select()
+       .from(roleplayAvaliacoes)
+       .where(eq(roleplayAvaliacoes.userId, userId))
+       .orderBy(desc(roleplayAvaliacoes.createdAt));
+     
+     // Montar status de cada nível
+     const niveis = [1, 2, 3, 4, 5].map(n => {
+       const melhorAvaliacao = avaliacoes
+         .filter(a => a.nivelAvaliado === n && a.aprovadoProximoNivel)
+         .sort((a, b) => b.notaGlobal - a.notaGlobal)[0];
+       
+       return {
+         nivel: n,
+         status: n < nivelAtual ? 'concluido' : 
+                 n === nivelAtual ? 'disponivel' : 'bloqueado',
+         melhorNota: melhorAvaliacao?.notaGlobal,
+         tentativas: avaliacoes.filter(a => a.nivelAvaliado === n).length,
+       };
+     });
+     
+     return niveis;
+   }
+```
+
+5. DEBUG: VERIFICAR CAMPOS NO BANCO:
+
+   Garantir que campos existem:
+```sql
+   -- Verificar se colunas existem em roleplay_sessoes
+   ALTER TABLE roleplay_sessoes 
+   ADD COLUMN IF NOT EXISTS modo VARCHAR(20) DEFAULT 'livre',
+   ADD COLUMN IF NOT EXISTS nivel_treinado INTEGER,
+   ADD COLUMN IF NOT EXISTS aprovado BOOLEAN DEFAULT false,
+   ADD COLUMN IF NOT EXISTS nota_final DECIMAL(4,2);
+   
+   -- Verificar se colunas existem em roleplay_avaliacoes
+   ALTER TABLE roleplay_avaliacoes
+   ADD COLUMN IF NOT EXISTS nivel_avaliado INTEGER,
+   ADD COLUMN IF NOT EXISTS aprovado_proximo_nivel BOOLEAN DEFAULT false,
+   ADD COLUMN IF NOT EXISTS criterios_atendidos JSONB;
+```
+
+TESTE COMPLETO:
+1. Iniciar Nível 1 → verificar que sessao.modo = 'niveis' e sessao.nivelTreinado = 1
+2. Completar roleplay → verificar que avaliação usa critérios do Nível 1
+3. Receber nota 7.5 (>=7.0) → deve aparecer "APROVADO"
+4. Verificar no banco: roleplay_avaliacoes.aprovado_proximo_nivel = true
+5. Verificar no banco: vendedores_academia.nivel_atual = 2
+6. Voltar para tela de níveis → Nível 1 deve mostrar ✅ e Nível 2 deve estar desbloqueado 🔓
+7. Clicar em Nível 2 → deve permitir iniciar

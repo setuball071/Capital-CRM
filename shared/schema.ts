@@ -996,7 +996,9 @@ export const roleplayAvaliacoes = pgTable("roleplay_avaliacoes", {
   pontosFortes: jsonb("pontos_fortes").default([]), // Array de strings
   pontosMelhorar: jsonb("pontos_melhorar").default([]), // Array de strings
   nivelSugerido: integer("nivel_sugerido"),
+  nivelAvaliado: integer("nivel_avaliado"), // Nível que foi avaliado (Modo Níveis)
   aprovadoProximoNivel: boolean("aprovado_proximo_nivel").default(false),
+  criteriosAtendidos: jsonb("criterios_atendidos").default({}), // Critérios do nível atendidos
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 
