@@ -11718,6 +11718,76 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // POST /api/crm/leads/:id/interaction - Adicionar observação/interação sem mover de estágio
+  app.post("/api/crm/leads/:id/interaction", requireAuth, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const tenantId = req.user!.tenantId;
+      
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      // Validação básica dos campos
+      const tipoContato = typeof req.body.tipoContato === "string" ? req.body.tipoContato : "observacao";
+      const observacao = typeof req.body.observacao === "string" ? req.body.observacao.trim() : "";
+      const contactId = typeof req.body.contactId === "number" ? req.body.contactId : null;
+
+      if (!observacao || observacao.length === 0) {
+        return res.status(400).json({ message: "Observação é obrigatória" });
+      }
+
+      // Verificar se o lead existe e pertence ao tenant/usuário correto
+      const [lead] = await db.select().from(salesLeads).where(eq(salesLeads.id, leadId)).limit(1);
+      if (!lead) {
+        return res.status(404).json({ message: "Lead não encontrado" });
+      }
+
+      // Verificar isolamento de tenant
+      if (tenantId && lead.tenantId && lead.tenantId !== tenantId) {
+        return res.status(403).json({ message: "Acesso negado a este lead" });
+      }
+
+      // Verificar se o usuário tem acesso ao lead (é o dono ou tem permissão especial)
+      const isMaster = req.user!.isMaster;
+      const isOwner = lead.assignedTo === userId;
+      const hasSpecialAccess = ["atendimento", "coordenacao"].includes(req.user!.role);
+      
+      if (!isMaster && !isOwner && !hasSpecialAccess) {
+        return res.status(403).json({ message: "Você não tem permissão para adicionar observações a este lead" });
+      }
+
+      const now = new Date();
+      
+      // Atualizar o lead com a data do último contato
+      await db.update(salesLeads)
+        .set({
+          ultimoContatoEm: now,
+          ultimoTipoContato: tipoContato,
+          updatedAt: now,
+        })
+        .where(eq(salesLeads.id, leadId));
+
+      // Inserir a interação mantendo o marcador atual
+      await db.insert(leadInteractions).values({
+        leadId,
+        userId,
+        tipoContato,
+        leadMarker: lead.leadMarker,
+        observacao,
+        contactId,
+        margemValor: lead.currentMargin || "0",
+        propostaValorEstimado: lead.currentProposal || "0",
+      });
+
+      return res.json({ message: "Observação adicionada com sucesso" });
+    } catch (error) {
+      console.error("Add interaction error:", error);
+      return res.status(500).json({ message: "Erro ao adicionar observação" });
+    }
+  });
+
   // GET /api/crm/leads/:id/interactions - Histórico de interações do lead
   app.get("/api/crm/leads/:id/interactions", requireAuth, async (req, res) => {
     try {

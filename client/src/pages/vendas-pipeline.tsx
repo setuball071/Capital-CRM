@@ -33,7 +33,6 @@ import {
   LEAD_MARKERS, 
   LEAD_MARKER_LABELS, 
   MARKERS_REQUIRING_MOTIVO,
-  TIPOS_CONTATO_LEAD,
   type SalesLead, 
   type LeadMarker,
   type LeadContact,
@@ -298,6 +297,9 @@ export default function VendasPipeline() {
   const [showSecondary, setShowSecondary] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState<PipelineLead | null>(null);
+  const [addObsDialogOpen, setAddObsDialogOpen] = useState(false);
+  const [newObservacao, setNewObservacao] = useState("");
+  const [newTipoContato, setNewTipoContato] = useState("observacao");
   
   const [newMarker, setNewMarker] = useState<LeadMarker>("EM_ATENDIMENTO");
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
@@ -378,6 +380,44 @@ export default function VendasPipeline() {
       toast({ title: "Erro ao excluir lead", description: error.message, variant: "destructive" });
     },
   });
+
+  const addObservationMutation = useMutation({
+    mutationFn: async (data: { leadId: number; observacao: string; tipoContato: string }) => {
+      return apiRequest("POST", `/api/crm/leads/${data.leadId}/interaction`, {
+        observacao: data.observacao,
+        tipoContato: data.tipoContato,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      toast({ title: "Observação adicionada com sucesso" });
+      setAddObsDialogOpen(false);
+      setNewObservacao("");
+      setNewTipoContato("observacao");
+      // Recarregar interações
+      if (selectedLead) {
+        fetch(`/api/crm/leads/${selectedLead.id}/interactions`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => setLeadInteractions(data))
+          .catch(() => {});
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao adicionar observação", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddObservation = () => {
+    if (!selectedLead || !newObservacao.trim()) {
+      toast({ title: "Digite uma observação", variant: "destructive" });
+      return;
+    }
+    addObservationMutation.mutate({
+      leadId: selectedLead.id,
+      observacao: newObservacao.trim(),
+      tipoContato: newTipoContato,
+    });
+  };
 
   const handleDeleteLead = () => {
     if (leadToDelete) {
@@ -875,6 +915,14 @@ export default function VendasPipeline() {
             <Button variant="outline" onClick={() => setDetailsOpen(false)}>
               Fechar
             </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setAddObsDialogOpen(true)}
+              data-testid="button-add-observation"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Adicionar Observação
+            </Button>
             <Button onClick={() => { setDetailsOpen(false); openMoveDialog(selectedLead!); }}>
               <ArrowRight className="h-4 w-4 mr-2" />
               Mover estágio
@@ -913,6 +961,62 @@ export default function VendasPipeline() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de adicionar observação */}
+      <Dialog open={addObsDialogOpen} onOpenChange={setAddObsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Adicionar Observação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Tipo de Contato</Label>
+              <Select value={newTipoContato} onValueChange={setNewTipoContato}>
+                <SelectTrigger data-testid="select-obs-tipo-contato">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="observacao">Observação Interna</SelectItem>
+                  <SelectItem value="ligacao">Ligação</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Observação *</Label>
+              <Textarea
+                value={newObservacao}
+                onChange={(e) => setNewObservacao(e.target.value)}
+                placeholder="Digite sua observação ou registro de interação..."
+                rows={4}
+                data-testid="input-obs-text"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddObsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAddObservation}
+              disabled={addObservationMutation.isPending || !newObservacao.trim()}
+              data-testid="button-confirm-add-obs"
+            >
+              {addObservationMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
         <DialogContent className="max-w-md">
