@@ -1,0 +1,84 @@
+PROBLEMA: O arquivo CSV baixado precisa ter um nome descritivo usando o ID do pedido e os filtros aplicados.
+
+EXEMPLO DO QUE O USUÁRIO VÊ NA TELA:
+ID: #27
+Filtros: "Orgao: 57202 | Idade: 35 - 68 | Banco: BANCO PAN"
+
+NOME DO ARQUIVO ESPERADO:
+Pedido_27_Orgao_57202_Idade_35-68_Banco_BANCO_PAN.csv
+
+CONTEXTO:
+- Tabela: pedidos_lista
+- Campo: id (número do pedido)
+- Campo: filtrosUsados (JSONB) - contém os filtros aplicados
+- Rota de download: endpoint que gera/baixa o CSV
+
+SOLUÇÃO NECESSÁRIA:
+
+1. GERAR NOME DO ARQUIVO NO FORMATO:
+   Pedido_{ID}_{ResumoDeFiltros}.csv
+
+2. LÓGICA DE FORMATAÇÃO DOS FILTROS:
+   - Iterar pelos filtros usados
+   - Formatar cada filtro como: {NomeCampo}_{Valor}
+   - Exemplos de campos comuns:
+     * convenio → Convenio_SIAPE
+     * orgao → Orgao_57202
+     * uf → UF_SP
+     * idade_min/idade_max → Idade_35-68
+     * banco → Banco_BANCO_PAN
+     * margem_30_min/margem_30_max → Margem30_500-2000
+   
+3. SANITIZAÇÃO:
+   - Remover caracteres especiais inválidos para nome de arquivo
+   - Substituir espaços por underscores
+   - Limitar nome total a 150 caracteres (truncar se necessário)
+   - Manter apenas: letras, números, underscore, hífen, ponto
+
+4. CÓDIGO ESPERADO (exemplo):
+```typescript
+   function gerarNomeArquivo(pedidoId: number, filtros: any): string {
+     const parts = [`Pedido_${pedidoId}`];
+     
+     if (filtros.orgao) parts.push(`Orgao_${filtros.orgao}`);
+     if (filtros.convenio) parts.push(`Convenio_${filtros.convenio}`);
+     if (filtros.uf) parts.push(`UF_${filtros.uf}`);
+     if (filtros.banco) parts.push(`Banco_${filtros.banco.replace(/\s+/g, '_')}`);
+     
+     // Idade (se ambos presentes)
+     if (filtros.idade_min && filtros.idade_max) {
+       parts.push(`Idade_${filtros.idade_min}-${filtros.idade_max}`);
+     }
+     
+     // Margem 30%
+     if (filtros.margem_30_min && filtros.margem_30_max) {
+       parts.push(`Margem30_${filtros.margem_30_min}-${filtros.margem_30_max}`);
+     }
+     
+     let nome = parts.join('_') + '.csv';
+     
+     // Sanitizar e limitar tamanho
+     nome = nome.replace(/[^a-zA-Z0-9_.-]/g, '_');
+     if (nome.length > 150) {
+       nome = nome.substring(0, 147) + '.csv';
+     }
+     
+     return nome;
+   }
+```
+
+5. APLICAR NO DOWNLOAD:
+```typescript
+   const nomeArquivo = gerarNomeArquivo(pedido.id, pedido.filtrosUsados);
+   res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+```
+
+EXEMPLOS DE RESULTADO:
+- Pedido #27 com filtros mostrados → "Pedido_27_Orgao_57202_Idade_35-68_Banco_BANCO_PAN.csv"
+- Pedido #15 com convenio SIAPE e UF SP → "Pedido_15_Convenio_SIAPE_UF_SP.csv"
+- Pedido #8 sem filtros → "Pedido_8.csv"
+
+TESTE:
+- Baixar pedido #27 → verificar nome do arquivo
+- Verificar que todos os filtros principais aparecem no nome
+- Confirmar que caracteres especiais são sanitizados

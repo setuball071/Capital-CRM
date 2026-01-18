@@ -7325,34 +7325,44 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   }
 
   // Helper function to generate descriptive filename from filters
-  function gerarNomeArquivoLista(filtros: any, dataPedido: Date | null): string {
-    const parts: string[] = [];
+  // Format: Pedido_{ID}_{FilterSummary}.csv
+  function gerarNomeArquivoLista(pedidoId: number, filtros: any): string {
+    const parts: string[] = [`Pedido_${pedidoId}`];
     
-    // Extract main filter values
-    if (filtros?.convenio) parts.push(String(filtros.convenio));
-    if (filtros?.uf) parts.push(String(filtros.uf));
-    if (filtros?.orgao && !filtros?.convenio) parts.push(String(filtros.orgao));
-    if (filtros?.situacaoFuncional) parts.push(String(filtros.situacaoFuncional));
+    // Extract main filter values in priority order
+    if (filtros?.orgao) parts.push(`Orgao_${filtros.orgao}`);
+    if (filtros?.convenio) parts.push(`Convenio_${filtros.convenio}`);
+    if (filtros?.uf) parts.push(`UF_${filtros.uf}`);
+    if (filtros?.banco) parts.push(`Banco_${String(filtros.banco).replace(/\s+/g, '_')}`);
+    if (filtros?.situacaoFuncional) parts.push(`Situacao_${filtros.situacaoFuncional}`);
     
-    // Format date
-    const data = dataPedido 
-      ? new Date(dataPedido).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
-    
-    // Build filename
-    let nome: string;
-    if (parts.length > 0) {
-      nome = `Lista_${parts.join('_')}_${data}.csv`;
-    } else {
-      nome = `Lista_Geral_${data}.csv`;
+    // Age range (if both present)
+    if (filtros?.idade_min && filtros?.idade_max) {
+      parts.push(`Idade_${filtros.idade_min}-${filtros.idade_max}`);
+    } else if (filtros?.idadeMin && filtros?.idadeMax) {
+      parts.push(`Idade_${filtros.idadeMin}-${filtros.idadeMax}`);
     }
     
-    // Sanitize: remove invalid characters, replace spaces with underscores, limit length
+    // Margem 30% range
+    if (filtros?.margem_30_min && filtros?.margem_30_max) {
+      parts.push(`Margem30_${filtros.margem_30_min}-${filtros.margem_30_max}`);
+    } else if (filtros?.margem30Min && filtros?.margem30Max) {
+      parts.push(`Margem30_${filtros.margem30Min}-${filtros.margem30Max}`);
+    }
+    
+    // Build filename
+    let nome = parts.join('_') + '.csv';
+    
+    // Sanitize: remove invalid characters, replace spaces with underscores
     nome = nome
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9_.-]/g, '_')
-      .replace(/_+/g, '_')
-      .substring(0, 100);
+      .replace(/_+/g, '_');
+    
+    // Limit total length to 150 characters
+    if (nome.length > 150) {
+      nome = nome.substring(0, 146) + '.csv';
+    }
     
     return nome;
   }
@@ -7399,7 +7409,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       // Generate descriptive filename based on filters
-      const fileName = gerarNomeArquivoLista(pedido.filtrosUsados, pedido.criadoEm);
+      const fileName = gerarNomeArquivoLista(id, pedido.filtrosUsados);
       console.log(`[PedidoLista] Download file: ${fileName}`);
       res.download(filePath, fileName);
       
