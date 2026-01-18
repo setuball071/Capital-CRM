@@ -739,7 +739,38 @@ export default function AdminBrandingPage() {
           <CardContent>
             <div className="flex justify-center">
               <div className={`${getPreviewWidth()} w-full transition-all duration-300`}>
-                <div className="rounded-lg p-8 flex flex-col items-center justify-center min-h-[300px]" style={{ backgroundColor: formData.loginBgColor }}>
+                <div className="flex rounded-lg overflow-hidden min-h-[300px]">
+                  {/* Sidebar Preview */}
+                  <div 
+                    className="w-16 flex flex-col items-center py-4 border-r border-white/10"
+                    style={{ 
+                      background: formData.useSidebarGradient 
+                        ? generateGradientCSS(formData.sidebarGradientConfig)
+                        : formData.sidebarBgColor || "#1e3a5f",
+                      color: formData.sidebarFontColor || "#ffffff"
+                    }}
+                    data-testid="preview-sidebar"
+                  >
+                    {tenantData?.logoUrl ? (
+                      <img src={tenantData.logoUrl} alt="Logo" className="h-8 w-8 object-contain mb-4" />
+                    ) : (
+                      <div className="h-8 w-8 rounded bg-white/20 mb-4" />
+                    )}
+                    <div className="space-y-3">
+                      <div className="w-6 h-6 rounded bg-current opacity-30" />
+                      <div className="w-6 h-6 rounded bg-current opacity-30" />
+                      <div className="w-6 h-6 rounded bg-current opacity-30" />
+                    </div>
+                  </div>
+                  {/* Login Preview */}
+                  <div 
+                    className="flex-1 p-8 flex flex-col items-center justify-center" 
+                    style={{ 
+                      background: formData.useLoginGradient 
+                        ? generateGradientCSS(formData.loginGradientConfig)
+                        : formData.loginBgColor 
+                    }}
+                  >
                   {(tenantData as any)?.logoLoginUrl || tenantData?.logoUrl ? (
                     <img src={(tenantData as any)?.logoLoginUrl || tenantData?.logoUrl} alt="Preview" className="h-16 mb-4 object-contain" />
                   ) : (
@@ -764,6 +795,7 @@ export default function AdminBrandingPage() {
                   {formData.footerText && (
                     <p className="text-white/50 text-xs mt-6">{formData.footerText}</p>
                   )}
+                  </div>
                 </div>
               </div>
             </div>

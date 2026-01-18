@@ -204,14 +204,25 @@ export function AppSidebar() {
 
   const filteredSections = getFilteredSections();
 
-  const sidebarStyle = useSidebarGradient && sidebarGradient 
-    ? { background: sidebarGradient }
-    : sidebarBgColor && sidebarBgColor !== "#ffffff"
-      ? { backgroundColor: sidebarBgColor }
-      : undefined;
+  // Generate sidebar background style
+  // The Sidebar component uses bg-sidebar class on inner elements
+  // We use CSS selector to override the inner element's background
+  const hasSidebarGradient = useSidebarGradient && sidebarGradient;
+  const hasCustomBgColor = sidebarBgColor && sidebarBgColor !== "#ffffff";
+  
+  // Create inline style tag for sidebar background override
+  const sidebarBgStyle = (hasSidebarGradient || hasCustomBgColor) ? (
+    <style>{`
+      [data-slot="sidebar-inner"] {
+        background: ${hasSidebarGradient ? sidebarGradient : sidebarBgColor} !important;
+      }
+    `}</style>
+  ) : null;
 
   return (
-    <Sidebar className="border-r border-border" style={sidebarStyle}>
+    <>
+      {sidebarBgStyle}
+      <Sidebar className="border-r border-border">
       <SidebarHeader className="border-b border-border">
         <div 
           className="w-full flex items-center justify-center px-3 py-4"
@@ -329,5 +340,6 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+    </>
   );
 }
