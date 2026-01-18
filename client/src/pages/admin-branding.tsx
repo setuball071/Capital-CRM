@@ -13,6 +13,7 @@ import { useTenant } from "@/components/tenant-theme-provider";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle } from "lucide-react";
 import type { Tenant, TenantTheme } from "@shared/schema";
+import { GradientEditor, GradientConfig, generateGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
 
 const FONT_OPTIONS = [
   { value: "Inter", label: "Inter" },
@@ -83,11 +84,10 @@ export default function AdminBrandingPage() {
     showSystemName: true,
     sidebarBgColor: "#ffffff",
     sidebarFontColor: "#1f2937",
-    sidebarGradient: "",
-    loginGradient: "",
-    primaryGradient: "",
     useSidebarGradient: false,
     useLoginGradient: false,
+    sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
+    loginGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
   });
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -130,11 +130,10 @@ export default function AdminBrandingPage() {
         showSystemName: theme?.showSystemName !== false,
         sidebarBgColor: theme?.sidebarBgColor || "#ffffff",
         sidebarFontColor: theme?.sidebarFontColor || "#1f2937",
-        sidebarGradient: theme?.sidebarGradient || "",
-        loginGradient: theme?.loginGradient || "",
-        primaryGradient: theme?.primaryGradient || "",
         useSidebarGradient: theme?.useSidebarGradient === true,
         useLoginGradient: theme?.useLoginGradient === true,
+        sidebarGradientConfig: theme?.sidebarGradientConfig || { ...DEFAULT_GRADIENT_CONFIG },
+        loginGradientConfig: theme?.loginGradientConfig || { ...DEFAULT_GRADIENT_CONFIG },
       });
     }
   }, [tenantData]);
@@ -160,11 +159,12 @@ export default function AdminBrandingPage() {
         showSystemName: data.showSystemName,
         sidebarBgColor: data.sidebarBgColor,
         sidebarFontColor: data.sidebarFontColor,
-        sidebarGradient: data.sidebarGradient,
-        loginGradient: data.loginGradient,
-        primaryGradient: data.primaryGradient,
         useSidebarGradient: data.useSidebarGradient,
         useLoginGradient: data.useLoginGradient,
+        sidebarGradientConfig: data.sidebarGradientConfig,
+        loginGradientConfig: data.loginGradientConfig,
+        sidebarGradient: data.useSidebarGradient ? generateGradientCSS(data.sidebarGradientConfig) : "",
+        loginGradient: data.useLoginGradient ? generateGradientCSS(data.loginGradientConfig) : "",
         lastEditedBy: user?.name || "Desconhecido",
         lastEditedAt: new Date().toISOString(),
       };
@@ -269,11 +269,10 @@ export default function AdminBrandingPage() {
       footerText: "",
       sidebarBgColor: DEFAULT_THEME.sidebarBgColor || "#ffffff",
       sidebarFontColor: DEFAULT_THEME.sidebarFontColor || "#1f2937",
-      sidebarGradient: "",
-      loginGradient: "",
-      primaryGradient: "",
       useSidebarGradient: false,
       useLoginGradient: false,
+      sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG },
+      loginGradientConfig: { ...DEFAULT_GRADIENT_CONFIG },
     });
     toast({ title: "Padrões restaurados", description: "Clique em Salvar para aplicar." });
   };
@@ -575,27 +574,11 @@ export default function AdminBrandingPage() {
                   </Label>
                 </div>
                 {formData.useSidebarGradient && (
-                  <div className="space-y-2">
-                    <Label htmlFor="sidebarGradient">Gradiente CSS do Menu</Label>
-                    <Input 
-                      id="sidebarGradient" 
-                      type="text" 
-                      value={formData.sidebarGradient} 
-                      onChange={(e) => setFormData({ ...formData, sidebarGradient: e.target.value })} 
-                      placeholder="linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)"
-                      data-testid="input-sidebar-gradient"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Exemplo: linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)
-                    </p>
-                    {formData.sidebarGradient && (
-                      <div 
-                        className="h-12 rounded-md border"
-                        style={{ background: formData.sidebarGradient }}
-                        data-testid="preview-sidebar-gradient"
-                      />
-                    )}
-                  </div>
+                  <GradientEditor
+                    value={formData.sidebarGradientConfig}
+                    onChange={(config) => setFormData({ ...formData, sidebarGradientConfig: config })}
+                    testIdPrefix="sidebar-gradient"
+                  />
                 )}
               </div>
             </div>
@@ -614,27 +597,11 @@ export default function AdminBrandingPage() {
                 </Label>
               </div>
               {formData.useLoginGradient && (
-                <div className="space-y-2">
-                  <Label htmlFor="loginGradient">Gradiente CSS do Login</Label>
-                  <Input 
-                    id="loginGradient" 
-                    type="text" 
-                    value={formData.loginGradient} 
-                    onChange={(e) => setFormData({ ...formData, loginGradient: e.target.value })} 
-                    placeholder="linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)"
-                    data-testid="input-login-gradient"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Quando ativo, substitui a "Cor de Fundo do Login" por este gradiente
-                  </p>
-                  {formData.loginGradient && (
-                    <div 
-                      className="h-12 rounded-md border"
-                      style={{ background: formData.loginGradient }}
-                      data-testid="preview-login-gradient"
-                    />
-                  )}
-                </div>
+                <GradientEditor
+                  value={formData.loginGradientConfig}
+                  onChange={(config) => setFormData({ ...formData, loginGradientConfig: config })}
+                  testIdPrefix="login-gradient"
+                />
               )}
             </div>
           </CardContent>
