@@ -9,11 +9,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
-import { MessageSquare, Send, Star, RefreshCw, Lock, ArrowRight, User, Bot, Award, ThumbsUp, ThumbsDown, Lightbulb, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Star, RefreshCw, Lock, ArrowRight, User, Bot, Award, ThumbsUp, ThumbsDown, Lightbulb, Loader2, Sparkles, GraduationCap, Target, Clock, CheckCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Progress } from "@/components/ui/progress";
 
 interface Perfil {
   perfil: {
@@ -23,6 +24,21 @@ interface Perfil {
     notaMediaGlobal: string | null;
   };
 }
+
+interface RoleplayNivelPrompt {
+  id: number;
+  nivel: number;
+  nome: string;
+  descricao: string | null;
+  promptCompleto: string;
+  criteriosAprovacao: string[];
+  notaMinima: string;
+  tempoLimiteMinutos: number | null;
+  isActive: boolean;
+  podeCustomizar: boolean;
+}
+
+type ModoRoleplay = "selecao" | "livre" | "niveis";
 
 interface AvaliacaoResposta {
   nota: number;
@@ -66,7 +82,16 @@ export default function AcademiaRoleplay() {
   const [mensagensEnviadas, setMensagensEnviadas] = useState(0);
   const [limiteMensagens, setLimiteMensagens] = useState(10);
   const [sessaoFinalizada, setSessaoFinalizada] = useState(false);
+  const [modoRoleplay, setModoRoleplay] = useState<ModoRoleplay>("selecao");
+  const [nivelModoNiveis, setNivelModoNiveis] = useState<number>(1);
+  const [personaAtual, setPersonaAtual] = useState<RoleplayNivelPrompt | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Fetch nivel prompts for Modo Níveis
+  const { data: nivelPrompts, isLoading: loadingNivelPrompts } = useQuery<RoleplayNivelPrompt[]>({
+    queryKey: ["/api/roleplay-niveis/prompts"],
+    enabled: modoRoleplay === "selecao" || modoRoleplay === "niveis",
+  });
 
   // REFACTORED: Use profile-based permissions for quiz bypass
   // isMaster or users with edit access to modulo_academia can bypass quiz
@@ -96,10 +121,12 @@ export default function AcademiaRoleplay() {
         modo: "roleplay_cliente",
         falaCorretor,
         nivelAtual: parseInt(nivelSelecionado),
-        sessaoId: sessaoId || undefined, // Don't send null, send undefined
+        sessaoId: sessaoId || undefined,
         avaliarResposta: true,
         contexto: contextoCompleto,
         cenario: cenario || undefined,
+        tipoModo: modoRoleplay === "niveis" ? "niveis" : "livre",
+        nivelPromptId: personaAtual?.id,
       });
       return response.json();
     },
@@ -224,7 +251,23 @@ export default function AcademiaRoleplay() {
     setCenarioIniciado(false);
     setMensagensEnviadas(0);
     setSessaoFinalizada(false);
+    setModoRoleplay("selecao");
+    setPersonaAtual(null);
     queryClient.invalidateQueries({ queryKey: ["/api/academia/perfil"] });
+  };
+  
+  const handleSelecionarModoLivre = () => {
+    setModoRoleplay("livre");
+  };
+  
+  const handleSelecionarModoNiveis = (nivel: number) => {
+    const prompt = nivelPrompts?.find(p => p.nivel === nivel);
+    if (prompt) {
+      setNivelModoNiveis(nivel);
+      setNivelSelecionado(nivel.toString());
+      setPersonaAtual(prompt);
+      setModoRoleplay("niveis");
+    }
   };
 
   const cenarioMutation = useMutation({
@@ -233,6 +276,8 @@ export default function AcademiaRoleplay() {
         modo: "roleplay_cliente",
         cenario: cenarioTexto,
         nivelAtual: parseInt(nivelSelecionado),
+        tipoModo: modoRoleplay === "niveis" ? "niveis" : "livre",
+        nivelPromptId: personaAtual?.id,
       });
       return response.json();
     },
@@ -334,21 +379,185 @@ export default function AcademiaRoleplay() {
   }
 
   const mediaNotas = calcularMediaNotas();
-
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl" data-testid="page-academia-roleplay">
-      <div className="mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <MessageSquare className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold" data-testid="text-title">Roleplay com IA</h1>
-              <p className="text-muted-foreground text-sm">
-                Avaliação em tempo real a cada resposta
+  
+  // Tela de seleção de modo
+  if (modoRoleplay === "selecao") {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-4xl" data-testid="page-academia-roleplay">
+        <div className="mb-8 text-center">
+          <MessageSquare className="h-12 w-12 text-primary mx-auto mb-4" />
+          <h1 className="text-3xl font-bold mb-2" data-testid="text-title">Roleplay com IA</h1>
+          <p className="text-muted-foreground">
+            Escolha o modo de treinamento para praticar suas habilidades de vendas
+          </p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          {/* Modo Livre */}
+          <Card className="hover-elevate cursor-pointer" onClick={handleSelecionarModoLivre} data-testid="card-modo-livre">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-primary/10">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Modo Livre</CardTitle>
+                  <CardDescription>Treino customizável</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Crie cenários personalizados e treine situações específicas do seu dia a dia.
               </p>
-            </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Cenários personalizados</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Sem limite de tempo</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Feedback em tempo real</span>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button className="w-full" data-testid="button-iniciar-modo-livre">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Iniciar Modo Livre
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* Modo Níveis */}
+          <Card className="hover-elevate cursor-pointer" data-testid="card-modo-niveis">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-amber-500/10">
+                  <GraduationCap className="h-6 w-6 text-amber-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Modo Níveis</CardTitle>
+                  <CardDescription>Progressão estruturada</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Enfrente 5 personas com dificuldade crescente e obtenha aprovação formal.
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Target className="h-4 w-4 text-amber-500" />
+                  <span>5 níveis de dificuldade</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Target className="h-4 w-4 text-amber-500" />
+                  <span>Personas realistas</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Target className="h-4 w-4 text-amber-500" />
+                  <span>Nota mínima para aprovar</span>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-2">
+              <p className="text-xs text-muted-foreground w-full">Selecione o nível:</p>
+              <div className="grid grid-cols-5 gap-1 w-full">
+                {loadingNivelPrompts ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))
+                ) : (
+                  nivelPrompts?.map((prompt) => (
+                    <Button
+                      key={prompt.nivel}
+                      variant="outline"
+                      size="sm"
+                      className="flex-col h-auto py-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelecionarModoNiveis(prompt.nivel);
+                      }}
+                      disabled={!prompt.isActive}
+                      data-testid={`button-nivel-${prompt.nivel}`}
+                    >
+                      <span className="font-bold">{prompt.nivel}</span>
+                    </Button>
+                  ))
+                )}
+              </div>
+            </CardFooter>
+          </Card>
+        </div>
+        
+        {/* Descrição dos níveis */}
+        {nivelPrompts && nivelPrompts.length > 0 && (
+          <Card className="mt-6 max-w-3xl mx-auto">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Personas do Modo Níveis</CardTitle>
+              <CardDescription>Conheça os clientes que você vai enfrentar</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {nivelPrompts.map((prompt) => (
+                  <div key={prompt.nivel} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                    <Badge variant="outline" className="shrink-0">
+                      Nível {prompt.nivel}
+                    </Badge>
+                    <div className="flex-1">
+                      <p className="font-medium">{prompt.nome}</p>
+                      <p className="text-sm text-muted-foreground">{prompt.descricao}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Target className="h-3 w-3" />
+                          Nota mínima: {prompt.notaMinima}
+                        </span>
+                        {prompt.tempoLimiteMinutos && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {prompt.tempoLimiteMinutos} min
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+  
+  // Header para modos ativos
+  const renderHeader = () => (
+    <div className="mb-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          {modoRoleplay === "livre" ? (
+            <Sparkles className="h-8 w-8 text-primary" />
+          ) : (
+            <GraduationCap className="h-8 w-8 text-amber-500" />
+          )}
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-title">
+              {modoRoleplay === "livre" ? "Modo Livre" : `Nível ${nivelModoNiveis}: ${personaAtual?.nome || ""}`}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {modoRoleplay === "livre" 
+                ? "Treinamento com cenários personalizados"
+                : personaAtual?.descricao || "Avaliação estruturada"}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+        </div>
+        <div className="flex items-center gap-3">
+          {modoRoleplay === "livre" && (
             <Select value={nivelSelecionado} onValueChange={setNivelSelecionado} disabled={mensagens.length > 0}>
               <SelectTrigger className="w-40" data-testid="select-nivel">
                 <SelectValue placeholder="Nível" />
@@ -361,13 +570,25 @@ export default function AcademiaRoleplay() {
                 <SelectItem value="5">Nível 5 - Fechamento</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={handleNovaSimulacao} data-testid="button-nova-simulacao">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Nova
-            </Button>
-          </div>
+          )}
+          {modoRoleplay === "niveis" && personaAtual && (
+            <Badge variant="outline" className="px-3 py-1">
+              <Target className="h-3 w-3 mr-1" />
+              Meta: {personaAtual.notaMinima}
+            </Badge>
+          )}
+          <Button variant="outline" onClick={handleNovaSimulacao} data-testid="button-nova-simulacao">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Voltar
+          </Button>
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl" data-testid="page-academia-roleplay">
+      {renderHeader()}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">

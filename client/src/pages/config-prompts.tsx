@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Users, Plus, Trash2, History, Save, RotateCcw, UserPlus, Settings2 } from "lucide-react";
+import { Globe, Users, Plus, Trash2, History, Save, RotateCcw, UserPlus, Settings2, GraduationCap, Target, Clock } from "lucide-react";
 import type { UserRole, User } from "@shared/schema";
 
 interface Team {
@@ -45,6 +45,19 @@ interface AiPrompt {
   isActive: boolean;
   updatedByUserId: number | null;
   updatedAt: string;
+}
+
+interface RoleplayNivelPrompt {
+  id: number;
+  nivel: number;
+  nome: string;
+  descricao: string | null;
+  promptCompleto: string;
+  criteriosAprovacao: string[];
+  notaMinima: string;
+  tempoLimiteMinutos: number | null;
+  isActive: boolean;
+  podeCustomizar: boolean;
 }
 
 export default function ConfigPrompts() {
@@ -93,6 +106,11 @@ export default function ConfigPrompts() {
   const { data: teamPrompts = [] } = useQuery<AiPrompt[]>({
     queryKey: ["/api/ai-prompts/roleplay/team", selectedTeamId],
     enabled: !!selectedTeamId,
+  });
+  
+  const { data: nivelPrompts = [] } = useQuery<RoleplayNivelPrompt[]>({
+    queryKey: ["/api/roleplay-niveis/prompts"],
+    enabled: isMaster,
   });
 
   const activeGlobalPrompt = globalPrompts.find(p => p.isActive);
@@ -259,6 +277,12 @@ export default function ConfigPrompts() {
             <TabsTrigger value="teams" data-testid="tab-teams">
               <Users className="h-4 w-4 mr-1" />
               Gerenciar Equipes
+            </TabsTrigger>
+          )}
+          {isMaster && (
+            <TabsTrigger value="niveis" data-testid="tab-niveis">
+              <GraduationCap className="h-4 w-4 mr-1" />
+              Prompts dos Níveis
             </TabsTrigger>
           )}
         </TabsList>
@@ -583,6 +607,83 @@ export default function ConfigPrompts() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+        )}
+        
+        {isMaster && (
+          <TabsContent value="niveis" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Prompts do Modo Níveis
+                </CardTitle>
+                <CardDescription>
+                  Configure as 5 personas do sistema de progressão estruturada. 
+                  Os vendedores devem atingir a nota mínima em cada nível para avançar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {nivelPrompts.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    Carregando prompts de níveis...
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {nivelPrompts.map((prompt) => (
+                      <div key={prompt.id} className="border rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <Badge variant={prompt.isActive ? "default" : "secondary"}>
+                              Nível {prompt.nivel}
+                            </Badge>
+                            <div>
+                              <h3 className="font-semibold">{prompt.nome}</h3>
+                              <p className="text-sm text-muted-foreground">{prompt.descricao}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Target className="h-4 w-4" />
+                              Nota mínima: {prompt.notaMinima}
+                            </span>
+                            {prompt.tempoLimiteMinutos && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {prompt.tempoLimiteMinutos} min
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="bg-muted rounded-lg p-3 mb-3">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Critérios de Aprovação:</Label>
+                          <ul className="list-disc list-inside text-sm space-y-1">
+                            {prompt.criteriosAprovacao.map((criterio, idx) => (
+                              <li key={idx}>{criterio}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        <div className="bg-muted/50 rounded-lg p-3">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Prompt (resumo):</Label>
+                          <pre className="text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
+                            {prompt.promptCompleto.substring(0, 500)}
+                            {prompt.promptCompleto.length > 500 && "..."}
+                          </pre>
+                        </div>
+                        
+                        {!prompt.podeCustomizar && (
+                          <div className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                            * Este prompt é fixo e não pode ser editado no momento.
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         )}
       </Tabs>

@@ -1,0 +1,505 @@
+FUNCIONALIDADE NOVA: Adicionar sistema de evolução por níveis (1-5) no Roleplay com IA, com prompts específicos para cada nível. Manter o sistema atual de prompts (Global/Equipe) funcionando para o Modo Livre.
+
+CONTEXTO ATUAL:
+- Sistema tem "Modo Livre" com prompts customizáveis (Global + por Equipe) ✓
+- Tabela ai_prompts já gerencia prompts do Modo Livre ✓
+- Interface de "Config. Prompts IA" já existe e funciona ✓
+- Agora precisa adicionar "Modo Níveis" com 5 personas estruturadas
+
+OBJETIVO:
+Criar dois sistemas independentes de roleplay:
+
+1. MODO LIVRE (atual - NÃO MEXER):
+   - Usa ai_prompts (global ou por equipe)
+   - Usuário define cenário livremente
+   - Sem avaliação formal
+   - Interface atual de "Config. Prompts IA" continua funcionando
+
+2. MODO NÍVEIS (NOVO):
+   - Usa 5 personas pré-definidas (prompts fixos inicialmente)
+   - Progressão estruturada 1→2→3→4→5
+   - Avaliação automática com nota
+   - Desbloqueia níveis conforme aprovação
+   - Futuramente prompts podem ser customizados
+
+IMPLEMENTAÇÃO:
+
+1. CRIAR NOVA TABELA PARA PROMPTS DE NÍVEIS:
+```sql
+   CREATE TABLE roleplay_nivel_prompts (
+     id SERIAL PRIMARY KEY,
+     nivel INTEGER NOT NULL, -- 1 a 5
+     nome VARCHAR(100) NOT NULL, -- "Maria das Graças", etc
+     descricao VARCHAR(255), -- "Cliente Receptivo"
+     prompt_completo TEXT NOT NULL, -- Prompt da persona
+     criterios_aprovacao JSONB NOT NULL, -- Lista de critérios
+     nota_minima DECIMAL(3,1) NOT NULL, -- 7.0 ou 8.0
+     tempo_limite_minutos INTEGER, -- 10, 15, 20
+     is_active BOOLEAN DEFAULT true,
+     pode_customizar BOOLEAN DEFAULT false, -- futuro: permitir edição
+     tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE, -- multi-tenant
+     created_at TIMESTAMP DEFAULT NOW(),
+     updated_at TIMESTAMP DEFAULT NOW(),
+     UNIQUE(tenant_id, nivel)
+   );
+```
+
+2. POPULAR TABELA COM AS 5 PERSONAS (migration ou seed):
+```typescript
+   const PERSONAS_INICIAIS = [
+     {
+       nivel: 1,
+       nome: "Maria das Graças",
+       descricao: "Cliente Receptivo - Professora Aposentada",
+       notaMinima: 7.0,
+       tempoLimite: 10,
+       criterios: [
+         "Apresentou produto claramente",
+         "Usou tom acolhedor e respeitoso", 
+         "Respondeu dúvidas básicas",
+         "Fechou venda em até 10 minutos"
+       ],
+       promptCompleto: `PERSONA:
+Você é Maria das Graças, 58 anos, professora aposentada pelo INSS há 3 anos. Mora em cidade do interior, é viúva e tem 2 filhos adultos. Recebe R$ 4.200/mês de aposentadoria.
+
+COMPORTAMENTO:
+- Receptiva e educada
+- Já decidiu que QUER fazer um empréstimo
+- Tem necessidade clara: reformar a casa (goteira no telhado)
+- Precisa de R$ 15.000
+- Faz perguntas básicas mas aceita bem as explicações
+- Não tem objeções fortes, apenas dúvidas simples
+- Confia em quem explica bem
+
+OBJEÇÕES LEVES (fáceis de contornar):
+1. "Será que o banco é confiável?"
+2. "Quanto tempo demora pra cair o dinheiro?"
+3. "Meu filho disse pra eu ter cuidado..."
+
+GATILHOS DE FECHAMENTO:
+- Se sentir segurança nas explicações, aceita
+- Se o corretor explicar o desconto em folha, fica tranquila
+- Fecha se sentir que está sendo bem atendida
+
+REGRAS:
+- Seja simpática e paciente
+- Faça 2-3 perguntas simples antes de fechar
+- Aceite a proposta se o corretor responder suas dúvidas corretamente
+- Elogie o atendimento se for bem tratada
+- NÃO crie objeções extras além das listadas
+- Após 8-10 mensagens, sinalize que está pronta para decidir
+- Se o corretor explicou bem, aceite com: "Está bem, vamos fazer então!"
+- Ao final, ofereça: "Gostaria de receber feedback sobre seu atendimento?"`
+     },
+     {
+       nivel: 2,
+       nome: "José Carlos",
+       descricao: "Cliente Indeciso - Servidor Público Municipal",
+       notaMinima: 7.0,
+       tempoLimite: 15,
+       criterios: [
+         "Identificou necessidade real (portabilidade vs novo)",
+         "Contornou pelo menos 3 objeções",
+         "Usou técnica de fechamento",
+         "Conseguiu compromisso (fechou ou agendou retorno)"
+       ],
+       promptCompleto: `PERSONA:
+Você é José Carlos, 62 anos, funcionário público municipal (guarda municipal) há 28 anos. Casado, 3 filhos (1 ainda mora em casa). Salário de R$ 5.800/mês. Já tem um empréstimo antigo com parcela de R$ 380.
+
+COMPORTAMENTO:
+- Educado mas indeciso
+- Está "pesquisando" - não tem urgência aparente
+- Quer fazer portabilidade OU pegar dinheiro novo, não sabe direito
+- Compara muito: "no outro banco me ofereceram..."
+- Pede tempo para pensar
+- Precisa de argumentos para decidir
+
+OBJEÇÕES MODERADAS:
+1. "Preciso falar com minha esposa antes..."
+2. "O outro banco ofereceu taxa de X%, vocês cobrem?"
+3. "Não sei se é o momento certo..."
+4. "Vou pensar e depois ligo de volta"
+5. "Já tenho um empréstimo, não quero me endividar mais"
+
+GATILHOS DE FECHAMENTO:
+- Se o corretor mostrar economia real na portabilidade
+- Se criar senso de urgência (condição especial por tempo limitado)
+- Se oferecer simulação comparativa clara
+- Se perguntar "o que falta para fecharmos hoje?"
+
+REGRAS:
+- Seja cordial mas não demonstre pressa
+- Use as objeções gradualmente (não todas de uma vez)
+- Peça para "pensar" pelo menos 1 vez
+- Se o corretor usar técnica de fechamento eficaz, aceite
+- Se o corretor não contornar bem, encerre dizendo que vai pensar`
+     },
+     {
+       nivel: 3,
+       nome: "Antônio Roberto",
+       descricao: "Cliente Desconfiado - Policial Militar",
+       notaMinima: 8.0,
+       tempoLimite: 15,
+       criterios: [
+         "Demonstrou conhecimento técnico (CET, IOF, taxas)",
+         "Foi transparente sobre comissão e custos",
+         "Soube lidar com desconfiança sem se ofender",
+         "Ofereceu garantias concretas",
+         "Construiu rapport apesar da resistência"
+       ],
+       promptCompleto: `PERSONA:
+Você é Antônio Roberto, 55 anos, Sargento da PM há 25 anos. Divorciado, paga pensão para 2 filhos. Salário de R$ 7.200/mês mas já tem 2 empréstimos (parcelas de R$ 890 total). Já foi "enganado" por um correspondente bancário antes (cobraram taxa maior do que prometeram).
+
+COMPORTAMENTO:
+- Desconfiado e direto
+- Faz perguntas incisivas sobre taxas e custos
+- Pede tudo por escrito/comprovado
+- Menciona experiência ruim anterior
+- Testa o conhecimento do corretor
+- Não aceita respostas vagas
+
+OBJEÇÕES DIFÍCEIS:
+1. "Já fui enganado antes, como sei que posso confiar em você?"
+2. "Me mostra por escrito essa taxa que você está falando"
+3. "Qual a taxa REAL? Com IOF e tudo?"
+4. "Por que eu deveria fazer com vocês e não direto no banco?"
+5. "Vocês ganham comissão em cima de mim, né? Quanto?"
+6. "Minha margem já está comprometida, como vão fazer?"
+7. "Se der problema, quem eu procuro?"
+
+GATILHOS DE FECHAMENTO:
+- Se o corretor for 100% transparente sobre custos
+- Se mostrar CET (Custo Efetivo Total) detalhado
+- Se oferecer contrato para análise antes de assinar
+- Se demonstrar conhecimento técnico profundo
+- Se reconhecer a experiência ruim e diferenciar seu atendimento
+
+REGRAS:
+- Seja cético mas não grosseiro
+- Interrompa se o corretor enrolar ou fugir da pergunta
+- Peça números específicos, não aceite "mais ou menos"
+- Se sentir que o corretor está sendo transparente, suavize
+- Se perceber despreparo, encerre a conversa
+- Mencione a experiência ruim pelo menos 2 vezes`
+     },
+     {
+       nivel: 4,
+       nome: "Sandra Regina",
+       descricao: "Cliente Difícil - Técnica de Enfermagem",
+       notaMinima: 8.0,
+       tempoLimite: 20,
+       criterios: [
+         "Demonstrou inteligência emocional",
+         "Manteve calma com interrupções e repetições",
+         "Adaptou proposta ao orçamento real",
+         "Explicou garantias do consignado claramente",
+         "Não explorou desespero de forma antiética",
+         "Organizou a conversa e guiou a cliente"
+       ],
+       promptCompleto: `PERSONA:
+Você é Sandra Regina, 48 anos, técnica de enfermagem em hospital público estadual há 18 anos. Mãe solo de 3 filhos (15, 12 e 8 anos). Salário de R$ 4.100/mês. Está desesperada: precisa de dinheiro para cirurgia do filho mais velho (particular, R$ 12.000) mas tem medo de não conseguir pagar.
+
+COMPORTAMENTO:
+- Emocionalmente abalada (situação urgente)
+- Alterna entre querer fechar rápido e ter medo
+- Faz muitas perguntas sobre "e se eu não conseguir pagar?"
+- Compara obsessivamente (já ligou para 4 bancos)
+- Quer a menor parcela possível, mesmo que pague mais no total
+- Interrompe muito, está ansiosa
+
+OBJEÇÕES COMPLEXAS:
+1. "E se eu perder o emprego? O que acontece?"
+2. "Não tenho como comprometer mais que R$ 300 por mês"
+3. "O banco X me ofereceu em 84x, vocês fazem em mais?"
+4. "Posso pagar antecipado sem multa? E se eu quiser quitar?"
+5. "Minha irmã disse que consignado é cilada..."
+6. "Vocês fazem para quem tem nome sujo? Tenho uma conta antiga..."
+7. "Preciso do dinheiro até sexta, conseguem?"
+8. "Se a parcela atrasar, desconta automático mesmo assim?"
+9. [Se contornar bem] "Tá, mas e se meu filho precisar de outra cirurgia?"
+
+GATILHOS DE FECHAMENTO:
+- Se o corretor demonstrar empatia genuína
+- Se mostrar simulação que caiba no orçamento (R$ 300 ou menos)
+- Se explicar as proteções do consignado
+- Se oferecer prazo viável para liberação
+- Se acalmar a ansiedade com informações claras
+
+REGRAS:
+- Demonstre ansiedade e urgência
+- Interrompa o corretor pelo menos 3 vezes
+- Mude de assunto / volte em objeções já respondidas (simule confusão)
+- Se o corretor for impaciente, fique mais difícil
+- Se o corretor for empático e claro, vá cedendo aos poucos
+- Mencione a necessidade do filho para criar pressão emocional
+- NÃO aceite proposta que ultrapasse R$ 350/mês`
+     },
+     {
+       nivel: 5,
+       nome: "Dr. Ricardo Mendes",
+       descricao: "Cliente Expert - Auditor da Receita Federal",
+       notaMinima: 8.0,
+       tempoLimite: 20,
+       criterios: [
+         "Manteve compostura sob pressão extrema",
+         "Demonstrou conhecimento técnico OU admitiu limitações honestamente",
+         "Não inventou informações falsas",
+         "Não se intimidou com ameaças",
+         "Manteve profissionalismo sem perspectiva de venda",
+         "Soube quando recuar e quando defender posição"
+       ],
+       promptCompleto: `PERSONA:
+Você é Ricardo Mendes, 52 anos, Auditor-Fiscal da Receita Federal há 22 anos. Formado em Direito e Contabilidade. Salário de R$ 28.000/mês. NÃO precisa de dinheiro - está testando o corretor porque quer entender o mercado para ajudar a sogra que foi "enganada".
+
+COMPORTAMENTO:
+- Arrogante e intimidador
+- Usa termos técnicos para testar conhecimento
+- Faz perguntas capciosas e pegadinhas
+- Critica o mercado de correspondentes bancários
+- Ameaça reclamar em órgãos reguladores
+- Grava a conversa (menciona isso)
+- Tenta fazer o corretor errar para "expor"
+
+OBJEÇÕES EXTREMAS:
+1. "Você sabe que correspondente bancário é regulado pelo Banco Central, né? Qual sua autorização?"
+2. "Me explica a diferença entre taxa nominal e taxa efetiva. E o que é anatocismo?"
+3. "Vocês estão de acordo com a Resolução 4.935? E a Lei 10.820?"
+4. "Minha sogra foi enganada por um de vocês. Cobraram taxa de 3,5% sendo que o banco paga 2,1%. Isso é crime."
+5. "Estou gravando essa conversa. Pode continuar."
+6. "Se você me passar informação errada, vou abrir processo no PROCON e no Banco Central"
+7. "Qual o CET máximo permitido por lei para consignado INSS? E para servidor federal?"
+8. "Você ganha quanto de comissão? Esse valor sai do meu bolso ou do banco?"
+9. "Por que eu deveria fazer consignado e não um empréstimo com garantia de investimento?"
+10. "Me mostra a tabela de taxas do banco parceiro. A oficial, não a de vocês."
+
+GATILHOS:
+- NÃO VAI FECHAR - objetivo é testar
+- Se o corretor demonstrar conhecimento excepcional, suavize e diga que vai indicar para sogra
+- Se o corretor admitir que não sabe algo e se propor a pesquisar, respeite
+- Se o corretor for desonesto ou inventar resposta, encerre agressivamente
+
+REGRAS:
+- Seja intimidador mas não ofensivo
+- Use linguagem formal e técnica
+- Teste conhecimento regulatório
+- Se o corretor errar informação técnica, corrija e pressione mais
+- Se o corretor admitir limitação honestamente, elogie discretamente
+- NUNCA feche negócio - máximo é "vou considerar indicar"
+- Se o corretor mantiver postura profissional por 15+ minutos, encerre cordialmente`
+     }
+   ];
+   
+   // Inserir no banco para cada tenant
+   for (const persona of PERSONAS_INICIAIS) {
+     await db.insert(roleplayNivelPrompts).values({
+       ...persona,
+       tenantId: tenant.id
+     });
+   }
+```
+
+3. ADICIONAR NOVA ABA NA INTERFACE DE CONFIGURAÇÃO:
+
+   Atualizar página "Config. Prompts IA" para ter 3 abas:
+```tsx
+   <Tabs defaultValue="global">
+     <TabsList>
+       <TabsTrigger value="global">Prompt Global</TabsTrigger>
+       <TabsTrigger value="equipe">Prompt por Equipe</TabsTrigger>
+       <TabsTrigger value="niveis">🆕 Prompts dos Níveis</TabsTrigger>
+     </TabsList>
+     
+     <TabsContent value="global">
+       {/* Interface atual - NÃO MEXER */}
+     </TabsContent>
+     
+     <TabsContent value="equipe">
+       {/* Interface atual - NÃO MEXER */}
+     </TabsContent>
+     
+     <TabsContent value="niveis">
+       <PromptsNiveisManager />
+     </TabsContent>
+   </Tabs>
+```
+
+4. COMPONENTE DE GERENCIAMENTO DOS NÍVEIS:
+```tsx
+   function PromptsNiveisManager() {
+     return (
+       <div>
+         <Alert>
+           <Info className="h-4 w-4" />
+           <AlertDescription>
+             Estes são os prompts das 5 personas do Modo Evolução por Níveis.
+             Por padrão, estão fixos para garantir experiência consistente de treinamento.
+             Você pode visualizar e, futuramente, customizar para seu tenant.
+           </AlertDescription>
+         </Alert>
+         
+         {NIVEIS.map(nivel => (
+           <NivelPromptCard
+             key={nivel}
+             nivel={nivel}
+             readonly={true} // Inicialmente só leitura
+             onEdit={() => {/* futuro: permitir edição */}}
+           />
+         ))}
+       </div>
+     );
+   }
+   
+   function NivelPromptCard({ nivel, readonly }) {
+     return (
+       <Card>
+         <CardHeader>
+           <CardTitle>
+             Nível {nivel.nivel}: {nivel.nome}
+             <Badge>{nivel.descricao}</Badge>
+           </CardTitle>
+         </CardHeader>
+         <CardContent>
+           <div className="grid gap-4">
+             <div>
+               <Label>Nota Mínima para Aprovar</Label>
+               <div>{nivel.notaMinima}/10</div>
+             </div>
+             
+             <div>
+               <Label>Tempo Limite</Label>
+               <div>{nivel.tempoLimite} minutos</div>
+             </div>
+             
+             <div>
+               <Label>Critérios de Aprovação</Label>
+               <ul className="list-disc pl-5">
+                 {nivel.criterios.map(c => <li key={c}>{c}</li>)}
+               </ul>
+             </div>
+             
+             <div>
+               <Label>Prompt da Persona</Label>
+               <Textarea 
+                 value={nivel.promptCompleto} 
+                 readOnly={readonly}
+                 rows={10}
+                 className="font-mono text-sm"
+               />
+             </div>
+             
+             {!readonly && (
+               <Button onClick={handleSave}>Salvar Alterações</Button>
+             )}
+           </div>
+         </CardContent>
+       </Card>
+     );
+   }
+```
+
+5. LÓGICA DE SELEÇÃO DE PROMPT NO BACKEND:
+```typescript
+   async function iniciarRoleplayComPromptCorreto(
+     userId: number, 
+     modo: 'livre' | 'niveis',
+     nivel?: number,
+     cenarioCustomizado?: string
+   ) {
+     let systemPrompt: string;
+     
+     if (modo === 'livre') {
+       // USA SISTEMA ATUAL (ai_prompts - global ou equipe)
+       const userTeam = await getUserTeam(userId);
+       
+       const prompt = await db.select()
+         .from(aiPrompts)
+         .where(eq(aiPrompts.type, 'roleplay'))
+         .where(
+           or(
+             and(eq(aiPrompts.scope, 'team'), eq(aiPrompts.teamId, userTeam.id)),
+             eq(aiPrompts.scope, 'global')
+           )
+         )
+         .where(eq(aiPrompts.isActive, true))
+         .orderBy(desc(aiPrompts.updatedAt))
+         .limit(1);
+       
+       systemPrompt = prompt?.promptText || DEFAULT_ROLEPLAY_PROMPT;
+       
+       // Adiciona cenário customizado do usuário
+       if (cenarioCustomizado) {
+         systemPrompt += `\n\nCENÁRIO CUSTOMIZADO PELO USUÁRIO:\n${cenarioCustomizado}`;
+       }
+       
+     } else if (modo === 'niveis') {
+       // USA NOVO SISTEMA (roleplay_nivel_prompts)
+       const nivelPrompt = await db.select()
+         .from(roleplayNivelPrompts)
+         .where(eq(roleplayNivelPrompts.nivel, nivel))
+         .where(eq(roleplayNivelPrompts.tenantId, tenantId))
+         .where(eq(roleplayNivelPrompts.isActive, true))
+         .limit(1);
+       
+       if (!nivelPrompt) {
+         throw new Error(`Prompt do nível ${nivel} não encontrado`);
+       }
+       
+       systemPrompt = nivelPrompt.promptCompleto;
+     }
+     
+     // Criar sessão
+     const sessao = await db.insert(roleplaySessoes).values({
+       userId,
+       modo,
+       nivelTreinado: nivel,
+       status: 'ativa',
+       historicoConversa: [
+         { role: 'system', content: systemPrompt }
+       ]
+     }).returning();
+     
+     return sessao;
+   }
+```
+
+6. INTERFACE DE SELEÇÃO DE MODO (já discutida antes):
+   - Tela inicial com 2 botões: "Modo Livre" e "Modo Níveis"
+   - Modo Livre → usa prompts customizáveis (sistema atual)
+   - Modo Níveis → usa prompts fixos das personas
+
+7. MIGRAÇÃO PARA ADICIONAR CAMPOS:
+```sql
+   -- Adicionar campos em roleplay_sessoes
+   ALTER TABLE roleplay_sessoes 
+   ADD COLUMN IF NOT EXISTS modo VARCHAR(20) DEFAULT 'livre',
+   ADD COLUMN IF NOT EXISTS nivel_treinado INTEGER,
+   ADD COLUMN IF NOT EXISTS aprovado BOOLEAN DEFAULT false,
+   ADD COLUMN IF NOT EXISTS nota_final DECIMAL(4,2);
+   
+   -- Adicionar campos em roleplay_avaliacoes
+   ALTER TABLE roleplay_avaliacoes 
+   ADD COLUMN IF NOT EXISTS nivel_avaliado INTEGER,
+   ADD COLUMN IF NOT EXISTS criterios_atendidos JSONB,
+   ADD COLUMN IF NOT EXISTS passou_nivel BOOLEAN DEFAULT false;
+```
+
+IMPORTANTE - RESUMO DOS 2 SISTEMAS:
+
+📌 MODO LIVRE:
+- Usa tabela: ai_prompts (global/equipe)
+- Interface: Config. Prompts IA → abas Global/Equipe (atual)
+- Funcionalidade: NÃO MEXER, manter como está
+- Sem avaliação formal
+
+📌 MODO NÍVEIS:
+- Usa tabela: roleplay_nivel_prompts (nova)
+- Interface: Config. Prompts IA → aba Níveis (nova)
+- Prompts inicialmente fixos (readonly=true)
+- Com avaliação e progressão
+
+TESTE FINAL:
+1. Modo Livre deve funcionar exatamente como antes
+2. Prompts Global/Equipe não devem ser afetados
+3. Nova aba "Prompts dos Níveis" deve mostrar as 5 personas
+4. Iniciar Modo Níveis deve usar prompt da tabela roleplay_nivel_prompts
+5. Iniciar Modo Livre deve usar prompt da tabela ai_prompts (sistema atual)

@@ -933,15 +933,35 @@ export const quizTentativas = pgTable("quiz_tentativas", {
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 
+// Prompts das personas para Modo Níveis (1-5)
+export const roleplayNivelPrompts = pgTable("roleplay_nivel_prompts", {
+  id: serial("id").primaryKey(),
+  nivel: integer("nivel").notNull(), // 1 a 5
+  nome: varchar("nome", { length: 100 }).notNull(), // "Maria das Graças", etc
+  descricao: varchar("descricao", { length: 255 }), // "Cliente Receptivo"
+  promptCompleto: text("prompt_completo").notNull(), // Prompt da persona
+  criteriosAprovacao: jsonb("criterios_aprovacao").notNull().default([]), // Lista de critérios
+  notaMinima: decimal("nota_minima", { precision: 3, scale: 1 }).notNull().default("7.0"), // 7.0 ou 8.0
+  tempoLimiteMinutos: integer("tempo_limite_minutos"), // 10, 15, 20
+  isActive: boolean("is_active").notNull().default(true),
+  podeCustomizar: boolean("pode_customizar").notNull().default(false), // futuro: permitir edição
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Sessões de roleplay
 export const roleplaySessoes = pgTable("roleplay_sessoes", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   nivelTreinado: integer("nivel_treinado").notNull(), // Nível durante a sessão
+  modo: varchar("modo", { length: 20 }).notNull().default("livre"), // 'livre' ou 'niveis'
   status: varchar("status", { length: 20 }).notNull().default("ativa"), // ativa, finalizada
   historicoConversa: jsonb("historico_conversa").notNull().default([]), // Array de mensagens
   cenario: text("cenario"), // Cenário customizado pelo usuário
   totalMensagens: integer("total_mensagens").notNull().default(0), // Contador de mensagens do corretor
+  aprovado: boolean("aprovado").default(false), // Se passou no nível (Modo Níveis)
+  notaFinal: decimal("nota_final", { precision: 4, scale: 2 }), // Nota final da sessão
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   finalizadoEm: timestamp("finalizado_em"),
 });
@@ -1016,6 +1036,12 @@ export const insertQuizTentativaSchema = createInsertSchema(quizTentativas).omit
   criadoEm: true,
 });
 
+export const insertRoleplayNivelPromptSchema = createInsertSchema(roleplayNivelPrompts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertRoleplaySessaoSchema = createInsertSchema(roleplaySessoes).omit({
   id: true,
   criadoEm: true,
@@ -1046,6 +1072,9 @@ export type InsertVendedorAcademia = z.infer<typeof insertVendedorAcademiaSchema
 
 export type QuizTentativa = typeof quizTentativas.$inferSelect;
 export type InsertQuizTentativa = z.infer<typeof insertQuizTentativaSchema>;
+
+export type RoleplayNivelPrompt = typeof roleplayNivelPrompts.$inferSelect;
+export type InsertRoleplayNivelPrompt = z.infer<typeof insertRoleplayNivelPromptSchema>;
 
 export type RoleplaySessao = typeof roleplaySessoes.$inferSelect;
 export type InsertRoleplaySessao = z.infer<typeof insertRoleplaySessaoSchema>;
@@ -1087,6 +1116,8 @@ export const treinadorRequestSchema = z.object({
   avaliarResposta: z.boolean().optional(), // Para avaliação inline por resposta
   tom: z.enum(["consultiva_acolhedora", "direta_objetiva", "persuasiva_profissional", "alta_conversao", "ultra_premium"]).optional(), // Estilo da abordagem
   cenario: z.string().optional(), // Cenário específico para roleplay (ex: "cliente disse que vai pensar")
+  tipoModo: z.enum(["livre", "niveis"]).optional(), // Modo de roleplay: livre (customizável) ou niveis (progressão estruturada)
+  nivelPromptId: z.number().optional(), // ID do prompt de nível para Modo Níveis
 });
 
 export type TreinadorRequest = z.infer<typeof treinadorRequestSchema>;

@@ -7659,8 +7659,9 @@ Se o corretor for confuso, ignorar sua realidade ou forçar algo incompatível, 
         });
       }
 
-      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId, avaliarResposta, tom, cenario } = result.data;
+      const { modo, nivelAtual, falaCorretor, canal, tipoCliente, produtoFoco, contexto, historicoResumido, sessaoId, avaliarResposta, tom, cenario, tipoModo, nivelPromptId } = result.data;
       const userId = req.user!.id;
+      const tenantId = req.user!.tenantId || 1;
 
       // Import OpenAI client
       const { openai } = await import("./openaiClient");
@@ -7760,10 +7761,37 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta e
         responseFormat = "json";
       }
 
-      console.log(`[Academia] Calling OpenAI for mode: ${modo}, user: ${userId}`);
+      console.log(`[Academia] Calling OpenAI for mode: ${modo}, user: ${userId}, tipoModo: ${tipoModo || "livre"}`);
 
-      // Get the effective prompt for this user (team-specific or global)
-      const effectivePrompt = await getEffectiveRoleplayPrompt(userId);
+      // Get the effective prompt for this user
+      // For Modo Níveis, use the specific nivel prompt; otherwise use team/global prompt
+      let effectivePrompt: string;
+      let selectedNivelPrompt: any = null;
+      
+      if (tipoModo === "niveis") {
+        // Modo Níveis: require nivel prompt
+        if (!nivelPromptId && !nivelAtual) {
+          return res.status(400).json({ 
+            message: "Para Modo Níveis, é necessário especificar nivelPromptId ou nivelAtual" 
+          });
+        }
+        
+        // Fetch the specific nivel prompt by nivelAtual (one prompt per level per tenant)
+        const nivelPrompt = await storage.getRoleplayNivelPrompt(nivelAtual, tenantId);
+        
+        if (nivelPrompt && nivelPrompt.promptCompleto && nivelPrompt.isActive) {
+          effectivePrompt = nivelPrompt.promptCompleto;
+          selectedNivelPrompt = nivelPrompt;
+          console.log(`[Academia] Using Modo Níveis prompt for level ${nivelAtual}: ${nivelPrompt.nome}`);
+        } else {
+          return res.status(400).json({ 
+            message: `Prompt do nível ${nivelAtual} não encontrado ou não está ativo` 
+          });
+        }
+      } else {
+        // Modo Livre: use team-specific or global prompt
+        effectivePrompt = await getEffectiveRoleplayPrompt(userId);
+      }
 
       // For roleplay_cliente, we need to include conversation history
       let messagesForOpenAI: { role: "system" | "user" | "assistant"; content: string }[] = [
@@ -7850,6 +7878,7 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta e
             historicoConversa: [],
             cenario: cenario || null,
             totalMensagens: 0,
+            modo: tipoModo || "livre",
           }).returning();
           sessao = newSessao;
         }
@@ -12061,6 +12090,81 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Get user team error:", error);
       return res.status(500).json({ message: "Erro ao buscar equipe" });
+    }
+  });
+  
+  // ===== ROLEPLAY NIVEL PROMPTS (Modo Níveis) =====
+  
+  // GET /api/roleplay-niveis/prompts - Listar prompts de todos os níveis
+  app.get("/api/roleplay-niveis/prompts", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId || 1;
+      
+      // Seed prompts if not exists for this tenant
+      await storage.seedRoleplayNivelPrompts(tenantId);
+      
+      const prompts = await storage.getRoleplayNivelPrompts(tenantId);
+      return res.json(prompts);
+    } catch (error) {
+      console.error("Get nivel prompts error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prompts de níveis" });
+    }
+  });
+  
+  // GET /api/roleplay-niveis/prompts/:nivel - Obter prompt de um nível específico
+  app.get("/api/roleplay-niveis/prompts/:nivel", requireAuth, async (req, res) => {
+    try {
+      const nivel = parseInt(req.params.nivel);
+      const tenantId = req.user!.tenantId || 1;
+      
+      if (nivel < 1 || nivel > 5) {
+        return res.status(400).json({ message: "Nível deve ser entre 1 e 5" });
+      }
+      
+      const prompt = await storage.getRoleplayNivelPrompt(nivel, tenantId);
+      if (!prompt) {
+        return res.status(404).json({ message: "Prompt não encontrado para este nível" });
+      }
+      
+      return res.json(prompt);
+    } catch (error) {
+      console.error("Get nivel prompt error:", error);
+      return res.status(500).json({ message: "Erro ao buscar prompt do nível" });
+    }
+  });
+  
+  // PUT /api/roleplay-niveis/prompts/:nivel - Atualizar prompt de um nível (Master only, se podeCustomizar=true)
+  app.put("/api/roleplay-niveis/prompts/:nivel", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const nivel = parseInt(req.params.nivel);
+      const tenantId = req.user!.tenantId || 1;
+      const { promptCompleto, criteriosAprovacao, notaMinima, tempoLimiteMinutos } = req.body;
+      
+      if (nivel < 1 || nivel > 5) {
+        return res.status(400).json({ message: "Nível deve ser entre 1 e 5" });
+      }
+      
+      const existing = await storage.getRoleplayNivelPrompt(nivel, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: "Prompt não encontrado para este nível" });
+      }
+      
+      if (!existing.podeCustomizar) {
+        return res.status(403).json({ message: "Este prompt não pode ser customizado ainda" });
+      }
+      
+      const updated = await storage.upsertRoleplayNivelPrompt({
+        ...existing,
+        promptCompleto: promptCompleto || existing.promptCompleto,
+        criteriosAprovacao: criteriosAprovacao || existing.criteriosAprovacao,
+        notaMinima: notaMinima || existing.notaMinima,
+        tempoLimiteMinutos: tempoLimiteMinutos !== undefined ? tempoLimiteMinutos : existing.tempoLimiteMinutos,
+      });
+      
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update nivel prompt error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar prompt do nível" });
     }
   });
 
