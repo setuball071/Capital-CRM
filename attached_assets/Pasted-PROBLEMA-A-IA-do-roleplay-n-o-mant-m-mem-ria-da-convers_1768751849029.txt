@@ -1,0 +1,81 @@
+PROBLEMA: A IA do roleplay não mantém memória da conversa, esquece o contexto e repete assuntos mesmo quando o usuário já contornou/resolveu.
+
+CAUSA:
+- Sistema não está enviando histórico de mensagens anteriores para a API
+- Cada mensagem está sendo tratada isoladamente
+- OpenAI precisa receber TODA a conversa a cada chamada
+
+LOCALIZAÇÃO:
+- Tabela: roleplay_sessoes (campo historico_conversa)
+- Backend: função que chama OpenAI API
+- Provavelmente em: server/treinador-service.ts ou similar
+
+SOLUÇÃO:
+
+1. VERIFICAR SE HISTÓRICO ESTÁ SENDO SALVO:
+   - Conferir se cada mensagem está sendo gravada em roleplay_sessoes.historico_conversa
+   - O campo deve ser JSONB array: [{ role: 'user', content: '...' }, { role: 'assistant', content: '...' }]
+
+2. ENVIAR HISTÓRICO COMPLETO PARA OPENAI:
+```typescript
+   // ERRADO (sem memória):
+   const response = await openai.chat.completions.create({
+     model: "gpt-4",
+     messages: [
+       { role: "system", content: promptDoSistema },
+       { role: "user", content: mensagemAtual } // ❌ SÓ MENSAGEM ATUAL
+     ]
+   });
+   
+   // CORRETO (com memória):
+   const response = await openai.chat.completions.create({
+     model: "gpt-4",
+     messages: [
+       { role: "system", content: promptDoSistema },
+       ...historicoCompleto, // ✅ TODAS as mensagens anteriores
+       { role: "user", content: mensagemAtual }
+     ]
+   });
+```
+
+3. BUSCAR HISTÓRICO DO BANCO:
+```typescript
+   // Buscar sessão ativa do usuário
+   const sessao = await db.select()
+     .from(roleplaySessoes)
+     .where(eq(roleplaySessoes.userId, userId))
+     .where(eq(roleplaySessoes.status, 'ativa'))
+     .limit(1);
+   
+   const historico = sessao.historicoConversa || [];
+   
+   // Adicionar mensagem nova ao histórico
+   historico.push({ role: 'user', content: mensagemUsuario });
+   
+   // Chamar OpenAI com histórico completo
+   const response = await openai.chat.completions.create({
+     model: "gpt-4",
+     messages: [
+       { role: "system", content: promptSistema },
+       ...historico
+     ]
+   });
+   
+   // Salvar resposta da IA no histórico
+   historico.push({ role: 'assistant', content: response.choices[0].message.content });
+   
+   // Atualizar banco
+   await db.update(roleplaySessoes)
+     .set({ historicoConversa: historico })
+     .where(eq(roleplaySessoes.id, sessao.id));
+```
+
+4. LIMITAR TAMANHO DO HISTÓRICO (OPCIONAL):
+   - Se conversa ficar muito longa (>20 mensagens), pode dar timeout
+   - Manter últimas 20 mensagens + system prompt
+   - Ou resumir mensagens antigas
+
+IMPORTANTE:
+- Histórico deve incluir SYSTEM prompt + TODAS mensagens user/assistant
+- Cada nova mensagem ADICIONA ao histórico, não substitui
+- Salvar histórico no banco após cada interação

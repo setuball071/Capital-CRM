@@ -7765,19 +7765,47 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta e
       // Get the effective prompt for this user (team-specific or global)
       const effectivePrompt = await getEffectiveRoleplayPrompt(userId);
 
-      // Call OpenAI
+      // For roleplay_cliente, we need to include conversation history
+      let messagesForOpenAI: { role: "system" | "user" | "assistant"; content: string }[] = [
+        { role: "system", content: effectivePrompt },
+      ];
+
+      // If this is a roleplay session, include conversation history for context
+      if (modo === "roleplay_cliente" && sessaoId) {
+        // Fetch existing session history
+        const existingSession = await db.select().from(roleplaySessoes).where(eq(roleplaySessoes.id, sessaoId)).limit(1);
+        if (existingSession.length > 0) {
+          const historico = (existingSession[0].historicoConversa as any[]) || [];
+          
+          // Convert session history to OpenAI format
+          // Limit to last 20 exchanges (40 messages) to avoid token limits
+          const recentHistory = historico.slice(-40);
+          
+          for (const msg of recentHistory) {
+            if (msg.role === "corretor") {
+              messagesForOpenAI.push({ role: "user", content: msg.content });
+            } else if (msg.role === "cliente") {
+              messagesForOpenAI.push({ role: "assistant", content: msg.content });
+            }
+          }
+          
+          console.log(`[Academia] Including ${recentHistory.length} messages from session history`);
+        }
+      }
+
+      // Add the current message
+      messagesForOpenAI.push({ role: "user", content: userMessage });
+
+      // Call OpenAI with full conversation history
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: effectivePrompt },
-          { role: "user", content: userMessage },
-        ],
+        messages: messagesForOpenAI,
         temperature: 0.7,
         max_tokens: 1500,
       });
 
       const aiResponse = completion.choices[0]?.message?.content || "";
-      console.log(`[Academia] OpenAI response received, length: ${aiResponse.length}`);
+      console.log(`[Academia] OpenAI response received, length: ${aiResponse.length}, messages sent: ${messagesForOpenAI.length}`);
 
       // Process response based on mode
       const LIMITE_MENSAGENS_ROLEPLAY = 10; // Limite de mensagens do corretor por sessão
