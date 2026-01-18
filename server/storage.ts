@@ -2479,15 +2479,38 @@ export class DbStorage implements IStorage {
   }
   
   async hasModuleAccess(userId: number, module: string): Promise<boolean> {
+    // First check exact module permission
     const [perm] = await db.select().from(userPermissions)
       .where(and(eq(userPermissions.userId, userId), eq(userPermissions.module, module)));
-    return perm?.canView === true;
+    if (perm?.canView === true) return true;
+    
+    // Fallback: check if user has ANY sub-item permission for this module
+    // Sub-items are stored as "module.subitem" (e.g., "modulo_academia.roleplay")
+    const subItemPerms = await db.select().from(userPermissions)
+      .where(and(
+        eq(userPermissions.userId, userId),
+        sql`${userPermissions.module} LIKE ${module + '.%'}`
+      ));
+    
+    // If user has canView on ANY sub-item, grant module access
+    return subItemPerms.some(p => p.canView === true);
   }
 
   async hasModuleEditAccess(userId: number, module: string): Promise<boolean> {
+    // First check exact module permission
     const [perm] = await db.select().from(userPermissions)
       .where(and(eq(userPermissions.userId, userId), eq(userPermissions.module, module)));
-    return perm?.canEdit === true;
+    if (perm?.canEdit === true) return true;
+    
+    // Fallback: check if user has ANY sub-item edit permission for this module
+    const subItemPerms = await db.select().from(userPermissions)
+      .where(and(
+        eq(userPermissions.userId, userId),
+        sql`${userPermissions.module} LIKE ${module + '.%'}`
+      ));
+    
+    // If user has canEdit on ANY sub-item, grant module edit access
+    return subItemPerms.some(p => p.canEdit === true);
   }
   
   // ===== LEAD SCHEDULES =====
