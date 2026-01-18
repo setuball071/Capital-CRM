@@ -71,7 +71,7 @@ import {
   type FiltrosPedidoLista,
   type PricingSettings,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -7599,7 +7599,8 @@ Se o corretor for confuso, ignorar sua realidade ou forçar algo incompatível, 
    - Responder EXCLUSIVAMENTE em JSON com: abertura_resumida, objetivo_abordagem, perguntas_consultivas (array), exploracao_dor, proposta_valor, gatilhos_usados (array), script_pronto_ligacao, script_pronto_whatsapp.`;
 
   // Helper function to get the effective roleplay prompt for a user
-  async function getEffectiveRoleplayPrompt(userId: number): Promise<string> {
+  // Returns { promptText, variante, descricaoVariante } for Modo Livre with persona variation
+  async function getEffectiveRoleplayPrompt(userId: number): Promise<{ promptText: string; variante?: string | null; descricaoVariante?: string | null }> {
     try {
       // 1. Check if user belongs to a team
       const userMembership = await db.select()
@@ -7625,12 +7626,12 @@ Se o corretor for confuso, ignorar sua realidade ou forçar algo incompatível, 
 
         if (teamPrompt.length > 0) {
           console.log(`[Roleplay] Using team-specific prompt for user ${userId}, team ${teamId}`);
-          return teamPrompt[0].promptText;
+          return { promptText: teamPrompt[0].promptText };
         }
       }
 
-      // 3. Fallback to global prompt
-      const globalPrompt = await db.select()
+      // 3. Fetch ALL active global prompts with variants
+      const globalPrompts = await db.select()
         .from(aiPrompts)
         .where(
           and(
@@ -7638,20 +7639,35 @@ Se o corretor for confuso, ignorar sua realidade ou forçar algo incompatível, 
             eq(aiPrompts.scope, "global"),
             eq(aiPrompts.isActive, true)
           )
-        )
-        .limit(1);
+        );
 
-      if (globalPrompt.length > 0) {
-        console.log(`[Roleplay] Using global prompt for user ${userId}`);
-        return globalPrompt[0].promptText;
+      // Filter to only variants (those with variante field set)
+      const variantes = globalPrompts.filter(p => p.variante);
+      
+      if (variantes.length > 0) {
+        // 4. RANDOM SELECTION - Choose one variant randomly
+        const varianteSorteada = variantes[Math.floor(Math.random() * variantes.length)];
+        console.log(`[Roleplay] Randomly selected persona "${varianteSorteada.variante}" for user ${userId}`);
+        return {
+          promptText: varianteSorteada.promptText,
+          variante: varianteSorteada.variante,
+          descricaoVariante: varianteSorteada.descricaoVariante,
+        };
       }
 
-      // 4. Fallback to hardcoded default
+      // 5. Fallback to legacy global prompt (without variant)
+      const legacyPrompt = globalPrompts.find(p => !p.variante);
+      if (legacyPrompt) {
+        console.log(`[Roleplay] Using legacy global prompt for user ${userId}`);
+        return { promptText: legacyPrompt.promptText };
+      }
+
+      // 6. Fallback to hardcoded default
       console.log(`[Roleplay] Using default hardcoded prompt for user ${userId}`);
-      return TREINADOR_SYSTEM_PROMPT;
+      return { promptText: TREINADOR_SYSTEM_PROMPT };
     } catch (error) {
       console.error("[Roleplay] Error fetching prompt, using default:", error);
-      return TREINADOR_SYSTEM_PROMPT;
+      return { promptText: TREINADOR_SYSTEM_PROMPT };
     }
   }
 
@@ -7775,6 +7791,7 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta e
       // For Modo Níveis, use the specific nivel prompt; otherwise use team/global prompt
       let effectivePrompt: string;
       let selectedNivelPrompt: any = null;
+      let personaSorteada: { variante?: string | null; descricao?: string | null } = {};
       
       if (tipoModo === "niveis") {
         // Modo Níveis: require nivel prompt
@@ -7797,8 +7814,13 @@ Gere a abordagem e responda EXCLUSIVAMENTE em JSON válido com EXATAMENTE esta e
           });
         }
       } else {
-        // Modo Livre: use team-specific or global prompt
-        effectivePrompt = await getEffectiveRoleplayPrompt(userId);
+        // Modo Livre: use team-specific or global prompt with random persona selection
+        const promptResult = await getEffectiveRoleplayPrompt(userId);
+        effectivePrompt = promptResult.promptText;
+        personaSorteada = {
+          variante: promptResult.variante,
+          descricao: promptResult.descricaoVariante,
+        };
       }
 
       // For roleplay_cliente, we need to include conversation history
@@ -7970,6 +7992,10 @@ Responda EXCLUSIVAMENTE em JSON:
           mensagensEnviadas: novoTotalMensagens,
           limiteMensagens: LIMITE_MENSAGENS_ROLEPLAY,
           sessaoFinalizada: atingiuLimite,
+          personaSorteada: personaSorteada.variante ? {
+            variante: personaSorteada.variante,
+            descricao: personaSorteada.descricao,
+          } : undefined,
         });
 
       } else if (modo === "avaliacao_roleplay") {
@@ -12137,6 +12163,69 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Save global prompt error:", error);
       return res.status(500).json({ message: "Erro ao salvar prompt" });
+    }
+  });
+
+  // PUT /api/ai-prompts/:id - Atualizar prompt/variante específico (Master)
+  app.put("/api/ai-prompts/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const promptId = parseInt(req.params.id);
+      const { promptText, isActive } = req.body;
+      
+      // Buscar prompt existente
+      const [existingPrompt] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, promptId)).limit(1);
+      if (!existingPrompt) {
+        return res.status(404).json({ message: "Prompt não encontrado" });
+      }
+      
+      // VALIDATION: If trying to deactivate a persona variant, ensure at least one will remain active
+      if (isActive === false && existingPrompt.variante && existingPrompt.type === "roleplay" && existingPrompt.scope === "global") {
+        // Count how many active variants exist (excluding this one)
+        const activeVariants = await db.select()
+          .from(aiPrompts)
+          .where(
+            and(
+              eq(aiPrompts.type, "roleplay"),
+              eq(aiPrompts.scope, "global"),
+              eq(aiPrompts.isActive, true),
+              not(eq(aiPrompts.id, promptId))
+            )
+          );
+        
+        // Filter to only variants (those with variante field set)
+        const otherActiveVariants = activeVariants.filter(p => p.variante);
+        
+        if (otherActiveVariants.length === 0) {
+          return res.status(400).json({ 
+            message: "Não é possível desativar esta persona. Pelo menos uma persona deve permanecer ativa para o Modo Livre funcionar." 
+          });
+        }
+      }
+      
+      // Construir objeto de atualização
+      const updateData: Partial<{promptText: string, isActive: boolean, version: number, updatedAt: Date, updatedByUserId: number}> = {
+        updatedAt: new Date(),
+        updatedByUserId: req.user!.id,
+      };
+      
+      if (promptText !== undefined && promptText.trim().length >= 10) {
+        updateData.promptText = promptText.trim();
+        updateData.version = existingPrompt.version + 1;
+      }
+      
+      if (isActive !== undefined) {
+        updateData.isActive = isActive;
+      }
+      
+      await db.update(aiPrompts)
+        .set(updateData)
+        .where(eq(aiPrompts.id, promptId));
+      
+      const [updatedPrompt] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, promptId)).limit(1);
+      return res.json(updatedPrompt);
+    } catch (error) {
+      console.error("Update prompt error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar prompt" });
     }
   });
 

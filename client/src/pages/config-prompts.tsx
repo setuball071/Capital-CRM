@@ -13,7 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Users, Plus, Trash2, History, Save, RotateCcw, UserPlus, Settings2, GraduationCap, Target, Clock } from "lucide-react";
+import { Globe, Users, Plus, Trash2, History, Save, RotateCcw, UserPlus, Settings2, GraduationCap, Target, Clock, Shuffle, Edit, ChevronDown, ChevronUp } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { UserRole, User } from "@shared/schema";
 
 interface Team {
@@ -40,6 +43,8 @@ interface AiPrompt {
   type: string;
   scope: string;
   teamId: number | null;
+  variante: string | null;
+  descricaoVariante: string | null;
   promptText: string;
   version: number;
   isActive: boolean;
@@ -73,6 +78,8 @@ export default function ConfigPrompts() {
   const [newMemberUserId, setNewMemberUserId] = useState<string>("");
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [historyScope, setHistoryScope] = useState<"global" | "team">("global");
+  const [varianteEditandoId, setVarianteEditandoId] = useState<number | null>(null);
+  const [varianteEditandoText, setVarianteEditandoText] = useState("");
 
   const userRole = user?.role as UserRole;
   const isMaster = userRole === "master";
@@ -127,6 +134,21 @@ export default function ConfigPrompts() {
     },
     onError: () => {
       toast({ title: "Erro ao salvar prompt", variant: "destructive" });
+    },
+  });
+
+  const updateVarianteMutation = useMutation({
+    mutationFn: async ({ id, promptText, isActive }: { id: number; promptText?: string; isActive?: boolean }) => {
+      return apiRequest("PUT", `/api/ai-prompts/${id}`, { promptText, isActive });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-prompts/roleplay/global"] });
+      toast({ title: "Variante atualizada com sucesso" });
+      setVarianteEditandoId(null);
+      setVarianteEditandoText("");
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar variante", variant: "destructive" });
     },
   });
 
@@ -289,64 +311,137 @@ export default function ConfigPrompts() {
 
         {isMaster && (
           <TabsContent value="global" className="space-y-4">
-            <Card>
+            <Alert>
+              <Shuffle className="h-4 w-4" />
+              <AlertTitle>Modo Livre com Variação de Personas</AlertTitle>
+              <AlertDescription>
+                O sistema escolherá aleatoriamente uma destas personas a cada nova sessão do Modo Livre.
+                Você pode customizar cada uma individualmente ou desativá-las.
+              </AlertDescription>
+            </Alert>
+
+            {globalPrompts.filter(p => p.variante).length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Nenhuma variante de persona configurada. As variantes serão criadas automaticamente.
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-4">
+              {globalPrompts.filter(p => p.variante).map((variante) => (
+                <Card key={variante.id} className={!variante.isActive ? "opacity-60" : ""}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Shuffle className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <CardTitle className="text-base capitalize">
+                            {variante.variante?.replace("_", " ")}
+                          </CardTitle>
+                          <CardDescription>{variante.descricaoVariante}</CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Ativa</span>
+                          <Switch
+                            checked={variante.isActive}
+                            onCheckedChange={(checked) => 
+                              updateVarianteMutation.mutate({ id: variante.id, isActive: checked })
+                            }
+                            data-testid={`switch-variante-${variante.variante}`}
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (varianteEditandoId === variante.id) {
+                              setVarianteEditandoId(null);
+                              setVarianteEditandoText("");
+                            } else {
+                              setVarianteEditandoId(variante.id);
+                              setVarianteEditandoText(variante.promptText);
+                            }
+                          }}
+                          data-testid={`button-edit-variante-${variante.variante}`}
+                        >
+                          {varianteEditandoId === variante.id ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <Edit className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  {varianteEditandoId === variante.id && (
+                    <CardContent className="pt-0 space-y-4">
+                      <Textarea
+                        value={varianteEditandoText}
+                        onChange={(e) => setVarianteEditandoText(e.target.value)}
+                        rows={12}
+                        className="font-mono text-sm"
+                        data-testid={`textarea-variante-${variante.variante}`}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => updateVarianteMutation.mutate({ 
+                            id: variante.id, 
+                            promptText: varianteEditandoText 
+                          })}
+                          disabled={updateVarianteMutation.isPending}
+                          data-testid={`button-save-variante-${variante.variante}`}
+                        >
+                          <Save className="h-4 w-4 mr-1" />
+                          Salvar Alterações
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setVarianteEditandoId(null);
+                            setVarianteEditandoText("");
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+            
+            <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Globe className="h-5 w-5" />
-                  Prompt Global (Padrão)
+                  <History className="h-5 w-5" />
+                  Prompt Legado (sem variante)
                 </CardTitle>
                 <CardDescription>
-                  Este prompt é usado por todas as equipes que não possuem prompt específico.
-                  Todas as equipes herdam este prompt automaticamente.
+                  Prompts antigos sem variante definida. Usado como fallback se nenhuma variante estiver ativa.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {activeGlobalPrompt && (
-                  <div className="p-4 bg-muted rounded-lg">
+                {globalPrompts.filter(p => !p.variante && p.isActive).map((prompt) => (
+                  <div key={prompt.id} className="p-4 bg-muted rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                      <Badge variant="secondary">Versão {activeGlobalPrompt.version} - Ativo</Badge>
+                      <Badge variant="secondary">Versão {prompt.version}</Badge>
                       <span className="text-sm text-muted-foreground">
-                        {formatDate(activeGlobalPrompt.updatedAt)}
+                        {formatDate(prompt.updatedAt)}
                       </span>
                     </div>
-                    <pre className="text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">
-                      {activeGlobalPrompt.promptText}
+                    <pre className="text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">
+                      {prompt.promptText}
                     </pre>
                   </div>
+                ))}
+                
+                {globalPrompts.filter(p => !p.variante && p.isActive).length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum prompt legado ativo.</p>
                 )}
-
-                <div className="space-y-2">
-                  <Label>Novo Prompt Global</Label>
-                  <Textarea
-                    value={globalPromptText}
-                    onChange={(e) => setGlobalPromptText(e.target.value)}
-                    placeholder="Digite o novo prompt para o Roleplay..."
-                    rows={8}
-                    data-testid="input-global-prompt"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => saveGlobalPromptMutation.mutate(globalPromptText)}
-                    disabled={!globalPromptText.trim() || saveGlobalPromptMutation.isPending}
-                    data-testid="button-save-global-prompt"
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    Salvar Nova Versão
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setHistoryScope("global");
-                      setShowHistoryDialog(true);
-                    }}
-                    data-testid="button-history-global"
-                  >
-                    <History className="h-4 w-4 mr-1" />
-                    Ver Histórico ({globalPrompts.length})
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
