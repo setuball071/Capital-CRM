@@ -13,7 +13,7 @@ import { useTenant } from "@/components/tenant-theme-provider";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle } from "lucide-react";
 import type { Tenant, TenantTheme } from "@shared/schema";
-import { GradientEditor, GradientConfig, generateGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
+import { GradientEditor, GradientConfig, generateGradientCSS, parseGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
 
 const FONT_OPTIONS = [
   { value: "Inter", label: "Inter" },
@@ -132,8 +132,12 @@ export default function AdminBrandingPage() {
         sidebarFontColor: theme?.sidebarFontColor || "#1f2937",
         useSidebarGradient: theme?.useSidebarGradient === true,
         useLoginGradient: theme?.useLoginGradient === true,
-        sidebarGradientConfig: theme?.sidebarGradientConfig || { ...DEFAULT_GRADIENT_CONFIG },
-        loginGradientConfig: theme?.loginGradientConfig || { ...DEFAULT_GRADIENT_CONFIG },
+        sidebarGradientConfig: theme?.sidebarGradientConfig || 
+          (theme?.sidebarGradient ? parseGradientCSS(theme.sidebarGradient) : null) || 
+          { ...DEFAULT_GRADIENT_CONFIG },
+        loginGradientConfig: theme?.loginGradientConfig || 
+          (theme?.loginGradient ? parseGradientCSS(theme.loginGradient) : null) || 
+          { ...DEFAULT_GRADIENT_CONFIG },
       });
     }
   }, [tenantData]);
