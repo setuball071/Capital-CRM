@@ -4879,8 +4879,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     try {
       const runId = parseInt(req.params.id);
       const userTenantId = req.tenantId;
+      const isMaster = req.user?.isMaster === true;
       
-      console.log(`[ImportRun] Starting TRANSACTIONAL cascading delete for run ${runId} (userTenant: ${userTenantId})...`);
+      console.log(`[ImportRun] Starting TRANSACTIONAL cascading delete for run ${runId} (userTenant: ${userTenantId}, isMaster: ${isMaster})...`);
       
       // Buscar o import_run para obter tenantId e base_tag
       const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
@@ -4889,8 +4890,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Import run não encontrado" });
       }
       
-      // Usar tenantId do run ou do usuário
-      const effectiveTenantId = run.tenantId || userTenantId;
+      // Validar tenant: usuário master pode excluir de qualquer tenant, outros só do próprio
+      const runTenantId = run.tenantId;
+      if (!isMaster && runTenantId && runTenantId !== userTenantId) {
+        console.error(`[ImportRun] ERROR: Tenant mismatch - user ${userTenantId} trying to delete run from tenant ${runTenantId}`);
+        return res.status(403).json({ message: "Sem permissão para excluir importação de outro tenant" });
+      }
+      
+      // Usar tenantId do run (sempre preferir o do run para garantir deleção correta)
+      const effectiveTenantId = runTenantId || userTenantId;
       const runBaseTag = run.baseTag || "";
       
       if (!effectiveTenantId) {
