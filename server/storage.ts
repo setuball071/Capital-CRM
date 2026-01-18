@@ -1542,9 +1542,10 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctTiposContratoByBanco(banco: string): Promise<string[]> {
+    // Usar ILIKE para busca case-insensitive
     const result = await db.select({ tipoContrato: clientesContratos.tipoContrato })
       .from(clientesContratos)
-      .where(eq(clientesContratos.banco, banco));
+      .where(ilike(clientesContratos.banco, banco));
     const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
     return uniqueTipos.sort() as string[];
   }

@@ -1,0 +1,75 @@
+PROBLEMA: O filtro dinâmico de "Tipo de Contrato" funciona quando o banco é selecionado da lista padrão, mas NÃO funciona quando o usuário digita um banco manualmente que não está na lista.
+
+CONTEXTO:
+- Campo "Banco" permite duas formas de input:
+  1. Selecionar da lista padrão (funciona ✓)
+  2. Digitar manualmente um banco que não está na lista (não funciona ✗)
+- Quando banco é digitado manualmente, o filtro de "Tipo de Contrato" volta a mostrar TODOS os tipos de TODOS os bancos
+
+CAUSA PROVÁVEL:
+- A lista padrão de bancos é hardcoded/fixa
+- Quando usuário digita banco livre, o valor não está sendo capturado corretamente
+- OU a query está fazendo match exato e falhando para bancos digitados
+
+SOLUÇÃO NECESSÁRIA:
+
+1. VERIFICAR CAPTURA DO VALOR:
+   - O campo "Banco" deve capturar TANTO seleção da lista QUANTO texto digitado
+   - Garantir que onChange captura ambos os casos
+   - Debug: console.log do valor do banco quando digitado manualmente
+
+2. AJUSTAR QUERY DE TIPOS DE CONTRATO:
+   - A query atual provavelmente faz match exato: WHERE banco = $1
+   - Pode precisar ser case-insensitive ou usar LIKE:
+```sql
+   SELECT DISTINCT tipo_contrato 
+   FROM clientes_contratos 
+   WHERE UPPER(banco) = UPPER($1)  -- case-insensitive
+   ORDER BY tipo_contrato;
+```
+   
+   OU se for busca parcial:
+```sql
+   SELECT DISTINCT tipo_contrato 
+   FROM clientes_contratos 
+   WHERE banco ILIKE '%' || $1 || '%'  -- busca parcial
+   ORDER BY tipo_contrato;
+```
+
+3. NORMALIZAÇÃO DO NOME DO BANCO:
+   - Verificar se nome do banco no database está exatamente igual ao digitado
+   - Exemplo: Database tem "BANCO PAN" mas usuário digita "Banco Pan"
+   - Solução: sempre comparar em UPPER ou normalizar
+
+4. FALLBACK INTELIGENTE:
+   - Se banco digitado não retornar nenhum tipo → mostrar mensagem
+   - Algo como: "Nenhum tipo de contrato encontrado para este banco"
+   - Em vez de mostrar todos os tipos (comportamento atual)
+
+5. DEBUG RECOMENDADO:
+   - Adicionar log no backend para ver:
+     * Qual banco está sendo enviado na requisição
+     * Quantos tipos foram retornados
+     * Se query retornou vazio
+   
+   Exemplo:
+```typescript
+   console.log('Buscando tipos para banco:', banco);
+   console.log('Tipos encontrados:', tipos.length);
+```
+
+6. CÓDIGO FRONTEND ESPERADO:
+```typescript
+   // Capturar tanto seleção quanto texto livre
+   const handleBancoChange = (value: string) => {
+     setBancoSelecionado(value); // value pode vir da lista OU digitado
+     // Buscar tipos automaticamente
+     buscarTiposContrato(value);
+   };
+```
+
+TESTE:
+1. Selecionar banco da lista padrão → deve funcionar (já funciona)
+2. Digitar manualmente "AGIBANK" → deve carregar tipos do AGIBANK
+3. Digitar "banco pan" (minúsculo) → deve funcionar (case-insensitive)
+4. Digitar banco inexistente "BANCO XYZ" → deve mostrar lista vazia ou mensagem
