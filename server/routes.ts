@@ -4786,9 +4786,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   });
 
   // GET lista de import runs - MASTER ONLY
+  // Increased limit from 50 to 1000 to show more import history
   app.get("/api/import-runs", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {
-      const runs = await db.select().from(importRuns).orderBy(desc(importRuns.createdAt)).limit(50);
+      const runs = await db.select().from(importRuns).orderBy(desc(importRuns.createdAt)).limit(1000);
       return res.json(runs);
     } catch (error) {
       console.error("Get import runs error:", error);
