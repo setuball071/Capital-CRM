@@ -1,0 +1,65 @@
+PROBLEMA: A interface atual de gradientes exige que o usuário escreva código CSS manualmente (ex: "linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%)"), o que é difícil para usuários não-técnicos.
+
+SOLUÇÃO NECESSÁRIA: Criar um editor visual de gradientes amigável
+
+IMPLEMENTAÇÃO:
+
+1. SUBSTITUIR CAMPO DE TEXTO por um EDITOR VISUAL com:
+   
+   A) Seletor de cores (Color Picker):
+      - Botão "Adicionar Cor" que abre um color picker
+      - Permitir adicionar até 5 cores no gradiente
+      - Mostrar preview em tempo real
+   
+   B) Controles de posição:
+      - Slider para ajustar posição de cada cor (0% a 100%)
+      - Permitir remover cores adicionadas
+   
+   C) Direção do gradiente:
+      - Dropdown ou botões para escolher:
+        * Horizontal (90deg)
+        * Vertical (180deg)
+        * Diagonal ↘ (135deg) [padrão]
+        * Diagonal ↙ (45deg)
+   
+   D) Preview visual:
+      - Barra mostrando o gradiente em tempo real
+      - Exatamente como está agora (a barra colorida)
+
+2. INTERFACE SUGERIDA:
+
+   [✓] Usar gradiente no menu lateral
+   
+   Cores do Gradiente:
+   [Cor 1: 🎨 #FF6B00] [Posição: 0%] [X Remover]
+   [Cor 2: 🎨 #FF1493] [Posição: 50%] [X Remover]
+   [Cor 3: 🎨 #9C27B0] [Posição: 100%] [X Remover]
+   
+   [+ Adicionar Cor]
+   
+   Direção: [Diagonal ↘ ▼]
+   
+   Preview:
+   [████████████████████] (barra com gradiente)
+   
+   ---
+   
+   [✓] Usar gradiente na tela de login
+   
+   (mesma interface acima)
+
+3. CÓDIGO GERADO AUTOMATICAMENTE:
+   - O sistema deve gerar automaticamente o CSS baseado nas escolhas
+   - Armazenar no themeJson como string CSS pronta
+   - Permitir também um modo "Avançado" com campo de texto livre para usuários técnicos
+
+4. BIBLIOTECAS RECOMENDADAS:
+   - react-colorful (color picker moderno e leve)
+   - ou @uiw/react-color (alternativa)
+   - Shadcn/ui Slider para posição das cores
+
+IMPORTANTE:
+- Interface deve ser 100% visual, sem exigir conhecimento de CSS
+- Manter preview em tempo real
+- Salvar as cores individuais + direção + posições no themeJson para permitir edição posterior
+- Ter opção de "Usar cor sólida" para desativar gradiente
