@@ -6390,6 +6390,25 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET tipos de contrato filtrados por banco - MASTER ONLY
+  app.get("/api/clientes/filtros/tipos-contrato", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
+    try {
+      const banco = req.query.banco as string | undefined;
+      
+      let tiposContrato: string[];
+      if (banco && banco.trim()) {
+        tiposContrato = await storage.getDistinctTiposContratoByBanco(banco.trim());
+      } else {
+        tiposContrato = await storage.getDistinctTiposContratoClientes();
+      }
+      
+      return res.json(tiposContrato);
+    } catch (error) {
+      console.error("Get tipos contrato error:", error);
+      return res.status(500).json({ message: "Erro ao buscar tipos de contrato" });
+    }
+  });
+
   // GET convênios disponíveis para consulta de clientes - MASTER ONLY
   app.get("/api/clientes/filtros/convenios", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
     try {

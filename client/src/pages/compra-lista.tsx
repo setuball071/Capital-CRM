@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,10 +194,34 @@ export default function CompraLista() {
   const [campanhaDescricao, setCampanhaDescricao] = useState("");
   const [campanhaLimiteLeads, setCampanhaLimiteLeads] = useState<number | undefined>(undefined);
   const [selectedPacote, setSelectedPacote] = useState<PacotePreco | null>(null);
+  const [tiposContratoFiltrados, setTiposContratoFiltrados] = useState<string[]>([]);
+  const [isLoadingTipos, setIsLoadingTipos] = useState(false);
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
   });
+
+  // Buscar tipos de contrato dinamicamente quando o banco mudar
+  useEffect(() => {
+    const fetchTiposContrato = async () => {
+      setIsLoadingTipos(true);
+      try {
+        const url = filtros.banco 
+          ? `/api/clientes/filtros/tipos-contrato?banco=${encodeURIComponent(filtros.banco)}`
+          : `/api/clientes/filtros/tipos-contrato`;
+        const response = await fetch(url, { credentials: "include" });
+        if (response.ok) {
+          const tipos = await response.json();
+          setTiposContratoFiltrados(tipos);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar tipos de contrato:", error);
+      } finally {
+        setIsLoadingTipos(false);
+      }
+    };
+    fetchTiposContrato();
+  }, [filtros.banco]);
 
   const { data: pedidos = [], isLoading: isLoadingPedidos } = useQuery<PedidoLista[]>({
     queryKey: ["/api/pedidos-lista"],
@@ -554,7 +578,7 @@ export default function CompraLista() {
                     <Combobox
                       options={filtrosDisponiveis?.bancos || []}
                       value={filtros.banco}
-                      onValueChange={(v) => setFiltros({ ...filtros, banco: v })}
+                      onValueChange={(v) => setFiltros({ ...filtros, banco: v, tipo_contrato: undefined })}
                       placeholder="Todos os bancos"
                       searchPlaceholder="Buscar banco..."
                       emptyText="Nenhum banco encontrado."
@@ -569,17 +593,23 @@ export default function CompraLista() {
                     <Select
                       value={filtros.tipo_contrato || "all"}
                       onValueChange={(v) => setFiltros({ ...filtros, tipo_contrato: v === "all" ? undefined : v })}
+                      disabled={isLoadingTipos}
                     >
                       <SelectTrigger data-testid="select-tipo-contrato">
-                        <SelectValue placeholder="Todos" />
+                        <SelectValue placeholder={isLoadingTipos ? "Carregando..." : (filtros.banco ? "Selecione" : "Todos")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
-                        {filtrosDisponiveis?.tiposContrato?.map((t) => (
+                        {tiposContratoFiltrados.map((t) => (
                           <SelectItem key={t} value={t}>{t}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {filtros.banco && tiposContratoFiltrados.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {tiposContratoFiltrados.length} tipo(s) disponível(is) para {filtros.banco}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

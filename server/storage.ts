@@ -237,6 +237,7 @@ export interface IStorage {
   getDistinctUfsClientes(): Promise<string[]>;
   getDistinctBancosClientes(): Promise<string[]>;
   getDistinctTiposContratoClientes(): Promise<string[]>;
+  getDistinctTiposContratoByBanco(banco: string): Promise<string[]>;
   
   // Clientes Vínculos
   getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
@@ -1536,6 +1537,14 @@ export class DbStorage implements IStorage {
 
   async getDistinctTiposContratoClientes(): Promise<string[]> {
     const result = await db.select({ tipoContrato: clientesContratos.tipoContrato }).from(clientesContratos);
+    const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
+    return uniqueTipos.sort() as string[];
+  }
+
+  async getDistinctTiposContratoByBanco(banco: string): Promise<string[]> {
+    const result = await db.select({ tipoContrato: clientesContratos.tipoContrato })
+      .from(clientesContratos)
+      .where(eq(clientesContratos.banco, banco));
     const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
     return uniqueTipos.sort() as string[];
   }

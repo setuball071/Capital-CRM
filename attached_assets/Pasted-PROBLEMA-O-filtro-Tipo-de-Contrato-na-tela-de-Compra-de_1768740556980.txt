@@ -1,0 +1,79 @@
+PROBLEMA: O filtro "Tipo de Contrato" na tela de Compra de Lista mostra TODOS os códigos de TODOS os bancos (lista gigante e confusa). Precisa mostrar apenas os tipos de contrato do banco selecionado.
+
+LOCALIZAÇÃO:
+- Tela: Base de Clientes → Compra de Lista
+- Seção: Filtros de Contrato
+- Campos envolvidos:
+  * Banco (dropdown) - primeiro filtro
+  * Tipo de Contrato (dropdown) - segundo filtro
+
+COMPORTAMENTO ATUAL (PROBLEMA):
+1. Usuário abre "Tipo de Contrato" → mostra lista gigante com códigos de todos os bancos
+2. Lista tem centenas de códigos misturados (1808624, 304101, 326230, etc.)
+3. Usuário não sabe quais códigos são do banco que ele quer
+
+COMPORTAMENTO ESPERADO (SOLUÇÃO):
+1. Usuário seleciona "Banco: AGIBANK"
+2. Dropdown "Tipo de Contrato" atualiza automaticamente
+3. Mostra APENAS os tipos de contrato do AGIBANK
+4. Se usuário trocar para outro banco → lista de tipos atualiza novamente
+
+IMPLEMENTAÇÃO NECESSÁRIA:
+
+1. CRIAR RELAÇÃO BANCO ↔ TIPOS DE CONTRATO:
+   - Verificar de onde vem a lista de tipos de contrato
+   - Provavelmente vem da tabela "clientes_contratos" campo "tipoContrato"
+   - Fazer query filtrada por banco:
+```sql
+   SELECT DISTINCT tipo_contrato 
+   FROM clientes_contratos 
+   WHERE banco = $1 
+   ORDER BY tipo_contrato;
+```
+
+2. TORNAR DROPDOWN DINÂMICO NO FRONTEND:
+   - Quando usuário seleciona um banco → disparar evento
+   - Fazer requisição para buscar tipos daquele banco
+   - Atualizar opções do dropdown "Tipo de Contrato"
+   - Se banco estiver vazio → mostrar todos os tipos (comportamento atual)
+
+3. CÓDIGO FRONTEND ESPERADO (exemplo):
+```typescript
+   const [bancoSelecionado, setBancoSelecionado] = useState("");
+   const [tiposContrato, setTiposContrato] = useState([]);
+   
+   useEffect(() => {
+     if (bancoSelecionado) {
+       // Buscar tipos apenas deste banco
+       fetch(`/api/tipos-contrato?banco=${bancoSelecionado}`)
+         .then(res => res.json())
+         .then(data => setTiposContrato(data));
+     } else {
+       // Se sem banco selecionado, buscar todos
+       fetch('/api/tipos-contrato')
+         .then(res => res.json())
+         .then(data => setTiposContrato(data));
+     }
+   }, [bancoSelecionado]);
+```
+
+4. CRIAR ENDPOINT DE API:
+   - Rota: GET /api/tipos-contrato?banco={nomeBanco}
+   - Retornar array de tipos únicos daquele banco
+   - Se parâmetro banco estiver vazio → retornar todos
+
+5. MELHORIAS ADICIONAIS:
+   - Limpar seleção de "Tipo de Contrato" quando trocar de banco
+   - Mostrar loading/spinner enquanto carrega tipos
+   - Adicionar placeholder: "Selecione um banco primeiro" se banco vazio
+
+EXEMPLO DE FLUXO:
+1. Página carrega → "Tipo de Contrato" mostra todos (ou vazio)
+2. Usuário seleciona "AGIBANK" → "Tipo de Contrato" carrega apenas tipos do AGIBANK
+3. Usuário troca para "BANCO PAN" → "Tipo de Contrato" atualiza para tipos do BANCO PAN
+4. Usuário remove banco → "Tipo de Contrato" volta a mostrar todos
+
+TESTE:
+- Selecionar AGIBANK → verificar que apenas tipos do AGIBANK aparecem
+- Trocar para outro banco → lista deve atualizar
+- Remover seleção de banco → deve voltar lista completa
