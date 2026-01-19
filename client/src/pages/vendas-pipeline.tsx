@@ -752,7 +752,7 @@ export default function VendasPipeline() {
       </div>
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -870,10 +870,10 @@ export default function VendasPipeline() {
                 ) : leadInteractions.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Nenhuma interação registrada</p>
                 ) : (
-                  <ScrollArea className="h-40">
-                    <div className="space-y-2">
+                  <ScrollArea className="h-64">
+                    <div className="space-y-3 pr-3">
                       {leadInteractions.map((interaction) => (
-                        <div key={interaction.id} className="text-xs border rounded p-2 space-y-1">
+                        <div key={interaction.id} className="text-sm border rounded-lg p-3 space-y-2 bg-muted/30">
                           <div className="flex items-center justify-between gap-2">
                             <Badge variant="outline" className="text-xs">
                               {LEAD_MARKER_LABELS[interaction.leadMarker as LeadMarker] || interaction.leadMarker}
