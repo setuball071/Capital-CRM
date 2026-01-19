@@ -383,7 +383,7 @@ export default function VendasPipeline() {
 
   const addObservationMutation = useMutation({
     mutationFn: async (data: { leadId: number; observacao: string; tipoContato: string }) => {
-      return apiRequest("POST", `/api/crm/leads/${data.leadId}/interaction`, {
+      return apiRequest("POST", `/api/crm/leads/${data.leadId}/observation`, {
         observacao: data.observacao,
         tipoContato: data.tipoContato,
       });

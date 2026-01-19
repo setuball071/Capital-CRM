@@ -11718,8 +11718,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
-  // POST /api/crm/leads/:id/interaction - Adicionar observação/interação sem mover de estágio
-  app.post("/api/crm/leads/:id/interaction", requireAuth, async (req, res) => {
+  // POST /api/crm/leads/:id/observation - Adicionar observação/interação sem mover de estágio
+  app.post("/api/crm/leads/:id/observation", requireAuth, async (req, res) => {
     try {
       const leadId = parseInt(req.params.id);
       const userId = req.user!.id;
