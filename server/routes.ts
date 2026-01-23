@@ -1471,6 +1471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Middleware para configurações do sistema - REFACTORED to use profile-based permissions
   // Now checks for modulo_config_sistema permission (nomenclaturas, etc.)
+  // Also allows 'operacional' role users since nomenclaturas are part of operational config
   async function requireMasterOrAdmin(req: Request, res: Response, next: NextFunction) {
     if (!req.user) {
       return res.status(401).json({ message: "Não autorizado" });
@@ -1482,10 +1483,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return next();
     }
     
+    // Role 'operacional' has access to nomenclaturas (operational config)
+    if (req.user.role === "operacional") {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_config_sistema", "edit", true, "role=operacional");
+      return next();
+    }
+    
     // Check profile-based permission for system config
     const hasAccess = await storage.hasModuleEditAccess(req.user.id, "modulo_config_sistema");
     if (hasAccess) {
       logPermissionCheck(req.user.id, req.user.name, "modulo_config_sistema", "edit", true, "Profile permission granted");
+      return next();
+    }
+    
+    // Also allow users with modulo_roteiros edit permission
+    const hasRoteirosEdit = await storage.hasModuleEditAccess(req.user.id, "modulo_roteiros");
+    if (hasRoteirosEdit) {
+      logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "edit", true, "modulo_roteiros edit granted");
       return next();
     }
     
