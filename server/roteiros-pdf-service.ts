@@ -48,11 +48,12 @@ METADADOS PARA BUSCA:
 REGRAS DE FORMATAÇÃO DE TIPOS (OBRIGATÓRIO):
 1. Campos de IDADE (idade_minima, idade_maxima): números inteiros SEM aspas (ex: 75, 18, 80)
 2. Campos de PRAZO em meses (prazo_minimo_meses, prazo_maximo_meses): números inteiros SEM aspas (ex: 12, 84, 96)
-3. Campos de VALOR MONETÁRIO (parcela_minima, valor_minimo_liberado, limite_parcela): strings formatadas com R$ (ex: "R$ 2.000,00")
-4. Campos de PERCENTUAL (margem_especifica, margem_seguranca): strings com símbolo % (ex: "5%", "30%")
-5. Campos BOOLEANOS (todas as flags): apenas true ou false, NUNCA null ou string
-6. Campos de TEXTO: strings não vazias
-7. Campos de ARRAY: arrays não vazios, ou OMITIR o campo se não houver dados
+3. Campos NUMÉRICOS de valor (limite_parcela, parcela_minima): números decimais SEM aspas e SEM símbolos (ex: 2000.00, 150.50)
+4. Campos de TEXTO de valor (valor_minimo_liberado): strings formatadas com R$ (ex: "R$ 2.000,00")
+5. Campos de PERCENTUAL (margem_especifica, margem_seguranca): strings com símbolo % (ex: "5%", "30%")
+6. Campos BOOLEANOS (todas as flags): apenas true ou false, NUNCA null ou string
+7. Campos de TEXTO: strings não vazias
+8. Campos de ARRAY: arrays não vazios, ou OMITIR o campo se não houver dados
 
 INSTRUÇÕES:
 1. Retorne APENAS um objeto JSON válido no formato: {"roteiros": [...]}
