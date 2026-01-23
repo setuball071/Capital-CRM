@@ -93,6 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
     
+    // Usuários com role 'operacional' têm acesso total ao módulo de roteiros (área operacional)
+    if (user?.role === "operacional" && module === "modulo_roteiros") {
+      return true;
+    }
+    
     // Primeiro, verifica permissão legacy no nível do módulo
     if (checkPermission(module, accessType)) {
       return true;
@@ -117,6 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasSubItemAccess = (module: ModuleName, subItem: string, accessType: "view" | "edit" | "delegate" = "view"): boolean => {
     // isMaster sempre tem acesso total
     if (user?.isMaster) {
+      return true;
+    }
+    
+    // Usuários com role 'operacional' têm acesso total ao módulo de roteiros (área operacional)
+    if (user?.role === "operacional" && module === "modulo_roteiros") {
       return true;
     }
     
