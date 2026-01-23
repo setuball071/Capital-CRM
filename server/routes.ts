@@ -1364,7 +1364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all agreements (master only)
-  app.get("/api/agreements/all", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/agreements/all", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const agreements = await storage.getAllAgreements();
       return res.json(agreements);
@@ -1374,8 +1374,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create agreement (master only)
-  app.post("/api/agreements", requireAuth, requireMaster, async (req, res) => {
+  // Create agreement (operacional access)
+  app.post("/api/agreements", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const result = insertAgreementSchema.safeParse(req.body);
       
@@ -1394,8 +1394,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update agreement (master only)
-  app.put("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+  // Update agreement (operacional access)
+  app.put("/api/agreements/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const result = insertAgreementSchema.partial().safeParse(req.body);
@@ -1419,8 +1419,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete agreement (master only)
-  app.delete("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+  // Delete agreement (operacional access)
+  app.delete("/api/agreements/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteAgreement(id);
@@ -2387,8 +2387,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create agreement (master only)
-  app.post("/api/agreements", requireAuth, requireMaster, async (req, res) => {
+  // Create agreement (operacional access)
+  app.post("/api/agreements", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const result = insertAgreementSchema.safeParse(req.body);
       
@@ -2407,8 +2407,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update agreement (master only)
-  app.patch("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+  // Update agreement (operacional access)
+  app.patch("/api/agreements/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -2436,8 +2436,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete agreement (master only)
-  app.delete("/api/agreements/:id", requireAuth, requireMaster, async (req, res) => {
+  // Delete agreement (operacional access)
+  app.delete("/api/agreements/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
