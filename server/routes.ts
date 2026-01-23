@@ -1832,7 +1832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all coefficient tables (master only)
-  app.get("/api/coefficient-tables/all", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/coefficient-tables/all", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const tables = await storage.getAllCoefficientTables();
       return res.json(tables);
@@ -1842,8 +1842,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create coefficient table (master only)
-  app.post("/api/coefficient-tables", requireAuth, requireMaster, async (req, res) => {
+  // Create coefficient table (operacional access)
+  app.post("/api/coefficient-tables", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const result = insertCoefficientTableSchema.safeParse(req.body);
       
@@ -1862,8 +1862,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update coefficient table (master only)
-  app.put("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+  // Update coefficient table (operacional access)
+  app.put("/api/coefficient-tables/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const result = insertCoefficientTableSchema.partial().safeParse(req.body);
@@ -1887,8 +1887,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete coefficient table (master only)
-  app.delete("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+  // Delete coefficient table (operacional access)
+  app.delete("/api/coefficient-tables/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteCoefficientTable(id);
@@ -1899,8 +1899,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk delete coefficient tables (master only)
-  app.post("/api/coefficient-tables/bulk-delete", requireAuth, requireMaster, async (req, res) => {
+  // Bulk delete coefficient tables (operacional access)
+  app.post("/api/coefficient-tables/bulk-delete", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const { ids } = req.body;
       
@@ -1921,8 +1921,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk deactivate coefficient tables (master only)
-  app.post("/api/coefficient-tables/bulk-deactivate", requireAuth, requireMaster, async (req, res) => {
+  // Bulk deactivate coefficient tables (operacional access)
+  app.post("/api/coefficient-tables/bulk-deactivate", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const { ids } = req.body;
       
@@ -1945,8 +1945,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk reactivate coefficient tables (master only)
-  app.post("/api/coefficient-tables/bulk-reactivate", requireAuth, requireMaster, async (req, res) => {
+  // Bulk reactivate coefficient tables (operacional access)
+  app.post("/api/coefficient-tables/bulk-reactivate", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const { ids } = req.body;
       
@@ -2481,8 +2481,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create coefficient table (master only)
-  app.post("/api/coefficient-tables", requireAuth, requireMaster, async (req, res) => {
+  // Create coefficient table (operacional access)
+  app.post("/api/coefficient-tables", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const result = insertCoefficientTableSchema.safeParse(req.body);
       
@@ -2501,8 +2501,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk import coefficient tables (master only)
-  app.post("/api/coefficient-tables/bulk-import", requireAuth, requireMaster, async (req, res) => {
+  // Bulk import coefficient tables (operacional access)
+  app.post("/api/coefficient-tables/bulk-import", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const { tables } = req.body;
 
@@ -2544,8 +2544,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update coefficient table (master only)
-  app.patch("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+  // Update coefficient table (operacional access)
+  app.patch("/api/coefficient-tables/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -2573,8 +2573,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete coefficient table (master only)
-  app.delete("/api/coefficient-tables/:id", requireAuth, requireMaster, async (req, res) => {
+  // Delete coefficient table (operacional access)
+  app.delete("/api/coefficient-tables/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
