@@ -77,9 +77,23 @@ export function AppSidebar() {
     const module = item.module || getModuleForUrl(item.url);
     if (!module) return true;
     
+    // DEBUG: Log para investigar problema de acesso operacional
+    if (module === "modulo_roteiros") {
+      console.log("[SIDEBAR DEBUG] canShowMenuItem for modulo_roteiros:", {
+        url: item.url,
+        subItem: item.subItem,
+        userRole: user?.role,
+        isMaster: user?.isMaster
+      });
+    }
+    
     // If sub-item is specified, check granular permission
     if (item.subItem) {
-      return hasSubItemAccess(module as ModuleName, item.subItem);
+      const hasAccess = hasSubItemAccess(module as ModuleName, item.subItem);
+      if (module === "modulo_roteiros") {
+        console.log("[SIDEBAR DEBUG] hasSubItemAccess result:", hasAccess);
+      }
+      return hasAccess;
     }
     
     // Otherwise fall back to module-level access
