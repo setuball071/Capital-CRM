@@ -229,13 +229,13 @@ function Router() {
                 {() => <ModuleRoute component={UsersPage} module="modulo_config_usuarios" />}
               </Route>
               <Route path="/agreements">
-                {() => <MasterRoute component={AgreementsPage} />}
+                {() => <ModuleRoute component={AgreementsPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/banks">
-                {() => <MasterRoute component={BanksPage} />}
+                {() => <ModuleRoute component={BanksPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/coefficient-tables">
-                {() => <MasterRoute component={CoefficientTablesPage} />}
+                {() => <ModuleRoute component={CoefficientTablesPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/roteiros">
                 {() => <ModuleRoute component={RoteirosPage} module="modulo_roteiros" />}

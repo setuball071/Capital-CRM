@@ -88,16 +88,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Não há mais herança baseada em role
   // Retorna true se pelo menos um sub-item do módulo tiver a permissão solicitada
   const hasModuleAccess = (module: ModuleName, accessType: "view" | "edit" | "delegate" = "view"): boolean => {
-    // DEBUG: Log para investigar problema de acesso operacional
-    if (module === "modulo_roteiros") {
-      console.log("[AUTH DEBUG] hasModuleAccess check:", { 
-        module, 
-        userRole: user?.role, 
-        isMaster: user?.isMaster,
-        roleIsOperacional: user?.role === "operacional"
-      });
-    }
-    
     // isMaster sempre tem acesso total a todos os módulos
     if (user?.isMaster) {
       return true;
@@ -105,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Usuários com role 'operacional' têm acesso total ao módulo de roteiros (área operacional)
     if (user?.role === "operacional" && module === "modulo_roteiros") {
-      console.log("[AUTH DEBUG] Granting access to operacional user for modulo_roteiros");
       return true;
     }
     
