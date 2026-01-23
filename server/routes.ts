@@ -348,6 +348,46 @@ function requireMasterRole(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Middleware para acesso à área Operacional (bancos, convênios, tabelas, roteiros)
+// Permite: isMaster, role='operacional', ou permissão de edição em modulo_roteiros
+async function requireOperacionalAccess(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Não autorizado" });
+  }
+  
+  // isMaster tem acesso total
+  if (req.user.isMaster) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "edit", true, "isMaster=true");
+    return next();
+  }
+  
+  // Role 'operacional' tem acesso direto à área operacional
+  if (req.user.role === "operacional") {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "edit", true, "role=operacional");
+    return next();
+  }
+  
+  // Verificar permissão de edição no módulo de roteiros (área operacional)
+  const hasEditAccess = await storage.hasSubItemAccess(req.user.id, "modulo_roteiros", "roteiros_bancarios", "canEdit");
+  if (hasEditAccess) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros.roteiros_bancarios", "edit", true, "Profile permission granted");
+    return next();
+  }
+  
+  // Também verificar permissões específicas para outros sub-itens operacionais
+  const hasConveniosEdit = await storage.hasSubItemAccess(req.user.id, "modulo_roteiros", "convenios", "canEdit");
+  const hasBancosEdit = await storage.hasSubItemAccess(req.user.id, "modulo_roteiros", "bancos", "canEdit");
+  const hasTabelasEdit = await storage.hasSubItemAccess(req.user.id, "modulo_roteiros", "tabelas_coeficientes", "canEdit");
+  
+  if (hasConveniosEdit || hasBancosEdit || hasTabelasEdit) {
+    logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "edit", true, "Sub-item edit permission");
+    return next();
+  }
+  
+  logPermissionCheck(req.user.id, req.user.name, "modulo_roteiros", "edit", false, "No operacional access");
+  return res.status(403).json({ message: "Acesso negado - você não tem permissão para editar a área operacional" });
+}
+
 // Table access middleware - REFACTORED to use profile-based permissions
 // Now checks for modulo_tabelas_coeficientes permission instead of role
 async function requireTableAccess(req: Request, res: Response, next: NextFunction) {
@@ -1237,7 +1277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all banks (master only)
-  app.get("/api/banks/all", requireAuth, requireMaster, async (req, res) => {
+  app.get("/api/banks/all", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const bankList = await storage.getAllBanks();
       return res.json(bankList);
@@ -1248,7 +1288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create bank (master only)
-  app.post("/api/banks", requireAuth, requireMaster, async (req, res) => {
+  app.post("/api/banks", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const result = insertBankSchema.safeParse(req.body);
       
@@ -1274,7 +1314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update bank (master only)
-  app.put("/api/banks/:id", requireAuth, requireMaster, async (req, res) => {
+  app.put("/api/banks/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const result = insertBankSchema.partial().safeParse(req.body);
@@ -1299,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete bank (master only)
-  app.delete("/api/banks/:id", requireAuth, requireMaster, async (req, res) => {
+  app.delete("/api/banks/:id", requireAuth, requireOperacionalAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteBank(id);
