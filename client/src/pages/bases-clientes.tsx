@@ -2550,6 +2550,74 @@ export default function BasesClientes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de confirmação de exclusão em massa */}
+      <AlertDialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[500px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Confirmar Exclusão em Massa
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  Você está prestes a excluir <strong>{selectedRunIds.size}</strong> base(s) importada(s). 
+                  Esta ação não pode ser desfeita.
+                </p>
+                <div className="bg-muted p-3 rounded-md max-h-32 overflow-y-auto">
+                  <p className="text-sm font-medium mb-2">Arquivos selecionados:</p>
+                  <ul className="text-sm space-y-1">
+                    {getSelectedRunNames().slice(0, 5).map((name, i) => (
+                      <li key={i} className="text-muted-foreground truncate">• {name}</li>
+                    ))}
+                    {getSelectedRunNames().length > 5 && (
+                      <li className="text-muted-foreground italic">
+                        ...e mais {getSelectedRunNames().length - 5} arquivo(s)
+                      </li>
+                    )}
+                  </ul>
+                </div>
+                {bulkDeleteMutation.isPending && bulkDeleteProgress && (
+                  <div className="space-y-2">
+                    <Progress value={(bulkDeleteProgress.current / bulkDeleteProgress.total) * 100} />
+                    <p className="text-sm text-center text-muted-foreground">
+                      Excluindo {bulkDeleteProgress.current} de {bulkDeleteProgress.total}...
+                    </p>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => setIsBulkDeleteDialogOpen(false)}
+              disabled={bulkDeleteMutation.isPending}
+              data-testid="button-cancel-bulk-delete"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
+              data-testid="button-confirm-bulk-delete"
+            >
+              {bulkDeleteMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir {selectedRunIds.size} base(s)
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
