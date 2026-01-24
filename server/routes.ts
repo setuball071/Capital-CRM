@@ -4995,28 +4995,44 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               continue;
             }
             
-            // Executar deletes em sequência para evitar timeout no NeonDB serverless
+            // Helper para executar query com retry em caso de falha de conexão
+            const executeWithRetry = async (query: any, maxRetries = 3) => {
+              for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                  return await db.execute(query);
+                } catch (err: any) {
+                  if (attempt < maxRetries && err.message?.includes('fetch failed')) {
+                    console.log(`[BulkDelete] Retry ${attempt}/${maxRetries} for query...`);
+                    await new Promise(r => setTimeout(r, 500 * attempt)); // backoff
+                    continue;
+                  }
+                  throw err;
+                }
+              }
+            };
+            
+            // Executar deletes em sequência com retry
             // 1. Deletar tabelas de staging e auxiliares (mais leves)
-            await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
-            await db.execute(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
-            await db.execute(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
-            await db.execute(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
-            await db.execute(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
             
             // 2. Deletar dados de clientes vinculados ao import_run
-            await db.execute(sql`
+            await executeWithRetry(sql`
               DELETE FROM clientes_folha_mes 
               WHERE import_run_id = ${runId}
                  OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
             `);
             
-            await db.execute(sql`
+            await executeWithRetry(sql`
               DELETE FROM clientes_contratos 
               WHERE import_run_id = ${runId}
                  OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
             `);
             
-            await db.execute(sql`
+            await executeWithRetry(sql`
               DELETE FROM client_contacts 
               WHERE (is_manual = false OR is_manual IS NULL)
                 AND (
@@ -5025,14 +5041,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
                 )
             `);
             
-            await db.execute(sql`
+            await executeWithRetry(sql`
               DELETE FROM clientes_vinculo 
               WHERE import_run_id = ${runId}
                  OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
             `);
             
             // 3. Deletar pessoas órfãs do tenant
-            await db.execute(sql`
+            await executeWithRetry(sql`
               DELETE FROM clientes_pessoa 
               WHERE tenant_id = ${effectiveTenantId}
                 AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = clientes_pessoa.id)
@@ -5042,7 +5058,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             `);
             
             // 4. Deletar o import_run
-            await db.execute(sql`DELETE FROM import_runs WHERE id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM import_runs WHERE id = ${runId}`);
             
             deletedCount++;
             console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${uniqueIds.length})`);
