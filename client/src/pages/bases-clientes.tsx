@@ -2116,18 +2116,41 @@ export default function BasesClientes() {
       {isMaster && importRuns.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-              Histórico de Importações Rápidas
-            </CardTitle>
-            <CardDescription>
-              Rastreabilidade completa de cada linha importada ({importRuns.length} importações)
-            </CardDescription>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Histórico de Importações Rápidas
+                </CardTitle>
+                <CardDescription>
+                  Rastreabilidade completa de cada linha importada ({importRuns.length} importações)
+                </CardDescription>
+              </div>
+              {selectedRunIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setIsBulkDeleteDialogOpen(true)}
+                  data-testid="button-bulk-delete"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir Selecionados ({selectedRunIds.size})
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={isAllCurrentPageSelected()}
+                      onCheckedChange={handleSelectAllRuns}
+                      aria-label="Selecionar todos"
+                      data-testid="checkbox-select-all"
+                    />
+                  </TableHead>
                   <TableHead>Arquivo</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Convênio</TableHead>
@@ -2143,6 +2166,14 @@ export default function BasesClientes() {
                   .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
                   .map((run) => (
                   <TableRow key={run.id} data-testid={`row-import-run-${run.id}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedRunIds.has(run.id)}
+                        onCheckedChange={(checked) => handleSelectRun(run.id, checked === true)}
+                        aria-label={`Selecionar importação ${run.id}`}
+                        data-testid={`checkbox-run-${run.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="max-w-[200px]">
                       <div className="flex flex-col">
                         <span className="truncate font-medium" title={run.arquivoOrigem || `Import #${run.id}`}>
