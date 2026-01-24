@@ -68,12 +68,9 @@ const MODELO_COLUNAS = {
     { nome: "ARQ. UPAG", descricao: "Unidade pagadora" },
   ],
   rendimentos: [
-    { nome: "Créditos", descricao: "Valor bruto da folha (salário bruto)" },
-    { nome: "Débitos", descricao: "Total de descontos da folha" },
-    { nome: "Líquido", descricao: "Valor líquido do salário" },
-    { nome: "Salário Bruto", descricao: "Salário bruto completo" },
-    { nome: "Descontos Brutos", descricao: "Total de descontos brutos" },
-    { nome: "Salário Líquido", descricao: "Salário líquido final" },
+    { nome: "Créditos", descricao: "Valor bruto da folha (também aceita 'Salário Bruto')" },
+    { nome: "Débitos", descricao: "Total de descontos da folha (também aceita 'Descontos Brutos')" },
+    { nome: "Líquido", descricao: "Valor líquido do salário (também aceita 'Salário Líquido')" },
     { nome: "Base Calc", descricao: "Base de cálculo" },
   ],
   margens70: [

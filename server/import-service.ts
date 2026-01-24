@@ -57,13 +57,13 @@ export const COLUMN_MAP: Record<string, string> = {
   liquido: "liquido",
   
   // === SALÁRIO ADICIONAL (Headers: "Salário Bruto", "Descontos Brutos", "Salário Líquido") ===
-  // Campos separados para dados adicionais de salário
-  salario_bruto: "salario_bruto",
-  salariobruto: "salario_bruto",
-  descontos_brutos: "descontos_brutos",
-  descontosbrutos: "descontos_brutos",
-  salario_liquido: "salario_liquido",
-  salarioliquido: "salario_liquido",
+  // Estes são ALIASES que mapeiam para os mesmos campos creditos/debitos/liquido
+  salario_bruto: "creditos",
+  salariobruto: "creditos",
+  descontos_brutos: "debitos",
+  descontosbrutos: "debitos",
+  salario_liquido: "liquido",
+  salarioliquido: "liquido",
   
   competencia_folha: "competencia_folha",
   
