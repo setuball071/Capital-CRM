@@ -5269,6 +5269,193 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE /api/d8/import-runs/bulk-delete - Exclusão em massa de contratos D8
+  // IMPORTANTE: Esta rota DEVE vir ANTES de /api/d8/import-runs/:id para evitar conflito
+  // Apaga SOMENTE contratos, preservando pessoas e vínculos que tenham outros dados
+  app.delete("/api/d8/import-runs/bulk-delete", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
+    try {
+      const { ids: rawIds } = req.body;
+      const userTenantId = req.tenantId;
+      const isMaster = req.user?.isMaster === true;
+      
+      console.log(`[D8-BulkDelete] Received request with body:`, JSON.stringify(req.body));
+      
+      if (!Array.isArray(rawIds) || rawIds.length === 0) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      
+      // Converter e validar IDs para números inteiros
+      const ids: number[] = [];
+      for (const id of rawIds) {
+        const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
+        if (!isNaN(numId) && numId > 0) {
+          ids.push(numId);
+        }
+      }
+      
+      if (ids.length === 0) {
+        return res.status(400).json({ message: "Nenhum ID válido fornecido" });
+      }
+      
+      const uniqueIds = [...new Set(ids)];
+      console.log(`[D8-BulkDelete] Starting bulk delete D8 for ${uniqueIds.length} import runs: [${uniqueIds.join(', ')}]`);
+      
+      // Helper para executar query com retry
+      const executeWithRetry = async (query: any, maxRetries = 3) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            return await db.execute(query);
+          } catch (err: any) {
+            if (attempt < maxRetries && err.message?.includes('fetch failed')) {
+              console.log(`[D8-BulkDelete] Retry ${attempt}/${maxRetries}...`);
+              await new Promise(r => setTimeout(r, 500 * attempt));
+              continue;
+            }
+            throw err;
+          }
+        }
+      };
+      
+      let totalContratos = 0;
+      let totalPessoasAfetadas = 0;
+      let totalVinculosOrfaos = 0;
+      let totalPessoasOrfas = 0;
+      const errors: string[] = [];
+      let processedCount = 0;
+      
+      for (const runId of uniqueIds) {
+        try {
+          // Buscar o import_run para validação
+          const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+          
+          if (!run) {
+            errors.push(`Import #${runId}: não encontrado`);
+            continue;
+          }
+          
+          // Verificar se é D8
+          if (run.tipoImport !== 'd8') {
+            errors.push(`Import #${runId}: não é D8 (tipo: ${run.tipoImport})`);
+            continue;
+          }
+          
+          // Validar tenant
+          const runTenantId = run.tenantId;
+          if (!isMaster && runTenantId && runTenantId !== userTenantId) {
+            errors.push(`Import #${runId}: sem permissão (tenant diferente)`);
+            continue;
+          }
+          
+          const effectiveTenantId = runTenantId || userTenantId;
+          const runBaseTag = run.baseTag || "";
+          
+          if (!effectiveTenantId) {
+            errors.push(`Import #${runId}: tenant não identificado`);
+            continue;
+          }
+          
+          // FASE 1: Deletar contratos
+          const result = await executeWithRetry(sql`
+            WITH 
+            tenant_pessoas AS (
+              SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+            ),
+            deleted_contratos AS (
+              DELETE FROM clientes_contratos 
+              WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+                AND (
+                  import_run_id = ${runId}
+                  OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                )
+              RETURNING id, pessoa_id
+            )
+            SELECT 
+              (SELECT COUNT(*) FROM deleted_contratos) as contratos_count,
+              (SELECT COUNT(DISTINCT pessoa_id) FROM deleted_contratos) as pessoas_afetadas
+          `);
+          
+          const row = result?.rows?.[0] as any || {};
+          const deletedContratos = Number(row.contratos_count) || 0;
+          const pessoasAfetadas = Number(row.pessoas_afetadas) || 0;
+          
+          // FASE 2: Limpeza de órfãos
+          const cleanupResult = await executeWithRetry(sql`
+            WITH 
+            deleted_vinculos AS (
+              DELETE FROM clientes_vinculo v
+              WHERE v.tenant_id = ${effectiveTenantId}
+                AND (
+                  v.import_run_id = ${runId}
+                  OR (v.import_run_id IS NULL AND v.base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                )
+                AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.vinculo_id = v.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.vinculo_id = v.id)
+              RETURNING id, pessoa_id
+            ),
+            deleted_pessoas AS (
+              DELETE FROM clientes_pessoa p
+              WHERE p.tenant_id = ${effectiveTenantId}
+                AND (
+                  p.import_run_id = ${runId}
+                  OR (p.import_run_id IS NULL AND p.base_tag_ultima = ${runBaseTag} AND ${runBaseTag} != '')
+                )
+                AND NOT EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.pessoa_id = p.id)
+                AND NOT EXISTS (SELECT 1 FROM client_contacts c WHERE c.client_id = p.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_telefones t WHERE t.pessoa_id = p.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = p.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.pessoa_id = p.id)
+              RETURNING id
+            )
+            SELECT 
+              (SELECT COUNT(*) FROM deleted_vinculos) as vinculos_count,
+              (SELECT COUNT(*) FROM deleted_pessoas) as pessoas_count
+          `);
+          
+          const cleanupRow = cleanupResult?.rows?.[0] as any || {};
+          const deletedVinculos = Number(cleanupRow.vinculos_count) || 0;
+          const deletedPessoas = Number(cleanupRow.pessoas_count) || 0;
+          
+          // Atualizar status do import_run (com filtro de tenant para segurança)
+          await executeWithRetry(sql`
+            UPDATE import_runs 
+            SET status = 'contratos_deletados', updated_at = NOW()
+            WHERE id = ${runId} AND tenant_id = ${effectiveTenantId}
+          `);
+          
+          totalContratos += deletedContratos;
+          totalPessoasAfetadas += pessoasAfetadas;
+          totalVinculosOrfaos += deletedVinculos;
+          totalPessoasOrfas += deletedPessoas;
+          processedCount++;
+          
+          console.log(`[D8-BulkDelete] Run #${runId}: ${deletedContratos} contratos, ${deletedVinculos} vínculos órfãos, ${deletedPessoas} pessoas órfãs`);
+          
+        } catch (itemError: any) {
+          console.error(`[D8-BulkDelete] Error on run #${runId}:`, itemError.message);
+          errors.push(`Import #${runId}: ${itemError.message || "erro desconhecido"}`);
+        }
+      }
+      
+      console.log(`[D8-BulkDelete] Completed: ${processedCount}/${uniqueIds.length} processed, ${totalContratos} contratos total`);
+      
+      return res.json({
+        success: true,
+        processed: processedCount,
+        deleted: {
+          contratos: totalContratos,
+          pessoasAfetadas: totalPessoasAfetadas,
+          vinculosOrfaos: totalVinculosOrfaos,
+          pessoasOrfas: totalPessoasOrfas
+        },
+        errors: errors.length > 0 ? errors : undefined
+      });
+      
+    } catch (error: any) {
+      console.error("D8 Bulk delete error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao excluir contratos D8" });
+    }
+  });
+
   // DELETE /api/d8/import-runs/:id - Apaga SOMENTE contratos gerados por esse import-run
   // Não apaga pessoas, vínculos, folha nem o import_run em si (mantém rastreabilidade)
   app.delete("/api/d8/import-runs/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {

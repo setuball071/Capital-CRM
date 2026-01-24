@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw, ChevronLeft, ChevronRight, Square, CheckSquare } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw, ChevronLeft, ChevronRight, Square, CheckSquare, FileX } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -182,6 +182,10 @@ export default function BasesClientes() {
   const [d8DeleteConfirmText, setD8DeleteConfirmText] = useState("");
   const [isLoadingD8Preview, setIsLoadingD8Preview] = useState(false);
   const [isDeletingD8, setIsDeletingD8] = useState(false);
+  
+  // D8 Bulk Delete states
+  const [isD8BulkDeleteDialogOpen, setIsD8BulkDeleteDialogOpen] = useState(false);
+  const [d8BulkDeleteConfirmText, setD8BulkDeleteConfirmText] = useState("");
 
   const handleDownloadModelo = () => {
     // Headers canônicos conforme modelo XLSX
@@ -740,6 +744,67 @@ export default function BasesClientes() {
     const ids = Array.from(selectedRunIds);
     setBulkDeleteProgress({ current: 0, total: ids.length });
     bulkDeleteMutation.mutate(ids);
+  };
+
+  // Retorna apenas os IDs de D8 selecionados
+  const getSelectedD8Ids = () => {
+    return importRuns
+      .filter(run => selectedRunIds.has(run.id) && run.tipoImport === 'd8')
+      .map(run => run.id);
+  };
+
+  const d8BulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await fetch("/api/d8/import-runs/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao excluir contratos D8");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const contratos = data.deleted?.contratos || 0;
+      const processed = data.processed || 0;
+      const errorCount = data.errors?.length || 0;
+      
+      if (errorCount > 0) {
+        toast({
+          title: "Exclusão D8 parcial",
+          description: `${processed} import(s) processado(s), ${contratos} contratos excluídos. ${errorCount} erro(s).`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Exclusão D8 concluída",
+          description: `${processed} import(s) processado(s), ${contratos} contratos excluídos.`,
+        });
+      }
+      
+      setSelectedRunIds(new Set());
+      setIsD8BulkDeleteDialogOpen(false);
+      setD8BulkDeleteConfirmText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível excluir os contratos D8.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleD8BulkDelete = () => {
+    const ids = getSelectedD8Ids();
+    d8BulkDeleteMutation.mutate(ids);
   };
 
   // Abrir dialog de preview para exclusão D8
@@ -2127,15 +2192,28 @@ export default function BasesClientes() {
                 </CardDescription>
               </div>
               {selectedRunIds.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setIsBulkDeleteDialogOpen(true)}
-                  data-testid="button-bulk-delete"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Excluir Selecionados ({selectedRunIds.size})
-                </Button>
+                <div className="flex gap-2">
+                  {getSelectedD8Ids().length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsD8BulkDeleteDialogOpen(true)}
+                      data-testid="button-bulk-delete-d8"
+                    >
+                      <FileX className="w-4 h-4 mr-2" />
+                      Excluir D8 ({getSelectedD8Ids().length})
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setIsBulkDeleteDialogOpen(true)}
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir Selecionados ({selectedRunIds.size})
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>
@@ -2612,6 +2690,84 @@ export default function BasesClientes() {
                 <>
                   <Trash2 className="w-4 h-4 mr-2" />
                   Excluir {selectedRunIds.size} base(s)
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de confirmação para exclusão D8 em massa */}
+      <AlertDialog open={isD8BulkDeleteDialogOpen} onOpenChange={setIsD8BulkDeleteDialogOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
+              <FileX className="w-5 h-5" />
+              Excluir contratos D8 em massa
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Esta ação remove apenas os <strong>contratos</strong> importados pelos D8 selecionados, 
+                  preservando pessoas e vínculos que tenham outros dados.
+                </p>
+                
+                <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-md p-3">
+                  <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                    {getSelectedD8Ids().length} import(s) D8 selecionado(s)
+                  </p>
+                  <ul className="text-xs text-orange-700 dark:text-orange-300 mt-2 max-h-32 overflow-auto space-y-1">
+                    {importRuns
+                      .filter(run => selectedRunIds.has(run.id) && run.tipoImport === 'd8')
+                      .slice(0, 10)
+                      .map(run => (
+                        <li key={run.id}>• {run.arquivoOrigem || `Import #${run.id}`}</li>
+                      ))}
+                    {getSelectedD8Ids().length > 10 && (
+                      <li className="italic">... e mais {getSelectedD8Ids().length - 10}</li>
+                    )}
+                  </ul>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Para confirmar, digite <strong>DELETE</strong> abaixo:</Label>
+                  <Input
+                    value={d8BulkDeleteConfirmText}
+                    onChange={(e) => setD8BulkDeleteConfirmText(e.target.value)}
+                    placeholder="Digite DELETE para confirmar"
+                    disabled={d8BulkDeleteMutation.isPending}
+                    data-testid="input-confirm-d8-bulk-delete"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setIsD8BulkDeleteDialogOpen(false);
+                setD8BulkDeleteConfirmText("");
+              }}
+              disabled={d8BulkDeleteMutation.isPending}
+              data-testid="button-cancel-d8-bulk-delete"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleD8BulkDelete}
+              disabled={d8BulkDeleteMutation.isPending || d8BulkDeleteConfirmText !== "DELETE"}
+              data-testid="button-confirm-d8-bulk-delete"
+            >
+              {d8BulkDeleteMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <FileX className="w-4 h-4 mr-2" />
+                  Excluir contratos D8
                 </>
               )}
             </Button>
