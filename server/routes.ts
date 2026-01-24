@@ -9985,7 +9985,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
       const vinculoAtual = vinculosFiltrados[0] || null;
       
-      // Get folha
+      // Get folha - buscar todas para merge de dados
       let folhaRegistros;
       if (vinculoAtual) {
         folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoAtual.id);
@@ -9995,32 +9995,54 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } else {
         folhaRegistros = await storage.getFolhaMesByPessoaId(cliente.id);
       }
+      
+      // Merge folhas: usa dados da mais recente, mas preenche campos vazios com folhas anteriores
       const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
       
-      // Transform folha to snake_case
+      // Helper para verificar se valor é válido (não nulo, não undefined, não string vazia)
+      const isValidValue = (val: any): boolean => {
+        if (val === null || val === undefined) return false;
+        if (typeof val === 'string' && val.trim() === '') return false;
+        return true;
+      };
+      
+      // Helper para pegar valor da folha mais recente ou buscar em anteriores
+      const getFieldValue = (field: string): any => {
+        if (!folhaAtual) return null;
+        if (isValidValue((folhaAtual as any)[field])) return (folhaAtual as any)[field];
+        // Buscar em folhas anteriores
+        for (let i = 1; i < folhaRegistros.length; i++) {
+          if (isValidValue((folhaRegistros[i] as any)[field])) {
+            return (folhaRegistros[i] as any)[field];
+          }
+        }
+        return null;
+      };
+      
+      // Transform folha to snake_case com merge de dados
       const folhaFormatada = folhaAtual ? {
         competencia: folhaAtual.competencia,
-        margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
-        margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
-        margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
-        margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
-        margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
-        margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
-        margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
-        margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
-        margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
-        margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
-        margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
-        margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
-        margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
-        margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
-        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
-        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
-        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
-        creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
-        debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
-        liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
-        sit_func_no_mes: folhaAtual.sitFuncNoMes,
+        margem_bruta_5: getFieldValue('margemBruta5') != null ? parseFloat(String(getFieldValue('margemBruta5'))) : null,
+        margem_utilizada_5: getFieldValue('margemUtilizada5') != null ? parseFloat(String(getFieldValue('margemUtilizada5'))) : null,
+        margem_saldo_5: getFieldValue('margemSaldo5') != null ? parseFloat(String(getFieldValue('margemSaldo5'))) : null,
+        margem_beneficio_bruta_5: getFieldValue('margemBeneficioBruta5') != null ? parseFloat(String(getFieldValue('margemBeneficioBruta5'))) : null,
+        margem_beneficio_utilizada_5: getFieldValue('margemBeneficioUtilizada5') != null ? parseFloat(String(getFieldValue('margemBeneficioUtilizada5'))) : null,
+        margem_beneficio_saldo_5: getFieldValue('margemBeneficioSaldo5') != null ? parseFloat(String(getFieldValue('margemBeneficioSaldo5'))) : null,
+        margem_bruta_35: getFieldValue('margemBruta35') != null ? parseFloat(String(getFieldValue('margemBruta35'))) : null,
+        margem_utilizada_35: getFieldValue('margemUtilizada35') != null ? parseFloat(String(getFieldValue('margemUtilizada35'))) : null,
+        margem_saldo_35: getFieldValue('margemSaldo35') != null ? parseFloat(String(getFieldValue('margemSaldo35'))) : null,
+        margem_bruta_70: getFieldValue('margemBruta70') != null ? parseFloat(String(getFieldValue('margemBruta70'))) : null,
+        margem_utilizada_70: getFieldValue('margemUtilizada70') != null ? parseFloat(String(getFieldValue('margemUtilizada70'))) : null,
+        margem_saldo_70: getFieldValue('margemSaldo70') != null ? parseFloat(String(getFieldValue('margemSaldo70'))) : null,
+        margem_cartao_credito_saldo: getFieldValue('margemCartaoCreditoSaldo') != null ? parseFloat(String(getFieldValue('margemCartaoCreditoSaldo'))) : null,
+        margem_cartao_beneficio_saldo: getFieldValue('margemCartaoBeneficioSaldo') != null ? parseFloat(String(getFieldValue('margemCartaoBeneficioSaldo'))) : null,
+        salario_bruto: getFieldValue('salarioBruto') != null ? parseFloat(String(getFieldValue('salarioBruto'))) : null,
+        descontos_brutos: getFieldValue('descontosBrutos') != null ? parseFloat(String(getFieldValue('descontosBrutos'))) : null,
+        salario_liquido: getFieldValue('salarioLiquido') != null ? parseFloat(String(getFieldValue('salarioLiquido'))) : null,
+        creditos: getFieldValue('creditos') != null ? parseFloat(String(getFieldValue('creditos'))) : null,
+        debitos: getFieldValue('debitos') != null ? parseFloat(String(getFieldValue('debitos'))) : null,
+        liquido: getFieldValue('liquido') != null ? parseFloat(String(getFieldValue('liquido'))) : null,
+        sit_func_no_mes: getFieldValue('sitFuncNoMes'),
         base_tag: folhaAtual.baseTag,
         extras_folha: folhaAtual.extrasFolha,
       } : null;

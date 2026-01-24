@@ -50,17 +50,20 @@ export const COLUMN_MAP: Record<string, string> = {
   regime_juridico: "rjur",
   
   // === SALÁRIO/RENDIMENTOS (Headers: "Créditos", "Débitos", "Líquido") ===
-  // Créditos → creditos (sinônimo: salario_bruto)
   creditos: "creditos",
   credito: "creditos",
-  salario_bruto: "creditos", // Legado → Créditos
-  // Débitos → debitos (sinônimo: descontos_brutos)
   debitos: "debitos",
   debito: "debitos",
-  descontos_brutos: "debitos", // Legado → Débitos
-  // Líquido → liquido (sinônimo: salario_liquido)
   liquido: "liquido",
-  salario_liquido: "liquido", // Legado → Líquido
+  
+  // === SALÁRIO ADICIONAL (Headers: "Salário Bruto", "Descontos Brutos", "Salário Líquido") ===
+  // Campos separados para dados adicionais de salário
+  salario_bruto: "salario_bruto",
+  salariobruto: "salario_bruto",
+  descontos_brutos: "descontos_brutos",
+  descontosbrutos: "descontos_brutos",
+  salario_liquido: "salario_liquido",
+  salarioliquido: "salario_liquido",
   
   competencia_folha: "competencia_folha",
   
