@@ -1,0 +1,111 @@
+DIAGNÓSTICO E CORREÇÃO: Rota bulk-delete retornando 500
+
+PROBLEMA: Endpoint DELETE /api/import-runs/bulk-delete retorna 500 sem logs visíveis
+
+SOLUÇÃO EM ETAPAS:
+
+ETAPA 1 - LOCALIZAR O ARQUIVO DE ROTAS
+Procurar arquivo que contém as rotas de import-runs:
+- Provavelmente em: src/routes/import-runs.ts OU
+- src/routes/importRuns.ts OU
+- server/routes/import-runs.js
+
+ETAPA 2 - VERIFICAR SE A ROTA EXISTE
+Buscar no arquivo por: 'bulk-delete' ou '/bulk-delete'
+
+SE A ROTA NÃO EXISTIR:
+Adicionar ANTES de qualquer outra rota DELETE:
+```typescript
+// Exclusão em massa
+router.delete('/bulk-delete', authenticateToken, async (req, res) => {
+  console.log('🔴 BULK DELETE - Iniciando');
+  console.log('Body:', req.body);
+  
+  const client = await pool.connect();
+  
+  try {
+    const { ids } = req.body;
+    const tenantId = req.user.tenantId;
+    
+    // Validações
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs inválidos' });
+    }
+    
+    console.log(`Deletando ${ids.length} registros do tenant ${tenantId}`);
+    
+    await client.query('BEGIN');
+    
+    // Deletar registros relacionados primeiro
+    await client.query(
+      `DELETE FROM import_records WHERE import_run_id = ANY($1::int[])`,
+      [ids]
+    );
+    
+    // Deletar import_runs
+    const result = await client.query(
+      `DELETE FROM import_runs WHERE id = ANY($1::int[]) AND tenant_id = $2 RETURNING id`,
+      [ids, tenantId]
+    );
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ ${result.rowCount} registros deletados`);
+    
+    res.json({
+      success: true,
+      deleted: result.rowCount,
+      message: `${result.rowCount} base(s) excluída(s)`
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Erro bulk delete:', error);
+    res.status(500).json({ 
+      error: 'Erro ao excluir imports',
+      message: error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+```
+
+ETAPA 3 - VERIFICAR NOME DAS TABELAS
+Confirmar nomes corretos no banco:
+- Tabela principal: import_runs (ou client_imports?)
+- Tabela relacionada: import_records (ou import_clients?)
+
+Se os nomes forem diferentes, ajustar na query:
+```sql
+DELETE FROM [NOME_CORRETO_TABELA_PRINCIPAL] WHERE ...
+DELETE FROM [NOME_CORRETO_TABELA_RELACIONADA] WHERE ...
+```
+
+ETAPA 4 - VERIFICAR MIDDLEWARE
+Confirmar que existe middleware authenticateToken ou authenticate:
+- Importado no topo do arquivo: import { authenticateToken } from '../middleware/auth'
+- Se não existir, remover da rota ou criar middleware
+
+ETAPA 5 - TESTAR QUERIES MANUALMENTE
+Abrir console do PostgreSQL e testar:
+```sql
+-- Ver estrutura das tabelas
+\d import_runs
+\d import_records
+
+-- Testar delete manual
+SELECT * FROM import_runs WHERE id IN (314, 313, 312);
+```
+
+IMPORTANTE:
+- A rota DEVE estar ANTES de rotas com parâmetros dinâmicos tipo /:id
+- Verificar se não há outra rota conflitante
+- Confirmar que pool de conexão PostgreSQL está configurado
+- Garantir que req.user.tenantId está disponível (middleware de auth)
+
+APÓS IMPLEMENTAR:
+1. Salvar arquivo
+2. Reiniciar servidor se necessário
+3. Testar exclusão novamente
+4. Verificar logs no console do servidor

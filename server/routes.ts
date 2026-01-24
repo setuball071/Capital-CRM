@@ -4927,6 +4927,183 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // DELETE /api/import-runs/bulk-delete - Exclusão em massa de import runs
+  // IMPORTANTE: Esta rota DEVE vir ANTES de /api/import-runs/:id para evitar conflito de roteamento
+  // Processa em lotes de 10 com delay de 100ms entre lotes para não sobrecarregar o BD
+  app.delete("/api/import-runs/bulk-delete", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
+    try {
+      const { ids: rawIds } = req.body;
+      const userTenantId = req.tenantId;
+      const isMaster = req.user?.isMaster === true;
+      
+      console.log(`[BulkDelete] Received request with body:`, JSON.stringify(req.body));
+      
+      if (!Array.isArray(rawIds) || rawIds.length === 0) {
+        return res.status(400).json({ message: "IDs inválidos" });
+      }
+      
+      // Converter e validar IDs para números inteiros
+      const ids: number[] = [];
+      for (const id of rawIds) {
+        const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
+        if (!isNaN(numId) && numId > 0) {
+          ids.push(numId);
+        }
+      }
+      
+      if (ids.length === 0) {
+        return res.status(400).json({ message: "Nenhum ID válido fornecido" });
+      }
+      
+      // Remover duplicatas
+      const uniqueIds = [...new Set(ids)];
+      
+      console.log(`[BulkDelete] Starting bulk delete for ${uniqueIds.length} import runs: [${uniqueIds.join(', ')}] (userTenant: ${userTenantId}, isMaster: ${isMaster})...`);
+      
+      const BATCH_SIZE = 10;
+      const BATCH_DELAY_MS = 100;
+      let deletedCount = 0;
+      const errors: string[] = [];
+      
+      // Processar em lotes
+      for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
+        const batch = uniqueIds.slice(i, i + BATCH_SIZE);
+        
+        // Processar cada item do lote sequencialmente (para manter transação atômica por item)
+        for (const runId of batch) {
+          try {
+            // Buscar o import_run para validação
+            const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+            
+            if (!run) {
+              errors.push(`Import #${runId}: não encontrado`);
+              continue;
+            }
+            
+            // Validar tenant
+            const runTenantId = run.tenantId;
+            if (!isMaster && runTenantId && runTenantId !== userTenantId) {
+              errors.push(`Import #${runId}: sem permissão (tenant diferente)`);
+              continue;
+            }
+            
+            const effectiveTenantId = runTenantId || userTenantId;
+            const runBaseTag = run.baseTag || "";
+            
+            if (!effectiveTenantId) {
+              errors.push(`Import #${runId}: tenant não identificado`);
+              continue;
+            }
+            
+            // Executar delete com mesma lógica do delete individual (transação atômica via CTEs)
+            await db.execute(sql`
+              WITH 
+              tenant_pessoas AS (
+                SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
+              ),
+              deleted_folhas AS (
+                DELETE FROM clientes_folha_mes 
+                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+                  AND (
+                    import_run_id = ${runId}
+                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                  )
+                RETURNING id
+              ),
+              deleted_contratos AS (
+                DELETE FROM clientes_contratos 
+                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+                  AND (
+                    import_run_id = ${runId}
+                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                  )
+                RETURNING id
+              ),
+              deleted_contacts AS (
+                DELETE FROM client_contacts 
+                WHERE client_id IN (SELECT id FROM tenant_pessoas)
+                  AND (is_manual = false OR is_manual IS NULL)
+                  AND (
+                    import_run_id = ${runId}
+                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                  )
+                RETURNING id
+              ),
+              deleted_vinculos AS (
+                DELETE FROM clientes_vinculo 
+                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
+                  AND (
+                    import_run_id = ${runId}
+                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                  )
+                RETURNING id
+              ),
+              deleted_pessoas AS (
+                DELETE FROM clientes_pessoa 
+                WHERE tenant_id = ${effectiveTenantId}
+                  AND id IN (SELECT id FROM tenant_pessoas)
+                  AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = clientes_pessoa.id)
+                  AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.pessoa_id = clientes_pessoa.id)
+                  AND NOT EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.pessoa_id = clientes_pessoa.id)
+                  AND NOT EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id = clientes_pessoa.id)
+                RETURNING id
+              ),
+              deleted_rows AS (
+                DELETE FROM import_run_rows WHERE import_run_id = ${runId}
+                RETURNING id
+              ),
+              deleted_errors AS (
+                DELETE FROM import_errors WHERE import_run_id = ${runId}
+                RETURNING id
+              ),
+              deleted_staging_folha AS (
+                DELETE FROM staging_folha WHERE import_run_id = ${runId}
+                RETURNING id
+              ),
+              deleted_staging_d8 AS (
+                DELETE FROM staging_d8 WHERE import_run_id = ${runId}
+                RETURNING id
+              ),
+              deleted_staging_contatos AS (
+                DELETE FROM staging_contatos WHERE import_run_id = ${runId}
+                RETURNING id
+              ),
+              deleted_run AS (
+                DELETE FROM import_runs WHERE id = ${runId}
+                RETURNING id
+              )
+              SELECT 1
+            `);
+            
+            deletedCount++;
+            console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${uniqueIds.length})`);
+            
+          } catch (itemError: any) {
+            console.error(`[BulkDelete] Error deleting import #${runId}:`, itemError.message);
+            errors.push(`Import #${runId}: ${itemError.message || "erro desconhecido"}`);
+          }
+        }
+        
+        // Delay entre lotes (exceto o último)
+        if (i + BATCH_SIZE < uniqueIds.length) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        }
+      }
+      
+      console.log(`[BulkDelete] Completed: ${deletedCount} deleted, ${errors.length} errors`);
+      
+      return res.json({
+        success: true,
+        deleted: deletedCount,
+        errors: errors.length > 0 ? errors : undefined
+      });
+      
+    } catch (error: any) {
+      console.error("Bulk delete import runs error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao excluir importações" });
+    }
+  });
+
   // DELETE excluir import run e TODOS os dados finais associados (cascata completa)
   // IMPORTANTE: Usa BOTH import_run_id E base_tag para capturar registros órfãos legados
   app.delete("/api/import-runs/:id", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
@@ -5104,180 +5281,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     } catch (error) {
       console.error("Delete import run error:", error);
       return res.status(500).json({ message: "Erro ao excluir import" });
-    }
-  });
-
-  // DELETE /api/import-runs/bulk-delete - Exclusão em massa de import runs
-  // Processa em lotes de 10 com delay de 100ms entre lotes para não sobrecarregar o BD
-  app.delete("/api/import-runs/bulk-delete", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
-    try {
-      const { ids: rawIds } = req.body;
-      const userTenantId = req.tenantId;
-      const isMaster = req.user?.isMaster === true;
-      
-      if (!Array.isArray(rawIds) || rawIds.length === 0) {
-        return res.status(400).json({ message: "IDs inválidos" });
-      }
-      
-      // Converter e validar IDs para números inteiros
-      const ids: number[] = [];
-      for (const id of rawIds) {
-        const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
-        if (!isNaN(numId) && numId > 0) {
-          ids.push(numId);
-        }
-      }
-      
-      if (ids.length === 0) {
-        return res.status(400).json({ message: "Nenhum ID válido fornecido" });
-      }
-      
-      // Remover duplicatas
-      const uniqueIds = [...new Set(ids)];
-      
-      console.log(`[BulkDelete] Starting bulk delete for ${uniqueIds.length} import runs (userTenant: ${userTenantId}, isMaster: ${isMaster})...`);
-      
-      const BATCH_SIZE = 10;
-      const BATCH_DELAY_MS = 100;
-      let deletedCount = 0;
-      const errors: string[] = [];
-      
-      // Processar em lotes
-      for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
-        const batch = uniqueIds.slice(i, i + BATCH_SIZE);
-        
-        // Processar cada item do lote sequencialmente (para manter transação atômica por item)
-        for (const runId of batch) {
-          try {
-            // Buscar o import_run para validação
-            const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
-            
-            if (!run) {
-              errors.push(`Import #${runId}: não encontrado`);
-              continue;
-            }
-            
-            // Validar tenant
-            const runTenantId = run.tenantId;
-            if (!isMaster && runTenantId && runTenantId !== userTenantId) {
-              errors.push(`Import #${runId}: sem permissão (tenant diferente)`);
-              continue;
-            }
-            
-            const effectiveTenantId = runTenantId || userTenantId;
-            const runBaseTag = run.baseTag || "";
-            
-            if (!effectiveTenantId) {
-              errors.push(`Import #${runId}: tenant não identificado`);
-              continue;
-            }
-            
-            // Executar delete com mesma lógica do delete individual (transação atômica via CTEs)
-            await db.execute(sql`
-              WITH 
-              tenant_pessoas AS (
-                SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
-              ),
-              deleted_folhas AS (
-                DELETE FROM clientes_folha_mes 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_contratos AS (
-                DELETE FROM clientes_contratos 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_contacts AS (
-                DELETE FROM client_contacts 
-                WHERE client_id IN (SELECT id FROM tenant_pessoas)
-                  AND (is_manual = false OR is_manual IS NULL)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_vinculos AS (
-                DELETE FROM clientes_vinculo 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_pessoas AS (
-                DELETE FROM clientes_pessoa 
-                WHERE tenant_id = ${effectiveTenantId}
-                  AND id IN (SELECT id FROM tenant_pessoas)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id = clientes_pessoa.id)
-                RETURNING id
-              ),
-              deleted_rows AS (
-                DELETE FROM import_run_rows WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_errors AS (
-                DELETE FROM import_errors WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_folha AS (
-                DELETE FROM staging_folha WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_d8 AS (
-                DELETE FROM staging_d8 WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_contatos AS (
-                DELETE FROM staging_contatos WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_run AS (
-                DELETE FROM import_runs WHERE id = ${runId}
-                RETURNING id
-              )
-              SELECT 1
-            `);
-            
-            deletedCount++;
-            console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${uniqueIds.length})`);
-            
-          } catch (itemError: any) {
-            console.error(`[BulkDelete] Error deleting import #${runId}:`, itemError.message);
-            errors.push(`Import #${runId}: ${itemError.message || "erro desconhecido"}`);
-          }
-        }
-        
-        // Delay entre lotes (exceto o último)
-        if (i + BATCH_SIZE < uniqueIds.length) {
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-        }
-      }
-      
-      console.log(`[BulkDelete] Completed: ${deletedCount} deleted, ${errors.length} errors`);
-      
-      return res.json({
-        success: true,
-        deleted: deletedCount,
-        errors: errors.length > 0 ? errors : undefined
-      });
-      
-    } catch (error: any) {
-      console.error("Bulk delete import runs error:", error);
-      return res.status(500).json({ message: error.message || "Erro ao excluir importações" });
     }
   });
 
