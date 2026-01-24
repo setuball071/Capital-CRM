@@ -165,8 +165,22 @@ export default function BasesClientes() {
   const [selectedImportRun, setSelectedImportRun] = useState<ImportRunWithCounts | null>(null);
   const [isRunDetailOpen, setIsRunDetailOpen] = useState(false);
   const [importRunsPage, setImportRunsPage] = useState(1);
-  const IMPORT_RUNS_PER_PAGE = 15;
+  const [importRunsPerPage, setImportRunsPerPage] = useState(() => {
+    const saved = localStorage.getItem('importHistoryItemsPerPage');
+    return saved ? Number(saved) : 25;
+  });
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
+  
+  // Persistir preferência de itens por página no localStorage
+  useEffect(() => {
+    localStorage.setItem('importHistoryItemsPerPage', String(importRunsPerPage));
+  }, [importRunsPerPage]);
+  
+  // Handler para mudar itens por página (reseta para página 1)
+  const handleImportRunsPerPageChange = (newLimit: number) => {
+    setImportRunsPerPage(newLimit);
+    setImportRunsPage(1);
+  };
   
   // Bulk delete states for Import Runs
   const [selectedRunIds, setSelectedRunIds] = useState<Set<number>>(new Set());
@@ -669,7 +683,7 @@ export default function BasesClientes() {
   const handleSelectAllRuns = (checked: boolean) => {
     if (checked) {
       const currentPageIds = importRuns
-        .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+        .slice((importRunsPage - 1) * importRunsPerPage, importRunsPage * importRunsPerPage)
         .map(run => run.id);
       setSelectedRunIds(new Set(currentPageIds));
     } else {
@@ -679,7 +693,7 @@ export default function BasesClientes() {
 
   const isAllCurrentPageSelected = () => {
     const currentPageIds = importRuns
-      .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+      .slice((importRunsPage - 1) * importRunsPerPage, importRunsPage * importRunsPerPage)
       .map(run => run.id);
     return currentPageIds.length > 0 && currentPageIds.every(id => selectedRunIds.has(id));
   };
@@ -2241,7 +2255,7 @@ export default function BasesClientes() {
               </TableHeader>
               <TableBody>
                 {importRuns
-                  .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+                  .slice((importRunsPage - 1) * importRunsPerPage, importRunsPage * importRunsPerPage)
                   .map((run) => (
                   <TableRow key={run.id} data-testid={`row-import-run-${run.id}`}>
                     <TableCell>
@@ -2337,33 +2351,51 @@ export default function BasesClientes() {
               </TableBody>
             </Table>
             
-            {/* Paginação */}
-            {importRuns.length > IMPORT_RUNS_PER_PAGE && (
-              <div className="flex items-center justify-between pt-4 border-t">
+            {/* Paginação com seletor de itens por página */}
+            {importRuns.length > 0 && (
+              <div className="flex items-center justify-between pt-4 border-t flex-wrap gap-4">
                 <div className="text-sm text-muted-foreground">
-                  Página {importRunsPage} de {Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE)}
+                  Mostrando {Math.min((importRunsPage - 1) * importRunsPerPage + 1, importRuns.length)}-{Math.min(importRunsPage * importRunsPerPage, importRuns.length)} de {importRuns.length} registros
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setImportRunsPage(p => Math.max(1, p - 1))}
-                    disabled={importRunsPage === 1}
-                    data-testid="button-prev-page"
+                
+                <div className="flex items-center gap-4 flex-wrap">
+                  <select
+                    value={importRunsPerPage}
+                    onChange={(e) => handleImportRunsPerPageChange(Number(e.target.value))}
+                    className="border rounded px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    data-testid="select-items-per-page"
                   >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setImportRunsPage(p => Math.min(Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE), p + 1))}
-                    disabled={importRunsPage >= Math.ceil(importRuns.length / IMPORT_RUNS_PER_PAGE)}
-                    data-testid="button-next-page"
-                  >
-                    Próxima
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
+                    <option value={15}>15 por página</option>
+                    <option value={25}>25 por página</option>
+                    <option value={50}>50 por página</option>
+                    <option value={100}>100 por página</option>
+                  </select>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImportRunsPage(p => Math.max(1, p - 1))}
+                      disabled={importRunsPage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-2">
+                      Página {importRunsPage} de {Math.max(1, Math.ceil(importRuns.length / importRunsPerPage))}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImportRunsPage(p => Math.min(Math.ceil(importRuns.length / importRunsPerPage), p + 1))}
+                      disabled={importRunsPage >= Math.ceil(importRuns.length / importRunsPerPage)}
+                      data-testid="button-next-page"
+                    >
+                      Próxima
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

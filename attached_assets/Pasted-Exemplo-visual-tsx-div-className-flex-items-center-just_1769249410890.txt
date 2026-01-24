@@ -1,0 +1,101 @@
+Exemplo visual:
+```tsx
+   <div className="flex items-center justify-between mt-4">
+     <div className="text-sm text-gray-600">
+       Mostrando {startIndex + 1}-{Math.min(endIndex, totalRecords)} de {totalRecords} registros
+     </div>
+     
+     <div className="flex items-center gap-4">
+       <select 
+         value={itemsPerPage}
+         onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+         className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+       >
+         <option value={15}>15 por página</option>
+         <option value={25}>25 por página</option>
+         <option value={50}>50 por página</option>
+         <option value={100}>100 por página</option>
+       </select>
+       
+       <div className="flex gap-2">
+         <button
+           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+           disabled={currentPage === 1}
+           className="px-3 py-1 border rounded disabled:opacity-50"
+         >
+           Anterior
+         </button>
+         
+         <span className="px-3 py-1">
+           Página {currentPage} de {totalPages}
+         </span>
+         
+         <button
+           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+           disabled={currentPage === totalPages}
+           className="px-3 py-1 border rounded disabled:opacity-50"
+         >
+           Próxima
+         </button>
+       </div>
+     </div>
+   </div>
+```
+
+7. PERSISTIR PREFERÊNCIA (OPCIONAL)
+   Salvar escolha no localStorage:
+```typescript
+   const [itemsPerPage, setItemsPerPage] = useState(() => {
+     const saved = localStorage.getItem('importHistoryItemsPerPage');
+     return saved ? Number(saved) : 25;
+   });
+   
+   useEffect(() => {
+     localStorage.setItem('importHistoryItemsPerPage', String(itemsPerPage));
+   }, [itemsPerPage]);
+```
+
+8. AJUSTE NO BACKEND (SE NECESSÁRIO)
+   Se a paginação for server-side, atualizar endpoint:
+```typescript
+   // GET /api/import-runs?page=1&limit=25
+   
+   const page = parseInt(req.query.page as string) || 1;
+   const limit = parseInt(req.query.limit as string) || 25;
+   const offset = (page - 1) * limit;
+   
+   const results = await db
+     .select()
+     .from(importRuns)
+     .where(eq(importRuns.tenantId, tenantId))
+     .limit(limit)
+     .offset(offset)
+     .orderBy(desc(importRuns.createdAt));
+   
+   const totalCount = await db
+     .select({ count: sql<number>`count(*)` })
+     .from(importRuns)
+     .where(eq(importRuns.tenantId, tenantId));
+   
+   res.json({
+     data: results,
+     pagination: {
+       page,
+       limit,
+       total: totalCount[0].count,
+       totalPages: Math.ceil(totalCount[0].count / limit)
+     }
+   });
+```
+
+PADRÃO RECOMENDADO:
+- Default: 25 registros por página (melhor performance que 15)
+- Máximo: 100 registros (evita sobrecarga)
+
+ARQUIVOS A MODIFICAR:
+- Frontend: [componente da página Base de Clientes]
+- Backend (se server-side): server/routes.ts (endpoint GET /api/import-runs)
+
+NÃO IMPLEMENTAR:
+- Paginação infinita (manter tradicional)
+- "Mostrar todos" (pode travar navegador com muitos registros)
