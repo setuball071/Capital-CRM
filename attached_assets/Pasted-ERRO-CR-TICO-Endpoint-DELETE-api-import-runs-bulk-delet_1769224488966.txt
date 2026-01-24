@@ -1,0 +1,166 @@
+ERRO CRÍTICO: Endpoint DELETE /api/import-runs/bulk-delete retornando 500
+
+ERRO OBSERVADO:
+- Status: 500 Internal Server Error
+- Endpoint: https://goldcarddigital.com.br/api/import-runs/bulk-delete
+- Contexto: Tentativa de excluir 3 bases selecionadas
+- Erro exibido: "Erro ao excluir import"
+
+DIAGNÓSTICO NECESSÁRIO:
+
+1. VERIFICAR LOG DO SERVIDOR
+   - Abrir console/terminal do backend
+   - Identificar stack trace completo do erro 500
+   - Verificar se é erro de:
+     * Sintaxe TypeScript/JavaScript
+     * Conexão com banco de dados
+     * Transação PostgreSQL
+     * Permissões/autenticação
+     * Validação de dados
+
+2. PONTOS CRÍTICOS A VERIFICAR:
+
+   A) VALIDAÇÃO DE REQUEST BODY
+```typescript
+   // Verificar se está recebendo corretamente:
+   const { ids } = req.body;
+   console.log('IDs recebidos:', ids); // Debug
+   
+   // Validar:
+   if (!Array.isArray(ids) || ids.length === 0) {
+     return res.status(400).json({ error: 'IDs inválidos' });
+   }
+```
+
+   B) TENANT/AUTENTICAÇÃO
+```typescript
+   // Verificar se tenantId está disponível:
+   const tenantId = req.user?.tenantId || req.tenant?.id;
+   console.log('Tenant ID:', tenantId); // Debug
+   
+   if (!tenantId) {
+     return res.status(401).json({ error: 'Não autenticado' });
+   }
+```
+
+   C) QUERY SQL/TRANSAÇÃO
+```typescript
+   // Verificar sintaxe da query:
+   const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+     
+     // Query deve filtrar por tenant:
+     const result = await client.query(
+       'DELETE FROM import_runs WHERE id = ANY($1) AND tenant_id = $2 RETURNING id',
+       [ids, tenantId]
+     );
+     
+     await client.query('COMMIT');
+     console.log('Deletados:', result.rowCount); // Debug
+   } catch (error) {
+     await client.query('ROLLBACK');
+     console.error('Erro na transação:', error); // Log completo
+     throw error;
+   } finally {
+     client.release();
+   }
+```
+
+   D) CASCADE/DEPENDÊNCIAS
+```typescript
+   // Se houver tabelas relacionadas, deletar primeiro:
+   // Ex: import_records, import_errors, etc
+   await client.query(
+     'DELETE FROM import_records WHERE import_run_id = ANY($1)',
+     [ids]
+   );
+   // Depois deletar import_runs
+```
+
+3. ADICIONAR LOGS DETALHADOS TEMPORARIAMENTE
+```typescript
+   try {
+     console.log('=== INÍCIO BULK DELETE ===');
+     console.log('Body recebido:', req.body);
+     console.log('IDs:', ids);
+     console.log('Tenant:', tenantId);
+     
+     // ... código de exclusão ...
+     
+     console.log('=== SUCESSO ===');
+     res.json({ success: true, deleted: ids.length });
+   } catch (error) {
+     console.error('=== ERRO BULK DELETE ===');
+     console.error('Mensagem:', error.message);
+     console.error('Stack:', error.stack);
+     console.error('Detalhes:', error);
+     
+     res.status(500).json({ 
+       error: 'Erro ao excluir imports',
+       details: process.env.NODE_ENV === 'development' ? error.message : undefined
+     });
+   }
+```
+
+4. ESTRUTURA COMPLETA DO ENDPOINT
+```typescript
+   router.delete('/bulk-delete', authenticate, async (req, res) => {
+     const client = await pool.connect();
+     
+     try {
+       // 1. Validações
+       const { ids } = req.body;
+       const tenantId = req.user.tenantId;
+       
+       if (!Array.isArray(ids) || ids.length === 0) {
+         return res.status(400).json({ error: 'IDs inválidos' });
+       }
+       
+       // 2. Transação
+       await client.query('BEGIN');
+       
+       // 3. Deletar dependências primeiro (se houver)
+       await client.query(
+         'DELETE FROM [tabela_relacionada] WHERE import_run_id = ANY($1) AND tenant_id = $2',
+         [ids, tenantId]
+       );
+       
+       // 4. Deletar registros principais
+       const result = await client.query(
+         'DELETE FROM import_runs WHERE id = ANY($1) AND tenant_id = $2 RETURNING id',
+         [ids, tenantId]
+       );
+       
+       // 5. Commit
+       await client.query('COMMIT');
+       
+       res.json({ 
+         success: true, 
+         deleted: result.rowCount 
+       });
+       
+     } catch (error) {
+       await client.query('ROLLBACK');
+       console.error('Erro bulk delete:', error);
+       res.status(500).json({ error: 'Erro ao excluir imports' });
+     } finally {
+       client.release();
+     }
+   });
+```
+
+AÇÃO IMEDIATA:
+1. Adicionar logs detalhados conforme item 3
+2. Testar novamente a exclusão
+3. Copiar o erro completo do console do servidor
+4. Ajustar código conforme erro específico identificado
+
+ARQUIVOS A MODIFICAR:
+- Backend route: [caminho do arquivo de rotas de import-runs]
+- Controller: [se houver controller separado]
+
+NÃO FAZER:
+- Remover validações de segurança
+- Ignorar erros silenciosamente
+- Deletar sem transação

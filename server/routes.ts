@@ -5111,15 +5111,31 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   // Processa em lotes de 10 com delay de 100ms entre lotes para não sobrecarregar o BD
   app.delete("/api/import-runs/bulk-delete", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
-      const { ids } = req.body;
+      const { ids: rawIds } = req.body;
       const userTenantId = req.tenantId;
       const isMaster = req.user?.isMaster === true;
       
-      if (!Array.isArray(ids) || ids.length === 0) {
+      if (!Array.isArray(rawIds) || rawIds.length === 0) {
         return res.status(400).json({ message: "IDs inválidos" });
       }
       
-      console.log(`[BulkDelete] Starting bulk delete for ${ids.length} import runs (userTenant: ${userTenantId}, isMaster: ${isMaster})...`);
+      // Converter e validar IDs para números inteiros
+      const ids: number[] = [];
+      for (const id of rawIds) {
+        const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
+        if (!isNaN(numId) && numId > 0) {
+          ids.push(numId);
+        }
+      }
+      
+      if (ids.length === 0) {
+        return res.status(400).json({ message: "Nenhum ID válido fornecido" });
+      }
+      
+      // Remover duplicatas
+      const uniqueIds = [...new Set(ids)];
+      
+      console.log(`[BulkDelete] Starting bulk delete for ${uniqueIds.length} import runs (userTenant: ${userTenantId}, isMaster: ${isMaster})...`);
       
       const BATCH_SIZE = 10;
       const BATCH_DELAY_MS = 100;
@@ -5127,8 +5143,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const errors: string[] = [];
       
       // Processar em lotes
-      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-        const batch = ids.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
+        const batch = uniqueIds.slice(i, i + BATCH_SIZE);
         
         // Processar cada item do lote sequencialmente (para manter transação atômica por item)
         for (const runId of batch) {
@@ -5237,7 +5253,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             `);
             
             deletedCount++;
-            console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${ids.length})`);
+            console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${uniqueIds.length})`);
             
           } catch (itemError: any) {
             console.error(`[BulkDelete] Error deleting import #${runId}:`, itemError.message);
@@ -5246,7 +5262,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         }
         
         // Delay entre lotes (exceto o último)
-        if (i + BATCH_SIZE < ids.length) {
+        if (i + BATCH_SIZE < uniqueIds.length) {
           await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
