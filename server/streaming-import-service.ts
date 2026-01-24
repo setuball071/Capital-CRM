@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as readline from "readline";
 import * as path from "path";
+import * as iconv from "iconv-lite";
 import { db } from "./storage";
 import {
   importRuns,
@@ -22,11 +23,89 @@ import {
   preserveMatricula,
   preserveNumeroContrato,
   normalizeBrDecimal,
+  normalizeBrDecimalOrZero,
   COLUMN_MAP,
 } from "./import-service";
 
 const MAX_LINHAS_POR_EXECUCAO = 1_000_000;
 const BUFFER_SIZE = 100_000;
+
+/**
+ * Detecta o encoding de um arquivo CSV (UTF-8 ou Windows-1252/Latin1)
+ * Retorna 'utf8' ou 'win1252'
+ */
+function detectFileEncoding(filePath: string): 'utf8' | 'win1252' {
+  const fd = fs.openSync(filePath, 'r');
+  const buffer = Buffer.alloc(4096);
+  const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
+  fs.closeSync(fd);
+  
+  const sample = buffer.slice(0, bytesRead);
+  
+  // Verifica se é UTF-8 válido
+  // UTF-8 inválido geralmente tem bytes 0x80-0x9F que não são válidos em UTF-8 puro
+  // Windows-1252 usa esses bytes para caracteres especiais
+  let hasInvalidUtf8 = false;
+  let i = 0;
+  while (i < bytesRead) {
+    const byte = sample[i];
+    if (byte < 0x80) {
+      // ASCII - válido em ambos
+      i++;
+    } else if ((byte >= 0x80 && byte <= 0x9F) || (byte >= 0xA0 && byte <= 0xFF && sample[i+1] === undefined)) {
+      // Bytes típicos de Windows-1252 que não são UTF-8 válido
+      // 0x80-0x9F são caracteres de controle em Latin1/Win1252 mas inválidos em UTF-8
+      // Caracteres acentuados em Win1252: á=E1, é=E9, í=ED, ó=F3, ú=FA, etc.
+      hasInvalidUtf8 = true;
+      break;
+    } else if ((byte & 0xE0) === 0xC0) {
+      // UTF-8 2-byte sequence
+      if (i + 1 >= bytesRead || (sample[i+1] & 0xC0) !== 0x80) {
+        hasInvalidUtf8 = true;
+        break;
+      }
+      i += 2;
+    } else if ((byte & 0xF0) === 0xE0) {
+      // UTF-8 3-byte sequence
+      if (i + 2 >= bytesRead || (sample[i+1] & 0xC0) !== 0x80 || (sample[i+2] & 0xC0) !== 0x80) {
+        hasInvalidUtf8 = true;
+        break;
+      }
+      i += 3;
+    } else if ((byte & 0xF8) === 0xF0) {
+      // UTF-8 4-byte sequence
+      if (i + 3 >= bytesRead || (sample[i+1] & 0xC0) !== 0x80 || (sample[i+2] & 0xC0) !== 0x80 || (sample[i+3] & 0xC0) !== 0x80) {
+        hasInvalidUtf8 = true;
+        break;
+      }
+      i += 4;
+    } else {
+      hasInvalidUtf8 = true;
+      break;
+    }
+  }
+  
+  const encoding = hasInvalidUtf8 ? 'win1252' : 'utf8';
+  console.log(`[Encoding Detection] File: ${path.basename(filePath)}, Detected: ${encoding}`);
+  return encoding;
+}
+
+/**
+ * Cria um stream de leitura que converte automaticamente de Windows-1252 para UTF-8 se necessário
+ */
+function createEncodingAwareStream(filePath: string, options?: { start?: number; end?: number }): NodeJS.ReadableStream {
+  const encoding = detectFileEncoding(filePath);
+  const streamOptions = { ...options };
+  
+  if (encoding === 'win1252') {
+    // Lê como buffer e converte de Windows-1252 para UTF-8
+    const rawStream = fs.createReadStream(filePath, streamOptions);
+    return rawStream.pipe(iconv.decodeStream('win1252'));
+  } else {
+    // UTF-8 nativo
+    return fs.createReadStream(filePath, { ...streamOptions, encoding: 'utf8' });
+  }
+}
 
 /**
  * Função utilitária de diagnóstico para verificar constraints e índices de uma tabela
@@ -325,7 +404,7 @@ class StreamingImportService {
   }
   
   private async readFirstLineHeaders(filePath: string): Promise<string[]> {
-    const stream = fs.createReadStream(filePath, { start: 0, end: 20000, encoding: "utf8" });
+    const stream = createEncodingAwareStream(filePath, { start: 0, end: 20000 });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
     let headers: string[] = [];
     for await (const line of rl) {
@@ -333,7 +412,9 @@ class StreamingImportService {
       break;
     }
     rl.close();
-    stream.destroy();
+    if ('destroy' in stream && typeof stream.destroy === 'function') {
+      stream.destroy();
+    }
     return headers;
   }
 
@@ -367,11 +448,7 @@ class StreamingImportService {
     let pausedForResume = false;
     let bytesRead = startOffset;
 
-    const headerFirstLineStream = fs.createReadStream(filePath, {
-      start: 0,
-      end: 20000,
-      encoding: "utf8",
-    });
+    const headerFirstLineStream = createEncodingAwareStream(filePath, { start: 0, end: 20000 });
     const headerRl = readline.createInterface({
       input: headerFirstLineStream,
       crlfDelay: Infinity,
@@ -382,7 +459,9 @@ class StreamingImportService {
       break;
     }
     headerRl.close();
-    headerFirstLineStream.destroy();
+    if ('destroy' in headerFirstLineStream && typeof headerFirstLineStream.destroy === 'function') {
+      headerFirstLineStream.destroy();
+    }
 
     // Log detalhado dos headers detectados
     console.log(`[IMPORT ${run.id}] Headers detectados (${headers.length}):`, headers.join(", "));
@@ -411,10 +490,7 @@ class StreamingImportService {
       }
     }
 
-    const fileStream = fs.createReadStream(filePath, {
-      start: startOffset,
-      encoding: "utf8",
-    });
+    const fileStream = createEncodingAwareStream(filePath, { start: startOffset });
 
     const rl = readline.createInterface({
       input: fileStream,
@@ -475,7 +551,9 @@ class StreamingImportService {
     }
 
     rl.close();
-    fileStream.destroy();
+    if ('destroy' in fileStream && typeof (fileStream as any).destroy === 'function') {
+      (fileStream as any).destroy();
+    }
 
     if (buffer.length > 0) {
       const { success, error } = await this.processBuffer(
@@ -1033,34 +1111,39 @@ class StreamingImportService {
       )
       .limit(1);
 
+    // Verifica se é atualização - se sim, usa normalizeBrDecimalOrZero (vazio = 0)
+    const isUpdate = existing.length > 0;
+    const normalizeNum = isUpdate ? normalizeBrDecimalOrZero : normalizeBrDecimal;
+    
     const folhaData: Record<string, any> = {
       pessoaId,
       competencia,
       baseTag,
-      salarioBruto: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_bruto")),
-      descontosBrutos: normalizeBrDecimal(this.extractValue(row, headerMap, "descontos_brutos")),
-      salarioLiquido: normalizeBrDecimal(this.extractValue(row, headerMap, "salario_liquido")),
+      salarioBruto: normalizeNum(this.extractValue(row, headerMap, "salario_bruto")),
+      descontosBrutos: normalizeNum(this.extractValue(row, headerMap, "descontos_brutos")),
+      salarioLiquido: normalizeNum(this.extractValue(row, headerMap, "salario_liquido")),
       // Margem 5% (COLUMN_MAP mapeia margem_30 → margem_5 para retrocompatibilidade)
-      margemBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_bruta")),
-      margemUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_utilizada")),
-      margemSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_5_saldo")),
+      margemBruta5: normalizeNum(this.extractValue(row, headerMap, "margem_5_bruta")),
+      margemUtilizada5: normalizeNum(this.extractValue(row, headerMap, "margem_5_utilizada")),
+      margemSaldo5: normalizeNum(this.extractValue(row, headerMap, "margem_5_saldo")),
       // Margem Benefício 5%
-      margemBeneficioBruta5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_bruta")),
-      margemBeneficioUtilizada5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_utilizada")),
-      margemBeneficioSaldo5: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_beneficio_5_saldo")),
+      margemBeneficioBruta5: normalizeNum(this.extractValue(row, headerMap, "margem_beneficio_5_bruta")),
+      margemBeneficioUtilizada5: normalizeNum(this.extractValue(row, headerMap, "margem_beneficio_5_utilizada")),
+      margemBeneficioSaldo5: normalizeNum(this.extractValue(row, headerMap, "margem_beneficio_5_saldo")),
       // Margem 35%
-      margemBruta35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_bruta")),
-      margemUtilizada35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_utilizada")),
-      margemSaldo35: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_35_saldo")),
+      margemBruta35: normalizeNum(this.extractValue(row, headerMap, "margem_35_bruta")),
+      margemUtilizada35: normalizeNum(this.extractValue(row, headerMap, "margem_35_utilizada")),
+      margemSaldo35: normalizeNum(this.extractValue(row, headerMap, "margem_35_saldo")),
       // Margem 70%
-      margemBruta70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_bruta")),
-      margemUtilizada70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_utilizada")),
-      margemSaldo70: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_70_saldo")),
-      margemCartaoCreditoSaldo: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_cartao_credito_saldo")),
-      margemCartaoBeneficioSaldo: normalizeBrDecimal(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
+      margemBruta70: normalizeNum(this.extractValue(row, headerMap, "margem_70_bruta")),
+      margemUtilizada70: normalizeNum(this.extractValue(row, headerMap, "margem_70_utilizada")),
+      margemSaldo70: normalizeNum(this.extractValue(row, headerMap, "margem_70_saldo")),
+      margemCartaoCreditoSaldo: normalizeNum(this.extractValue(row, headerMap, "margem_cartao_credito_saldo")),
+      margemCartaoBeneficioSaldo: normalizeNum(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
     };
 
-    if (existing.length > 0) {
+    if (isUpdate) {
+      console.log(`[FOLHA UPDATE] Atualizando folha para pessoa ${pessoaId}, competência ${competencia.toISOString().slice(0,10)}`);
       await db
         .update(clientesFolhaMes)
         .set(folhaData)

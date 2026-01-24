@@ -224,6 +224,15 @@ export function normalizeBrDecimal(value: string | number | null | undefined): n
   return isNaN(num) ? null : num;
 }
 
+/**
+ * Similar a normalizeBrDecimal, mas retorna 0 em vez de null para valores vazios.
+ * Útil para atualizações de folha onde vazio significa "zerado".
+ */
+export function normalizeBrDecimalOrZero(value: string | number | null | undefined): number {
+  const result = normalizeBrDecimal(value);
+  return result === null ? 0 : result;
+}
+
 export function normalizePmtRaw(value: string | null | undefined): { pmtValue: number | null; pmtRaw: string | null } {
   if (value === null || value === undefined || value === "") {
     return { pmtValue: null, pmtRaw: null };
