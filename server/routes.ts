@@ -4995,85 +4995,54 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               continue;
             }
             
-            // Executar delete com mesma lógica do delete individual (transação atômica via CTEs)
+            // Executar deletes em sequência para evitar timeout no NeonDB serverless
+            // 1. Deletar tabelas de staging e auxiliares (mais leves)
+            await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
+            await db.execute(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
+            await db.execute(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
+            await db.execute(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
+            await db.execute(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
+            
+            // 2. Deletar dados de clientes vinculados ao import_run
             await db.execute(sql`
-              WITH 
-              tenant_pessoas AS (
-                SELECT id FROM clientes_pessoa WHERE tenant_id = ${effectiveTenantId}
-              ),
-              deleted_folhas AS (
-                DELETE FROM clientes_folha_mes 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_contratos AS (
-                DELETE FROM clientes_contratos 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_contacts AS (
-                DELETE FROM client_contacts 
-                WHERE client_id IN (SELECT id FROM tenant_pessoas)
-                  AND (is_manual = false OR is_manual IS NULL)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_vinculos AS (
-                DELETE FROM clientes_vinculo 
-                WHERE pessoa_id IN (SELECT id FROM tenant_pessoas)
-                  AND (
-                    import_run_id = ${runId}
-                    OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
-                  )
-                RETURNING id
-              ),
-              deleted_pessoas AS (
-                DELETE FROM clientes_pessoa 
-                WHERE tenant_id = ${effectiveTenantId}
-                  AND id IN (SELECT id FROM tenant_pessoas)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.pessoa_id = clientes_pessoa.id)
-                  AND NOT EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id = clientes_pessoa.id)
-                RETURNING id
-              ),
-              deleted_rows AS (
-                DELETE FROM import_run_rows WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_errors AS (
-                DELETE FROM import_errors WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_folha AS (
-                DELETE FROM staging_folha WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_d8 AS (
-                DELETE FROM staging_d8 WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_staging_contatos AS (
-                DELETE FROM staging_contatos WHERE import_run_id = ${runId}
-                RETURNING id
-              ),
-              deleted_run AS (
-                DELETE FROM import_runs WHERE id = ${runId}
-                RETURNING id
-              )
-              SELECT 1
+              DELETE FROM clientes_folha_mes 
+              WHERE import_run_id = ${runId}
+                 OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
             `);
+            
+            await db.execute(sql`
+              DELETE FROM clientes_contratos 
+              WHERE import_run_id = ${runId}
+                 OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            `);
+            
+            await db.execute(sql`
+              DELETE FROM client_contacts 
+              WHERE (is_manual = false OR is_manual IS NULL)
+                AND (
+                  import_run_id = ${runId}
+                  OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+                )
+            `);
+            
+            await db.execute(sql`
+              DELETE FROM clientes_vinculo 
+              WHERE import_run_id = ${runId}
+                 OR (import_run_id IS NULL AND base_tag = ${runBaseTag} AND ${runBaseTag} != '')
+            `);
+            
+            // 3. Deletar pessoas órfãs do tenant
+            await db.execute(sql`
+              DELETE FROM clientes_pessoa 
+              WHERE tenant_id = ${effectiveTenantId}
+                AND NOT EXISTS (SELECT 1 FROM clientes_folha_mes f WHERE f.pessoa_id = clientes_pessoa.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_contratos c WHERE c.pessoa_id = clientes_pessoa.id)
+                AND NOT EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.pessoa_id = clientes_pessoa.id)
+                AND NOT EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id = clientes_pessoa.id)
+            `);
+            
+            // 4. Deletar o import_run
+            await db.execute(sql`DELETE FROM import_runs WHERE id = ${runId}`);
             
             deletedCount++;
             console.log(`[BulkDelete] Deleted import #${runId} (${deletedCount}/${uniqueIds.length})`);
