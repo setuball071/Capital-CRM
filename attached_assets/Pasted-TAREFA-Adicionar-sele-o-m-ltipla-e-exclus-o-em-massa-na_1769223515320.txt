@@ -1,0 +1,79 @@
+TAREFA: Adicionar seleção múltipla e exclusão em massa na página Base de Clientes
+
+CONTEXTO ATUAL:
+- Página: Base de Clientes (bases-clientes)
+- Tabela: Histórico de Importações Rápidas
+- Sistema já tem exclusão individual funcionando
+- Exclusão usa processo organizado com transações para proteger integridade do BD
+
+IMPLEMENTAR:
+
+1. CHECKBOX DE SELEÇÃO
+   - Adicionar checkbox na primeira coluna de cada linha da tabela
+   - Adicionar checkbox "Selecionar todos" no header da tabela
+   - Estado: armazenar IDs selecionados em array no componente React
+
+2. BOTÃO DE EXCLUSÃO EM MASSA
+   - Posição: ao lado do botão "Importar Base" (só aparece quando houver seleções)
+   - Label: "Excluir Selecionados ({quantidade})"
+   - Cor: vermelho (danger)
+   - Ícone: lixeira
+   - Desabilitar se nenhum item selecionado
+
+3. MODAL DE CONFIRMAÇÃO
+   - Título: "Confirmar Exclusão em Massa"
+   - Mensagem: "Você está prestes a excluir {quantidade} base(s) importada(s). Esta ação não pode ser desfeita."
+   - Lista: Mostrar nomes dos arquivos selecionados (máximo 5, depois "e mais X...")
+   - Botões: "Cancelar" (cinza) e "Excluir" (vermelho)
+
+4. LÓGICA DE EXCLUSÃO BACKEND
+   Endpoint: DELETE /api/bases/bulk-delete
+   
+   Body: {
+     ids: number[]
+   }
+   
+   Processo (MANTER ARQUITETURA ATUAL DE SEGURANÇA):
+   - Validar que IDs pertencem ao tenant correto
+   - Usar transação PostgreSQL (BEGIN/COMMIT/ROLLBACK)
+   - Deletar em LOTES de 10 registros por vez (para não travar BD)
+   - Para cada lote:
+     a) Deletar registros relacionados em tabelas dependentes
+     b) Deletar registros da tabela principal
+     c) Aguardar 100ms entre lotes (evitar sobrecarga)
+   - Retornar: { success: true, deleted: number, errors: string[] }
+
+5. FEEDBACK VISUAL
+   - Durante exclusão: Loading spinner + "Excluindo {atual} de {total}..."
+   - Ao finalizar sucesso: Toast verde "X base(s) excluída(s) com sucesso"
+   - Se houver erros: Toast amarelo "X excluídas, Y falharam" + lista de erros
+   - Atualizar tabela automaticamente após exclusão
+   - Limpar seleções
+
+6. TRATAMENTO DE ERROS
+   - Se falhar no meio: rollback da transação atual
+   - Continuar com próximos lotes (não interromper tudo)
+   - Log detalhado de erros no console/servidor
+
+RESTRIÇÕES:
+- NÃO alterar lógica atual de exclusão individual
+- NÃO remover validações de segurança existentes
+- MANTER processamento em lotes (não excluir tudo de uma vez)
+- RESPEITAR delay entre lotes para não sobrecarregar BD
+- Usar mesmas tabelas/relacionamentos atuais
+
+TECNOLOGIAS:
+- Frontend: React + TypeScript (componente atual da página)
+- Backend: Node.js + Express + TypeScript
+- Database: PostgreSQL com transações
+- UI: Manter padrão visual atual (cores, botões, modais)
+
+ARQUIVOS A MODIFICAR:
+- Frontend: [caminho do componente Base de Clientes]
+- Backend: [caminho do controller/route de bases]
+- Tipos: [caminho dos types TypeScript]
+
+NÃO IMPLEMENTAR AGORA:
+- Histórico de exclusões (fazer depois)
+- Desfazer exclusão (fazer depois)
+- Exportar antes de excluir (fazer depois)

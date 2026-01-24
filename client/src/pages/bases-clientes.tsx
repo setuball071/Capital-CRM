@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Upload, Database, FileSpreadsheet, CheckCircle, XCircle, Clock, HelpCircle, Download, Trash2, AlertTriangle, Zap, RefreshCw, ChevronLeft, ChevronRight, Square, CheckSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { ConvenioCombobox } from "@/components/convenio-combobox";
@@ -166,6 +167,11 @@ export default function BasesClientes() {
   const [importRunsPage, setImportRunsPage] = useState(1);
   const IMPORT_RUNS_PER_PAGE = 15;
   const [isDownloadingErrors, setIsDownloadingErrors] = useState(false);
+  
+  // Bulk delete states for Import Runs
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<number>>(new Set());
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ current: number; total: number } | null>(null);
   
   // D8 Delete confirmation states
   const [isD8DeleteDialogOpen, setIsD8DeleteDialogOpen] = useState(false);
@@ -641,6 +647,99 @@ export default function BasesClientes() {
         variant: "destructive",
       });
     }
+  };
+
+  // Funções de seleção múltipla para exclusão em massa
+  const handleSelectRun = (runId: number, checked: boolean) => {
+    setSelectedRunIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(runId);
+      } else {
+        newSet.delete(runId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllRuns = (checked: boolean) => {
+    if (checked) {
+      const currentPageIds = importRuns
+        .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+        .map(run => run.id);
+      setSelectedRunIds(new Set(currentPageIds));
+    } else {
+      setSelectedRunIds(new Set());
+    }
+  };
+
+  const isAllCurrentPageSelected = () => {
+    const currentPageIds = importRuns
+      .slice((importRunsPage - 1) * IMPORT_RUNS_PER_PAGE, importRunsPage * IMPORT_RUNS_PER_PAGE)
+      .map(run => run.id);
+    return currentPageIds.length > 0 && currentPageIds.every(id => selectedRunIds.has(id));
+  };
+
+  const getSelectedRunNames = () => {
+    return importRuns
+      .filter(run => selectedRunIds.has(run.id))
+      .map(run => run.arquivoOrigem || `Import #${run.id}`);
+  };
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await fetch("/api/import-runs/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao excluir importações");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const successCount = data.deleted || 0;
+      const errorCount = data.errors?.length || 0;
+      
+      if (errorCount > 0) {
+        toast({
+          title: "Exclusão parcial",
+          description: `${successCount} importação(ões) excluída(s), ${errorCount} falhou(aram).`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Exclusão concluída",
+          description: `${successCount} importação(ões) excluída(s) com sucesso.`,
+        });
+      }
+      
+      // Limpar seleções e invalidar caches
+      setSelectedRunIds(new Set());
+      setIsBulkDeleteDialogOpen(false);
+      setBulkDeleteProgress(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      window.dispatchEvent(new CustomEvent("clientDataDeleted"));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível excluir as importações.",
+        variant: "destructive",
+      });
+      setBulkDeleteProgress(null);
+    },
+  });
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedRunIds);
+    setBulkDeleteProgress({ current: 0, total: ids.length });
+    bulkDeleteMutation.mutate(ids);
   };
 
   // Abrir dialog de preview para exclusão D8
