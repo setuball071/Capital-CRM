@@ -1,0 +1,314 @@
+FEATURE: Botão "Ver Histórico" de competências do cliente
+
+OBJETIVO: 
+Permitir visualizar todas as competências/folhas anteriores de um cliente em um modal/pop-up.
+
+CONTEXTO:
+- Sistema já mantém todas as competências no banco (import_records)
+- Tela atual mostra apenas a competência mais recente
+- Usuário quer ver histórico completo ao clicar em botão
+
+IMPLEMENTAÇÃO EM 3 PARTES:
+
+═══════════════════════════════════════════════════════════════
+PARTE 1 - BACKEND: Criar endpoint de histórico
+═══════════════════════════════════════════════════════════════
+
+ARQUIVO: server/routes.ts
+
+ADICIONAR novo endpoint (colocar ANTES de rotas com :id):
+```typescript
+// Histórico de competências de um cliente
+app.get(
+  "/api/clients/:cpf/history",
+  requireAuth,
+  requireModuleAccess("modulo_base_clientes"),
+  async (req, res) => {
+    try {
+      const { cpf } = req.params;
+      const tenantId = req.user?.tenantId;
+      
+      if (!tenantId) {
+        return res.status(401).json({ error: "Não autenticado" });
+      }
+      
+      console.log('📜 Buscando histórico para CPF:', cpf);
+      
+      // Buscar TODAS as competências do cliente
+      const history = await db
+        .select({
+          competencia: importRecords.competencia,
+          creditos: importRecords.creditos,
+          debitos: importRecords.debitos,
+          liquido: importRecords.liquido,
+          nome: importRecords.nome,
+          matricula: importRecords.matricula,
+          orgao: importRecords.orgao,
+          convenio: importRecords.convenio,
+          importRunId: importRecords.importRunId,
+          createdAt: importRecords.createdAt
+        })
+        .from(importRecords)
+        .where(
+          and(
+            eq(importRecords.cpf, cpf),
+            eq(importRecords.tenantId, tenantId)
+          )
+        )
+        .orderBy(desc(importRecords.competencia));
+      
+      console.log(`✅ Encontradas ${history.length} competências`);
+      
+      res.json({
+        cpf,
+        totalRecords: history.length,
+        history: history
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar histórico:', error);
+      res.status(500).json({ 
+        error: 'Erro ao buscar histórico',
+        message: error.message 
+      });
+    }
+  }
+);
+```
+
+═══════════════════════════════════════════════════════════════
+PARTE 2 - FRONTEND: Criar modal de histórico
+═══════════════════════════════════════════════════════════════
+
+ARQUIVO: [Componente da página de consulta de cliente]
+
+1. ADICIONAR ESTADO PARA MODAL
+```typescript
+const [showHistoryModal, setShowHistoryModal] = useState(false);
+const [historyData, setHistoryData] = useState<any[]>([]);
+const [loadingHistory, setLoadingHistory] = useState(false);
+```
+
+2. FUNÇÃO PARA BUSCAR HISTÓRICO
+```typescript
+const fetchHistory = async (cpf: string) => {
+  setLoadingHistory(true);
+  try {
+    const response = await fetch(`/api/clients/${cpf}/history`, {
+      headers: {
+        'Authorization': `Bearer ${token}`, // Ajustar conforme seu auth
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Erro ao buscar histórico');
+    }
+    
+    const data = await response.json();
+    setHistoryData(data.history);
+    setShowHistoryModal(true);
+  } catch (error) {
+    console.error('Erro ao buscar histórico:', error);
+    toast.error('Erro ao carregar histórico de competências');
+  } finally {
+    setLoadingHistory(false);
+  }
+};
+```
+
+3. BOTÃO "VER HISTÓRICO"
+
+Posição: Ao lado dos dados principais do cliente
+```tsx
+<div className="flex items-center gap-3">
+  <h3 className="text-lg font-semibold">
+    Dados da Folha - {formatCompetencia(clientData.competencia)}
+  </h3>
+  
+  <button
+    onClick={() => fetchHistory(clientData.cpf)}
+    disabled={loadingHistory}
+    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+  >
+    {loadingHistory ? (
+      <>
+        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        Carregando...
+      </>
+    ) : (
+      <>
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Ver Histórico
+      </>
+    )}
+  </button>
+</div>
+```
+
+4. COMPONENTE MODAL
+```tsx
+{showHistoryModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[80vh] flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">
+            Histórico de Competências
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {clientData.nome} - CPF: {formatCPF(clientData.cpf)}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Total: {historyData.length} competência(s) encontrada(s)
+          </p>
+        </div>
+        
+        <button
+          onClick={() => setShowHistoryModal(false)}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      {/* Tabela com scroll */}
+      <div className="flex-1 overflow-auto p-6">
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 bg-gray-50">
+            <tr className="border-b-2 border-gray-200">
+              <th className="text-left p-3 text-sm font-semibold text-gray-700">Competência</th>
+              <th className="text-right p-3 text-sm font-semibold text-gray-700">Créditos</th>
+              <th className="text-right p-3 text-sm font-semibold text-gray-700">Débitos</th>
+              <th className="text-right p-3 text-sm font-semibold text-gray-700">Líquido</th>
+              <th className="text-left p-3 text-sm font-semibold text-gray-700">Convênio</th>
+              <th className="text-left p-3 text-sm font-semibold text-gray-700">Data Import.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historyData.map((record, index) => (
+              <tr 
+                key={index}
+                className={`
+                  border-b border-gray-100 hover:bg-gray-50 transition-colors
+                  ${index === 0 ? 'bg-blue-50' : ''}
+                `}
+              >
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">
+                      {formatCompetencia(record.competencia)}
+                    </span>
+                    {index === 0 && (
+                      <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                        Atual
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="p-3 text-right font-mono text-green-600">
+                  {formatCurrency(record.creditos)}
+                </td>
+                <td className="p-3 text-right font-mono text-red-600">
+                  {formatCurrency(record.debitos)}
+                </td>
+                <td className="p-3 text-right font-mono font-semibold text-blue-600">
+                  {formatCurrency(record.liquido)}
+                </td>
+                <td className="p-3 text-sm text-gray-600">
+                  {record.convenio || '-'}
+                </td>
+                <td className="p-3 text-sm text-gray-500">
+                  {formatDate(record.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        {historyData.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            Nenhum histórico encontrado
+          </div>
+        )}
+      </div>
+      
+      {/* Footer */}
+      <div className="border-t p-4 bg-gray-50 flex justify-end">
+        <button
+          onClick={() => setShowHistoryModal(false)}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+5. FUNÇÕES AUXILIARES DE FORMATAÇÃO
+```typescript
+const formatCompetencia = (competencia: string) => {
+  // Se vier como "2026-02-01", converter para "Fevereiro/2026"
+  const date = new Date(competencia);
+  const meses = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+  return `${meses[date.getMonth()]}/${date.getFullYear()}`;
+};
+
+const formatCurrency = (value: number | string) => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(num || 0);
+};
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const formatCPF = (cpf: string) => {
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+};
+```
+
+═══════════════════════════════════════════════════════════════
+PARTE 3 - AJUSTES VISUAIS E UX
+═══════════════════════════════════════════════════════════════
+
+MELHORIAS OPCIONAIS:
+
+1. Adicionar badge de "Nova" em competências importadas há menos de 7 dias
+2. Adicionar botão de exportar histórico em CSV/Excel
+3. Adicionar filtro por período (últimos 6 meses, último ano, etc)
+4. Destacar diferenças entre competências (aumento/diminuição de valores)
+5. Adicionar gráfico de evolução dos valores ao longo do tempo
+
+IMPORTANTE:
+- Modal deve ser responsivo (funcionar em mobile)
+- Tabela deve ter scroll horizontal se necessário
+- Loading state enquanto busca dados
+- Tratamento de erro se API falhar
+- Competência atual destacada (primeira linha)
+
+NÃO IMPLEMENTAR AGORA:
+- Edição de dados no histórico
+- Exclusão de competências específicas
+- Comparação lado a lado de competências
