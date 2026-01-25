@@ -138,8 +138,8 @@ function formatCompetencia(competencia: string | null | undefined): string {
   if (!competencia) return "-";
   try {
     const date = new Date(competencia);
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const year = date.getUTCFullYear();
     return `${month}/${year}`;
   } catch {
     return competencia;
