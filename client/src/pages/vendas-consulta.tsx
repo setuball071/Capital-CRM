@@ -874,10 +874,29 @@ export default function VendasConsulta() {
                     <Briefcase className="h-4 w-4" />
                     Situação de Folha
                   </CardTitle>
-                  <CardDescription>
-                    {consultaData.folhaAtual?.competencia
-                      ? `Competência: ${consultaData.folhaAtual.competencia}`
-                      : "Dados de folha não disponíveis"}
+                  <CardDescription className="flex items-center gap-3">
+                    <span>
+                      {consultaData.folhaAtual?.competencia
+                        ? `Competência: ${formatCompetencia(consultaData.folhaAtual.competencia)}`
+                        : "Dados de folha não disponíveis"}
+                    </span>
+                    {consultaData.folhaAtual && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleOpenHistorico}
+                        disabled={historicoMutation.isPending}
+                        data-testid="button-historico-folha"
+                        title="Visualizar todas as competências importadas"
+                      >
+                        {historicoMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <History className="w-4 h-4 mr-2" />
+                        )}
+                        Ver Histórico
+                      </Button>
+                    )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -990,23 +1009,6 @@ export default function VendasConsulta() {
                       </div>
                     </div>
 
-                    <div className="flex justify-center pt-4">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleOpenHistorico}
-                        disabled={historicoMutation.isPending}
-                        data-testid="button-historico-folha"
-                        title="Visualizar todas as competências importadas"
-                      >
-                        {historicoMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <History className="w-4 h-4 mr-2" />
-                        )}
-                        Ver Histórico Completo
-                      </Button>
-                    </div>
                     </>
                   ) : (
                     <div className="text-center py-6 text-muted-foreground">
