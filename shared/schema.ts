@@ -1896,7 +1896,6 @@ export const stagingContatos = pgTable("staging_contatos", {
   errorMessage: text("error_message"),
 });
 
-export type StagingFolha = typeof stagingFolha.$inferSelect;
 export type StagingD8 = typeof stagingD8.$inferSelect;
 export type StagingContatos = typeof stagingContatos.$inferSelect;
 

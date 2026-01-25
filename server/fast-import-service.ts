@@ -6,7 +6,6 @@ import {
   importRuns,
   importErrors,
   importRunRows,
-  stagingFolha,
   stagingD8,
   stagingContatos,
   clientesPessoa,
@@ -999,9 +998,6 @@ class FastImportService {
 
   private async cleanupStaging(importRunId: number, tipoImport: string): Promise<void> {
     switch (tipoImport) {
-      case "folha":
-        await db.delete(stagingFolha).where(eq(stagingFolha.importRunId, importRunId));
-        break;
       case "d8":
         await db.delete(stagingD8).where(eq(stagingD8.importRunId, importRunId));
         break;
@@ -1120,9 +1116,6 @@ class FastImportService {
       const chunk = batch.slice(i, i + SQL_INSERT_CHUNK);
       
       switch (tipoImport) {
-        case "folha":
-          await db.insert(stagingFolha).values(chunk);
-          break;
         case "d8":
           await db.insert(stagingD8).values(chunk);
           break;
