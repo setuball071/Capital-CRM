@@ -7139,6 +7139,97 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET histórico completo de folhas de um cliente
+  app.get("/api/clientes/:pessoaId/historico-folha", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      const vinculoIdParam = req.query.vinculoId ? parseInt(req.query.vinculoId as string) : null;
+      
+      if (isNaN(pessoaId)) {
+        return res.status(400).json({ message: "ID de pessoa inválido" });
+      }
+      
+      // Get pessoa
+      const pessoa = await storage.getClientePessoaById(pessoaId);
+      if (!pessoa) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Get all vínculos for this pessoa
+      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId);
+      
+      // Determinar qual vínculo usar
+      let vinculoIdEfetivo: number | null = null;
+      
+      if (vinculoIdParam && !isNaN(vinculoIdParam)) {
+        const vinculoValido = vinculosTodos.find(v => v.id === vinculoIdParam);
+        if (vinculoValido) {
+          vinculoIdEfetivo = vinculoIdParam;
+        }
+      }
+      
+      // Se não foi especificado, buscar o vínculo com folha mais recente
+      if (!vinculoIdEfetivo && vinculosTodos.length > 0) {
+        const vinculoIds = vinculosTodos.map(v => v.id);
+        vinculoIdEfetivo = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+        if (!vinculoIdEfetivo) {
+          vinculoIdEfetivo = vinculosTodos[0].id;
+        }
+      }
+      
+      // Get all folhas for this vínculo (all competências)
+      let folhaRegistros;
+      if (vinculoIdEfetivo) {
+        folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoIdEfetivo);
+        if (folhaRegistros.length === 0) {
+          folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+        }
+      } else {
+        folhaRegistros = await storage.getFolhaMesByPessoaId(pessoaId);
+      }
+      
+      // Map all folhas with complete data
+      const historico = folhaRegistros.map(f => ({
+        competencia: f.competencia,
+        // Margem 5% (cartão crédito consignado)
+        margem_bruta_5: f.margemBruta5 != null ? parseFloat(f.margemBruta5) : null,
+        margem_utilizada_5: f.margemUtilizada5 != null ? parseFloat(f.margemUtilizada5) : null,
+        margem_saldo_5: f.margemSaldo5 != null ? parseFloat(f.margemSaldo5) : null,
+        // Margem Benefício 5%
+        margem_beneficio_bruta_5: f.margemBeneficioBruta5 != null ? parseFloat(f.margemBeneficioBruta5) : null,
+        margem_beneficio_utilizada_5: f.margemBeneficioUtilizada5 != null ? parseFloat(f.margemBeneficioUtilizada5) : null,
+        margem_beneficio_saldo_5: f.margemBeneficioSaldo5 != null ? parseFloat(f.margemBeneficioSaldo5) : null,
+        // Margem 35%
+        margem_bruta_35: f.margemBruta35 != null ? parseFloat(f.margemBruta35) : null,
+        margem_utilizada_35: f.margemUtilizada35 != null ? parseFloat(f.margemUtilizada35) : null,
+        margem_saldo_35: f.margemSaldo35 != null ? parseFloat(f.margemSaldo35) : null,
+        // Margem 70%
+        margem_bruta_70: f.margemBruta70 != null ? parseFloat(f.margemBruta70) : null,
+        margem_utilizada_70: f.margemUtilizada70 != null ? parseFloat(f.margemUtilizada70) : null,
+        margem_saldo_70: f.margemSaldo70 != null ? parseFloat(f.margemSaldo70) : null,
+        // Valores monetários
+        salario_bruto: f.salarioBruto != null ? parseFloat(f.salarioBruto) : null,
+        salario_liquido: f.salarioLiquido != null ? parseFloat(f.salarioLiquido) : null,
+        creditos: f.creditos != null ? parseFloat(f.creditos) : null,
+        debitos: f.debitos != null ? parseFloat(f.debitos) : null,
+        liquido: f.liquido != null ? parseFloat(f.liquido) : null,
+        base_tag: f.baseTag,
+      }));
+      
+      return res.json({
+        pessoa_id: pessoaId,
+        vinculo_id: vinculoIdEfetivo,
+        nome: pessoa.nome,
+        cpf: pessoa.cpf,
+        total_competencias: historico.length,
+        historico,
+      });
+    } catch (error) {
+      console.error("Get histórico folha error:", error);
+      return res.status(500).json({ message: "Erro ao buscar histórico de folhas" });
+    }
+  });
+
   // ===== PRICING SETTINGS ENDPOINTS (MODELO DE PACOTES) =====
 
   // GET pricing settings - Master only - Retorna tabela de pacotes

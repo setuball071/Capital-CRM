@@ -139,6 +139,37 @@ interface FolhaHistorico {
   base_tag: string | null;
 }
 
+interface FolhaHistoricoCompleto {
+  competencia: string;
+  margem_bruta_5: number | null;
+  margem_utilizada_5: number | null;
+  margem_saldo_5: number | null;
+  margem_beneficio_bruta_5: number | null;
+  margem_beneficio_utilizada_5: number | null;
+  margem_beneficio_saldo_5: number | null;
+  margem_bruta_35: number | null;
+  margem_utilizada_35: number | null;
+  margem_saldo_35: number | null;
+  margem_bruta_70: number | null;
+  margem_utilizada_70: number | null;
+  margem_saldo_70: number | null;
+  salario_bruto: number | null;
+  salario_liquido: number | null;
+  creditos: number | null;
+  debitos: number | null;
+  liquido: number | null;
+  base_tag: string | null;
+}
+
+interface HistoricoFolhaResponse {
+  pessoa_id: number;
+  vinculo_id: number | null;
+  nome: string;
+  cpf: string;
+  total_competencias: number;
+  historico: FolhaHistoricoCompleto[];
+}
+
 interface Contrato {
   id: number;
   tipo_contrato: string | null;
@@ -332,6 +363,10 @@ export default function ConsultaCliente() {
   const [selectedPessoaId, setSelectedPessoaId] = useState<number | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
+  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [historicoData, setHistoricoData] = useState<HistoricoFolhaResponse | null>(null);
+  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
+  const [selectedHistoricoCompetencia, setSelectedHistoricoCompetencia] = useState<FolhaHistoricoCompleto | null>(null);
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
   
   // Função para calcular Saldo Devedor usando Tabela Price
@@ -396,6 +431,36 @@ export default function ConsultaCliente() {
       title: "Copiado!",
       description: label ? `${label} copiado para a área de transferência.` : "Copiado para a área de transferência.",
     });
+  };
+
+  // Handler para abrir modal de histórico de folha
+  const handleOpenHistorico = async () => {
+    if (!selectedPessoaId) return;
+    
+    setIsLoadingHistorico(true);
+    setShowHistoricoModal(true);
+    setSelectedHistoricoCompetencia(null);
+    
+    try {
+      const url = selectedVinculoId 
+        ? `/api/clientes/${selectedPessoaId}/historico-folha?vinculoId=${selectedVinculoId}`
+        : `/api/clientes/${selectedPessoaId}/historico-folha`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        throw new Error("Erro ao carregar histórico");
+      }
+      const data: HistoricoFolhaResponse = await res.json();
+      setHistoricoData(data);
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o histórico de folhas.",
+        variant: "destructive",
+      });
+      setShowHistoricoModal(false);
+    } finally {
+      setIsLoadingHistorico(false);
+    }
   };
 
   const { data: conveniosDisponiveis } = useQuery<string[]>({
@@ -1036,46 +1101,29 @@ export default function ConsultaCliente() {
                         </div>
                       </div>
 
-                      {clienteDetalhado.folha.historico.length > 0 && (
-                        <Accordion type="single" collapsible>
-                          <AccordionItem value="historico">
-                            <AccordionTrigger className="text-sm">
-                              <Calendar className="w-4 h-4 mr-2" />
-                              Ver histórico de folha ({clienteDetalhado.folha.historico.length} meses)
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Competência</TableHead>
-                                    <TableHead>70%</TableHead>
-                                    <TableHead>35%</TableHead>
-                                    <TableHead>5%</TableHead>
-                                    <TableHead>Benef. 5%</TableHead>
-                                    <TableHead>Líquido</TableHead>
-                                    <TableHead>Base</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {clienteDetalhado.folha.historico.map((f, idx) => (
-                                    <TableRow key={idx}>
-                                      <TableCell>{formatDate(f.competencia)}</TableCell>
-                                      <TableCell>{formatCurrency(f.margem_saldo_70)}</TableCell>
-                                      <TableCell>{formatCurrency(f.margem_saldo_35)}</TableCell>
-                                      <TableCell>{formatCurrency(f.margem_saldo_5)}</TableCell>
-                                      <TableCell>{formatCurrency(f.margem_beneficio_saldo_5)}</TableCell>
-                                      <TableCell>{formatCurrency(f.liquido)}</TableCell>
-                                      <TableCell>
-                                        <Badge variant="outline" className="text-xs">{f.base_tag}</Badge>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      )}
+                      <div className="flex justify-center pt-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleOpenHistorico}
+                              disabled={isLoadingHistorico}
+                              data-testid="button-historico-folha"
+                            >
+                              {isLoadingHistorico ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Calendar className="w-4 h-4 mr-2" />
+                              )}
+                              Ver Histórico Completo
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Visualizar todas as competências importadas</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
@@ -1342,6 +1390,204 @@ export default function ConsultaCliente() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={showHistoricoModal} onOpenChange={setShowHistoricoModal}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Histórico de Folhas
+            </DialogTitle>
+            <DialogDescription>
+              {historicoData && (
+                <span>
+                  {historicoData.nome} - CPF: {formatCPF(historicoData.cpf)} 
+                  {historicoData.total_competencias > 0 && ` - ${historicoData.total_competencias} competência(s)`}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingHistorico ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : historicoData && historicoData.historico.length > 0 ? (
+            <div className="flex-1 overflow-hidden flex flex-col gap-4">
+              <div className="overflow-auto max-h-[300px] border rounded-md">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background">
+                    <TableRow>
+                      <TableHead>Competência</TableHead>
+                      <TableHead className="text-right">Margem 70%</TableHead>
+                      <TableHead className="text-right">Margem 35%</TableHead>
+                      <TableHead className="text-right">Margem 5%</TableHead>
+                      <TableHead className="text-right">Benef. 5%</TableHead>
+                      <TableHead className="text-right">Líquido</TableHead>
+                      <TableHead>Base</TableHead>
+                      <TableHead className="w-20"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historicoData.historico.map((f, idx) => (
+                      <TableRow 
+                        key={idx} 
+                        className={selectedHistoricoCompetencia?.competencia === f.competencia ? "bg-muted" : "cursor-pointer hover:bg-muted/50"}
+                        onClick={() => setSelectedHistoricoCompetencia(f)}
+                        data-testid={`row-historico-${idx}`}
+                      >
+                        <TableCell className="font-medium">{formatDate(f.competencia)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.margem_saldo_70)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.margem_saldo_35)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.margem_saldo_5)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.margem_beneficio_saldo_5)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.liquido)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{f.base_tag}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={(e) => { e.stopPropagation(); setSelectedHistoricoCompetencia(f); }}
+                            data-testid={`button-ver-detalhes-${idx}`}
+                          >
+                            Ver
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {selectedHistoricoCompetencia && (
+                <Card className="flex-shrink-0">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      Detalhes - {formatDate(selectedHistoricoCompetencia.competencia)}
+                      <Badge variant="outline">{selectedHistoricoCompetencia.base_tag}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Margem 70%</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Bruta:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_bruta_70)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Utilizada:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_utilizada_70)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span>Saldo:</span>
+                            <span className={(selectedHistoricoCompetencia.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_70)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Margem 35%</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Bruta:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_bruta_35)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Utilizada:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_utilizada_35)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span>Saldo:</span>
+                            <span className={(selectedHistoricoCompetencia.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_35)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Margem 5%</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Bruta:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_bruta_5)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Utilizada:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_utilizada_5)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span>Saldo:</span>
+                            <span className={(selectedHistoricoCompetencia.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_5)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Benefício 5%</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Bruta:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_bruta_5)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Utilizada:</span>
+                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_utilizada_5)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span>Saldo:</span>
+                            <span className={(selectedHistoricoCompetencia.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(selectedHistoricoCompetencia.margem_beneficio_saldo_5)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Salário Bruto</p>
+                        <p className="font-medium">{formatCurrency(selectedHistoricoCompetencia.salario_bruto)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Salário Líquido</p>
+                        <p className="font-medium">{formatCurrency(selectedHistoricoCompetencia.salario_liquido)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Créditos</p>
+                        <p className="font-medium text-green-600">{formatCurrency(selectedHistoricoCompetencia.creditos)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Débitos</p>
+                        <p className="font-medium text-red-600">{formatCurrency(selectedHistoricoCompetencia.debitos)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Líquido</p>
+                        <p className="font-medium">{formatCurrency(selectedHistoricoCompetencia.liquido)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhum histórico de folha disponível.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
