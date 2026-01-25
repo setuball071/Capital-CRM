@@ -1143,12 +1143,15 @@ class StreamingImportService {
     };
 
     if (isUpdate) {
-      console.log(`[FOLHA UPDATE] Atualizando folha para pessoa ${pessoaId}, competência ${competencia.toISOString().slice(0,10)}`);
+      console.log(`[FOLHA-UPSERT] ATUALIZAÇÃO pessoa=${pessoaId}, competência=${competencia.toISOString().slice(0,10)}, id=${existing[0].id}`);
+      console.log(`[FOLHA-UPSERT] Valores: salarioBruto=${folhaData.salarioBruto}, salarioLiquido=${folhaData.salarioLiquido}, margemSaldo35=${folhaData.margemSaldo35}`);
       await db
         .update(clientesFolhaMes)
         .set(folhaData)
         .where(eq(clientesFolhaMes.id, existing[0].id));
     } else {
+      console.log(`[FOLHA-UPSERT] INSERÇÃO pessoa=${pessoaId}, competência=${competencia.toISOString().slice(0,10)}, baseTag=${baseTag}`);
+      console.log(`[FOLHA-UPSERT] Valores: salarioBruto=${folhaData.salarioBruto}, salarioLiquido=${folhaData.salarioLiquido}, margemSaldo35=${folhaData.margemSaldo35}`);
       // DEBUG: Log antes do INSERT para identificar ON CONFLICT
       console.log("[DEBUG INSERT] Tabela: clientes_folha_mes");
       console.log("[DEBUG INSERT] Colunas:", Object.keys(folhaData).join(", "));

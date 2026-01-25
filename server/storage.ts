@@ -1630,10 +1630,21 @@ export class DbStorage implements IStorage {
   }
 
   async getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]> {
-    return await db.select()
+    const results = await db.select()
       .from(clientesFolhaMes)
       .where(eq(clientesFolhaMes.pessoaId, pessoaId))
       .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+    
+    if (results.length > 0) {
+      console.log(`[FOLHA-DEBUG] getFolhaMesByPessoaId(${pessoaId}): ${results.length} registros encontrados`);
+      console.log(`[FOLHA-DEBUG] Competência mais recente: ${results[0].competencia?.toISOString?.() || results[0].competencia}`);
+      console.log(`[FOLHA-DEBUG] Salário bruto: ${results[0].salarioBruto}, Salário líquido: ${results[0].salarioLiquido}`);
+      console.log(`[FOLHA-DEBUG] Margem 35% saldo: ${results[0].margemSaldo35}, Margem 5% saldo: ${results[0].margemSaldo5}`);
+    } else {
+      console.log(`[FOLHA-DEBUG] getFolhaMesByPessoaId(${pessoaId}): NENHUM registro encontrado`);
+    }
+    
+    return results;
   }
   
   async getLatestFolhaMesByPessoaIds(pessoaIds: number[]): Promise<Map<number, ClienteFolhaMes>> {
@@ -1690,10 +1701,21 @@ export class DbStorage implements IStorage {
   }
   
   async getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]> {
-    return await db.select()
+    const results = await db.select()
       .from(clientesFolhaMes)
       .where(eq(clientesFolhaMes.vinculoId, vinculoId))
       .orderBy(sql`${clientesFolhaMes.competencia} DESC`);
+    
+    if (results.length > 0) {
+      console.log(`[FOLHA-DEBUG] getFolhaMesByVinculoId(${vinculoId}): ${results.length} registros encontrados`);
+      console.log(`[FOLHA-DEBUG] Competência mais recente: ${results[0].competencia?.toISOString?.() || results[0].competencia}`);
+      console.log(`[FOLHA-DEBUG] Salário bruto: ${results[0].salarioBruto}, Salário líquido: ${results[0].salarioLiquido}`);
+      console.log(`[FOLHA-DEBUG] Margem 35% saldo: ${results[0].margemSaldo35}, Margem 5% saldo: ${results[0].margemSaldo5}`);
+    } else {
+      console.log(`[FOLHA-DEBUG] getFolhaMesByVinculoId(${vinculoId}): NENHUM registro encontrado, tentando fallback por pessoa`);
+    }
+    
+    return results;
   }
 
   // Clientes Vínculos
