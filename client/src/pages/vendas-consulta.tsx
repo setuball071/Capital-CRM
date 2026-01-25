@@ -134,6 +134,18 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+function formatCompetencia(competencia: string | null | undefined): string {
+  if (!competencia) return "-";
+  try {
+    const date = new Date(competencia);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${month}/${year}`;
+  } catch {
+    return competencia;
+  }
+}
+
 function formatPhone(phone: string | null | undefined): string {
   if (!phone) return "-";
   const clean = phone.replace(/\D/g, "");
@@ -1684,6 +1696,8 @@ export default function VendasConsulta() {
                             <TableHead>Competência</TableHead>
                             <TableHead className="text-right">Saldo 70%</TableHead>
                             <TableHead className="text-right">Saldo 35%</TableHead>
+                            <TableHead className="text-right">Saldo 5%</TableHead>
+                            <TableHead className="text-right">Benefício 5%</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1694,7 +1708,7 @@ export default function VendasConsulta() {
                               onClick={() => setSelectedHistoricoItem(item)}
                               data-testid={`row-historico-${item.competencia}`}
                             >
-                              <TableCell className="font-medium" data-testid={`text-competencia-${item.competencia}`}>{item.competencia}</TableCell>
+                              <TableCell className="font-medium" data-testid={`text-competencia-${item.competencia}`}>{formatCompetencia(item.competencia)}</TableCell>
                               <TableCell className="text-right">
                                 <span className={(item.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-saldo70-${item.competencia}`}>
                                   {formatCurrency(item.margem_saldo_70)}
@@ -1703,6 +1717,16 @@ export default function VendasConsulta() {
                               <TableCell className="text-right">
                                 <span className={(item.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-saldo35-${item.competencia}`}>
                                   {formatCurrency(item.margem_saldo_35)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={(item.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-saldo5-${item.competencia}`}>
+                                  {formatCurrency(item.margem_saldo_5)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={(item.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-beneficio5-${item.competencia}`}>
+                                  {formatCurrency(item.margem_beneficio_saldo_5)}
                                 </span>
                               </TableCell>
                             </TableRow>
@@ -1717,7 +1741,7 @@ export default function VendasConsulta() {
                       <Card data-testid="card-historico-detalhes">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base" data-testid="text-competencia-selecionada">
-                            Detalhes: {selectedHistoricoItem.competencia}
+                            Detalhes: {formatCompetencia(selectedHistoricoItem.competencia)}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
