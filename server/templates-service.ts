@@ -4,9 +4,9 @@ import ExcelJS from "exceljs";
 const TEXT_COLUMNS = ["cpf", "matricula", "upag", "numero_contrato", "n_contrato", "prazo", "prazo_remanescente", "m_instituidor", "ids", "instituidor", "arq_upag", "cep", "telefone_1", "telefone_2", "telefone_3", "telefone_4", "telefone_5"];
 
 // Colunas do template Folha Servidor - ordem EXATA conforme especificação do usuário
-// NÃO reordenar, NÃO renomear, NÃO traduzir, NÃO remover espaços ou acentos
+// Headers SEM ACENTOS para compatibilidade com Excel brasileiro (encoding Windows-1252)
 export const FOLHA_SERVIDOR_HEADERS = [
-  "Orgão",
+  "Orgao",
   "Matricula",
   "Base Calc",
   "Bruta 5%",
@@ -21,9 +21,9 @@ export const FOLHA_SERVIDOR_HEADERS = [
   "Bruta 70%",
   "Utilz 70%",
   "Saldo 70%",
-  "Créditos",
-  "Débitos",
-  "Líquido",
+  "Creditos",
+  "Debitos",
+  "Liquido",
   "ARQ. UPAG",
   "EXC QTD",
   "EXC Soma",
@@ -34,8 +34,9 @@ export const FOLHA_SERVIDOR_HEADERS = [
 ];
 
 // Mapeamento de header → campo interno (para parser)
+// Headers SEM ACENTOS para compatibilidade com Excel brasileiro
 export const FOLHA_SERVIDOR_COLUMN_MAP: Record<string, string> = {
-  "Orgão": "orgao",
+  "Orgao": "orgao",
   "Matricula": "matricula",
   "Base Calc": "base_calc",
   "Bruta 5%": "margem_5_bruta",
@@ -50,9 +51,9 @@ export const FOLHA_SERVIDOR_COLUMN_MAP: Record<string, string> = {
   "Bruta 70%": "margem_70_bruta",
   "Utilz 70%": "margem_70_utilizada",
   "Saldo 70%": "margem_70_saldo",
-  "Créditos": "creditos",
-  "Débitos": "debitos",
-  "Líquido": "liquido",
+  "Creditos": "creditos",
+  "Debitos": "debitos",
+  "Liquido": "liquido",
   "ARQ. UPAG": "arq_upag",
   "EXC QTD": "exc_qtd",
   "EXC Soma": "exc_soma",
@@ -63,9 +64,10 @@ export const FOLHA_SERVIDOR_COLUMN_MAP: Record<string, string> = {
 };
 
 // Colunas do template Folha Pensionista - ordem EXATA conforme especificação
+// Headers SEM ACENTOS para compatibilidade com Excel brasileiro (encoding Windows-1252)
 // Diferença do Servidor: inclui coluna "Instituidor" na posição 2
 export const FOLHA_PENSIONISTA_HEADERS = [
-  "Orgão",
+  "Orgao",
   "Instituidor",
   "Matricula",
   "Base Calc",
@@ -81,9 +83,9 @@ export const FOLHA_PENSIONISTA_HEADERS = [
   "Bruta 70%",
   "Utilz 70%",
   "Saldo 70%",
-  "Créditos",
-  "Débitos",
-  "Líquido",
+  "Creditos",
+  "Debitos",
+  "Liquido",
   "ARQ. UPAG",
   "EXC QTD",
   "EXC Soma",
@@ -101,8 +103,8 @@ export const FOLHA_PENSIONISTA_COLUMN_MAP: Record<string, string> = {
 
 export const TEMPLATE_COLUMNS = {
   folha: [
-    // Ordem EXATA conforme especificação - com acentos e % incluídos
-    { header: "Orgão", key: "orgao", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
+    // Ordem EXATA conforme especificação - SEM ACENTOS para compatibilidade com Excel brasileiro
+    { header: "Orgao", key: "orgao", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
     { header: "Matricula", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
     { header: "Base Calc", key: "base_calc", width: 15, required: false, example: "5000,00", isText: false },
     { header: "Bruta 5%", key: "margem_5_bruta", width: 12, required: false, example: "250,00", isText: false },
@@ -117,9 +119,9 @@ export const TEMPLATE_COLUMNS = {
     { header: "Bruta 70%", key: "margem_70_bruta", width: 12, required: false, example: "3.500,00", isText: false },
     { header: "Utilz 70%", key: "margem_70_utilizada", width: 12, required: false, example: "1.000,00", isText: false },
     { header: "Saldo 70%", key: "margem_70_saldo", width: 12, required: false, example: "2.500,00", isText: false },
-    { header: "Créditos", key: "creditos", width: 12, required: false, example: "5.000,00", isText: false },
-    { header: "Débitos", key: "debitos", width: 12, required: false, example: "1.000,00", isText: false },
-    { header: "Líquido", key: "liquido", width: 12, required: false, example: "4.000,00", isText: false },
+    { header: "Creditos", key: "creditos", width: 12, required: false, example: "5.000,00", isText: false },
+    { header: "Debitos", key: "debitos", width: 12, required: false, example: "1.000,00", isText: false },
+    { header: "Liquido", key: "liquido", width: 12, required: false, example: "4.000,00", isText: false },
     { header: "ARQ. UPAG", key: "arq_upag", width: 15, required: false, example: "00123", isText: true },
     { header: "EXC QTD", key: "exc_qtd", width: 10, required: false, example: "0", isText: false },
     { header: "EXC Soma", key: "exc_soma", width: 12, required: false, example: "0,00", isText: false },
@@ -129,8 +131,8 @@ export const TEMPLATE_COLUMNS = {
     { header: "Margem", key: "margem", width: 12, required: false, example: "200,00", isText: false },
   ],
   folha_pensionista: [
-    // Ordem EXATA conforme especificação - inclui Instituidor na posição 2
-    { header: "Orgão", key: "orgao", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
+    // Ordem EXATA conforme especificação - SEM ACENTOS para compatibilidade com Excel brasileiro
+    { header: "Orgao", key: "orgao", width: 25, required: false, example: "SECRETARIA DE EDUCACAO", isText: false },
     { header: "Instituidor", key: "instituidor", width: 15, required: false, example: "0654321", isText: true },
     { header: "Matricula", key: "matricula", width: 15, required: true, example: "0012345", isText: true },
     { header: "Base Calc", key: "base_calc", width: 15, required: false, example: "3500,00", isText: false },
@@ -146,9 +148,9 @@ export const TEMPLATE_COLUMNS = {
     { header: "Bruta 70%", key: "margem_70_bruta", width: 12, required: false, example: "2.450,00", isText: false },
     { header: "Utilz 70%", key: "margem_70_utilizada", width: 12, required: false, example: "700,00", isText: false },
     { header: "Saldo 70%", key: "margem_70_saldo", width: 12, required: false, example: "1.750,00", isText: false },
-    { header: "Créditos", key: "creditos", width: 12, required: false, example: "3.500,00", isText: false },
-    { header: "Débitos", key: "debitos", width: 12, required: false, example: "700,00", isText: false },
-    { header: "Líquido", key: "liquido", width: 12, required: false, example: "2.800,00", isText: false },
+    { header: "Creditos", key: "creditos", width: 12, required: false, example: "3.500,00", isText: false },
+    { header: "Debitos", key: "debitos", width: 12, required: false, example: "700,00", isText: false },
+    { header: "Liquido", key: "liquido", width: 12, required: false, example: "2.800,00", isText: false },
     { header: "ARQ. UPAG", key: "arq_upag", width: 15, required: false, example: "00456", isText: true },
     { header: "EXC QTD", key: "exc_qtd", width: 10, required: false, example: "0", isText: false },
     { header: "EXC Soma", key: "exc_soma", width: 12, required: false, example: "0,00", isText: false },
