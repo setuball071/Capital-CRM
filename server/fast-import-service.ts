@@ -532,8 +532,7 @@ class FastImportService {
   ): Promise<void> {
     console.log(`[FastImport] Registering all rows for run ${run.id}...`);
     
-    const stagingTable = tipoImport === "folha" ? "staging_folha" : 
-                         tipoImport === "d8" ? "staging_d8" : "staging_contatos";
+    const stagingTable = tipoImport === "d8" ? "staging_d8" : "staging_contatos";
     
     // Inserir todas as linhas válidas como 'ok'
     const okResult = await db.execute(sql`

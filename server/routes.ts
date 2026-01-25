@@ -5015,7 +5015,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             // 1. Deletar tabelas de staging e auxiliares (mais leves)
             await executeWithRetry(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
-            await executeWithRetry(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
             
@@ -5200,10 +5199,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           RETURNING id
         ),
         -- 8. Deletar staging (caso tenha restado)
-        deleted_staging_folha AS (
-          DELETE FROM staging_folha WHERE import_run_id = ${runId}
-          RETURNING id
-        ),
         deleted_staging_d8 AS (
           DELETE FROM staging_d8 WHERE import_run_id = ${runId}
           RETURNING id
