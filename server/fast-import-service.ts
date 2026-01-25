@@ -727,7 +727,7 @@ class FastImportService {
         margem_bruta_35, margem_utilizada_35, margem_saldo_35,
         margem_bruta_70, margem_utilizada_70, margem_saldo_70,
         margem_cartao_credito_saldo, margem_cartao_beneficio_saldo,
-        creditos, debitos, liquido, salario_bruto, descontos_brutos, salario_liquido,
+        creditos, debitos, liquido,
         sit_func_no_mes, base_tag, import_run_id
       )
       SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
@@ -751,9 +751,6 @@ class FastImportService {
         s.creditos::numeric,
         s.debitos::numeric,
         s.liquido::numeric,
-        s.salario_bruto::numeric,
-        s.descontos_brutos::numeric,
-        s.salario_liquido::numeric,
         s.sit_func,
         ${baseTag},
         ${run.id}
@@ -784,9 +781,6 @@ class FastImportService {
         creditos = EXCLUDED.creditos,
         debitos = EXCLUDED.debitos,
         liquido = EXCLUDED.liquido,
-        salario_bruto = EXCLUDED.salario_bruto,
-        descontos_brutos = EXCLUDED.descontos_brutos,
-        salario_liquido = EXCLUDED.salario_liquido,
         base_tag = ${baseTag},
         import_run_id = ${run.id}
     `);
