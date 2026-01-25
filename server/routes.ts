@@ -7079,8 +7079,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             margem_beneficio_saldo_5: f.margemBeneficioSaldo5 != null ? parseFloat(f.margemBeneficioSaldo5) : null,
             margem_saldo_35: f.margemSaldo35 != null ? parseFloat(f.margemSaldo35) : null,
             margem_saldo_70: f.margemSaldo70 != null ? parseFloat(f.margemSaldo70) : null,
-            creditos: f.creditos != null ? parseFloat(f.creditos) : null,
-            debitos: f.debitos != null ? parseFloat(f.debitos) : null,
             liquido: f.liquido != null ? parseFloat(f.liquido) : null,
             base_tag: f.baseTag,
           })),

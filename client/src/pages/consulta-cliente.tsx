@@ -135,8 +135,6 @@ interface FolhaHistorico {
   margem_beneficio_saldo_5: number | null;
   margem_saldo_35: number | null;
   margem_saldo_70: number | null;
-  creditos: number | null;
-  debitos: number | null;
   liquido: number | null;
   base_tag: string | null;
 }
@@ -1050,29 +1048,25 @@ export default function ConsultaCliente() {
                                 <TableHeader>
                                   <TableRow>
                                     <TableHead>Competência</TableHead>
-                                    <TableHead className="text-right">Créditos</TableHead>
-                                    <TableHead className="text-right">Débitos</TableHead>
-                                    <TableHead className="text-right">Líquido</TableHead>
-                                    <TableHead className="text-right">70%</TableHead>
-                                    <TableHead className="text-right">35%</TableHead>
-                                    <TableHead className="text-right">5%</TableHead>
-                                    <TableHead className="text-right">Benef. 5%</TableHead>
+                                    <TableHead>70%</TableHead>
+                                    <TableHead>35%</TableHead>
+                                    <TableHead>5%</TableHead>
+                                    <TableHead>Benef. 5%</TableHead>
+                                    <TableHead>Líquido</TableHead>
                                     <TableHead>Base</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {clienteDetalhado.folha.historico.map((f, idx) => (
-                                    <TableRow key={idx} data-testid={`row-folha-historico-${idx}`}>
+                                    <TableRow key={idx}>
                                       <TableCell>{formatDate(f.competencia)}</TableCell>
-                                      <TableCell className="text-right text-green-600">{formatCurrency(f.creditos)}</TableCell>
-                                      <TableCell className="text-right text-red-600">{formatCurrency(f.debitos)}</TableCell>
-                                      <TableCell className="text-right font-semibold text-blue-600">{formatCurrency(f.liquido)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(f.margem_saldo_70)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(f.margem_saldo_35)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(f.margem_saldo_5)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(f.margem_beneficio_saldo_5)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_70)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_35)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_saldo_5)}</TableCell>
+                                      <TableCell>{formatCurrency(f.margem_beneficio_saldo_5)}</TableCell>
+                                      <TableCell>{formatCurrency(f.liquido)}</TableCell>
                                       <TableCell>
-                                        <Badge variant="outline" className="text-xs">{f.base_tag || "-"}</Badge>
+                                        <Badge variant="outline" className="text-xs">{f.base_tag}</Badge>
                                       </TableCell>
                                     </TableRow>
                                   ))}
