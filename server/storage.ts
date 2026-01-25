@@ -270,6 +270,7 @@ export interface IStorage {
   getFolhaMesByPessoaId(pessoaId: number): Promise<ClienteFolhaMes[]>;
   getLatestFolhaMesByPessoaIds(pessoaIds: number[]): Promise<Map<number, ClienteFolhaMes>>;
   getFolhaMesByVinculoId(vinculoId: number): Promise<ClienteFolhaMes[]>;
+  getVinculoIdWithLatestFolha(vinculoIds: number[]): Promise<number | null>;
   
   // Clientes Contratos
   createClienteContrato(data: InsertClienteContrato): Promise<ClienteContrato>;
@@ -1716,6 +1717,27 @@ export class DbStorage implements IStorage {
     }
     
     return results;
+  }
+  
+  async getVinculoIdWithLatestFolha(vinculoIds: number[]): Promise<number | null> {
+    if (vinculoIds.length === 0) return null;
+    
+    const result = await db.select({
+      vinculoId: clientesFolhaMes.vinculoId,
+      competencia: clientesFolhaMes.competencia,
+    })
+      .from(clientesFolhaMes)
+      .where(inArray(clientesFolhaMes.vinculoId, vinculoIds))
+      .orderBy(sql`${clientesFolhaMes.competencia} DESC`)
+      .limit(1);
+    
+    if (result.length > 0 && result[0].vinculoId) {
+      console.log(`[VINCULO-FOLHA] Vínculo com folha mais recente: ${result[0].vinculoId} (competência: ${result[0].competencia})`);
+      return result[0].vinculoId;
+    }
+    
+    console.log(`[VINCULO-FOLHA] Nenhuma folha encontrada para vínculos: ${vinculoIds.join(', ')}`);
+    return vinculoIds[0] || null;
   }
 
   // Clientes Vínculos

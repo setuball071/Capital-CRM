@@ -6944,25 +6944,30 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       // Get all vínculos for this pessoa
       const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId);
       
-      // Filtrar vínculos: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
-      const vinculosValidos = vinculosTodos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
-      const vinculos = vinculosValidos.length > 0 ? vinculosValidos : vinculosTodos;
-      
-      // Determinar qual vínculo usar para buscar folha
+      // Determinar qual vínculo usar para buscar folha - PRIORIZAR folha mais recente (de TODOS os vínculos)
       let vinculoIdEfetivo: number | null = null;
       
       if (vinculoIdParam && !isNaN(vinculoIdParam)) {
-        // Validar que o vinculoId pertence aos vínculos filtrados
-        const vinculoValido = vinculos.find(v => v.id === vinculoIdParam);
+        // Validar que o vinculoId pertence aos vínculos disponíveis
+        const vinculoValido = vinculosTodos.find(v => v.id === vinculoIdParam);
         if (vinculoValido) {
           vinculoIdEfetivo = vinculoIdParam;
         }
       }
       
-      // Se não foi especificado ou não está na lista filtrada, usar o primeiro vínculo válido
-      if (!vinculoIdEfetivo && vinculos.length > 0) {
-        vinculoIdEfetivo = vinculos[0].id;
+      // Se não foi especificado, buscar o vínculo com folha mais recente (de TODOS, não apenas os filtrados)
+      if (!vinculoIdEfetivo && vinculosTodos.length > 0) {
+        const vinculoIds = vinculosTodos.map(v => v.id);
+        vinculoIdEfetivo = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+        // Fallback para primeiro vínculo se não encontrou folha
+        if (!vinculoIdEfetivo) {
+          vinculoIdEfetivo = vinculosTodos[0].id;
+        }
       }
+      
+      // Filtrar vínculos para exibição: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
+      const vinculosValidos = vinculosTodos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
+      const vinculos = vinculosValidos.length > 0 ? vinculosValidos : vinculosTodos;
       
       // Get folha data - sempre buscar por vínculo quando disponível, senão por pessoa (fallback para dados legados)
       let folhaRegistros;
@@ -9981,9 +9986,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Get vínculos
       const vinculos = await storage.getVinculosByPessoaId(cliente.id);
+      
+      // Selecionar vínculo com folha mais recente (de TODOS, não apenas os filtrados)
+      let vinculoAtual: typeof vinculos[0] | null = null;
+      if (vinculos.length > 0) {
+        const vinculoIds = vinculos.map(v => v.id);
+        const vinculoIdMaisRecente = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+        vinculoAtual = vinculos.find(v => v.id === vinculoIdMaisRecente) || vinculos[0];
+      }
+      
+      // Vínculos filtrados apenas para exibição
       const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
       const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
-      const vinculoAtual = vinculosFiltrados[0] || null;
       
       // Get folha
       let folhaRegistros;
@@ -10307,13 +10321,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (clienteBase) {
           // Get vínculos to find sit_func, rjur, orgao, upag
           const vinculos = await storage.getVinculosByPessoaId(lead.baseClienteId);
-          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
-          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
           
-          if (lead.matricula && vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados.find(v => v.matricula === lead.matricula) || vinculosFiltrados[0];
-          } else if (vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados[0];
+          // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
+          if (vinculos.length > 0) {
+            if (lead.matricula) {
+              vinculoAtual = vinculos.find(v => v.matricula === lead.matricula);
+            }
+            if (!vinculoAtual) {
+              const vinculoIds = vinculos.map(v => v.id);
+              const vinculoIdMaisRecente = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+              vinculoAtual = vinculos.find(v => v.id === vinculoIdMaisRecente) || vinculos[0];
+            }
           }
           
           // Get folha by vínculo when available
@@ -10481,13 +10499,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (clienteBase) {
           // Get vínculos to find sit_func, rjur, orgao, upag
           const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
-          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
-          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
           
-          if (result.lead.matricula && vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados.find(v => v.matricula === result.lead.matricula) || vinculosFiltrados[0];
-          } else if (vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados[0];
+          // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
+          if (vinculos.length > 0) {
+            if (result.lead.matricula) {
+              vinculoAtual = vinculos.find(v => v.matricula === result.lead.matricula);
+            }
+            if (!vinculoAtual) {
+              const vinculoIds = vinculos.map(v => v.id);
+              const vinculoIdMaisRecente = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+              vinculoAtual = vinculos.find(v => v.id === vinculoIdMaisRecente) || vinculos[0];
+            }
           }
           
           // Get folha by vínculo when available
@@ -10674,15 +10696,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           // Get vínculos to find sit_func, rjur, orgao, upag
           const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
           
-          // Filtrar vínculos: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
-          const vinculosValidos = vinculos.filter(v => v.orgao && v.orgao !== "DESCONHECIDO");
-          const vinculosFiltrados = vinculosValidos.length > 0 ? vinculosValidos : vinculos;
-          
-          // Select vínculo based on lead's matricula or use first valid one
-          if (result.lead.matricula && vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados.find(v => v.matricula === result.lead.matricula) || vinculosFiltrados[0];
-          } else if (vinculosFiltrados.length > 0) {
-            vinculoAtual = vinculosFiltrados[0];
+          // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
+          if (vinculos.length > 0) {
+            if (result.lead.matricula) {
+              vinculoAtual = vinculos.find(v => v.matricula === result.lead.matricula);
+            }
+            if (!vinculoAtual) {
+              const vinculoIds = vinculos.map(v => v.id);
+              const vinculoIdMaisRecente = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+              vinculoAtual = vinculos.find(v => v.id === vinculoIdMaisRecente) || vinculos[0];
+            }
           }
           
           // Get folha by vínculo when available
