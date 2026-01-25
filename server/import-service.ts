@@ -50,20 +50,17 @@ export const COLUMN_MAP: Record<string, string> = {
   regime_juridico: "rjur",
   
   // === SALÁRIO/RENDIMENTOS (Headers: "Créditos", "Débitos", "Líquido") ===
+  // Créditos → creditos (sinônimo: salario_bruto)
   creditos: "creditos",
   credito: "creditos",
+  salario_bruto: "creditos", // Legado → Créditos
+  // Débitos → debitos (sinônimo: descontos_brutos)
   debitos: "debitos",
   debito: "debitos",
+  descontos_brutos: "debitos", // Legado → Débitos
+  // Líquido → liquido (sinônimo: salario_liquido)
   liquido: "liquido",
-  
-  // === SALÁRIO ADICIONAL (Headers: "Salário Bruto", "Descontos Brutos", "Salário Líquido") ===
-  // Estes são ALIASES que mapeiam para os mesmos campos creditos/debitos/liquido
-  salario_bruto: "creditos",
-  salariobruto: "creditos",
-  descontos_brutos: "debitos",
-  descontosbrutos: "debitos",
-  salario_liquido: "liquido",
-  salarioliquido: "liquido",
+  salario_liquido: "liquido", // Legado → Líquido
   
   competencia_folha: "competencia_folha",
   

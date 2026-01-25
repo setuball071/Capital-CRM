@@ -5015,6 +5015,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             // 1. Deletar tabelas de staging e auxiliares (mais leves)
             await executeWithRetry(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM import_errors WHERE import_run_id = ${runId}`);
+            await executeWithRetry(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
             await executeWithRetry(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
             
@@ -5199,6 +5200,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           RETURNING id
         ),
         -- 8. Deletar staging (caso tenha restado)
+        deleted_staging_folha AS (
+          DELETE FROM staging_folha WHERE import_run_id = ${runId}
+          RETURNING id
+        ),
         deleted_staging_d8 AS (
           DELETE FROM staging_d8 WHERE import_run_id = ${runId}
           RETURNING id
@@ -10009,6 +10014,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
         margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
         margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+        salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+        descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+        salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
         creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
         debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
         liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,

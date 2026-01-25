@@ -6,6 +6,7 @@ import {
   importRuns,
   importErrors,
   importRunRows,
+  stagingFolha,
   stagingD8,
   stagingContatos,
   clientesPessoa,
@@ -531,7 +532,8 @@ class FastImportService {
   ): Promise<void> {
     console.log(`[FastImport] Registering all rows for run ${run.id}...`);
     
-    const stagingTable = tipoImport === "d8" ? "staging_d8" : "staging_contatos";
+    const stagingTable = tipoImport === "folha" ? "staging_folha" : 
+                         tipoImport === "d8" ? "staging_d8" : "staging_contatos";
     
     // Inserir todas as linhas válidas como 'ok'
     const okResult = await db.execute(sql`
@@ -655,6 +657,7 @@ class FastImportService {
         ${convenio},
         ${baseTag},
         ${run.id}
+      FROM staging_folha s
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
@@ -695,6 +698,7 @@ class FastImportService {
         s.sit_func,
         ${run.id},
         ${baseTag}
+      FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
@@ -747,12 +751,13 @@ class FastImportService {
         s.creditos::numeric,
         s.debitos::numeric,
         s.liquido::numeric,
-        s.salario_bruto::numeric,
-        s.descontos_brutos::numeric,
-        s.salario_liquido::numeric,
+        s.creditos::numeric,
+        s.debitos::numeric,
+        s.liquido::numeric,
         s.sit_func,
         ${baseTag},
         ${run.id}
+      FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       JOIN clientes_vinculo v ON v.tenant_id = ${tenantId}::integer
         AND v.cpf = s.cpf 
@@ -762,26 +767,26 @@ class FastImportService {
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
-        margem_bruta_5 = EXCLUDED.margem_bruta_5,
-        margem_utilizada_5 = EXCLUDED.margem_utilizada_5,
-        margem_saldo_5 = EXCLUDED.margem_saldo_5,
-        margem_beneficio_bruta_5 = EXCLUDED.margem_beneficio_bruta_5,
-        margem_beneficio_utilizada_5 = EXCLUDED.margem_beneficio_utilizada_5,
-        margem_beneficio_saldo_5 = EXCLUDED.margem_beneficio_saldo_5,
-        margem_bruta_35 = EXCLUDED.margem_bruta_35,
-        margem_utilizada_35 = EXCLUDED.margem_utilizada_35,
-        margem_saldo_35 = EXCLUDED.margem_saldo_35,
-        margem_bruta_70 = EXCLUDED.margem_bruta_70,
-        margem_utilizada_70 = EXCLUDED.margem_utilizada_70,
-        margem_saldo_70 = EXCLUDED.margem_saldo_70,
-        margem_cartao_credito_saldo = EXCLUDED.margem_cartao_credito_saldo,
-        margem_cartao_beneficio_saldo = EXCLUDED.margem_cartao_beneficio_saldo,
-        creditos = EXCLUDED.creditos,
-        debitos = EXCLUDED.debitos,
-        liquido = EXCLUDED.liquido,
-        salario_bruto = EXCLUDED.salario_bruto,
-        descontos_brutos = EXCLUDED.descontos_brutos,
-        salario_liquido = EXCLUDED.salario_liquido,
+        margem_bruta_5 = COALESCE(EXCLUDED.margem_bruta_5, clientes_folha_mes.margem_bruta_5),
+        margem_utilizada_5 = COALESCE(EXCLUDED.margem_utilizada_5, clientes_folha_mes.margem_utilizada_5),
+        margem_saldo_5 = COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5),
+        margem_beneficio_bruta_5 = COALESCE(EXCLUDED.margem_beneficio_bruta_5, clientes_folha_mes.margem_beneficio_bruta_5),
+        margem_beneficio_utilizada_5 = COALESCE(EXCLUDED.margem_beneficio_utilizada_5, clientes_folha_mes.margem_beneficio_utilizada_5),
+        margem_beneficio_saldo_5 = COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5),
+        margem_bruta_35 = COALESCE(EXCLUDED.margem_bruta_35, clientes_folha_mes.margem_bruta_35),
+        margem_utilizada_35 = COALESCE(EXCLUDED.margem_utilizada_35, clientes_folha_mes.margem_utilizada_35),
+        margem_saldo_35 = COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35),
+        margem_bruta_70 = COALESCE(EXCLUDED.margem_bruta_70, clientes_folha_mes.margem_bruta_70),
+        margem_utilizada_70 = COALESCE(EXCLUDED.margem_utilizada_70, clientes_folha_mes.margem_utilizada_70),
+        margem_saldo_70 = COALESCE(EXCLUDED.margem_saldo_70, clientes_folha_mes.margem_saldo_70),
+        margem_cartao_credito_saldo = COALESCE(EXCLUDED.margem_cartao_credito_saldo, clientes_folha_mes.margem_cartao_credito_saldo),
+        margem_cartao_beneficio_saldo = COALESCE(EXCLUDED.margem_cartao_beneficio_saldo, clientes_folha_mes.margem_cartao_beneficio_saldo),
+        creditos = COALESCE(EXCLUDED.creditos, clientes_folha_mes.creditos),
+        debitos = COALESCE(EXCLUDED.debitos, clientes_folha_mes.debitos),
+        liquido = COALESCE(EXCLUDED.liquido, clientes_folha_mes.liquido),
+        salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
+        descontos_brutos = COALESCE(EXCLUDED.descontos_brutos, clientes_folha_mes.descontos_brutos),
+        salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
         base_tag = ${baseTag},
         import_run_id = ${run.id}
     `);
@@ -998,6 +1003,9 @@ class FastImportService {
 
   private async cleanupStaging(importRunId: number, tipoImport: string): Promise<void> {
     switch (tipoImport) {
+      case "folha":
+        await db.delete(stagingFolha).where(eq(stagingFolha.importRunId, importRunId));
+        break;
       case "d8":
         await db.delete(stagingD8).where(eq(stagingD8.importRunId, importRunId));
         break;
@@ -1053,9 +1061,6 @@ class FastImportService {
         creditos: parseNum(getValue("creditos")),
         debitos: parseNum(getValue("debitos")),
         liquido: parseNum(getValue("liquido")),
-        salarioBruto: parseNum(getValue("salario_bruto")),
-        descontosBrutos: parseNum(getValue("descontos_brutos")),
-        salarioLiquido: parseNum(getValue("salario_liquido")),
         excQtd: parseInt(getValue("exc_qtd") || "0", 10) || null,
         excSoma: parseNum(getValue("exc_soma")),
         rjur: getValue("rjur") || null,
@@ -1116,6 +1121,9 @@ class FastImportService {
       const chunk = batch.slice(i, i + SQL_INSERT_CHUNK);
       
       switch (tipoImport) {
+        case "folha":
+          await db.insert(stagingFolha).values(chunk);
+          break;
         case "d8":
           await db.insert(stagingD8).values(chunk);
           break;
