@@ -656,7 +656,6 @@ class FastImportService {
         ${convenio},
         ${baseTag},
         ${run.id}
-      FROM staging_folha s
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
@@ -697,7 +696,6 @@ class FastImportService {
         s.sit_func,
         ${run.id},
         ${baseTag}
-      FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
@@ -756,7 +754,6 @@ class FastImportService {
         s.sit_func,
         ${baseTag},
         ${run.id}
-      FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       JOIN clientes_vinculo v ON v.tenant_id = ${tenantId}::integer
         AND v.cpf = s.cpf 
