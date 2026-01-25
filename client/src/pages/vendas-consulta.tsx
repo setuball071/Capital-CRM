@@ -12,15 +12,16 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Target
+  Plus, Pencil, Trash2, Save, SkipForward, Target, History
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
 type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
@@ -89,6 +90,36 @@ interface ConsultaData {
     natureza: string | null;
   } | null;
   pessoaId?: number;
+}
+
+interface HistoricoFolhaItem {
+  competencia: string;
+  margem_bruta_70: number | null;
+  margem_utilizada_70: number | null;
+  margem_saldo_70: number | null;
+  margem_bruta_35: number | null;
+  margem_utilizada_35: number | null;
+  margem_saldo_35: number | null;
+  margem_bruta_5: number | null;
+  margem_utilizada_5: number | null;
+  margem_saldo_5: number | null;
+  margem_beneficio_bruta_5: number | null;
+  margem_beneficio_utilizada_5: number | null;
+  margem_beneficio_saldo_5: number | null;
+  salario_bruto: number | null;
+  salario_liquido: number | null;
+  creditos: number | null;
+  debitos: number | null;
+  liquido: number | null;
+}
+
+interface HistoricoFolhaData {
+  pessoa_id: number;
+  vinculo_id: number | null;
+  nome: string;
+  cpf: string;
+  total_competencias: number;
+  historico: HistoricoFolhaItem[];
 }
 
 function formatCPF(cpf: string | null): string {
@@ -190,6 +221,10 @@ export default function VendasConsulta() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "", label: "" });
+  
+  const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+  const [historicoData, setHistoricoData] = useState<HistoricoFolhaData | null>(null);
+  const [selectedHistoricoItem, setSelectedHistoricoItem] = useState<HistoricoFolhaItem | null>(null);
   
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
@@ -475,6 +510,33 @@ export default function VendasConsulta() {
       return;
     }
     buscarMutation.mutate(termoBusca.trim());
+  };
+
+  const historicoMutation = useMutation({
+    mutationFn: async ({ pessoaId, vinculoId }: { pessoaId: number; vinculoId?: number }): Promise<HistoricoFolhaData> => {
+      const url = vinculoId 
+        ? `/api/clientes/${pessoaId}/historico-folha?vinculoId=${vinculoId}`
+        : `/api/clientes/${pessoaId}/historico-folha`;
+      const response = await apiRequest("GET", url);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setHistoricoData(data);
+    },
+    onError: () => {
+      toast({ title: "Erro ao carregar histórico", variant: "destructive" });
+    },
+  });
+
+  const handleOpenHistorico = () => {
+    if (!consultaData?.pessoaId) return;
+    setSelectedHistoricoItem(null);
+    setHistoricoData(null);
+    setHistoricoModalOpen(true);
+    historicoMutation.mutate({
+      pessoaId: consultaData.pessoaId,
+      vinculoId: consultaData.vinculo?.id,
+    });
   };
 
   const handleCopyPhone = async (phone: string) => {
@@ -914,6 +976,24 @@ export default function VendasConsulta() {
                           <p className="font-medium">{formatCurrency(consultaData.folhaAtual.liquido ?? consultaData.folhaAtual.salario_liquido)}</p>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="flex justify-center pt-4">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleOpenHistorico}
+                        disabled={historicoMutation.isPending}
+                        data-testid="button-historico-folha"
+                        title="Visualizar todas as competências importadas"
+                      >
+                        {historicoMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <History className="w-4 h-4 mr-2" />
+                        )}
+                        Ver Histórico Completo
+                      </Button>
                     </div>
                     </>
                   ) : (
@@ -1569,6 +1649,162 @@ export default function VendasConsulta() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               {editingContact ? "Atualizar" : "Adicionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historicoModalOpen} onOpenChange={setHistoricoModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Histórico de Folhas
+            </DialogTitle>
+            <DialogDescription>
+              Visualize todas as competências importadas para este cliente
+            </DialogDescription>
+          </DialogHeader>
+          
+          {historicoData ? (
+            <div className="space-y-4" data-testid="historico-content">
+              <div className="text-sm text-muted-foreground" data-testid="historico-header-info">
+                <span className="font-medium" data-testid="text-historico-nome">{historicoData.nome}</span> - CPF: <span data-testid="text-historico-cpf">{formatCPF(historicoData.cpf)}</span>
+                <span className="ml-4" data-testid="text-historico-total">({historicoData.total_competencias} competência{historicoData.total_competencias !== 1 ? "s" : ""})</span>
+              </div>
+              
+              {historicoData.historico.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Selecione uma competência:</p>
+                    <ScrollArea className="h-[300px] border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Competência</TableHead>
+                            <TableHead className="text-right">Saldo 70%</TableHead>
+                            <TableHead className="text-right">Saldo 35%</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {historicoData.historico.map((item) => (
+                            <TableRow 
+                              key={item.competencia}
+                              className={`cursor-pointer ${selectedHistoricoItem?.competencia === item.competencia ? "bg-accent" : ""}`}
+                              onClick={() => setSelectedHistoricoItem(item)}
+                              data-testid={`row-historico-${item.competencia}`}
+                            >
+                              <TableCell className="font-medium" data-testid={`text-competencia-${item.competencia}`}>{item.competencia}</TableCell>
+                              <TableCell className="text-right">
+                                <span className={(item.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-saldo70-${item.competencia}`}>
+                                  {formatCurrency(item.margem_saldo_70)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={(item.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"} data-testid={`text-saldo35-${item.competencia}`}>
+                                  {formatCurrency(item.margem_saldo_35)}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                  
+                  <div>
+                    {selectedHistoricoItem ? (
+                      <Card data-testid="card-historico-detalhes">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base" data-testid="text-competencia-selecionada">
+                            Detalhes: {selectedHistoricoItem.competencia}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4 text-sm" data-testid="historico-margens">
+                            <div className="space-y-2" data-testid="historico-margem-70">
+                              <p className="font-medium">Margem 70%</p>
+                              <div className="pl-2 space-y-1 text-muted-foreground">
+                                <p data-testid="text-margem70-bruta">Bruta: {formatCurrency(selectedHistoricoItem.margem_bruta_70)}</p>
+                                <p data-testid="text-margem70-utilizada">Utilizada: {formatCurrency(selectedHistoricoItem.margem_utilizada_70)}</p>
+                                <p className={`font-medium ${(selectedHistoricoItem.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-margem70-saldo">
+                                  Saldo: {formatCurrency(selectedHistoricoItem.margem_saldo_70)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-2" data-testid="historico-margem-35">
+                              <p className="font-medium">Margem 35%</p>
+                              <div className="pl-2 space-y-1 text-muted-foreground">
+                                <p data-testid="text-margem35-bruta">Bruta: {formatCurrency(selectedHistoricoItem.margem_bruta_35)}</p>
+                                <p data-testid="text-margem35-utilizada">Utilizada: {formatCurrency(selectedHistoricoItem.margem_utilizada_35)}</p>
+                                <p className={`font-medium ${(selectedHistoricoItem.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-margem35-saldo">
+                                  Saldo: {formatCurrency(selectedHistoricoItem.margem_saldo_35)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-2" data-testid="historico-margem-5">
+                              <p className="font-medium">Margem 5%</p>
+                              <div className="pl-2 space-y-1 text-muted-foreground">
+                                <p data-testid="text-margem5-bruta">Bruta: {formatCurrency(selectedHistoricoItem.margem_bruta_5)}</p>
+                                <p data-testid="text-margem5-utilizada">Utilizada: {formatCurrency(selectedHistoricoItem.margem_utilizada_5)}</p>
+                                <p className={`font-medium ${(selectedHistoricoItem.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-margem5-saldo">
+                                  Saldo: {formatCurrency(selectedHistoricoItem.margem_saldo_5)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-2" data-testid="historico-beneficio-5">
+                              <p className="font-medium">Benefício 5%</p>
+                              <div className="pl-2 space-y-1 text-muted-foreground">
+                                <p data-testid="text-beneficio5-bruta">Bruta: {formatCurrency(selectedHistoricoItem.margem_beneficio_bruta_5)}</p>
+                                <p data-testid="text-beneficio5-utilizada">Utilizada: {formatCurrency(selectedHistoricoItem.margem_beneficio_utilizada_5)}</p>
+                                <p className={`font-medium ${(selectedHistoricoItem.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-beneficio5-saldo">
+                                  Saldo: {formatCurrency(selectedHistoricoItem.margem_beneficio_saldo_5)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Separator />
+                          
+                          <div className="grid grid-cols-3 gap-4 text-sm text-center" data-testid="historico-valores">
+                            <div>
+                              <p className="text-muted-foreground">Créditos</p>
+                              <p className="font-medium text-green-600" data-testid="text-historico-creditos">{formatCurrency(selectedHistoricoItem.creditos)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Débitos</p>
+                              <p className="font-medium text-red-600" data-testid="text-historico-debitos">{formatCurrency(selectedHistoricoItem.debitos)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Líquido</p>
+                              <p className="font-medium" data-testid="text-historico-liquido">{formatCurrency(selectedHistoricoItem.liquido)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-muted-foreground" data-testid="historico-select-prompt">
+                        <p data-testid="text-select-competencia">Clique em uma competência para ver detalhes</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground" data-testid="historico-empty">
+                  <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p data-testid="text-historico-empty">Nenhum histórico de folha encontrado.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8" data-testid="historico-loading">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoricoModalOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
