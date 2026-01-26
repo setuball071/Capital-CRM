@@ -238,6 +238,7 @@ export default function VendasConsulta() {
   const [historicoData, setHistoricoData] = useState<HistoricoFolhaData | null>(null);
   const [selectedHistoricoItem, setSelectedHistoricoItem] = useState<HistoricoFolhaItem | null>(null);
   
+  const [contatosModalOpen, setContatosModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
   const [interactionFormData, setInteractionFormData] = useState({
@@ -704,8 +705,7 @@ export default function VendasConsulta() {
 
       <div className="flex-1 overflow-auto pb-4">
         <div className="container mx-auto p-4">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-4">
+          <div className="space-y-4">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -1055,9 +1055,9 @@ export default function VendasConsulta() {
                             <TableHead>Origem do Desconto</TableHead>
                             <TableHead>Nº Contrato</TableHead>
                             <TableHead className="text-right">Valor Parcela</TableHead>
+                            <TableHead className="text-right">Parc. Rest.</TableHead>
                             <TableHead className="text-center w-20">Taxa (%)</TableHead>
                             <TableHead className="text-right">Saldo Devedor</TableHead>
-                            <TableHead className="text-right">Parc. Rest.</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1110,6 +1110,7 @@ export default function VendasConsulta() {
                                   />
                                 </TableCell>
                                 <TableCell className="text-right">{formatCurrency(valorParcela)}</TableCell>
+                                <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
                                 <TableCell>
                                   <Input
                                     type="number"
@@ -1135,7 +1136,6 @@ export default function VendasConsulta() {
                                     )}
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
                               </TableRow>
                             );
                           })}
@@ -1203,282 +1203,312 @@ export default function VendasConsulta() {
                   )}
                 </CardContent>
               </Card>
-            </div>
 
-            <div className="space-y-4">
-              <Card>
+              <Card 
+                className="cursor-pointer hover-elevate"
+                onClick={() => setContatosModalOpen(true)}
+                data-testid="card-painel-contato"
+              >
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Painel de Contato</CardTitle>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      Painel de Contato
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      {(() => {
+                        const telCount = (consultaData.higienizacao?.telefones?.length || 0) + phoneContacts.length;
+                        const emailCount = (consultaData.higienizacao?.emails?.length || 0) + emailContacts.length;
+                        return `${telCount} tel · ${emailCount} email`;
+                      })()}
+                    </Badge>
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <Tabs defaultValue="telefones" className="w-full">
-                    <TabsList className="w-full rounded-none border-b">
-                      <TabsTrigger value="telefones" className="flex-1" data-testid="tab-telefones">
-                        <Phone className="h-3 w-3 mr-1" />
-                        Telefones
-                      </TabsTrigger>
-                      <TabsTrigger value="emails" className="flex-1" data-testid="tab-emails">
-                        <Mail className="h-3 w-3 mr-1" />
-                        Emails
-                      </TabsTrigger>
-                      <TabsTrigger value="endereco" className="flex-1" data-testid="tab-endereco">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        Endereço
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="telefones" className="p-4 space-y-2">
-                      {loadingContacts ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <>
-                          {consultaData.higienizacao?.telefones && consultaData.higienizacao.telefones.length > 0 && (
-                            <>
-                              <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
-                              {consultaData.higienizacao.telefones.map((tel, idx) => (
-                                <div 
-                                  key={`hig-tel-${idx}`} 
-                                  className="flex items-center gap-2 p-2 border rounded text-sm bg-green-50 dark:bg-green-950/30"
-                                  data-testid={`higienizacao-tel-${idx}`}
-                                >
-                                  {tel.principal && <Star className="h-3 w-3 text-yellow-500 fill-current shrink-0" />}
-                                  <span className="font-medium flex-1 truncate">{formatPhone(tel.telefone)}</span>
-                                  <Badge variant="outline" className="text-xs shrink-0">{tel.tipo}</Badge>
-                                  <Button 
-                                    size="icon" 
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    onClick={() => handleCopyPhone(tel.telefone)}
-                                    data-testid={`button-copy-hig-tel-${idx}`}
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                              <Separator className="my-2" />
-                            </>
-                          )}
-                          
-                          {phoneContacts.length > 0 && (
-                            <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
-                          )}
-                          {phoneContacts.map((contact) => (
-                            <div 
-                              key={contact.id} 
-                              className={`flex items-center gap-2 p-2 border rounded text-sm hover-elevate ${contact.isManual ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30" : ""}`}
-                              data-testid={`contact-item-${contact.id}`}
-                            >
-                              {contact.isManual && (
-                                <Badge variant="secondary" className="bg-orange-500 text-white text-[10px] px-1.5 py-0 shrink-0">
-                                  Hot
-                                </Badge>
-                              )}
-                              <span className="font-medium flex-1 truncate">{formatPhone(contact.value)}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => handleCopyPhone(contact.value)}
-                                  data-testid={`button-copy-contact-${contact.id}`}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => openEditContact(contact)}
-                                  data-testid={`button-edit-contact-${contact.id}`}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
-                                  onClick={() => setPrimaryContactMutation.mutate(contact.id)}
-                                  data-testid={`button-primary-contact-${contact.id}`}
-                                >
-                                  <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteContact(contact)}
-                                  data-testid={`button-delete-contact-${contact.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                          
-                          {phoneContacts.length === 0 && (!consultaData.higienizacao?.telefones || consultaData.higienizacao.telefones.length === 0) && (
-                            <div className="text-center py-4 text-muted-foreground text-sm">
-                              Sem telefones cadastrados
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => openNewContact("phone")}
-                        data-testid="button-novo-telefone"
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Novo Telefone
-                      </Button>
-                    </TabsContent>
-                    <TabsContent value="emails" className="p-4 space-y-2">
-                      {loadingContacts ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <>
-                          {consultaData.higienizacao?.emails && consultaData.higienizacao.emails.length > 0 && (
-                            <>
-                              <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
-                              {consultaData.higienizacao.emails.map((email, idx) => (
-                                <div 
-                                  key={`email-${idx}`} 
-                                  className="flex items-center gap-2 p-2 border rounded text-sm bg-blue-50 dark:bg-blue-950/30"
-                                  data-testid={`email-item-${idx}`}
-                                >
-                                  <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
-                                  <span className="font-medium flex-1 truncate">{email}</span>
-                                  <Button 
-                                    size="icon" 
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    onClick={() => handleCopyPhone(email)}
-                                    data-testid={`button-copy-email-${idx}`}
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                              <Separator className="my-2" />
-                            </>
-                          )}
-                          
-                          {emailContacts.length > 0 && (
-                            <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
-                          )}
-                          {emailContacts.map((contact) => (
-                            <div 
-                              key={contact.id} 
-                              className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
-                              data-testid={`email-contact-item-${contact.id}`}
-                            >
-                              <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="font-medium flex-1 truncate">{contact.value}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => handleCopyPhone(contact.value)}
-                                  data-testid={`button-copy-email-contact-${contact.id}`}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => openEditContact(contact)}
-                                  data-testid={`button-edit-email-${contact.id}`}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteContact(contact)}
-                                  data-testid={`button-delete-email-${contact.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                          
-                          {emailContacts.length === 0 && (!consultaData.higienizacao?.emails || consultaData.higienizacao.emails.length === 0) && (
-                            <div className="text-center py-4 text-muted-foreground text-sm">
-                              Sem emails cadastrados
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => openNewContact("email")}
-                        data-testid="button-novo-email"
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Novo Email
-                      </Button>
-                    </TabsContent>
-                    <TabsContent value="endereco" className="p-4 space-y-2">
-                      {consultaData.higienizacao?.endereco ? (
-                        <div className="space-y-3 text-sm p-3 border rounded bg-green-50 dark:bg-green-950/30">
-                          <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
-                          <div className="space-y-1">
-                            <p className="text-muted-foreground">Logradouro</p>
-                            <p>{consultaData.higienizacao.endereco.logradouro || "-"}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Número</p>
-                              <p>{consultaData.higienizacao.endereco.numero || "-"}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Complemento</p>
-                              <p>{consultaData.higienizacao.endereco.complemento || "-"}</p>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-muted-foreground">Bairro</p>
-                            <p>{consultaData.higienizacao.endereco.bairro || "-"}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Cidade</p>
-                              <p>{consultaData.higienizacao.endereco.cidade || "-"}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">UF</p>
-                              <p>{consultaData.higienizacao.endereco.uf || "-"}</p>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-muted-foreground">CEP</p>
-                            <p>{consultaData.higienizacao.endereco.cep || "-"}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sem endereço cadastrado
-                        </div>
-                      )}
-                    </TabsContent>
-                  </Tabs>
+                <CardContent className="pt-0">
+                  <p className="text-sm text-muted-foreground">
+                    Clique para ver e gerenciar telefones, emails e endereço
+                  </p>
                 </CardContent>
               </Card>
-
-            </div>
           </div>
         </div>
       </div>
+
+      {/* Modal Painel de Contato */}
+      <Dialog open={contatosModalOpen} onOpenChange={setContatosModalOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              Painel de Contato
+            </DialogTitle>
+            <DialogDescription>
+              Gerencie telefones, emails e endereço do cliente
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs defaultValue="telefones" className="w-full">
+            <TabsList className="w-full">
+              <TabsTrigger value="telefones" className="flex-1" data-testid="tab-telefones">
+                <Phone className="h-3 w-3 mr-1" />
+                Telefones
+              </TabsTrigger>
+              <TabsTrigger value="emails" className="flex-1" data-testid="tab-emails">
+                <Mail className="h-3 w-3 mr-1" />
+                Emails
+              </TabsTrigger>
+              <TabsTrigger value="endereco" className="flex-1" data-testid="tab-endereco">
+                <MapPin className="h-3 w-3 mr-1" />
+                Endereço
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="telefones" className="p-4 space-y-2">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {consultaData.higienizacao?.telefones && consultaData.higienizacao.telefones.length > 0 && (
+                    <>
+                      <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                      {consultaData.higienizacao.telefones.map((tel, idx) => (
+                        <div 
+                          key={`hig-tel-${idx}`} 
+                          className="flex items-center gap-2 p-2 border rounded text-sm bg-green-50 dark:bg-green-950/30"
+                          data-testid={`higienizacao-tel-${idx}`}
+                        >
+                          {tel.principal && <Star className="h-3 w-3 text-yellow-500 fill-current shrink-0" />}
+                          <span className="font-medium flex-1 truncate">{formatPhone(tel.telefone)}</span>
+                          <Badge variant="outline" className="text-xs shrink-0">{tel.tipo}</Badge>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => handleCopyPhone(tel.telefone)}
+                            data-testid={`button-copy-hig-tel-${idx}`}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Separator className="my-2" />
+                    </>
+                  )}
+                  
+                  {phoneContacts.length > 0 && (
+                    <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
+                  )}
+                  {phoneContacts.map((contact) => (
+                    <div 
+                      key={contact.id} 
+                      className={`flex items-center gap-2 p-2 border rounded text-sm hover-elevate ${contact.isManual ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30" : ""}`}
+                      data-testid={`contact-item-${contact.id}`}
+                    >
+                      {contact.isManual && (
+                        <Badge variant="secondary" className="bg-orange-500 text-white text-[10px] px-1.5 py-0 shrink-0">
+                          Hot
+                        </Badge>
+                      )}
+                      <span className="font-medium flex-1 truncate">{formatPhone(contact.value)}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => handleCopyPhone(contact.value)}
+                          data-testid={`button-copy-contact-${contact.id}`}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEditContact(contact)}
+                          data-testid={`button-edit-contact-${contact.id}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className={`h-7 w-7 ${contact.isPrimary ? "text-yellow-500" : ""}`}
+                          onClick={() => setPrimaryContactMutation.mutate(contact.id)}
+                          data-testid={`button-primary-contact-${contact.id}`}
+                        >
+                          <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => handleDeleteContact(contact)}
+                          data-testid={`button-delete-contact-${contact.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {phoneContacts.length === 0 && (!consultaData.higienizacao?.telefones || consultaData.higienizacao.telefones.length === 0) && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      Sem telefones cadastrados
+                    </div>
+                  )}
+                </>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => openNewContact("phone")}
+                data-testid="button-novo-telefone"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Novo Telefone
+              </Button>
+            </TabsContent>
+            <TabsContent value="emails" className="p-4 space-y-2">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {consultaData.higienizacao?.emails && consultaData.higienizacao.emails.length > 0 && (
+                    <>
+                      <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                      {consultaData.higienizacao.emails.map((email, idx) => (
+                        <div 
+                          key={`email-${idx}`} 
+                          className="flex items-center gap-2 p-2 border rounded text-sm bg-blue-50 dark:bg-blue-950/30"
+                          data-testid={`email-item-${idx}`}
+                        >
+                          <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="font-medium flex-1 truncate">{email}</span>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => handleCopyPhone(email)}
+                            data-testid={`button-copy-email-${idx}`}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Separator className="my-2" />
+                    </>
+                  )}
+                  
+                  {emailContacts.length > 0 && (
+                    <p className="text-xs text-muted-foreground font-medium">Adicionados</p>
+                  )}
+                  {emailContacts.map((contact) => (
+                    <div 
+                      key={contact.id} 
+                      className="flex items-center gap-2 p-2 border rounded text-sm hover-elevate"
+                      data-testid={`email-contact-item-${contact.id}`}
+                    >
+                      <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="font-medium flex-1 truncate">{contact.value}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => handleCopyPhone(contact.value)}
+                          data-testid={`button-copy-email-contact-${contact.id}`}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEditContact(contact)}
+                          data-testid={`button-edit-email-${contact.id}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => handleDeleteContact(contact)}
+                          data-testid={`button-delete-email-${contact.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {emailContacts.length === 0 && (!consultaData.higienizacao?.emails || consultaData.higienizacao.emails.length === 0) && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      Sem emails cadastrados
+                    </div>
+                  )}
+                </>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => openNewContact("email")}
+                data-testid="button-novo-email"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Novo Email
+              </Button>
+            </TabsContent>
+            <TabsContent value="endereco" className="p-4 space-y-2">
+              {consultaData.higienizacao?.endereco ? (
+                <div className="space-y-3 text-sm p-3 border rounded bg-green-50 dark:bg-green-950/30">
+                  <p className="text-xs text-muted-foreground font-medium">Base Importada</p>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">Logradouro</p>
+                    <p>{consultaData.higienizacao.endereco.logradouro || "-"}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Número</p>
+                      <p>{consultaData.higienizacao.endereco.numero || "-"}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Complemento</p>
+                      <p>{consultaData.higienizacao.endereco.complemento || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">Bairro</p>
+                    <p>{consultaData.higienizacao.endereco.bairro || "-"}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Cidade</p>
+                      <p>{consultaData.higienizacao.endereco.cidade || "-"}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">UF</p>
+                      <p>{consultaData.higienizacao.endereco.uf || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">CEP</p>
+                    <p>{consultaData.higienizacao.endereco.cep || "-"}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  Sem endereço cadastrado
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {/* BOTÃO FIXO - Registrar Atendimento */}
       <div className="fixed bottom-6 right-6 z-50">
