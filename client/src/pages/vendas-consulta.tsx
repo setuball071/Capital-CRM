@@ -1203,33 +1203,6 @@ export default function VendasConsulta() {
                   )}
                 </CardContent>
               </Card>
-
-              <Card 
-                className="cursor-pointer hover-elevate"
-                onClick={() => setContatosModalOpen(true)}
-                data-testid="card-painel-contato"
-              >
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      Painel de Contato
-                    </span>
-                    <Badge variant="secondary" className="text-xs">
-                      {(() => {
-                        const telCount = (consultaData.higienizacao?.telefones?.length || 0) + phoneContacts.length;
-                        const emailCount = (consultaData.higienizacao?.emails?.length || 0) + emailContacts.length;
-                        return `${telCount} tel · ${emailCount} email`;
-                      })()}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground">
-                    Clique para ver e gerenciar telefones, emails e endereço
-                  </p>
-                </CardContent>
-              </Card>
           </div>
         </div>
       </div>
@@ -1510,8 +1483,27 @@ export default function VendasConsulta() {
         </DialogContent>
       </Dialog>
 
-      {/* BOTÃO FIXO - Registrar Atendimento */}
-      <div className="fixed bottom-6 right-6 z-50">
+      {/* BOTÕES FIXOS - Lateral Direita */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        {/* Botão Contatos */}
+        <Button
+          variant="secondary"
+          className="px-6 py-6 text-base font-bold shadow-lg"
+          onClick={() => setContatosModalOpen(true)}
+          data-testid="button-painel-contato-flutuante"
+        >
+          <Phone className="h-5 w-5 mr-2" />
+          Contatos
+          <Badge variant="outline" className="ml-2 text-xs">
+            {(() => {
+              const telCount = (consultaData?.higienizacao?.telefones?.length || 0) + phoneContacts.length;
+              const emailCount = (consultaData?.higienizacao?.emails?.length || 0) + emailContacts.length;
+              return `${telCount + emailCount}`;
+            })()}
+          </Badge>
+        </Button>
+        
+        {/* Botão Registrar Atendimento */}
         <Button
           className="px-6 py-6 text-base font-bold shadow-lg"
           onClick={() => setDrawerOpen(true)}
