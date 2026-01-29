@@ -37,7 +37,7 @@ interface MenuSection {
 const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-amortizacao", "/simulador-portabilidade"],
   modulo_roteiros: ["/roteiros"],
-  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv"],
+  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline"],
@@ -128,6 +128,7 @@ export function AppSidebar() {
       title: "Base de Clientes",
       icon: Database,
       items: [
+        { title: "Dashboard", url: "/base-dashboard", icon: BarChart3, module: "modulo_base_clientes", subItem: "consulta" },
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes", subItem: "importacao" },
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
         { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },

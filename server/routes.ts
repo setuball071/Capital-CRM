@@ -4254,6 +4254,180 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // GET dashboard de métricas da base de clientes
+  app.get("/api/bases/dashboard", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      
+      // Get available competências (últimas 3)
+      const competenciasResult = await db.execute(sql`
+        SELECT DISTINCT competencia 
+        FROM clientes_folha_mes f
+        JOIN clientes_vinculo v ON v.id = f.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        ORDER BY competencia DESC
+        LIMIT 3
+      `);
+      
+      const competencias = competenciasResult.rows.map((r: any) => r.competencia);
+      
+      if (competencias.length < 2) {
+        return res.json({
+          metricas: {
+            totalClientes: 0,
+            clientesNovos: 0,
+            aumentoMargem: 0,
+            diminuicaoMargem: 0,
+            aumentoSalario: 0,
+            clientesPorBanco: {},
+            faixasMargem: {},
+          },
+          competenciaAtual: competencias[0] || null,
+          competenciaAnterior: null,
+          mensagem: "Necessário ter pelo menos 2 competências para comparação"
+        });
+      }
+      
+      const [compAtual, compAnterior] = competencias;
+      
+      // 1. Total de clientes na competência atual
+      const totalClientesResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT f.pessoa_id) as total
+        FROM clientes_folha_mes f
+        JOIN clientes_vinculo v ON v.id = f.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND f.competencia = ${compAtual}
+      `);
+      const totalClientes = parseInt(totalClientesResult.rows[0]?.total || '0');
+      
+      // 2. Clientes novos (existem na atual, não na anterior)
+      const clientesNovosResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT atual.pessoa_id) as novos
+        FROM clientes_folha_mes atual
+        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND atual.competencia = ${compAtual}
+        AND atual.pessoa_id NOT IN (
+          SELECT DISTINCT ant.pessoa_id 
+          FROM clientes_folha_mes ant
+          JOIN clientes_vinculo v2 ON v2.id = ant.vinculo_id
+          WHERE v2.tenant_id = ${tenantId}
+          AND ant.competencia = ${compAnterior}
+        )
+      `);
+      const clientesNovos = parseInt(clientesNovosResult.rows[0]?.novos || '0');
+      
+      // 3. Aumento de margem 70% (comparando folhas)
+      const aumentoMargemResult = await db.execute(sql`
+        SELECT COUNT(*) as total
+        FROM clientes_folha_mes atual
+        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
+        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND atual.competencia = ${compAtual}
+        AND anterior.competencia = ${compAnterior}
+        AND COALESCE(atual.margem_saldo_70, 0) > COALESCE(anterior.margem_saldo_70, 0)
+        AND COALESCE(anterior.margem_saldo_70, 0) > 0
+      `);
+      const aumentoMargem = parseInt(aumentoMargemResult.rows[0]?.total || '0');
+      
+      // 4. Diminuição de margem 70%
+      const diminuicaoMargemResult = await db.execute(sql`
+        SELECT COUNT(*) as total
+        FROM clientes_folha_mes atual
+        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
+        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND atual.competencia = ${compAtual}
+        AND anterior.competencia = ${compAnterior}
+        AND COALESCE(atual.margem_saldo_70, 0) < COALESCE(anterior.margem_saldo_70, 0)
+        AND COALESCE(anterior.margem_saldo_70, 0) > 0
+      `);
+      const diminuicaoMargem = parseInt(diminuicaoMargemResult.rows[0]?.total || '0');
+      
+      // 5. Aumento de salário bruto
+      const aumentoSalarioResult = await db.execute(sql`
+        SELECT COUNT(*) as total
+        FROM clientes_folha_mes atual
+        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
+        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND atual.competencia = ${compAtual}
+        AND anterior.competencia = ${compAnterior}
+        AND COALESCE(atual.salario_bruto, 0) > COALESCE(anterior.salario_bruto, 0)
+        AND COALESCE(anterior.salario_bruto, 0) > 0
+        AND (COALESCE(atual.salario_bruto, 0) - COALESCE(anterior.salario_bruto, 0)) > 50
+      `);
+      const aumentoSalario = parseInt(aumentoSalarioResult.rows[0]?.total || '0');
+      
+      // 6. Clientes por banco (top 10)
+      const bancosResult = await db.execute(sql`
+        SELECT 
+          COALESCE(p.banco_nome, 'NÃO INFORMADO') as banco,
+          COUNT(DISTINCT p.id) as total
+        FROM clientes_pessoa p
+        JOIN clientes_vinculo v ON v.pessoa_id = p.id
+        WHERE v.tenant_id = ${tenantId}
+        GROUP BY p.banco_nome
+        ORDER BY total DESC
+        LIMIT 10
+      `);
+      
+      const clientesPorBanco: Record<string, number> = {};
+      bancosResult.rows.forEach((r: any) => {
+        clientesPorBanco[r.banco] = parseInt(r.total);
+      });
+      
+      // 7. Distribuição de margem disponível (faixas)
+      const faixasMargemResult = await db.execute(sql`
+        SELECT 
+          CASE 
+            WHEN COALESCE(margem_saldo_70, 0) = 0 THEN 'Sem margem'
+            WHEN COALESCE(margem_saldo_70, 0) < 500 THEN 'Até R$ 500'
+            WHEN COALESCE(margem_saldo_70, 0) < 1000 THEN 'R$ 500-1.000'
+            WHEN COALESCE(margem_saldo_70, 0) < 2000 THEN 'R$ 1.000-2.000'
+            ELSE 'Acima de R$ 2.000'
+          END as faixa,
+          COUNT(*) as total
+        FROM clientes_folha_mes f
+        JOIN clientes_vinculo v ON v.id = f.vinculo_id
+        WHERE v.tenant_id = ${tenantId}
+        AND f.competencia = ${compAtual}
+        GROUP BY faixa
+        ORDER BY 
+          CASE faixa 
+            WHEN 'Sem margem' THEN 1
+            WHEN 'Até R$ 500' THEN 2
+            WHEN 'R$ 500-1.000' THEN 3
+            WHEN 'R$ 1.000-2.000' THEN 4
+            ELSE 5
+          END
+      `);
+      
+      const faixasMargem: Record<string, number> = {};
+      faixasMargemResult.rows.forEach((r: any) => {
+        faixasMargem[r.faixa] = parseInt(r.total);
+      });
+      
+      return res.json({
+        metricas: {
+          totalClientes,
+          clientesNovos,
+          aumentoMargem,
+          diminuicaoMargem,
+          aumentoSalario,
+          clientesPorBanco,
+          faixasMargem,
+        },
+        competenciaAtual: compAtual,
+        competenciaAnterior: compAnterior,
+      });
+    } catch (error) {
+      console.error("Dashboard error:", error);
+      return res.status(500).json({ message: "Erro ao calcular métricas do dashboard" });
+    }
+  });
+
   // POST importar base - Master only - Background processing for large files
   app.post("/api/bases/import", requireAuth, requireModuleAccess("modulo_base_clientes"), upload.single("arquivo"), async (req, res) => {
     try {
