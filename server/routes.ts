@@ -4393,13 +4393,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         JOIN clientes_vinculo v ON v.id = f.vinculo_id
         WHERE v.tenant_id = ${tenantId}
         AND f.competencia = ${compAtual}
-        GROUP BY faixa
+        GROUP BY 1
         ORDER BY 
-          CASE faixa 
-            WHEN 'Sem margem' THEN 1
-            WHEN 'Até R$ 500' THEN 2
-            WHEN 'R$ 500-1.000' THEN 3
-            WHEN 'R$ 1.000-2.000' THEN 4
+          CASE 
+            WHEN COALESCE(margem_saldo_70, 0) = 0 THEN 1
+            WHEN COALESCE(margem_saldo_70, 0) < 500 THEN 2
+            WHEN COALESCE(margem_saldo_70, 0) < 1000 THEN 3
+            WHEN COALESCE(margem_saldo_70, 0) < 2000 THEN 4
             ELSE 5
           END
       `);
