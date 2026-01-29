@@ -4259,14 +4259,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     try {
       const tenantId = req.tenantId;
       
-      // Get available competências (últimas 3)
+      // OTIMIZADO: Query única para obter competências
       const competenciasResult = await db.execute(sql`
-        SELECT DISTINCT competencia 
+        SELECT DISTINCT f.competencia 
         FROM clientes_folha_mes f
-        JOIN clientes_vinculo v ON v.id = f.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        ORDER BY competencia DESC
-        LIMIT 3
+        WHERE EXISTS (
+          SELECT 1 FROM clientes_vinculo v 
+          WHERE v.id = f.vinculo_id AND v.tenant_id = ${tenantId}
+        )
+        ORDER BY f.competencia DESC
+        LIMIT 2
       `);
       
       const competencias = competenciasResult.rows.map((r: any) => r.competencia);
@@ -4290,84 +4292,74 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       const [compAtual, compAnterior] = competencias;
       
-      // 1. Total de clientes na competência atual
-      const totalClientesResult = await db.execute(sql`
-        SELECT COUNT(DISTINCT f.pessoa_id) as total
-        FROM clientes_folha_mes f
-        JOIN clientes_vinculo v ON v.id = f.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND f.competencia = ${compAtual}
-      `);
-      const totalClientes = parseInt(totalClientesResult.rows[0]?.total || '0');
-      
-      // 2. Clientes novos (existem na atual, não na anterior)
-      const clientesNovosResult = await db.execute(sql`
-        SELECT COUNT(DISTINCT atual.pessoa_id) as novos
-        FROM clientes_folha_mes atual
-        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND atual.competencia = ${compAtual}
-        AND atual.pessoa_id NOT IN (
-          SELECT DISTINCT ant.pessoa_id 
-          FROM clientes_folha_mes ant
-          JOIN clientes_vinculo v2 ON v2.id = ant.vinculo_id
-          WHERE v2.tenant_id = ${tenantId}
-          AND ant.competencia = ${compAnterior}
+      // OTIMIZADO: Query única agregada para todas as métricas
+      const metricasResult = await db.execute(sql`
+        WITH folha_atual AS (
+          SELECT f.pessoa_id, f.margem_saldo_70, f.salario_bruto
+          FROM clientes_folha_mes f
+          WHERE f.competencia = ${compAtual}
+            AND EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.id = f.vinculo_id AND v.tenant_id = ${tenantId})
+        ),
+        folha_anterior AS (
+          SELECT f.pessoa_id, f.margem_saldo_70, f.salario_bruto
+          FROM clientes_folha_mes f
+          WHERE f.competencia = ${compAnterior}
+            AND EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.id = f.vinculo_id AND v.tenant_id = ${tenantId})
+        ),
+        comparacao AS (
+          SELECT 
+            a.pessoa_id,
+            COALESCE(a.margem_saldo_70, 0) as margem_atual,
+            COALESCE(b.margem_saldo_70, 0) as margem_anterior,
+            COALESCE(a.salario_bruto, 0) as salario_atual,
+            COALESCE(b.salario_bruto, 0) as salario_anterior,
+            CASE WHEN b.pessoa_id IS NULL THEN 1 ELSE 0 END as is_novo
+          FROM folha_atual a
+          LEFT JOIN folha_anterior b ON a.pessoa_id = b.pessoa_id
         )
+        SELECT 
+          COUNT(*) as total_clientes,
+          SUM(is_novo) as clientes_novos,
+          SUM(CASE WHEN margem_anterior > 0 AND margem_atual > margem_anterior THEN 1 ELSE 0 END) as aumento_margem,
+          SUM(CASE WHEN margem_anterior > 0 AND margem_atual < margem_anterior THEN 1 ELSE 0 END) as diminuicao_margem,
+          SUM(CASE WHEN salario_anterior > 0 AND salario_atual > salario_anterior AND (salario_atual - salario_anterior) > 50 THEN 1 ELSE 0 END) as aumento_salario
+        FROM comparacao
       `);
-      const clientesNovos = parseInt(clientesNovosResult.rows[0]?.novos || '0');
       
-      // 3. Aumento de margem 70% (comparando folhas)
-      const aumentoMargemResult = await db.execute(sql`
-        SELECT COUNT(*) as total
-        FROM clientes_folha_mes atual
-        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
-        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND atual.competencia = ${compAtual}
-        AND anterior.competencia = ${compAnterior}
-        AND COALESCE(atual.margem_saldo_70, 0) > COALESCE(anterior.margem_saldo_70, 0)
-        AND COALESCE(anterior.margem_saldo_70, 0) > 0
+      const metricas = metricasResult.rows[0] || {};
+      const totalClientes = parseInt(metricas.total_clientes || '0');
+      const clientesNovos = parseInt(metricas.clientes_novos || '0');
+      const aumentoMargem = parseInt(metricas.aumento_margem || '0');
+      const diminuicaoMargem = parseInt(metricas.diminuicao_margem || '0');
+      const aumentoSalario = parseInt(metricas.aumento_salario || '0');
+      
+      // OTIMIZADO: Faixas de margem com subquery simples
+      const faixasMargemResult = await db.execute(sql`
+        SELECT 
+          CASE 
+            WHEN COALESCE(f.margem_saldo_70, 0) = 0 THEN 'Sem margem'
+            WHEN COALESCE(f.margem_saldo_70, 0) < 500 THEN 'Até R$ 500'
+            WHEN COALESCE(f.margem_saldo_70, 0) < 1000 THEN 'R$ 500-1.000'
+            WHEN COALESCE(f.margem_saldo_70, 0) < 2000 THEN 'R$ 1.000-2.000'
+            ELSE 'Acima de R$ 2.000'
+          END as faixa,
+          COUNT(*) as total
+        FROM clientes_folha_mes f
+        WHERE f.competencia = ${compAtual}
+          AND EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.id = f.vinculo_id AND v.tenant_id = ${tenantId})
+        GROUP BY 1
+        ORDER BY MIN(COALESCE(f.margem_saldo_70, 0))
       `);
-      const aumentoMargem = parseInt(aumentoMargemResult.rows[0]?.total || '0');
       
-      // 4. Diminuição de margem 70%
-      const diminuicaoMargemResult = await db.execute(sql`
-        SELECT COUNT(*) as total
-        FROM clientes_folha_mes atual
-        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
-        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND atual.competencia = ${compAtual}
-        AND anterior.competencia = ${compAnterior}
-        AND COALESCE(atual.margem_saldo_70, 0) < COALESCE(anterior.margem_saldo_70, 0)
-        AND COALESCE(anterior.margem_saldo_70, 0) > 0
-      `);
-      const diminuicaoMargem = parseInt(diminuicaoMargemResult.rows[0]?.total || '0');
-      
-      // 5. Aumento de salário bruto
-      const aumentoSalarioResult = await db.execute(sql`
-        SELECT COUNT(*) as total
-        FROM clientes_folha_mes atual
-        JOIN clientes_folha_mes anterior ON atual.pessoa_id = anterior.pessoa_id
-        JOIN clientes_vinculo v ON v.id = atual.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND atual.competencia = ${compAtual}
-        AND anterior.competencia = ${compAnterior}
-        AND COALESCE(atual.salario_bruto, 0) > COALESCE(anterior.salario_bruto, 0)
-        AND COALESCE(anterior.salario_bruto, 0) > 0
-        AND (COALESCE(atual.salario_bruto, 0) - COALESCE(anterior.salario_bruto, 0)) > 50
-      `);
-      const aumentoSalario = parseInt(aumentoSalarioResult.rows[0]?.total || '0');
-      
-      // 6. Clientes por banco (top 10)
+      // OTIMIZADO: Top 10 bancos usando subquery
       const bancosResult = await db.execute(sql`
         SELECT 
           COALESCE(p.banco_nome, 'NÃO INFORMADO') as banco,
-          COUNT(DISTINCT p.id) as total
-        FROM clientes_pessoa p
-        JOIN clientes_vinculo v ON v.pessoa_id = p.id
-        WHERE v.tenant_id = ${tenantId}
+          COUNT(DISTINCT f.pessoa_id) as total
+        FROM clientes_folha_mes f
+        JOIN clientes_pessoa p ON p.id = f.pessoa_id
+        WHERE f.competencia = ${compAtual}
+          AND EXISTS (SELECT 1 FROM clientes_vinculo v WHERE v.id = f.vinculo_id AND v.tenant_id = ${tenantId})
         GROUP BY p.banco_nome
         ORDER BY total DESC
         LIMIT 10
@@ -4377,32 +4369,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       bancosResult.rows.forEach((r: any) => {
         clientesPorBanco[r.banco] = parseInt(r.total);
       });
-      
-      // 7. Distribuição de margem disponível (faixas)
-      const faixasMargemResult = await db.execute(sql`
-        SELECT 
-          CASE 
-            WHEN COALESCE(margem_saldo_70, 0) = 0 THEN 'Sem margem'
-            WHEN COALESCE(margem_saldo_70, 0) < 500 THEN 'Até R$ 500'
-            WHEN COALESCE(margem_saldo_70, 0) < 1000 THEN 'R$ 500-1.000'
-            WHEN COALESCE(margem_saldo_70, 0) < 2000 THEN 'R$ 1.000-2.000'
-            ELSE 'Acima de R$ 2.000'
-          END as faixa,
-          COUNT(*) as total
-        FROM clientes_folha_mes f
-        JOIN clientes_vinculo v ON v.id = f.vinculo_id
-        WHERE v.tenant_id = ${tenantId}
-        AND f.competencia = ${compAtual}
-        GROUP BY 1
-        ORDER BY 
-          CASE 
-            WHEN COALESCE(margem_saldo_70, 0) = 0 THEN 1
-            WHEN COALESCE(margem_saldo_70, 0) < 500 THEN 2
-            WHEN COALESCE(margem_saldo_70, 0) < 1000 THEN 3
-            WHEN COALESCE(margem_saldo_70, 0) < 2000 THEN 4
-            ELSE 5
-          END
-      `);
       
       const faixasMargem: Record<string, number> = {};
       faixasMargemResult.rows.forEach((r: any) => {
