@@ -14357,6 +14357,404 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ===== COMMERCIAL TEAMS (EQUIPES COMERCIAIS) API =====
+
+  // GET /api/commercial-teams - List all commercial teams for tenant
+  app.get("/api/commercial-teams", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT 
+          ct.*,
+          e.nome_completo as coordenador_nome,
+          (SELECT COUNT(*) FROM commercial_team_members ctm WHERE ctm.team_id = ct.id AND ctm.ativo = true) as total_membros
+        FROM commercial_teams ct
+        LEFT JOIN employees e ON ct.coordenador_id = e.id
+        WHERE ct.tenant_id = ${tenantId}
+        ORDER BY ct.nome_equipe ASC
+      `);
+
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("Error listing commercial teams:", error);
+      return res.status(500).json({ message: "Erro ao listar equipes comerciais" });
+    }
+  });
+
+  // GET /api/commercial-teams/:id - Get single commercial team
+  app.get("/api/commercial-teams/:id", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT 
+          ct.*,
+          e.nome_completo as coordenador_nome
+        FROM commercial_teams ct
+        LEFT JOIN employees e ON ct.coordenador_id = e.id
+        WHERE ct.id = ${id} AND ct.tenant_id = ${tenantId}
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Equipe não encontrada" });
+      }
+
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error getting commercial team:", error);
+      return res.status(500).json({ message: "Erro ao buscar equipe comercial" });
+    }
+  });
+
+  // POST /api/commercial-teams - Create new commercial team
+  app.post("/api/commercial-teams", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const data = req.body;
+
+      // Validate required fields
+      if (!data.nomeEquipe || !data.nomeEquipe.trim()) {
+        return res.status(400).json({ message: "Nome da equipe é obrigatório" });
+      }
+      if (!data.coordenadorId) {
+        return res.status(400).json({ message: "Coordenador é obrigatório" });
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO commercial_teams (
+          tenant_id, nome_equipe, descricao, coordenador_id, ativa, meta_mensal
+        ) VALUES (
+          ${tenantId}, ${data.nomeEquipe}, ${data.descricao || null}, ${data.coordenadorId || null}, ${data.ativa !== false}, ${data.metaMensal || null}
+        )
+        RETURNING *
+      `);
+
+      // If coordenador is set, add them as a member automatically
+      if (data.coordenadorId) {
+        await db.execute(sql`
+          INSERT INTO commercial_team_members (
+            tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao, ativo, data_entrada
+          ) VALUES (
+            ${tenantId}, ${(result.rows[0] as any).id}, ${data.coordenadorId}, 'coordenador', 'salario_fixo', true, ${new Date().toISOString().split('T')[0]}
+          )
+          ON CONFLICT DO NOTHING
+        `);
+      }
+
+      return res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error("Error creating commercial team:", error);
+      return res.status(500).json({ message: "Erro ao criar equipe comercial" });
+    }
+  });
+
+  // PUT /api/commercial-teams/:id - Update commercial team
+  app.put("/api/commercial-teams/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const data = req.body;
+
+      // Validate required fields
+      if (!data.nomeEquipe || !data.nomeEquipe.trim()) {
+        return res.status(400).json({ message: "Nome da equipe é obrigatório" });
+      }
+      if (!data.coordenadorId) {
+        return res.status(400).json({ message: "Coordenador é obrigatório" });
+      }
+
+      const existing = await db.execute(sql`
+        SELECT id, coordenador_id FROM commercial_teams WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Equipe não encontrada" });
+      }
+
+      const oldCoordinatorId = (existing.rows[0] as any).coordenador_id;
+      const newCoordinatorId = data.coordenadorId ? parseInt(data.coordenadorId) : null;
+
+      // Reconcile coordinator membership if coordinator changed
+      if (oldCoordinatorId !== newCoordinatorId) {
+        // Remove old coordinator's coordinator role (demote to vendedor or remove)
+        if (oldCoordinatorId) {
+          await db.execute(sql`
+            DELETE FROM commercial_team_members 
+            WHERE team_id = ${id} 
+            AND employee_id = ${oldCoordinatorId} 
+            AND funcao_equipe = 'coordenador'
+            AND tenant_id = ${tenantId}
+          `);
+        }
+        
+        // Add new coordinator as member if not already a member
+        if (newCoordinatorId) {
+          // Check if new coordinator is already a member of this team
+          const existingMember = await db.execute(sql`
+            SELECT id FROM commercial_team_members 
+            WHERE team_id = ${id} AND employee_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
+          `);
+          
+          if (existingMember.rows.length > 0) {
+            // Update existing member to coordinator role
+            await db.execute(sql`
+              UPDATE commercial_team_members 
+              SET funcao_equipe = 'coordenador', updated_at = NOW()
+              WHERE team_id = ${id} AND employee_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
+            `);
+          } else {
+            // Add as new coordinator member
+            await db.execute(sql`
+              INSERT INTO commercial_team_members (
+                tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao, ativo, data_entrada
+              ) VALUES (
+                ${tenantId}, ${id}, ${newCoordinatorId}, 'coordenador', 'salario_fixo', true, ${new Date().toISOString().split('T')[0]}
+              )
+            `);
+          }
+        }
+      }
+
+      const result = await db.execute(sql`
+        UPDATE commercial_teams SET
+          nome_equipe = ${data.nomeEquipe},
+          descricao = ${data.descricao || null},
+          coordenador_id = ${newCoordinatorId},
+          ativa = ${data.ativa !== false},
+          meta_mensal = ${data.metaMensal || null},
+          updated_at = NOW()
+        WHERE id = ${id} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error updating commercial team:", error);
+      return res.status(500).json({ message: "Erro ao atualizar equipe comercial" });
+    }
+  });
+
+  // DELETE /api/commercial-teams/:id - Delete commercial team
+  app.delete("/api/commercial-teams/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        DELETE FROM commercial_teams WHERE id = ${id} AND tenant_id = ${tenantId}
+        RETURNING id
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Equipe não encontrada" });
+      }
+
+      return res.json({ message: "Equipe removida com sucesso" });
+    } catch (error) {
+      console.error("Error deleting commercial team:", error);
+      return res.status(500).json({ message: "Erro ao remover equipe comercial" });
+    }
+  });
+
+  // GET /api/commercial-teams/:id/members - List members of a commercial team
+  app.get("/api/commercial-teams/:id/members", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT 
+          ctm.*,
+          e.nome_completo as funcionario_nome,
+          e.cpf as funcionario_cpf,
+          e.cargo as funcionario_cargo
+        FROM commercial_team_members ctm
+        JOIN employees e ON ctm.employee_id = e.id
+        WHERE ctm.team_id = ${teamId} AND ctm.tenant_id = ${tenantId}
+        ORDER BY 
+          CASE ctm.funcao_equipe 
+            WHEN 'coordenador' THEN 1
+            WHEN 'subcoordenador' THEN 2
+            WHEN 'assistente' THEN 3
+            WHEN 'vendedor' THEN 4
+            WHEN 'operacional' THEN 5
+            ELSE 6
+          END,
+          e.nome_completo ASC
+      `);
+
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("Error listing team members:", error);
+      return res.status(500).json({ message: "Erro ao listar membros da equipe" });
+    }
+  });
+
+  // POST /api/commercial-teams/:id/members - Add member to commercial team
+  app.post("/api/commercial-teams/:id/members", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const data = req.body;
+
+      // Validate required fields
+      if (!data.employeeId) {
+        return res.status(400).json({ message: "Funcionário é obrigatório" });
+      }
+      if (!data.funcaoEquipe) {
+        return res.status(400).json({ message: "Função na equipe é obrigatória" });
+      }
+      if (!data.tipoRemuneracao) {
+        return res.status(400).json({ message: "Tipo de remuneração é obrigatório" });
+      }
+      if (data.tipoRemuneracao === "salario_variavel" && !data.percentualComissao) {
+        return res.status(400).json({ message: "Percentual de comissão é obrigatório para remuneração variável" });
+      }
+      if (data.tipoRemuneracao === "premiacao_meta" && !data.percentualMeta) {
+        return res.status(400).json({ message: "Percentual de bônus é obrigatório para premiação por meta" });
+      }
+
+      // Check if team exists
+      const team = await db.execute(sql`
+        SELECT id FROM commercial_teams WHERE id = ${teamId} AND tenant_id = ${tenantId}
+      `);
+      if (team.rows.length === 0) {
+        return res.status(404).json({ message: "Equipe não encontrada" });
+      }
+
+      // Check if employee is already in an active team
+      const existingMember = await db.execute(sql`
+        SELECT ctm.id, ct.nome_equipe 
+        FROM commercial_team_members ctm
+        JOIN commercial_teams ct ON ctm.team_id = ct.id
+        WHERE ctm.employee_id = ${data.employeeId} 
+        AND ctm.ativo = true 
+        AND ct.ativa = true
+        AND ctm.tenant_id = ${tenantId}
+      `);
+      if (existingMember.rows.length > 0) {
+        const existingTeam = existingMember.rows[0] as any;
+        return res.status(400).json({ 
+          message: `Este funcionário já é membro ativo da equipe "${existingTeam.nome_equipe}"` 
+        });
+      }
+
+      // Check if trying to add coordinator when one already exists
+      if (data.funcaoEquipe === 'coordenador') {
+        const existingCoord = await db.execute(sql`
+          SELECT id FROM commercial_team_members 
+          WHERE team_id = ${teamId} AND funcao_equipe = 'coordenador' AND ativo = true
+        `);
+        if (existingCoord.rows.length > 0) {
+          return res.status(400).json({ message: "Esta equipe já possui um coordenador" });
+        }
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO commercial_team_members (
+          tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao,
+          percentual_comissao, valor_fixo_adicional, percentual_meta,
+          ativo, data_entrada, observacoes
+        ) VALUES (
+          ${tenantId}, ${teamId}, ${data.employeeId}, ${data.funcaoEquipe}, ${data.tipoRemuneracao},
+          ${data.percentualComissao || null}, ${data.valorFixoAdicional || null}, ${data.percentualMeta || null},
+          true, ${new Date().toISOString().split('T')[0]}, ${data.observacoes || null}
+        )
+        RETURNING *
+      `);
+
+      return res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error("Error adding team member:", error);
+      return res.status(500).json({ message: "Erro ao adicionar membro à equipe" });
+    }
+  });
+
+  // DELETE /api/commercial-teams/:teamId/members/:memberId - Remove member from team
+  app.delete("/api/commercial-teams/:teamId/members/:memberId", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const memberId = parseInt(req.params.memberId);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        DELETE FROM commercial_team_members 
+        WHERE id = ${memberId} AND team_id = ${teamId} AND tenant_id = ${tenantId}
+        RETURNING id
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Membro não encontrado" });
+      }
+
+      return res.json({ message: "Membro removido com sucesso" });
+    } catch (error) {
+      console.error("Error removing team member:", error);
+      return res.status(500).json({ message: "Erro ao remover membro da equipe" });
+    }
+  });
+
+  // GET /api/employees/available-for-team - List employees available to add to a team
+  app.get("/api/employees/available-for-team", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const { teamId } = req.query;
+
+      // Get employees from Commercial or Operational departments not in any active team
+      const result = await db.execute(sql`
+        SELECT e.id, e.nome_completo, e.cpf, e.cargo, e.departamento
+        FROM employees e
+        WHERE e.tenant_id = ${tenantId}
+        AND e.status = 'ativo'
+        AND (e.departamento ILIKE '%comercial%' OR e.departamento ILIKE '%operacional%' OR e.departamento IS NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM commercial_team_members ctm
+          JOIN commercial_teams ct ON ctm.team_id = ct.id
+          WHERE ctm.employee_id = e.id 
+          AND ctm.ativo = true 
+          AND ct.ativa = true
+          AND ctm.tenant_id = ${tenantId}
+          AND ct.tenant_id = ${tenantId}
+        )
+        ORDER BY e.nome_completo ASC
+      `);
+
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("Error listing available employees:", error);
+      return res.status(500).json({ message: "Erro ao listar funcionários disponíveis" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
