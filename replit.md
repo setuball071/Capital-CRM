@@ -48,6 +48,14 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
     - 5-step wizard form: Personal Data, Family, Professional, Banking, Documents
     - Document upload support (CPF, RG, CTPS, comprovante de residência, contrato)
     - CPF uniqueness validation per tenant
+*   **Commercial Teams Module (Equipes Comerciais)**: Team management for commercial operations. Features:
+    - Team CRUD with coordinator assignment (automatic membership reconciliation)
+    - Member management with role (coordenador, corretor, operador, analista, suporte) and remuneration type
+    - Remuneration types: salario_fixo, salario_variavel (with commission %), premiacao_meta (with bonus %)
+    - Tenant isolation with filters in all queries including NOT EXISTS subqueries
+    - Frontend/backend validation for all required fields
+    - Module permission: `modulo_config_usuarios`
+    - Route: `/equipes`
     - Full CRUD with tenant isolation via `req.tenantId`
     - Module permission: `modulo_config_usuarios` (view), edit permission for mutating operations
     - API: `/api/employees`, `/api/employees/:id`, `/api/employees/:id/documents`
