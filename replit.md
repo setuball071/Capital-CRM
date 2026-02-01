@@ -43,6 +43,14 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
       4. Physically deletes the import_run (not just marks as deleted)
       5. All operations are atomic - complete success or complete rollback
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
+*   **Employees Module (Funcionários)**: Complete employee management system for tenant staff. Features:
+    - Database: `employees`, `commercial_teams`, `commercial_team_members` tables
+    - 5-step wizard form: Personal Data, Family, Professional, Banking, Documents
+    - Document upload support (CPF, RG, CTPS, comprovante de residência, contrato)
+    - CPF uniqueness validation per tenant
+    - Full CRUD with tenant isolation via `req.tenantId`
+    - Module permission: `modulo_config_usuarios` (view), edit permission for mutating operations
+    - API: `/api/employees`, `/api/employees/:id`, `/api/employees/:id/documents`
 *   **High-Performance Client Database Export System**: Optimized streaming export system for generating client lists with package-based pricing. Features:
     - **Chunked/streaming processing**: 5,000 records per chunk to avoid memory issues with large datasets
     - **Optimized query patterns**: Single upfront COUNT query, then chunked data fetches with `skipCount: true`

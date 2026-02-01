@@ -43,6 +43,7 @@ import AdminTenantsPage from "@/pages/admin-tenants";
 import AdminBrandingPage from "@/pages/admin-branding";
 import SimuladorAmortizacaoPage from "@/pages/simulador-amortizacao";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
+import FuncionariosPage from "@/pages/funcionarios";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -315,6 +316,9 @@ function Router() {
               </Route>
               <Route path="/simulador-portabilidade">
                 {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}
+              </Route>
+              <Route path="/funcionarios">
+                {() => <ModuleRoute component={FuncionariosPage} module="modulo_config_usuarios" />}
               </Route>
               <Route component={NotFound} />
             </Switch>

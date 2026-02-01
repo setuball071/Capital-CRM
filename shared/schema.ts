@@ -1954,3 +1954,119 @@ Evoluir a conversa (início dúvida genérica, meio específico, fim decisão ou
 Varie os focos (um por resposta): taxa, parcela/conforto, comparação, arrependimento, uso do dinheiro, momento de vida, clareza nos números, confiança no consultor.
 Tom: humano, curto, natural, sem termos técnicos e sem repetir frases.`;
 
+// ===== EMPLOYEES & COMMERCIAL TEAMS SYSTEM =====
+
+// Employees table - cadastro geral de funcionários
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }), // Se tiver acesso ao sistema
+  
+  // Dados Pessoais
+  nomeCompleto: varchar("nome_completo", { length: 200 }).notNull(),
+  cpf: varchar("cpf", { length: 11 }).notNull(),
+  rg: varchar("rg", { length: 20 }),
+  dataNascimento: varchar("data_nascimento", { length: 10 }),
+  emailCorporativo: varchar("email_corporativo", { length: 100 }),
+  emailPessoal: varchar("email_pessoal", { length: 100 }),
+  telefone: varchar("telefone", { length: 20 }),
+  celular: varchar("celular", { length: 20 }),
+  enderecoCompleto: text("endereco_completo"),
+  cep: varchar("cep", { length: 8 }),
+  cidade: varchar("cidade", { length: 100 }),
+  estado: varchar("estado", { length: 2 }),
+  
+  // Dados Familiares
+  nomePai: varchar("nome_pai", { length: 200 }),
+  nomeMae: varchar("nome_mae", { length: 200 }),
+  estadoCivil: varchar("estado_civil", { length: 20 }),
+  quantidadeFilhos: integer("quantidade_filhos").default(0),
+  
+  // Dados Profissionais
+  cargo: varchar("cargo", { length: 100 }),
+  departamento: varchar("departamento", { length: 100 }), // RH, TI, Financeiro, Comercial, Marketing, Operacional
+  tipoContrato: varchar("tipo_contrato", { length: 10 }), // CLT ou PJ
+  dataAdmissao: varchar("data_admissao", { length: 10 }),
+  dataDemissao: varchar("data_demissao", { length: 10 }),
+  status: varchar("status", { length: 20 }).default("ativo"), // ativo, ferias, afastado, demitido
+  salarioBase: decimal("salario_base", { precision: 10, scale: 2 }),
+  
+  // Dados Bancários
+  banco: varchar("banco", { length: 100 }),
+  agencia: varchar("agencia", { length: 10 }),
+  conta: varchar("conta", { length: 20 }),
+  tipoConta: varchar("tipo_conta", { length: 20 }),
+  pix: varchar("pix", { length: 100 }),
+  
+  // Documentos (caminhos dos arquivos)
+  documentoCpf: varchar("documento_cpf", { length: 255 }),
+  documentoRg: varchar("documento_rg", { length: 255 }),
+  documentoCtps: varchar("documento_ctps", { length: 255 }),
+  documentoComprovanteResidencia: varchar("documento_comprovante_residencia", { length: 255 }),
+  documentoContrato: varchar("documento_contrato", { length: 255 }),
+  documentoOutros: jsonb("documento_outros"), // Array de caminhos
+  
+  // Controle
+  observacoes: text("observacoes"),
+  criadoPor: integer("criado_por").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmployeeSchema = createInsertSchema(employees, {
+  nomeCompleto: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").max(200),
+  cpf: z.string().length(11, "CPF deve ter 11 dígitos"),
+  emailCorporativo: z.string().email("Email inválido").optional().nullable(),
+  celular: z.string().optional().nullable(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+
+// Commercial Teams table - equipes comerciais
+export const commercialTeams = pgTable("commercial_teams", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  nomeEquipe: varchar("nome_equipe", { length: 100 }).notNull(),
+  descricao: text("descricao"),
+  coordenadorId: integer("coordenador_id").references(() => employees.id, { onDelete: "set null" }),
+  ativa: boolean("ativa").default(true),
+  metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCommercialTeamSchema = createInsertSchema(commercialTeams, {
+  nomeEquipe: z.string().min(2, "Nome da equipe deve ter pelo menos 2 caracteres").max(100),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type CommercialTeam = typeof commercialTeams.$inferSelect;
+export type InsertCommercialTeam = z.infer<typeof insertCommercialTeamSchema>;
+
+// Commercial Team Members table - membros das equipes comerciais
+export const commercialTeamMembers = pgTable("commercial_team_members", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  teamId: integer("team_id").references(() => commercialTeams.id, { onDelete: "cascade" }).notNull(),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  funcaoEquipe: varchar("funcao_equipe", { length: 50 }), // coordenador, subcoordenador, assistente, vendedor, operacional
+  ativo: boolean("ativo").default(true),
+  
+  // Remuneração
+  tipoRemuneracao: varchar("tipo_remuneracao", { length: 50 }), // salario_fixo, salario_variavel, premiacao_meta
+  percentualComissao: decimal("percentual_comissao", { precision: 5, scale: 2 }),
+  valorFixoAdicional: decimal("valor_fixo_adicional", { precision: 10, scale: 2 }),
+  percentualMeta: decimal("percentual_meta", { precision: 5, scale: 2 }),
+  
+  dataEntrada: varchar("data_entrada", { length: 10 }),
+  dataSaida: varchar("data_saida", { length: 10 }),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCommercialTeamMemberSchema = createInsertSchema(commercialTeamMembers).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type CommercialTeamMember = typeof commercialTeamMembers.$inferSelect;
+export type InsertCommercialTeamMember = z.infer<typeof insertCommercialTeamMemberSchema>;
+

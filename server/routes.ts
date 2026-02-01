@@ -14066,6 +14066,297 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ===== EMPLOYEES (FUNCIONÁRIOS) API =====
+  
+  // GET /api/employees - List all employees for tenant
+  app.get("/api/employees", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const { departamento, status, tipoContrato, search, page = "1", limit = "50" } = req.query;
+      
+      const pageNum = parseInt(page as string) || 1;
+      const limitNum = parseInt(limit as string) || 50;
+      const offset = (pageNum - 1) * limitNum;
+      
+      let conditions = [sql`tenant_id = ${tenantId}`];
+      
+      if (departamento && departamento !== "todos") {
+        conditions.push(sql`departamento = ${departamento}`);
+      }
+      if (status && status !== "todos") {
+        conditions.push(sql`status = ${status}`);
+      }
+      if (tipoContrato && tipoContrato !== "todos") {
+        conditions.push(sql`tipo_contrato = ${tipoContrato}`);
+      }
+      if (search) {
+        const searchTerm = `%${(search as string).toLowerCase()}%`;
+        conditions.push(sql`(LOWER(nome_completo) LIKE ${searchTerm} OR cpf LIKE ${searchTerm})`);
+      }
+      
+      const whereClause = sql.join(conditions, sql` AND `);
+      
+      const [countResult, employeesResult] = await Promise.all([
+        db.execute(sql`SELECT COUNT(*) as total FROM employees WHERE ${whereClause}`),
+        db.execute(sql`
+          SELECT * FROM employees 
+          WHERE ${whereClause}
+          ORDER BY nome_completo ASC
+          LIMIT ${limitNum} OFFSET ${offset}
+        `)
+      ]);
+      
+      return res.json({
+        employees: employeesResult.rows,
+        total: parseInt(countResult.rows[0]?.total as string) || 0,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil((parseInt(countResult.rows[0]?.total as string) || 0) / limitNum)
+      });
+    } catch (error) {
+      console.error("Error listing employees:", error);
+      return res.status(500).json({ message: "Erro ao listar funcionários" });
+    }
+  });
+  
+  // GET /api/employees/:id - Get single employee
+  app.get("/api/employees/:id", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      
+      const result = await db.execute(sql`
+        SELECT * FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Funcionário não encontrado" });
+      }
+      
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error getting employee:", error);
+      return res.status(500).json({ message: "Erro ao buscar funcionário" });
+    }
+  });
+  
+  // POST /api/employees - Create new employee
+  app.post("/api/employees", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const userId = req.user!.id;
+      const data = req.body;
+      
+      // Check CPF uniqueness
+      const existingCpf = await db.execute(sql`
+        SELECT id FROM employees WHERE cpf = ${data.cpf} AND tenant_id = ${tenantId}
+      `);
+      
+      if (existingCpf.rows.length > 0) {
+        return res.status(400).json({ message: "Já existe um funcionário com este CPF" });
+      }
+      
+      const result = await db.execute(sql`
+        INSERT INTO employees (
+          tenant_id, user_id, nome_completo, cpf, rg, data_nascimento,
+          email_corporativo, email_pessoal, telefone, celular,
+          endereco_completo, cep, cidade, estado,
+          nome_pai, nome_mae, estado_civil, quantidade_filhos,
+          cargo, departamento, tipo_contrato, data_admissao, data_demissao, status, salario_base,
+          banco, agencia, conta, tipo_conta, pix,
+          documento_cpf, documento_rg, documento_ctps, documento_comprovante_residencia, documento_contrato, documento_outros,
+          observacoes, criado_por
+        ) VALUES (
+          ${tenantId}, ${data.userId || null}, ${data.nomeCompleto}, ${data.cpf}, ${data.rg || null}, ${data.dataNascimento || null},
+          ${data.emailCorporativo || null}, ${data.emailPessoal || null}, ${data.telefone || null}, ${data.celular || null},
+          ${data.enderecoCompleto || null}, ${data.cep || null}, ${data.cidade || null}, ${data.estado || null},
+          ${data.nomePai || null}, ${data.nomeMae || null}, ${data.estadoCivil || null}, ${data.quantidadeFilhos || 0},
+          ${data.cargo || null}, ${data.departamento || null}, ${data.tipoContrato || null}, ${data.dataAdmissao || null}, ${data.dataDemissao || null}, ${data.status || 'ativo'}, ${data.salarioBase || null},
+          ${data.banco || null}, ${data.agencia || null}, ${data.conta || null}, ${data.tipoConta || null}, ${data.pix || null},
+          ${data.documentoCpf || null}, ${data.documentoRg || null}, ${data.documentoCtps || null}, ${data.documentoComprovanteResidencia || null}, ${data.documentoContrato || null}, ${data.documentoOutros ? JSON.stringify(data.documentoOutros) : null},
+          ${data.observacoes || null}, ${userId}
+        )
+        RETURNING *
+      `);
+      
+      return res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error("Error creating employee:", error);
+      return res.status(500).json({ message: "Erro ao criar funcionário" });
+    }
+  });
+  
+  // PUT /api/employees/:id - Update employee
+  app.put("/api/employees/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const data = req.body;
+      
+      // Check if exists
+      const existing = await db.execute(sql`
+        SELECT id FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+      
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Funcionário não encontrado" });
+      }
+      
+      // Check CPF uniqueness (excluding current)
+      if (data.cpf) {
+        const existingCpf = await db.execute(sql`
+          SELECT id FROM employees WHERE cpf = ${data.cpf} AND tenant_id = ${tenantId} AND id != ${id}
+        `);
+        
+        if (existingCpf.rows.length > 0) {
+          return res.status(400).json({ message: "Já existe outro funcionário com este CPF" });
+        }
+      }
+      
+      const result = await db.execute(sql`
+        UPDATE employees SET
+          user_id = ${data.userId || null},
+          nome_completo = ${data.nomeCompleto},
+          cpf = ${data.cpf},
+          rg = ${data.rg || null},
+          data_nascimento = ${data.dataNascimento || null},
+          email_corporativo = ${data.emailCorporativo || null},
+          email_pessoal = ${data.emailPessoal || null},
+          telefone = ${data.telefone || null},
+          celular = ${data.celular || null},
+          endereco_completo = ${data.enderecoCompleto || null},
+          cep = ${data.cep || null},
+          cidade = ${data.cidade || null},
+          estado = ${data.estado || null},
+          nome_pai = ${data.nomePai || null},
+          nome_mae = ${data.nomeMae || null},
+          estado_civil = ${data.estadoCivil || null},
+          quantidade_filhos = ${data.quantidadeFilhos || 0},
+          cargo = ${data.cargo || null},
+          departamento = ${data.departamento || null},
+          tipo_contrato = ${data.tipoContrato || null},
+          data_admissao = ${data.dataAdmissao || null},
+          data_demissao = ${data.dataDemissao || null},
+          status = ${data.status || 'ativo'},
+          salario_base = ${data.salarioBase || null},
+          banco = ${data.banco || null},
+          agencia = ${data.agencia || null},
+          conta = ${data.conta || null},
+          tipo_conta = ${data.tipoConta || null},
+          pix = ${data.pix || null},
+          documento_cpf = ${data.documentoCpf || null},
+          documento_rg = ${data.documentoRg || null},
+          documento_ctps = ${data.documentoCtps || null},
+          documento_comprovante_residencia = ${data.documentoComprovanteResidencia || null},
+          documento_contrato = ${data.documentoContrato || null},
+          documento_outros = ${data.documentoOutros ? JSON.stringify(data.documentoOutros) : null},
+          observacoes = ${data.observacoes || null},
+          updated_at = NOW()
+        WHERE id = ${id} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+      
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error updating employee:", error);
+      return res.status(500).json({ message: "Erro ao atualizar funcionário" });
+    }
+  });
+  
+  // DELETE /api/employees/:id - Delete employee
+  app.delete("/api/employees/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      
+      const result = await db.execute(sql`
+        DELETE FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
+        RETURNING id
+      `);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Funcionário não encontrado" });
+      }
+      
+      return res.json({ message: "Funcionário removido com sucesso" });
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      return res.status(500).json({ message: "Erro ao remover funcionário" });
+    }
+  });
+  
+  // POST /api/employees/:id/documents - Upload document for employee
+  app.post("/api/employees/:id/documents", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), upload.single("file"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const { documentType } = req.body;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "Arquivo não enviado" });
+      }
+      
+      // Check if employee exists
+      const existing = await db.execute(sql`
+        SELECT id FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+      
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Funcionário não encontrado" });
+      }
+      
+      // Save file
+      const uploadsDir = path.join(process.cwd(), "uploads", "employees", String(id));
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      
+      const fileName = `${documentType}-${Date.now()}${path.extname(req.file.originalname)}`;
+      const filePath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(filePath, req.file.buffer);
+      
+      const fileUrl = `/uploads/employees/${id}/${fileName}`;
+      
+      // Update employee with document path
+      const columnMap: Record<string, string> = {
+        cpf: "documento_cpf",
+        rg: "documento_rg",
+        ctps: "documento_ctps",
+        comprovante_residencia: "documento_comprovante_residencia",
+        contrato: "documento_contrato"
+      };
+      
+      const column = columnMap[documentType];
+      if (column) {
+        await db.execute(sql`
+          UPDATE employees SET ${sql.raw(column)} = ${fileUrl}, updated_at = NOW()
+          WHERE id = ${id} AND tenant_id = ${tenantId}
+        `);
+      }
+      
+      return res.json({ url: fileUrl, message: "Documento enviado com sucesso" });
+    } catch (error) {
+      console.error("Error uploading employee document:", error);
+      return res.status(500).json({ message: "Erro ao enviar documento" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
