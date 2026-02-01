@@ -1,0 +1,94 @@
+TAREFA: Criar rotas backend para Funcionários e Equipes
+
+ARQUIVO: server/routes.ts
+
+ADICIONAR ROTAS:
+
+// FUNCIONÁRIOS
+POST   /api/employees                    - Criar funcionário
+GET    /api/employees                    - Listar (filtros: departamento, status, busca)
+GET    /api/employees/:id                - Detalhes
+PUT    /api/employees/:id                - Atualizar
+DELETE /api/employees/:id                - Inativar
+POST   /api/employees/:id/documents      - Upload documentos
+GET    /api/employees/:id/documents/:type - Download documento
+
+// EQUIPES COMERCIAIS
+POST   /api/commercial-teams              - Criar equipe
+GET    /api/commercial-teams              - Listar equipes
+GET    /api/commercial-teams/:id          - Detalhes da equipe
+PUT    /api/commercial-teams/:id          - Atualizar equipe
+DELETE /api/commercial-teams/:id          - Inativar equipe
+
+// MEMBROS DA EQUIPE
+POST   /api/commercial-teams/:id/members  - Adicionar membro
+GET    /api/commercial-teams/:id/members  - Listar membros
+PUT    /api/team-members/:id              - Atualizar membro
+DELETE /api/team-members/:id              - Remover membro da equipe
+
+TODAS AS ROTAS:
+- requireAuth
+- Filtrar por tenant_id
+- Validar dados
+- Log de erros
+
+EXEMPLO:
+```typescript
+// Adicionar membro à equipe
+app.post('/api/commercial-teams/:id/members', requireAuth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { employee_id, funcao_equipe, tipo_remuneracao, percentual_comissao, valor_fixo_adicional, percentual_meta } = req.body;
+    const tenantId = req.user.tenantId;
+    
+    // Validar que funcionário não está em outra equipe ativa
+    const jaEmEquipe = await db.select()
+      .from(teamMembers)
+      .where(and(
+        eq(teamMembers.employee_id, employee_id),
+        eq(teamMembers.ativo, true)
+      ));
+    
+    if (jaEmEquipe.length > 0) {
+      return res.status(400).json({ error: 'Funcionário já está em uma equipe ativa' });
+    }
+    
+    // Se função é coordenador, validar que equipe não tem outro
+    if (funcao_equipe === 'coordenador') {
+      const temCoordenador = await db.select()
+        .from(teamMembers)
+        .where(and(
+          eq(teamMembers.team_id, teamId),
+          eq(teamMembers.funcao_equipe, 'coordenador'),
+          eq(teamMembers.ativo, true)
+        ));
+      
+      if (temCoordenador.length > 0) {
+        return res.status(400).json({ error: 'Equipe já tem um coordenador' });
+      }
+    }
+    
+    // Inserir membro
+    const [member] = await db.insert(teamMembers).values({
+      tenant_id: tenantId,
+      team_id: teamId,
+      employee_id,
+      funcao_equipe,
+      tipo_remuneracao,
+      percentual_comissao,
+      valor_fixo_adicional,
+      percentual_meta,
+      data_entrada: new Date(),
+      ativo: true
+    }).returning();
+    
+    res.json(member);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erro ao adicionar membro' });
+  }
+});
+```
+
+Upload de documentos usar multer.
+Salvar em: /uploads/employees/{employee_id}/{tipo}/

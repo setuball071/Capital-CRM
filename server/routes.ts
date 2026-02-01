@@ -14693,6 +14693,71 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // PUT /api/team-members/:id - Update team member
+  app.put("/api/team-members/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const memberId = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const data = req.body;
+
+      // Validate required fields
+      if (!data.funcaoEquipe) {
+        return res.status(400).json({ message: "Função na equipe é obrigatória" });
+      }
+      if (!data.tipoRemuneracao) {
+        return res.status(400).json({ message: "Tipo de remuneração é obrigatório" });
+      }
+      if (data.tipoRemuneracao === "salario_variavel" && !data.percentualComissao) {
+        return res.status(400).json({ message: "Percentual de comissão é obrigatório para remuneração variável" });
+      }
+      if (data.tipoRemuneracao === "premiacao_meta" && !data.percentualMeta) {
+        return res.status(400).json({ message: "Percentual de bônus é obrigatório para premiação por meta" });
+      }
+
+      // Get existing member
+      const existing = await db.execute(sql`
+        SELECT id, team_id, funcao_equipe FROM commercial_team_members 
+        WHERE id = ${memberId} AND tenant_id = ${tenantId}
+      `);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Membro não encontrado" });
+      }
+      const member = existing.rows[0] as any;
+
+      // If changing to coordinator, check if team already has one
+      if (data.funcaoEquipe === 'coordenador' && member.funcao_equipe !== 'coordenador') {
+        const existingCoord = await db.execute(sql`
+          SELECT id FROM commercial_team_members 
+          WHERE team_id = ${member.team_id} AND funcao_equipe = 'coordenador' AND ativo = true AND id != ${memberId}
+          AND tenant_id = ${tenantId}
+        `);
+        if (existingCoord.rows.length > 0) {
+          return res.status(400).json({ message: "Esta equipe já possui um coordenador" });
+        }
+      }
+
+      const result = await db.execute(sql`
+        UPDATE commercial_team_members SET
+          funcao_equipe = ${data.funcaoEquipe},
+          tipo_remuneracao = ${data.tipoRemuneracao},
+          percentual_comissao = ${data.percentualComissao || null},
+          valor_fixo_adicional = ${data.valorFixoAdicional || null},
+          percentual_meta = ${data.percentualMeta || null},
+          observacoes = ${data.observacoes || null}
+        WHERE id = ${memberId} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error updating team member:", error);
+      return res.status(500).json({ message: "Erro ao atualizar membro da equipe" });
+    }
+  });
+
   // DELETE /api/commercial-teams/:teamId/members/:memberId - Remove member from team
   app.delete("/api/commercial-teams/:teamId/members/:memberId", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
     try {
