@@ -1,0 +1,112 @@
+TAREFA: Criar página de Cadastro de Funcionários (independente de equipes)
+
+CRIAR ARQUIVO: client/src/pages/FuncionariosPage.tsx
+
+ESTRUTURA:
+
+CABEÇALHO:
+- Título: "Funcionários"
+- Botão: "+ Novo Funcionário"
+
+ABA 1: LISTA DE FUNCIONÁRIOS
+Tabela com colunas:
+- Nome
+- CPF (mascarado: 000.000.000-00)
+- Cargo
+- Departamento
+- Tipo Contrato
+- Status
+- Ações: Editar, Ver Documentos, Inativar
+
+Filtros:
+- Por departamento
+- Por status
+- Por tipo de contrato
+- Busca por nome/CPF
+
+Paginação: 50 por página
+
+ABA 2: FORMULÁRIO (modal ao clicar Novo/Editar)
+
+FORMULÁRIO EM WIZARD - 5 STEPS:
+
+STEP 1 - DADOS PESSOAIS:
+- Nome Completo *
+- CPF * (máscara)
+- RG
+- Data de Nascimento *
+- Email Corporativo *
+- Email Pessoal
+- Telefone
+- Celular *
+- CEP * (busca endereço automático)
+- Endereço Completo *
+- Cidade *
+- Estado * (select)
+
+STEP 2 - DADOS FAMILIARES:
+- Nome do Pai
+- Nome da Mãe *
+- Estado Civil * (select)
+- Quantidade de Filhos
+
+STEP 3 - DADOS PROFISSIONAIS:
+- Departamento * (select):
+  * Comercial
+  * Operacional
+  * Financeiro
+  * RH
+  * TI
+  * Marketing
+  * Serviços Gerais
+  * Diretoria
+- Cargo *
+- Tipo de Contrato * (CLT / PJ)
+- Data de Admissão *
+- Salário Base *
+- Status (select: Ativo, Férias, Afastado)
+
+STEP 4 - DADOS BANCÁRIOS:
+- Banco * (select com principais)
+- Agência *
+- Conta *
+- Tipo de Conta * (Corrente/Poupança/Salário)
+- Chave PIX
+
+STEP 5 - DOCUMENTOS:
+Upload múltiplo:
+- CPF (PDF/imagem, max 5MB)
+- RG (PDF/imagem, max 5MB)
+- CTPS (PDF/imagem, max 5MB)
+- Comprovante Residência (PDF/imagem, max 5MB)
+- Contrato (PDF, max 10MB)
+- Outros (múltiplos arquivos)
+
+Para cada upload mostrar:
+- Nome do arquivo
+- Tamanho
+- Preview (se imagem)
+- Botão remover
+- Progress bar durante upload
+
+OBSERVAÇÕES:
+- Campo de texto livre (textarea)
+
+BOTÕES:
+- Anterior / Próximo (entre steps)
+- Cancelar
+- Salvar (último step)
+
+VALIDAÇÕES:
+- CPF único no banco
+- Email corporativo único
+- Campos obrigatórios
+
+ADICIONAR NO MENU:
+Seção "Administração" → Funcionários
+
+USAR:
+- React Hook Form
+- Zod validation
+- TailwindCSS
+- shadcn/ui components

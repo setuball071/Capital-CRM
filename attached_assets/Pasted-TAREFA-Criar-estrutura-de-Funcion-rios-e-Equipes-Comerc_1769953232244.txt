@@ -1,0 +1,104 @@
+TAREFA: Criar estrutura de Funcionários e Equipes Comerciais
+
+CRIAR 3 TABELAS:
+
+1. TABELA: employees (funcionários - cadastro geral)
+   Colunas:
+   - id (serial primary key)
+   - tenant_id (integer, referência a tenants)
+   - user_id (integer, nullable, referência a users - se tiver acesso ao sistema)
+   
+   -- DADOS PESSOAIS
+   - nome_completo (varchar 200)
+   - cpf (varchar 11, unique)
+   - rg (varchar 20)
+   - data_nascimento (date)
+   - email_corporativo (varchar 100)
+   - email_pessoal (varchar 100)
+   - telefone (varchar 20)
+   - celular (varchar 20)
+   - endereco_completo (text)
+   - cep (varchar 8)
+   - cidade (varchar 100)
+   - estado (varchar 2)
+   
+   -- DADOS FAMILIARES
+   - nome_pai (varchar 200)
+   - nome_mae (varchar 200)
+   - estado_civil (varchar 20)
+   - quantidade_filhos (integer, default 0)
+   
+   -- DADOS PROFISSIONAIS
+   - cargo (varchar 100)
+   - departamento (varchar 100) - "RH", "TI", "Financeiro", "Comercial", "Marketing", "Operacional"
+   - tipo_contrato (varchar 10) - "CLT" ou "PJ"
+   - data_admissao (date)
+   - data_demissao (date, nullable)
+   - status (varchar 20) - "ativo", "ferias", "afastado", "demitido"
+   - salario_base (decimal 10,2)
+   
+   -- DADOS BANCÁRIOS
+   - banco (varchar 100)
+   - agencia (varchar 10)
+   - conta (varchar 20)
+   - tipo_conta (varchar 20)
+   - pix (varchar 100, nullable)
+   
+   -- DOCUMENTOS (caminhos)
+   - documento_cpf (varchar 255, nullable)
+   - documento_rg (varchar 255, nullable)
+   - documento_ctps (varchar 255, nullable)
+   - documento_comprovante_residencia (varchar 255, nullable)
+   - documento_contrato (varchar 255, nullable)
+   - documento_outros (jsonb, nullable)
+   
+   -- CONTROLE
+   - observacoes (text, nullable)
+   - criado_por (integer, referência a users)
+   - created_at (timestamp)
+   - updated_at (timestamp)
+
+2. TABELA: commercial_teams (equipes comerciais)
+   Colunas:
+   - id (serial primary key)
+   - tenant_id (integer, referência a tenants)
+   - nome_equipe (varchar 100)
+   - descricao (text, nullable)
+   - coordenador_id (integer, referência a employees) - obrigatório
+   - ativa (boolean, default true)
+   - meta_mensal (decimal 12,2, nullable)
+   - created_at (timestamp)
+   - updated_at (timestamp)
+
+3. TABELA: team_members (membros da equipe)
+   Colunas:
+   - id (serial primary key)
+   - tenant_id (integer, referência a tenants)
+   - team_id (integer, referência a commercial_teams)
+   - employee_id (integer, referência a employees)
+   - funcao_equipe (varchar 50) - "coordenador", "subcoordenador", "assistente", "vendedor", "operacional"
+   - ativo (boolean, default true)
+   
+   -- REMUNERAÇÃO (definir regras)
+   - tipo_remuneracao (varchar 50) - "salario_fixo", "salario_variavel", "premiacao_meta"
+   - percentual_comissao (decimal 5,2, nullable) - % sobre vendas da equipe
+   - valor_fixo_adicional (decimal 10,2, nullable) - valor fixo mensal adicional
+   - percentual_meta (decimal 5,2, nullable) - % de bônus ao bater meta
+   
+   - data_entrada (date)
+   - data_saida (date, nullable)
+   - observacoes (text, nullable)
+   - created_at (timestamp)
+   - updated_at (timestamp)
+
+CRIAR ÍNDICES:
+- CREATE INDEX idx_employees_cpf ON employees(cpf);
+- CREATE INDEX idx_employees_tenant ON employees(tenant_id);
+- CREATE INDEX idx_employees_status ON employees(status);
+- CREATE INDEX idx_team_members_team ON team_members(team_id);
+- CREATE INDEX idx_team_members_employee ON team_members(employee_id);
+
+CONSTRAINT UNIQUE:
+- ALTER TABLE team_members ADD CONSTRAINT unique_employee_per_team UNIQUE(team_id, employee_id);
+
+Apenas criar as tabelas. Não criar rotas nem páginas ainda.
