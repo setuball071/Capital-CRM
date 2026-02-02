@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, decimal, integer, bigint, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, varchar, decimal, integer, bigint, boolean, timestamp, jsonb, uniqueIndex, time } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -183,6 +183,12 @@ export const users = pgTable("users", {
   managerId: integer("manager_id").references(() => users.id, { onDelete: "set null" }), // For vendedor -> coordenador hierarchy
   isActive: boolean("is_active").notNull().default(true),
   isMaster: boolean("is_master").notNull().default(false), // Master users can access all tenants
+  horarioAcessoInicio: time("horario_acesso_inicio"), // Ex: "08:00"
+  horarioAcessoFim: time("horario_acesso_fim"), // Ex: "18:00"
+  diasAcessoPermitidos: text("dias_acesso_permitidos"), // JSON array Ex: ["seg", "ter", "qua", "qui", "sex"]
+  restringirPorIp: boolean("restringir_por_ip").default(false),
+  ipsPermitidos: text("ips_permitidos"), // JSON array Ex: ["192.168.1.100", "192.168.1.101"]
+  employeeId: integer("employee_id"), // References employees(id) - FK constraint exists in DB
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
