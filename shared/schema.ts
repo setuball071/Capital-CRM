@@ -1966,12 +1966,20 @@ export const employees = pgTable("employees", {
   nomeCompleto: varchar("nome_completo", { length: 200 }).notNull(),
   cpf: varchar("cpf", { length: 11 }).notNull(),
   rg: varchar("rg", { length: 20 }),
+  rgEstado: varchar("rg_estado", { length: 2 }),
+  rgEmissao: varchar("rg_emissao", { length: 10 }),
   dataNascimento: varchar("data_nascimento", { length: 10 }),
+  nacionalidade: varchar("nacionalidade", { length: 50 }),
+  naturalidade: varchar("naturalidade", { length: 100 }),
+  naturalidadeEstado: varchar("naturalidade_estado", { length: 2 }),
+  raca: varchar("raca", { length: 30 }),
+  grauInstrucao: varchar("grau_instrucao", { length: 50 }),
   emailCorporativo: varchar("email_corporativo", { length: 100 }),
   emailPessoal: varchar("email_pessoal", { length: 100 }),
   telefone: varchar("telefone", { length: 20 }),
   celular: varchar("celular", { length: 20 }),
   enderecoCompleto: text("endereco_completo"),
+  bairro: varchar("bairro", { length: 100 }),
   cep: varchar("cep", { length: 8 }),
   cidade: varchar("cidade", { length: 100 }),
   estado: varchar("estado", { length: 2 }),
@@ -1979,8 +1987,26 @@ export const employees = pgTable("employees", {
   // Dados Familiares
   nomePai: varchar("nome_pai", { length: 200 }),
   nomeMae: varchar("nome_mae", { length: 200 }),
+  nomeConjuge: varchar("nome_conjuge", { length: 200 }),
   estadoCivil: varchar("estado_civil", { length: 20 }),
   quantidadeFilhos: integer("quantidade_filhos").default(0),
+  
+  // Documentos (CTPS, Título de Eleitor, PIS)
+  ctpsNumero: varchar("ctps_numero", { length: 20 }),
+  ctpsSerie: varchar("ctps_serie", { length: 10 }),
+  ctpsEstado: varchar("ctps_estado", { length: 2 }),
+  tituloEleitor: varchar("titulo_eleitor", { length: 20 }),
+  tituloZona: varchar("titulo_zona", { length: 10 }),
+  tituloSecao: varchar("titulo_secao", { length: 10 }),
+  pis: varchar("pis", { length: 20 }),
+  
+  // Exame Admissional
+  clinicaExame: varchar("clinica_exame", { length: 150 }),
+  codigoCnes: varchar("codigo_cnes", { length: 20 }),
+  medicoExame: varchar("medico_exame", { length: 150 }),
+  crmMedico: varchar("crm_medico", { length: 20 }),
+  dataExame: varchar("data_exame", { length: 10 }),
+  dataVencimentoExame: varchar("data_vencimento_exame", { length: 10 }),
   
   // Dados Profissionais
   cargo: varchar("cargo", { length: 100 }),
@@ -1990,6 +2016,29 @@ export const employees = pgTable("employees", {
   dataDemissao: varchar("data_demissao", { length: 10 }),
   status: varchar("status", { length: 20 }).default("ativo"), // ativo, ferias, afastado, demitido
   salarioBase: decimal("salario_base", { precision: 10, scale: 2 }),
+  adicionalSalarial: decimal("adicional_salarial", { precision: 10, scale: 2 }),
+  
+  // Horários de Trabalho
+  horarioEntrada1: varchar("horario_entrada_1", { length: 5 }),
+  horarioSaida1: varchar("horario_saida_1", { length: 5 }),
+  horarioEntrada2: varchar("horario_entrada_2", { length: 5 }),
+  horarioSaida2: varchar("horario_saida_2", { length: 5 }),
+  horarioSabadoEntrada: varchar("horario_sabado_entrada", { length: 5 }),
+  horarioSabadoSaida: varchar("horario_sabado_saida", { length: 5 }),
+  
+  // Benefícios e Descanso
+  valeTransporte: boolean("vale_transporte"),
+  valeRefeicao: boolean("vale_refeicao"),
+  descansoSabado: boolean("descanso_sabado"),
+  descansoDomingo: boolean("descanso_domingo"),
+  
+  // Período de Experiência
+  periodoExperiencia: varchar("periodo_experiencia", { length: 20 }),
+  renovacaoExperiencia: varchar("renovacao_experiencia", { length: 20 }),
+  
+  // Assinatura do Contrato
+  cidadeAssinatura: varchar("cidade_assinatura", { length: 100 }),
+  dataAssinatura: varchar("data_assinatura", { length: 10 }),
   
   // Dados Bancários
   banco: varchar("banco", { length: 100 }),
