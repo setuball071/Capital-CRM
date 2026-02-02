@@ -1,0 +1,243 @@
+TAREFA: Criar endpoint para salvar funcionário com todos os dados da ficha
+
+ARQUIVO: server/routes.ts
+
+CRIAR ROTA: POST /api/employees
+```typescript
+app.post('/api/employees', requireAuth, upload.none(), async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const {
+      // Dados pessoais
+      nome_completo,
+      cpf,
+      rg_numero,
+      rg_estado,
+      rg_emissao,
+      data_nascimento,
+      nacionalidade,
+      naturalidade,
+      naturalidade_estado,
+      raca,
+      grau_instrucao,
+      
+      // Contatos
+      email_corporativo,
+      email_pessoal,
+      fone,
+      celular,
+      cep,
+      endereco_completo,
+      bairro,
+      cidade,
+      estado,
+      
+      // Família
+      estado_civil,
+      nome_pai,
+      nome_mae,
+      nome_conjuge,
+      quantidade_filhos,
+      
+      // Documentos trabalhistas
+      ctps_numero,
+      ctps_serie,
+      ctps_estado,
+      pis,
+      titulo_eleitor,
+      titulo_zona,
+      titulo_secao,
+      
+      // Profissional
+      departamento,
+      cargo,
+      funcao,
+      tipo_contrato,
+      data_admissao,
+      salario_base,
+      adicional,
+      periodo_experiencia,
+      data_renovacao,
+      
+      // Jornada
+      horario_entrada_1,
+      horario_saida_1,
+      horario_entrada_2,
+      horario_saida_2,
+      horario_sabado_entrada,
+      horario_sabado_saida,
+      
+      // Benefícios
+      vale_transporte,
+      vale_refeicao,
+      descanso_sabado,
+      descanso_domingo,
+      
+      // Saúde ocupacional
+      clinica_exame,
+      codigo_cnes,
+      medico_exame,
+      crm_medico,
+      data_exame,
+      data_vencimento_exame,
+      
+      // Bancário
+      banco,
+      agencia,
+      conta,
+      tipo_conta,
+      pix,
+      
+      // Acesso sistema
+      criar_acesso_sistema,
+      login,
+      senha,
+      visao_banco,
+      role,
+      
+      observacoes
+    } = req.body;
+    
+    // Validar CPF único
+    const cpfExiste = await db.select()
+      .from(employees)
+      .where(eq(employees.cpf, cpf.replace(/\D/g, '')));
+    
+    if (cpfExiste.length > 0) {
+      return res.status(400).json({ error: 'CPF já cadastrado' });
+    }
+    
+    let userId = null;
+    
+    // Criar user se solicitado
+    if (criar_acesso_sistema) {
+      const loginExiste = await db.select()
+        .from(users)
+        .where(eq(users.username, login));
+      
+      if (loginExiste.length > 0) {
+        return res.status(400).json({ error: 'Login já existe' });
+      }
+      
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash(senha, 10);
+      
+      const [newUser] = await db.insert(users).values({
+        tenantId,
+        username: login,
+        password: hashedPassword,
+        name: nome_completo,
+        email: email_corporativo,
+        role: role || 'user',
+        visaoBanco: visao_banco,
+        active: true
+      }).returning();
+      
+      userId = newUser.id;
+    }
+    
+    // Criar employee com TODOS os campos
+    const [newEmployee] = await db.insert(employees).values({
+      tenant_id: tenantId,
+      user_id: userId,
+      
+      // Pessoais
+      nome_completo,
+      cpf: cpf.replace(/\D/g, ''),
+      rg_numero,
+      rg_estado,
+      rg_emissao,
+      data_nascimento,
+      nacionalidade,
+      naturalidade,
+      naturalidade_estado,
+      raca,
+      grau_instrucao,
+      
+      // Contatos
+      email_corporativo,
+      email_pessoal,
+      fone,
+      celular,
+      cep: cep?.replace(/\D/g, ''),
+      endereco_completo,
+      bairro,
+      cidade,
+      estado,
+      
+      // Família
+      estado_civil,
+      nome_pai,
+      nome_mae,
+      nome_conjuge,
+      quantidade_filhos: parseInt(quantidade_filhos) || 0,
+      
+      // Documentos
+      ctps_numero,
+      ctps_serie,
+      ctps_estado,
+      pis,
+      titulo_eleitor,
+      titulo_zona,
+      titulo_secao,
+      
+      // Profissional
+      departamento,
+      cargo,
+      funcao,
+      tipo_contrato,
+      data_admissao,
+      salario_base: parseFloat(salario_base),
+      adicional: adicional ? parseFloat(adicional) : null,
+      periodo_experiencia,
+      data_renovacao,
+      status: 'ativo',
+      
+      // Jornada
+      horario_entrada_1,
+      horario_saida_1,
+      horario_entrada_2,
+      horario_saida_2,
+      horario_sabado_entrada,
+      horario_sabado_saida,
+      
+      // Benefícios
+      vale_transporte: vale_transporte === 'true' || vale_transporte === true,
+      vale_refeicao: vale_refeicao === 'true' || vale_refeicao === true,
+      descanso_sabado: descanso_sabado === 'true' || descanso_sabado === true,
+      descanso_domingo: descanso_domingo === 'true' || descanso_domingo === true,
+      
+      // Saúde
+      clinica_exame,
+      codigo_cnes,
+      medico_exame,
+      crm_medico,
+      data_exame,
+      data_vencimento_exame,
+      
+      // Bancário
+      banco,
+      agencia,
+      conta,
+      tipo_conta,
+      pix,
+      
+      observacoes,
+      criado_por: req.user.id
+    }).returning();
+    
+    res.json({
+      success: true,
+      employee: newEmployee,
+      user_created: !!userId
+    });
+    
+  } catch (error) {
+    console.error('Erro ao criar employee:', error);
+    res.status(500).json({ 
+      error: 'Erro ao cadastrar funcionário',
+      details: error.message 
+    });
+  }
+});
+```
