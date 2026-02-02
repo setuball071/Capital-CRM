@@ -17,28 +17,60 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
-  Plus, Search, Edit, Trash2, Eye, ChevronLeft, ChevronRight, 
-  User, Users, Briefcase, CreditCard, FileText, X
+  Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, 
+  User, Users, Briefcase, CreditCard, FileText, Clock, Heart, ClipboardList
 } from "lucide-react";
 
 const employeeFormSchema = z.object({
+  // Dados Pessoais
   nomeCompleto: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   cpf: z.string().min(11, "CPF deve ter 11 dígitos").max(11),
   rg: z.string().optional(),
+  rgEstado: z.string().optional(),
+  rgEmissao: z.string().optional(),
   dataNascimento: z.string().optional(),
+  nacionalidade: z.string().optional(),
+  naturalidade: z.string().optional(),
+  naturalidadeEstado: z.string().optional(),
+  raca: z.string().optional(),
+  grauInstrucao: z.string().optional(),
   emailCorporativo: z.string().email("Email inválido").optional().or(z.literal("")),
   emailPessoal: z.string().email("Email inválido").optional().or(z.literal("")),
   telefone: z.string().optional(),
   celular: z.string().optional(),
   enderecoCompleto: z.string().optional(),
+  bairro: z.string().optional(),
   cep: z.string().optional(),
   cidade: z.string().optional(),
   estado: z.string().optional(),
+  
+  // Dados Familiares
   nomePai: z.string().optional(),
   nomeMae: z.string().optional(),
+  nomeConjuge: z.string().optional(),
   estadoCivil: z.string().optional(),
   quantidadeFilhos: z.number().min(0).optional(),
+  
+  // Documentos (CTPS, Título, PIS)
+  ctpsNumero: z.string().optional(),
+  ctpsSerie: z.string().optional(),
+  ctpsEstado: z.string().optional(),
+  tituloEleitor: z.string().optional(),
+  tituloZona: z.string().optional(),
+  tituloSecao: z.string().optional(),
+  pis: z.string().optional(),
+  
+  // Exame Admissional
+  clinicaExame: z.string().optional(),
+  codigoCnes: z.string().optional(),
+  medicoExame: z.string().optional(),
+  crmMedico: z.string().optional(),
+  dataExame: z.string().optional(),
+  dataVencimentoExame: z.string().optional(),
+  
+  // Dados Profissionais
   cargo: z.string().optional(),
   departamento: z.string().optional(),
   tipoContrato: z.string().optional(),
@@ -46,11 +78,36 @@ const employeeFormSchema = z.object({
   dataDemissao: z.string().optional(),
   status: z.string().optional(),
   salarioBase: z.string().optional(),
+  adicionalSalarial: z.string().optional(),
+  
+  // Horários de Trabalho
+  horarioEntrada1: z.string().optional(),
+  horarioSaida1: z.string().optional(),
+  horarioEntrada2: z.string().optional(),
+  horarioSaida2: z.string().optional(),
+  horarioSabadoEntrada: z.string().optional(),
+  horarioSabadoSaida: z.string().optional(),
+  
+  // Benefícios e Descanso
+  valeTransporte: z.boolean().optional(),
+  valeRefeicao: z.boolean().optional(),
+  descansoSabado: z.boolean().optional(),
+  descansoDomingo: z.boolean().optional(),
+  
+  // Experiência e Contrato
+  periodoExperiencia: z.string().optional(),
+  renovacaoExperiencia: z.string().optional(),
+  cidadeAssinatura: z.string().optional(),
+  dataAssinatura: z.string().optional(),
+  
+  // Dados Bancários
   banco: z.string().optional(),
   agencia: z.string().optional(),
   conta: z.string().optional(),
   tipoConta: z.string().optional(),
   pix: z.string().optional(),
+  
+  // Observações
   observacoes: z.string().optional(),
 });
 
@@ -75,6 +132,17 @@ const BANCOS = [
   "Banco do Brasil", "Caixa Econômica", "Bradesco", "Itaú", "Santander", 
   "Nubank", "Inter", "C6 Bank", "BTG", "Safra", "Original", "PagBank", "Outro"
 ];
+
+const GRAUS_INSTRUCAO = [
+  "Fundamental Incompleto", "Fundamental Completo", "Médio Incompleto", "Médio Completo",
+  "Superior Incompleto", "Superior Completo", "Pós-Graduação", "Mestrado", "Doutorado"
+];
+
+const NACIONALIDADES = ["Brasileiro(a)", "Estrangeiro(a)"];
+
+const RACAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Não declarada"];
+
+const PERIODOS_EXPERIENCIA = ["30 dias", "45 dias", "60 dias", "90 dias"];
 
 function formatCpf(cpf: string): string {
   const cleaned = cpf.replace(/\D/g, "");
@@ -102,7 +170,7 @@ export default function FuncionariosPage() {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [wizardStep, setWizardStep] = useState(1);
   
-  const { data, isLoading, refetch } = useQuery<{
+  const { data, isLoading } = useQuery<{
     employees: any[];
     total: number;
     page: number;
@@ -124,38 +192,78 @@ export default function FuncionariosPage() {
     },
   });
 
+  const defaultFormValues: EmployeeFormData = {
+    nomeCompleto: "",
+    cpf: "",
+    rg: "",
+    rgEstado: "",
+    rgEmissao: "",
+    dataNascimento: "",
+    nacionalidade: "",
+    naturalidade: "",
+    naturalidadeEstado: "",
+    raca: "",
+    grauInstrucao: "",
+    emailCorporativo: "",
+    emailPessoal: "",
+    telefone: "",
+    celular: "",
+    enderecoCompleto: "",
+    bairro: "",
+    cep: "",
+    cidade: "",
+    estado: "",
+    nomePai: "",
+    nomeMae: "",
+    nomeConjuge: "",
+    estadoCivil: "",
+    quantidadeFilhos: 0,
+    ctpsNumero: "",
+    ctpsSerie: "",
+    ctpsEstado: "",
+    tituloEleitor: "",
+    tituloZona: "",
+    tituloSecao: "",
+    pis: "",
+    clinicaExame: "",
+    codigoCnes: "",
+    medicoExame: "",
+    crmMedico: "",
+    dataExame: "",
+    dataVencimentoExame: "",
+    cargo: "",
+    departamento: "",
+    tipoContrato: "",
+    dataAdmissao: "",
+    dataDemissao: "",
+    status: "ativo",
+    salarioBase: "",
+    adicionalSalarial: "",
+    horarioEntrada1: "",
+    horarioSaida1: "",
+    horarioEntrada2: "",
+    horarioSaida2: "",
+    horarioSabadoEntrada: "",
+    horarioSabadoSaida: "",
+    valeTransporte: false,
+    valeRefeicao: false,
+    descansoSabado: false,
+    descansoDomingo: false,
+    periodoExperiencia: "",
+    renovacaoExperiencia: "",
+    cidadeAssinatura: "",
+    dataAssinatura: "",
+    banco: "",
+    agencia: "",
+    conta: "",
+    tipoConta: "",
+    pix: "",
+    observacoes: "",
+  };
+
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeFormSchema),
-    defaultValues: {
-      nomeCompleto: "",
-      cpf: "",
-      rg: "",
-      dataNascimento: "",
-      emailCorporativo: "",
-      emailPessoal: "",
-      telefone: "",
-      celular: "",
-      enderecoCompleto: "",
-      cep: "",
-      cidade: "",
-      estado: "",
-      nomePai: "",
-      nomeMae: "",
-      estadoCivil: "",
-      quantidadeFilhos: 0,
-      cargo: "",
-      departamento: "",
-      tipoContrato: "",
-      dataAdmissao: "",
-      status: "ativo",
-      salarioBase: "",
-      banco: "",
-      agencia: "",
-      conta: "",
-      tipoConta: "",
-      pix: "",
-      observacoes: "",
-    },
+    defaultValues: defaultFormValues,
   });
 
   const createMutation = useMutation({
@@ -195,7 +303,7 @@ export default function FuncionariosPage() {
 
   const openCreateModal = () => {
     setEditingEmployee(null);
-    form.reset();
+    form.reset(defaultFormValues);
     setWizardStep(1);
     setIsModalOpen(true);
   };
@@ -206,19 +314,41 @@ export default function FuncionariosPage() {
       nomeCompleto: employee.nome_completo || "",
       cpf: employee.cpf || "",
       rg: employee.rg || "",
+      rgEstado: employee.rg_estado || "",
+      rgEmissao: employee.rg_emissao || "",
       dataNascimento: employee.data_nascimento || "",
+      nacionalidade: employee.nacionalidade || "",
+      naturalidade: employee.naturalidade || "",
+      naturalidadeEstado: employee.naturalidade_estado || "",
+      raca: employee.raca || "",
+      grauInstrucao: employee.grau_instrucao || "",
       emailCorporativo: employee.email_corporativo || "",
       emailPessoal: employee.email_pessoal || "",
       telefone: employee.telefone || "",
       celular: employee.celular || "",
       enderecoCompleto: employee.endereco_completo || "",
+      bairro: employee.bairro || "",
       cep: employee.cep || "",
       cidade: employee.cidade || "",
       estado: employee.estado || "",
       nomePai: employee.nome_pai || "",
       nomeMae: employee.nome_mae || "",
+      nomeConjuge: employee.nome_conjuge || "",
       estadoCivil: employee.estado_civil || "",
       quantidadeFilhos: employee.quantidade_filhos || 0,
+      ctpsNumero: employee.ctps_numero || "",
+      ctpsSerie: employee.ctps_serie || "",
+      ctpsEstado: employee.ctps_estado || "",
+      tituloEleitor: employee.titulo_eleitor || "",
+      tituloZona: employee.titulo_zona || "",
+      tituloSecao: employee.titulo_secao || "",
+      pis: employee.pis || "",
+      clinicaExame: employee.clinica_exame || "",
+      codigoCnes: employee.codigo_cnes || "",
+      medicoExame: employee.medico_exame || "",
+      crmMedico: employee.crm_medico || "",
+      dataExame: employee.data_exame || "",
+      dataVencimentoExame: employee.data_vencimento_exame || "",
       cargo: employee.cargo || "",
       departamento: employee.departamento || "",
       tipoContrato: employee.tipo_contrato || "",
@@ -226,6 +356,21 @@ export default function FuncionariosPage() {
       dataDemissao: employee.data_demissao || "",
       status: employee.status || "ativo",
       salarioBase: employee.salario_base || "",
+      adicionalSalarial: employee.adicional_salarial || "",
+      horarioEntrada1: employee.horario_entrada_1 || "",
+      horarioSaida1: employee.horario_saida_1 || "",
+      horarioEntrada2: employee.horario_entrada_2 || "",
+      horarioSaida2: employee.horario_saida_2 || "",
+      horarioSabadoEntrada: employee.horario_sabado_entrada || "",
+      horarioSabadoSaida: employee.horario_sabado_saida || "",
+      valeTransporte: employee.vale_transporte || false,
+      valeRefeicao: employee.vale_refeicao || false,
+      descansoSabado: employee.descanso_sabado || false,
+      descansoDomingo: employee.descanso_domingo || false,
+      periodoExperiencia: employee.periodo_experiencia || "",
+      renovacaoExperiencia: employee.renovacao_experiencia || "",
+      cidadeAssinatura: employee.cidade_assinatura || "",
+      dataAssinatura: employee.data_assinatura || "",
       banco: employee.banco || "",
       agencia: employee.agencia || "",
       conta: employee.conta || "",
@@ -241,7 +386,7 @@ export default function FuncionariosPage() {
     setIsModalOpen(false);
     setEditingEmployee(null);
     setWizardStep(1);
-    form.reset();
+    form.reset(defaultFormValues);
   };
 
   const onSubmit = (data: EmployeeFormData) => {
@@ -266,7 +411,8 @@ export default function FuncionariosPage() {
       const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
       const data = await res.json();
       if (!data.erro) {
-        form.setValue("enderecoCompleto", `${data.logradouro}, ${data.bairro}`);
+        form.setValue("enderecoCompleto", data.logradouro);
+        form.setValue("bairro", data.bairro);
         form.setValue("cidade", data.localidade);
         form.setValue("estado", data.uf);
       }
@@ -276,12 +422,17 @@ export default function FuncionariosPage() {
   };
 
   const WIZARD_STEPS = [
-    { number: 1, title: "Dados Pessoais", icon: User },
+    { number: 1, title: "Pessoais", icon: User },
     { number: 2, title: "Família", icon: Users },
-    { number: 3, title: "Profissional", icon: Briefcase },
-    { number: 4, title: "Bancário", icon: CreditCard },
-    { number: 5, title: "Documentos", icon: FileText },
+    { number: 3, title: "Documentos", icon: FileText },
+    { number: 4, title: "Exame", icon: Heart },
+    { number: 5, title: "Profissional", icon: Briefcase },
+    { number: 6, title: "Horários", icon: Clock },
+    { number: 7, title: "Bancário", icon: CreditCard },
+    { number: 8, title: "Contrato", icon: ClipboardList },
   ];
+
+  const TOTAL_STEPS = WIZARD_STEPS.length;
 
   return (
     <div className="p-6 space-y-6">
@@ -458,31 +609,31 @@ export default function FuncionariosPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle data-testid="text-modal-title">
               {editingEmployee ? "Editar Funcionário" : "Novo Funcionário"}
             </DialogTitle>
             <DialogDescription>
-              Preencha as informações do funcionário em cada etapa
+              Preencha as informações do funcionário em cada etapa ({wizardStep}/{TOTAL_STEPS})
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex gap-2 mb-6 border-b pb-4">
+          <div className="flex flex-wrap gap-1 mb-4 border-b pb-4">
             {WIZARD_STEPS.map((step) => (
               <button
                 key={step.number}
                 type="button"
                 onClick={() => setWizardStep(step.number)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs transition-colors ${
                   wizardStep === step.number
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted hover-elevate"
                 }`}
                 data-testid={`button-step-${step.number}`}
               >
-                <step.icon className="w-4 h-4" />
-                <span className="hidden md:inline">{step.title}</span>
+                <step.icon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{step.title}</span>
               </button>
             ))}
           </div>
@@ -490,17 +641,18 @@ export default function FuncionariosPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               
+              {/* Step 1: Dados Pessoais */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
                     <User className="w-5 h-5" /> Dados Pessoais
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField
                       control={form.control}
                       name="nomeCompleto"
                       render={({ field }) => (
-                        <FormItem className="md:col-span-2">
+                        <FormItem className="md:col-span-3">
                           <FormLabel>Nome Completo *</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-nome" />
@@ -516,12 +668,7 @@ export default function FuncionariosPage() {
                         <FormItem>
                           <FormLabel>CPF *</FormLabel>
                           <FormControl>
-                            <Input 
-                              {...field} 
-                              maxLength={11}
-                              placeholder="Apenas números"
-                              data-testid="input-cpf"
-                            />
+                            <Input {...field} maxLength={11} placeholder="Apenas números" data-testid="input-cpf" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -542,6 +689,41 @@ export default function FuncionariosPage() {
                     />
                     <FormField
                       control={form.control}
+                      name="rgEstado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UF RG</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-rg-estado">
+                                <SelectValue placeholder="UF" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {ESTADOS.map(uf => (
+                                <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="rgEmissao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data Emissão RG</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-rg-emissao" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
                       name="dataNascimento"
                       render={({ field }) => (
                         <FormItem>
@@ -549,6 +731,107 @@ export default function FuncionariosPage() {
                           <FormControl>
                             <Input type="date" {...field} data-testid="input-data-nascimento" />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="nacionalidade"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nacionalidade</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-nacionalidade">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {NACIONALIDADES.map(n => (
+                                <SelectItem key={n} value={n}>{n}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="naturalidade"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Naturalidade</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Cidade natal" data-testid="input-naturalidade" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="naturalidadeEstado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UF Naturalidade</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-naturalidade-estado">
+                                <SelectValue placeholder="UF" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {ESTADOS.map(uf => (
+                                <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="raca"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Raça/Cor</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-raca">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {RACAS.map(r => (
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="grauInstrucao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Grau de Instrução</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-grau-instrucao">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {GRAUS_INSTRUCAO.map(g => (
+                                <SelectItem key={g} value={g}>{g}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -629,9 +912,22 @@ export default function FuncionariosPage() {
                       name="enderecoCompleto"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>Endereço Completo</FormLabel>
+                          <FormLabel>Endereço</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-endereco" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bairro"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bairro</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-bairro" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -659,7 +955,7 @@ export default function FuncionariosPage() {
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-estado">
-                                <SelectValue placeholder="Selecione" />
+                                <SelectValue placeholder="UF" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -676,6 +972,7 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
+              {/* Step 2: Dados Familiares */}
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
@@ -703,6 +1000,19 @@ export default function FuncionariosPage() {
                           <FormLabel>Nome da Mãe</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-nome-mae" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="nomeConjuge"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nome do Cônjuge</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-nome-conjuge" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -753,7 +1063,211 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
+              {/* Step 3: Documentos (CTPS, Título, PIS) */}
               {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <FileText className="w-5 h-5" /> Documentos
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-3 text-sm font-medium text-muted-foreground">CTPS - Carteira de Trabalho</div>
+                    <FormField
+                      control={form.control}
+                      name="ctpsNumero"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número CTPS</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-ctps-numero" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ctpsSerie"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Série CTPS</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-ctps-serie" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ctpsEstado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UF CTPS</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-ctps-estado">
+                                <SelectValue placeholder="UF" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {ESTADOS.map(uf => (
+                                <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="md:col-span-3 text-sm font-medium text-muted-foreground mt-4">Título de Eleitor</div>
+                    <FormField
+                      control={form.control}
+                      name="tituloEleitor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número do Título</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-titulo-eleitor" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tituloZona"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Zona</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-titulo-zona" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tituloSecao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Seção</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-titulo-secao" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="md:col-span-3 text-sm font-medium text-muted-foreground mt-4">PIS/PASEP</div>
+                    <FormField
+                      control={form.control}
+                      name="pis"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número PIS/PASEP</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-pis" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Exame Admissional */}
+              {wizardStep === 4 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Heart className="w-5 h-5" /> Exame Admissional
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="clinicaExame"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Clínica</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-clinica-exame" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="codigoCnes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Código CNES</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-codigo-cnes" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="medicoExame"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Médico Responsável</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-medico-exame" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="crmMedico"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CRM do Médico</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-crm-medico" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dataExame"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data do Exame</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-data-exame" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dataVencimentoExame"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data Vencimento Exame</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-data-vencimento-exame" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Dados Profissionais */}
+              {wizardStep === 5 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
                     <Briefcase className="w-5 h-5" /> Dados Profissionais
@@ -764,7 +1278,7 @@ export default function FuncionariosPage() {
                       name="departamento"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Departamento *</FormLabel>
+                          <FormLabel>Departamento</FormLabel>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-departamento-form">
@@ -786,7 +1300,7 @@ export default function FuncionariosPage() {
                       name="cargo"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Cargo *</FormLabel>
+                          <FormLabel>Cargo/Função</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-cargo" />
                           </FormControl>
@@ -799,7 +1313,7 @@ export default function FuncionariosPage() {
                       name="tipoContrato"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de Contrato *</FormLabel>
+                          <FormLabel>Tipo de Contrato</FormLabel>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-tipo-contrato-form">
@@ -820,7 +1334,7 @@ export default function FuncionariosPage() {
                       name="dataAdmissao"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Data de Admissão *</FormLabel>
+                          <FormLabel>Data de Admissão</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} data-testid="input-data-admissao" />
                           </FormControl>
@@ -833,15 +1347,22 @@ export default function FuncionariosPage() {
                       name="salarioBase"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Salário Base</FormLabel>
+                          <FormLabel>Salário Base (R$)</FormLabel>
                           <FormControl>
-                            <Input 
-                              type="number" 
-                              step="0.01"
-                              placeholder="0.00"
-                              {...field}
-                              data-testid="input-salario"
-                            />
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-salario" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="adicionalSalarial"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Adicional (R$)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-adicional" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -873,7 +1394,164 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
-              {wizardStep === 4 && (
+              {/* Step 6: Horários de Trabalho e Benefícios */}
+              {wizardStep === 6 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Clock className="w-5 h-5" /> Horários de Trabalho e Benefícios
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground">Jornada Dias Úteis</div>
+                    <FormField
+                      control={form.control}
+                      name="horarioEntrada1"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Entrada Manhã</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-entrada-1" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="horarioSaida1"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Saída Almoço</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-saida-1" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="horarioEntrada2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Retorno Almoço</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-entrada-2" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="horarioSaida2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Saída Tarde</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-saida-2" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground mt-4">Jornada Sábado</div>
+                    <FormField
+                      control={form.control}
+                      name="horarioSabadoEntrada"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Entrada Sábado</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-sabado-entrada" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="horarioSabadoSaida"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Saída Sábado</FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} data-testid="input-horario-sabado-saida" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground mt-4">Benefícios e Descanso</div>
+                    <FormField
+                      control={form.control}
+                      name="valeTransporte"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-vale-transporte"
+                            />
+                          </FormControl>
+                          <FormLabel className="cursor-pointer">Vale Transporte</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="valeRefeicao"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-vale-refeicao"
+                            />
+                          </FormControl>
+                          <FormLabel className="cursor-pointer">Vale Refeição</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="descansoSabado"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-descanso-sabado"
+                            />
+                          </FormControl>
+                          <FormLabel className="cursor-pointer">Descanso Sábado</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="descansoDomingo"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-descanso-domingo"
+                            />
+                          </FormControl>
+                          <FormLabel className="cursor-pointer">Descanso Domingo</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 7: Dados Bancários */}
+              {wizardStep === 7 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
                     <CreditCard className="w-5 h-5" /> Dados Bancários
@@ -884,7 +1562,7 @@ export default function FuncionariosPage() {
                       name="banco"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Banco *</FormLabel>
+                          <FormLabel>Banco</FormLabel>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-banco">
@@ -906,7 +1584,7 @@ export default function FuncionariosPage() {
                       name="agencia"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Agência *</FormLabel>
+                          <FormLabel>Agência</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-agencia" />
                           </FormControl>
@@ -919,7 +1597,7 @@ export default function FuncionariosPage() {
                       name="conta"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Conta *</FormLabel>
+                          <FormLabel>Conta</FormLabel>
                           <FormControl>
                             <Input {...field} data-testid="input-conta" />
                           </FormControl>
@@ -932,7 +1610,7 @@ export default function FuncionariosPage() {
                       name="tipoConta"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de Conta *</FormLabel>
+                          <FormLabel>Tipo de Conta</FormLabel>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-tipo-conta">
@@ -966,32 +1644,102 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
-              {wizardStep === 5 && (
+              {/* Step 8: Contrato e Observações */}
+              {wizardStep === 8 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
-                    <FileText className="w-5 h-5" /> Documentos e Observações
+                    <ClipboardList className="w-5 h-5" /> Contrato e Observações
                   </h3>
-                  <p className="text-sm text-muted-foreground">
-                    O upload de documentos estará disponível após salvar o funcionário.
-                  </p>
-                  <FormField
-                    control={form.control}
-                    name="observacoes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Observações</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            {...field} 
-                            rows={4}
-                            placeholder="Anotações adicionais sobre o funcionário..."
-                            data-testid="textarea-observacoes"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="periodoExperiencia"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Período de Experiência</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-periodo-experiencia">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PERIODOS_EXPERIENCIA.map(p => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="renovacaoExperiencia"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Renovação Experiência</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-renovacao-experiencia">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PERIODOS_EXPERIENCIA.map(p => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="cidadeAssinatura"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cidade da Assinatura</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-cidade-assinatura" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dataAssinatura"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data da Assinatura</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-data-assinatura" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="observacoes"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Observações</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              {...field} 
+                              rows={4}
+                              placeholder="Anotações adicionais sobre o funcionário..."
+                              data-testid="textarea-observacoes"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1013,7 +1761,7 @@ export default function FuncionariosPage() {
                   <Button type="button" variant="outline" onClick={closeModal} data-testid="button-cancel">
                     Cancelar
                   </Button>
-                  {wizardStep < 5 ? (
+                  {wizardStep < TOTAL_STEPS ? (
                     <Button 
                       type="button" 
                       onClick={() => setWizardStep(s => s + 1)}
