@@ -1,0 +1,89 @@
+TAREFA: Criar endpoint para vincular employee a user existente
+
+ARQUIVO: server/routes.ts
+
+CRIAR ROTA: PATCH /api/users/:id/employee
+```typescript
+app.patch('/api/users/:id/employee', requireAuth, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { employee_id } = req.body;
+    const tenantId = req.user.tenantId;
+
+    // Verificar se user pertence ao tenant
+    const [user] = await db.select()
+      .from(users)
+      .where(and(
+        eq(users.id, userId),
+        eq(users.tenantId, tenantId)
+      ));
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Atualizar vínculo
+    await db.update(users)
+      .set({
+        employee_id: employee_id || null,
+        updated_at: new Date()
+      })
+      .where(eq(users.id, userId));
+
+    console.log(`✅ User ${userId} vinculado ao employee ${employee_id}`);
+
+    res.json({
+      success: true,
+      message: 'Vínculo atualizado com sucesso'
+    });
+
+  } catch (error) {
+    console.error('Erro ao vincular employee:', error);
+    res.status(500).json({ error: 'Erro ao atualizar vínculo' });
+  }
+});
+```
+
+MODIFICAR TAMBÉM: POST /api/employees
+Remover toda lógica de criação de usuário.
+Apenas salvar employee com user_id se fornecido:
+```typescript
+app.post('/api/employees', requireAuth, async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const dados = req.body;
+
+    // Validações básicas
+    if (!dados.colaborador) {
+      return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
+
+    // Salvar employee
+    const [newEmployee] = await db.insert(employees).values({
+      tenant_id: tenantId,
+      user_id: dados.user_id || null, // Vínculo opcional
+      colaborador: dados.colaborador,
+      cpf: dados.cpf?.replace(/\D/g, ''),
+      // ... resto dos campos
+      criado_por: req.user.id,
+      created_at: new Date()
+    }).returning();
+
+    // Se tem user_id, atualizar tabela users
+    if (dados.user_id) {
+      await db.update(users)
+        .set({ employee_id: newEmployee.id })
+        .where(eq(users.id, dados.user_id));
+    }
+
+    res.json({
+      success: true,
+      employee: newEmployee
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar employee:', error);
+    res.status(500).json({ error: 'Erro ao cadastrar funcionário' });
+  }
+});
+```

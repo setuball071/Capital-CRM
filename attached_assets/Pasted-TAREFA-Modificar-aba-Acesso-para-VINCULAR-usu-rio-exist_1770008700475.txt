@@ -1,0 +1,136 @@
+TAREFA: Modificar aba "Acesso" para VINCULAR usuário existente (não criar novo)
+
+ARQUIVO: client/src/pages/FuncionariosPage.tsx (ou componente de edição)
+
+LOCALIZAR: Aba "Acesso" no formulário de funcionário
+
+REMOVER:
+- Checkbox "Criar acesso ao sistema para este funcionário"
+- Campos: Login, Senha, Confirmar Senha, Visão de Banco, Perfil
+
+SUBSTITUIR POR:
+```tsx
+<div className="space-y-4">
+  <div className="flex items-center justify-between">
+    <h3 className="font-semibold">Vincular Usuário ao Sistema</h3>
+  </div>
+
+  <Alert className="bg-blue-50 border-blue-200">
+    <AlertDescription>
+      Para criar novos usuários, acesse: <strong>Administração → Usuários</strong>
+    </AlertDescription>
+  </Alert>
+
+  <div>
+    <Label>Usuário do Sistema</Label>
+    <Select
+      value={employeeData.user_id?.toString() || ''}
+      onValueChange={(value) => setEmployeeData({
+        ...employeeData,
+        user_id: value ? parseInt(value) : null
+      })}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione um usuário ou deixe sem vínculo" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="">
+          Sem vínculo (funcionário sem acesso ao sistema)
+        </SelectItem>
+        {usuariosDisponiveis?.map((user) => (
+          <SelectItem key={user.id} value={user.id.toString()}>
+            {user.name} - {user.username} ({user.email})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <p className="text-xs text-gray-500 mt-1">
+      Vincule este funcionário a um usuário já cadastrado no sistema
+    </p>
+  </div>
+
+  {employeeData.user_id && (
+    <div className="border rounded-lg p-4 bg-gray-50">
+      <h4 className="font-medium mb-2">Usuário Vinculado</h4>
+      {usuariosDisponiveis?.find(u => u.id === employeeData.user_id) && (
+        <div className="space-y-1 text-sm">
+          <p><strong>Nome:</strong> {usuariosDisponiveis.find(u => u.id === employeeData.user_id).name}</p>
+          <p><strong>Login:</strong> {usuariosDisponiveis.find(u => u.id === employeeData.user_id).username}</p>
+          <p><strong>Email:</strong> {usuariosDisponiveis.find(u => u.id === employeeData.user_id).email}</p>
+          <p><strong>Perfil:</strong> {usuariosDisponiveis.find(u => u.id === employeeData.user_id).role}</p>
+        </div>
+      )}
+      <div className="mt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open('/usuarios', '_blank')}
+        >
+          Configurar Acesso (Horários e IPs)
+        </Button>
+      </div>
+    </div>
+  )}
+</div>
+```
+
+BUSCAR USUÁRIOS DISPONÍVEIS:
+```typescript
+const { data: usuariosDisponiveis } = useQuery({
+  queryKey: ['users', 'all'],
+  queryFn: async () => {
+    const res = await fetch('/api/users');
+    if (!res.ok) throw new Error('Erro ao buscar usuários');
+    return res.json();
+  }
+});
+```
+
+AO SALVAR FUNCIONÁRIO:
+```typescript
+const salvarFuncionario = async () => {
+  try {
+    // 1. Salvar/atualizar funcionário
+    const response = await fetch('/api/employees', {
+      method: isEditing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...employeeData,
+        user_id: employeeData.user_id || null
+      })
+    });
+
+    if (!response.ok) throw new Error('Erro ao salvar');
+
+    const result = await response.json();
+
+    // 2. Se tem user_id, atualizar vínculo na tabela users
+    if (employeeData.user_id) {
+      await fetch(`/api/users/${employeeData.user_id}/employee`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: result.employee.id
+        })
+      });
+    }
+
+    toast.success('Funcionário salvo com sucesso!');
+    onClose();
+    refetch();
+
+  } catch (error) {
+    toast.error('Erro ao salvar: ' + error.message);
+  }
+};
+```
+
+REMOVER:
+- Toda lógica de criação de usuário
+- Validações de senha
+- Hash de senha
+- Inserção na tabela users
+
+MANTER:
+- Apenas select de usuários existentes
+- Vínculo user_id ↔ employee_id
