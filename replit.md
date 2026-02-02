@@ -45,9 +45,23 @@ The frontend is developed with React 18 and TypeScript, using Vite for developme
 *   **Academia ConsigOne (Training Module)**: AI-powered sales training for credit consultants, including static fundamentals, quizzes, AI-powered chat roleplay simulations with real-time evaluation and message limits, AI script generation for sales approaches, and an admin dashboard for monitoring progress and generating AI feedback.
 *   **Employees Module (Funcionários)**: Complete employee management system for tenant staff. Features:
     - Database: `employees`, `commercial_teams`, `commercial_team_members` tables
-    - 5-step wizard form: Personal Data, Family, Professional, Banking, Documents
+    - **6-step wizard form** (Updated 2026-02-02):
+      - Step 1: Dados Pessoais (Personal Data)
+      - Step 2: Dados Familiares (Family Data)
+      - Step 3: Dados Profissionais (Professional Data)
+      - Step 4: Dados Bancários (Banking Data)
+      - Step 5: Documentos (Documents)
+      - Step 6: Acesso ao Sistema (System Access) - NEW
     - Document upload support (CPF, RG, CTPS, comprovante de residência, contrato)
     - CPF uniqueness validation per tenant
+    - **System Access Creation (Step 6)**: When creating an employee, optionally create a user account:
+      - Checkbox `criarAcesso` enables/disables user creation
+      - Login field: must be valid email format
+      - Password: min 8 characters with confirmation
+      - visaoBanco: TODOS | SIAPE | INSS (stored in employees.visao_banco)
+      - Role: aligned with USER_ROLES (vendedor, coordenacao, atendimento, operacional, master)
+      - Master role sets user.is_master=true for full access
+      - Creates user with bcrypt-hashed password and links to tenant via user_tenants
 *   **Commercial Teams Module (Equipes Comerciais)**: Team management for commercial operations. Features:
     - Team CRUD with coordinator assignment (automatic membership reconciliation)
     - Member management with role (coordenador, corretor, operador, analista, suporte) and remuneration type

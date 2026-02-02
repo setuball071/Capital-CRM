@@ -1,0 +1,98 @@
+TAREFA: Adicionar step "Acesso ao Sistema" no formulário de employee
+
+ARQUIVO: client/src/pages/FuncionariosPage.tsx
+
+MODIFICAR WIZARD para ter 6 STEPS:
+
+STEP 1: Dados Pessoais
+STEP 2: Dados Familiares
+STEP 3: Dados Profissionais
+STEP 4: Dados Bancários
+STEP 5: Documentos
+STEP 6: Acesso ao Sistema (NOVO)
+
+STEP 6 - CONTEÚDO:
+```tsx
+<div className="space-y-4">
+  <div className="flex items-center space-x-2">
+    <Checkbox 
+      id="criar_acesso"
+      checked={criarAcesso}
+      onCheckedChange={setCriarAcesso}
+    />
+    <label htmlFor="criar_acesso">
+      Criar acesso ao sistema para este funcionário
+    </label>
+  </div>
+  
+  {criarAcesso && (
+    <>
+      <div>
+        <Label>Login (username) *</Label>
+        <Input 
+          {...register('login')}
+          placeholder="Ex: joao.silva"
+        />
+      </div>
+      
+      <div>
+        <Label>Senha *</Label>
+        <Input 
+          type="password"
+          {...register('senha')}
+          minLength={8}
+        />
+        <p className="text-xs text-gray-500">Mínimo 8 caracteres</p>
+      </div>
+      
+      <div>
+        <Label>Confirmar Senha *</Label>
+        <Input 
+          type="password"
+          {...register('confirmar_senha')}
+        />
+      </div>
+      
+      <div>
+        <Label>Visão de Banco *</Label>
+        <Select {...register('visao_banco')}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">TODOS</SelectItem>
+            <SelectItem value="SIAPE">SIAPE</SelectItem>
+            <SelectItem value="INSS">INSS</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <Label>Perfil de Acesso *</Label>
+        <Select {...register('role')}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">Usuário Comum</SelectItem>
+            <SelectItem value="gestor">Gestor</SelectItem>
+            <SelectItem value="admin">Administrador</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </>
+  )}
+  
+  {!criarAcesso && (
+    <p className="text-sm text-gray-500">
+      Este funcionário será cadastrado apenas como registro interno,
+      sem acesso ao sistema.
+    </p>
+  )}
+</div>
+```
+
+VALIDAÇÃO:
+- Se criarAcesso === true: login, senha e confirmar_senha são obrigatórios
+- Senhas devem ser iguais
+- Login deve ser único

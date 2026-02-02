@@ -2055,6 +2055,9 @@ export const employees = pgTable("employees", {
   documentoContrato: varchar("documento_contrato", { length: 255 }),
   documentoOutros: jsonb("documento_outros"), // Array de caminhos
   
+  // Acesso ao Sistema
+  visaoBanco: varchar("visao_banco", { length: 10 }), // TODOS, SIAPE, INSS
+  
   // Controle
   observacoes: text("observacoes"),
   criadoPor: integer("criado_por").references(() => users.id, { onDelete: "set null" }),
@@ -2067,6 +2070,7 @@ export const insertEmployeeSchema = createInsertSchema(employees, {
   cpf: z.string().length(11, "CPF deve ter 11 dígitos"),
   emailCorporativo: z.string().email("Email inválido").optional().nullable(),
   celular: z.string().optional().nullable(),
+  visaoBanco: z.enum(["TODOS", "SIAPE", "INSS"]).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type Employee = typeof employees.$inferSelect;

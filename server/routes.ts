@@ -14165,6 +14165,60 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Já existe um funcionário com este CPF" });
       }
       
+      // If criarAcesso is true, create a user for this employee
+      let newUserId: number | null = null;
+      if (data.criarAcesso) {
+        // Validate required fields - login must be valid email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!data.login || !emailRegex.test(data.login)) {
+          return res.status(400).json({ message: "Informe um email válido para login" });
+        }
+        if (!data.senha || data.senha.length < 8) {
+          return res.status(400).json({ message: "Senha deve ter pelo menos 8 caracteres" });
+        }
+        if (data.senha !== data.confirmarSenha) {
+          return res.status(400).json({ message: "As senhas não coincidem" });
+        }
+        
+        // Validate visaoBanco
+        const allowedVisaoBanco = ['TODOS', 'SIAPE', 'INSS'];
+        if (!data.visaoBanco || !allowedVisaoBanco.includes(data.visaoBanco)) {
+          return res.status(400).json({ message: "Selecione uma visão de banco válida" });
+        }
+        
+        // Validate role - aligned with USER_ROLES from shared schema
+        const allowedRoles = ['vendedor', 'coordenacao', 'atendimento', 'operacional', 'master'];
+        if (!data.role || !allowedRoles.includes(data.role)) {
+          return res.status(400).json({ message: "Selecione um perfil de acesso válido" });
+        }
+        
+        const finalRole = data.role;
+        const isMasterFlag = data.role === 'master';
+        
+        // Check if login (email) already exists
+        const existingLogin = await db.execute(sql`
+          SELECT id FROM users WHERE email = ${data.login}
+        `);
+        if (existingLogin.rows.length > 0) {
+          return res.status(400).json({ message: "Já existe um usuário com este login" });
+        }
+        
+        // Hash password and create user
+        const passwordHash = await bcrypt.hash(data.senha, 10);
+        const newUserResult = await db.execute(sql`
+          INSERT INTO users (name, email, password_hash, role, is_active, is_master)
+          VALUES (${data.nomeCompleto}, ${data.login}, ${passwordHash}, ${finalRole}, true, ${isMasterFlag})
+          RETURNING id
+        `);
+        newUserId = newUserResult.rows[0].id as number;
+        
+        // Link user to tenant
+        await db.execute(sql`
+          INSERT INTO user_tenants (user_id, tenant_id, is_primary)
+          VALUES (${newUserId}, ${tenantId}, true)
+        `);
+      }
+      
       const result = await db.execute(sql`
         INSERT INTO employees (
           tenant_id, user_id, nome_completo, cpf, rg, rg_estado, rg_emissao, data_nascimento,
@@ -14180,9 +14234,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           periodo_experiencia, renovacao_experiencia, cidade_assinatura, data_assinatura,
           banco, agencia, conta, tipo_conta, pix,
           documento_cpf, documento_rg, documento_ctps, documento_comprovante_residencia, documento_contrato, documento_outros,
-          observacoes, criado_por
+          visao_banco, observacoes, criado_por
         ) VALUES (
-          ${tenantId}, ${data.userId || null}, ${data.nomeCompleto}, ${data.cpf}, ${data.rg || null}, ${data.rgEstado || null}, ${data.rgEmissao || null}, ${data.dataNascimento || null},
+          ${tenantId}, ${newUserId || data.userId || null}, ${data.nomeCompleto}, ${data.cpf}, ${data.rg || null}, ${data.rgEstado || null}, ${data.rgEmissao || null}, ${data.dataNascimento || null},
           ${data.nacionalidade || null}, ${data.naturalidade || null}, ${data.naturalidadeEstado || null}, ${data.raca || null}, ${data.grauInstrucao || null},
           ${data.emailCorporativo || null}, ${data.emailPessoal || null}, ${data.telefone || null}, ${data.celular || null},
           ${data.enderecoCompleto || null}, ${data.bairro || null}, ${data.cep || null}, ${data.cidade || null}, ${data.estado || null},
@@ -14195,7 +14249,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           ${data.periodoExperiencia || null}, ${data.renovacaoExperiencia || null}, ${data.cidadeAssinatura || null}, ${data.dataAssinatura || null},
           ${data.banco || null}, ${data.agencia || null}, ${data.conta || null}, ${data.tipoConta || null}, ${data.pix || null},
           ${data.documentoCpf || null}, ${data.documentoRg || null}, ${data.documentoCtps || null}, ${data.documentoComprovanteResidencia || null}, ${data.documentoContrato || null}, ${data.documentoOutros ? JSON.stringify(data.documentoOutros) : null},
-          ${data.observacoes || null}, ${userId}
+          ${data.visaoBanco || null}, ${data.observacoes || null}, ${userId}
         )
         RETURNING *
       `);

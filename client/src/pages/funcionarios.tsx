@@ -20,7 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, 
-  User, Users, Briefcase, CreditCard, FileText, Clock, Heart, ClipboardList
+  User, Users, Briefcase, CreditCard, FileText, Lock
 } from "lucide-react";
 
 const employeeFormSchema = z.object({
@@ -109,6 +109,55 @@ const employeeFormSchema = z.object({
   
   // Observações
   observacoes: z.string().optional(),
+  
+  // Acesso ao Sistema
+  criarAcesso: z.boolean().optional(),
+  login: z.string().optional(),
+  senha: z.string().optional(),
+  confirmarSenha: z.string().optional(),
+  visaoBanco: z.string().optional(),
+  role: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.criarAcesso) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!data.login || !emailRegex.test(data.login)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe um email válido para login",
+        path: ["login"],
+      });
+    }
+    if (!data.senha || data.senha.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Senha deve ter pelo menos 8 caracteres",
+        path: ["senha"],
+      });
+    }
+    if (data.senha !== data.confirmarSenha) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "As senhas não coincidem",
+        path: ["confirmarSenha"],
+      });
+    }
+    const allowedVisaoBanco = ['TODOS', 'SIAPE', 'INSS'];
+    if (!data.visaoBanco || !allowedVisaoBanco.includes(data.visaoBanco)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione uma visão de banco",
+        path: ["visaoBanco"],
+      });
+    }
+    const allowedRoles = ['vendedor', 'coordenacao', 'atendimento', 'operacional', 'master'];
+    if (!data.role || !allowedRoles.includes(data.role)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione um perfil de acesso",
+        path: ["role"],
+      });
+    }
+  }
 });
 
 type EmployeeFormData = z.infer<typeof employeeFormSchema>;
@@ -259,6 +308,12 @@ export default function FuncionariosPage() {
     tipoConta: "",
     pix: "",
     observacoes: "",
+    criarAcesso: false,
+    login: "",
+    senha: "",
+    confirmarSenha: "",
+    visaoBanco: "",
+    role: "",
   };
 
   const form = useForm<EmployeeFormData>({
@@ -424,12 +479,10 @@ export default function FuncionariosPage() {
   const WIZARD_STEPS = [
     { number: 1, title: "Pessoais", icon: User },
     { number: 2, title: "Família", icon: Users },
-    { number: 3, title: "Documentos", icon: FileText },
-    { number: 4, title: "Exame", icon: Heart },
-    { number: 5, title: "Profissional", icon: Briefcase },
-    { number: 6, title: "Horários", icon: Clock },
-    { number: 7, title: "Bancário", icon: CreditCard },
-    { number: 8, title: "Contrato", icon: ClipboardList },
+    { number: 3, title: "Profissional", icon: Briefcase },
+    { number: 4, title: "Bancário", icon: CreditCard },
+    { number: 5, title: "Documentos", icon: FileText },
+    { number: 6, title: "Acesso", icon: Lock },
   ];
 
   const TOTAL_STEPS = WIZARD_STEPS.length;
@@ -1063,8 +1116,217 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
-              {/* Step 3: Documentos (CTPS, Título, PIS) */}
+              {/* Step 3: Dados Profissionais */}
               {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Briefcase className="w-5 h-5" /> Dados Profissionais
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="departamento"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Departamento</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-departamento-form">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {DEPARTAMENTOS.map(d => (
+                                <SelectItem key={d} value={d}>{d}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="cargo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cargo/Função</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-cargo" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tipoContrato"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo de Contrato</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-tipo-contrato-form">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="CLT">CLT</SelectItem>
+                              <SelectItem value="PJ">PJ</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dataAdmissao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data de Admissão</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-data-admissao" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="salarioBase"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Salário Base (R$)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-salario" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-status-form">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map(s => (
+                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Dados Bancários */}
+              {wizardStep === 4 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" /> Dados Bancários
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="banco"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Banco</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-banco">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {BANCOS.map(b => (
+                                <SelectItem key={b} value={b}>{b}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="agencia"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Agência</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-agencia" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="conta"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Conta</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-conta" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tipoConta"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo de Conta</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-tipo-conta">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="corrente">Corrente</SelectItem>
+                              <SelectItem value="poupanca">Poupança</SelectItem>
+                              <SelectItem value="salario">Salário</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="pix"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Chave PIX</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="CPF, Email, Telefone ou Aleatória" data-testid="input-pix" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Documentos */}
+              {wizardStep === 5 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
                     <FileText className="w-5 h-5" /> Documentos
@@ -1177,568 +1439,130 @@ export default function FuncionariosPage() {
                 </div>
               )}
 
-              {/* Step 4: Exame Admissional */}
-              {wizardStep === 4 && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Heart className="w-5 h-5" /> Exame Admissional
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="clinicaExame"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Clínica</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-clinica-exame" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="codigoCnes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Código CNES</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-codigo-cnes" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="medicoExame"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Médico Responsável</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-medico-exame" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="crmMedico"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>CRM do Médico</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-crm-medico" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dataExame"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data do Exame</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-data-exame" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dataVencimentoExame"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data Vencimento Exame</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-data-vencimento-exame" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Step 5: Dados Profissionais */}
-              {wizardStep === 5 && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Briefcase className="w-5 h-5" /> Dados Profissionais
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="departamento"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Departamento</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-departamento-form">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {DEPARTAMENTOS.map(d => (
-                                <SelectItem key={d} value={d}>{d}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="cargo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cargo/Função</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-cargo" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="tipoContrato"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de Contrato</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-tipo-contrato-form">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="CLT">CLT</SelectItem>
-                              <SelectItem value="PJ">PJ</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dataAdmissao"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data de Admissão</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-data-admissao" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="salarioBase"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Salário Base (R$)</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-salario" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="adicionalSalarial"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Adicional (R$)</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-adicional" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-status-form">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {STATUS_OPTIONS.map(s => (
-                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Step 6: Horários de Trabalho e Benefícios */}
+              {/* Step 6: Acesso ao Sistema */}
               {wizardStep === 6 && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
-                    <Clock className="w-5 h-5" /> Horários de Trabalho e Benefícios
+                    <Lock className="w-5 h-5" /> Acesso ao Sistema
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground">Jornada Dias Úteis</div>
+                  <div className="space-y-4">
                     <FormField
                       control={form.control}
-                      name="horarioEntrada1"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Entrada Manhã</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-entrada-1" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="horarioSaida1"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Saída Almoço</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-saida-1" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="horarioEntrada2"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Retorno Almoço</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-entrada-2" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="horarioSaida2"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Saída Tarde</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-saida-2" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground mt-4">Jornada Sábado</div>
-                    <FormField
-                      control={form.control}
-                      name="horarioSabadoEntrada"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Entrada Sábado</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-sabado-entrada" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="horarioSabadoSaida"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Saída Sábado</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-horario-sabado-saida" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="md:col-span-4 text-sm font-medium text-muted-foreground mt-4">Benefícios e Descanso</div>
-                    <FormField
-                      control={form.control}
-                      name="valeTransporte"
+                      name="criarAcesso"
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
                           <FormControl>
                             <Checkbox
                               checked={field.value}
                               onCheckedChange={field.onChange}
-                              data-testid="checkbox-vale-transporte"
+                              data-testid="checkbox-criar-acesso"
                             />
                           </FormControl>
-                          <FormLabel className="cursor-pointer">Vale Transporte</FormLabel>
+                          <FormLabel className="cursor-pointer">
+                            Criar acesso ao sistema para este funcionário
+                          </FormLabel>
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="valeRefeicao"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-vale-refeicao"
-                            />
-                          </FormControl>
-                          <FormLabel className="cursor-pointer">Vale Refeição</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="descansoSabado"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-descanso-sabado"
-                            />
-                          </FormControl>
-                          <FormLabel className="cursor-pointer">Descanso Sábado</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="descansoDomingo"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-descanso-domingo"
-                            />
-                          </FormControl>
-                          <FormLabel className="cursor-pointer">Descanso Domingo</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
 
-              {/* Step 7: Dados Bancários */}
-              {wizardStep === 7 && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" /> Dados Bancários
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="banco"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Banco</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-banco">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {BANCOS.map(b => (
-                                <SelectItem key={b} value={b}>{b}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="agencia"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Agência</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-agencia" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="conta"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Conta</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-conta" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="tipoConta"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de Conta</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-tipo-conta">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="corrente">Corrente</SelectItem>
-                              <SelectItem value="poupanca">Poupança</SelectItem>
-                              <SelectItem value="salario">Salário</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="pix"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Chave PIX</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="CPF, Email, Telefone ou Aleatória" data-testid="input-pix" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
+                    {form.watch("criarAcesso") && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                        <FormField
+                          control={form.control}
+                          name="login"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Login (username) *</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: joao.silva" data-testid="input-login" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div />
+                        <FormField
+                          control={form.control}
+                          name="senha"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Senha *</FormLabel>
+                              <FormControl>
+                                <Input type="password" {...field} minLength={8} data-testid="input-senha" />
+                              </FormControl>
+                              <p className="text-xs text-muted-foreground">Mínimo 8 caracteres</p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="confirmarSenha"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Confirmar Senha *</FormLabel>
+                              <FormControl>
+                                <Input type="password" {...field} data-testid="input-confirmar-senha" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="visaoBanco"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Visão de Banco *</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-visao-banco">
+                                    <SelectValue placeholder="Selecione" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="TODOS">TODOS</SelectItem>
+                                  <SelectItem value="SIAPE">SIAPE</SelectItem>
+                                  <SelectItem value="INSS">INSS</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="role"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Perfil de Acesso *</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-role">
+                                    <SelectValue placeholder="Selecione" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="vendedor">Vendedor</SelectItem>
+                                  <SelectItem value="coordenacao">Coordenador</SelectItem>
+                                  <SelectItem value="atendimento">Atendimento</SelectItem>
+                                  <SelectItem value="operacional">Operacional</SelectItem>
+                                  <SelectItem value="master">Master/Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
 
-              {/* Step 8: Contrato e Observações */}
-              {wizardStep === 8 && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5" /> Contrato e Observações
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="periodoExperiencia"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Período de Experiência</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-periodo-experiencia">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {PERIODOS_EXPERIENCIA.map(p => (
-                                <SelectItem key={p} value={p}>{p}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="renovacaoExperiencia"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Renovação Experiência</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-renovacao-experiencia">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {PERIODOS_EXPERIENCIA.map(p => (
-                                <SelectItem key={p} value={p}>{p}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="cidadeAssinatura"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cidade da Assinatura</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-cidade-assinatura" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dataAssinatura"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data da Assinatura</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-data-assinatura" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="observacoes"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Observações</FormLabel>
-                          <FormControl>
-                            <Textarea 
-                              {...field} 
-                              rows={4}
-                              placeholder="Anotações adicionais sobre o funcionário..."
-                              data-testid="textarea-observacoes"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {!form.watch("criarAcesso") && (
+                      <p className="text-sm text-muted-foreground py-4">
+                        Este funcionário será cadastrado apenas como registro interno,
+                        sem acesso ao sistema.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
