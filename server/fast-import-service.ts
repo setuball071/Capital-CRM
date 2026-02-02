@@ -930,6 +930,28 @@ class FastImportService {
       ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
+    const telefone4Result = await db.execute(sql`
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
+      SELECT p.id, 'phone', s.telefone_4, ${run.id}, ${baseTag}
+      FROM staging_contatos s
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+        AND s.telefone_4 IS NOT NULL AND s.telefone_4 != ''
+      ON CONFLICT (client_id, type, value) DO NOTHING
+    `);
+
+    const telefone5Result = await db.execute(sql`
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
+      SELECT p.id, 'phone', s.telefone_5, ${run.id}, ${baseTag}
+      FROM staging_contatos s
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+        AND s.telefone_5 IS NOT NULL AND s.telefone_5 != ''
+      ON CONFLICT (client_id, type, value) DO NOTHING
+    `);
+
     const emailResult = await db.execute(sql`
       INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
       SELECT p.id, 'email', s.email, ${run.id}, ${baseTag}
@@ -942,7 +964,8 @@ class FastImportService {
     `);
 
     const totalContacts = (telefone1Result.rowCount || 0) + (telefone2Result.rowCount || 0) + 
-                          (telefone3Result.rowCount || 0) + (emailResult.rowCount || 0);
+                          (telefone3Result.rowCount || 0) + (telefone4Result.rowCount || 0) + 
+                          (telefone5Result.rowCount || 0) + (emailResult.rowCount || 0);
 
     console.log(`[FastImport] Contatos upserted: ${totalContacts}`);
 
@@ -980,6 +1003,22 @@ class FastImportService {
           NULLIF(TRIM(s.conta), ''),
           p.conta
         ),
+        endereco = COALESCE(
+          NULLIF(TRIM(s.endereco), ''),
+          p.endereco
+        ),
+        cidade = COALESCE(
+          NULLIF(TRIM(s.cidade), ''),
+          p.cidade
+        ),
+        endereco_uf = COALESCE(
+          NULLIF(TRIM(s.uf), ''),
+          p.endereco_uf
+        ),
+        cep = COALESCE(
+          NULLIF(TRIM(s.cep), ''),
+          p.cep
+        ),
         atualizado_em = NOW()
       FROM staging_contatos s
       WHERE p.cpf = s.cpf
@@ -989,7 +1028,11 @@ class FastImportService {
           (s.data_nascimento IS NOT NULL AND s.data_nascimento != '') OR
           (s.banco_nome IS NOT NULL AND s.banco_nome != '') OR
           (s.agencia IS NOT NULL AND s.agencia != '') OR
-          (s.conta IS NOT NULL AND s.conta != '')
+          (s.conta IS NOT NULL AND s.conta != '') OR
+          (s.endereco IS NOT NULL AND s.endereco != '') OR
+          (s.cidade IS NOT NULL AND s.cidade != '') OR
+          (s.uf IS NOT NULL AND s.uf != '') OR
+          (s.cep IS NOT NULL AND s.cep != '')
         )
     `);
 

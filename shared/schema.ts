@@ -596,6 +596,11 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
   // Observações/notas de atendimento
   notes: text("notes"), // Histórico de observações do cliente
+  // === DADOS DE ENDEREÇO ===
+  endereco: varchar("endereco", { length: 255 }), // Logradouro
+  cidade: varchar("cidade", { length: 150 }),
+  enderecoUf: varchar("endereco_uf", { length: 2 }), // UF do endereço (separado do UF do órgão)
+  cep: varchar("cep", { length: 10 }),
 }, (table) => ({
   // Chave única: CPF - uma pessoa por CPF
   pessoaCpfIdx: uniqueIndex("idx_pessoa_cpf").on(table.cpf),
