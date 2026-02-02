@@ -2422,6 +2422,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Link/unlink employee to user
+  app.patch("/api/users/:id/employee", requireAuth, requireUserManagementAccess, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      const { employee_id } = req.body;
+
+      if (isNaN(userId) || userId <= 0) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+
+      // Verify user exists
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Tenant isolation for non-master users
+      const isMaster = req.user?.isMaster === true;
+      if (!isMaster) {
+        if (!tenantId) {
+          return res.status(403).json({ message: "Acesso negado - ambiente não identificado" });
+        }
+        const userTenantCheck = await db.execute(sql`
+          SELECT 1 FROM user_tenants 
+          WHERE user_id = ${userId} AND tenant_id = ${tenantId}
+        `);
+        if (userTenantCheck.rows.length === 0) {
+          return res.status(403).json({ message: "Usuário não pertence ao ambiente atual" });
+        }
+      }
+
+      // Validate employee_id if provided
+      const employeeIdValue = employee_id ? parseInt(employee_id) : null;
+      if (employee_id && (isNaN(employeeIdValue!) || employeeIdValue! <= 0)) {
+        return res.status(400).json({ message: "ID de funcionário inválido" });
+      }
+
+      // Require tenantId for this operation (even for masters)
+      if (!tenantId) {
+        return res.status(400).json({ message: "Selecione um ambiente para realizar esta operação" });
+      }
+
+      // Verify employee belongs to same tenant
+      if (employeeIdValue) {
+        const employeeCheck = await db.execute(sql`
+          SELECT id, user_id, tenant_id FROM employees WHERE id = ${employeeIdValue}
+        `);
+        if (employeeCheck.rows.length === 0) {
+          return res.status(404).json({ message: "Funcionário não encontrado" });
+        }
+        const employee = employeeCheck.rows[0] as any;
+        if (employee.tenant_id !== tenantId) {
+          return res.status(403).json({ message: "Funcionário não pertence ao ambiente atual" });
+        }
+        // Check if employee is already linked to another user
+        if (employee.user_id && employee.user_id !== userId) {
+          return res.status(400).json({ message: "Este funcionário já está vinculado a outro usuário" });
+        }
+      }
+
+      // Check uniqueness: user can only be linked to one employee (via users.employee_id)
+      if (employeeIdValue) {
+        const existingLink = await db.execute(sql`
+          SELECT id FROM users WHERE employee_id = ${employeeIdValue} AND id != ${userId}
+        `);
+        if (existingLink.rows.length > 0) {
+          return res.status(400).json({ message: "Este funcionário já está vinculado a outro usuário" });
+        }
+      }
+
+      // Get current employee_id to update the old link
+      const oldEmployeeId = (targetUser as any).employeeId;
+
+      // Update user's employee link
+      await db.execute(sql`
+        UPDATE users 
+        SET employee_id = ${employeeIdValue}
+        WHERE id = ${userId}
+      `);
+
+      // Make linking bidirectional: update employees.user_id
+      if (oldEmployeeId && oldEmployeeId !== employeeIdValue) {
+        await db.execute(sql`
+          UPDATE employees SET user_id = NULL WHERE id = ${oldEmployeeId}
+        `);
+      }
+      if (employeeIdValue) {
+        await db.execute(sql`
+          UPDATE employees SET user_id = ${userId} WHERE id = ${employeeIdValue}
+        `);
+      }
+
+      console.log(`✅ User ${userId} vinculado ao employee ${employeeIdValue}`);
+
+      return res.json({ 
+        success: true, 
+        message: employeeIdValue ? "Vínculo criado com sucesso" : "Vínculo removido com sucesso"
+      });
+    } catch (error) {
+      console.error("Link employee to user error:", error);
+      return res.status(500).json({ message: "Erro ao vincular funcionário" });
+    }
+  });
+
   // ===== SIMULATIONS ROUTES =====
   
   // Get user's simulations
@@ -14248,6 +14353,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Já existe um funcionário com este CPF" });
       }
       
+      // Validate userId if provided - must belong to same tenant
+      if (data.userId) {
+        const userTenantCheck = await db.execute(sql`
+          SELECT 1 FROM user_tenants WHERE user_id = ${data.userId} AND tenant_id = ${tenantId}
+        `);
+        if (userTenantCheck.rows.length === 0) {
+          return res.status(400).json({ message: "O usuário selecionado não pertence ao ambiente atual" });
+        }
+        // Check if user is already linked to another employee
+        const existingEmployeeLink = await db.execute(sql`
+          SELECT id FROM employees WHERE user_id = ${data.userId} AND tenant_id = ${tenantId}
+        `);
+        if (existingEmployeeLink.rows.length > 0) {
+          return res.status(400).json({ message: "Este usuário já está vinculado a outro funcionário" });
+        }
+      }
+
       // If criarAcesso is true, create a user for this employee
       let newUserId: number | null = null;
       if (data.criarAcesso) {
@@ -14337,7 +14459,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         RETURNING *
       `);
       
-      return res.status(201).json(result.rows[0]);
+      const createdEmployee = result.rows[0] as any;
+      
+      // If userId was provided (linking to existing user), update the user's employee_id
+      const linkedUserId = newUserId || data.userId;
+      if (linkedUserId && createdEmployee.id) {
+        await db.execute(sql`
+          UPDATE users SET employee_id = ${createdEmployee.id} WHERE id = ${linkedUserId}
+        `);
+        console.log(`✅ Employee ${createdEmployee.id} vinculado ao user ${linkedUserId}`);
+      }
+      
+      return res.status(201).json(createdEmployee);
     } catch (error) {
       console.error("Error creating employee:", error);
       return res.status(500).json({ message: "Erro ao criar funcionário" });
@@ -14511,14 +14644,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
       const data = req.body;
       
-      // Check if exists
+      // Check if exists and get current user_id
       const existing = await db.execute(sql`
-        SELECT id FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
+        SELECT id, user_id FROM employees WHERE id = ${id} AND tenant_id = ${tenantId}
       `);
       
       if (existing.rows.length === 0) {
         return res.status(404).json({ message: "Funcionário não encontrado" });
       }
+      
+      const oldUserId = (existing.rows[0] as any).user_id;
       
       // Check CPF uniqueness (excluding current)
       if (data.cpf) {
@@ -14531,9 +14666,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
       }
       
+      // Validate userId if provided - must belong to same tenant
+      const newUserId = data.userId || null;
+      if (newUserId) {
+        const userTenantCheck = await db.execute(sql`
+          SELECT 1 FROM user_tenants WHERE user_id = ${newUserId} AND tenant_id = ${tenantId}
+        `);
+        if (userTenantCheck.rows.length === 0) {
+          return res.status(400).json({ message: "O usuário selecionado não pertence ao ambiente atual" });
+        }
+        // Check if user is already linked to another employee (excluding current)
+        const existingEmployeeLink = await db.execute(sql`
+          SELECT id FROM employees WHERE user_id = ${newUserId} AND tenant_id = ${tenantId} AND id != ${id}
+        `);
+        if (existingEmployeeLink.rows.length > 0) {
+          return res.status(400).json({ message: "Este usuário já está vinculado a outro funcionário" });
+        }
+      }
+      
       const result = await db.execute(sql`
         UPDATE employees SET
-          user_id = ${data.userId || null},
+          user_id = ${newUserId},
           nome_completo = ${data.nomeCompleto},
           cpf = ${data.cpf},
           rg = ${data.rg || null},
@@ -14611,7 +14764,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         RETURNING *
       `);
       
-      return res.json(result.rows[0]);
+      const updatedEmployee = result.rows[0] as any;
+      
+      // Handle user link changes
+      if (oldUserId !== newUserId) {
+        // Unlink old user if exists
+        if (oldUserId) {
+          await db.execute(sql`
+            UPDATE users SET employee_id = NULL WHERE id = ${oldUserId}
+          `);
+          console.log(`✅ User ${oldUserId} desvinculado do employee ${id}`);
+        }
+        // Link new user if exists
+        if (newUserId) {
+          await db.execute(sql`
+            UPDATE users SET employee_id = ${id} WHERE id = ${newUserId}
+          `);
+          console.log(`✅ User ${newUserId} vinculado ao employee ${id}`);
+        }
+      }
+      
+      return res.json(updatedEmployee);
     } catch (error) {
       console.error("Error updating employee:", error);
       return res.status(500).json({ message: "Erro ao atualizar funcionário" });

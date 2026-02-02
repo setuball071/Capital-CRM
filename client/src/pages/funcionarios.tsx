@@ -111,54 +111,8 @@ const employeeFormSchema = z.object({
   // Observações
   observacoes: z.string().optional(),
   
-  // Acesso ao Sistema
-  criarAcesso: z.boolean().optional(),
-  login: z.string().optional(),
-  senha: z.string().optional(),
-  confirmarSenha: z.string().optional(),
-  visaoBanco: z.string().optional(),
-  role: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.criarAcesso) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!data.login || !emailRegex.test(data.login)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Informe um email válido para login",
-        path: ["login"],
-      });
-    }
-    if (!data.senha || data.senha.length < 8) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Senha deve ter pelo menos 8 caracteres",
-        path: ["senha"],
-      });
-    }
-    if (data.senha !== data.confirmarSenha) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "As senhas não coincidem",
-        path: ["confirmarSenha"],
-      });
-    }
-    const allowedVisaoBanco = ['TODOS', 'SIAPE', 'INSS'];
-    if (!data.visaoBanco || !allowedVisaoBanco.includes(data.visaoBanco)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione uma visão de banco",
-        path: ["visaoBanco"],
-      });
-    }
-    const allowedRoles = ['vendedor', 'coordenacao', 'atendimento', 'operacional', 'master'];
-    if (!data.role || !allowedRoles.includes(data.role)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione um perfil de acesso",
-        path: ["role"],
-      });
-    }
-  }
+  // Acesso ao Sistema - Vincular usuário existente
+  userId: z.number().nullable().optional(),
 });
 
 type EmployeeFormData = z.infer<typeof employeeFormSchema>;
@@ -248,6 +202,16 @@ export default function FuncionariosPage() {
     },
   });
 
+  // Fetch available users for linking
+  const { data: usuariosDisponiveis } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users", { credentials: "include" });
+      if (!res.ok) throw new Error("Erro ao buscar usuários");
+      return res.json();
+    },
+  });
+
   const defaultFormValues: EmployeeFormData = {
     nomeCompleto: "",
     cpf: "",
@@ -315,12 +279,7 @@ export default function FuncionariosPage() {
     tipoConta: "",
     pix: "",
     observacoes: "",
-    criarAcesso: false,
-    login: "",
-    senha: "",
-    confirmarSenha: "",
-    visaoBanco: "",
-    role: "",
+    userId: null,
   };
 
   const form = useForm<EmployeeFormData>({
@@ -439,6 +398,7 @@ export default function FuncionariosPage() {
       tipoConta: employee.tipo_conta || "",
       pix: employee.pix || "",
       observacoes: employee.observacoes || "",
+      userId: employee.user_id || null,
     });
     setWizardStep(1);
     setIsModalOpen(true);
@@ -1519,118 +1479,68 @@ export default function FuncionariosPage() {
                     <Lock className="w-5 h-5" /> Acesso ao Sistema
                   </h3>
                   <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="criarAcesso"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 py-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-criar-acesso"
-                            />
-                          </FormControl>
-                          <FormLabel className="cursor-pointer">
-                            Criar acesso ao sistema para este funcionário
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
+                    <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+                      <AlertDescription>
+                        Para criar novos usuários, acesse: <strong>Administração &gt; Usuários</strong>
+                      </AlertDescription>
+                    </Alert>
 
-                    {form.watch("criarAcesso") && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-                        <FormField
-                          control={form.control}
-                          name="login"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Login (username) *</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Ex: joao.silva" data-testid="input-login" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div />
-                        <FormField
-                          control={form.control}
-                          name="senha"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Senha *</FormLabel>
-                              <FormControl>
-                                <Input type="password" {...field} minLength={8} data-testid="input-senha" />
-                              </FormControl>
-                              <p className="text-xs text-muted-foreground">Mínimo 8 caracteres</p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="confirmarSenha"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Confirmar Senha *</FormLabel>
-                              <FormControl>
-                                <Input type="password" {...field} data-testid="input-confirmar-senha" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="visaoBanco"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Visão de Banco *</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-visao-banco">
-                                    <SelectValue placeholder="Selecione" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="TODOS">TODOS</SelectItem>
-                                  <SelectItem value="SIAPE">SIAPE</SelectItem>
-                                  <SelectItem value="INSS">INSS</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="role"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Perfil de Acesso *</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-role">
-                                    <SelectValue placeholder="Selecione" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="vendedor">Vendedor</SelectItem>
-                                  <SelectItem value="coordenacao">Coordenador</SelectItem>
-                                  <SelectItem value="atendimento">Atendimento</SelectItem>
-                                  <SelectItem value="operacional">Operacional</SelectItem>
-                                  <SelectItem value="master">Master/Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                    <div>
+                      <Label>Usuário do Sistema</Label>
+                      <Select
+                        value={form.watch("userId")?.toString() || "none"}
+                        onValueChange={(value) => form.setValue("userId", value && value !== "none" ? parseInt(value) : null)}
+                      >
+                        <SelectTrigger data-testid="select-user-id">
+                          <SelectValue placeholder="Selecione um usuário ou deixe sem vínculo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            Sem vínculo (funcionário sem acesso ao sistema)
+                          </SelectItem>
+                          {usuariosDisponiveis?.map((user) => (
+                            <SelectItem key={user.id} value={user.id.toString()}>
+                              {user.name} - {user.username} ({user.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Vincule este funcionário a um usuário já cadastrado no sistema
+                      </p>
+                    </div>
+
+                    {form.watch("userId") && (
+                      <div className="border rounded-lg p-4 bg-muted/50">
+                        <h4 className="font-medium mb-2">Usuário Vinculado</h4>
+                        {(() => {
+                          const selectedUser = usuariosDisponiveis?.find(u => u.id === form.watch("userId"));
+                          if (!selectedUser) return null;
+                          return (
+                            <div className="space-y-1 text-sm">
+                              <p><strong>Nome:</strong> {selectedUser.name}</p>
+                              <p><strong>Login:</strong> {selectedUser.username}</p>
+                              <p><strong>Email:</strong> {selectedUser.email}</p>
+                              <p><strong>Perfil:</strong> {selectedUser.role}</p>
+                            </div>
+                          );
+                        })()}
+                        <div className="mt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open('/usuarios', '_blank')}
+                            data-testid="button-config-acesso"
+                          >
+                            <Lock className="w-4 h-4 mr-2" />
+                            Configurar Acesso (Horários e IPs)
+                          </Button>
+                        </div>
                       </div>
                     )}
 
-                    {!form.watch("criarAcesso") && (
+                    {!form.watch("userId") && (
                       <p className="text-sm text-muted-foreground py-4">
                         Este funcionário será cadastrado apenas como registro interno,
                         sem acesso ao sistema.
