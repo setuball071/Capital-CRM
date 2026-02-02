@@ -446,8 +446,20 @@ export type RoteiroBancario = typeof roteirosBancarios.$inferSelect;
 
 // ===== AUTHENTICATION SCHEMAS =====
 
+// Login validation: accepts 4-digit numeric code (new) OR email (legacy)
+const loginValidator = z.string().refine(
+  (val) => {
+    // Check if it's a 4-digit numeric code
+    if (/^\d{4}$/.test(val)) return true;
+    // Check if it's a valid email (legacy support)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(val);
+  },
+  { message: "Login deve ser um código de 4 dígitos ou email válido" }
+);
+
 export const loginSchema = z.object({
-  email: z.string().email({ message: "Email inválido" }),
+  email: loginValidator,
   password: z.string().min(1, { message: "Senha é obrigatória" }),
 });
 
@@ -455,7 +467,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 export const registerSchema = z.object({
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
-  email: z.string().email({ message: "Email inválido" }),
+  email: loginValidator,
   password: z.string().min(6, { message: "Senha deve ter pelo menos 6 caracteres" }),
   role: z.enum(USER_ROLES, { message: "Role inválido" }),
   managerId: z.number().optional(),

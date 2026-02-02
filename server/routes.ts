@@ -266,10 +266,20 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
+// Login validation: accepts 4-digit numeric code (new) OR email (legacy)
+const loginValidatorServer = z.string().refine(
+  (val) => {
+    if (/^\d{4}$/.test(val)) return true;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(val);
+  },
+  { message: "Login deve ser um código de 4 dígitos ou email válido" }
+);
+
 // Schema for updating users
 const updateUserSchema = z.object({
   name: z.string().min(3).optional(),
-  email: z.string().email().optional(),
+  email: loginValidatorServer.optional(),
   password: z.string().min(6).optional(),
   role: z.enum(USER_ROLES).optional(),
   managerId: z.number().int().nullable().optional(),
@@ -1088,7 +1098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ message: "Email já cadastrado" });
+        return res.status(400).json({ message: "Login já cadastrado" });
       }
 
       // Hash password

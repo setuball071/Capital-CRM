@@ -420,6 +420,18 @@ export default function UsersPage() {
       return;
     }
 
+    // Validate login format: 4 digits for new users, allow legacy emails
+    const is4Digit = /^\d{4}$/.test(email);
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!editingUser && !is4Digit && !isEmail) {
+      toast({
+        title: "Erro",
+        description: "Login deve ser um código de 4 dígitos numéricos",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const data: any = {
       name,
       email,
@@ -629,16 +641,21 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Login</Label>
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
+                  placeholder={editingUser ? "" : "1234"}
                   data-testid="input-user-email"
                   disabled={!!editingUser}
                 />
+                {!editingUser && (
+                  <p className="text-xs text-muted-foreground">
+                    Digite um código de 4 dígitos numéricos (ou email para compatibilidade)
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">
@@ -866,7 +883,7 @@ export default function UsersPage() {
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Pesquisar por nome, email ou função..."
+                placeholder="Pesquisar por nome, login ou função..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -880,7 +897,7 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Login</TableHead>
                 <TableHead>Função</TableHead>
                 {canManageAllUsers && <TableHead>Coordenador</TableHead>}
                 <TableHead>Status</TableHead>
@@ -1023,7 +1040,7 @@ export default function UsersPage() {
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label className="text-muted-foreground text-sm">Login (Email)</Label>
+              <Label className="text-muted-foreground text-sm">Login</Label>
               <div className="flex items-center gap-2">
                 <Input 
                   value={createdCredentials?.email || ""} 
@@ -1034,10 +1051,10 @@ export default function UsersPage() {
                 <Button 
                   size="icon" 
                   variant="outline"
-                  onClick={() => copyToClipboard(createdCredentials?.email || "", "Email")}
+                  onClick={() => copyToClipboard(createdCredentials?.email || "", "Login")}
                   data-testid="button-copy-email"
                 >
-                  {copiedField === "Email" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  {copiedField === "Login" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
