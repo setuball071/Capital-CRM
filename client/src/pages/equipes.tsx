@@ -91,9 +91,10 @@ export default function EquipesPage() {
     queryKey: ["/api/commercial-teams"],
   });
 
-  const { data: employees = [] } = useQuery<Employee[]>({
+  const { data: employeesData = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees"],
   });
+  const employees = Array.isArray(employeesData) ? employeesData : [];
 
   const { data: availableEmployees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees/available-for-team"],
@@ -382,7 +383,7 @@ export default function EquipesPage() {
                   <SelectValue placeholder="Selecione o coordenador" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.filter(e => (e as any).status === "ativo").map((emp) => (
+                  {(Array.isArray(employees) ? employees : []).filter(e => (e as any).status === "ativo").map((emp) => (
                     <SelectItem key={emp.id} value={emp.id.toString()}>
                       {emp.nome_completo}
                     </SelectItem>
@@ -465,7 +466,7 @@ export default function EquipesPage() {
                   <SelectValue placeholder="Selecione o coordenador" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.filter(e => (e as any).status === "ativo").map((emp) => (
+                  {(Array.isArray(employees) ? employees : []).filter(e => (e as any).status === "ativo").map((emp) => (
                     <SelectItem key={emp.id} value={emp.id.toString()}>
                       {emp.nome_completo}
                     </SelectItem>
