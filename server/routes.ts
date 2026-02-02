@@ -11,6 +11,7 @@ import {
   getUserTenants,
   checkUserTenantAccess,
 } from "./tenant-middleware";
+import { validateAccess } from "./middleware/validateAccess";
 import {
   loginSchema,
   registerSchema,
@@ -318,7 +319,8 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   // Para não-masters sem tenantId, req.tenantId permanece undefined
   // e endpoints que exigem tenant retornarão 401
   
-  next();
+  // Aplicar validação de acesso (horário, dia, IP)
+  validateAccess(req, res, next);
 }
 
 // Helper to check if user has one of the allowed roles
