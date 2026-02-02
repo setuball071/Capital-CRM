@@ -898,47 +898,47 @@ class FastImportService {
 
     // 1. Inserir telefones na tabela client_contacts
     const telefone1Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
-      SELECT p.id, 'telefone', s.telefone_1, ${run.id}, ${baseTag}
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
+      SELECT p.id, 'phone', s.telefone_1, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.telefone_1 IS NOT NULL AND s.telefone_1 != ''
-      ON CONFLICT (client_id, tipo, valor) DO NOTHING
+      ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
     const telefone2Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
-      SELECT p.id, 'telefone', s.telefone_2, ${run.id}, ${baseTag}
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
+      SELECT p.id, 'phone', s.telefone_2, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.telefone_2 IS NOT NULL AND s.telefone_2 != ''
-      ON CONFLICT (client_id, tipo, valor) DO NOTHING
+      ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
     const telefone3Result = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
-      SELECT p.id, 'telefone', s.telefone_3, ${run.id}, ${baseTag}
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
+      SELECT p.id, 'phone', s.telefone_3, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.telefone_3 IS NOT NULL AND s.telefone_3 != ''
-      ON CONFLICT (client_id, tipo, valor) DO NOTHING
+      ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
     const emailResult = await db.execute(sql`
-      INSERT INTO client_contacts (client_id, tipo, valor, import_run_id, base_tag)
+      INSERT INTO client_contacts (client_id, type, value, import_run_id, base_tag)
       SELECT p.id, 'email', s.email, ${run.id}, ${baseTag}
       FROM staging_contatos s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.email IS NOT NULL AND s.email != ''
-      ON CONFLICT (client_id, tipo, valor) DO NOTHING
+      ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
     const totalContacts = (telefone1Result.rowCount || 0) + (telefone2Result.rowCount || 0) + 
