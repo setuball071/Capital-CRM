@@ -1,0 +1,81 @@
+TAREFA: Criar middleware que valida horário, dia e IP no login
+
+CRIAR ARQUIVO: server/middleware/validateAccess.ts
+```typescript
+export const validateAccess = async (req, res, next) => {
+  try {
+    const user = req.user;
+    
+    if (!user) {
+      return next();
+    }
+
+    // 1. VALIDAR HORÁRIO
+    if (user.horario_acesso_inicio && user.horario_acesso_fim) {
+      const agora = new Date();
+      const horaAtual = `${agora.getHours().toString().padStart(2, '0')}:${agora.getMinutes().toString().padStart(2, '0')}`;
+      
+      if (horaAtual < user.horario_acesso_inicio || horaAtual > user.horario_acesso_fim) {
+        return res.status(403).json({
+          error: 'Acesso negado',
+          message: `Horário de acesso: ${user.horario_acesso_inicio} às ${user.horario_acesso_fim}`
+        });
+      }
+    }
+
+    // 2. VALIDAR DIA DA SEMANA
+    if (user.dias_acesso_permitidos) {
+      const diasPermitidos = JSON.parse(user.dias_acesso_permitidos);
+      
+      if (diasPermitidos.length > 0) {
+        const hoje = new Date();
+        const diaDaSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'][hoje.getDay()];
+        
+        if (!diasPermitidos.includes(diaDaSemana)) {
+          return res.status(403).json({
+            error: 'Acesso negado',
+            message: 'Você não tem permissão para acessar hoje'
+          });
+        }
+      }
+    }
+
+    // 3. VALIDAR IP
+    if (user.restringir_por_ip && user.ips_permitidos) {
+      const ipsPermitidos = JSON.parse(user.ips_permitidos);
+      const ipCliente = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+      
+      // Limpar IP (remover ::ffff: se tiver)
+      const ipLimpo = ipCliente.replace('::ffff:', '');
+      
+      if (!ipsPermitidos.includes(ipLimpo)) {
+        console.log(`❌ IP bloqueado: ${ipLimpo}`);
+        return res.status(403).json({
+          error: 'Acesso negado',
+          message: 'Seu IP não está autorizado a acessar o sistema'
+        });
+      }
+    }
+
+    // Tudo OK, permitir acesso
+    next();
+
+  } catch (error) {
+    console.error('Erro no middleware de validação:', error);
+    next(); // Em caso de erro, permite acesso (segurança fail-open)
+  }
+};
+```
+
+APLICAR O MIDDLEWARE:
+```typescript
+// Em todas as rotas protegidas
+app.use('/api/*', requireAuth, validateAccess);
+```
+
+OU aplicar apenas em rotas específicas:
+```typescript
+app.get('/api/dashboard', requireAuth, validateAccess, async (req, res) => {
+  // ...
+});
+```

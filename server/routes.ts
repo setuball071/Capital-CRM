@@ -1994,6 +1994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       let users: User[];
       const currentUserRole = req.user!.role as UserRole;
+      const { sem_vinculo } = req.query;
       
       if (currentUserRole === "master" || currentUserRole === "atendimento") {
         // Master and atendimento see all users
@@ -2012,6 +2013,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           return res.status(403).json({ message: "Acesso negado" });
         }
+      }
+      
+      // Filter users without employee link if requested
+      if (sem_vinculo === 'true') {
+        users = users.filter(u => !u.employeeId || u.employeeId === 0);
       }
       
       // Remove password hashes
