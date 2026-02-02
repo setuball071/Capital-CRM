@@ -1,0 +1,68 @@
+TAREFA: Criar migração para vincular users existentes aos employees
+
+CRIAR ARQUIVO: server/migrations/link-users-to-employees.ts
+
+OBJETIVO: 
+Para cada user existente, criar registro em employees e vincular
+
+CÓDIGO DA MIGRAÇÃO:
+```typescript
+import { db } from '../storage';
+import { users, employees } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+
+async function migrateUsersToEmployees() {
+  console.log('Iniciando migração users → employees...');
+  
+  // Buscar todos os users existentes
+  const allUsers = await db.select().from(users);
+  
+  console.log(`Encontrados ${allUsers.length} usuários`);
+  
+  for (const user of allUsers) {
+    // Verificar se já existe employee vinculado
+    const existingEmployee = await db.select()
+      .from(employees)
+      .where(eq(employees.user_id, user.id))
+      .limit(1);
+    
+    if (existingEmployee.length > 0) {
+      console.log(`User ${user.id} já tem employee vinculado`);
+      continue;
+    }
+    
+    // Criar employee baseado no user
+    const [newEmployee] = await db.insert(employees).values({
+      tenant_id: user.tenantId,
+      user_id: user.id,
+      nome_completo: user.name || 'Nome não informado',
+      cpf: user.cpf || '00000000000', // Ajustar depois manualmente
+      email_corporativo: user.email,
+      departamento: 'Comercial', // Padrão, ajustar depois
+      cargo: 'Vendedor', // Padrão, ajustar depois
+      tipo_contrato: 'PJ', // Padrão, ajustar depois
+      data_admissao: user.createdAt || new Date(),
+      status: 'ativo',
+      salario_base: 0, // Ajustar depois
+      criado_por: user.id
+    }).returning();
+    
+    console.log(`✅ Employee criado para user ${user.id} → employee ${newEmployee.id}`);
+  }
+  
+  console.log('Migração concluída!');
+}
+
+// Executar
+migrateUsersToEmployees().catch(console.error);
+```
+
+EXECUTAR APENAS UMA VEZ:
+```bash
+npx ts-node server/migrations/link-users-to-employees.ts
+```
+
+APÓS MIGRAÇÃO:
+- Todos os users terão employee vinculado
+- Editar manualmente dados incompletos (CPF, salário, etc)
+- Histórico preservado (user.id mantém vínculo)
