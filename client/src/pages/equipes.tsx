@@ -91,10 +91,12 @@ export default function EquipesPage() {
     queryKey: ["/api/commercial-teams"],
   });
 
-  const { data: employeesData = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/employees"],
+  const { data: employeesResponse } = useQuery<{ employees: Employee[], total: number } | Employee[]>({
+    queryKey: ["/api/employees", { departamento: "Comercial", status: "ativo" }],
   });
-  const employees = Array.isArray(employeesData) ? employeesData : [];
+  const employees = Array.isArray(employeesResponse) 
+    ? employeesResponse 
+    : (employeesResponse?.employees || []);
 
   const { data: availableEmployees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees/available-for-team"],
