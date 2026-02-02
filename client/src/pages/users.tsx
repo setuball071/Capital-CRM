@@ -48,7 +48,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock } from "lucide-react";
+import { ConfigurarAcessoModal } from "@/components/ConfigurarAcessoModal";
 import { 
   type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission, type Tenant,
   MODULE_LIST, MODULE_SUB_ITEMS, MODULE_LABELS, getSubItemPermissionKey, parsePermissionKey,
@@ -80,6 +81,10 @@ export default function UsersPage() {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; name: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  
+  // Access configuration modal state
+  const [acessoModalUser, setAcessoModalUser] = useState<User | null>(null);
+  const [showAcessoModal, setShowAcessoModal] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -923,6 +928,20 @@ export default function UsersPage() {
                       >
                         Editar
                       </Button>
+                      {canManageAllUsers && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setAcessoModalUser(user);
+                            setShowAcessoModal(true);
+                          }}
+                          data-testid={`button-acesso-user-${user.id}`}
+                          title="Configurar horário e IP de acesso"
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                      )}
                       {canManageAllUsers && user.id !== currentUser?.id && (
                         <Button
                           variant={user.isActive ? "destructive" : "default"}
@@ -1066,6 +1085,19 @@ export default function UsersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de configuração de acesso */}
+      <ConfigurarAcessoModal
+        user={acessoModalUser}
+        open={showAcessoModal}
+        onClose={() => {
+          setShowAcessoModal(false);
+          setAcessoModalUser(null);
+        }}
+        onSave={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+        }}
+      />
     </div>
   );
 }

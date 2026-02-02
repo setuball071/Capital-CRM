@@ -1,0 +1,182 @@
+TAREFA: Criar modal de configuração de horário e IP para usuários
+
+CRIAR COMPONENTE: client/src/components/ConfigurarAcessoModal.tsx
+```tsx
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
+
+export function ConfigurarAcessoModal({ user, open, onClose, onSave }) {
+  const [horarioInicio, setHorarioInicio] = useState(user?.horarioAcessoInicio || '');
+  const [horarioFim, setHorarioFim] = useState(user?.horarioAcessoFim || '');
+  const [diasSelecionados, setDiasSelecionados] = useState(
+    user?.diasAcessoPermitidos ? JSON.parse(user.diasAcessoPermitidos) : []
+  );
+  const [restringirIP, setRestringirIP] = useState(user?.restringirPorIp || false);
+  const [ipsPermitidos, setIpsPermitidos] = useState(
+    user?.ipsPermitidos ? JSON.parse(user.ipsPermitidos).join('\n') : ''
+  );
+
+  const diasDaSemana = [
+    { value: 'seg', label: 'Segunda' },
+    { value: 'ter', label: 'Terça' },
+    { value: 'qua', label: 'Quarta' },
+    { value: 'qui', label: 'Quinta' },
+    { value: 'sex', label: 'Sexta' },
+    { value: 'sab', label: 'Sábado' },
+    { value: 'dom', label: 'Domingo' }
+  ];
+
+  const toggleDia = (dia) => {
+    if (diasSelecionados.includes(dia)) {
+      setDiasSelecionados(diasSelecionados.filter(d => d !== dia));
+    } else {
+      setDiasSelecionados([...diasSelecionados, dia]);
+    }
+  };
+
+  const salvar = async () => {
+    try {
+      // Validar IPs se restringir por IP
+      if (restringirIP && !ipsPermitidos.trim()) {
+        toast.error('Informe pelo menos um IP permitido');
+        return;
+      }
+
+      const ipsArray = ipsPermitidos
+        .split('\n')
+        .map(ip => ip.trim())
+        .filter(ip => ip.length > 0);
+
+      const dados = {
+        horario_acesso_inicio: horarioInicio || null,
+        horario_acesso_fim: horarioFim || null,
+        dias_acesso_permitidos: JSON.stringify(diasSelecionados),
+        restringir_por_ip: restringirIP,
+        ips_permitidos: restringirIP ? JSON.stringify(ipsArray) : null
+      };
+
+      const response = await fetch(`/api/users/${user.id}/acesso`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+      });
+
+      if (!response.ok) throw new Error('Erro ao salvar');
+
+      toast.success('Configurações de acesso salvas!');
+      onSave();
+      onClose();
+    } catch (error) {
+      toast.error('Erro ao salvar: ' + error.message);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Configurar Acesso - {user?.name}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* HORÁRIOS */}
+          <div>
+            <h4 className="font-semibold mb-3">Horário de Acesso</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Início</Label>
+                <Input
+                  type="time"
+                  value={horarioInicio}
+                  onChange={(e) => setHorarioInicio(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Fim</Label>
+                <Input
+                  type="time"
+                  value={horarioFim}
+                  onChange={(e) => setHorarioFim(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Deixe em branco para acesso 24h
+            </p>
+          </div>
+
+          {/* DIAS DA SEMANA */}
+          <div>
+            <h4 className="font-semibold mb-3">Dias Permitidos</h4>
+            <div className="grid grid-cols-4 gap-3">
+              {diasDaSemana.map((dia) => (
+                <div key={dia.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={dia.value}
+                    checked={diasSelecionados.includes(dia.value)}
+                    onCheckedChange={() => toggleDia(dia.value)}
+                  />
+                  <label htmlFor={dia.value} className="text-sm">
+                    {dia.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Deixe vazio para permitir todos os dias
+            </p>
+          </div>
+
+          {/* RESTRIÇÃO DE IP */}
+          <div>
+            <div className="flex items-center space-x-2 mb-3">
+              <Checkbox
+                id="restringir-ip"
+                checked={restringirIP}
+                onCheckedChange={setRestringirIP}
+              />
+              <label htmlFor="restringir-ip" className="font-semibold">
+                Restringir Acesso por IP
+              </label>
+            </div>
+
+            {restringirIP && (
+              <div>
+                <Label>IPs Permitidos (um por linha)</Label>
+                <textarea
+                  value={ipsPermitidos}
+                  onChange={(e) => setIpsPermitidos(e.target.value)}
+                  placeholder="192.168.1.100&#10;192.168.1.101&#10;177.20.30.40"
+                  rows={5}
+                  className="w-full border rounded p-2 font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Usuário só poderá acessar destes IPs
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* BOTÕES */}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button onClick={salvar}>
+              Salvar Configurações
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+USAR O MODAL:
+Na página de usuários, adicionar botão "Configurar Acesso" em cada usuário.

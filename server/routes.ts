@@ -2339,6 +2339,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user access configuration (hours, days, IP)
+  app.patch("/api/users/:id/acesso", requireAuth, requireUserManagementAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId;
+      
+      if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+
+      // Check if user exists
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Tenant isolation: verify user belongs to current tenant
+      const isMaster = req.user?.isMaster === true;
+      if (!isMaster) {
+        if (!tenantId) {
+          return res.status(403).json({ message: "Acesso negado - ambiente não identificado" });
+        }
+        const userTenantCheck = await db.execute(sql`
+          SELECT 1 FROM user_tenants 
+          WHERE user_id = ${id} AND tenant_id = ${tenantId}
+        `);
+        if (userTenantCheck.rows.length === 0) {
+          return res.status(403).json({ message: "Usuário não pertence ao ambiente atual" });
+        }
+      }
+
+      // Validate request body
+      const accessSchema = z.object({
+        horario_acesso_inicio: z.string().nullable().optional(),
+        horario_acesso_fim: z.string().nullable().optional(),
+        dias_acesso_permitidos: z.string().nullable().optional(),
+        restringir_por_ip: z.boolean().optional(),
+        ips_permitidos: z.string().nullable().optional(),
+      });
+
+      const result = accessSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Dados inválidos", 
+          errors: result.error.errors 
+        });
+      }
+
+      const { 
+        horario_acesso_inicio, 
+        horario_acesso_fim, 
+        dias_acesso_permitidos, 
+        restringir_por_ip, 
+        ips_permitidos 
+      } = result.data;
+
+      // Update user access fields
+      await db.execute(sql`
+        UPDATE users 
+        SET 
+          horario_acesso_inicio = ${horario_acesso_inicio || null},
+          horario_acesso_fim = ${horario_acesso_fim || null},
+          dias_acesso_permitidos = ${dias_acesso_permitidos || null},
+          restringir_por_ip = ${restringir_por_ip === true},
+          ips_permitidos = ${ips_permitidos || null}
+        WHERE id = ${id}
+      `);
+
+      return res.json({ success: true, message: "Configurações de acesso atualizadas" });
+    } catch (error) {
+      console.error("Update user access error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar configurações de acesso" });
+    }
+  });
+
   // ===== SIMULATIONS ROUTES =====
   
   // Get user's simulations

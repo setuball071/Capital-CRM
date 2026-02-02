@@ -1,0 +1,86 @@
+TAREFA: Criar endpoint para atualizar configurações de acesso do usuário
+
+ARQUIVO: server/routes.ts
+
+CRIAR ROTA: PATCH /api/users/:id/acesso
+```typescript
+app.patch('/api/users/:id/acesso', requireAuth, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const tenantId = req.user.tenantId;
+    const {
+      horario_acesso_inicio,
+      horario_acesso_fim,
+      dias_acesso_permitidos,
+      restringir_por_ip,
+      ips_permitidos
+    } = req.body;
+
+    // Verificar se user pertence ao tenant
+    const [user] = await db.select()
+      .from(users)
+      .where(and(
+        eq(users.id, userId),
+        eq(users.tenantId, tenantId)
+      ));
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Atualizar configurações
+    await db.update(users)
+      .set({
+        horario_acesso_inicio,
+        horario_acesso_fim,
+        dias_acesso_permitidos,
+        restringir_por_ip,
+        ips_permitidos,
+        updated_at: new Date()
+      })
+      .where(eq(users.id, userId));
+
+    console.log('✅ Configurações de acesso atualizadas para user:', userId);
+
+    res.json({
+      success: true,
+      message: 'Configurações salvas com sucesso'
+    });
+
+  } catch (error) {
+    console.error('Erro ao atualizar acesso:', error);
+    res.status(500).json({ error: 'Erro ao salvar configurações' });
+  }
+});
+```
+
+CRIAR TAMBÉM: GET /api/users (listar com filtro sem vínculo)
+```typescript
+app.get('/api/users', requireAuth, async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { sem_vinculo } = req.query;
+
+    let query = db.select()
+      .from(users)
+      .where(eq(users.tenantId, tenantId));
+
+    // Se pedir apenas sem vínculo
+    if (sem_vinculo === 'true') {
+      query = query.where(
+        or(
+          eq(users.employee_id, null),
+          eq(users.employee_id, 0)
+        )
+      );
+    }
+
+    const result = await query;
+    res.json(result);
+
+  } catch (error) {
+    console.error('Erro ao listar users:', error);
+    res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
+});
+```
