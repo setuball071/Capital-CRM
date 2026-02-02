@@ -1,0 +1,64 @@
+TAREFA: Adicionar campos da ficha de contratação na tabela employees
+
+EXECUTAR MIGRATION SQL:
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS fone VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bairro VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS nacionalidade VARCHAR(50);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS grau_instrucao VARCHAR(50);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS naturalidade VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS naturalidade_estado VARCHAR(2);
+
+-- CTPS
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ctps_numero VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ctps_serie VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ctps_estado VARCHAR(2);
+
+-- RG completo
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS rg_numero VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS rg_estado VARCHAR(2);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS rg_emissao DATE;
+
+-- Documentos adicionais
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS titulo_eleitor VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS titulo_zona VARCHAR(10);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS titulo_secao VARCHAR(10);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pis VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS raca VARCHAR(50);
+
+-- Família
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS nome_conjuge VARCHAR(200);
+
+-- Saúde ocupacional
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS clinica_exame VARCHAR(200);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS codigo_cnes VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS medico_exame VARCHAR(200);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS crm_medico VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS data_exame DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS data_vencimento_exame DATE;
+
+-- Remuneração detalhada
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS adicional DECIMAL(10,2);
+
+-- Jornada de trabalho
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_entrada_1 TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_saida_1 TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_entrada_2 TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_saida_2 TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_sabado_entrada TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS horario_sabado_saida TIME;
+
+-- Benefícios
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS vale_transporte BOOLEAN DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS vale_refeicao BOOLEAN DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS descanso_sabado BOOLEAN DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS descanso_domingo BOOLEAN DEFAULT true;
+
+-- Contrato
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS periodo_experiencia VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS data_renovacao DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS cidade_assinatura VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS data_assinatura_contrato DATE;
+
+Executar apenas uma vez.
