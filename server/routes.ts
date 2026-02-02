@@ -14260,6 +14260,152 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro ao criar funcionário" });
     }
   });
+
+  // POST /api/employees/import-json - Import employee from JSON
+  app.post("/api/employees/import-json", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+      const userId = req.user!.id;
+      const data = req.body;
+      
+      // Map JSON fields to employee fields (support multiple field naming conventions)
+      const nomeCompleto = data.colaborador || data.nomeCompleto || data.nome_completo || "";
+      const cpf = (data.cpf || "").replace(/\D/g, "");
+      
+      if (!nomeCompleto || !cpf) {
+        return res.status(400).json({ message: "Campos obrigatórios: colaborador/nomeCompleto e cpf" });
+      }
+      
+      if (cpf.length !== 11) {
+        return res.status(400).json({ message: "CPF deve ter 11 dígitos" });
+      }
+      
+      // Check CPF uniqueness
+      const existingCpf = await db.execute(sql`
+        SELECT id FROM employees WHERE cpf = ${cpf} AND tenant_id = ${tenantId}
+      `);
+      
+      if (existingCpf.rows.length > 0) {
+        return res.status(400).json({ message: "Já existe um funcionário com este CPF" });
+      }
+      
+      // Map all fields with multiple naming convention support
+      const mappedData = {
+        nomeCompleto,
+        cpf,
+        rg: data.rg_numero || data.rgNumero || data.rg || null,
+        rgEstado: data.rg_estado || data.rgEstado || null,
+        rgEmissao: data.rg_emissao || data.rgEmissao || null,
+        dataNascimento: data.data_nascimento || data.dataNascimento || null,
+        nacionalidade: data.nacionalidade || null,
+        naturalidade: data.naturalidade || null,
+        naturalidadeEstado: data.naturalidade_estado || data.naturalidadeEstado || null,
+        raca: data.raca || null,
+        grauInstrucao: data.grau_instrucao || data.grauInstrucao || null,
+        emailCorporativo: data.email_corporativo || data.emailCorporativo || data.email || null,
+        emailPessoal: data.email_pessoal || data.emailPessoal || null,
+        telefone: data.fone || data.telefone || null,
+        celular: data.celular || null,
+        enderecoCompleto: data.endereco_completo || data.enderecoCompleto || data.endereco || null,
+        bairro: data.bairro || null,
+        cep: (data.cep || "").replace(/\D/g, "") || null,
+        cidade: data.cidade || null,
+        estado: data.estado || null,
+        nomePai: data.nome_pai || data.nomePai || null,
+        nomeMae: data.nome_mae || data.nomeMae || null,
+        nomeConjuge: data.nome_conjuge || data.nomeConjuge || null,
+        estadoCivil: data.estado_civil || data.estadoCivil || null,
+        quantidadeFilhos: parseInt(data.quantidade_filhos || data.quantidadeFilhos) || 0,
+        ctpsNumero: data.ctps_numero || data.ctpsNumero || null,
+        ctpsSerie: data.ctps_serie || data.ctpsSerie || null,
+        ctpsEstado: data.ctps_estado || data.ctpsEstado || null,
+        tituloEleitor: data.titulo_eleitor || data.tituloEleitor || null,
+        tituloZona: data.titulo_zona || data.tituloZona || null,
+        tituloSecao: data.titulo_secao || data.tituloSecao || null,
+        pis: data.pis || null,
+        clinicaExame: data.clinica_exame || data.clinicaExame || null,
+        codigoCnes: data.codigo_cnes || data.codigoCnes || null,
+        medicoExame: data.medico_exame || data.medicoExame || null,
+        crmMedico: data.crm_medico || data.crmMedico || null,
+        dataExame: data.data_exame || data.dataExame || null,
+        dataVencimentoExame: data.data_vencimento_exame || data.dataVencimentoExame || null,
+        cargo: data.cargo || data.funcao || null,
+        departamento: data.departamento || null,
+        tipoContrato: data.tipo_contrato || data.tipoContrato || null,
+        dataAdmissao: data.data_admissao || data.dataAdmissao || null,
+        salarioBase: data.salario_base || data.salarioBase || null,
+        adicionalSalarial: data.adicional || data.adicional_salarial || data.adicionalSalarial || null,
+        periodoExperiencia: data.periodo_experiencia || data.periodoExperiencia || null,
+        renovacaoExperiencia: data.data_renovacao || data.renovacaoExperiencia || null,
+        horarioEntrada1: data.horario_entrada_1 || data.horarioEntrada1 || null,
+        horarioSaida1: data.horario_saida_1 || data.horarioSaida1 || null,
+        horarioEntrada2: data.horario_entrada_2 || data.horarioEntrada2 || null,
+        horarioSaida2: data.horario_saida_2 || data.horarioSaida2 || null,
+        horarioSabadoEntrada: data.horario_sabado_entrada || data.horarioSabadoEntrada || null,
+        horarioSabadoSaida: data.horario_sabado_saida || data.horarioSabadoSaida || null,
+        valeTransporte: data.vale_transporte === true || data.vale_transporte === "true" || data.valeTransporte === true,
+        valeRefeicao: data.vale_refeicao === true || data.vale_refeicao === "true" || data.valeRefeicao === true,
+        descansoSabado: data.descanso_sabado === true || data.descanso_sabado === "true" || data.descansoSabado === true,
+        descansoDomingo: data.descanso_domingo !== false && data.descanso_domingo !== "false" && data.descansoDomingo !== false,
+        cidadeAssinatura: data.cidade_assinatura || data.cidadeAssinatura || null,
+        dataAssinatura: data.data_assinatura_contrato || data.dataAssinatura || null,
+        banco: data.banco || null,
+        agencia: data.agencia || null,
+        conta: data.conta || null,
+        tipoConta: data.tipo_conta || data.tipoConta || null,
+        pix: data.pix || null,
+        observacoes: data.observacoes || null,
+      };
+      
+      // Insert employee
+      const result = await db.execute(sql`
+        INSERT INTO employees (
+          tenant_id, nome_completo, cpf, rg, rg_estado, rg_emissao, data_nascimento,
+          nacionalidade, naturalidade, naturalidade_estado, raca, grau_instrucao,
+          email_corporativo, email_pessoal, telefone, celular,
+          endereco_completo, bairro, cep, cidade, estado,
+          nome_pai, nome_mae, nome_conjuge, estado_civil, quantidade_filhos,
+          ctps_numero, ctps_serie, ctps_estado, titulo_eleitor, titulo_zona, titulo_secao, pis,
+          clinica_exame, codigo_cnes, medico_exame, crm_medico, data_exame, data_vencimento_exame,
+          cargo, departamento, tipo_contrato, data_admissao, status, salario_base, adicional_salarial,
+          horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_sabado_entrada, horario_sabado_saida,
+          vale_transporte, vale_refeicao, descanso_sabado, descanso_domingo,
+          periodo_experiencia, renovacao_experiencia, cidade_assinatura, data_assinatura,
+          banco, agencia, conta, tipo_conta, pix,
+          observacoes, criado_por
+        ) VALUES (
+          ${tenantId}, ${mappedData.nomeCompleto}, ${mappedData.cpf}, ${mappedData.rg}, ${mappedData.rgEstado}, ${mappedData.rgEmissao}, ${mappedData.dataNascimento},
+          ${mappedData.nacionalidade}, ${mappedData.naturalidade}, ${mappedData.naturalidadeEstado}, ${mappedData.raca}, ${mappedData.grauInstrucao},
+          ${mappedData.emailCorporativo}, ${mappedData.emailPessoal}, ${mappedData.telefone}, ${mappedData.celular},
+          ${mappedData.enderecoCompleto}, ${mappedData.bairro}, ${mappedData.cep}, ${mappedData.cidade}, ${mappedData.estado},
+          ${mappedData.nomePai}, ${mappedData.nomeMae}, ${mappedData.nomeConjuge}, ${mappedData.estadoCivil}, ${mappedData.quantidadeFilhos},
+          ${mappedData.ctpsNumero}, ${mappedData.ctpsSerie}, ${mappedData.ctpsEstado}, ${mappedData.tituloEleitor}, ${mappedData.tituloZona}, ${mappedData.tituloSecao}, ${mappedData.pis},
+          ${mappedData.clinicaExame}, ${mappedData.codigoCnes}, ${mappedData.medicoExame}, ${mappedData.crmMedico}, ${mappedData.dataExame}, ${mappedData.dataVencimentoExame},
+          ${mappedData.cargo}, ${mappedData.departamento}, ${mappedData.tipoContrato}, ${mappedData.dataAdmissao}, 'ativo', ${mappedData.salarioBase}, ${mappedData.adicionalSalarial},
+          ${mappedData.horarioEntrada1}, ${mappedData.horarioSaida1}, ${mappedData.horarioEntrada2}, ${mappedData.horarioSaida2}, ${mappedData.horarioSabadoEntrada}, ${mappedData.horarioSabadoSaida},
+          ${mappedData.valeTransporte}, ${mappedData.valeRefeicao}, ${mappedData.descansoSabado}, ${mappedData.descansoDomingo},
+          ${mappedData.periodoExperiencia}, ${mappedData.renovacaoExperiencia}, ${mappedData.cidadeAssinatura}, ${mappedData.dataAssinatura},
+          ${mappedData.banco}, ${mappedData.agencia}, ${mappedData.conta}, ${mappedData.tipoConta}, ${mappedData.pix},
+          ${mappedData.observacoes}, ${userId}
+        )
+        RETURNING *
+      `);
+      
+      console.log(`[EMPLOYEE-IMPORT] Employee imported via JSON: ${mappedData.nomeCompleto} (CPF: ${mappedData.cpf})`);
+      
+      return res.status(201).json({
+        success: true,
+        employee: result.rows[0],
+        message: "Funcionário importado com sucesso"
+      });
+    } catch (error) {
+      console.error("Error importing employee from JSON:", error);
+      return res.status(500).json({ message: "Erro ao importar funcionário" });
+    }
+  });
   
   // PUT /api/employees/:id - Update employee
   app.put("/api/employees/:id", requireAuth, requireModuleAccess("modulo_config_usuarios", "edit"), async (req, res) => {

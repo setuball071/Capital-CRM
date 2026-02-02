@@ -1,0 +1,116 @@
+TAREFA: Adicionar botão "Importar JSON" ao lado do botão "Novo Funcionário"
+
+ARQUIVO: Página de Funcionários atual (client/src/pages/FuncionariosPage.tsx)
+
+MODIFICAR APENAS O CABEÇALHO:
+
+ANTES:
+<Button onClick={abrirFormulario}>+ Novo Funcionário</Button>
+
+DEPOIS:
+<div className="flex gap-2">
+  <Button onClick={abrirFormulario}>
+    + Novo Funcionário
+  </Button>
+  <Button onClick={() => setShowImportModal(true)} variant="outline">
+    📄 Importar JSON
+  </Button>
+</div>
+
+ADICIONAR ESTADO:
+const [showImportModal, setShowImportModal] = useState(false);
+const [jsonInput, setJsonInput] = useState('');
+const [jsonValido, setJsonValido] = useState(false);
+const [erroJSON, setErroJSON] = useState(null);
+
+ADICIONAR MODAL (no final do componente, antes do </div> final):
+
+<Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+  <DialogContent className="max-w-2xl">
+    <DialogHeader>
+      <DialogTitle>Importar Funcionário via JSON</DialogTitle>
+      <DialogDescription>
+        Cole o JSON com os dados do funcionário
+      </DialogDescription>
+    </DialogHeader>
+    
+    <div className="space-y-4">
+      <Textarea
+        value={jsonInput}
+        onChange={(e) => setJsonInput(e.target.value)}
+        placeholder='{"empresa": "Capital Go", "colaborador": "João Silva", "cpf": "123.456.789-00", ...}'
+        rows={12}
+        className="font-mono text-sm"
+      />
+      
+      {erroJSON && (
+        <Alert variant="destructive">
+          <AlertDescription>{erroJSON}</AlertDescription>
+        </Alert>
+      )}
+      
+      {jsonValido && (
+        <Alert className="bg-green-50 text-green-900 border-green-200">
+          <AlertDescription>✓ JSON válido!</AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => setShowImportModal(false)}>
+          Cancelar
+        </Button>
+        <Button onClick={importarJSON}>
+          Importar
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
+
+ADICIONAR FUNÇÕES:
+
+const importarJSON = async () => {
+  try {
+    // Validar JSON
+    const dados = JSON.parse(jsonInput);
+    
+    if (!dados.colaborador || !dados.cpf) {
+      setErroJSON('JSON deve ter campos "colaborador" e "cpf"');
+      return;
+    }
+    
+    setJsonValido(true);
+    setErroJSON(null);
+    
+    // Enviar para backend
+    const response = await fetch('/api/employees/import-json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonInput
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Erro ao importar');
+    }
+    
+    // Sucesso
+    toast.success('Funcionário importado com sucesso!');
+    setShowImportModal(false);
+    setJsonInput('');
+    setJsonValido(false);
+    
+    // Recarregar lista
+    refetch(); // ou window.location.reload();
+    
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      setErroJSON('JSON inválido. Verifique a formatação.');
+    } else {
+      setErroJSON(error.message);
+    }
+    setJsonValido(false);
+  }
+};
+
+Não criar página nova. Apenas modificar a existente.

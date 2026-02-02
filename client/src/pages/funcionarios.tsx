@@ -18,9 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, 
-  User, Users, Briefcase, CreditCard, FileText, Lock
+  User, Users, Briefcase, CreditCard, FileText, Lock, FileUp
 } from "lucide-react";
 
 const employeeFormSchema = z.object({
@@ -218,6 +219,12 @@ export default function FuncionariosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [wizardStep, setWizardStep] = useState(1);
+  
+  // Import JSON modal state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [jsonInput, setJsonInput] = useState("");
+  const [jsonValido, setJsonValido] = useState(false);
+  const [erroJSON, setErroJSON] = useState<string | null>(null);
   
   const { data, isLoading } = useQuery<{
     employees: any[];
@@ -476,6 +483,62 @@ export default function FuncionariosPage() {
     }
   };
 
+  // Import JSON function
+  const importarJSON = async () => {
+    try {
+      // Validate JSON syntax
+      const dados = JSON.parse(jsonInput);
+      
+      if (!dados.colaborador && !dados.nomeCompleto && !dados.nome_completo) {
+        setErroJSON('JSON deve ter campo "colaborador", "nomeCompleto" ou "nome_completo"');
+        setJsonValido(false);
+        return;
+      }
+      
+      if (!dados.cpf) {
+        setErroJSON('JSON deve ter campo "cpf"');
+        setJsonValido(false);
+        return;
+      }
+      
+      setJsonValido(true);
+      setErroJSON(null);
+      
+      // Send to backend
+      const response = await fetch('/api/employees/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonInput,
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || error.error || 'Erro ao importar');
+      }
+      
+      // Success
+      toast({
+        title: "Sucesso",
+        description: "Funcionário importado com sucesso!",
+      });
+      setShowImportModal(false);
+      setJsonInput("");
+      setJsonValido(false);
+      
+      // Reload list
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        setErroJSON("JSON inválido. Verifique a formatação.");
+      } else {
+        setErroJSON((error as Error).message);
+      }
+      setJsonValido(false);
+    }
+  };
+
   const WIZARD_STEPS = [
     { number: 1, title: "Pessoais", icon: User },
     { number: 2, title: "Família", icon: Users },
@@ -491,10 +554,20 @@ export default function FuncionariosPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" data-testid="text-page-title">Funcionários</h1>
-        <Button onClick={openCreateModal} data-testid="button-new-employee">
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Funcionário
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={openCreateModal} data-testid="button-new-employee">
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Funcionário
+          </Button>
+          <Button 
+            onClick={() => setShowImportModal(true)} 
+            variant="outline"
+            data-testid="button-import-json"
+          >
+            <FileUp className="w-4 h-4 mr-2" />
+            Importar JSON
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -1607,6 +1680,66 @@ export default function FuncionariosPage() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import JSON Modal */}
+      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Importar Funcionário via JSON</DialogTitle>
+            <DialogDescription>
+              Cole o JSON com os dados do funcionário
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Textarea
+              value={jsonInput}
+              onChange={(e) => {
+                setJsonInput(e.target.value);
+                setErroJSON(null);
+                setJsonValido(false);
+              }}
+              placeholder='{"colaborador": "João Silva", "cpf": "12345678901", "cargo": "Consultor", ...}'
+              rows={12}
+              className="font-mono text-sm"
+              data-testid="input-json"
+            />
+            
+            {erroJSON && (
+              <Alert variant="destructive">
+                <AlertDescription>{erroJSON}</AlertDescription>
+              </Alert>
+            )}
+            
+            {jsonValido && (
+              <Alert className="bg-green-50 text-green-900 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
+                <AlertDescription>JSON válido!</AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowImportModal(false);
+                  setJsonInput("");
+                  setJsonValido(false);
+                  setErroJSON(null);
+                }}
+                data-testid="button-cancel-import"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={importarJSON}
+                data-testid="button-confirm-import"
+              >
+                Importar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
