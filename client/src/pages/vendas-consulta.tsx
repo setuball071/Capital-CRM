@@ -689,7 +689,29 @@ export default function VendasConsulta() {
                 />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setContatosModalOpen(true)}
+                data-testid="button-painel-contato"
+              >
+                <Phone className="h-4 w-4 mr-2" />
+                Contatos
+                <Badge variant="outline" className="ml-2" data-testid="text-contatos-count">
+                  {(() => {
+                    const telCount = (consultaData?.higienizacao?.telefones?.length || 0) + phoneContacts.length;
+                    const emailCount = (consultaData?.higienizacao?.emails?.length || 0) + emailContacts.length;
+                    return `${telCount + emailCount}`;
+                  })()}
+                </Badge>
+              </Button>
+              <Button
+                onClick={() => setDrawerOpen(true)}
+                data-testid="button-registrar-atendimento"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Registrar Atendimento
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={() => setConsultaData(null)}
@@ -1483,36 +1505,6 @@ export default function VendasConsulta() {
         </DialogContent>
       </Dialog>
 
-      {/* BOTÕES FIXOS - Lateral Direita */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
-        {/* Botão Contatos */}
-        <Button
-          variant="secondary"
-          className="px-6 py-6 text-base font-bold shadow-lg"
-          onClick={() => setContatosModalOpen(true)}
-          data-testid="button-painel-contato-flutuante"
-        >
-          <Phone className="h-5 w-5 mr-2" />
-          Contatos
-          <Badge variant="outline" className="ml-2 text-xs">
-            {(() => {
-              const telCount = (consultaData?.higienizacao?.telefones?.length || 0) + phoneContacts.length;
-              const emailCount = (consultaData?.higienizacao?.emails?.length || 0) + emailContacts.length;
-              return `${telCount + emailCount}`;
-            })()}
-          </Badge>
-        </Button>
-        
-        {/* Botão Registrar Atendimento */}
-        <Button
-          className="px-6 py-6 text-base font-bold shadow-lg"
-          onClick={() => setDrawerOpen(true)}
-          data-testid="button-registrar-atendimento"
-        >
-          <MessageSquare className="h-5 w-5 mr-2" />
-          Registrar Atendimento
-        </Button>
-      </div>
 
       {/* Dialog Registrar Interação */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
