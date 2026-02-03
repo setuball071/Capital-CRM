@@ -892,8 +892,8 @@ export default function UsersPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
+        <CardContent className="overflow-x-auto">
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
@@ -901,7 +901,7 @@ export default function UsersPage() {
                 <TableHead>Função</TableHead>
                 {canManageAllUsers && <TableHead>Coordenador</TableHead>}
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="text-right min-w-[260px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -936,7 +936,7 @@ export default function UsersPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[260px]">
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <Button
                           variant="outline"
