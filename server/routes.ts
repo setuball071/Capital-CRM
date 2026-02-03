@@ -8197,7 +8197,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     if (filtros?.orgao) parts.push(`Orgao_${filtros.orgao}`);
     if (filtros?.convenio) parts.push(`Convenio_${filtros.convenio}`);
     if (filtros?.uf) parts.push(`UF_${filtros.uf}`);
-    if (filtros?.banco) parts.push(`Banco_${String(filtros.banco).replace(/\s+/g, '_')}`);
+    if (filtros?.bancos && filtros.bancos.length > 0) parts.push(`Bancos_${filtros.bancos.map(b => String(b).replace(/\s+/g, '_')).join('-')}`);
     if (filtros?.situacaoFuncional) parts.push(`Situacao_${filtros.situacaoFuncional}`);
     
     // Age range (if both present)

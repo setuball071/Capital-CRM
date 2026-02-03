@@ -40,10 +40,13 @@ interface Filtros {
   margem_cartao_beneficio_min?: number;
   margem_cartao_beneficio_max?: number;
   // Filtros de contrato
-  banco?: string;
+  bancos?: string[];
   tipos_contrato?: string[];
   parcela_min?: number;
   parcela_max?: number;
+  // Filtro de parcelas restantes
+  parcelas_restantes_min?: number;
+  parcelas_restantes_max?: number;
   // Filtro de quantidade de contratos
   qtd_contratos_min?: number;
   qtd_contratos_max?: number;
@@ -202,13 +205,14 @@ export default function CompraLista() {
     queryKey: ["/api/clientes/filtros"],
   });
 
-  // Buscar tipos de contrato dinamicamente quando o banco mudar
+  // Buscar tipos de contrato dinamicamente quando os bancos mudarem
   useEffect(() => {
     const fetchTiposContrato = async () => {
       setIsLoadingTipos(true);
       try {
-        const url = filtros.banco 
-          ? `/api/clientes/filtros/tipos-contrato?banco=${encodeURIComponent(filtros.banco)}`
+        // Se apenas um banco selecionado, filtrar por ele; senão, buscar todos
+        const url = filtros.bancos && filtros.bancos.length === 1
+          ? `/api/clientes/filtros/tipos-contrato?banco=${encodeURIComponent(filtros.bancos[0])}`
           : `/api/clientes/filtros/tipos-contrato`;
         const response = await fetch(url, { credentials: "include" });
         if (response.ok) {
@@ -222,7 +226,7 @@ export default function CompraLista() {
       }
     };
     fetchTiposContrato();
-  }, [filtros.banco]);
+  }, [filtros.bancos]);
 
   const { data: pedidos = [], isLoading: isLoadingPedidos } = useQuery<PedidoLista[]>({
     queryKey: ["/api/pedidos-lista"],
@@ -424,7 +428,7 @@ export default function CompraLista() {
     if (f.margem_cartao_beneficio_min !== undefined || f.margem_cartao_beneficio_max !== undefined) {
       parts.push(`Margem Cart.Benef: ${f.margem_cartao_beneficio_min || 0} - ${f.margem_cartao_beneficio_max || "∞"}`);
     }
-    if (f.banco) parts.push(`Banco: ${f.banco}`);
+    if (f.bancos && f.bancos.length > 0) parts.push(`Bancos: ${f.bancos.join(", ")}`);
     if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
       parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
     }
@@ -575,17 +579,15 @@ export default function CompraLista() {
                 <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Contrato</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="banco">Banco</Label>
-                    <Combobox
+                    <Label htmlFor="bancos">Bancos</Label>
+                    <MultiSelectCombobox
                       options={filtrosDisponiveis?.bancos || []}
-                      value={filtros.banco}
-                      onValueChange={(v) => setFiltros({ ...filtros, banco: v, tipos_contrato: [] })}
+                      value={filtros.bancos || []}
+                      onValueChange={(v) => setFiltros({ ...filtros, bancos: v.length > 0 ? v : undefined, tipos_contrato: [] })}
                       placeholder="Todos os bancos"
                       searchPlaceholder="Buscar banco..."
                       emptyText="Nenhum banco encontrado."
-                      creatable={true}
-                      createOptionLabel={(v) => `Usar "${v}"`}
-                      data-testid="combobox-banco"
+                      data-testid="multiselect-bancos"
                     />
                   </div>
 
@@ -601,11 +603,19 @@ export default function CompraLista() {
                       disabled={isLoadingTipos}
                       data-testid="multiselect-tipo-contrato"
                     />
-                    {filtros.banco && tiposContratoFiltrados.length > 0 && (
+                    {filtros.bancos && filtros.bancos.length === 1 && tiposContratoFiltrados.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        {tiposContratoFiltrados.length} tipo(s) disponível(is) para {filtros.banco}
+                        {tiposContratoFiltrados.length} tipo(s) disponível(is) para {filtros.bancos[0]}
                         {filtros.tipos_contrato && filtros.tipos_contrato.length > 0 && (
                           <> • {filtros.tipos_contrato.length} selecionado(s)</>
+                        )}
+                      </p>
+                    )}
+                    {filtros.bancos && filtros.bancos.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        {filtros.bancos.length} banco(s) selecionado(s)
+                        {filtros.tipos_contrato && filtros.tipos_contrato.length > 0 && (
+                          <> • {filtros.tipos_contrato.length} tipo(s) selecionado(s)</>
                         )}
                       </p>
                     )}
@@ -685,6 +695,30 @@ export default function CompraLista() {
                       onChange={(e) => setFiltros({ ...filtros, parcela_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                       data-testid="input-parcela-max"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Parcelas Restantes</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Mín"
+                        value={filtros.parcelas_restantes_min ?? ""}
+                        onChange={(e) => setFiltros({ ...filtros, parcelas_restantes_min: e.target.value ? parseInt(e.target.value) : undefined })}
+                        data-testid="input-parcelas-restantes-min"
+                        className="w-1/2"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Máx"
+                        value={filtros.parcelas_restantes_max ?? ""}
+                        onChange={(e) => setFiltros({ ...filtros, parcelas_restantes_max: e.target.value ? parseInt(e.target.value) : undefined })}
+                        data-testid="input-parcelas-restantes-max"
+                        className="w-1/2"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

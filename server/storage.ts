@@ -1136,7 +1136,7 @@ export class DbStorage implements IStorage {
     );
     
     const needsContratoJoin = !!(
-      filtros.banco || (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined
+      (filtros.bancos && filtros.bancos.length > 0) || (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined || filtros.parcelas_restantes_min !== undefined || filtros.parcelas_restantes_max !== undefined
     );
     
     const needsContratoCountFilter = filtros.qtd_contratos_min !== undefined || filtros.qtd_contratos_max !== undefined;
@@ -1233,8 +1233,16 @@ export class DbStorage implements IStorage {
       }
 
       // Contrato conditions (parameterized)
-      if (filtros.banco) {
-        whereConditions.push(sql`c.banco ILIKE ${'%' + filtros.banco + '%'}`);
+      if (filtros.bancos && filtros.bancos.length > 0) {
+        // Múltiplos bancos: usar OR com ILIKE para cada banco (lógica inclusiva)
+        const bancoConditions = filtros.bancos.map(banco => 
+          sql`c.banco ILIKE ${'%' + banco + '%'}`
+        );
+        // Juntar com OR: cliente deve ter contrato em PELO MENOS UM dos bancos selecionados
+        const combinedBancos = bancoConditions.reduce((acc, curr, idx) => 
+          idx === 0 ? curr : sql`${acc} OR ${curr}`
+        );
+        whereConditions.push(sql`(${combinedBancos})`);
       }
       if (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) {
         // Múltiplos tipos: usar OR com ILIKE para cada tipo (lógica inclusiva)
@@ -1252,6 +1260,14 @@ export class DbStorage implements IStorage {
       }
       if (filtros.parcela_max !== undefined) {
         whereConditions.push(sql`c.valor_parcela <= ${filtros.parcela_max}`);
+      }
+      
+      // Filtro de parcelas restantes
+      if (filtros.parcelas_restantes_min !== undefined) {
+        whereConditions.push(sql`c.prazo_restante >= ${filtros.parcelas_restantes_min}`);
+      }
+      if (filtros.parcelas_restantes_max !== undefined) {
+        whereConditions.push(sql`c.prazo_restante <= ${filtros.parcelas_restantes_max}`);
       }
       
       // Filtro de quantidade de contratos via subquery
