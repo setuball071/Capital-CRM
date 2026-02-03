@@ -936,49 +936,51 @@ export default function UsersPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEditDialog(user)}
-                        data-testid={`button-edit-user-${user.id}`}
-                      >
-                        Editar
-                      </Button>
-                      {canManageAllUsers && (
+                    <TableCell>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            setAcessoModalUser(user);
-                            setShowAcessoModal(true);
-                          }}
-                          data-testid={`button-acesso-user-${user.id}`}
-                          title="Configurar horário e IP de acesso"
+                          onClick={() => handleOpenEditDialog(user)}
+                          data-testid={`button-edit-user-${user.id}`}
                         >
-                          <Clock className="h-4 w-4" />
+                          Editar
                         </Button>
-                      )}
-                      {canManageAllUsers && user.id !== currentUser?.id && (
-                        <Button
-                          variant={user.isActive ? "destructive" : "default"}
-                          size="sm"
-                          onClick={() => toggleUserStatus(user)}
-                          data-testid={`button-toggle-user-${user.id}`}
-                        >
-                          {user.isActive ? "Desativar" : "Ativar"}
-                        </Button>
-                      )}
-                      {canDeleteUser(user) && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setUserToDelete(user)}
-                          data-testid={`button-delete-user-${user.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                        {canManageAllUsers && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setAcessoModalUser(user);
+                              setShowAcessoModal(true);
+                            }}
+                            data-testid={`button-acesso-user-${user.id}`}
+                            title="Configurar horário e IP de acesso"
+                          >
+                            <Clock className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canManageAllUsers && user.id !== currentUser?.id && (
+                          <Button
+                            variant={user.isActive ? "destructive" : "default"}
+                            size="sm"
+                            onClick={() => toggleUserStatus(user)}
+                            data-testid={`button-toggle-user-${user.id}`}
+                          >
+                            {user.isActive ? "Desativar" : "Ativar"}
+                          </Button>
+                        )}
+                        {canDeleteUser(user) && (
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => setUserToDelete(user)}
+                            data-testid={`button-delete-user-${user.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
