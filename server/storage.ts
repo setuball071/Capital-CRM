@@ -1264,10 +1264,10 @@ export class DbStorage implements IStorage {
       
       // Filtro de parcelas restantes
       if (filtros.parcelas_restantes_min !== undefined) {
-        whereConditions.push(sql`c.prazo_restante >= ${filtros.parcelas_restantes_min}`);
+        whereConditions.push(sql`c.parcelas_restantes >= ${filtros.parcelas_restantes_min}`);
       }
       if (filtros.parcelas_restantes_max !== undefined) {
-        whereConditions.push(sql`c.prazo_restante <= ${filtros.parcelas_restantes_max}`);
+        whereConditions.push(sql`c.parcelas_restantes <= ${filtros.parcelas_restantes_max}`);
       }
       
       // Filtro de quantidade de contratos via subquery
