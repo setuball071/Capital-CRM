@@ -1,0 +1,169 @@
+CORREÇÃO DE CRESCIMENTO DO BANCO
+
+Contexto obrigatório
+O sistema mantém histórico mensal de folha corretamente em clientes_folha_mes.
+O problema atual é o crescimento descontrolado da tabela import_run_rows, que está armazenando logs técnicos linha-a-linha de importações antigas, consumindo ~76% do banco (~7GB), sem necessidade operacional.
+
+🧠 OBJETIVO
+
+Corrigir a arquitetura de importação para que:
+
+O histórico mensal continue existindo normalmente (NÃO remover dados de negócio).
+
+Dados técnicos de importação sejam tratados como temporários.
+
+O banco pare de crescer indefinidamente por causa de logs de importação.
+
+✅ TAREFAS (executar nesta ordem)
+1️⃣ Confirmar fonte do histórico mensal (NÃO alterar)
+
+Verificar e garantir que:
+
+O histórico mensal já está corretamente persistido em:
+
+clientes_folha_mes
+
+clientes_contratos
+
+clientes_vinculo
+
+Cada importação de folha gera novos registros por competência, sem sobrescrever o passado.
+
+⚠️ Não alterar essas tabelas. Elas são dados finais.
+
+2️⃣ Tratar import_run_rows como LOG TÉCNICO (não histórico)
+
+Aplicar as seguintes mudanças:
+
+✔️ Função da tabela
+
+import_run_rows deve servir apenas para:
+
+debug de importação
+
+auditoria recente
+
+troubleshooting
+
+❌ O que ela NÃO deve fazer
+
+NÃO guardar histórico eterno
+
+NÃO ser fonte de dados de negócio
+
+NÃO crescer indefinidamente
+
+3️⃣ Implementar política de retenção automática
+
+Criar uma rotina segura para limpeza de import_run_rows.
+
+Regra sugerida:
+
+Manter apenas os últimos 15 ou 30 dias (usar 30 dias por padrão).
+
+Exemplo lógico:
+DELETE FROM import_run_rows
+WHERE created_at < NOW() - INTERVAL '30 days';
+
+
+📌 Essa limpeza:
+
+NÃO afeta clientes
+
+NÃO afeta folha
+
+NÃO afeta contratos
+
+NÃO afeta histórico mensal
+
+4️⃣ Executar limpeza inicial (controlada)
+
+Após validar que o histórico está em clientes_folha_mes, executar uma limpeza inicial:
+
+Remover import_run_rows antigos
+
+Manter apenas registros recentes
+
+⚠️ NÃO apagar:
+
+clientes_folha_mes
+
+clientes_contratos
+
+clientes_vinculo
+
+clientes_pessoa
+
+5️⃣ Limpar tabelas de staging após import
+
+Após cada import bem-sucedido, garantir:
+
+staging_folha
+
+staging_d8
+
+staging_contatos
+
+👉 sejam limpas automaticamente (truncate ou delete).
+
+Essas tabelas:
+
+São temporárias
+
+Não devem acumular dados
+
+6️⃣ Ajustar fluxo de importação
+
+No fluxo de importação:
+
+Após sucesso:
+
+dados vão para tabelas finais
+
+logs técnicos ficam em import_run_rows
+
+Após X dias:
+
+logs são automaticamente descartados
+
+7️⃣ Validação final
+
+Após aplicar tudo:
+
+Confirmar:
+
+Histórico mensal continua íntegro
+
+Novas importações funcionam
+
+Banco não cresce de forma exponencial
+
+Medir:
+
+Tamanho total do banco
+
+Crescimento mensal esperado (apenas dados reais)
+
+🚫 RESTRIÇÕES IMPORTANTES
+
+❌ NÃO remover histórico mensal
+
+❌ NÃO remover dados de clientes
+
+❌ NÃO recriar schema do zero
+
+❌ NÃO alterar lógica de negócio
+
+❌ NÃO apagar tabelas finais
+
+✅ RESULTADO ESPERADO
+
+Banco estável
+
+Histórico mensal preservado
+
+Importações mais leves
+
+Fim do crescimento descontrolado
+
+Arquitetura correta (dados ≠ logs)
