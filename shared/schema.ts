@@ -229,7 +229,7 @@ export const coefficientTables = pgTable("coefficient_tables", {
 // Simulations history
 export const simulations = pgTable("simulations", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   clientName: varchar("client_name", { length: 255 }).notNull(),
   agreementId: integer("agreement_id").references(() => agreements.id),
   agreementName: varchar("agreement_name", { length: 255 }), // Denormalized for history

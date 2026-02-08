@@ -2188,8 +2188,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        await storage.deleteUser(id);
-        deleted++;
+        try {
+          await storage.deleteUser(id);
+          deleted++;
+        } catch (err: any) {
+          console.error(`Error deleting user ${id} (${targetUser.name}):`, err?.message || err);
+          errors.push(`${targetUser.name}: erro ao excluir - ${err?.message || 'erro desconhecido'}`);
+        }
       }
 
       return res.json({ 

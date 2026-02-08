@@ -481,6 +481,7 @@ export class DbStorage implements IStorage {
   }
 
   async deleteUser(id: number): Promise<void> {
+    await db.delete(simulations).where(eq(simulations.userId, id));
     await db.delete(users).where(eq(users.id, id));
   }
 
