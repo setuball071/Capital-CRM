@@ -76,6 +76,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   
   // Credentials dialog state (shown after creating user)
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
@@ -366,6 +368,52 @@ export default function UsersPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return apiRequest("DELETE", "/api/users/bulk", { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setSelectedUserIds(new Set());
+      setShowBulkDeleteDialog(false);
+      toast({
+        title: data.message || "Usuários excluídos com sucesso",
+        description: data.errors?.length > 0 ? `Erros: ${data.errors.join(", ")}` : undefined,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir usuários",
+        description: error.message || "Não foi possível excluir os usuários",
+        variant: "destructive",
+      });
+      setShowBulkDeleteDialog(false);
+    },
+  });
+
+  const toggleSelectUser = (userId: number) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const canDeleteUser = (user: User): boolean => {
+    if (!currentUser || user.id === currentUser.id) {
+      return false;
+    }
+    const targetRole = user.role as UserRole;
+    if (isMaster) return true;
+    if (isAtendimento) return targetRole !== "master";
+    if (isCoordenacao) return targetRole === "vendedor" && user.managerId === currentUser.id;
+    return false;
+  };
+
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingUser(null);
@@ -503,30 +551,6 @@ export default function UsersPage() {
     });
   };
 
-  const canDeleteUser = (user: User): boolean => {
-    if (!currentUser || user.id === currentUser.id) {
-      return false; // Cannot delete yourself
-    }
-    
-    const targetRole = user.role as UserRole;
-    
-    if (isMaster) {
-      return true; // Master can delete anyone except themselves
-    }
-    
-    if (isAtendimento) {
-      // Atendimento can delete anyone except master
-      return targetRole !== "master";
-    }
-    
-    if (isCoordenacao) {
-      // Coordenacao can ONLY delete vendedores from their own team
-      return targetRole === "vendedor" && user.managerId === currentUser.id;
-    }
-    
-    return false; // Operacional and vendedores cannot delete anyone
-  };
-
   const getRoleLabel = (role: string) => {
     return ROLE_LABELS[role as UserRole] || role;
   };
@@ -566,6 +590,18 @@ export default function UsersPage() {
       getRoleLabel(user.role).toLowerCase().includes(search)
     );
   });
+
+  const deletableFilteredUsers = useMemo(() => {
+    return filteredUsers.filter(u => canDeleteUser(u));
+  }, [filteredUsers, currentUser]);
+
+  const toggleSelectAll = () => {
+    if (selectedUserIds.size === deletableFilteredUsers.length) {
+      setSelectedUserIds(new Set());
+    } else {
+      setSelectedUserIds(new Set(deletableFilteredUsers.map(u => u.id)));
+    }
+  };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
     if (role === "master") return "default";
@@ -893,9 +929,40 @@ export default function UsersPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
+          {selectedUserIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-md bg-muted/50 border">
+              <span className="text-sm font-medium">
+                {selectedUserIds.size} usuário{selectedUserIds.size !== 1 ? "s" : ""} selecionado{selectedUserIds.size !== 1 ? "s" : ""}
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowBulkDeleteDialog(true)}
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir Selecionados
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedUserIds(new Set())}
+                data-testid="button-clear-selection"
+              >
+                Limpar Seleção
+              </Button>
+            </div>
+          )}
           <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={deletableFilteredUsers.length > 0 && selectedUserIds.size === deletableFilteredUsers.length}
+                    onCheckedChange={toggleSelectAll}
+                    data-testid="checkbox-select-all-users"
+                  />
+                </TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Login</TableHead>
                 <TableHead>Função</TableHead>
@@ -909,6 +976,15 @@ export default function UsersPage() {
                 const manager = coordenadores.find((c) => c.id === user.managerId);
                 return (
                   <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
+                    <TableCell className="w-10">
+                      {canDeleteUser(user) ? (
+                        <Checkbox
+                          checked={selectedUserIds.has(user.id)}
+                          onCheckedChange={() => toggleSelectUser(user.id)}
+                          data-testid={`checkbox-select-user-${user.id}`}
+                        />
+                      ) : null}
+                    </TableCell>
                     <TableCell className="font-medium" data-testid={`user-name-${user.id}`}>
                       {user.name}
                     </TableCell>
@@ -987,7 +1063,7 @@ export default function UsersPage() {
               })}
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canManageAllUsers ? 6 : 5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={canManageAllUsers ? 7 : 6} className="text-center text-muted-foreground py-8">
                     {searchTerm.trim() ? "Nenhum usuário encontrado para esta pesquisa" : "Nenhum usuário cadastrado"}
                   </TableCell>
                 </TableRow>
@@ -996,6 +1072,36 @@ export default function UsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão em Lote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{selectedUserIds.size} usuário{selectedUserIds.size !== 1 ? "s" : ""}</strong>?
+              Esta ação não pode ser desfeita e todos os dados associados serão permanentemente removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-bulk-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate(Array.from(selectedUserIds))}
+              disabled={bulkDeleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-bulk-delete"
+            >
+              {bulkDeleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                `Excluir ${selectedUserIds.size} Usuário${selectedUserIds.size !== 1 ? "s" : ""}`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
         <AlertDialogContent>

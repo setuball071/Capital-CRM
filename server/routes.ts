@@ -2151,6 +2151,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete users (must be before :id route)
+  app.delete("/api/users/bulk", requireAuth, requireUserManagementAccess, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Lista de IDs é obrigatória" });
+      }
+
+      const currentUserId = req.user!.id;
+      const currentUserRole = req.user!.role as UserRole;
+      const validIds = ids.filter((id: number) => Number.isInteger(id) && id > 0 && id !== currentUserId);
+      
+      if (validIds.length === 0) {
+        return res.status(400).json({ message: "Nenhum usuário válido para excluir" });
+      }
+
+      const errors: string[] = [];
+      let deleted = 0;
+
+      for (const id of validIds) {
+        const targetUser = await storage.getUser(id);
+        if (!targetUser) continue;
+
+        const targetUserRole = targetUser.role as UserRole;
+
+        if (currentUserRole === "coordenacao") {
+          if (targetUserRole !== "vendedor" || targetUser.managerId !== currentUserId) {
+            errors.push(`${targetUser.name}: sem permissão`);
+            continue;
+          }
+        } else if (currentUserRole === "atendimento") {
+          if (targetUserRole === "master") {
+            errors.push(`${targetUser.name}: não pode excluir administradores`);
+            continue;
+          }
+        }
+
+        await storage.deleteUser(id);
+        deleted++;
+      }
+
+      return res.json({ 
+        message: `${deleted} usuário(s) excluído(s) com sucesso`,
+        deleted,
+        errors 
+      });
+    } catch (error) {
+      console.error("Bulk delete users error:", error);
+      return res.status(500).json({ message: "Erro ao excluir usuários em lote" });
+    }
+  });
+
   // Delete user with role-based permissions:
   // - admin: can delete any user (except themselves)
   // - atendimento: can delete any user EXCEPT admins
