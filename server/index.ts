@@ -144,5 +144,9 @@ app.use((req, res, next) => {
     const { csvSplitRunner } = await import("./csv-split-runner");
     csvSplitRunner.start();
     log("CSV Split background runner started");
+
+    const { startDataRetention } = await import("./data-retention");
+    startDataRetention();
+    log("Data retention background runner started");
   });
 })();
