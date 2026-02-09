@@ -1,7 +1,7 @@
 import { db } from "./storage";
 import { sql } from "drizzle-orm";
 
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 15;
 const BATCH_SIZE = 50000;
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -24,7 +24,7 @@ async function cleanupOldImportRunRows(): Promise<number> {
         DELETE FROM import_run_rows 
         WHERE id IN (
           SELECT id FROM import_run_rows 
-          WHERE created_at < NOW() - INTERVAL '30 days' 
+          WHERE created_at < NOW() - INTERVAL '15 days' 
           LIMIT ${BATCH_SIZE}
         )
       `);
