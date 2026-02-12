@@ -1,0 +1,259 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  TrendingUp, Target, Award, FileText, Zap, Calendar, Trophy, 
+  Info, ArrowUpRight, Plus, Trash2, Edit2, CheckCircle, Settings, User,
+  ChevronUp, Medal
+} from 'lucide-react';
+import { 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, ComposedChart, Line, Cell
+} from 'recharts';
+
+// --- Mock de Dados ---
+const INITIAL_CAMPAIGNS = [
+  { 
+    id: 'monthly-feb', 
+    type: 'monthly', 
+    title: 'Meta Mensal - Fevereiro', 
+    active: true,
+    steps: [
+      { target: 10000, reward: "Bônus R$ 500" },
+      { target: 30000, reward: "Bônus R$ 1.500" },
+      { target: 50000, reward: "Bônus R$ 3.000" }
+    ]
+  },
+  { 
+    id: 'special-q1', 
+    type: 'special', 
+    title: 'Campanha Master (Trimestral)', 
+    active: true,
+    steps: [{ target: 150000, reward: "Viagem Internacional" }]
+  }
+];
+
+const DAILY_PRODUCTION = [
+  { day: '01', valor: 2500, acumulado: 2500 },
+  { day: '02', valor: 0, acumulado: 2500 },
+  { day: '03', valor: 4200, acumulado: 6700 },
+  { day: '04', valor: 1500, acumulado: 8200 },
+  { day: '05', valor: 8500, acumulado: 16700 },
+  { day: '06', valor: 1200, acumulado: 17900 },
+  { day: '07', valor: 0, acumulado: 17900 },
+  { day: '08', valor: 3100, acumulado: 21000 },
+  { day: '09', valor: 5000, acumulado: 26000 },
+  { day: '10', valor: 6500, acumulado: 32500 },
+];
+
+const App = () => {
+  const [view, setView] = useState('seller'); 
+  const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS);
+  const [production, setProduction] = useState(32500); 
+  
+  // Simulação de Usuário com Role (Em prod, isso vem do Auth)
+  const user = {
+    name: "Ricardo Oliveira",
+    rank: 4,
+    role: 'admin', // Altere para 'seller' para ver o botão sumir
+    photo: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ricardo",
+    diasRestantes: 8,
+  };
+
+  const toggleCampaign = (id) => {
+    setCampaigns(campaigns.map(c => c.id === id ? { ...c, active: !c.active } : c));
+  };
+
+  // --- Componente de Visão do Vendedor ---
+  const SellerDashboard = () => (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <div className="lg:col-span-8 space-y-6">
+          {/* Card de Meta Principal */}
+          {campaigns.filter(c => c.active && c.type === 'monthly').map(camp => {
+            const mainTarget = camp.steps[camp.steps.length - 1].target;
+            const percent = (production / mainTarget) * 100;
+            return (
+              <div key={camp.id} className="bg-[#161920] border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h2 className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">{camp.title}</h2>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-5xl font-black text-white">R$ {production.toLocaleString()}</span>
+                      <span className="text-slate-500 font-bold text-lg">/ {mainTarget.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl text-center mb-2">
+                      <p className="text-2xl font-black text-emerald-400">{percent.toFixed(0)}%</p>
+                    </div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Atingimento Total</p>
+                  </div>
+                </div>
+                <div className="w-full h-3 bg-slate-800 rounded-full mb-4">
+                  <div className="h-full bg-gradient-to-r from-purple-600 to-emerald-400 rounded-full transition-all duration-1000" style={{ width: `${Math.min(percent, 100)}%` }} />
+                </div>
+                <div className="flex justify-between text-[10px] font-black uppercase text-slate-600">
+                  <span>Início do Mês</span>
+                  <span>Meta batida em R$ {mainTarget.toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Gráfico de Evolução de Ritmo */}
+          <div className="bg-[#161920] border border-slate-800 rounded-3xl p-6">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="font-bold text-white flex items-center gap-2 italic">RITMO DE PRODUÇÃO</h3>
+                <p className="text-[11px] text-slate-500">Volume de contratos por dia digitado</p>
+              </div>
+            </div>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={DAILY_PRODUCTION}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="day" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis hide />
+                  <Tooltip cursor={{fill: '#1e293b', opacity: 0.4}} contentStyle={{ backgroundColor: '#0f1115', border: '1px solid #334155', borderRadius: '12px' }} />
+                  <Bar dataKey="valor" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={40}>
+                    {DAILY_PRODUCTION.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.valor > 5000 ? '#A855F7' : '#6366f1'} />
+                    ))}
+                  </Bar>
+                  <Line type="monotone" dataKey="acumulado" stroke="#334155" strokeWidth={2} dot={false} opacity={0.3} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Coluna Lateral: Campanhas e Ranking */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Widget de Ranking (Recuperado) */}
+          <div className="bg-gradient-to-br from-[#1c2128] to-[#161920] border border-slate-800 rounded-3xl p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                <Medal size={18} className="text-yellow-500" /> POSIÇÃO NO RANKING
+              </h3>
+              <span className="text-2xl font-black text-white">#{user.rank}</span>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-slate-500">3º</div>
+                  <span className="text-slate-400">Marcos Silva</span>
+                </div>
+                <span className="font-bold text-slate-500">R$ 38.200</span>
+              </div>
+              <div className="flex items-center justify-between text-xs p-2 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">4º</div>
+                  <span className="text-white font-bold">Você</span>
+                </div>
+                <span className="font-bold text-purple-400">R$ {production.toLocaleString()}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-800">
+                <p className="text-[10px] text-center text-slate-500 font-bold uppercase">
+                  Faltam R$ 5.700 para subir de posição
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Campanhas Ativas */}
+          <div className="bg-[#161920] border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+              <Trophy size={18} className="text-purple-400" /> CAMPANHAS ATIVAS
+            </h3>
+            <div className="space-y-6">
+              {campaigns.filter(c => c.active).map(camp => (
+                <div key={camp.id} className="border-t border-slate-800 pt-4 first:border-0 first:pt-0">
+                  <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest">{camp.title}</p>
+                  <div className="space-y-3">
+                    {camp.steps.map((step, idx) => {
+                      const isAchieved = production >= step.target;
+                      const prevTarget = idx > 0 ? camp.steps[idx-1].target : 0;
+                      const isNext = !isAchieved && production >= prevTarget;
+                      return (
+                        <div key={idx} className={`p-4 rounded-2xl border transition-all ${isAchieved ? 'bg-emerald-500/5 border-emerald-500/20' : isNext ? 'bg-purple-600/10 border-purple-500/40' : 'bg-slate-900/40 border-slate-800'}`}>
+                          <div className="flex justify-between items-center">
+                            <p className={`font-bold text-sm ${isAchieved ? 'text-emerald-400' : 'text-white'}`}>{step.reward}</p>
+                            {isAchieved && <CheckCircle size={14} className="text-emerald-500" />}
+                          </div>
+                          {isNext && (
+                            <p className="mt-2 text-[10px] text-purple-300 font-bold uppercase">Faltam R$ {(step.target - production).toLocaleString()}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0f1115] text-slate-200 p-4 md:p-8 font-sans">
+      <header className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full border-2 border-purple-500 p-0.5 relative">
+            <img src={user.photo} className="rounded-full bg-slate-800" />
+            <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-[#0f1115] text-[9px] font-black px-1.5 py-0.5 rounded-full border-2 border-[#0f1115]">
+              TOP {user.rank}
+            </div>
+          </div>
+          <div>
+            <h1 className="font-black text-2xl text-white tracking-tighter">DASHBOARD</h1>
+            <p className="text-[11px] text-slate-500 uppercase font-bold tracking-[0.2em]">{user.name}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex bg-[#161920] px-4 py-2 rounded-2xl border border-slate-800 items-center gap-2">
+            <Calendar size={14} className="text-blue-400" />
+            <span className="text-xs font-bold text-white">{user.diasRestantes} dias úteis restantes</span>
+          </div>
+
+          {/* PROTEÇÃO: O botão de Admin só renderiza se user.role === 'admin' */}
+          {user.role === 'admin' && (
+            <div className="flex bg-[#161920] p-1 rounded-xl border border-slate-800 shadow-lg">
+              <button 
+                onClick={() => setView('seller')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${view === 'seller' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}
+              >
+                Vendedor
+              </button>
+              <button 
+                onClick={() => setView('admin')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${view === 'admin' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}
+              >
+                <Settings size={12} className="inline mr-1" /> Painel Admin
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {view === 'seller' ? <SellerDashboard /> : (
+        <div className="bg-[#161920] rounded-3xl p-10 border border-slate-800 text-center">
+          <Settings size={48} className="mx-auto text-purple-500 mb-4 opacity-20" />
+          <h2 className="text-xl font-bold text-white">Configurações de Campanha</h2>
+          <p className="text-slate-500 text-sm mt-2">Área restrita para administradores.</p>
+          {/* Aqui entraria o CRUD de campanhas do código anterior */}
+        </div>
+      )}
+      
+      <footer className="mt-12 pt-6 border-t border-slate-900 flex justify-between text-[9px] text-slate-700 font-bold uppercase tracking-[0.3em]">
+        <span>AIZ CRM INFRASTRUCTURE</span>
+        <span>AUTH_STATUS: {user.role.toUpperCase()}</span>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
