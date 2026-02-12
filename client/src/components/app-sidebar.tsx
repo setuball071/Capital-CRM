@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -30,6 +30,7 @@ interface MenuSection {
     module?: string;
     subItem?: string;
     masterOnly?: boolean;
+    roleOnly?: string;
   }[];
 }
 
@@ -72,8 +73,9 @@ export function AppSidebar() {
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string }): boolean => {
     if (item.masterOnly && !isMaster) return false;
+    if (item.roleOnly && userRole !== item.roleOnly && !isMaster) return false;
     const module = item.module || getModuleForUrl(item.url);
     if (!module) return true;
     
@@ -102,7 +104,7 @@ export function AppSidebar() {
       title: "Principal",
       icon: Home,
       items: [
-        // "Início" removido pois é redundante estar dentro de "Principal"
+        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, roleOnly: "vendedor" },
       ],
     },
     {

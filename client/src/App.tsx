@@ -45,6 +45,7 @@ import SimuladorAmortizacaoPage from "@/pages/simulador-amortizacao";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
+import DashboardVendedorPage from "@/pages/dashboard-vendedor";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -82,9 +83,13 @@ function HomePage() {
     return <Redirect to="/login" />;
   }
 
-  // Only isMaster users go to dashboard, others go to welcome page
+  // Only isMaster users go to dashboard, vendedores to their panel, others to welcome
   if (user.isMaster) {
     return <Redirect to="/dashboard" />;
+  }
+  
+  if (user.role === "vendedor") {
+    return <Redirect to="/dashboard-vendedor" />;
   }
   
   return <Redirect to="/welcome" />;
@@ -323,6 +328,9 @@ function Router() {
               </Route>
               <Route path="/equipes">
                 {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
+              </Route>
+              <Route path="/dashboard-vendedor">
+                {() => <ProtectedRoute component={DashboardVendedorPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
