@@ -370,7 +370,7 @@ export default function DashboardVendedorPage() {
                 {data?.vendedorNome || user.name}
               </h1>
               {data?.rankingPosition && (
-                <span className="text-xs sm:text-sm font-black text-primary/70 tracking-tight whitespace-nowrap" data-testid="text-ranking">
+                <span className="sm:text-sm tracking-tight whitespace-nowrap text-[30px] font-black text-[#442cab] pl-[22px] pr-[22px] text-right" data-testid="text-ranking">
                   Top {data.rankingPosition}#
                 </span>
               )}
@@ -406,9 +406,7 @@ export default function DashboardVendedorPage() {
           </button>
         </div>
       </header>
-
       {view === "dashboard" ? <DashboardPanel /> : <RegulationPanel />}
-
       <footer className="mt-8 sm:mt-12 pt-4 sm:pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] sm:text-[10px] text-muted-foreground/50 font-bold uppercase tracking-wider">
         <div className="flex items-center gap-2">
           <Shield size={10} className="text-primary/30" />
