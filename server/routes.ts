@@ -15403,6 +15403,139 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ========================
+  // Dashboard Vendedor API
+  // ========================
+  app.get("/api/dashboard-vendedor", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const tenantId = req.tenantId || req.session?.tenantId;
+
+      if (!userId || !tenantId) {
+        return res.status(401).json({ message: "Não autorizado" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const metaMensal = user.metaMensal ? parseFloat(user.metaMensal as string) : 0;
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const firstDayOfMonth = new Date(year, month, 1);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+
+      const calcDiasUteis = (start: Date, end: Date) => {
+        let count = 0;
+        const d = new Date(start);
+        while (d <= end) {
+          const dow = d.getDay();
+          if (dow !== 0 && dow !== 6) count++;
+          d.setDate(d.getDate() + 1);
+        }
+        return count;
+      };
+
+      const diasUteisNoMes = calcDiasUteis(firstDayOfMonth, lastDayOfMonth);
+      const hoje = new Date(year, month, now.getDate());
+      const diasUteisAteHoje = calcDiasUteis(firstDayOfMonth, hoje);
+
+      const contratosResult = await db.execute(sql`
+        SELECT 
+          DATE(data_contrato) as dia,
+          COUNT(*)::int as quantidade,
+          COALESCE(SUM(valor_contrato), 0)::numeric as valor_total
+        FROM vendedor_contratos
+        WHERE vendedor_id = ${userId}
+          AND tenant_id = ${tenantId}
+          AND data_contrato >= ${firstDayOfMonth.toISOString()}
+          AND data_contrato <= ${lastDayOfMonth.toISOString()}
+        GROUP BY DATE(data_contrato)
+        ORDER BY dia ASC
+      `);
+
+      const totaisResult = await db.execute(sql`
+        SELECT 
+          COUNT(*)::int as total_contratos,
+          COALESCE(SUM(valor_contrato), 0)::numeric as total_valor
+        FROM vendedor_contratos
+        WHERE vendedor_id = ${userId}
+          AND tenant_id = ${tenantId}
+          AND data_contrato >= ${firstDayOfMonth.toISOString()}
+          AND data_contrato <= ${lastDayOfMonth.toISOString()}
+      `);
+
+      const totalContratos = parseInt(totaisResult.rows[0]?.total_contratos as string) || 0;
+      const totalValor = parseFloat(totaisResult.rows[0]?.total_valor as string) || 0;
+
+      const metaDiaria = diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
+      const mediaAtual = diasUteisAteHoje > 0 ? totalValor / diasUteisAteHoje : 0;
+      const projecaoMensal = mediaAtual * diasUteisNoMes;
+      const percentualMeta = metaMensal > 0 ? (totalValor / metaMensal) * 100 : 0;
+
+      let indicadorCor: "verde" | "amarelo" | "vermelho" = "vermelho";
+      if (metaMensal > 0) {
+        if (projecaoMensal >= metaMensal) {
+          indicadorCor = "verde";
+        } else if (projecaoMensal >= metaMensal * 0.85) {
+          indicadorCor = "amarelo";
+        }
+      }
+
+      const allDays: Record<string, { quantidade: number; valor: number }> = {};
+      const d = new Date(firstDayOfMonth);
+      while (d <= hoje) {
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const key = d.toISOString().split("T")[0];
+          allDays[key] = { quantidade: 0, valor: 0 };
+        }
+        d.setDate(d.getDate() + 1);
+      }
+
+      for (const row of contratosResult.rows) {
+        const dia = (row.dia as string).split("T")[0];
+        if (allDays[dia] !== undefined) {
+          allDays[dia] = {
+            quantidade: parseInt(row.quantidade as string) || 0,
+            valor: parseFloat(row.valor_total as string) || 0,
+          };
+        }
+      }
+
+      const contratosPorDia = Object.entries(allDays).map(([dia, data]) => ({
+        dia: dia.substring(8, 10) + "/" + dia.substring(5, 7),
+        diaCompleto: dia,
+        quantidade: data.quantidade,
+        valor: data.valor,
+        metaDiaria: Math.round(metaDiaria * 100) / 100,
+      }));
+
+      return res.json({
+        vendedorNome: user.name,
+        metaMensal,
+        totalValor: Math.round(totalValor * 100) / 100,
+        totalContratos,
+        percentualMeta: Math.round(percentualMeta * 100) / 100,
+        projecaoMensal: Math.round(projecaoMensal * 100) / 100,
+        indicadorCor,
+        metaDiaria: Math.round(metaDiaria * 100) / 100,
+        mediaAtual: Math.round(mediaAtual * 100) / 100,
+        diasUteisNoMes,
+        diasUteisAteHoje,
+        diasUteisRestantes: diasUteisNoMes - diasUteisAteHoje,
+        contratosPorDia,
+        mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+      });
+    } catch (error) {
+      console.error("Error in dashboard-vendedor API:", error);
+      return res.status(500).json({ message: "Erro ao carregar dashboard" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

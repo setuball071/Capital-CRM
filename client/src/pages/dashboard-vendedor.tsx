@@ -1,16 +1,9 @@
-import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Trophy,
-  Medal,
-  Calendar,
-  CheckCircle,
-  TrendingUp,
-  Target,
-} from "lucide-react";
+import { Loader2, TrendingUp, Target, Calendar, DollarSign, BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -20,56 +13,46 @@ import {
   ComposedChart,
   Bar,
   Line,
+  ReferenceLine,
   Cell,
 } from "recharts";
 
-const INITIAL_CAMPAIGNS = [
-  {
-    id: "monthly-feb",
-    type: "monthly",
-    title: "Meta Mensal - Fevereiro",
-    active: true,
-    steps: [
-      { target: 10000, reward: "Bônus R$ 500" },
-      { target: 30000, reward: "Bônus R$ 1.500" },
-      { target: 50000, reward: "Bônus R$ 3.000" },
-    ],
-  },
-  {
-    id: "special-q1",
-    type: "special",
-    title: "Campanha Master (Trimestral)",
-    active: true,
-    steps: [{ target: 150000, reward: "Viagem Internacional" }],
-  },
-];
+interface DashboardData {
+  vendedorNome: string;
+  metaMensal: number;
+  totalValor: number;
+  totalContratos: number;
+  percentualMeta: number;
+  projecaoMensal: number;
+  indicadorCor: "verde" | "amarelo" | "vermelho";
+  metaDiaria: number;
+  mediaAtual: number;
+  diasUteisNoMes: number;
+  diasUteisAteHoje: number;
+  diasUteisRestantes: number;
+  contratosPorDia: Array<{
+    dia: string;
+    diaCompleto: string;
+    quantidade: number;
+    valor: number;
+    metaDiaria: number;
+  }>;
+  mesAno: string;
+}
 
-const DAILY_PRODUCTION = [
-  { day: "01", valor: 2500, acumulado: 2500 },
-  { day: "02", valor: 0, acumulado: 2500 },
-  { day: "03", valor: 4200, acumulado: 6700 },
-  { day: "04", valor: 1500, acumulado: 8200 },
-  { day: "05", valor: 8500, acumulado: 16700 },
-  { day: "06", valor: 1200, acumulado: 17900 },
-  { day: "07", valor: 0, acumulado: 17900 },
-  { day: "08", valor: 3100, acumulado: 21000 },
-  { day: "09", valor: 5000, acumulado: 26000 },
-  { day: "10", valor: 6500, acumulado: 32500 },
-];
-
-const RANKING_DATA = [
-  { position: 1, name: "Ana Costa", value: 52300 },
-  { position: 2, name: "Carlos Mendes", value: 45100 },
-  { position: 3, name: "Marcos Silva", value: 38200 },
-  { position: 5, name: "Julia Santos", value: 28400 },
-];
+const MESES: Record<string, string> = {
+  "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
+  "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto",
+  "09": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro",
+};
 
 export default function DashboardVendedorPage() {
   const { user } = useAuth();
-  const [campaigns] = useState(INITIAL_CAMPAIGNS);
-  const production = 32500;
-  const userRank = 4;
-  const diasRestantes = 8;
+
+  const { data, isLoading, isError } = useQuery<DashboardData>({
+    queryKey: ["/api/dashboard-vendedor"],
+    refetchInterval: 60000,
+  });
 
   if (!user) return null;
 
@@ -81,20 +64,58 @@ export default function DashboardVendedorPage() {
   };
 
   const formatCurrency = (value: number) =>
-    `R$ ${value.toLocaleString("pt-BR")}`;
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
-  const monthlyCampaign = campaigns.find(
-    (c) => c.active && c.type === "monthly"
-  );
-  const mainTarget = monthlyCampaign
-    ? monthlyCampaign.steps[monthlyCampaign.steps.length - 1].target
-    : 50000;
-  const percent = (production / mainTarget) * 100;
+  const formatCurrencyShort = (value: number) => {
+    if (value >= 1000) return `R$ ${(value / 1000).toFixed(1)}k`;
+    return formatCurrency(value);
+  };
 
-  const nextRankValue = RANKING_DATA.find(
-    (r) => r.position === userRank - 1
-  )?.value;
-  const gapToNextRank = nextRankValue ? nextRankValue - production : 0;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground mb-2">Erro ao carregar o painel</p>
+            <p className="text-xs text-muted-foreground">Tente recarregar a página</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const indicadorBg = data?.indicadorCor === "verde"
+    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+    : data?.indicadorCor === "amarelo"
+    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+    : "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30";
+
+  const indicadorIcon = data?.indicadorCor === "verde"
+    ? <ArrowUpRight className="h-4 w-4" />
+    : data?.indicadorCor === "amarelo"
+    ? <ArrowUpRight className="h-4 w-4" />
+    : <ArrowDownRight className="h-4 w-4" />;
+
+  const mesNome = data?.mesAno ? MESES[data.mesAno.split("/")[0]] || "" : "";
+  const ano = data?.mesAno ? data.mesAno.split("/")[1] : "";
+
+  const chartData = data?.contratosPorDia || [];
+
+  const projecaoLinhaData = chartData.map((item, idx) => {
+    if (data && data.diasUteisAteHoje > 0) {
+      const projecaoPorDia = data.projecaoMensal / data.diasUteisNoMes;
+      return { ...item, projecaoDiaria: Math.round(projecaoPorDia * 100) / 100 };
+    }
+    return { ...item, projecaoDiaria: 0 };
+  });
 
   return (
     <div className="flex flex-col h-screen" data-testid="dashboard-vendedor">
@@ -103,12 +124,7 @@ export default function DashboardVendedorPage() {
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 border-2 border-primary">
               <AvatarFallback className="text-sm font-bold">
-                {user.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")
-                  .substring(0, 2)
-                  .toUpperCase()}
+                {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div>
@@ -116,306 +132,236 @@ export default function DashboardVendedorPage() {
                 {getGreeting()}, {user.name.split(" ")[0]}
               </h1>
               <p className="text-xs text-muted-foreground">
-                Painel do Vendedor
+                Painel de Performance &middot; {mesNome} {ano}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="gap-1" data-testid="badge-rank">
-              <Medal className="h-3 w-3" />
-              TOP {userRank}
-            </Badge>
             <Badge variant="secondary" className="gap-1" data-testid="badge-dias-restantes">
               <Calendar className="h-3 w-3" />
-              {diasRestantes} dias úteis restantes
+              {data?.diasUteisRestantes || 0} dias úteis restantes
             </Badge>
           </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 max-w-[1400px] mx-auto">
-          <div className="lg:col-span-8 space-y-4 md:space-y-6">
-            {monthlyCampaign && (
-              <Card data-testid="card-meta-principal">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start flex-wrap gap-4 mb-6">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                        {monthlyCampaign.title}
-                      </p>
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-4xl md:text-5xl font-black" data-testid="text-producao-valor">
-                          {formatCurrency(production)}
-                        </span>
-                        <span className="text-lg text-muted-foreground font-bold">
-                          / {mainTarget.toLocaleString("pt-BR")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <div className="bg-primary/10 border border-primary/20 p-3 rounded-xl text-center mb-1">
-                        <p className="text-2xl font-black text-primary" data-testid="text-percent">
-                          {percent.toFixed(0)}%
-                        </p>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                        Atingimento Total
-                      </p>
-                    </div>
-                  </div>
-                  <div className="w-full h-3 bg-muted rounded-full mb-3">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary to-chart-2 rounded-full transition-all duration-1000"
-                      style={{ width: `${Math.min(percent, 100)}%` }}
-                      data-testid="progress-meta"
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
-                    <span>Início do Mês</span>
-                    <span>
-                      Meta batida em {formatCurrency(mainTarget)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card data-testid="card-grafico-ritmo">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center flex-wrap gap-2">
-                  <div>
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-primary" />
-                      RITMO DE PRODUÇÃO
-                    </CardTitle>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Volume de contratos por dia digitado
-                    </p>
-                  </div>
+        <div className="max-w-[1400px] mx-auto space-y-4 md:space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <Card data-testid="card-meta-mensal">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Meta Mensal</p>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[280px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={DAILY_PRODUCTION}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="hsl(var(--border))"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="day"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis hide />
-                      <Tooltip
-                        cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                          color: "hsl(var(--card-foreground))",
-                        }}
-                        formatter={(value: number, name: string) => [
-                          formatCurrency(value),
-                          name === "valor" ? "Produção" : "Acumulado",
-                        ]}
-                      />
-                      <Bar
-                        dataKey="valor"
-                        fill="hsl(var(--primary))"
-                        radius={[4, 4, 0, 0]}
-                        barSize={40}
-                      >
-                        {DAILY_PRODUCTION.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              entry.valor > 5000
-                                ? "hsl(var(--chart-1))"
-                                : "hsl(var(--primary))"
-                            }
-                          />
-                        ))}
-                      </Bar>
-                      <Line
-                        type="monotone"
-                        dataKey="acumulado"
-                        stroke="hsl(var(--muted-foreground))"
-                        strokeWidth={2}
-                        dot={false}
-                        opacity={0.3}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                <p className="text-xl md:text-2xl font-black" data-testid="text-meta-mensal">
+                  {data?.metaMensal ? formatCurrency(data.metaMensal) : "Não definida"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-total-fechado">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Total Fechado</p>
+                </div>
+                <p className="text-xl md:text-2xl font-black" data-testid="text-total-fechado">
+                  {formatCurrency(data?.totalValor || 0)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {data?.totalContratos || 0} contratos
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-percentual">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">% da Meta</p>
+                </div>
+                <p className="text-xl md:text-2xl font-black" data-testid="text-percentual">
+                  {(data?.percentualMeta || 0).toFixed(1)}%
+                </p>
+                <div className="w-full h-2 bg-muted rounded-full mt-2">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-chart-2 rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.min(data?.percentualMeta || 0, 100)}%` }}
+                    data-testid="progress-meta"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-projecao">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Projeção Final</p>
+                </div>
+                <p className="text-xl md:text-2xl font-black" data-testid="text-projecao">
+                  {formatCurrency(data?.projecaoMensal || 0)}
+                </p>
+                <div className="mt-2">
+                  <Badge variant="outline" className={`text-[10px] gap-1 ${indicadorBg}`} data-testid="badge-indicador">
+                    {indicadorIcon}
+                    {data?.indicadorCor === "verde" ? "Acima da meta" :
+                     data?.indicadorCor === "amarelo" ? "Próximo da meta" : "Abaixo da meta"}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <div className="lg:col-span-4 space-y-4 md:space-y-6">
-            <Card data-testid="card-ranking">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Medal className="h-4 w-4 text-yellow-500" />
-                    POSIÇÃO NO RANKING
-                  </span>
-                  <span className="text-2xl font-black">#{userRank}</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {RANKING_DATA.filter((r) => r.position === userRank - 1).map(
-                    (r) => (
-                      <div
-                        key={r.position}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback className="text-[10px]">
-                              {r.position}º
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-muted-foreground">
-                            {r.name}
-                          </span>
-                        </div>
-                        <span className="font-bold text-muted-foreground">
-                          {formatCurrency(r.value)}
-                        </span>
-                      </div>
-                    )
-                  )}
-
-                  <div className="flex items-center justify-between text-xs p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-7 w-7 border border-primary">
-                        <AvatarFallback className="text-[10px] bg-primary text-primary-foreground font-bold">
-                          {userRank}º
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-bold">Você</span>
-                    </div>
-                    <span className="font-bold text-primary">
-                      {formatCurrency(production)}
-                    </span>
-                  </div>
-
-                  {RANKING_DATA.filter((r) => r.position === userRank + 1).map(
-                    (r) => (
-                      <div
-                        key={r.position}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback className="text-[10px]">
-                              {r.position}º
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-muted-foreground">
-                            {r.name}
-                          </span>
-                        </div>
-                        <span className="font-bold text-muted-foreground">
-                          {formatCurrency(r.value)}
-                        </span>
-                      </div>
-                    )
-                  )}
-
-                  {gapToNextRank > 0 && (
-                    <div className="pt-2 border-t">
-                      <p className="text-[10px] text-center text-muted-foreground font-bold uppercase">
-                        Faltam {formatCurrency(gapToNextRank)} para subir de
-                        posição
-                      </p>
-                    </div>
-                  )}
+          <Card data-testid="card-grafico-ritmo">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center flex-wrap gap-2">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    RITMO DE PRODUÇÃO
+                  </CardTitle>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Valor de contratos fechados por dia útil
+                  </p>
                 </div>
+                <div className="flex items-center gap-4 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-primary" />
+                    <span className="text-muted-foreground">Produção/dia</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-6 h-0.5 bg-emerald-500" />
+                    <span className="text-muted-foreground">Meta diária</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-6 h-0.5 border-t-2 border-dashed border-amber-500" />
+                    <span className="text-muted-foreground">Projeção</span>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={projecaoLinhaData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(var(--border))"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="dia"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v: number) => formatCurrencyShort(v)}
+                      width={60}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        color: "hsl(var(--card-foreground))",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value: number, name: string) => {
+                        const label = name === "valor" ? "Produção" :
+                                      name === "metaDiaria" ? "Meta diária" :
+                                      name === "projecaoDiaria" ? "Projeção diária" : name;
+                        return [formatCurrency(value), label];
+                      }}
+                    />
+                    {data?.metaDiaria && data.metaDiaria > 0 && (
+                      <ReferenceLine
+                        y={data.metaDiaria}
+                        stroke="hsl(var(--chart-2))"
+                        strokeWidth={2}
+                        strokeDasharray=""
+                        label={{
+                          value: `Meta: ${formatCurrencyShort(data.metaDiaria)}`,
+                          position: "right",
+                          fill: "hsl(var(--chart-2))",
+                          fontSize: 10,
+                        }}
+                      />
+                    )}
+                    <Bar
+                      dataKey="valor"
+                      fill="hsl(var(--primary))"
+                      radius={[4, 4, 0, 0]}
+                      barSize={32}
+                    >
+                      {projecaoLinhaData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.valor >= (data?.metaDiaria || 0) && entry.valor > 0
+                              ? "hsl(var(--chart-2))"
+                              : "hsl(var(--primary))"
+                          }
+                        />
+                      ))}
+                    </Bar>
+                    <Line
+                      type="monotone"
+                      dataKey="projecaoDiaria"
+                      stroke="hsl(var(--chart-4))"
+                      strokeWidth={2}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      connectNulls
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+            <Card data-testid="card-media-diaria">
+              <CardContent className="p-4">
+                <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide mb-1">Média Diária Atual</p>
+                <p className="text-lg font-black" data-testid="text-media-diaria">
+                  {formatCurrency(data?.mediaAtual || 0)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Baseado em {data?.diasUteisAteHoje || 0} dias úteis trabalhados
+                </p>
               </CardContent>
             </Card>
 
-            <Card data-testid="card-campanhas">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-primary" />
-                  CAMPANHAS ATIVAS
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-5">
-                  {campaigns
-                    .filter((c) => c.active)
-                    .map((camp) => (
-                      <div
-                        key={camp.id}
-                        className="border-t pt-4 first:border-0 first:pt-0"
-                        data-testid={`campaign-${camp.id}`}
-                      >
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase mb-3 tracking-widest">
-                          {camp.title}
-                        </p>
-                        <div className="space-y-2">
-                          {camp.steps.map((step, idx) => {
-                            const isAchieved = production >= step.target;
-                            const prevTarget =
-                              idx > 0 ? camp.steps[idx - 1].target : 0;
-                            const isNext =
-                              !isAchieved && production >= prevTarget;
-                            return (
-                              <div
-                                key={idx}
-                                className={`p-3 rounded-lg border transition-all ${
-                                  isAchieved
-                                    ? "bg-chart-2/10 border-chart-2/30"
-                                    : isNext
-                                    ? "bg-primary/10 border-primary/30"
-                                    : "bg-muted/50 border-border"
-                                }`}
-                                data-testid={`campaign-step-${camp.id}-${idx}`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <p
-                                      className={`font-bold text-sm ${
-                                        isAchieved
-                                          ? "text-chart-2"
-                                          : ""
-                                      }`}
-                                    >
-                                      {step.reward}
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground">
-                                      Meta: {formatCurrency(step.target)}
-                                    </p>
-                                  </div>
-                                  {isAchieved && (
-                                    <CheckCircle className="h-4 w-4 text-chart-2" />
-                                  )}
-                                  {isNext && (
-                                    <Target className="h-4 w-4 text-primary animate-pulse" />
-                                  )}
-                                </div>
-                                {isNext && (
-                                  <p className="mt-1 text-[10px] text-primary font-bold uppercase">
-                                    Faltam{" "}
-                                    {formatCurrency(step.target - production)}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+            <Card data-testid="card-meta-diaria">
+              <CardContent className="p-4">
+                <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide mb-1">Meta Diária Necessária</p>
+                <p className="text-lg font-black" data-testid="text-meta-diaria">
+                  {formatCurrency(data?.metaDiaria || 0)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {data?.diasUteisNoMes || 0} dias úteis no mês
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-falta-meta">
+              <CardContent className="p-4">
+                <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide mb-1">Falta para Meta</p>
+                <p className="text-lg font-black" data-testid="text-falta-meta">
+                  {formatCurrency(Math.max((data?.metaMensal || 0) - (data?.totalValor || 0), 0))}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Em {data?.diasUteisRestantes || 0} dias úteis restantes
+                </p>
               </CardContent>
             </Card>
           </div>

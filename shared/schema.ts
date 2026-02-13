@@ -189,6 +189,7 @@ export const users = pgTable("users", {
   restringirPorIp: boolean("restringir_por_ip").default(false),
   ipsPermitidos: text("ips_permitidos"), // JSON array Ex: ["192.168.1.100", "192.168.1.101"]
   employeeId: integer("employee_id"), // References employees(id) - FK constraint exists in DB
+  metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -2148,4 +2149,30 @@ export const insertCommercialTeamMemberSchema = createInsertSchema(commercialTea
 
 export type CommercialTeamMember = typeof commercialTeamMembers.$inferSelect;
 export type InsertCommercialTeamMember = z.infer<typeof insertCommercialTeamMemberSchema>;
+
+// Vendedor Contratos table - contratos fechados pelos vendedores (produção)
+export const vendedorContratos = pgTable("vendedor_contratos", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  vendedorId: integer("vendedor_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  clienteNome: varchar("cliente_nome", { length: 255 }).notNull(),
+  clienteCpf: varchar("cliente_cpf", { length: 14 }),
+  banco: varchar("banco", { length: 100 }),
+  convenio: varchar("convenio", { length: 100 }),
+  tipoOperacao: varchar("tipo_operacao", { length: 100 }),
+  prazo: integer("prazo"),
+  valorContrato: decimal("valor_contrato", { precision: 12, scale: 2 }).notNull(),
+  valorParcela: decimal("valor_parcela", { precision: 10, scale: 2 }),
+  valorTroco: decimal("valor_troco", { precision: 10, scale: 2 }),
+  dataContrato: timestamp("data_contrato").notNull().defaultNow(),
+  status: varchar("status", { length: 50 }).notNull().default("pendente"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertVendedorContratoSchema = createInsertSchema(vendedorContratos).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type VendedorContrato = typeof vendedorContratos.$inferSelect;
+export type InsertVendedorContrato = z.infer<typeof insertVendedorContratoSchema>;
 
