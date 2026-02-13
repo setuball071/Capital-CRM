@@ -1,0 +1,296 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  TrendingUp, Target, Award, Zap, Calendar, Trophy, 
+  Settings, User, Medal, CheckCircle2, AlertTriangle, 
+  XCircle, ChevronUp, Gem, Shield, Crown, Sparkles, Star,
+  FileText, ArrowUpRight, TrendingDown, Gauge, BookOpen, 
+  DollarSign, Info, Scale, AlertCircle
+} from 'lucide-react';
+import { 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, ReferenceLine
+} from 'recharts';
+
+// --- Configurações de Negócio MS Promotora ---
+const DIAS_UTEIS_MES = 22;
+
+const PERFORMANCE_TIERS = {
+  5: { name: 'BRONZE', color: '#cd7f32', icon: Shield, bg: 'bg-orange-900/10', target: 10000, rewardValue: 500 },
+  4: { name: 'PRATA', color: '#94a3b8', icon: Medal, bg: 'bg-slate-800/40', target: 30000, rewardValue: 1200 },
+  3: { name: 'OURO', color: '#fbbf24', icon: Star, bg: 'bg-yellow-500/10', target: 50000, rewardValue: 3000 },
+  2: { name: 'DIAMANTE', color: '#22d3ee', icon: Gem, bg: 'bg-cyan-500/10', target: 80000, rewardValue: 6000 },
+  1: { name: 'ELITE', color: '#a855f7', icon: Crown, bg: 'bg-purple-600/10', target: 150000, rewardValue: 15000 }
+};
+
+// Dados Reais de Exemplo (10 dias, total 32.500)
+const DADOS_REAIS = [
+  { dia: 1, valor: 3000 }, { dia: 2, valor: 1500 }, { dia: 3, valor: 4000 },
+  { dia: 4, valor: 2800 }, { dia: 5, valor: 5200 }, { dia: 6, valor: 1200 },
+  { dia: 7, valor: 0 }, { dia: 8, valor: 2900 }, { dia: 9, valor: 5400 },
+  { dia: 10, valor: 3500 } 
+];
+
+const App = () => {
+  const [view, setView] = useState('dashboard'); 
+  
+  const user = {
+    name: "Ricardo Oliveira",
+    tierLevel: 4, // Status PRATA
+    photo: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ricardo",
+    metaMensal: 50000,
+    diasDecorridos: 10,
+  };
+
+  const currentTier = PERFORMANCE_TIERS[user.tierLevel];
+  const nextTier = PERFORMANCE_TIERS[user.tierLevel - 1];
+
+  const { stats, chartData } = useMemo(() => {
+    const totalFechado = DADOS_REAIS.reduce((acc, curr) => acc + curr.valor, 0);
+    const diasRestantes = DIAS_UTEIS_MES - user.diasDecorridos;
+    const metaDiariaOriginal = user.metaMensal / DIAS_UTEIS_MES;
+    
+    const saldoDevedor = user.metaMensal - totalFechado;
+    const metaDiariaAjustada = diasRestantes > 0 ? Math.max(0, saldoDevedor / diasRestantes) : 0;
+    const percentualAtingimento = (totalFechado / user.metaMensal) * 100;
+
+    const fullMonthData = Array.from({ length: DIAS_UTEIS_MES }, (_, i) => {
+      const dia = i + 1;
+      const dadoReal = DADOS_REAIS.find(d => d.dia === dia);
+      const isPassado = dia <= user.diasDecorridos;
+      const metaDoDia = isPassado ? metaDiariaOriginal : metaDiariaAjustada;
+      const produzido = dadoReal ? dadoReal.valor : 0;
+
+      return {
+        dia: dia < 10 ? `0${dia}` : `${dia}`,
+        preenchimento: Math.min(produzido, metaDoDia),
+        vazio: Math.max(0, metaDoDia - produzido),
+        excedente: Math.max(0, produzido - metaDoDia),
+        totalReal: produzido,
+        metaDoDia
+      };
+    });
+
+    return { 
+      stats: { totalFechado, metaDiariaAjustada, saldoDevedor, diasRestantes, percentualAtingimento },
+      chartData: fullMonthData
+    };
+  }, [user.metaMensal, user.diasDecorridos]);
+
+  const RegulationPanel = () => (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-5xl mx-auto">
+      <div className="bg-[#111318] border border-white/5 rounded-[3rem] p-10 shadow-3xl">
+        <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-purple-600/20 rounded-2xl">
+              <Scale className="text-purple-500" size={32} />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">Regulamento de Desempenho</h2>
+              <p className="text-slate-500 font-medium">Classificações e Premiações MS</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500">
+            <AlertCircle size={16} />
+            <span className="text-[10px] font-black uppercase tracking-widest">Prêmios não cumulativos</span>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-3xl border border-white/5 bg-black/20">
+          <table className="w-full text-left">
+            <thead className="bg-white/5 border-b border-white/5">
+              <tr>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Nível Extraordinário</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Faturamento Mínimo</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Prêmio (R$)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 text-sm font-bold">
+              {Object.values(PERFORMANCE_TIERS).sort((a, b) => b.target - a.target).map((tier, idx) => (
+                <tr key={idx} className="group hover:bg-white/[0.02]">
+                  <td className="px-8 py-6 flex items-center gap-4">
+                    <tier.icon size={20} style={{ color: tier.color }} />
+                    <span className="text-white italic tracking-widest uppercase">{tier.name}</span>
+                  </td>
+                  <td className="px-8 py-6 text-slate-300">R$ {tier.target.toLocaleString()}</td>
+                  <td className="px-8 py-6 text-2xl text-emerald-400 italic font-black">R$ {tier.rewardValue.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const DashboardPanel = () => (
+    <div className="space-y-8 animate-in fade-in duration-700">
+      
+      {/* CARD SUPERIOR - ESTILO image_945e78.png (BONIFICAÇÃO REMOVIDA) */}
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative border border-slate-200">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <p className="text-slate-400 text-[11px] font-black uppercase tracking-widest mb-2">Meta Mensal - Fevereiro</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black text-[#1e1b4b]">R$ {stats.totalFechado.toLocaleString()}</span>
+              <span className="text-2xl font-bold text-slate-300">/ {user.metaMensal.toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <div className="bg-[#e0e7ff] px-8 py-4 rounded-3xl border border-blue-100 shadow-sm mb-1">
+              <span className="text-4xl font-black text-blue-600">{stats.percentualAtingimento.toFixed(0)}%</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-black uppercase tracking-tighter italic">Atingimento Total</p>
+          </div>
+        </div>
+        <div className="w-full h-4 bg-slate-100 rounded-full mb-5 overflow-hidden shadow-inner">
+          <div className="h-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(stats.percentualAtingimento, 100)}%` }} />
+        </div>
+        <div className="flex justify-between text-[11px] font-black text-slate-400 uppercase tracking-widest italic opacity-80">
+          <span>Início do Mês</span>
+          <span>Meta Alvo de R$ {user.metaMensal.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* GRÁFICO CENTRAL */}
+        <div className="lg:col-span-8">
+          <div className="bg-[#111318] border border-white/5 rounded-[3rem] p-10 shadow-2xl relative">
+            <div className="flex justify-between items-start mb-10 pb-6 border-b border-white/5">
+              <div>
+                <h3 className="text-white font-black text-2xl tracking-tighter flex items-center gap-3 italic uppercase">
+                  <Gauge size={28} className="text-purple-500" /> Ritmo de Desempenho
+                </h3>
+                <p className="text-xs text-slate-500 mt-2 font-medium italic font-mono tracking-tighter">
+                  Status de preenchimento da meta diária recalculada.
+                </p>
+              </div>
+              
+              {/* RESTAURAÇÃO DA LEGENDA SOLICITADA */}
+              <div className="flex gap-6 mt-2 bg-black/20 p-3 rounded-2xl border border-white/5">
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 rounded-sm bg-[#9333ea] shadow-[0_0_8px_rgba(147,51,234,0.4)]"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRODUZIDO</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 rounded-sm bg-[#1e1b4b]"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">A REALIZAR</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[400px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.2} />
+                  <XAxis dataKey="dia" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis hide />
+                  <Tooltip cursor={{ fill: '#ffffff', opacity: 0.03 }} contentStyle={{ backgroundColor: '#0f1115', border: '1px solid #334155', borderRadius: '24px' }} />
+                  <Bar dataKey="preenchimento" stackId="a" fill="#9333ea" barSize={34} radius={chartData.some(d => d.vazio > 0) ? [0, 0, 0, 0] : [10, 10, 0, 0]} />
+                  <Bar dataKey="vazio" stackId="a" fill="#1e1b4b" barSize={34} radius={[10, 10, 0, 0]} />
+                  <Bar dataKey="excedente" stackId="a" fill="#e9d5ff" barSize={34} radius={[10, 10, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
+            {/* CARDS DE APOIO DIÁRIO */}
+            <div className="grid grid-cols-2 gap-6 mt-10">
+              <div className="bg-black/20 p-6 rounded-[2rem] border border-white/5 text-center">
+                 <p className="text-slate-500 text-[10px] font-black uppercase mb-1 tracking-widest">Saldo p/ Meta 100%</p>
+                 <p className="text-3xl font-black text-white italic tracking-tighter">R$ {stats.saldoDevedor.toLocaleString()}</p>
+              </div>
+              <div className="bg-purple-600/10 p-6 rounded-[2rem] border border-purple-500/20 text-center ring-1 ring-purple-500/10 animate-pulse">
+                 <p className="text-purple-400 text-[10px] font-black uppercase mb-1 tracking-widest italic flex items-center justify-center gap-1">
+                   <Zap size={10} fill="currentColor" /> Meta de Hoje
+                 </p>
+                 <p className="text-3xl font-black text-white italic tracking-tighter">R$ {Math.round(stats.metaDiariaAjustada).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SIDEBAR: NÍVEL EXTRAORDINÁRIO (FIXO) */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-[#111318] border border-white/5 rounded-[3rem] p-10 shadow-2xl relative overflow-hidden group border-purple-500/10">
+            <div className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:opacity-10 transition-opacity duration-1000">
+              <currentTier.icon size={160} />
+            </div>
+
+            <h3 className="text-purple-500 font-black text-[14px] flex items-center gap-2 mb-10 uppercase tracking-[0.4em] italic">
+              <Shield size={18} fill="currentColor" className="opacity-80" /> Nível Extraordinário
+            </h3>
+
+            <div className="text-center mb-10 relative z-10">
+              <div className="inline-flex p-8 rounded-full bg-slate-900 border border-white/5 shadow-inner mb-6 ring-4 ring-purple-500/5">
+                <currentTier.icon size={64} style={{ color: currentTier.color }} />
+              </div>
+              <h2 className="text-[12px] font-bold text-slate-500 uppercase tracking-[0.6em] mb-2 text-center italic">Sua Classificação</h2>
+              <p className="text-5xl font-black italic tracking-tighter text-center uppercase leading-none mb-6" style={{ color: currentTier.color }}>
+                {currentTier.name}
+              </p>
+              <div className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-5 py-2 rounded-full border border-emerald-500/20 shadow-lg">
+                 <DollarSign size={14} />
+                 <span className="text-sm font-black italic tracking-widest uppercase">Prêmio: R$ {currentTier.rewardValue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {nextTier && (
+              <div className="space-y-6 bg-purple-500/5 p-8 rounded-[2.5rem] border border-purple-500/10 shadow-inner relative z-10">
+                <div className="flex justify-between items-center">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic tracking-tight underline decoration-purple-500 underline-offset-8">Rumo ao {nextTier.name}</p>
+                   <div className="text-white font-black italic text-sm">R$ {nextTier.rewardValue.toLocaleString()}</div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs font-black italic text-white opacity-70">
+                    <span>R$ {(nextTier.target - stats.totalFechado).toLocaleString()} faltantes</span>
+                    <span className="text-purple-400">{Math.min(100, (stats.totalFechado/nextTier.target * 100)).toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-white/5">
+                    <div className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 rounded-full shadow-[0_0_12px_rgba(168,85,247,0.4)]" style={{ width: `${Math.min((stats.totalFechado/nextTier.target * 100), 100)}%` }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#090b0e] text-slate-200 p-4 md:p-8 font-sans selection:bg-purple-500 selection:text-white">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8">
+        <div className="flex items-center gap-6">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full border-2 border-purple-600 p-1 shadow-2xl">
+              <img src={user.photo} className="rounded-full bg-slate-800 border border-white/5" />
+            </div>
+            <div className="absolute -bottom-2 -right-2 p-2 rounded-full border-2 border-[#090b0e] shadow-xl ring-2 ring-purple-500/20" style={{ backgroundColor: currentTier.color }}>
+              <currentTier.icon size={12} className="text-[#090b0e]" />
+            </div>
+          </div>
+          <div>
+            <h1 className="font-black text-4xl text-white tracking-tighter uppercase leading-none italic">MS PROMOTORA</h1>
+            <p className="text-[10px] text-slate-500 font-black tracking-[0.6em] uppercase mt-2 tracking-widest italic">{user.name} • STATUS {currentTier.name}</p>
+          </div>
+        </div>
+
+        <div className="flex bg-[#111318] p-2 rounded-[1.5rem] border border-white/5 shadow-3xl">
+          <button onClick={() => setView('dashboard')} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase transition-all tracking-widest flex items-center gap-2 ${view === 'dashboard' ? 'bg-purple-600 text-white shadow-xl shadow-purple-900/40' : 'text-slate-500 hover:text-white'}`}>Dashboard</button>
+          <button onClick={() => setView('rules')} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase transition-all tracking-widest flex items-center gap-2 ${view === 'rules' ? 'bg-purple-600 text-white shadow-xl shadow-purple-900/40' : 'text-slate-500 hover:text-white'}`}>Regulamento</button>
+        </div>
+      </header>
+
+      {view === 'dashboard' ? <DashboardPanel /> : <RegulationPanel />}
+      
+      <footer className="mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] text-slate-800 font-black uppercase tracking-[0.5em]">
+        <div className="flex items-center gap-3">
+          <Shield size={12} className="text-purple-900" />
+          <span>MS Compliance - Classificação Extraordinária Protegida</span>
+        </div>
+        <span>2024 • AIZ CRM Infrastructure</span>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
