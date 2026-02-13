@@ -15491,6 +15491,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const currentTier = getTierForValue(totalValor);
       const nextTier = getNextTierForValue(totalValor);
 
+      const rankingResult = await db.execute(sql`
+        SELECT vendedor_id, COALESCE(SUM(valor_contrato), 0)::numeric as total
+        FROM vendedor_contratos
+        WHERE tenant_id = ${tenantId}
+          AND data_contrato >= ${firstDayOfMonth.toISOString()}
+          AND data_contrato <= ${lastDayOfMonth.toISOString()}
+        GROUP BY vendedor_id
+        ORDER BY total DESC
+      `);
+
+      let rankingPosition = 1;
+      for (let i = 0; i < rankingResult.rows.length; i++) {
+        if (String(rankingResult.rows[i].vendedor_id) === String(userId)) {
+          rankingPosition = i + 1;
+          break;
+        }
+      }
+
       const allDaysMap: Record<string, { quantidade: number; valor: number }> = {};
       const d = new Date(firstDayOfMonth);
       while (d <= hoje) {
@@ -15572,6 +15590,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         diasUteisAteHoje,
         diasUteisRestantes,
         contratosPorDia: allChartData,
+        rankingPosition,
         currentTier,
         nextTier,
         allTiers: PERFORMANCE_TIERS,

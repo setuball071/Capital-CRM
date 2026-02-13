@@ -47,6 +47,7 @@ interface DashboardData {
     vazio: number;
     excedente: number;
   }>;
+  rankingPosition: number;
   currentTier: TierData | null;
   nextTier: TierData | null;
   allTiers: TierData[];
@@ -218,7 +219,7 @@ export default function DashboardVendedorPage() {
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Produzido</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/20" />
+                    <div className="w-2.5 h-2.5 rounded-sm bg-primary/15 border border-primary/30" />
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">A Realizar</span>
                   </div>
                 </div>
@@ -248,7 +249,7 @@ export default function DashboardVendedorPage() {
                       }}
                     />
                     <Bar dataKey="preenchimento" stackId="a" fill="hsl(var(--primary))" barSize={24} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="vazio" stackId="a" fill="hsl(var(--muted))" barSize={24} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="vazio" stackId="a" fill="hsl(var(--primary) / 0.15)" barSize={24} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="excedente" stackId="a" fill="hsl(var(--chart-4))" barSize={24} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -364,9 +365,16 @@ export default function DashboardVendedorPage() {
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="font-black text-lg sm:text-2xl lg:text-3xl text-foreground tracking-tight uppercase leading-none truncate" data-testid="text-dashboard-title">
-              {data?.vendedorNome || user.name}
-            </h1>
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="font-black text-lg sm:text-2xl lg:text-3xl text-foreground tracking-tight uppercase leading-none truncate" data-testid="text-dashboard-title">
+                {data?.vendedorNome || user.name}
+              </h1>
+              {data?.rankingPosition && (
+                <span className="text-xs sm:text-sm font-black text-primary/70 tracking-tight whitespace-nowrap" data-testid="text-ranking">
+                  Top {data.rankingPosition}#
+                </span>
+              )}
+            </div>
             <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1">
               {mesNome} {data?.mesAno?.split("/")[1]} {currentTierData ? `\u2022 ${currentTierData.name}` : ""}
             </p>
