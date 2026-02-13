@@ -4284,7 +4284,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             pessoa = processedPessoas.get(cpf);
           } else {
             // Buscar no banco de dados
-            const pessoasEncontradas = await storage.getClientesByCpf(cpf, effectiveTenantIdBg);
+            const pessoasEncontradas = await storage.getClientesByCpf(cpf);
             pessoa = pessoasEncontradas[0];
           }
         }
@@ -4944,7 +4944,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               pessoa = processedPessoas.get(cpf);
             } else {
               // Buscar no banco de dados
-              const pessoasEncontradas = await storage.getClientesByCpf(cpf, effectiveTenantIdSync);
+              const pessoasEncontradas = await storage.getClientesByCpf(cpf);
               pessoa = pessoasEncontradas[0];
             }
           }
@@ -7226,23 +7226,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // GET consulta de cliente por CPF ou matrícula - MASTER ONLY
-  // CRÍTICO: Sempre filtra por tenant_id derivado do usuário autenticado
+  // GET consulta de cliente por CPF ou matrícula
+  // Base de clientes é compartilhada entre todos os ambientes
   app.get("/api/clientes/consulta", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const { cpf, matricula, convenio, base } = req.query;
-      // CRÍTICO: Usar req.tenantId que é derivado do usuário autenticado pelo requireAuth
-      const userTenantId = req.tenantId;
       
-      // CRÍTICO: tenant_id obrigatório para isolamento multi-tenant
-      if (!userTenantId) {
-        console.error("[Consulta Cliente] ERROR: No tenantId - user may not have tenant assigned");
-        return res.status(401).json({ 
-          message: "Sessão inválida. Seu usuário não está vinculado a um ambiente. Faça login novamente ou contate o administrador." 
-        });
-      }
-      
-      // Validate at least one search parameter is provided
       if (!cpf && !matricula) {
         return res.status(400).json({ 
           message: "Informe CPF ou matrícula para realizar a consulta" 
@@ -7255,15 +7244,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const convenioFiltro = convenio ? String(convenio).trim() : null;
       const baseFiltro = base ? String(base).trim() : null;
       
-      console.log(`[Consulta Cliente] tenant=${userTenantId}, tipoBusca=${matricula ? 'matricula' : 'cpf'}, convenio=${convenioFiltro || 'all'}, base=${baseFiltro || 'all'}`);
+      console.log(`[Consulta Cliente] user=${req.user?.id}, tipoBusca=${matricula ? 'matricula' : 'cpf'}, convenio=${convenioFiltro || 'all'}, base=${baseFiltro || 'all'}`);
       
-      // Priority: matricula > cpf
       if (matricula) {
         tipoBusca = "matricula";
         termo = String(matricula).trim();
         
-        // CRÍTICO: Passa tenantId para filtrar apenas dados do tenant
-        const clientes = await storage.getClientesByMatricula(termo, userTenantId, convenioFiltro || undefined, baseFiltro || undefined);
+        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -7277,19 +7264,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         }));
       } else if (cpf) {
         tipoBusca = "cpf";
-        // Clean CPF (remove dots, dashes) and normalize to 11 digits with padStart
         const cleanCpf = String(cpf).replace(/\D/g, "");
         termo = cleanCpf.padStart(11, "0");
         
-        // Validate CPF has at least 1 digit and at most 11 digits
         if (cleanCpf.length === 0 || cleanCpf.length > 11) {
           return res.status(400).json({ 
             message: "CPF inválido. Informe um CPF válido." 
           });
         }
         
-        // CRÍTICO: Passa tenantId para filtrar apenas dados do tenant
-        const clientes = await storage.getClientesByCpf(termo, userTenantId, convenioFiltro || undefined, baseFiltro || undefined);
+        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -7305,7 +7289,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(400).json({ message: "Parâmetro inválido" });
       }
       
-      console.log(`[Consulta Cliente] tenant=${userTenantId}, tipo=${tipoBusca}, termo="${termo}", resultados=${resultados.length}`);
+      console.log(`[Consulta Cliente] user=${req.user?.id}, tipo=${tipoBusca}, termo="${termo}", resultados=${resultados.length}`);
       
       return res.json({
         tipo_busca: tipoBusca,
