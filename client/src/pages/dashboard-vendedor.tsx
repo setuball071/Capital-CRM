@@ -206,7 +206,7 @@ export default function DashboardVendedorPage() {
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
                 <div>
-                  <h3 className="text-foreground font-black italic text-base sm:text-lg lg:text-xl tracking-tight flex items-center gap-2 uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <h3 className="text-foreground font-black italic text-xl sm:text-2xl lg:text-3xl tracking-tight flex items-center gap-2 uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                     <Gauge size={20} className="text-primary" /> Ritmo de Desempenho
                   </h3>
                   <p className="text-[11px] text-muted-foreground mt-1">
@@ -282,7 +282,7 @@ export default function DashboardVendedorPage() {
                 <CurrentTierIcon size={120} />
               </div>
 
-              <h3 className="text-primary font-black italic text-[11px] sm:text-[12px] flex items-center gap-2 mb-5 sm:mb-8 uppercase tracking-[0.2em] sm:tracking-[0.3em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              <h3 className="text-primary font-black italic text-sm sm:text-base lg:text-lg flex items-center gap-2 mb-5 sm:mb-8 uppercase tracking-[0.15em] sm:tracking-[0.2em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                 <Shield size={14} fill="currentColor" className="opacity-80" /> Nível Extraordinário
               </h3>
 
@@ -294,7 +294,7 @@ export default function DashboardVendedorPage() {
                   Sua Classificação
                 </h2>
                 <p
-                  className="text-2xl sm:text-3xl lg:text-4xl font-black italic tracking-tight text-center uppercase leading-none mb-3 sm:mb-5"
+                  className="text-3xl sm:text-4xl lg:text-5xl font-black italic tracking-tight text-center uppercase leading-none mb-3 sm:mb-5"
                   style={{ color: currentTierData?.color || "hsl(var(--muted-foreground))", fontFamily: "'Barlow Condensed', sans-serif" }}
                   data-testid="text-tier-name"
                 >
@@ -366,11 +366,11 @@ export default function DashboardVendedorPage() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h1 className="font-black italic text-lg sm:text-2xl lg:text-3xl text-foreground tracking-tight uppercase leading-none truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
+              <h1 className="font-black italic text-2xl sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase leading-none truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
                 {data?.vendedorNome || user.name}
               </h1>
               {data?.rankingPosition && (
-                <span className="sm:text-sm tracking-tight whitespace-nowrap text-[30px] font-black italic text-[#442cab] pl-[22px] pr-[22px] text-right" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-ranking">
+                <span className="text-xl sm:text-2xl lg:text-3xl tracking-tight whitespace-nowrap font-black italic text-primary/70" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-ranking">
                   Top {data.rankingPosition}#
                 </span>
               )}
