@@ -15390,6 +15390,31 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // ========================
   // Dashboard Vendedor API
   // ========================
+
+  const PERFORMANCE_TIERS = [
+    { level: 5, name: "BRONZE", color: "#cd7f32", icon: "Shield", target: 10000, rewardValue: 500 },
+    { level: 4, name: "PRATA", color: "#94a3b8", icon: "Medal", target: 30000, rewardValue: 1200 },
+    { level: 3, name: "OURO", color: "#fbbf24", icon: "Star", target: 50000, rewardValue: 3000 },
+    { level: 2, name: "DIAMANTE", color: "#22d3ee", icon: "Gem", target: 80000, rewardValue: 6000 },
+    { level: 1, name: "ELITE", color: "#a855f7", icon: "Crown", target: 150000, rewardValue: 15000 },
+  ];
+
+  function getTierForValue(value: number) {
+    const sorted = [...PERFORMANCE_TIERS].sort((a, b) => b.target - a.target);
+    for (const tier of sorted) {
+      if (value >= tier.target) return tier;
+    }
+    return null;
+  }
+
+  function getNextTierForValue(value: number) {
+    const sorted = [...PERFORMANCE_TIERS].sort((a, b) => a.target - b.target);
+    for (const tier of sorted) {
+      if (value < tier.target) return tier;
+    }
+    return null;
+  }
+
   app.get("/api/dashboard-vendedor", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.session?.userId;
@@ -15426,6 +15451,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const diasUteisNoMes = calcDiasUteis(firstDayOfMonth, lastDayOfMonth);
       const hoje = new Date(year, month, now.getDate());
       const diasUteisAteHoje = calcDiasUteis(firstDayOfMonth, hoje);
+      const diasUteisRestantes = diasUteisNoMes - diasUteisAteHoje;
 
       const contratosResult = await db.execute(sql`
         SELECT 
@@ -15455,48 +15481,81 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const totalContratos = parseInt(totaisResult.rows[0]?.total_contratos as string) || 0;
       const totalValor = parseFloat(totaisResult.rows[0]?.total_valor as string) || 0;
 
-      const metaDiaria = diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
+      const metaDiariaOriginal = diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
+      const saldoDevedor = Math.max(0, metaMensal - totalValor);
+      const metaDiariaAjustada = diasUteisRestantes > 0 ? saldoDevedor / diasUteisRestantes : 0;
       const mediaAtual = diasUteisAteHoje > 0 ? totalValor / diasUteisAteHoje : 0;
       const projecaoMensal = mediaAtual * diasUteisNoMes;
       const percentualMeta = metaMensal > 0 ? (totalValor / metaMensal) * 100 : 0;
 
-      let indicadorCor: "verde" | "amarelo" | "vermelho" = "vermelho";
-      if (metaMensal > 0) {
-        if (projecaoMensal >= metaMensal) {
-          indicadorCor = "verde";
-        } else if (projecaoMensal >= metaMensal * 0.85) {
-          indicadorCor = "amarelo";
-        }
-      }
+      const currentTier = getTierForValue(totalValor);
+      const nextTier = getNextTierForValue(totalValor);
 
-      const allDays: Record<string, { quantidade: number; valor: number }> = {};
+      const allDaysMap: Record<string, { quantidade: number; valor: number }> = {};
       const d = new Date(firstDayOfMonth);
       while (d <= hoje) {
         const dow = d.getDay();
         if (dow !== 0 && dow !== 6) {
           const key = d.toISOString().split("T")[0];
-          allDays[key] = { quantidade: 0, valor: 0 };
+          allDaysMap[key] = { quantidade: 0, valor: 0 };
         }
         d.setDate(d.getDate() + 1);
       }
 
       for (const row of contratosResult.rows) {
         const dia = (row.dia as string).split("T")[0];
-        if (allDays[dia] !== undefined) {
-          allDays[dia] = {
+        if (allDaysMap[dia] !== undefined) {
+          allDaysMap[dia] = {
             quantidade: parseInt(row.quantidade as string) || 0,
             valor: parseFloat(row.valor_total as string) || 0,
           };
         }
       }
 
-      const contratosPorDia = Object.entries(allDays).map(([dia, data]) => ({
-        dia: dia.substring(8, 10) + "/" + dia.substring(5, 7),
-        diaCompleto: dia,
-        quantidade: data.quantidade,
-        valor: data.valor,
-        metaDiaria: Math.round(metaDiaria * 100) / 100,
-      }));
+      let diaIndex = 0;
+      const contratosPorDia = Object.entries(allDaysMap).map(([dia, dayData]) => {
+        diaIndex++;
+        const isPassado = true;
+        const metaDoDia = isPassado ? metaDiariaOriginal : metaDiariaAjustada;
+        const produzido = dayData.valor;
+        const preenchimento = Math.min(produzido, metaDoDia);
+        const vazio = Math.max(0, metaDoDia - produzido);
+        const excedente = Math.max(0, produzido - metaDoDia);
+
+        return {
+          dia: dia.substring(8, 10),
+          diaCompleto: dia,
+          quantidade: dayData.quantidade,
+          valor: dayData.valor,
+          metaDoDia: Math.round(metaDoDia * 100) / 100,
+          preenchimento: Math.round(preenchimento * 100) / 100,
+          vazio: Math.round(vazio * 100) / 100,
+          excedente: Math.round(excedente * 100) / 100,
+        };
+      });
+
+      const futureDays: typeof contratosPorDia = [];
+      const futureD = new Date(hoje);
+      futureD.setDate(futureD.getDate() + 1);
+      while (futureD <= lastDayOfMonth) {
+        const dow = futureD.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const key = futureD.toISOString().split("T")[0];
+          futureDays.push({
+            dia: key.substring(8, 10),
+            diaCompleto: key,
+            quantidade: 0,
+            valor: 0,
+            metaDoDia: Math.round(metaDiariaAjustada * 100) / 100,
+            preenchimento: 0,
+            vazio: Math.round(metaDiariaAjustada * 100) / 100,
+            excedente: 0,
+          });
+        }
+        futureD.setDate(futureD.getDate() + 1);
+      }
+
+      const allChartData = [...contratosPorDia, ...futureDays];
 
       return res.json({
         vendedorNome: user.name,
@@ -15505,13 +15564,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         totalContratos,
         percentualMeta: Math.round(percentualMeta * 100) / 100,
         projecaoMensal: Math.round(projecaoMensal * 100) / 100,
-        indicadorCor,
-        metaDiaria: Math.round(metaDiaria * 100) / 100,
+        metaDiariaOriginal: Math.round(metaDiariaOriginal * 100) / 100,
+        metaDiariaAjustada: Math.round(metaDiariaAjustada * 100) / 100,
         mediaAtual: Math.round(mediaAtual * 100) / 100,
+        saldoDevedor: Math.round(saldoDevedor * 100) / 100,
         diasUteisNoMes,
         diasUteisAteHoje,
-        diasUteisRestantes: diasUteisNoMes - diasUteisAteHoje,
-        contratosPorDia,
+        diasUteisRestantes,
+        contratosPorDia: allChartData,
+        currentTier,
+        nextTier,
+        allTiers: PERFORMANCE_TIERS,
         mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
       });
     } catch (error) {
