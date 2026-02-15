@@ -213,7 +213,7 @@ export default function DashboardVendedorPage() {
                     Status de preenchimento da meta diária recalculada
                   </p>
                 </div>
-                <div className="flex gap-3 sm:gap-4 bg-muted/50 p-2 rounded-lg border border-border">
+                <div className="flex gap-3 sm:gap-4 bg-muted/50 p-2 rounded-lg border border-border flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "hsl(var(--primary))" }} />
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Produzido</span>
@@ -221,6 +221,10 @@ export default function DashboardVendedorPage() {
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-sm bg-primary/15 border border-primary/30" />
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Meta do Dia</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "#00C853" }} />
+                    <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Excedente</span>
                   </div>
                 </div>
               </div>
@@ -239,18 +243,22 @@ export default function DashboardVendedorPage() {
                         borderRadius: "12px",
                         fontSize: "12px",
                         color: "hsl(var(--card-foreground))",
+                        padding: "10px 14px",
                       }}
-                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 700, marginBottom: "4px" }}
                       formatter={(value: number, name: string) => {
                         const label = name === "preenchimento" ? "Produzido" :
                                       name === "vazio" ? "A realizar" :
                                       name === "excedente" ? "Excedente" : name;
-                        return [`R$ ${value.toLocaleString("pt-BR")}`, label];
+                        const color = name === "preenchimento" ? "hsl(var(--primary))" :
+                                      name === "excedente" ? "#00C853" :
+                                      "hsl(var(--muted-foreground))";
+                        return [<span style={{ color, fontWeight: 600 }}>{`R$ ${value.toLocaleString("pt-BR")}`}</span>, label];
                       }}
                     />
                     <Bar dataKey="preenchimento" stackId="a" fill="hsl(var(--primary))" barSize={24} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="vazio" stackId="a" fill="hsl(var(--primary) / 0.15)" barSize={24} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="excedente" stackId="a" fill="hsl(var(--chart-4))" barSize={24} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="excedente" stackId="a" fill="#00C853" barSize={24} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
