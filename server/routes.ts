@@ -804,10 +804,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Priority 3: Fall back to first active tenant
+        // Priority 3: Fall back to Capital Go (primary dev tenant, id=4)
         if (!tenant) {
-          const [fallbackTenant] = await db.select().from(tenants).where(eq(tenants.isActive, true)).limit(1);
-          tenant = fallbackTenant || null;
+          const DEV_DEFAULT_TENANT_ID = 4;
+          const [fallbackTenant] = await db.select().from(tenants).where(
+            and(eq(tenants.id, DEV_DEFAULT_TENANT_ID), eq(tenants.isActive, true))
+          ).limit(1);
+          if (fallbackTenant) {
+            tenant = fallbackTenant;
+          } else {
+            const [anyTenant] = await db.select().from(tenants).where(eq(tenants.isActive, true)).limit(1);
+            tenant = anyTenant || null;
+          }
         }
       }
       
