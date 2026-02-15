@@ -220,7 +220,7 @@ export default function DashboardVendedorPage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-sm bg-primary/15 border border-primary/30" />
-                    <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">A Realizar</span>
+                    <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Meta do Dia</span>
                   </div>
                 </div>
               </div>
