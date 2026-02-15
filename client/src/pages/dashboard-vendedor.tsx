@@ -257,7 +257,7 @@ export default function DashboardVendedorPage() {
 
               <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6">
                 <div className="bg-muted/50 p-3 sm:p-5 rounded-xl border border-border text-center">
-                  <p className="text-muted-foreground text-[9px] sm:text-[10px] font-bold uppercase mb-1 tracking-wider">Saldo p/ Meta 100%</p>
+                  <p className="text-muted-foreground text-[9px] sm:text-[10px] font-bold uppercase mb-1 tracking-wider">Quanto falta pra Meta</p>
                   <p className="text-lg sm:text-xl lg:text-2xl font-black text-foreground tracking-tight" data-testid="text-saldo-devedor">
                     R$ {(data?.saldoDevedor || 0).toLocaleString("pt-BR")}
                   </p>
