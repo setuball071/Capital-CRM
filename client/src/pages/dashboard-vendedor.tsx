@@ -420,7 +420,7 @@ export default function DashboardVendedorPage() {
           <Shield size={10} className="text-primary/30" />
           <span>Classificação Extraordinária Protegida</span>
         </div>
-        <span>ConsigOne CRM</span>
+        <span>Capital GO</span>
       </footer>
     </div>
   );
