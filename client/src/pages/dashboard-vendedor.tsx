@@ -223,7 +223,7 @@ export default function DashboardVendedorPage() {
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Meta do Dia</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "#D81B60" }} />
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "#A855F7" }} />
                     <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Excedente</span>
                   </div>
                 </div>
@@ -251,14 +251,14 @@ export default function DashboardVendedorPage() {
                                       name === "vazio" ? "A realizar" :
                                       name === "excedente" ? "Excedente" : name;
                         const color = name === "preenchimento" ? "hsl(var(--primary))" :
-                                      name === "excedente" ? "#D81B60" :
+                                      name === "excedente" ? "#A855F7" :
                                       "hsl(var(--muted-foreground))";
                         return [<span style={{ color, fontWeight: 600 }}>{`R$ ${value.toLocaleString("pt-BR")}`}</span>, label];
                       }}
                     />
                     <Bar dataKey="preenchimento" stackId="a" fill="hsl(var(--primary))" barSize={24} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="vazio" stackId="a" fill="hsl(var(--primary) / 0.15)" barSize={24} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="excedente" stackId="a" fill="#D81B60" barSize={24} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="excedente" stackId="a" fill="#A855F7" barSize={24} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
