@@ -15826,6 +15826,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let totalIgnorados = 0;
 
       const contratos: any[] = [];
+      const ignorados: any[] = [];
 
       for (const row of rows) {
         totalImportado++;
@@ -15833,6 +15834,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const contratoId = String(row.ContratoId || "").trim();
         if (!contratoId) {
           totalIgnorados++;
+          ignorados.push({
+            linha: totalImportado + 1,
+            contratoId: "(vazio)",
+            nomeCliente: String(row.NomeCliente || "").trim(),
+            motivo: "ContratoId vazio ou ausente",
+          });
           continue;
         }
 
@@ -15879,6 +15886,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         } else {
           totalIgnorados++;
+          const motivos: string[] = [];
+          if (!isPago) {
+            motivos.push(`Status "${statusProposta || "(vazio)"}" — somente "PAGO" é aceito`);
+          }
+          if (!dataPagamentoRaw) {
+            motivos.push("Data de pagamento ausente");
+          }
+          if (valorBase <= 0) {
+            motivos.push("Valor base zerado ou inválido");
+          }
+          ignorados.push({
+            linha: totalImportado + 1,
+            contratoId,
+            nomeCliente: contrato.nomeCliente,
+            cpfCliente: contrato.cpfCliente,
+            banco: contrato.banco,
+            status: statusProposta,
+            dataPagamento: dataPagamentoRaw || "(vazia)",
+            valorBase,
+            motivo: motivos.join("; "),
+          });
         }
       }
 
@@ -15891,6 +15919,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           totalIgnorados,
         },
         contratos,
+        ignorados,
       });
     } catch (error: any) {
       console.error("[IMPORT-PRODUCAO] Preview error:", error);

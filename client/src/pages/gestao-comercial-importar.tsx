@@ -27,6 +27,18 @@ interface ResumoImportacao {
   totalIgnorados: number;
 }
 
+interface ContratoIgnorado {
+  linha: number;
+  contratoId: string;
+  nomeCliente: string;
+  cpfCliente?: string;
+  banco?: string;
+  status: string;
+  dataPagamento: string;
+  valorBase?: number;
+  motivo: string;
+}
+
 type Step = "upload" | "preview" | "confirmed";
 
 export default function GestaoComercialImportarPage() {
@@ -37,6 +49,8 @@ export default function GestaoComercialImportarPage() {
   const [fileName, setFileName] = useState("");
   const [resumo, setResumo] = useState<ResumoImportacao | null>(null);
   const [contratos, setContratos] = useState<ContratoPreview[]>([]);
+  const [ignorados, setIgnorados] = useState<ContratoIgnorado[]>([]);
+  const [showIgnorados, setShowIgnorados] = useState(false);
   const [resultado, setResultado] = useState<{ inseridos: number; atualizados: number; ignorados: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -77,6 +91,8 @@ export default function GestaoComercialImportarPage() {
       const data = await response.json();
       setResumo(data.resumo);
       setContratos(data.contratos);
+      setIgnorados(data.ignorados || []);
+      setShowIgnorados(false);
       setStep("preview");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message || "Erro ao processar arquivo", variant: "destructive" });
@@ -117,6 +133,8 @@ export default function GestaoComercialImportarPage() {
     setFileName("");
     setResumo(null);
     setContratos([]);
+    setIgnorados([]);
+    setShowIgnorados(false);
     setResultado(null);
   };
 
@@ -226,13 +244,26 @@ export default function GestaoComercialImportarPage() {
                     <p className="text-xs text-muted-foreground mt-1">Valor Cartão</p>
                   </CardContent>
                 </Card>
-                <Card className="border">
+                <Card
+                  className={`border ${resumo.totalIgnorados > 0 ? "cursor-pointer hover-elevate" : ""}`}
+                  onClick={() => {
+                    if (resumo.totalIgnorados > 0) {
+                      setShowIgnorados(true);
+                      setTimeout(() => {
+                        document.getElementById("section-ignorados")?.scrollIntoView({ behavior: "smooth" });
+                      }, 100);
+                    }
+                  }}
+                >
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />
                       <p className="text-2xl font-bold text-amber-500" data-testid="text-total-ignorados">{resumo.totalIgnorados}</p>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">Ignorados</p>
+                    {resumo.totalIgnorados > 0 && (
+                      <p className="text-xs text-primary mt-1">Clique para ver</p>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -292,6 +323,61 @@ export default function GestaoComercialImportarPage() {
               </div>
             </CardContent>
           </Card>
+
+          {ignorados.length > 0 && (
+            <Card id="section-ignorados">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileX className="h-5 w-5 text-amber-500" />
+                  Contratos Ignorados ({ignorados.length})
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowIgnorados(!showIgnorados)}
+                  data-testid="button-toggle-ignorados"
+                >
+                  {showIgnorados ? "Ocultar detalhes" : "Ver detalhes"}
+                </Button>
+              </CardHeader>
+              {showIgnorados && (
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" data-testid="table-ignorados">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="p-2 font-medium">Linha</th>
+                          <th className="p-2 font-medium">Contrato</th>
+                          <th className="p-2 font-medium">Cliente</th>
+                          <th className="p-2 font-medium">Status</th>
+                          <th className="p-2 font-medium">Data Pgto</th>
+                          <th className="p-2 font-medium">Motivo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ignorados.map((ig, i) => (
+                          <tr key={ig.contratoId + "-" + i} className="border-b">
+                            <td className="p-2 text-muted-foreground">{ig.linha}</td>
+                            <td className="p-2">{ig.contratoId}</td>
+                            <td className="p-2 max-w-[150px] truncate">{ig.nomeCliente}</td>
+                            <td className="p-2">
+                              <span className="inline-flex items-center gap-1 text-amber-600 font-medium text-xs">
+                                <AlertTriangle className="h-3 w-3" /> {ig.status || "(vazio)"}
+                              </span>
+                            </td>
+                            <td className="p-2 text-muted-foreground">{ig.dataPagamento}</td>
+                            <td className="p-2">
+                              <span className="text-destructive text-xs">{ig.motivo}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <Button variant="outline" onClick={handleReset} data-testid="button-cancel">
