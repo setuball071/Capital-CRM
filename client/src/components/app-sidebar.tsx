@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -31,6 +31,7 @@ interface MenuSection {
     subItem?: string;
     masterOnly?: boolean;
     roleOnly?: string;
+    rolesAllowed?: string[];
     tenantFeature?: string;
   }[];
 }
@@ -67,6 +68,7 @@ export function AppSidebar() {
     admin: false,
     academia: false,
     alpha: false,
+    gestãocomercial: false,
   });
 
   if (!user) return null;
@@ -78,10 +80,11 @@ export function AppSidebar() {
     moduloPerformanceEnabled,
   };
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; tenantFeature?: string }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string }): boolean => {
     if (item.tenantFeature && !tenantFeatureFlags[item.tenantFeature]) return false;
     if (item.masterOnly && !isMaster) return false;
     if (item.roleOnly && userRole !== item.roleOnly && !isMaster) return false;
+    if (item.rolesAllowed && !item.rolesAllowed.includes(userRole) && !isMaster) return false;
     const module = item.module || getModuleForUrl(item.url);
     if (!module) return true;
     
@@ -178,6 +181,17 @@ export function AppSidebar() {
         { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
+      ],
+    },
+    {
+      title: "Gestão Comercial",
+      icon: Briefcase,
+      items: [
+        { title: "Dashboard da Empresa", url: "/vendas/gestao-comercial/dashboard", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Importar Produção", url: "/vendas/gestao-comercial/importar-producao", icon: Upload, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Metas & Níveis", url: "/vendas/gestao-comercial/metas-niveis", icon: Target, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Regulamento", url: "/vendas/gestao-comercial/regulamento", icon: FileText, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Relatórios", url: "/vendas/gestao-comercial/relatorios", icon: FileBarChart, rolesAllowed: ["master", "coordenacao"] },
       ],
     },
   ];

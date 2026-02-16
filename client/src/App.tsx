@@ -47,6 +47,11 @@ import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
 import DashboardVendedorPage from "@/pages/dashboard-vendedor";
+import GestaoComercialDashboardPage from "@/pages/gestao-comercial-dashboard";
+import GestaoComercialImportarPage from "@/pages/gestao-comercial-importar";
+import GestaoComercialMetasPage from "@/pages/gestao-comercial-metas";
+import GestaoComercialRegulamentoPage from "@/pages/gestao-comercial-regulamento";
+import GestaoComercialRelatoriosPage from "@/pages/gestao-comercial-relatorios";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -112,6 +117,28 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
   }
 
   if (!user.isMaster) {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  if (!user.isMaster && !allowedRoles.includes(user.role)) {
     return <Redirect to="/" />;
   }
 
@@ -355,6 +382,21 @@ function Router() {
               </Route>
               <Route path="/dashboard-vendedor">
                 {() => <TenantFeatureRoute component={DashboardVendedorPage} feature="moduloPerformanceEnabled" />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/dashboard">
+                {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master", "coordenacao"]} />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/importar-producao">
+                {() => <RoleRoute component={GestaoComercialImportarPage} allowedRoles={["master", "coordenacao"]} />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/metas-niveis">
+                {() => <RoleRoute component={GestaoComercialMetasPage} allowedRoles={["master", "coordenacao"]} />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/regulamento">
+                {() => <RoleRoute component={GestaoComercialRegulamentoPage} allowedRoles={["master", "coordenacao"]} />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/relatorios">
+                {() => <RoleRoute component={GestaoComercialRelatoriosPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
