@@ -823,8 +823,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
       
-      // Note: devTenantId cookie is only set during login, not here
-      // This prevents overwriting the user's actual tenant with a fallback tenant
+      if (process.env.NODE_ENV === "development" && tenant) {
+        const cookieHeader = req.headers.cookie || "";
+        const hasDevCookie = cookieHeader.includes("devTenantId=");
+        if (!hasDevCookie) {
+          res.cookie("devTenantId", tenant.id.toString(), {
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            httpOnly: false,
+            sameSite: "lax"
+          });
+        }
+      }
       
       res.json({
         id: tenant.id,
@@ -1257,6 +1266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Erro ao fazer logout" });
       }
       res.clearCookie("connect.sid");
+      res.clearCookie("devTenantId");
       return res.json({ message: "Logout realizado com sucesso" });
     });
   });
