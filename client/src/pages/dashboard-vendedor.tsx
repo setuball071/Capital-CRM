@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -202,6 +202,95 @@ function MetaCartaoCard({ performance, mesNome }: {
   );
 }
 
+function NivelCard({ performance, label, icon: IconComponent }: {
+  performance: CategoriaPerformance | undefined;
+  label: string;
+  icon: typeof Shield;
+}) {
+  if (!performance) return null;
+  const nivel = performance.nivelAtual;
+  const proximo = performance.proximoNivel;
+  const NivelIcon = nivel ? getTierIcon(nivel.icone) : Shield;
+
+  return (
+    <Card className="rounded-2xl border-primary/10 relative overflow-visible h-full" data-testid={`card-nivel-${label.toLowerCase().includes("cartão") ? "cartao" : "geral"}`}>
+      <CardContent className="p-4 sm:p-5 h-full flex flex-col">
+        <div className="absolute top-0 right-0 p-4 opacity-[0.04] pointer-events-none">
+          <NivelIcon size={80} />
+        </div>
+
+        <div className="flex items-center gap-2 mb-3">
+          <IconComponent size={14} className="text-primary" />
+          <h3 className="text-primary font-black italic text-[11px] sm:text-xs uppercase tracking-[0.15em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {label}
+          </h3>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center mb-3 relative z-10">
+          <div className="inline-flex p-3 sm:p-4 rounded-full bg-muted border border-border mb-2">
+            <NivelIcon size={24} style={{ color: nivel?.cor || "hsl(var(--muted-foreground))" }} />
+          </div>
+          <p className="text-[8px] sm:text-[9px] font-bold text-muted-foreground uppercase tracking-[0.3em] mb-0.5">
+            Sua Classificação
+          </p>
+          <p
+            className="text-xl sm:text-2xl font-black italic tracking-tight uppercase leading-none mb-2"
+            style={{ color: nivel?.cor || "hsl(var(--muted-foreground))", fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {nivel?.nome || "SEM NÍVEL"}
+          </p>
+          {nivel && (
+            <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+              <DollarSign size={10} />
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+                Prêmio: R$ {nivel.premio.toLocaleString("pt-BR")}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {proximo && (
+          <div className="bg-muted/50 p-3 rounded-xl border border-border relative z-10">
+            <div className="flex justify-between items-center gap-1 mb-1.5">
+              <p className="text-[8px] sm:text-[9px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <ChevronRight size={9} className="text-primary" /> Rumo ao {proximo.nome}
+              </p>
+              <span className="text-[10px] sm:text-xs font-black" style={{ color: proximo.cor }}>
+                R$ {proximo.premio.toLocaleString("pt-BR")}
+              </span>
+            </div>
+            <div className="flex justify-between items-center gap-1 mb-1.5">
+              <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground">
+                R$ {performance.faltaParaProximo.toLocaleString("pt-BR")} faltantes
+              </span>
+              <span className="text-[9px] sm:text-[10px] font-black text-primary">
+                {performance.progressoNivel.toFixed(0)}%
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden border border-border">
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{
+                  width: `${Math.min(performance.progressoNivel, 100)}%`,
+                  backgroundColor: proximo.cor,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!proximo && nivel && (
+          <div className="bg-primary/5 p-3 rounded-xl border border-primary/10 text-center relative z-10">
+            <p className="text-[9px] sm:text-[10px] font-black text-primary uppercase tracking-wider flex items-center justify-center gap-1">
+              <Crown size={10} /> Nível Máximo Atingido
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardVendedorPage() {
   const { user } = useAuth();
   const [view, setView] = useState<"dashboard" | "rules">("dashboard");
@@ -319,8 +408,8 @@ export default function DashboardVendedorPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:gap-6">
-        <div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+        <div className="lg:col-span-8">
           <Card className="rounded-2xl">
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
@@ -402,6 +491,18 @@ export default function DashboardVendedorPage() {
           </Card>
         </div>
 
+        <div className="lg:col-span-4 space-y-4 sm:space-y-5">
+          <NivelCard
+            performance={perfData?.geral}
+            label="Nível Geral"
+            icon={Target}
+          />
+          <NivelCard
+            performance={perfData?.cartao}
+            label="Nível Cartão"
+            icon={CreditCard}
+          />
+        </div>
       </div>
     </div>
   );
