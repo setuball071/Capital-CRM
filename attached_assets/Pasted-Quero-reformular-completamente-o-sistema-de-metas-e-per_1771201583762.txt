@@ -1,0 +1,224 @@
+Quero reformular completamente o sistema de metas e performance dos vendedores.
+
+IMPORTANTE:
+
+Remover totalmente qualquer uso da palavra "ranking" do sistema.
+
+O modelo agora será baseado em NÍVEIS INDIVIDUAIS.
+
+Deve ser escalável para novas categorias no futuro.
+
+🎯 OBJETIVO
+
+Implementar um sistema de metas com:
+
+Meta Geral
+
+Meta Cartão (paralela e independente)
+
+Regras:
+
+A produção de cartão soma na meta geral.
+
+A produção geral NÃO soma na meta cartão.
+
+Cada categoria tem seus próprios níveis e premiações.
+
+O sistema deve calcular automaticamente o nível com base na produção acumulada do mês.
+
+📦 1. CRIAR ESTRUTURA DE BANCO
+
+Criar tabela:
+
+meta_niveis
+
+Campos:
+
+id (PK)
+categoria (VARCHAR) → 'GERAL', 'CARTAO' (deixar preparado para novas categorias)
+nome_nivel (VARCHAR) → BRONZE, PRATA, OURO, DIAMANTE
+valor_minimo (NUMERIC)
+valor_maximo (NUMERIC)
+premio (NUMERIC)
+ordem (INT)
+
+Criar índices para:
+
+categoria
+
+valor_minimo
+
+valor_maximo
+
+📦 2. LÓGICA DE CÁLCULO DE NÍVEL
+
+Criar função:
+
+getNivelAtual(vendedorId, categoria)
+
+Regras:
+
+Buscar produção acumulada do mês atual.
+
+Se categoria = GERAL:
+
+somar toda produção.
+
+Se categoria = CARTAO:
+
+somar apenas produção do tipo CARTAO.
+
+Buscar na tabela meta_niveis o nível correspondente onde:
+valor_minimo <= produção <= valor_maximo.
+
+Retornar:
+
+nível atual
+
+prêmio atual
+
+próximo nível
+
+valor faltante para próximo nível
+
+percentual de progresso dentro do nível
+
+📦 3. ALTERAR DASHBOARD DO VENDEDOR
+
+Modificar a tela atual para ter DOIS BLOCOS DE META:
+
+🔵 BLOCO 1 — META GERAL
+
+Exibir:
+
+Meta Mensal Geral
+Valor produzido / meta total
+Barra de progresso
+Percentual total atingido
+
+Nível Atual
+Prêmio Atual
+Próximo Nível
+Valor faltante para próximo nível
+
+🟣 BLOCO 2 — META CARTÃO
+
+Exibir:
+
+Meta Cartão
+Valor produzido cartão / meta cartão
+Barra de progresso
+Percentual cartão
+
+Nível Cartão
+Prêmio Cartão
+Próximo nível cartão
+Valor faltante para avançar
+
+📦 4. REMOVER QUALQUER COMPARAÇÃO ENTRE VENDEDORES
+
+Não pode existir:
+
+ranking
+
+posição
+
+top 1
+
+classificação comparativa
+
+Somente desempenho individual.
+
+📦 5. ESTRUTURA ESCALÁVEL
+
+O sistema deve permitir futuramente adicionar novas categorias:
+
+Exemplo:
+
+SEGURO
+
+PORTABILIDADE
+
+CONSÓRCIO
+
+Sem precisar reescrever lógica.
+
+📦 6. BACKEND
+
+Criar endpoint:
+
+GET /api/performance/:vendedorId
+
+Retornar:
+
+{
+geral: {
+produzido,
+meta,
+percentual,
+nivelAtual,
+premio,
+proximoNivel,
+faltaParaProximo
+},
+cartao: {
+produzido,
+meta,
+percentual,
+nivelAtual,
+premio,
+proximoNivel,
+faltaParaProximo
+}
+}
+
+📦 7. FRONTEND
+
+Criar componente reutilizável:
+
+<MetaCard categoria="GERAL" /> <MetaCard categoria="CARTAO" />
+
+Para permitir expansão futura.
+
+📦 8. PREPARAR PARA 200+ VENDEDORES
+
+Garantir:
+
+Queries indexadas
+
+Cálculo por mês usando índice por data
+
+Nenhum cálculo pesado no frontend
+
+Toda lógica no backend
+
+📦 9. TESTES
+
+Criar testes:
+
+vendedor sem produção
+
+vendedor no limite exato de mudança de nível
+
+vendedor no último nível
+
+vendedor apenas com cartão
+
+vendedor com produção mista
+
+📦 10. IMPORTANTE
+
+Manter compatibilidade com sistema atual.
+Não quebrar histórico.
+Não alterar dados existentes.
+
+Criar migration segura.
+
+🚀 RESULTADO ESPERADO
+
+Sistema de metas profissional,
+juridicamente seguro,
+escalável,
+sem ranking,
+com dois níveis paralelos,
+preparado para expansão futura.
