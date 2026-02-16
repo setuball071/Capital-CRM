@@ -2176,3 +2176,23 @@ export const insertVendedorContratoSchema = createInsertSchema(vendedorContratos
 export type VendedorContrato = typeof vendedorContratos.$inferSelect;
 export type InsertVendedorContrato = z.infer<typeof insertVendedorContratoSchema>;
 
+export const metaNiveis = pgTable("meta_niveis", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  categoria: varchar("categoria", { length: 50 }).notNull(),
+  nomeNivel: varchar("nome_nivel", { length: 100 }).notNull(),
+  valorMinimo: decimal("valor_minimo", { precision: 12, scale: 2 }).notNull(),
+  valorMaximo: decimal("valor_maximo", { precision: 12, scale: 2 }),
+  premio: decimal("premio", { precision: 12, scale: 2 }).notNull(),
+  ordem: integer("ordem").notNull(),
+  cor: varchar("cor", { length: 20 }),
+  icone: varchar("icone", { length: 50 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMetaNivelSchema = createInsertSchema(metaNiveis).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type MetaNivel = typeof metaNiveis.$inferSelect;
+export type InsertMetaNivel = z.infer<typeof insertMetaNivelSchema>;
+

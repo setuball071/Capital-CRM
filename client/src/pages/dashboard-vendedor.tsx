@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, DollarSign } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, DollarSign, CreditCard, TrendingUp, Target, ChevronRight } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -14,13 +14,30 @@ import {
   Bar,
 } from "recharts";
 
-interface TierData {
-  level: number;
-  name: string;
-  color: string;
-  icon: string;
-  target: number;
-  rewardValue: number;
+interface NivelData {
+  nome: string;
+  ordem: number;
+  cor: string;
+  icone: string;
+  premio: number;
+  valorMinimo: number;
+  valorMaximo: number | null;
+}
+
+interface CategoriaPerformance {
+  produzido: number;
+  meta: number;
+  percentual: number;
+  nivelAtual: NivelData | null;
+  proximoNivel: NivelData | null;
+  faltaParaProximo: number;
+  progressoNivel: number;
+  todosNiveis: NivelData[];
+}
+
+interface PerformanceData {
+  geral: CategoriaPerformance;
+  cartao: CategoriaPerformance;
 }
 
 interface DashboardData {
@@ -47,10 +64,6 @@ interface DashboardData {
     vazio: number;
     excedente: number;
   }>;
-  rankingPosition: number;
-  currentTier: TierData | null;
-  nextTier: TierData | null;
-  allTiers: TierData[];
   mesAno: string;
 }
 
@@ -68,12 +81,153 @@ function getTierIcon(iconName: string) {
   return TIER_ICONS[iconName] || Shield;
 }
 
+function MetaCard({ categoria, performance, label, icon: IconComponent, accentColor }: {
+  categoria: string;
+  performance: CategoriaPerformance | undefined;
+  label: string;
+  icon: typeof Shield;
+  accentColor: string;
+}) {
+  if (!performance) return null;
+
+  const nivel = performance.nivelAtual;
+  const proximo = performance.proximoNivel;
+  const NivelIcon = nivel ? getTierIcon(nivel.icone) : Shield;
+  const sortedNiveis = performance.todosNiveis ? [...performance.todosNiveis].sort((a, b) => a.ordem - b.ordem) : [];
+
+  return (
+    <Card className="rounded-2xl border-primary/10 relative overflow-visible group h-full" data-testid={`card-meta-${categoria.toLowerCase()}`}>
+      <CardContent className="p-4 sm:p-6 h-full flex flex-col">
+        <div className="absolute top-0 right-0 p-5 sm:p-6 opacity-[0.04] pointer-events-none">
+          <NivelIcon size={100} />
+        </div>
+
+        <div className="flex items-center gap-2 mb-4 sm:mb-5">
+          <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}>
+            <IconComponent size={16} style={{ color: accentColor }} />
+          </div>
+          <h3 className="text-primary font-black italic text-sm sm:text-base uppercase tracking-[0.1em] sm:tracking-[0.15em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {label}
+          </h3>
+        </div>
+
+        <div className="flex-1 flex flex-col">
+          <div className="text-center mb-4 sm:mb-5 relative z-10">
+            <div className="inline-flex p-4 sm:p-5 rounded-full bg-muted border border-border mb-3 sm:mb-4">
+              <NivelIcon size={32} style={{ color: nivel?.cor || "hsl(var(--muted-foreground))" }} />
+            </div>
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-[0.3em] mb-1">
+              Seu Nível
+            </p>
+            <p
+              className="text-2xl sm:text-3xl lg:text-4xl font-black italic tracking-tight uppercase leading-none mb-2 sm:mb-3"
+              style={{ color: nivel?.cor || "hsl(var(--muted-foreground))", fontFamily: "'Barlow Condensed', sans-serif" }}
+              data-testid={`text-nivel-${categoria.toLowerCase()}`}
+            >
+              {nivel?.nome || "SEM NÍVEL"}
+            </p>
+            {nivel && (
+              <div className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                <DollarSign size={12} />
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">
+                  Prêmio: R$ {nivel.premio.toLocaleString("pt-BR")}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3 relative z-10">
+            <div className="bg-muted/50 p-3 sm:p-4 rounded-xl border border-border">
+              <div className="flex justify-between items-center flex-wrap gap-1 mb-2">
+                <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Produzido
+                </p>
+                <p className="text-sm sm:text-base font-black text-foreground">
+                  R$ {performance.produzido.toLocaleString("pt-BR")}
+                </p>
+              </div>
+
+              <div className="flex gap-1 mt-2">
+                {sortedNiveis.map((n, i) => {
+                  const isAtual = nivel && n.nome === nivel.nome;
+                  const isAlcancado = nivel && n.ordem <= nivel.ordem;
+                  const NIcon = getTierIcon(n.icone);
+                  return (
+                    <div key={n.nome} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        className="w-full h-1.5 rounded-full transition-all duration-500"
+                        style={{
+                          backgroundColor: isAlcancado ? n.cor : "hsl(var(--muted))",
+                          opacity: isAtual ? 1 : (isAlcancado ? 0.6 : 0.3),
+                        }}
+                      />
+                      <NIcon
+                        size={10}
+                        style={{ color: isAlcancado ? n.cor : "hsl(var(--muted-foreground))" }}
+                        className={isAtual ? "" : "opacity-40"}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {proximo && (
+              <div className="bg-primary/5 p-3 sm:p-4 rounded-xl border border-primary/10">
+                <div className="flex justify-between items-center flex-wrap gap-1 mb-2">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <ChevronRight size={10} className="text-primary" /> Rumo ao {proximo.nome}
+                  </p>
+                  <span className="text-[10px] sm:text-xs font-black text-primary">
+                    {performance.progressoNivel.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden border border-border mb-2">
+                  <div
+                    className="h-full rounded-full transition-all duration-1000"
+                    style={{
+                      width: `${Math.min(performance.progressoNivel, 100)}%`,
+                      backgroundColor: proximo.cor,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between items-center flex-wrap gap-1">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground">
+                    R$ {performance.faltaParaProximo.toLocaleString("pt-BR")} faltantes
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground">
+                    Prêmio: R$ {proximo.premio.toLocaleString("pt-BR")}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!proximo && nivel && (
+              <div className="bg-primary/5 p-3 sm:p-4 rounded-xl border border-primary/10 text-center">
+                <p className="text-[10px] sm:text-xs font-black text-primary uppercase tracking-wider flex items-center justify-center gap-1.5">
+                  <Crown size={12} /> Nível Máximo Atingido
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardVendedorPage() {
   const { user } = useAuth();
   const [view, setView] = useState<"dashboard" | "rules">("dashboard");
 
   const { data, isLoading, isError } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard-vendedor"],
+    refetchInterval: 60000,
+  });
+
+  const { data: perfData } = useQuery<PerformanceData>({
+    queryKey: ["/api/performance", user?.id],
+    enabled: !!user?.id,
     refetchInterval: 60000,
   });
 
@@ -105,61 +259,68 @@ export default function DashboardVendedorPage() {
     );
   }
 
-  const currentTierData = data?.currentTier;
-  const nextTierData = data?.nextTier;
-  const CurrentTierIcon = currentTierData ? getTierIcon(currentTierData.icon) : Shield;
-  const sortedTiers = data?.allTiers ? [...data.allTiers].sort((a, b) => b.target - a.target) : [];
+  const nivelGeral = perfData?.geral?.nivelAtual;
+  const NivelGeralIcon = nivelGeral ? getTierIcon(nivelGeral.icone) : Shield;
 
-  const RegulationPanel = () => (
-    <div className="max-w-5xl mx-auto">
-      <Card className="rounded-2xl">
-        <CardContent className="p-5 sm:p-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <Scale className="text-primary" size={24} />
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-black text-foreground uppercase tracking-tight">Regulamento de Desempenho</h2>
-                <p className="text-muted-foreground text-xs sm:text-sm">Classificações e Premiações</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400">
-              <AlertCircle size={14} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Prêmios não cumulativos</span>
-            </div>
-          </div>
+  const RegulationPanel = () => {
+    const allCategorias = [
+      { key: "geral", label: "Meta Geral", niveis: perfData?.geral?.todosNiveis || [] },
+      { key: "cartao", label: "Meta Cartão", niveis: perfData?.cartao?.todosNiveis || [] },
+    ];
 
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full text-left min-w-[480px]">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Nível</th>
-                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Faturamento Mínimo</th>
-                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prêmio (R$)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border text-sm font-semibold">
-                {sortedTiers.map((tier) => {
-                  const TIcon = getTierIcon(tier.icon);
-                  return (
-                    <tr key={tier.level}>
-                      <td className="px-4 sm:px-6 py-3 sm:py-5 flex items-center gap-3">
-                        <TIcon size={18} style={{ color: tier.color }} />
-                        <span className="text-foreground uppercase text-xs sm:text-sm font-bold tracking-wider">{tier.name}</span>
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-5 text-muted-foreground text-xs sm:text-sm">R$ {tier.target.toLocaleString("pt-BR")}</td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-5 text-base sm:text-xl text-emerald-600 dark:text-emerald-400 font-black">R$ {tier.rewardValue.toLocaleString("pt-BR")}</td>
+    return (
+      <div className="max-w-5xl mx-auto space-y-6">
+        {allCategorias.map((cat) => (
+          <Card className="rounded-2xl" key={cat.key}>
+            <CardContent className="p-5 sm:p-8">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    {cat.key === "geral" ? <Scale className="text-primary" size={24} /> : <CreditCard className="text-primary" size={24} />}
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-black text-foreground uppercase tracking-tight">{cat.label}</h2>
+                    <p className="text-muted-foreground text-xs sm:text-sm">Níveis e Premiações</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400">
+                  <AlertCircle size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Prêmios não cumulativos</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-left min-w-[480px]">
+                  <thead className="bg-muted/50 border-b border-border">
+                    <tr>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Nível</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Faturamento Mínimo</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prêmio (R$)</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+                  </thead>
+                  <tbody className="divide-y divide-border text-sm font-semibold">
+                    {[...cat.niveis].sort((a, b) => b.ordem - a.ordem).map((nivel) => {
+                      const TIcon = getTierIcon(nivel.icone);
+                      return (
+                        <tr key={nivel.nome}>
+                          <td className="px-4 sm:px-6 py-3 sm:py-5 flex items-center gap-3">
+                            <TIcon size={18} style={{ color: nivel.cor }} />
+                            <span className="text-foreground uppercase text-xs sm:text-sm font-bold tracking-wider">{nivel.nome}</span>
+                          </td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-5 text-muted-foreground text-xs sm:text-sm">R$ {nivel.valorMinimo.toLocaleString("pt-BR")}</td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-5 text-base sm:text-xl text-emerald-600 dark:text-emerald-400 font-black">R$ {nivel.premio.toLocaleString("pt-BR")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
 
   const DashboardPanel = () => (
     <div className="space-y-5 sm:space-y-6" data-testid="dashboard-vendedor">
@@ -283,69 +444,21 @@ export default function DashboardVendedorPage() {
           </Card>
         </div>
 
-        <div className="lg:col-span-4">
-          <Card className="rounded-2xl border-primary/10 relative overflow-visible group h-full">
-            <CardContent className="p-4 sm:p-6 lg:p-8 h-full flex flex-col">
-              <div className="absolute top-0 right-0 p-6 sm:p-8 opacity-[0.04] pointer-events-none">
-                <CurrentTierIcon size={120} />
-              </div>
-
-              <h3 className="text-primary font-black italic text-sm sm:text-base lg:text-lg flex items-center gap-2 mb-5 sm:mb-8 uppercase tracking-[0.15em] sm:tracking-[0.2em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                <Shield size={14} fill="currentColor" className="opacity-80" /> Nível Extraordinário
-              </h3>
-
-              <div className="text-center mb-5 sm:mb-8 relative z-10 flex-1 flex flex-col items-center justify-center">
-                <div className="inline-flex p-5 sm:p-6 rounded-full bg-muted border border-border mb-3 sm:mb-5">
-                  <CurrentTierIcon size={40} style={{ color: currentTierData?.color || "hsl(var(--muted-foreground))" }} />
-                </div>
-                <h2 className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-[0.3em] sm:tracking-[0.5em] mb-1.5 text-center">
-                  Sua Classificação
-                </h2>
-                <p
-                  className="text-3xl sm:text-4xl lg:text-5xl font-black italic tracking-tight text-center uppercase leading-none mb-3 sm:mb-5"
-                  style={{ color: currentTierData?.color || "hsl(var(--muted-foreground))", fontFamily: "'Barlow Condensed', sans-serif" }}
-                  data-testid="text-tier-name"
-                >
-                  {currentTierData?.name || "SEM TIER"}
-                </p>
-                {currentTierData && (
-                  <div className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 sm:px-4 py-1.5 rounded-full border border-emerald-500/20">
-                    <DollarSign size={13} />
-                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">
-                      Prêmio: R$ {currentTierData.rewardValue.toLocaleString("pt-BR")}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {nextTierData && (
-                <div className="space-y-3 sm:space-y-4 bg-primary/5 p-4 sm:p-6 rounded-xl border border-primary/10 relative z-10">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      Rumo ao {nextTierData.name}
-                    </p>
-                    <div className="text-foreground font-black text-xs sm:text-sm">
-                      R$ {nextTierData.rewardValue.toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between gap-2 text-[10px] sm:text-xs font-bold text-muted-foreground">
-                      <span>R$ {Math.max(0, nextTierData.target - (data?.totalValor || 0)).toLocaleString("pt-BR")} faltantes</span>
-                      <span className="text-primary">
-                        {Math.min(100, ((data?.totalValor || 0) / nextTierData.target * 100)).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden border border-border">
-                      <div
-                        className="h-full bg-gradient-to-r from-primary to-chart-4 rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.min(((data?.totalValor || 0) / nextTierData.target * 100), 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="lg:col-span-4 space-y-5 sm:space-y-6">
+          <MetaCard
+            categoria="GERAL"
+            performance={perfData?.geral}
+            label="Meta Geral"
+            icon={TrendingUp}
+            accentColor="hsl(var(--primary))"
+          />
+          <MetaCard
+            categoria="CARTAO"
+            performance={perfData?.cartao}
+            label="Meta Cartão"
+            icon={CreditCard}
+            accentColor="#22d3ee"
+          />
         </div>
       </div>
     </div>
@@ -363,12 +476,12 @@ export default function DashboardVendedorPage() {
                 </AvatarFallback>
               </Avatar>
             </div>
-            {currentTierData && (
+            {nivelGeral && (
               <div
                 className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
-                style={{ backgroundColor: currentTierData.color }}
+                style={{ backgroundColor: nivelGeral.cor }}
               >
-                <CurrentTierIcon size={8} className="text-background" />
+                <NivelGeralIcon size={8} className="text-background" />
               </div>
             )}
           </div>
@@ -377,14 +490,9 @@ export default function DashboardVendedorPage() {
               <h1 className="font-black italic text-2xl sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase leading-none truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
                 {data?.vendedorNome || user.name}
               </h1>
-              {data?.rankingPosition && (
-                <span className="text-xl sm:text-2xl lg:text-3xl tracking-tight whitespace-nowrap font-black italic text-primary/70" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-ranking">
-                  Top {data.rankingPosition}#
-                </span>
-              )}
             </div>
             <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1">
-              {mesNome} {data?.mesAno?.split("/")[1]} {currentTierData ? `\u2022 ${currentTierData.name}` : ""}
+              {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
             </p>
           </div>
         </div>
@@ -417,8 +525,8 @@ export default function DashboardVendedorPage() {
       {view === "dashboard" ? <DashboardPanel /> : <RegulationPanel />}
       <footer className="mt-8 sm:mt-12 pt-4 sm:pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] sm:text-[10px] text-muted-foreground/50 font-bold uppercase tracking-wider">
         <div className="flex items-center gap-2">
-          <Shield size={10} className="text-primary/30" />
-          <span>Classificação Extraordinária</span>
+          <Target size={10} className="text-primary/30" />
+          <span>Desempenho Individual</span>
         </div>
         <span>Capital GO</span>
       </footer>

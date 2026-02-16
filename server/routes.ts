@@ -15499,24 +15499,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const currentTier = getTierForValue(totalValor);
       const nextTier = getNextTierForValue(totalValor);
 
-      const rankingResult = await db.execute(sql`
-        SELECT vendedor_id, COALESCE(SUM(valor_contrato), 0)::numeric as total
-        FROM vendedor_contratos
-        WHERE tenant_id = ${tenantId}
-          AND data_contrato >= ${firstDayOfMonth.toISOString()}
-          AND data_contrato <= ${lastDayOfMonth.toISOString()}
-        GROUP BY vendedor_id
-        ORDER BY total DESC
-      `);
-
-      let rankingPosition = 1;
-      for (let i = 0; i < rankingResult.rows.length; i++) {
-        if (String(rankingResult.rows[i].vendedor_id) === String(userId)) {
-          rankingPosition = i + 1;
-          break;
-        }
-      }
-
       const allDaysMap: Record<string, { quantidade: number; valor: number }> = {};
       const d = new Date(firstDayOfMonth);
       while (d <= hoje) {
@@ -15598,7 +15580,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         diasUteisAteHoje,
         diasUteisRestantes,
         contratosPorDia: allChartData,
-        rankingPosition,
         currentTier,
         nextTier,
         allTiers: PERFORMANCE_TIERS,
@@ -15607,6 +15588,166 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Error in dashboard-vendedor API:", error);
       return res.status(500).json({ message: "Erro ao carregar dashboard" });
+    }
+  });
+
+  // ========================
+  // Performance API (Níveis Individuais)
+  // ========================
+
+  app.get("/api/performance/:vendedorId", requireAuth, async (req: any, res) => {
+    try {
+      const vendedorId = parseInt(req.params.vendedorId);
+      const tenantId = req.tenantId || req.session?.tenantId;
+
+      if (!tenantId || isNaN(vendedorId)) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const firstDayOfMonth = new Date(year, month, 1);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+
+      const niveisResult = await db.execute(sql`
+        SELECT * FROM meta_niveis 
+        WHERE tenant_id = ${tenantId}
+        ORDER BY categoria, ordem ASC
+      `);
+
+      const niveisPorCategoria: Record<string, any[]> = {};
+      for (const row of niveisResult.rows) {
+        const cat = row.categoria as string;
+        if (!niveisPorCategoria[cat]) niveisPorCategoria[cat] = [];
+        niveisPorCategoria[cat].push(row);
+      }
+
+      const totalGeralResult = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_contrato), 0)::numeric as total
+        FROM vendedor_contratos
+        WHERE vendedor_id = ${vendedorId}
+          AND tenant_id = ${tenantId}
+          AND data_contrato >= ${firstDayOfMonth.toISOString()}
+          AND data_contrato <= ${lastDayOfMonth.toISOString()}
+      `);
+      const produzidoGeral = parseFloat(totalGeralResult.rows[0]?.total as string) || 0;
+
+      const totalCartaoResult = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_contrato), 0)::numeric as total
+        FROM vendedor_contratos
+        WHERE vendedor_id = ${vendedorId}
+          AND tenant_id = ${tenantId}
+          AND data_contrato >= ${firstDayOfMonth.toISOString()}
+          AND data_contrato <= ${lastDayOfMonth.toISOString()}
+          AND (LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%')
+      `);
+      const produzidoCartao = parseFloat(totalCartaoResult.rows[0]?.total as string) || 0;
+
+      function calcularNivel(produzido: number, niveis: any[]) {
+        let nivelAtual = null;
+        let proximoNivel = null;
+
+        const sorted = [...niveis].sort((a, b) => parseInt(a.ordem) - parseInt(b.ordem));
+
+        for (let i = 0; i < sorted.length; i++) {
+          const nivel = sorted[i];
+          const min = parseFloat(nivel.valor_minimo);
+          const max = nivel.valor_maximo ? parseFloat(nivel.valor_maximo) : Infinity;
+
+          if (produzido >= min && produzido <= max) {
+            nivelAtual = nivel;
+            proximoNivel = sorted[i + 1] || null;
+            break;
+          }
+        }
+
+        if (!nivelAtual && sorted.length > 0) {
+          const lastNivel = sorted[sorted.length - 1];
+          const lastMax = lastNivel.valor_maximo ? parseFloat(lastNivel.valor_maximo) : Infinity;
+          if (produzido >= parseFloat(lastNivel.valor_minimo)) {
+            nivelAtual = lastNivel;
+            proximoNivel = null;
+          }
+        }
+
+        const faltaParaProximo = proximoNivel ? Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido) : 0;
+
+        let progressoNivel = 0;
+        if (nivelAtual) {
+          const min = parseFloat(nivelAtual.valor_minimo);
+          const max = nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : (proximoNivel ? parseFloat(proximoNivel.valor_minimo) : min * 2);
+          const range = max - min;
+          progressoNivel = range > 0 ? Math.min(100, ((produzido - min) / range) * 100) : 100;
+        }
+
+        return {
+          nivelAtual: nivelAtual ? {
+            nome: nivelAtual.nome_nivel,
+            ordem: parseInt(nivelAtual.ordem),
+            cor: nivelAtual.cor,
+            icone: nivelAtual.icone,
+            premio: parseFloat(nivelAtual.premio),
+            valorMinimo: parseFloat(nivelAtual.valor_minimo),
+            valorMaximo: nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : null,
+          } : null,
+          proximoNivel: proximoNivel ? {
+            nome: proximoNivel.nome_nivel,
+            ordem: parseInt(proximoNivel.ordem),
+            cor: proximoNivel.cor,
+            icone: proximoNivel.icone,
+            premio: parseFloat(proximoNivel.premio),
+            valorMinimo: parseFloat(proximoNivel.valor_minimo),
+          } : null,
+          faltaParaProximo: Math.round(faltaParaProximo * 100) / 100,
+          progressoNivel: Math.round(progressoNivel * 100) / 100,
+        };
+      }
+
+      const user = await storage.getUser(vendedorId);
+      const metaMensal = user?.metaMensal ? parseFloat(user.metaMensal as string) : 0;
+
+      const geralNiveis = niveisPorCategoria["GERAL"] || [];
+      const cartaoNiveis = niveisPorCategoria["CARTAO"] || [];
+
+      const geralPerf = calcularNivel(produzidoGeral, geralNiveis);
+      const cartaoPerf = calcularNivel(produzidoCartao, cartaoNiveis);
+
+      return res.json({
+        geral: {
+          produzido: Math.round(produzidoGeral * 100) / 100,
+          meta: metaMensal,
+          percentual: metaMensal > 0 ? Math.round((produzidoGeral / metaMensal) * 10000) / 100 : 0,
+          ...geralPerf,
+          todosNiveis: geralNiveis.map((n: any) => ({
+            nome: n.nome_nivel,
+            ordem: parseInt(n.ordem),
+            cor: n.cor,
+            icone: n.icone,
+            premio: parseFloat(n.premio),
+            valorMinimo: parseFloat(n.valor_minimo),
+            valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+          })),
+        },
+        cartao: {
+          produzido: Math.round(produzidoCartao * 100) / 100,
+          meta: 0,
+          percentual: 0,
+          ...cartaoPerf,
+          todosNiveis: cartaoNiveis.map((n: any) => ({
+            nome: n.nome_nivel,
+            ordem: parseInt(n.ordem),
+            cor: n.cor,
+            icone: n.icone,
+            premio: parseFloat(n.premio),
+            valorMinimo: parseFloat(n.valor_minimo),
+            valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error("Error in performance API:", error);
+      return res.status(500).json({ message: "Erro ao carregar performance" });
     }
   });
 
