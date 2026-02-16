@@ -1,23 +1,357 @@
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, X, CreditCard, DollarSign, FileCheck, FileX } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+
+interface ContratoPreview {
+  contratoId: string;
+  nomeCliente: string;
+  cpfCliente: string;
+  banco: string;
+  tipoContrato: string;
+  nomeCorretor: string;
+  status: string;
+  dataPagamento: string;
+  valorBase: number;
+  isCartao: boolean;
+  mesReferencia: string;
+}
+
+interface ResumoImportacao {
+  totalImportado: number;
+  totalPagoValido: number;
+  totalValorGeral: number;
+  totalValorCartao: number;
+  totalIgnorados: number;
+}
+
+type Step = "upload" | "preview" | "confirmed";
 
 export default function GestaoComercialImportarPage() {
+  const { toast } = useToast();
+  const [step, setStep] = useState<Step>("upload");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const [resumo, setResumo] = useState<ResumoImportacao | null>(null);
+  const [contratos, setContratos] = useState<ContratoPreview[]>([]);
+  const [resultado, setResultado] = useState<{ inseridos: number; atualizados: number; ignorados: number } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  };
+
+  const handleFile = useCallback(async (file: File) => {
+    const validTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+    ];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!validTypes.includes(file.type) && !["xlsx", "xls", "csv"].includes(ext || "")) {
+      toast({ title: "Formato inválido", description: "Envie um arquivo .xlsx, .xls ou .csv", variant: "destructive" });
+      return;
+    }
+
+    setIsProcessing(true);
+    setFileName(file.name);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/gestao-comercial/importar/preview", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao processar arquivo");
+      }
+
+      const data = await response.json();
+      setResumo(data.resumo);
+      setContratos(data.contratos);
+      setStep("preview");
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message || "Erro ao processar arquivo", variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [toast]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
+  const handleConfirm = async () => {
+    setIsConfirming(true);
+    try {
+      const response = await apiRequest("POST", "/api/gestao-comercial/importar/confirmar", { contratos });
+      const data = await response.json();
+      setResultado(data.resultado);
+      setStep("confirmed");
+      toast({ title: "Importação confirmada", description: data.message });
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message || "Erro ao confirmar importação", variant: "destructive" });
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleReset = () => {
+    setStep("upload");
+    setFileName("");
+    setResumo(null);
+    setContratos([]);
+    setResultado(null);
+  };
+
   return (
-    <div className="p-6 space-y-6" data-testid="page-gestao-importar">
+    <div className="p-6 space-y-6 max-w-5xl mx-auto" data-testid="page-gestao-importar">
       <div className="flex items-center gap-3">
         <Upload className="h-6 w-6 text-muted-foreground" />
         <h1 className="text-2xl font-semibold" data-testid="text-page-title">Importar Produção</h1>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Importação de Dados de Produção</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground" data-testid="text-placeholder">
-            Módulo de importação de produção em desenvolvimento.
-          </p>
-        </CardContent>
-      </Card>
+
+      {step === "upload" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" />
+              Upload de Planilha
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`border-2 border-dashed rounded-md p-12 text-center transition-colors ${
+                dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              data-testid="dropzone-upload"
+            >
+              {isProcessing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Processando {fileName}...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <Upload className="h-12 w-12 text-muted-foreground/50" />
+                  <div>
+                    <p className="text-lg font-medium">Arraste a planilha aqui</p>
+                    <p className="text-sm text-muted-foreground mt-1">ou clique para selecionar o arquivo</p>
+                  </div>
+                  <label>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={handleFileInput}
+                      data-testid="input-file-upload"
+                    />
+                    <Button variant="outline" asChild>
+                      <span data-testid="button-select-file">Selecionar Arquivo</span>
+                    </Button>
+                  </label>
+                  <p className="text-xs text-muted-foreground">Formatos aceitos: .xlsx, .xls, .csv</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "preview" && resumo && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck className="h-5 w-5" />
+                Validação da Importação
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>Arquivo: {fileName}</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <Card className="border">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold" data-testid="text-total-importado">{resumo.totalImportado}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Total Importado</p>
+                  </CardContent>
+                </Card>
+                <Card className="border">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <p className="text-2xl font-bold text-green-600" data-testid="text-total-pago">{resumo.totalPagoValido}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Pagos Válidos</p>
+                  </CardContent>
+                </Card>
+                <Card className="border">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      <p className="text-2xl font-bold" data-testid="text-total-valor-geral">{formatCurrency(resumo.totalValorGeral)}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Valor Geral</p>
+                  </CardContent>
+                </Card>
+                <Card className="border">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <CreditCard className="h-4 w-4 text-purple-600" />
+                      <p className="text-2xl font-bold text-purple-600" data-testid="text-total-valor-cartao">{formatCurrency(resumo.totalValorCartao)}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Valor Cartão</p>
+                  </CardContent>
+                </Card>
+                <Card className="border">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <p className="text-2xl font-bold text-amber-500" data-testid="text-total-ignorados">{resumo.totalIgnorados}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Ignorados</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Contratos Pagos Válidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid="table-contratos-preview">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="p-2 font-medium">Contrato</th>
+                      <th className="p-2 font-medium">Cliente</th>
+                      <th className="p-2 font-medium">CPF</th>
+                      <th className="p-2 font-medium">Banco</th>
+                      <th className="p-2 font-medium">Tipo</th>
+                      <th className="p-2 font-medium">Corretor</th>
+                      <th className="p-2 font-medium">Status</th>
+                      <th className="p-2 font-medium">Data Pgto</th>
+                      <th className="p-2 font-medium text-right">Valor Base</th>
+                      <th className="p-2 font-medium text-center">Cartão</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contratos
+                      .filter((c) => c.status === "PAGO" && c.dataPagamento)
+                      .map((c, i) => (
+                        <tr key={c.contratoId + "-" + i} className="border-b hover-elevate">
+                          <td className="p-2">{c.contratoId}</td>
+                          <td className="p-2 max-w-[150px] truncate">{c.nomeCliente}</td>
+                          <td className="p-2">{c.cpfCliente}</td>
+                          <td className="p-2 max-w-[120px] truncate">{c.banco}</td>
+                          <td className="p-2 max-w-[120px] truncate">{c.tipoContrato}</td>
+                          <td className="p-2 max-w-[130px] truncate">{c.nomeCorretor}</td>
+                          <td className="p-2">
+                            <span className="inline-flex items-center gap-1 text-green-600 font-medium text-xs">
+                              <CheckCircle2 className="h-3 w-3" /> PAGO
+                            </span>
+                          </td>
+                          <td className="p-2">{c.dataPagamento}</td>
+                          <td className="p-2 text-right font-medium">{formatCurrency(c.valorBase)}</td>
+                          <td className="p-2 text-center">
+                            {c.isCartao ? (
+                              <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <Button variant="outline" onClick={handleReset} data-testid="button-cancel">
+              <X className="h-4 w-4 mr-2" /> Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={isConfirming || resumo.totalPagoValido === 0}
+              data-testid="button-confirm"
+            >
+              {isConfirming ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Confirmar Importação ({resumo.totalPagoValido} contratos)
+            </Button>
+          </div>
+        </>
+      )}
+
+      {step === "confirmed" && resultado && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="h-5 w-5" />
+              Importação Concluída
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Card className="border">
+                <CardContent className="p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600" data-testid="text-inseridos">{resultado.inseridos}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Novos Contratos</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-4 text-center">
+                  <p className="text-3xl font-bold text-blue-600" data-testid="text-atualizados">{resultado.atualizados}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Atualizados</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-4 text-center">
+                  <p className="text-3xl font-bold text-amber-500" data-testid="text-ignorados-final">{resultado.ignorados}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Ignorados</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="flex justify-center">
+              <Button onClick={handleReset} data-testid="button-nova-importacao">
+                <Upload className="h-4 w-4 mr-2" />
+                Nova Importação
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

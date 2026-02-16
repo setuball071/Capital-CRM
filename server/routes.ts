@@ -71,6 +71,7 @@ import {
   type UserRole,
   type FiltrosPedidoLista,
   type PricingSettings,
+  producoesContratos,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -15784,6 +15785,204 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Error in performance API:", error);
       return res.status(500).json({ message: "Erro ao carregar performance" });
+    }
+  });
+
+  // ==========================================
+  // Gestão Comercial - Importar Produção
+  // ==========================================
+
+  app.post("/api/gestao-comercial/importar/preview", requireAuth, upload.single("file"), async (req: any, res) => {
+    try {
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão para importar produção" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+      if (!rows.length) {
+        return res.status(400).json({ message: "Planilha vazia" });
+      }
+
+      const firstRow = rows[0];
+      const hasContratoId = "ContratoId" in firstRow;
+      if (!hasContratoId) {
+        return res.status(400).json({ message: "Coluna 'ContratoId' não encontrada na planilha" });
+      }
+
+      let totalImportado = 0;
+      let totalPagoValido = 0;
+      let totalValorGeral = 0;
+      let totalValorCartao = 0;
+      let totalIgnorados = 0;
+
+      const contratos: any[] = [];
+
+      for (const row of rows) {
+        totalImportado++;
+
+        const contratoId = String(row.ContratoId || "").trim();
+        if (!contratoId) {
+          totalIgnorados++;
+          continue;
+        }
+
+        const statusProposta = String(row.StatusProposta || row.StatusBancoCliente || "").trim().toUpperCase();
+        const tipoContrato = String(row.TipoContrato || "").trim();
+        const isCartao = tipoContrato.toLowerCase().includes("cart");
+        const valorBase = parseFloat(String(row.ValorBase || "0").replace(",", ".")) || 0;
+
+        const dataPagamentoRaw = String(row.DataStatusBancoCliente || row.DataPagamento || "").trim();
+
+        let mesReferencia = "";
+        let dataPagamento = dataPagamentoRaw;
+
+        if (dataPagamentoRaw) {
+          const parts = dataPagamentoRaw.split("/");
+          if (parts.length === 3) {
+            mesReferencia = `${parts[2]}-${parts[1].padStart(2, "0")}`;
+          }
+        }
+
+        const isPago = statusProposta === "PAGO";
+
+        const contrato = {
+          contratoId,
+          nomeCliente: String(row.NomeCliente || "").trim(),
+          cpfCliente: String(row.CpfCliente || "").trim(),
+          banco: String(row.Banco || "").trim(),
+          tipoContrato,
+          nomeCorretor: String(row.NomeCorretor || "").trim(),
+          status: statusProposta,
+          dataPagamento,
+          valorBase,
+          isCartao,
+          mesReferencia,
+        };
+
+        contratos.push(contrato);
+
+        if (isPago && dataPagamentoRaw) {
+          totalPagoValido++;
+          totalValorGeral += valorBase;
+          if (isCartao) {
+            totalValorCartao += valorBase;
+          }
+        } else {
+          totalIgnorados++;
+        }
+      }
+
+      res.json({
+        resumo: {
+          totalImportado,
+          totalPagoValido,
+          totalValorGeral: Math.round(totalValorGeral * 100) / 100,
+          totalValorCartao: Math.round(totalValorCartao * 100) / 100,
+          totalIgnorados,
+        },
+        contratos,
+      });
+    } catch (error: any) {
+      console.error("[IMPORT-PRODUCAO] Preview error:", error);
+      res.status(500).json({ message: "Erro ao processar planilha: " + (error.message || "Erro desconhecido") });
+    }
+  });
+
+  app.post("/api/gestao-comercial/importar/confirmar", requireAuth, async (req: any, res) => {
+    try {
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão para importar produção" });
+      }
+
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "Tenant não identificado" });
+      }
+
+      const { contratos } = req.body;
+      if (!contratos || !Array.isArray(contratos) || contratos.length === 0) {
+        return res.status(400).json({ message: "Nenhum contrato para importar" });
+      }
+
+      let inseridos = 0;
+      let atualizados = 0;
+      let ignorados = 0;
+
+      for (const c of contratos) {
+        const isPago = String(c.status || "").toUpperCase() === "PAGO";
+        const hasDate = !!c.dataPagamento;
+        if (!isPago || !hasDate) {
+          ignorados++;
+          continue;
+        }
+
+        const existing = await db.select().from(producoesContratos)
+          .where(and(
+            eq(producoesContratos.contratoId, String(c.contratoId)),
+            eq(producoesContratos.tenantId, tenantId)
+          ))
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db.update(producoesContratos)
+            .set({
+              nomeCliente: c.nomeCliente,
+              cpfCliente: c.cpfCliente,
+              banco: c.banco,
+              tipoContrato: c.tipoContrato,
+              nomeCorretor: c.nomeCorretor,
+              status: c.status,
+              dataPagamento: c.dataPagamento,
+              valorBase: String(c.valorBase),
+              isCartao: c.isCartao,
+              mesReferencia: c.mesReferencia,
+              confirmado: true,
+            })
+            .where(and(
+              eq(producoesContratos.contratoId, String(c.contratoId)),
+              eq(producoesContratos.tenantId, tenantId)
+            ));
+          atualizados++;
+        } else {
+          await db.insert(producoesContratos).values({
+            tenantId,
+            contratoId: String(c.contratoId),
+            nomeCliente: c.nomeCliente,
+            cpfCliente: c.cpfCliente,
+            banco: c.banco,
+            tipoContrato: c.tipoContrato,
+            nomeCorretor: c.nomeCorretor,
+            status: c.status,
+            dataPagamento: c.dataPagamento,
+            valorBase: String(c.valorBase),
+            isCartao: c.isCartao,
+            mesReferencia: c.mesReferencia,
+            importadoPor: req.user?.id,
+            confirmado: true,
+          });
+          inseridos++;
+        }
+      }
+
+      res.json({
+        message: "Importação confirmada com sucesso",
+        resultado: { inseridos, atualizados, ignorados },
+      });
+    } catch (error: any) {
+      console.error("[IMPORT-PRODUCAO] Confirm error:", error);
+      res.status(500).json({ message: "Erro ao confirmar importação: " + (error.message || "Erro desconhecido") });
     }
   });
 

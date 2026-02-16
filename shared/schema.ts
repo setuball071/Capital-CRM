@@ -2197,3 +2197,29 @@ export const insertMetaNivelSchema = createInsertSchema(metaNiveis).omit({ id: t
 export type MetaNivel = typeof metaNiveis.$inferSelect;
 export type InsertMetaNivel = z.infer<typeof insertMetaNivelSchema>;
 
+export const producoesContratos = pgTable("producoes_contratos", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  contratoId: varchar("contrato_id", { length: 100 }).notNull(),
+  nomeCliente: varchar("nome_cliente", { length: 255 }),
+  cpfCliente: varchar("cpf_cliente", { length: 20 }),
+  banco: varchar("banco", { length: 255 }),
+  tipoContrato: varchar("tipo_contrato", { length: 255 }),
+  nomeCorretor: varchar("nome_corretor", { length: 255 }),
+  status: varchar("status", { length: 100 }),
+  dataPagamento: varchar("data_pagamento", { length: 20 }),
+  valorBase: decimal("valor_base", { precision: 14, scale: 2 }),
+  isCartao: boolean("is_cartao").default(false),
+  mesReferencia: varchar("mes_referencia", { length: 7 }),
+  importadoPor: integer("importado_por").references(() => users.id),
+  confirmado: boolean("confirmado").default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_producoes_contrato_tenant").on(table.contratoId, table.tenantId),
+]);
+
+export const insertProducaoContratoSchema = createInsertSchema(producoesContratos).omit({ id: true, createdAt: true });
+
+export type ProducaoContrato = typeof producoesContratos.$inferSelect;
+export type InsertProducaoContrato = z.infer<typeof insertProducaoContratoSchema>;
+
