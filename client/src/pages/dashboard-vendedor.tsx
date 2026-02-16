@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, DollarSign, CreditCard, TrendingUp, Target, ChevronRight } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -81,138 +81,124 @@ function getTierIcon(iconName: string) {
   return TIER_ICONS[iconName] || Shield;
 }
 
-function MetaCard({ categoria, performance, label, icon: IconComponent, accentColor }: {
-  categoria: string;
+function MetaGeralCard({ performance, mesNome, metaMensal }: {
   performance: CategoriaPerformance | undefined;
-  label: string;
-  icon: typeof Shield;
-  accentColor: string;
+  mesNome: string;
+  metaMensal: number;
 }) {
   if (!performance) return null;
-
   const nivel = performance.nivelAtual;
-  const proximo = performance.proximoNivel;
-  const NivelIcon = nivel ? getTierIcon(nivel.icone) : Shield;
-  const sortedNiveis = performance.todosNiveis ? [...performance.todosNiveis].sort((a, b) => a.ordem - b.ordem) : [];
+  const percentual = metaMensal > 0 ? Math.round((performance.produzido / metaMensal) * 100) : 0;
 
   return (
-    <Card className="rounded-2xl border-primary/10 relative overflow-visible group h-full" data-testid={`card-meta-${categoria.toLowerCase()}`}>
-      <CardContent className="p-4 sm:p-6 h-full flex flex-col">
-        <div className="absolute top-0 right-0 p-5 sm:p-6 opacity-[0.04] pointer-events-none">
-          <NivelIcon size={100} />
-        </div>
-
-        <div className="flex items-center gap-2 mb-4 sm:mb-5">
-          <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}>
-            <IconComponent size={16} style={{ color: accentColor }} />
-          </div>
-          <h3 className="text-primary font-black italic text-sm sm:text-base uppercase tracking-[0.1em] sm:tracking-[0.15em]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            {label}
+    <Card className="rounded-2xl border-primary/20 shadow-lg flex-1 min-w-0" data-testid="card-meta-geral">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Target size={14} className="text-primary" />
+          <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-primary" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Meta Geral – {mesNome}
           </h3>
         </div>
 
-        <div className="flex-1 flex flex-col">
-          <div className="text-center mb-4 sm:mb-5 relative z-10">
-            <div className="inline-flex p-4 sm:p-5 rounded-full bg-muted border border-border mb-3 sm:mb-4">
-              <NivelIcon size={32} style={{ color: nivel?.cor || "hsl(var(--muted-foreground))" }} />
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-primary tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-geral-produzido">
+                R$ {performance.produzido.toLocaleString("pt-BR")}
+              </span>
+              <span className="text-base sm:text-lg lg:text-xl font-bold text-muted-foreground/50">
+                / {metaMensal.toLocaleString("pt-BR")}
+              </span>
             </div>
-            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-[0.3em] mb-1">
-              Seu Nível
-            </p>
-            <p
-              className="text-2xl sm:text-3xl lg:text-4xl font-black italic tracking-tight uppercase leading-none mb-2 sm:mb-3"
-              style={{ color: nivel?.cor || "hsl(var(--muted-foreground))", fontFamily: "'Barlow Condensed', sans-serif" }}
-              data-testid={`text-nivel-${categoria.toLowerCase()}`}
-            >
-              {nivel?.nome || "SEM NÍVEL"}
-            </p>
-            {nivel && (
-              <div className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                <DollarSign size={12} />
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">
-                  Prêmio: R$ {nivel.premio.toLocaleString("pt-BR")}
-                </span>
-              </div>
-            )}
           </div>
-
-          <div className="space-y-3 relative z-10">
-            <div className="bg-muted/50 p-3 sm:p-4 rounded-xl border border-border">
-              <div className="flex justify-between items-center flex-wrap gap-1 mb-2">
-                <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Produzido
-                </p>
-                <p className="text-sm sm:text-base font-black text-foreground">
-                  R$ {performance.produzido.toLocaleString("pt-BR")}
-                </p>
-              </div>
-
-              <div className="flex gap-1 mt-2">
-                {sortedNiveis.map((n, i) => {
-                  const isAtual = nivel && n.nome === nivel.nome;
-                  const isAlcancado = nivel && n.ordem <= nivel.ordem;
-                  const NIcon = getTierIcon(n.icone);
-                  return (
-                    <div key={n.nome} className="flex-1 flex flex-col items-center gap-1">
-                      <div
-                        className="w-full h-1.5 rounded-full transition-all duration-500"
-                        style={{
-                          backgroundColor: isAlcancado ? n.cor : "hsl(var(--muted))",
-                          opacity: isAtual ? 1 : (isAlcancado ? 0.6 : 0.3),
-                        }}
-                      />
-                      <NIcon
-                        size={10}
-                        style={{ color: isAlcancado ? n.cor : "hsl(var(--muted-foreground))" }}
-                        className={isAtual ? "" : "opacity-40"}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {proximo && (
-              <div className="bg-primary/5 p-3 sm:p-4 rounded-xl border border-primary/10">
-                <div className="flex justify-between items-center flex-wrap gap-1 mb-2">
-                  <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                    <ChevronRight size={10} className="text-primary" /> Rumo ao {proximo.nome}
-                  </p>
-                  <span className="text-[10px] sm:text-xs font-black text-primary">
-                    {performance.progressoNivel.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden border border-border mb-2">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${Math.min(performance.progressoNivel, 100)}%`,
-                      backgroundColor: proximo.cor,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between items-center flex-wrap gap-1">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground">
-                    R$ {performance.faltaParaProximo.toLocaleString("pt-BR")} faltantes
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground">
-                    Prêmio: R$ {proximo.premio.toLocaleString("pt-BR")}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {!proximo && nivel && (
-              <div className="bg-primary/5 p-3 sm:p-4 rounded-xl border border-primary/10 text-center">
-                <p className="text-[10px] sm:text-xs font-black text-primary uppercase tracking-wider flex items-center justify-center gap-1.5">
-                  <Crown size={12} /> Nível Máximo Atingido
-                </p>
-              </div>
-            )}
+          <div className="shrink-0 bg-primary/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-primary/20">
+            <span className="text-lg sm:text-xl lg:text-2xl font-black text-primary" data-testid="text-meta-geral-percent">
+              {percentual}%
+            </span>
           </div>
+        </div>
+
+        <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2" data-testid="text-nivel-geral">
+          Nível Atual: <span style={{ color: nivel?.cor }}>{nivel?.nome || "—"}</span>
+        </p>
+
+        <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-chart-2"
+            style={{ width: `${Math.min(percentual, 100)}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center gap-2 text-[9px] sm:text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider">
+          <span>Início: 01 {mesNome?.substring(0, 3).toUpperCase()}</span>
+          <span>Meta consolidada de todos os contratos</span>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function MetaCartaoCard({ performance, mesNome }: {
+  performance: CategoriaPerformance | undefined;
+  mesNome: string;
+}) {
+  if (!performance) return null;
+  const nivel = performance.nivelAtual;
+  const proximo = performance.proximoNivel;
+  const metaCartao = proximo ? proximo.valorMinimo : (nivel?.valorMaximo || nivel?.valorMinimo || 0);
+  const percentCartao = metaCartao > 0 ? Math.round((performance.produzido / metaCartao) * 100) : 0;
+
+  return (
+    <div className="rounded-2xl bg-[#1a1a2e] dark:bg-[#111122] p-4 sm:p-5 flex flex-col justify-between min-w-0 flex-1 w-full" data-testid="card-meta-cartao">
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <CreditCard size={14} className="text-purple-400" />
+          <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-purple-300" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Meta Cartão – {mesNome}
+          </h3>
+        </div>
+
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-xl sm:text-2xl lg:text-3xl font-black text-purple-400 tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-cartao-produzido">
+                R$ {performance.produzido.toLocaleString("pt-BR")}
+              </span>
+              <span className="text-sm sm:text-base font-bold text-gray-500">
+                / {metaCartao.toLocaleString("pt-BR")}
+              </span>
+            </div>
+          </div>
+          <div className="shrink-0 bg-purple-500/20 px-3 py-1.5 rounded-xl border border-purple-500/30">
+            <span className="text-base sm:text-lg font-black text-purple-400" data-testid="text-meta-cartao-percent">
+              {percentCartao}%
+            </span>
+          </div>
+        </div>
+
+        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-4">
+          <div
+            className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-purple-600 to-purple-400"
+            style={{ width: `${Math.min(percentCartao, 100)}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-center">
+            <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Nível Cartão</p>
+            <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-nivel-cartao">
+              {nivel?.nome || "—"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-center">
+            <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Prêmio Atual</p>
+            <p className="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-wide" data-testid="text-premio-cartao">
+              R$ {(nivel?.premio || 0).toLocaleString("pt-BR")}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -324,45 +310,17 @@ export default function DashboardVendedorPage() {
 
   const DashboardPanel = () => (
     <div className="space-y-5 sm:space-y-6" data-testid="dashboard-vendedor">
-      <Card className="rounded-2xl border-primary/20 shadow-lg">
-        <CardContent className="p-4 sm:p-6 lg:p-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4 mb-4 sm:mb-5">
-            <div className="min-w-0 flex-1">
-              <p className="text-muted-foreground text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-1.5">Meta Mensal - {mesNome}</p>
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-foreground" data-testid="text-total-fechado">
-                  R$ {(data?.totalValor || 0).toLocaleString("pt-BR")}
-                </span>
-                <span className="text-base sm:text-lg lg:text-xl font-bold text-muted-foreground/50" data-testid="text-meta-mensal">
-                  / {(data?.metaMensal || 0).toLocaleString("pt-BR")}
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-col items-end shrink-0">
-              <div className="bg-primary/10 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-primary/20 mb-1">
-                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-primary" data-testid="text-percentual">
-                  {(data?.percentualMeta || 0).toFixed(0)}%
-                </span>
-              </div>
-              <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Atingimento Total</p>
-            </div>
-          </div>
-          <div className="w-full h-2.5 sm:h-3 bg-muted rounded-full mb-3 sm:mb-4 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary to-chart-2 transition-all duration-1000 rounded-full"
-              style={{ width: `${Math.min(data?.percentualMeta || 0, 100)}%` }}
-              data-testid="progress-meta"
-            />
-          </div>
-          <div className="flex justify-between gap-2 text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider opacity-70">
-            <span>Início do Mês</span>
-            <span>Meta: R$ {(data?.metaMensal || 0).toLocaleString("pt-BR")}</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch">
+        <div className="lg:col-span-3 flex">
+          <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} />
+        </div>
+        <div className="lg:col-span-2 flex">
+          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} />
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
-        <div className="lg:col-span-8">
+      <div className="grid grid-cols-1 gap-5 sm:gap-6">
+        <div>
           <Card className="rounded-2xl">
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
@@ -444,22 +402,6 @@ export default function DashboardVendedorPage() {
           </Card>
         </div>
 
-        <div className="lg:col-span-4 space-y-5 sm:space-y-6">
-          <MetaCard
-            categoria="GERAL"
-            performance={perfData?.geral}
-            label="Meta Geral"
-            icon={TrendingUp}
-            accentColor="hsl(var(--primary))"
-          />
-          <MetaCard
-            categoria="CARTAO"
-            performance={perfData?.cartao}
-            label="Meta Cartão"
-            icon={CreditCard}
-            accentColor="#22d3ee"
-          />
-        </div>
       </div>
     </div>
   );
