@@ -1,0 +1,82 @@
+ATENÇÃO: NÃO REMOVER NADA EXISTENTE.
+
+Precisamos ajustar o módulo ALPHA sem alterar nada que já funcione para o vendedor.
+
+REGRAS ABSOLUTAS:
+- NÃO remover itens atuais do menu.
+- NÃO alterar rotas existentes.
+- NÃO quebrar permissões atuais.
+- NÃO modificar telas já prontas.
+- Apenas adicionar nova estrutura com controle de acesso.
+
+----------------------------------------------------
+OBJETIVO
+----------------------------------------------------
+
+Manter o ALPHA exatamente como está para o vendedor e criar uma nova área interna chamada:
+
+"GESTÃO COMERCIAL"
+
+Essa área deve ser visível SOMENTE para usuários com perfil:
+- admin
+- gestor
+
+----------------------------------------------------
+ESTRUTURA FINAL DO MENU ALPHA
+----------------------------------------------------
+
+ALPHA (para vendedor – permanece igual):
+
+- Campanhas
+- Atendimento
+- Pipeline
+- Consulta
+- Agenda
+- Gestão Pipeline
+
+ALPHA (para gestor/admin – adicional):
+
++ Gestão Comercial
+    - Dashboard da Empresa
+    - Importar Produção
+    - Metas & Níveis
+    - Regulamento
+    - Relatórios
+
+----------------------------------------------------
+PERMISSÃO
+----------------------------------------------------
+
+Se user.role === 'admin' ou user.role === 'gestor':
+    Mostrar "Gestão Comercial"
+
+Caso contrário:
+    NÃO mostrar essa área.
+
+----------------------------------------------------
+IMPLEMENTAÇÃO TÉCNICA
+----------------------------------------------------
+
+1) Localizar onde o menu lateral do ALPHA é definido.
+2) Criar um grupo de menu chamado "Gestão Comercial".
+3) Adicionar os 5 itens dentro dele.
+4) Aplicar condição de renderização baseada na role do usuário.
+5) Caso as páginas não existam ainda, criar páginas placeholder simples (estrutura básica) sem lógica complexa.
+6) Garantir que o vendedor NÃO visualize nada dessa área.
+7) Não alterar absolutamente nada da área operacional já existente.
+
+----------------------------------------------------
+CHECK FINAL OBRIGATÓRIO
+----------------------------------------------------
+
+Login como vendedor:
+- Deve ver apenas:
+  Campanhas, Atendimento, Pipeline, Consulta, Agenda, Gestão Pipeline.
+
+Login como gestor/admin:
+- Deve ver tudo acima + Gestão Comercial.
+
+Não alterar layout global.
+Não alterar rotas existentes.
+Não remover funcionalidades.
+Apenas adicionar a nova área com controle de acesso.
