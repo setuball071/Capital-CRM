@@ -1183,11 +1183,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine tenant ID for session
       let sessionTenantId = req.tenantId;
       
-      // In development mode without domain-based tenant, determine user's tenant
       if (!sessionTenantId && process.env.NODE_ENV === "development") {
         const userTenantList = await getUserTenants(user.id);
         if (userTenantList.length > 0) {
-          sessionTenantId = userTenantList[0].id;
+          const cookieHeader = req.headers.cookie || "";
+          let devTenantId: number | null = null;
+          try {
+            for (const cookie of cookieHeader.split(";")) {
+              const trimmed = cookie.trim();
+              const eqIndex = trimmed.indexOf("=");
+              if (eqIndex > 0) {
+                const key = trimmed.substring(0, eqIndex);
+                const value = trimmed.substring(eqIndex + 1);
+                if (key === "devTenantId") {
+                  devTenantId = parseInt(decodeURIComponent(value));
+                  break;
+                }
+              }
+            }
+          } catch (e) {}
+          
+          if (devTenantId && userTenantList.some(t => t.id === devTenantId)) {
+            sessionTenantId = devTenantId;
+          } else {
+            sessionTenantId = userTenantList[0].id;
+          }
         }
       }
       
