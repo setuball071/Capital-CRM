@@ -418,7 +418,7 @@ export default function DashboardVendedorPage() {
       <footer className="mt-8 sm:mt-12 pt-4 sm:pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] sm:text-[10px] text-muted-foreground/50 font-bold uppercase tracking-wider">
         <div className="flex items-center gap-2">
           <Shield size={10} className="text-primary/30" />
-          <span>Classificação Extraordinária Protegida</span>
+          <span>Classificação Extraordinária</span>
         </div>
         <span>Capital GO</span>
       </footer>
