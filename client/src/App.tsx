@@ -8,6 +8,7 @@ import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { useTenant } from "@/components/tenant-theme-provider";
 import CalculatorPage from "@/pages/calculator";
 import DashboardPage from "@/pages/dashboard";
 import WelcomePage from "@/pages/welcome";
@@ -69,8 +70,8 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
 function HomePage() {
   const { user, isLoading } = useAuth();
+  const { moduloPerformanceEnabled } = useTenant();
   
-  // Wait for auth to resolve before making any decisions
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -83,12 +84,11 @@ function HomePage() {
     return <Redirect to="/login" />;
   }
 
-  // Only isMaster users go to dashboard, vendedores to their panel, others to welcome
   if (user.isMaster) {
     return <Redirect to="/dashboard" />;
   }
   
-  if (user.role === "vendedor") {
+  if (user.role === "vendedor" && moduloPerformanceEnabled) {
     return <Redirect to="/dashboard-vendedor" />;
   }
   
@@ -142,6 +142,30 @@ function ModuleRoute({ component: Component, module, accessType = "view" }: {
 
   if (!hasModuleAccess(module, accessType)) {
     return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+function TenantFeatureRoute({ component: Component, feature }: { component: React.ComponentType; feature: string }) {
+  const { user, isLoading } = useAuth();
+  const tenant = useTenant();
+  const featureEnabled = (tenant as any)[feature] === true;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  if (!featureEnabled) {
+    return <Redirect to="/welcome" />;
   }
 
   return <Component />;
@@ -330,7 +354,7 @@ function Router() {
                 {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
               </Route>
               <Route path="/dashboard-vendedor">
-                {() => <ProtectedRoute component={DashboardVendedorPage} />}
+                {() => <TenantFeatureRoute component={DashboardVendedorPage} feature="moduloPerformanceEnabled" />}
               </Route>
               <Route component={NotFound} />
             </Switch>

@@ -73,6 +73,7 @@ interface TenantContextValue {
   useSidebarGradient: boolean;
   useLoginGradient: boolean;
   sidebarBgColor: string;
+  moduloPerformanceEnabled: boolean;
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -238,6 +239,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const useSidebarGradient = themeData?.useSidebarGradient === true;
   const useLoginGradient = themeData?.useLoginGradient === true;
   const sidebarBgColor = themeData?.sidebarBgColor || "#ffffff";
+  const moduloPerformanceEnabled = themeData?.moduloPerformanceEnabled === true;
   
   useEffect(() => {
     if (isLoading) return;
@@ -287,6 +289,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
       useSidebarGradient,
       useLoginGradient,
       sidebarBgColor,
+      moduloPerformanceEnabled,
     }}>
       {children}
     </TenantContext.Provider>

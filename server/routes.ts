@@ -15604,6 +15604,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Parâmetros inválidos" });
       }
 
+      const tenantResult = await db.execute(sql`SELECT theme_json FROM tenants WHERE id = ${tenantId}`);
+      const themeJson = tenantResult.rows[0]?.theme_json as any;
+      if (!themeJson?.moduloPerformanceEnabled) {
+        return res.status(403).json({ message: "Módulo de performance não habilitado para este ambiente" });
+      }
+
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth();

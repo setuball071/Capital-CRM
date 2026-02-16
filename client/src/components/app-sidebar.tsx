@@ -31,6 +31,7 @@ interface MenuSection {
     subItem?: string;
     masterOnly?: boolean;
     roleOnly?: string;
+    tenantFeature?: string;
   }[];
 }
 
@@ -56,7 +57,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
-  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
+  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor, moduloPerformanceEnabled } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
@@ -73,7 +74,12 @@ export function AppSidebar() {
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string }): boolean => {
+  const tenantFeatureFlags: Record<string, boolean> = {
+    moduloPerformanceEnabled,
+  };
+
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; tenantFeature?: string }): boolean => {
+    if (item.tenantFeature && !tenantFeatureFlags[item.tenantFeature]) return false;
     if (item.masterOnly && !isMaster) return false;
     if (item.roleOnly && userRole !== item.roleOnly && !isMaster) return false;
     const module = item.module || getModuleForUrl(item.url);
@@ -104,7 +110,7 @@ export function AppSidebar() {
       title: "Principal",
       icon: Home,
       items: [
-        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, roleOnly: "vendedor" },
+        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, roleOnly: "vendedor", tenantFeature: "moduloPerformanceEnabled" },
       ],
     },
     {
