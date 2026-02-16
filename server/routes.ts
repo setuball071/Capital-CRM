@@ -15843,7 +15843,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           continue;
         }
 
-        const statusProposta = String(row.StatusProposta || row.StatusBancoCliente || "").trim().toUpperCase();
+        const statusProposta = String(row.StatusBancoCliente || row.StatusProposta || "").trim().toUpperCase();
         const tipoContrato = String(row.TipoContrato || "").trim();
         const isCartao = tipoContrato.toLowerCase().includes("cart");
         const valorBase = parseFloat(String(row.ValorBase || "0").replace(",", ".")) || 0;
@@ -15860,7 +15860,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         }
 
-        const isPago = statusProposta === "PAGO";
+        const isPago = statusProposta === "PAGO AO CLIENTE";
 
         const contrato = {
           contratoId,
@@ -15888,7 +15888,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           totalIgnorados++;
           const motivos: string[] = [];
           if (!isPago) {
-            motivos.push(`Status "${statusProposta || "(vazio)"}" — somente "PAGO" é aceito`);
+            motivos.push(`Status "${statusProposta || "(vazio)"}" — somente "PAGO AO CLIENTE" é aceito`);
           }
           if (!dataPagamentoRaw) {
             motivos.push("Data de pagamento ausente");
@@ -15950,7 +15950,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       let ignorados = 0;
 
       for (const c of contratos) {
-        const isPago = String(c.status || "").toUpperCase() === "PAGO";
+        const isPago = String(c.status || "").toUpperCase() === "PAGO AO CLIENTE";
         const hasDate = !!c.dataPagamento;
         if (!isPago || !hasDate) {
           ignorados++;
