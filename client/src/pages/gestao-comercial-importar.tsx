@@ -11,10 +11,19 @@ interface ContratoPreview {
   cpfCliente: string;
   banco: string;
   tipoContrato: string;
+  convenio: string;
+  prazo: string;
   nomeCorretor: string;
+  codigoCorretor: string;
+  grupoVendedor: string;
+  filial: string;
   status: string;
   dataPagamento: string;
   valorBase: number;
+  valorBruto: number;
+  valorLiquido: number;
+  comissaoRepasseValor: number;
+  comissaoRepassePerc: number;
   isCartao: boolean;
   mesReferencia: string;
 }
@@ -138,8 +147,10 @@ export default function GestaoComercialImportarPage() {
     setResultado(null);
   };
 
+  const validContratos = contratos.filter((c) => c.status === "PAGO AO CLIENTE" && c.dataPagamento);
+
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto" data-testid="page-gestao-importar">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-gestao-importar">
       <div className="flex items-center gap-3">
         <Upload className="h-6 w-6 text-muted-foreground" />
         <h1 className="text-2xl font-semibold" data-testid="text-page-title">Importar Produção</h1>
@@ -272,52 +283,54 @@ export default function GestaoComercialImportarPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Contratos Pagos Válidos</CardTitle>
+              <CardTitle className="text-base">Contratos Pagos Válidos ({validContratos.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" data-testid="table-contratos-preview">
                   <thead>
                     <tr className="border-b text-left">
-                      <th className="p-2 font-medium">Contrato</th>
-                      <th className="p-2 font-medium">Cliente</th>
-                      <th className="p-2 font-medium">CPF</th>
-                      <th className="p-2 font-medium">Banco</th>
-                      <th className="p-2 font-medium">Tipo</th>
-                      <th className="p-2 font-medium">Corretor</th>
-                      <th className="p-2 font-medium">Status</th>
-                      <th className="p-2 font-medium">Data Pgto</th>
-                      <th className="p-2 font-medium text-right">Valor Base</th>
-                      <th className="p-2 font-medium text-center">Cartão</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Contrato</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Corretor</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Cliente</th>
+                      <th className="p-2 font-medium whitespace-nowrap">CPF</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Banco</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Convênio</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Tipo</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Prazo</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Data Pgto</th>
+                      <th className="p-2 font-medium whitespace-nowrap text-right">Valor Base</th>
+                      <th className="p-2 font-medium whitespace-nowrap text-right">Valor Bruto</th>
+                      <th className="p-2 font-medium whitespace-nowrap text-right">Comissão %</th>
+                      <th className="p-2 font-medium whitespace-nowrap text-right">Comissão R$</th>
+                      <th className="p-2 font-medium whitespace-nowrap text-center">Cartão</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contratos
-                      .filter((c) => c.status === "PAGO" && c.dataPagamento)
-                      .map((c, i) => (
-                        <tr key={c.contratoId + "-" + i} className="border-b hover-elevate">
-                          <td className="p-2">{c.contratoId}</td>
-                          <td className="p-2 max-w-[150px] truncate">{c.nomeCliente}</td>
-                          <td className="p-2">{c.cpfCliente}</td>
-                          <td className="p-2 max-w-[120px] truncate">{c.banco}</td>
-                          <td className="p-2 max-w-[120px] truncate">{c.tipoContrato}</td>
-                          <td className="p-2 max-w-[130px] truncate">{c.nomeCorretor}</td>
-                          <td className="p-2">
-                            <span className="inline-flex items-center gap-1 text-green-600 font-medium text-xs">
-                              <CheckCircle2 className="h-3 w-3" /> PAGO
-                            </span>
-                          </td>
-                          <td className="p-2">{c.dataPagamento}</td>
-                          <td className="p-2 text-right font-medium">{formatCurrency(c.valorBase)}</td>
-                          <td className="p-2 text-center">
-                            {c.isCartao ? (
-                              <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                    {validContratos.map((c, i) => (
+                      <tr key={c.contratoId + "-" + i} className="border-b hover-elevate">
+                        <td className="p-2 whitespace-nowrap">{c.contratoId}</td>
+                        <td className="p-2 max-w-[160px] truncate" title={c.nomeCorretor}>{c.nomeCorretor}</td>
+                        <td className="p-2 max-w-[160px] truncate" title={c.nomeCliente}>{c.nomeCliente}</td>
+                        <td className="p-2 whitespace-nowrap">{c.cpfCliente}</td>
+                        <td className="p-2 max-w-[100px] truncate" title={c.banco}>{c.banco}</td>
+                        <td className="p-2 whitespace-nowrap">{c.convenio}</td>
+                        <td className="p-2 max-w-[120px] truncate" title={c.tipoContrato}>{c.tipoContrato}</td>
+                        <td className="p-2 text-center">{c.prazo}</td>
+                        <td className="p-2 whitespace-nowrap">{c.dataPagamento}</td>
+                        <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.valorBase)}</td>
+                        <td className="p-2 text-right whitespace-nowrap">{formatCurrency(c.valorBruto)}</td>
+                        <td className="p-2 text-right whitespace-nowrap">{c.comissaoRepassePerc}%</td>
+                        <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.comissaoRepasseValor)}</td>
+                        <td className="p-2 text-center">
+                          {c.isCartao ? (
+                            <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

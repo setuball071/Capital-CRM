@@ -15862,16 +15862,30 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const isPago = statusProposta === "PAGO AO CLIENTE";
 
+        const valorBruto = parseFloat(String(row.ValorBruto || "0").replace(",", ".")) || 0;
+        const valorLiquido = parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
+        const comissaoRepasseValor = parseFloat(String(row.ComissaoRepasseValor || "0").replace(",", ".")) || 0;
+        const comissaoRepassePerc = parseFloat(String(row.ComissaoRepassePercentual || "0").replace(",", ".")) || 0;
+
         const contrato = {
           contratoId,
           nomeCliente: String(row.NomeCliente || "").trim(),
           cpfCliente: String(row.CpfCliente || "").trim(),
           banco: String(row.Banco || "").trim(),
           tipoContrato,
+          convenio: String(row.Convenio || "").trim(),
+          prazo: String(row.Prazo || "").trim(),
           nomeCorretor: String(row.NomeCorretor || "").trim(),
+          codigoCorretor: String(row.CodigoCorretor || "").trim(),
+          grupoVendedor: String(row.NomeGrupoVendedor || "").trim(),
+          filial: String(row.Filial || "").trim(),
           status: statusProposta,
           dataPagamento,
           valorBase,
+          valorBruto,
+          valorLiquido,
+          comissaoRepasseValor,
+          comissaoRepassePerc,
           isCartao,
           mesReferencia,
         };
@@ -15964,21 +15978,32 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           ))
           .limit(1);
 
+        const contratoData = {
+          nomeCliente: c.nomeCliente,
+          cpfCliente: c.cpfCliente,
+          banco: c.banco,
+          tipoContrato: c.tipoContrato,
+          convenio: c.convenio || "",
+          prazo: c.prazo || "",
+          nomeCorretor: c.nomeCorretor,
+          codigoCorretor: c.codigoCorretor || "",
+          grupoVendedor: c.grupoVendedor || "",
+          filial: c.filial || "",
+          status: c.status,
+          dataPagamento: c.dataPagamento,
+          valorBase: String(c.valorBase),
+          valorBruto: String(c.valorBruto || 0),
+          valorLiquido: String(c.valorLiquido || 0),
+          comissaoRepasseValor: String(c.comissaoRepasseValor || 0),
+          comissaoRepassePerc: String(c.comissaoRepassePerc || 0),
+          isCartao: c.isCartao,
+          mesReferencia: c.mesReferencia,
+          confirmado: true,
+        };
+
         if (existing.length > 0) {
           await db.update(producoesContratos)
-            .set({
-              nomeCliente: c.nomeCliente,
-              cpfCliente: c.cpfCliente,
-              banco: c.banco,
-              tipoContrato: c.tipoContrato,
-              nomeCorretor: c.nomeCorretor,
-              status: c.status,
-              dataPagamento: c.dataPagamento,
-              valorBase: String(c.valorBase),
-              isCartao: c.isCartao,
-              mesReferencia: c.mesReferencia,
-              confirmado: true,
-            })
+            .set(contratoData)
             .where(and(
               eq(producoesContratos.contratoId, String(c.contratoId)),
               eq(producoesContratos.tenantId, tenantId)
@@ -15988,18 +16013,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           await db.insert(producoesContratos).values({
             tenantId,
             contratoId: String(c.contratoId),
-            nomeCliente: c.nomeCliente,
-            cpfCliente: c.cpfCliente,
-            banco: c.banco,
-            tipoContrato: c.tipoContrato,
-            nomeCorretor: c.nomeCorretor,
-            status: c.status,
-            dataPagamento: c.dataPagamento,
-            valorBase: String(c.valorBase),
-            isCartao: c.isCartao,
-            mesReferencia: c.mesReferencia,
+            ...contratoData,
             importadoPor: req.user?.id,
-            confirmado: true,
           });
           inseridos++;
         }
