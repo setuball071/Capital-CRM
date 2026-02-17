@@ -140,14 +140,14 @@ function MetaGeralCard({ performance, mesNome, metaMensal }: {
   );
 }
 
-function MetaCartaoCard({ performance, mesNome }: {
+function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp }: {
   performance: CategoriaPerformance | undefined;
   mesNome: string;
+  metaCartao: number;
 }) {
   if (!performance) return null;
   const nivel = performance.nivelAtual;
-  const proximo = performance.proximoNivel;
-  const metaCartao = proximo ? proximo.valorMinimo : (nivel?.valorMaximo || nivel?.valorMinimo || 0);
+  const metaCartao = metaCartaoProp > 0 ? metaCartaoProp : (performance.meta || 0);
   const percentCartao = metaCartao > 0 ? Math.round((performance.produzido / metaCartao) * 100) : 0;
 
   return (
@@ -400,7 +400,7 @@ export default function DashboardVendedorPage() {
           <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} />
         </div>
         <div className="lg:col-span-2 flex">
-          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} />
+          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} metaCartao={data?.metaCartao || 0} />
         </div>
       </div>
 
