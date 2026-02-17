@@ -16148,6 +16148,280 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ==========================================
+  // METAS MENSAIS - Gestão Comercial
+  // ==========================================
+
+  // GET /api/metas/equipes - List teams for metas (with role-based filtering)
+  app.get("/api/metas/equipes", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const user = req.user!;
+      const role = user.role;
+
+      let result;
+      if (role === "vendedor") {
+        result = await db.execute(sql`
+          SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
+                 e.nome_completo as coordenador_nome
+          FROM commercial_teams ct
+          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+            AND ct.id IN (
+              SELECT ctm.team_id FROM commercial_team_members ctm
+              JOIN employees emp ON ctm.employee_id = emp.id
+              WHERE emp.tenant_id = ${tenantId} AND ctm.ativo = true
+              AND emp.user_id = ${user.id}
+            )
+          ORDER BY ct.nome_equipe
+        `);
+      } else if (role === "coordenacao") {
+        result = await db.execute(sql`
+          SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
+                 e.nome_completo as coordenador_nome
+          FROM commercial_teams ct
+          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+            AND (ct.coordenador_id IN (
+              SELECT emp.id FROM employees emp WHERE emp.user_id = ${user.id} AND emp.tenant_id = ${tenantId}
+            ) OR ct.id IN (
+              SELECT ctm.team_id FROM commercial_team_members ctm
+              JOIN employees emp ON ctm.employee_id = emp.id
+              WHERE emp.user_id = ${user.id} AND emp.tenant_id = ${tenantId} AND ctm.ativo = true
+            ))
+          ORDER BY ct.nome_equipe
+        `);
+      } else {
+        result = await db.execute(sql`
+          SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
+                 e.nome_completo as coordenador_nome
+          FROM commercial_teams ct
+          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+          ORDER BY ct.nome_equipe
+        `);
+      }
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[METAS] Error listing teams:", error);
+      res.status(500).json({ message: "Erro ao listar equipes" });
+    }
+  });
+
+  // GET /api/metas/equipe/:equipeId/:mesReferencia - Get team meta
+  app.get("/api/metas/equipe/:equipeId/:mesReferencia", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const equipeId = parseInt(req.params.equipeId);
+      const mesReferencia = req.params.mesReferencia;
+
+      const result = await db.execute(sql`
+        SELECT * FROM metas_equipe WHERE equipe_id = ${equipeId} AND mes_referencia = ${mesReferencia} AND tenant_id = ${tenantId}
+      `);
+
+      res.json(result.rows[0] || null);
+    } catch (error: any) {
+      console.error("[METAS] Error getting team meta:", error);
+      res.status(500).json({ message: "Erro ao buscar meta da equipe" });
+    }
+  });
+
+  // PUT /api/metas/equipe - Upsert team meta
+  app.put("/api/metas/equipe", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const user = req.user!;
+      if (!user.isMaster && !["master", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { equipeId, mesReferencia, metaGeral, metaCartao } = req.body;
+
+      if (!equipeId || !mesReferencia) {
+        return res.status(400).json({ message: "equipeId e mesReferencia são obrigatórios" });
+      }
+
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (mesReferencia < currentMonth) {
+        return res.status(403).json({ message: "Não é possível editar metas de meses anteriores" });
+      }
+
+      const mg = parseFloat(metaGeral) || 0;
+      const mc = parseFloat(metaCartao) || 0;
+
+      const result = await db.execute(sql`
+        INSERT INTO metas_equipe (tenant_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
+        VALUES (${tenantId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+        ON CONFLICT (tenant_id, equipe_id, mes_referencia) DO UPDATE SET
+          meta_geral = EXCLUDED.meta_geral,
+          meta_cartao = EXCLUDED.meta_cartao
+        RETURNING *
+      `);
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[METAS] Error upserting team meta:", error);
+      res.status(500).json({ message: "Erro ao salvar meta da equipe" });
+    }
+  });
+
+  // GET /api/metas/individuais/:equipeId/:mesReferencia - Get individual metas for a team/month
+  app.get("/api/metas/individuais/:equipeId/:mesReferencia", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const user = req.user!;
+      const equipeId = parseInt(req.params.equipeId);
+      const mesReferencia = req.params.mesReferencia;
+
+      let result;
+      if (user.role === "vendedor") {
+        result = await db.execute(sql`
+          SELECT mi.*, u.name as usuario_nome, u.email as usuario_email
+          FROM metas_individuais mi
+          JOIN users u ON mi.usuario_id = u.id
+          WHERE mi.equipe_id = ${equipeId} AND mi.mes_referencia = ${mesReferencia} AND mi.tenant_id = ${tenantId}
+            AND mi.usuario_id = ${user.id}
+          ORDER BY u.name
+        `);
+      } else {
+        result = await db.execute(sql`
+          SELECT mi.*, u.name as usuario_nome, u.email as usuario_email
+          FROM metas_individuais mi
+          JOIN users u ON mi.usuario_id = u.id
+          WHERE mi.equipe_id = ${equipeId} AND mi.mes_referencia = ${mesReferencia} AND mi.tenant_id = ${tenantId}
+          ORDER BY u.name
+        `);
+      }
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[METAS] Error getting individual metas:", error);
+      res.status(500).json({ message: "Erro ao buscar metas individuais" });
+    }
+  });
+
+  // GET /api/metas/membros/:equipeId - Get team members (for individual meta assignment)
+  app.get("/api/metas/membros/:equipeId", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const equipeId = parseInt(req.params.equipeId);
+
+      const result = await db.execute(sql`
+        SELECT ctm.id as member_id, ctm.funcao_equipe, e.id as employee_id, e.nome_completo as nome,
+               e.user_id, u.name as user_name, u.email
+        FROM commercial_team_members ctm
+        JOIN employees e ON ctm.employee_id = e.id
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE ctm.team_id = ${equipeId} AND ctm.tenant_id = ${tenantId} AND ctm.ativo = true
+        ORDER BY e.nome_completo
+      `);
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[METAS] Error getting team members:", error);
+      res.status(500).json({ message: "Erro ao listar membros da equipe" });
+    }
+  });
+
+  // PUT /api/metas/individual - Upsert individual meta
+  app.put("/api/metas/individual", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const user = req.user!;
+      if (!user.isMaster && !["master", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { usuarioId, equipeId, mesReferencia, metaGeral, metaCartao } = req.body;
+
+      if (!usuarioId || !equipeId || !mesReferencia) {
+        return res.status(400).json({ message: "usuarioId, equipeId e mesReferencia são obrigatórios" });
+      }
+
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (mesReferencia < currentMonth) {
+        return res.status(403).json({ message: "Não é possível editar metas de meses anteriores" });
+      }
+
+      const mg = parseFloat(metaGeral) || 0;
+      const mc = parseFloat(metaCartao) || 0;
+
+      const result = await db.execute(sql`
+        INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
+        VALUES (${tenantId}, ${usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+        ON CONFLICT (tenant_id, usuario_id, equipe_id, mes_referencia) DO UPDATE SET
+          meta_geral = EXCLUDED.meta_geral,
+          meta_cartao = EXCLUDED.meta_cartao
+        RETURNING *
+      `);
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[METAS] Error upserting individual meta:", error);
+      res.status(500).json({ message: "Erro ao salvar meta individual" });
+    }
+  });
+
+  // PUT /api/metas/individuais/batch - Batch upsert individual metas
+  app.put("/api/metas/individuais/batch", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+
+      const user = req.user!;
+      if (!user.isMaster && !["master", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { metas, equipeId, mesReferencia } = req.body;
+
+      if (!Array.isArray(metas) || !equipeId || !mesReferencia) {
+        return res.status(400).json({ message: "metas, equipeId e mesReferencia são obrigatórios" });
+      }
+
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (mesReferencia < currentMonth) {
+        return res.status(403).json({ message: "Não é possível editar metas de meses anteriores" });
+      }
+
+      const results = [];
+      for (const meta of metas) {
+        const mg = parseFloat(meta.metaGeral) || 0;
+        const mc = parseFloat(meta.metaCartao) || 0;
+        const result = await db.execute(sql`
+          INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
+          VALUES (${tenantId}, ${meta.usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+          ON CONFLICT (tenant_id, usuario_id, equipe_id, mes_referencia) DO UPDATE SET
+            meta_geral = EXCLUDED.meta_geral,
+            meta_cartao = EXCLUDED.meta_cartao
+          RETURNING *
+        `);
+        results.push(result.rows[0]);
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error("[METAS] Error batch upserting individual metas:", error);
+      res.status(500).json({ message: "Erro ao salvar metas individuais" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

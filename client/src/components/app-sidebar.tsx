@@ -41,7 +41,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-amortizacao", "/simulador-portabilidade"],
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard"],
-  modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios", "/equipes"],
+  modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline"],
 };
@@ -156,7 +156,6 @@ export function AppSidebar() {
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_usuarios", subItem: "precos" },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Funcionários", url: "/funcionarios", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
-        { title: "Equipes", url: "/equipes", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
       ],
     },
@@ -188,6 +187,8 @@ export function AppSidebar() {
       icon: Briefcase,
       items: [
         { title: "Dashboard da Empresa", url: "/vendas/gestao-comercial/dashboard", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Equipes", url: "/equipes", icon: Users, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Metas Mensais", url: "/vendas/gestao-comercial/metas-mensais", icon: Target, rolesAllowed: ["master", "coordenacao", "vendedor"] },
         { title: "Importar Produção", url: "/vendas/gestao-comercial/importar-producao", icon: Upload, rolesAllowed: ["master", "coordenacao"] },
         { title: "Histórico Importações", url: "/vendas/gestao-comercial/historico-importacoes", icon: History, rolesAllowed: ["master", "coordenacao"] },
         { title: "Metas & Níveis", url: "/vendas/gestao-comercial/metas-niveis", icon: Target, rolesAllowed: ["master", "coordenacao"] },

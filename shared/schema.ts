@@ -2256,3 +2256,38 @@ export const insertProducaoContratoSchema = createInsertSchema(producoesContrato
 export type ProducaoContrato = typeof producoesContratos.$inferSelect;
 export type InsertProducaoContrato = z.infer<typeof insertProducaoContratoSchema>;
 
+// Metas de Equipe - uma meta por equipe por mês
+export const metasEquipe = pgTable("metas_equipe", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  equipeId: integer("equipe_id").references(() => commercialTeams.id, { onDelete: "cascade" }).notNull(),
+  mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+  metaGeral: decimal("meta_geral", { precision: 14, scale: 2 }).notNull().default("0"),
+  metaCartao: decimal("meta_cartao", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_metas_equipe_unique").on(table.tenantId, table.equipeId, table.mesReferencia),
+]);
+
+export const insertMetaEquipeSchema = createInsertSchema(metasEquipe).omit({ id: true, createdAt: true });
+export type MetaEquipe = typeof metasEquipe.$inferSelect;
+export type InsertMetaEquipe = z.infer<typeof insertMetaEquipeSchema>;
+
+// Metas Individuais - uma meta por vendedor por mês
+export const metasIndividuais = pgTable("metas_individuais", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  usuarioId: integer("usuario_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  equipeId: integer("equipe_id").references(() => commercialTeams.id, { onDelete: "cascade" }).notNull(),
+  mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+  metaGeral: decimal("meta_geral", { precision: 14, scale: 2 }).notNull().default("0"),
+  metaCartao: decimal("meta_cartao", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_metas_individuais_unique").on(table.tenantId, table.usuarioId, table.equipeId, table.mesReferencia),
+]);
+
+export const insertMetaIndividualSchema = createInsertSchema(metasIndividuais).omit({ id: true, createdAt: true });
+export type MetaIndividual = typeof metasIndividuais.$inferSelect;
+export type InsertMetaIndividual = z.infer<typeof insertMetaIndividualSchema>;
+
