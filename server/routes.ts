@@ -15010,10 +15010,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const result = await db.execute(sql`
         SELECT 
           ct.*,
-          e.nome_completo as coordenador_nome,
+          u.name as coordenador_nome,
           (SELECT COUNT(*) FROM commercial_team_members ctm WHERE ctm.team_id = ct.id AND ctm.ativo = true) as total_membros
         FROM commercial_teams ct
-        LEFT JOIN employees e ON ct.coordenador_id = e.id
+        LEFT JOIN users u ON ct.coordenador_id = u.id
         WHERE ct.tenant_id = ${tenantId}
         ORDER BY ct.nome_equipe ASC
       `);
@@ -15037,9 +15037,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const result = await db.execute(sql`
         SELECT 
           ct.*,
-          e.nome_completo as coordenador_nome
+          u.name as coordenador_nome
         FROM commercial_teams ct
-        LEFT JOIN employees e ON ct.coordenador_id = e.id
+        LEFT JOIN users u ON ct.coordenador_id = u.id
         WHERE ct.id = ${id} AND ct.tenant_id = ${tenantId}
       `);
 
@@ -15079,18 +15079,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         )
         RETURNING *
       `);
-
-      // If coordenador is set, add them as a member automatically
-      if (data.coordenadorId) {
-        await db.execute(sql`
-          INSERT INTO commercial_team_members (
-            tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao, ativo, data_entrada
-          ) VALUES (
-            ${tenantId}, ${(result.rows[0] as any).id}, ${data.coordenadorId}, 'coordenador', 'salario_fixo', true, ${new Date().toISOString().split('T')[0]}
-          )
-          ON CONFLICT DO NOTHING
-        `);
-      }
 
       return res.status(201).json(result.rows[0]);
     } catch (error) {

@@ -2110,7 +2110,7 @@ export const commercialTeams = pgTable("commercial_teams", {
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
   nomeEquipe: varchar("nome_equipe", { length: 100 }).notNull(),
   descricao: text("descricao"),
-  coordenadorId: integer("coordenador_id").references(() => employees.id, { onDelete: "set null" }),
+  coordenadorId: integer("coordenador_id").references(() => users.id, { onDelete: "set null" }),
   ativa: boolean("ativa").default(true),
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
