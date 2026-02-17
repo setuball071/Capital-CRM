@@ -1,0 +1,264 @@
+OBJETIVO AGORA
+
+Criar a tela Gestão Comercial → Metas & Níveis
+
+Onde o gestor poderá:
+
+Criar níveis de PRODUÇÃO GERAL
+
+Criar níveis de PRODUÇÃO DE CARTÃO
+
+Definir:
+
+Nome do nível
+
+Valor mínimo para atingir
+
+Valor do prêmio
+
+Ícone
+
+Cor personalizada
+
+Ordenar níveis por faturamento mínimo
+
+Visualizar preview de como aparecerá no dashboard
+
+🧠 Estrutura Conceitual
+
+Você terá DOIS grupos de níveis:
+
+🟣 Níveis – Produção Geral
+
+🔵 Níveis – Produção Cartão
+
+Cada grupo totalmente independente.
+
+📐 Estrutura Técnica Recomendada
+
+Tabela: production_levels
+
+Campos sugeridos:
+
+id
+tenant_id
+type: "GERAL" | "CARTAO"
+name
+minimum_amount
+prize_amount
+icon
+color
+order_position
+active
+created_at
+
+
+Isso deixa escalável.
+
+🖥️ Como deve ser a tela
+1️⃣ Topo da página
+
+Título:
+Metas & Níveis
+
+Subtítulo:
+Configure os níveis de premiação da produção geral e de cartão.
+
+2️⃣ Separação visual em abas
+[ Produção Geral ]   [ Produção Cartão ]
+
+
+Cada aba com sua própria lista.
+
+3️⃣ Lista de níveis (tipo tabela configurável)
+
+Colunas:
+
+| Ordem | Ícone | Nível | Faturamento Mínimo | Prêmio | Cor | Ações |
+
+Botão:
+➕ Adicionar Nível
+
+4️⃣ Modal de criação/edição
+
+Campos:
+
+Nome do nível
+
+Faturamento mínimo (R$)
+
+Valor do prêmio (R$)
+
+Selecionar ícone
+
+Selecionar cor
+
+Ordem (posição)
+
+🎨 Seleção de Ícones
+
+Você pode usar biblioteca tipo:
+
+lucide-react
+
+heroicons
+
+tabler icons
+
+Sugestão de ícones pré-definidos:
+
+gem (diamante)
+
+trophy
+
+medal
+
+star
+
+crown
+
+target
+
+shield
+
+award
+
+flame
+
+rocket
+
+Campo pode ser dropdown com preview.
+
+🎨 Seleção de Cor
+
+Color picker simples:
+
+Hex color
+
+Ou paleta pré-definida
+
+Sugestão:
+Salve o HEX no banco.
+
+🧠 Regra IMPORTANTÍSSIMA
+
+Sempre ordenar níveis por:
+
+minimum_amount ASC
+
+
+Porque o sistema vai:
+
+Ver qual o maior nível que o usuário atingiu
+
+Se nenhum foi atingido:
+→ pegar o primeiro da lista
+→ mostrar quanto falta para o primeiro nível
+
+Isso resolve o problema que você mostrou antes 👆
+
+🔥 Agora o Prompt DEFINITIVO para colocar no DEV (Replit)
+
+Copie e cole exatamente isso:
+
+Precisamos desenvolver o módulo completo de configuração de Metas & Níveis dentro de:
+
+ALPHA → Gestão Comercial → Metas & Níveis
+
+Objetivo:
+Permitir que o gestor configure níveis de premiação para dois tipos de produção:
+- PRODUÇÃO GERAL
+- PRODUÇÃO CARTÃO
+
+⚙️ Estrutura técnica:
+
+Criar tabela production_levels com os seguintes campos:
+
+id (uuid)
+tenant_id
+type ("GERAL" | "CARTAO")
+name (string)
+minimum_amount (decimal)
+prize_amount (decimal)
+icon (string)
+color (string hex)
+order_position (integer)
+active (boolean)
+created_at (timestamp)
+
+📌 Interface:
+
+A tela deve ter duas abas:
+[ Produção Geral ]
+[ Produção Cartão ]
+
+Cada aba exibe uma lista de níveis com:
+
+- Ordem
+- Ícone
+- Nome do nível
+- Faturamento mínimo
+- Valor do prêmio
+- Cor
+- Ações (editar / excluir)
+
+Botão:
++ Adicionar nível
+
+📌 Modal de criação/edição:
+
+Campos:
+- Nome do nível
+- Faturamento mínimo (R$)
+- Valor do prêmio (R$)
+- Selecionar ícone (dropdown com preview)
+- Selecionar cor (color picker)
+- Ordem
+- Ativo (toggle)
+
+🎨 Ícones disponíveis (usar biblioteca de ícones existente no projeto):
+
+gem
+trophy
+medal
+star
+crown
+target
+shield
+award
+flame
+rocket
+
+📌 Regras:
+
+- Sempre ordenar por minimum_amount ASC.
+- O sistema deve permitir múltiplos níveis.
+- Não pode permitir dois níveis com mesmo minimum_amount no mesmo type.
+- O tipo GERAL é independente do tipo CARTAO.
+
+📌 Importante:
+
+Esse módulo será usado depois para:
+- Determinar nível atual do vendedor
+- Determinar próximo nível mesmo quando não houver nível atingido
+- Calcular quanto falta para próximo nível
+
+Implementar API REST completa:
+GET /levels
+POST /levels
+PUT /levels/:id
+DELETE /levels/:id
+
+🏆 Resultado
+
+Com isso você:
+
+Resolve o problema do “sem nível”
+
+Cria um sistema profissional
+
+Deixa o sistema totalmente configurável
+
+Não precisa alterar código quando mudar premiações
+
+Fica pronto para dashboard do gestor depois
