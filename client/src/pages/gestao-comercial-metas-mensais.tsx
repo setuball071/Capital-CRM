@@ -37,11 +37,9 @@ interface MetaIndividual {
 interface TeamMember {
   member_id: number;
   funcao_equipe: string;
-  employee_id: number;
-  nome: string;
-  user_id: number | null;
-  user_name: string | null;
-  email: string | null;
+  user_id: number;
+  user_name: string;
+  email: string;
 }
 
 function getCurrentMonth(): string {
@@ -65,6 +63,10 @@ function navigateMonth(mesRef: string, direction: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const EMPTY_TEAMS: Team[] = [];
+const EMPTY_METAS: MetaIndividual[] = [];
+const EMPTY_MEMBERS: TeamMember[] = [];
+
 export default function MetasMensaisPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -82,7 +84,7 @@ export default function MetasMensaisPage() {
   const currentMonth = getCurrentMonth();
   const isMonthLocked = mesReferencia < currentMonth;
 
-  const { data: equipes = [], isLoading: loadingEquipes } = useQuery<Team[]>({
+  const { data: equipes = EMPTY_TEAMS, isLoading: loadingEquipes } = useQuery<Team[]>({
     queryKey: ["/api/metas/equipes"],
   });
 
@@ -90,7 +92,7 @@ export default function MetasMensaisPage() {
     if (equipes.length > 0 && !equipeId) {
       setEquipeId(String(equipes[0].id));
     }
-  }, [equipes]);
+  }, [equipes, equipeId]);
 
   const { data: metaEquipe, isLoading: loadingMetaEquipe } = useQuery<MetaEquipe | null>({
     queryKey: ["/api/metas/equipe", equipeId, mesReferencia],
@@ -103,7 +105,7 @@ export default function MetasMensaisPage() {
     enabled: !!equipeId,
   });
 
-  const { data: metasIndividuais = [], isLoading: loadingIndividuais } = useQuery<MetaIndividual[]>({
+  const { data: metasIndividuais = EMPTY_METAS, isLoading: loadingIndividuais } = useQuery<MetaIndividual[]>({
     queryKey: ["/api/metas/individuais", equipeId, mesReferencia],
     queryFn: async () => {
       if (!equipeId) return [];
@@ -114,7 +116,7 @@ export default function MetasMensaisPage() {
     enabled: !!equipeId,
   });
 
-  const { data: membros = [] } = useQuery<TeamMember[]>({
+  const { data: membros = EMPTY_MEMBERS } = useQuery<TeamMember[]>({
     queryKey: ["/api/metas/membros", equipeId],
     queryFn: async () => {
       if (!equipeId) return [];
@@ -201,12 +203,10 @@ export default function MetasMensaisPage() {
     ? membros.filter(m => m.user_id)
     : metasIndividuais.map(mi => ({
         user_id: mi.usuario_id,
-        nome: mi.usuario_nome,
         user_name: mi.usuario_nome,
         email: mi.usuario_email,
         funcao_equipe: "",
         member_id: 0,
-        employee_id: 0,
       }));
 
   const handleIndividualChange = (userId: number, field: 'metaGeral' | 'metaCartao', value: string) => {
@@ -419,7 +419,7 @@ export default function MetasMensaisPage() {
             <p className="text-muted-foreground text-center py-8">
               {isVendedor
                 ? "Nenhuma meta definida para você neste mês."
-                : "Nenhum membro com acesso ao sistema nesta equipe. Vincule usuários aos funcionários em Equipes."}
+                : "Nenhum membro nesta equipe. Adicione membros em Gestão Comercial > Equipes."}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -440,7 +440,7 @@ export default function MetasMensaisPage() {
                       <tr key={userId} className="border-b last:border-b-0" data-testid={`row-meta-${userId}`}>
                         <td className="py-3 pr-4">
                           <div>
-                            <p className="font-medium">{membro.user_name || membro.nome}</p>
+                            <p className="font-medium">{membro.user_name}</p>
                             {membro.email && (
                               <p className="text-xs text-muted-foreground">{membro.email}</p>
                             )}

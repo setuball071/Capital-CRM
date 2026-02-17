@@ -15119,12 +15119,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       // Reconcile coordinator membership if coordinator changed
       if (oldCoordinatorId !== newCoordinatorId) {
-        // Remove old coordinator's coordinator role (demote to vendedor or remove)
+        // Remove old coordinator's coordinator role
         if (oldCoordinatorId) {
           await db.execute(sql`
             DELETE FROM commercial_team_members 
             WHERE team_id = ${id} 
-            AND employee_id = ${oldCoordinatorId} 
+            AND user_id = ${oldCoordinatorId} 
             AND funcao_equipe = 'coordenador'
             AND tenant_id = ${tenantId}
           `);
@@ -15132,24 +15132,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         
         // Add new coordinator as member if not already a member
         if (newCoordinatorId) {
-          // Check if new coordinator is already a member of this team
           const existingMember = await db.execute(sql`
             SELECT id FROM commercial_team_members 
-            WHERE team_id = ${id} AND employee_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
+            WHERE team_id = ${id} AND user_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
           `);
           
           if (existingMember.rows.length > 0) {
-            // Update existing member to coordinator role
             await db.execute(sql`
               UPDATE commercial_team_members 
               SET funcao_equipe = 'coordenador', updated_at = NOW()
-              WHERE team_id = ${id} AND employee_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
+              WHERE team_id = ${id} AND user_id = ${newCoordinatorId} AND tenant_id = ${tenantId}
             `);
           } else {
-            // Add as new coordinator member
             await db.execute(sql`
               INSERT INTO commercial_team_members (
-                tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao, ativo, data_entrada
+                tenant_id, team_id, user_id, funcao_equipe, tipo_remuneracao, ativo, data_entrada
               ) VALUES (
                 ${tenantId}, ${id}, ${newCoordinatorId}, 'coordenador', 'salario_fixo', true, ${new Date().toISOString().split('T')[0]}
               )
@@ -16140,40 +16137,36 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (role === "vendedor") {
         result = await db.execute(sql`
           SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
-                 e.nome_completo as coordenador_nome
+                 u.name as coordenador_nome
           FROM commercial_teams ct
-          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          LEFT JOIN users u ON ct.coordenador_id = u.id
           WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
             AND ct.id IN (
               SELECT ctm.team_id FROM commercial_team_members ctm
-              JOIN employees emp ON ctm.employee_id = emp.id
-              WHERE emp.tenant_id = ${tenantId} AND ctm.ativo = true
-              AND emp.user_id = ${user.id}
+              WHERE ctm.user_id = ${user.id} AND ctm.ativo = true
+              AND ctm.tenant_id = ${tenantId}
             )
           ORDER BY ct.nome_equipe
         `);
       } else if (role === "coordenacao") {
         result = await db.execute(sql`
           SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
-                 e.nome_completo as coordenador_nome
+                 u.name as coordenador_nome
           FROM commercial_teams ct
-          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          LEFT JOIN users u ON ct.coordenador_id = u.id
           WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
-            AND (ct.coordenador_id IN (
-              SELECT emp.id FROM employees emp WHERE emp.user_id = ${user.id} AND emp.tenant_id = ${tenantId}
-            ) OR ct.id IN (
+            AND (ct.coordenador_id = ${user.id} OR ct.id IN (
               SELECT ctm.team_id FROM commercial_team_members ctm
-              JOIN employees emp ON ctm.employee_id = emp.id
-              WHERE emp.user_id = ${user.id} AND emp.tenant_id = ${tenantId} AND ctm.ativo = true
+              WHERE ctm.user_id = ${user.id} AND ctm.tenant_id = ${tenantId} AND ctm.ativo = true
             ))
           ORDER BY ct.nome_equipe
         `);
       } else {
         result = await db.execute(sql`
           SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
-                 e.nome_completo as coordenador_nome
+                 u.name as coordenador_nome
           FROM commercial_teams ct
-          LEFT JOIN employees e ON ct.coordenador_id = e.id
+          LEFT JOIN users u ON ct.coordenador_id = u.id
           WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
           ORDER BY ct.nome_equipe
         `);
@@ -16294,13 +16287,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const equipeId = parseInt(req.params.equipeId);
 
       const result = await db.execute(sql`
-        SELECT ctm.id as member_id, ctm.funcao_equipe, e.id as employee_id, e.nome_completo as nome,
-               e.user_id, u.name as user_name, u.email
+        SELECT ctm.id as member_id, ctm.funcao_equipe, ctm.user_id,
+               u.name as user_name, u.email
         FROM commercial_team_members ctm
-        JOIN employees e ON ctm.employee_id = e.id
-        LEFT JOIN users u ON e.user_id = u.id
+        LEFT JOIN users u ON ctm.user_id = u.id
         WHERE ctm.team_id = ${equipeId} AND ctm.tenant_id = ${tenantId} AND ctm.ativo = true
-        ORDER BY e.nome_completo
+        ORDER BY u.name
       `);
 
       res.json(result.rows);
