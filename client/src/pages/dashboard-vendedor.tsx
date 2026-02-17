@@ -522,7 +522,7 @@ export default function DashboardVendedorPage() {
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <div className="relative shrink-0">
             {user.avatarUrl ? (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
+              <div className="w-20 h-20 sm:w-28 sm:h-28 relative">
                 <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-contain object-bottom" data-testid="img-vendedor-avatar" />
                 {nivelGeral && (
                   <div
