@@ -2197,9 +2197,31 @@ export const insertMetaNivelSchema = createInsertSchema(metaNiveis).omit({ id: t
 export type MetaNivel = typeof metaNiveis.$inferSelect;
 export type InsertMetaNivel = z.infer<typeof insertMetaNivelSchema>;
 
+export const producoesImportacoes = pgTable("producoes_importacoes", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  fileName: varchar("file_name", { length: 500 }),
+  importadoPor: integer("importado_por").references(() => users.id),
+  importadoPorNome: varchar("importado_por_nome", { length: 255 }),
+  totalContratos: integer("total_contratos").default(0),
+  totalIgnorados: integer("total_ignorados").default(0),
+  totalInseridos: integer("total_inseridos").default(0),
+  totalAtualizados: integer("total_atualizados").default(0),
+  totalValorGeral: decimal("total_valor_geral", { precision: 14, scale: 2 }).default("0"),
+  totalValorCartao: decimal("total_valor_cartao", { precision: 14, scale: 2 }).default("0"),
+  mesReferencia: varchar("mes_referencia", { length: 7 }),
+  status: varchar("status", { length: 20 }).default("confirmado"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertProducaoImportacaoSchema = createInsertSchema(producoesImportacoes).omit({ id: true, createdAt: true });
+export type ProducaoImportacao = typeof producoesImportacoes.$inferSelect;
+export type InsertProducaoImportacao = z.infer<typeof insertProducaoImportacaoSchema>;
+
 export const producoesContratos = pgTable("producoes_contratos", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  importacaoId: integer("importacao_id").references(() => producoesImportacoes.id, { onDelete: "set null" }),
   contratoId: varchar("contrato_id", { length: 100 }).notNull(),
   nomeCliente: varchar("nome_cliente", { length: 255 }),
   cpfCliente: varchar("cpf_cliente", { length: 20 }),
@@ -2211,6 +2233,8 @@ export const producoesContratos = pgTable("producoes_contratos", {
   codigoCorretor: varchar("codigo_corretor", { length: 50 }),
   grupoVendedor: varchar("grupo_vendedor", { length: 255 }),
   filial: varchar("filial", { length: 255 }),
+  vendedorId: integer("vendedor_id").references(() => users.id, { onDelete: "set null" }),
+  vendedorNome: varchar("vendedor_nome", { length: 255 }),
   status: varchar("status", { length: 100 }),
   dataPagamento: varchar("data_pagamento", { length: 20 }),
   valorBase: decimal("valor_base", { precision: 14, scale: 2 }),

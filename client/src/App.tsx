@@ -52,6 +52,7 @@ import GestaoComercialImportarPage from "@/pages/gestao-comercial-importar";
 import GestaoComercialMetasPage from "@/pages/gestao-comercial-metas";
 import GestaoComercialRegulamentoPage from "@/pages/gestao-comercial-regulamento";
 import GestaoComercialRelatoriosPage from "@/pages/gestao-comercial-relatorios";
+import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -388,6 +389,9 @@ function Router() {
               </Route>
               <Route path="/vendas/gestao-comercial/importar-producao">
                 {() => <RoleRoute component={GestaoComercialImportarPage} allowedRoles={["master", "coordenacao"]} />}
+              </Route>
+              <Route path="/vendas/gestao-comercial/historico-importacoes">
+                {() => <RoleRoute component={GestaoComercialHistoricoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/gestao-comercial/metas-niveis">
                 {() => <RoleRoute component={GestaoComercialMetasPage} allowedRoles={["master", "coordenacao"]} />}

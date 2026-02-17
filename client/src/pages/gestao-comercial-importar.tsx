@@ -1,9 +1,19 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, X, CreditCard, DollarSign, FileCheck, FileX } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, X, CreditCard, DollarSign, FileCheck, FileX, Users, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+
+interface Vendedor {
+  id: number;
+  name: string;
+  role: string;
+  isActive: boolean;
+}
 
 interface ContratoPreview {
   contratoId: string;
@@ -26,6 +36,8 @@ interface ContratoPreview {
   comissaoRepassePerc: number;
   isCartao: boolean;
   mesReferencia: string;
+  vendedorId?: number | null;
+  vendedorNome?: string;
 }
 
 interface ResumoImportacao {
@@ -50,8 +62,40 @@ interface ContratoIgnorado {
 
 type Step = "upload" | "preview" | "confirmed";
 
+function normalizeStr(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function findBestMatch(corretorName: string, vendedores: Vendedor[]): Vendedor | null {
+  if (!corretorName) return null;
+  const normalized = normalizeStr(corretorName);
+  const parts = normalized.split(/\s+/);
+
+  let bestMatch: Vendedor | null = null;
+  let bestScore = 0;
+
+  for (const v of vendedores) {
+    const vNorm = normalizeStr(v.name);
+    if (vNorm === normalized) return v;
+
+    const vParts = vNorm.split(/\s+/);
+    let score = 0;
+    for (const part of parts) {
+      if (part.length < 2) continue;
+      if (vParts.some(vp => vp === part)) score += 3;
+      else if (vNorm.includes(part)) score += 1;
+    }
+    if (score > bestScore && score >= 3) {
+      bestScore = score;
+      bestMatch = v;
+    }
+  }
+  return bestMatch;
+}
+
 export default function GestaoComercialImportarPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [step, setStep] = useState<Step>("upload");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -62,19 +106,64 @@ export default function GestaoComercialImportarPage() {
   const [showIgnorados, setShowIgnorados] = useState(false);
   const [resultado, setResultado] = useState<{ inseridos: number; atualizados: number; ignorados: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [vendedorMap, setVendedorMap] = useState<Record<string, { vendedorId: number | null; vendedorNome: string }>>({});
+
+  const { data: vendedores = [] } = useQuery<Vendedor[]>({
+    queryKey: ["/api/gestao-comercial/vendedores"],
+  });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
   };
 
+  const validContratos = useMemo(() =>
+    contratos.filter((c) => c.status === "PAGO AO CLIENTE" && c.dataPagamento),
+    [contratos]
+  );
+
+  const corretorNames = useMemo(() => {
+    const names = new Set<string>();
+    validContratos.forEach(c => { if (c.nomeCorretor) names.add(c.nomeCorretor); });
+    return Array.from(names);
+  }, [validContratos]);
+
+  useEffect(() => {
+    if (corretorNames.length > 0 && vendedores.length > 0 && Object.keys(vendedorMap).length === 0) {
+      const initialMap: Record<string, { vendedorId: number | null; vendedorNome: string }> = {};
+      for (const name of corretorNames) {
+        const match = findBestMatch(name, vendedores);
+        if (match) {
+          initialMap[name] = { vendedorId: match.id, vendedorNome: match.name };
+        } else {
+          initialMap[name] = { vendedorId: null, vendedorNome: "" };
+        }
+      }
+      setVendedorMap(initialMap);
+    }
+  }, [corretorNames, vendedores, vendedorMap]);
+
+  const handleVendedorChange = useCallback((corretorName: string, vendedorId: string) => {
+    if (vendedorId === "none") {
+      setVendedorMap(prev => ({ ...prev, [corretorName]: { vendedorId: null, vendedorNome: "" } }));
+    } else {
+      const v = vendedores.find(v => v.id === parseInt(vendedorId));
+      if (v) {
+        setVendedorMap(prev => ({ ...prev, [corretorName]: { vendedorId: v.id, vendedorNome: v.name } }));
+      }
+    }
+  }, [vendedores]);
+
+  const allMapped = useMemo(() => {
+    return corretorNames.every(name => vendedorMap[name]?.vendedorId);
+  }, [corretorNames, vendedorMap]);
+
+  const unmappedCount = useMemo(() => {
+    return corretorNames.filter(name => !vendedorMap[name]?.vendedorId).length;
+  }, [corretorNames, vendedorMap]);
+
   const handleFile = useCallback(async (file: File) => {
-    const validTypes = [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "text/csv",
-    ];
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!validTypes.includes(file.type) && !["xlsx", "xls", "csv"].includes(ext || "")) {
+    if (!["xlsx", "xls", "csv"].includes(ext || "")) {
       toast({ title: "Formato inválido", description: "Envie um arquivo .xlsx, .xls ou .csv", variant: "destructive" });
       return;
     }
@@ -102,6 +191,7 @@ export default function GestaoComercialImportarPage() {
       setContratos(data.contratos);
       setIgnorados(data.ignorados || []);
       setShowIgnorados(false);
+      setVendedorMap({});
       setStep("preview");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message || "Erro ao processar arquivo", variant: "destructive" });
@@ -125,7 +215,16 @@ export default function GestaoComercialImportarPage() {
   const handleConfirm = async () => {
     setIsConfirming(true);
     try {
-      const response = await apiRequest("POST", "/api/gestao-comercial/importar/confirmar", { contratos });
+      const enrichedContratos = validContratos.map(c => ({
+        ...c,
+        vendedorId: vendedorMap[c.nomeCorretor]?.vendedorId || null,
+        vendedorNome: vendedorMap[c.nomeCorretor]?.vendedorNome || "",
+      }));
+
+      const response = await apiRequest("POST", "/api/gestao-comercial/importar/confirmar", {
+        contratos: enrichedContratos,
+        fileName,
+      });
       const data = await response.json();
       setResultado(data.resultado);
       setStep("confirmed");
@@ -145,15 +244,24 @@ export default function GestaoComercialImportarPage() {
     setIgnorados([]);
     setShowIgnorados(false);
     setResultado(null);
+    setVendedorMap({});
   };
-
-  const validContratos = contratos.filter((c) => c.status === "PAGO AO CLIENTE" && c.dataPagamento);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-gestao-importar">
-      <div className="flex items-center gap-3">
-        <Upload className="h-6 w-6 text-muted-foreground" />
-        <h1 className="text-2xl font-semibold" data-testid="text-page-title">Importar Produção</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Upload className="h-6 w-6 text-muted-foreground" />
+          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Importar Produção</h1>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => navigate("/vendas/gestao-comercial/historico-importacoes")}
+          data-testid="button-historico"
+        >
+          <History className="h-4 w-4 mr-2" />
+          Histórico de Importações
+        </Button>
       </div>
 
       {step === "upload" && (
@@ -281,6 +389,67 @@ export default function GestaoComercialImportarPage() {
             </CardContent>
           </Card>
 
+          {corretorNames.length > 0 && vendedores.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Vincular Vendedores ({corretorNames.length} corretores)
+                </CardTitle>
+                {unmappedCount > 0 && (
+                  <span className="text-sm text-amber-500 font-medium" data-testid="text-unmapped-count">
+                    {unmappedCount} sem vínculo
+                  </span>
+                )}
+                {unmappedCount === 0 && (
+                  <span className="text-sm text-green-600 font-medium flex items-center gap-1" data-testid="text-all-mapped">
+                    <CheckCircle2 className="h-4 w-4" /> Todos vinculados
+                  </span>
+                )}
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Selecione o vendedor do sistema correspondente a cada nome de corretor da planilha.
+                </p>
+                <div className="space-y-3">
+                  {corretorNames.map(name => {
+                    const mapping = vendedorMap[name];
+                    const isMapped = !!mapping?.vendedorId;
+                    return (
+                      <div
+                        key={name}
+                        className="flex items-center gap-3 flex-wrap sm:flex-nowrap"
+                        data-testid={`row-vendedor-${name.replace(/\s+/g, "-")}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-[200px] shrink-0">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${isMapped ? "bg-green-500" : "bg-amber-500"}`} />
+                          <span className="text-sm font-medium truncate" title={name}>{name}</span>
+                        </div>
+                        <div className="text-muted-foreground text-sm shrink-0">→</div>
+                        <Select
+                          value={mapping?.vendedorId ? String(mapping.vendedorId) : "none"}
+                          onValueChange={(val) => handleVendedorChange(name, val)}
+                        >
+                          <SelectTrigger className="w-full sm:w-[280px]" data-testid={`select-vendedor-${name.replace(/\s+/g, "-")}`}>
+                            <SelectValue placeholder="Selecionar vendedor..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">— Não vincular —</SelectItem>
+                            {vendedores.map(v => (
+                              <SelectItem key={v.id} value={String(v.id)}>
+                                {v.name} ({v.role})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Contratos Pagos Válidos ({validContratos.length})</CardTitle>
@@ -292,6 +461,7 @@ export default function GestaoComercialImportarPage() {
                     <tr className="border-b text-left">
                       <th className="p-2 font-medium whitespace-nowrap">Contrato</th>
                       <th className="p-2 font-medium whitespace-nowrap">Corretor</th>
+                      <th className="p-2 font-medium whitespace-nowrap">Vendedor Vinculado</th>
                       <th className="p-2 font-medium whitespace-nowrap">Cliente</th>
                       <th className="p-2 font-medium whitespace-nowrap">CPF</th>
                       <th className="p-2 font-medium whitespace-nowrap">Banco</th>
@@ -307,30 +477,40 @@ export default function GestaoComercialImportarPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {validContratos.map((c, i) => (
-                      <tr key={c.contratoId + "-" + i} className="border-b hover-elevate">
-                        <td className="p-2 whitespace-nowrap">{c.contratoId}</td>
-                        <td className="p-2 max-w-[160px] truncate" title={c.nomeCorretor}>{c.nomeCorretor}</td>
-                        <td className="p-2 max-w-[160px] truncate" title={c.nomeCliente}>{c.nomeCliente}</td>
-                        <td className="p-2 whitespace-nowrap">{c.cpfCliente}</td>
-                        <td className="p-2 max-w-[100px] truncate" title={c.banco}>{c.banco}</td>
-                        <td className="p-2 whitespace-nowrap">{c.convenio}</td>
-                        <td className="p-2 max-w-[120px] truncate" title={c.tipoContrato}>{c.tipoContrato}</td>
-                        <td className="p-2 text-center">{c.prazo}</td>
-                        <td className="p-2 whitespace-nowrap">{c.dataPagamento}</td>
-                        <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.valorBase)}</td>
-                        <td className="p-2 text-right whitespace-nowrap">{formatCurrency(c.valorBruto)}</td>
-                        <td className="p-2 text-right whitespace-nowrap">{c.comissaoRepassePerc}%</td>
-                        <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.comissaoRepasseValor)}</td>
-                        <td className="p-2 text-center">
-                          {c.isCartao ? (
-                            <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {validContratos.map((c, i) => {
+                      const mapping = vendedorMap[c.nomeCorretor];
+                      return (
+                        <tr key={c.contratoId + "-" + i} className="border-b hover-elevate">
+                          <td className="p-2 whitespace-nowrap">{c.contratoId}</td>
+                          <td className="p-2 max-w-[160px] truncate" title={c.nomeCorretor}>{c.nomeCorretor}</td>
+                          <td className="p-2 whitespace-nowrap">
+                            {mapping?.vendedorNome ? (
+                              <span className="text-green-600 font-medium text-xs">{mapping.vendedorNome}</span>
+                            ) : (
+                              <span className="text-amber-500 text-xs">Não vinculado</span>
+                            )}
+                          </td>
+                          <td className="p-2 max-w-[160px] truncate" title={c.nomeCliente}>{c.nomeCliente}</td>
+                          <td className="p-2 whitespace-nowrap">{c.cpfCliente}</td>
+                          <td className="p-2 max-w-[100px] truncate" title={c.banco}>{c.banco}</td>
+                          <td className="p-2 whitespace-nowrap">{c.convenio}</td>
+                          <td className="p-2 max-w-[120px] truncate" title={c.tipoContrato}>{c.tipoContrato}</td>
+                          <td className="p-2 text-center">{c.prazo}</td>
+                          <td className="p-2 whitespace-nowrap">{c.dataPagamento}</td>
+                          <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.valorBase)}</td>
+                          <td className="p-2 text-right whitespace-nowrap">{formatCurrency(c.valorBruto)}</td>
+                          <td className="p-2 text-right whitespace-nowrap">{c.comissaoRepassePerc}%</td>
+                          <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.comissaoRepasseValor)}</td>
+                          <td className="p-2 text-center">
+                            {c.isCartao ? (
+                              <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -396,18 +576,23 @@ export default function GestaoComercialImportarPage() {
             <Button variant="outline" onClick={handleReset} data-testid="button-cancel">
               <X className="h-4 w-4 mr-2" /> Cancelar
             </Button>
-            <Button
-              onClick={handleConfirm}
-              disabled={isConfirming || resumo.totalPagoValido === 0}
-              data-testid="button-confirm"
-            >
-              {isConfirming ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 mr-2" />
+            <div className="flex items-center gap-3">
+              {unmappedCount > 0 && (
+                <span className="text-xs text-amber-500">{unmappedCount} corretor(es) sem vínculo</span>
               )}
-              Confirmar Importação ({resumo.totalPagoValido} contratos)
-            </Button>
+              <Button
+                onClick={handleConfirm}
+                disabled={isConfirming || resumo.totalPagoValido === 0}
+                data-testid="button-confirm"
+              >
+                {isConfirming ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                Confirmar Importação ({resumo.totalPagoValido} contratos)
+              </Button>
+            </div>
           </div>
         </>
       )}
@@ -442,10 +627,18 @@ export default function GestaoComercialImportarPage() {
               </Card>
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex items-center justify-center gap-4">
               <Button onClick={handleReset} data-testid="button-nova-importacao">
                 <Upload className="h-4 w-4 mr-2" />
                 Nova Importação
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate("/vendas/gestao-comercial/historico-importacoes")}
+                data-testid="button-ver-historico"
+              >
+                <History className="h-4 w-4 mr-2" />
+                Ver Histórico
               </Button>
             </div>
           </CardContent>

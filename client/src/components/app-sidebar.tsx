@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -189,6 +189,7 @@ export function AppSidebar() {
       items: [
         { title: "Dashboard da Empresa", url: "/vendas/gestao-comercial/dashboard", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
         { title: "Importar Produção", url: "/vendas/gestao-comercial/importar-producao", icon: Upload, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Histórico Importações", url: "/vendas/gestao-comercial/historico-importacoes", icon: History, rolesAllowed: ["master", "coordenacao"] },
         { title: "Metas & Níveis", url: "/vendas/gestao-comercial/metas-niveis", icon: Target, rolesAllowed: ["master", "coordenacao"] },
         { title: "Regulamento", url: "/vendas/gestao-comercial/regulamento", icon: FileText, rolesAllowed: ["master", "coordenacao"] },
         { title: "Relatórios", url: "/vendas/gestao-comercial/relatorios", icon: FileBarChart, rolesAllowed: ["master", "coordenacao"] },

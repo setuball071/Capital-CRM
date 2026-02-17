@@ -72,6 +72,7 @@ import {
   type FiltrosPedidoLista,
   type PricingSettings,
   producoesContratos,
+  producoesImportacoes,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -15941,6 +15942,90 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  app.get("/api/gestao-comercial/vendedores", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const tenantUsers = await db.select({
+        id: users.id,
+        name: users.name,
+        role: users.role,
+        isActive: users.isActive,
+      }).from(users)
+        .innerJoin(userTenants, eq(users.id, userTenants.userId))
+        .where(and(
+          eq(userTenants.tenantId, tenantId),
+          eq(users.isActive, true)
+        ))
+        .orderBy(asc(users.name));
+
+      res.json(tenantUsers);
+    } catch (error: any) {
+      console.error("[VENDEDORES] Error:", error);
+      res.status(500).json({ message: "Erro ao buscar vendedores" });
+    }
+  });
+
+  app.get("/api/gestao-comercial/importacoes", requireAuth, async (req: any, res) => {
+    try {
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const importacoes = await db.select().from(producoesImportacoes)
+        .where(eq(producoesImportacoes.tenantId, tenantId))
+        .orderBy(desc(producoesImportacoes.createdAt));
+
+      res.json(importacoes);
+    } catch (error: any) {
+      console.error("[IMPORTACOES] Error:", error);
+      res.status(500).json({ message: "Erro ao buscar histórico de importações" });
+    }
+  });
+
+  app.get("/api/gestao-comercial/importacoes/:id", requireAuth, async (req: any, res) => {
+    try {
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const importacaoId = parseInt(req.params.id);
+      const [importacao] = await db.select().from(producoesImportacoes)
+        .where(and(
+          eq(producoesImportacoes.id, importacaoId),
+          eq(producoesImportacoes.tenantId, tenantId)
+        ))
+        .limit(1);
+
+      if (!importacao) {
+        return res.status(404).json({ message: "Importação não encontrada" });
+      }
+
+      const contratosResult = await db.select().from(producoesContratos)
+        .where(and(
+          eq(producoesContratos.importacaoId, importacaoId),
+          eq(producoesContratos.tenantId, tenantId)
+        ))
+        .orderBy(asc(producoesContratos.nomeCorretor));
+
+      res.json({ importacao, contratos: contratosResult });
+    } catch (error: any) {
+      console.error("[IMPORTACAO-DETAIL] Error:", error);
+      res.status(500).json({ message: "Erro ao buscar detalhes da importação" });
+    }
+  });
+
   app.post("/api/gestao-comercial/importar/confirmar", requireAuth, async (req: any, res) => {
     try {
       const userRole = req.user?.role;
@@ -15954,22 +16039,38 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Tenant não identificado" });
       }
 
-      const { contratos } = req.body;
+      const { contratos, fileName } = req.body;
       if (!contratos || !Array.isArray(contratos) || contratos.length === 0) {
         return res.status(400).json({ message: "Nenhum contrato para importar" });
       }
 
       let inseridos = 0;
       let atualizados = 0;
-      let ignorados = 0;
+      let ignoradosCount = 0;
+      let totalValorGeral = 0;
+      let totalValorCartao = 0;
+      let mesRef = "";
+
+      const [importacao] = await db.insert(producoesImportacoes).values({
+        tenantId,
+        fileName: fileName || "planilha.xlsx",
+        importadoPor: req.user?.id,
+        importadoPorNome: req.user?.name || "",
+        status: "processando",
+      }).returning();
 
       for (const c of contratos) {
         const isPago = String(c.status || "").toUpperCase() === "PAGO AO CLIENTE";
         const hasDate = !!c.dataPagamento;
         if (!isPago || !hasDate) {
-          ignorados++;
+          ignoradosCount++;
           continue;
         }
+
+        const valorBase = parseFloat(String(c.valorBase || 0)) || 0;
+        totalValorGeral += valorBase;
+        if (c.isCartao) totalValorCartao += valorBase;
+        if (!mesRef && c.mesReferencia) mesRef = c.mesReferencia;
 
         const existing = await db.select().from(producoesContratos)
           .where(and(
@@ -15989,6 +16090,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           codigoCorretor: c.codigoCorretor || "",
           grupoVendedor: c.grupoVendedor || "",
           filial: c.filial || "",
+          vendedorId: c.vendedorId || null,
+          vendedorNome: c.vendedorNome || "",
           status: c.status,
           dataPagamento: c.dataPagamento,
           valorBase: String(c.valorBase),
@@ -15998,6 +16101,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           comissaoRepassePerc: String(c.comissaoRepassePerc || 0),
           isCartao: c.isCartao,
           mesReferencia: c.mesReferencia,
+          importacaoId: importacao.id,
           confirmado: true,
         };
 
@@ -16020,9 +16124,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
       }
 
+      await db.update(producoesImportacoes)
+        .set({
+          totalContratos: inseridos + atualizados,
+          totalIgnorados: ignoradosCount,
+          totalInseridos: inseridos,
+          totalAtualizados: atualizados,
+          totalValorGeral: String(Math.round(totalValorGeral * 100) / 100),
+          totalValorCartao: String(Math.round(totalValorCartao * 100) / 100),
+          mesReferencia: mesRef,
+          status: "confirmado",
+        })
+        .where(eq(producoesImportacoes.id, importacao.id));
+
       res.json({
         message: "Importação confirmada com sucesso",
-        resultado: { inseridos, atualizados, ignorados },
+        resultado: { inseridos, atualizados, ignorados: ignoradosCount },
+        importacaoId: importacao.id,
       });
     } catch (error: any) {
       console.error("[IMPORT-PRODUCAO] Confirm error:", error);
