@@ -15756,33 +15756,43 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         if (!nivelAtual && sorted.length > 0) {
           const lastNivel = sorted[sorted.length - 1];
-          const lastMax = lastNivel.valor_maximo ? parseFloat(lastNivel.valor_maximo) : Infinity;
           if (produzido >= parseFloat(lastNivel.valor_minimo)) {
             nivelAtual = lastNivel;
             proximoNivel = null;
+          } else {
+            proximoNivel = sorted[0];
           }
         }
 
-        const faltaParaProximo = proximoNivel ? Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido) : 0;
-
+        let faltaParaProximo = 0;
         let progressoNivel = 0;
-        if (nivelAtual) {
+
+        if (nivelAtual && proximoNivel) {
+          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido);
           const min = parseFloat(nivelAtual.valor_minimo);
-          const max = nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : (proximoNivel ? parseFloat(proximoNivel.valor_minimo) : min * 2);
+          const max = nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : parseFloat(proximoNivel.valor_minimo);
           const range = max - min;
           progressoNivel = range > 0 ? Math.min(100, ((produzido - min) / range) * 100) : 100;
+        } else if (nivelAtual && !proximoNivel) {
+          progressoNivel = 100;
+        } else if (!nivelAtual && proximoNivel) {
+          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido);
+          const targetMin = parseFloat(proximoNivel.valor_minimo);
+          progressoNivel = targetMin > 0 ? Math.min(100, (produzido / targetMin) * 100) : 0;
         }
 
+        const formatNivel = (n: any) => ({
+          nome: n.nome_nivel,
+          ordem: parseInt(n.ordem),
+          cor: n.cor,
+          icone: n.icone,
+          premio: parseFloat(n.premio),
+          valorMinimo: parseFloat(n.valor_minimo),
+          valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+        });
+
         return {
-          nivelAtual: nivelAtual ? {
-            nome: nivelAtual.nome_nivel,
-            ordem: parseInt(nivelAtual.ordem),
-            cor: nivelAtual.cor,
-            icone: nivelAtual.icone,
-            premio: parseFloat(nivelAtual.premio),
-            valorMinimo: parseFloat(nivelAtual.valor_minimo),
-            valorMaximo: nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : null,
-          } : null,
+          nivelAtual: nivelAtual ? formatNivel(nivelAtual) : null,
           proximoNivel: proximoNivel ? {
             nome: proximoNivel.nome_nivel,
             ordem: parseInt(proximoNivel.ordem),
@@ -15793,6 +15803,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           } : null,
           faltaParaProximo: Math.round(faltaParaProximo * 100) / 100,
           progressoNivel: Math.round(progressoNivel * 100) / 100,
+          todosNiveis: sorted.map(formatNivel),
         };
       }
 

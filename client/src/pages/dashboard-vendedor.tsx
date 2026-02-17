@@ -121,7 +121,7 @@ function MetaGeralCard({ performance, mesNome, metaMensal }: {
         </div>
 
         <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2" data-testid="text-nivel-geral">
-          Nível Atual: <span style={{ color: nivel?.cor }}>{nivel?.nome || "—"}</span>
+          Nível Atual: <span style={{ color: nivel?.cor || "hsl(var(--muted-foreground))" }}>{nivel?.nome || "Sem Nível"}</span>
         </p>
 
         <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden mb-3">
@@ -189,7 +189,7 @@ function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp }: {
           <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-center">
             <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Nível Cartão</p>
             <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-nivel-cartao">
-              {nivel?.nome || "—"}
+              {nivel?.nome || "Sem Nível"}
             </p>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-center">
@@ -280,6 +280,14 @@ function NivelSection({ performance, label, icon: IconComponent }: {
         <div className="bg-primary/5 p-3 rounded-xl border border-primary/10 text-center relative z-10">
           <p className="text-[9px] sm:text-[10px] font-black text-primary uppercase tracking-wider flex items-center justify-center gap-1">
             <Crown size={10} /> Nível Máximo Atingido
+          </p>
+        </div>
+      )}
+
+      {!proximo && !nivel && (
+        <div className="bg-muted/50 p-3 rounded-xl border border-border text-center relative z-10">
+          <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            Níveis não configurados
           </p>
         </div>
       )}
