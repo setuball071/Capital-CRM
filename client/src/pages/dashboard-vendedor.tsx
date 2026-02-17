@@ -43,7 +43,9 @@ interface PerformanceData {
 interface DashboardData {
   vendedorNome: string;
   metaMensal: number;
+  metaCartao: number;
   totalValor: number;
+  totalCartao: number;
   totalContratos: number;
   percentualMeta: number;
   projecaoMensal: number;

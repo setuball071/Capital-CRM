@@ -15441,13 +15441,28 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      const metaMensal = user.metaMensal ? parseFloat(user.metaMensal as string) : 0;
-
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth();
+      const mesRef = `${year}-${String(month + 1).padStart(2, '0')}`;
       const firstDayOfMonth = new Date(year, month, 1);
       const lastDayOfMonth = new Date(year, month + 1, 0);
+
+      // Pull meta from metas_individuais (priority) or fallback to user.metaMensal
+      let metaMensal = 0;
+      let metaCartao = 0;
+      const metaIndResult = await db.execute(sql`
+        SELECT mi.meta_geral, mi.meta_cartao 
+        FROM metas_individuais mi
+        WHERE mi.usuario_id = ${userId} AND mi.tenant_id = ${tenantId} AND mi.mes_referencia = ${mesRef}
+        LIMIT 1
+      `);
+      if (metaIndResult.rows.length > 0) {
+        metaMensal = parseFloat(metaIndResult.rows[0].meta_geral as string) || 0;
+        metaCartao = parseFloat(metaIndResult.rows[0].meta_cartao as string) || 0;
+      } else {
+        metaMensal = user.metaMensal ? parseFloat(user.metaMensal as string) : 0;
+      }
 
       const calcDiasUteis = (start: Date, end: Date) => {
         let count = 0;
@@ -15465,7 +15480,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const diasUteisAteHoje = calcDiasUteis(firstDayOfMonth, hoje);
       const diasUteisRestantes = diasUteisNoMes - diasUteisAteHoje;
 
-      const contratosResult = await db.execute(sql`
+      // Get production data from producoes_contratos (imported paid production) + vendedor_contratos
+      const prodContratosResult = await db.execute(sql`
+        SELECT 
+          TO_DATE(data_pagamento, 'DD/MM/YYYY') as dia,
+          COUNT(*)::int as quantidade,
+          COALESCE(SUM(valor_base), 0)::numeric as valor_total,
+          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as valor_cartao
+        FROM producoes_contratos
+        WHERE vendedor_id = ${userId}
+          AND tenant_id = ${tenantId}
+          AND mes_referencia = ${mesRef}
+          AND confirmado = true
+        GROUP BY TO_DATE(data_pagamento, 'DD/MM/YYYY')
+        ORDER BY dia ASC
+      `);
+
+      const vendContratosResult = await db.execute(sql`
         SELECT 
           DATE(data_contrato) as dia,
           COUNT(*)::int as quantidade,
@@ -15479,10 +15510,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         ORDER BY dia ASC
       `);
 
-      const totaisResult = await db.execute(sql`
+      // Merge production totals from both sources
+      const prodTotaisResult = await db.execute(sql`
         SELECT 
           COUNT(*)::int as total_contratos,
-          COALESCE(SUM(valor_contrato), 0)::numeric as total_valor
+          COALESCE(SUM(valor_base), 0)::numeric as total_valor,
+          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
+        FROM producoes_contratos
+        WHERE vendedor_id = ${userId}
+          AND tenant_id = ${tenantId}
+          AND mes_referencia = ${mesRef}
+          AND confirmado = true
+      `);
+
+      const vendTotaisResult = await db.execute(sql`
+        SELECT 
+          COUNT(*)::int as total_contratos,
+          COALESCE(SUM(valor_contrato), 0)::numeric as total_valor,
+          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_cartao
         FROM vendedor_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -15490,8 +15535,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND data_contrato <= ${lastDayOfMonth.toISOString()}
       `);
 
-      const totalContratos = parseInt(totaisResult.rows[0]?.total_contratos as string) || 0;
-      const totalValor = parseFloat(totaisResult.rows[0]?.total_valor as string) || 0;
+      const totalContratos = (parseInt(prodTotaisResult.rows[0]?.total_contratos as string) || 0)
+        + (parseInt(vendTotaisResult.rows[0]?.total_contratos as string) || 0);
+      const totalValor = (parseFloat(prodTotaisResult.rows[0]?.total_valor as string) || 0)
+        + (parseFloat(vendTotaisResult.rows[0]?.total_valor as string) || 0);
+      const totalCartao = (parseFloat(prodTotaisResult.rows[0]?.total_cartao as string) || 0)
+        + (parseFloat(vendTotaisResult.rows[0]?.total_cartao as string) || 0);
 
       const metaDiariaOriginal = diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
       const saldoDevedor = Math.max(0, metaMensal - totalValor);
@@ -15514,13 +15563,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         d.setDate(d.getDate() + 1);
       }
 
-      for (const row of contratosResult.rows) {
+      // Merge producoes_contratos data
+      for (const row of prodContratosResult.rows) {
         const dia = (row.dia as string).split("T")[0];
         if (allDaysMap[dia] !== undefined) {
-          allDaysMap[dia] = {
-            quantidade: parseInt(row.quantidade as string) || 0,
-            valor: parseFloat(row.valor_total as string) || 0,
-          };
+          allDaysMap[dia].quantidade += parseInt(row.quantidade as string) || 0;
+          allDaysMap[dia].valor += parseFloat(row.valor_total as string) || 0;
+        }
+      }
+
+      // Merge vendedor_contratos data
+      for (const row of vendContratosResult.rows) {
+        const dia = (row.dia as string).split("T")[0];
+        if (allDaysMap[dia] !== undefined) {
+          allDaysMap[dia].quantidade += parseInt(row.quantidade as string) || 0;
+          allDaysMap[dia].valor += parseFloat(row.valor_total as string) || 0;
         }
       }
 
@@ -15572,7 +15629,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.json({
         vendedorNome: user.name,
         metaMensal,
+        metaCartao,
         totalValor: Math.round(totalValor * 100) / 100,
+        totalCartao: Math.round(totalCartao * 100) / 100,
         totalContratos,
         percentualMeta: Math.round(percentualMeta * 100) / 100,
         projecaoMensal: Math.round(projecaoMensal * 100) / 100,
@@ -15617,6 +15676,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth();
+      const mesRef = `${year}-${String(month + 1).padStart(2, '0')}`;
       const firstDayOfMonth = new Date(year, month, 1);
       const lastDayOfMonth = new Date(year, month + 1, 0);
 
@@ -15633,7 +15693,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         niveisPorCategoria[cat].push(row);
       }
 
-      const totalGeralResult = await db.execute(sql`
+      // Sum production from vendedor_contratos
+      const totalGeralVCResult = await db.execute(sql`
         SELECT COALESCE(SUM(valor_contrato), 0)::numeric as total
         FROM vendedor_contratos
         WHERE vendedor_id = ${vendedorId}
@@ -15641,9 +15702,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND data_contrato >= ${firstDayOfMonth.toISOString()}
           AND data_contrato <= ${lastDayOfMonth.toISOString()}
       `);
-      const produzidoGeral = parseFloat(totalGeralResult.rows[0]?.total as string) || 0;
 
-      const totalCartaoResult = await db.execute(sql`
+      const totalCartaoVCResult = await db.execute(sql`
         SELECT COALESCE(SUM(valor_contrato), 0)::numeric as total
         FROM vendedor_contratos
         WHERE vendedor_id = ${vendedorId}
@@ -15652,7 +15712,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND data_contrato <= ${lastDayOfMonth.toISOString()}
           AND (LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%')
       `);
-      const produzidoCartao = parseFloat(totalCartaoResult.rows[0]?.total as string) || 0;
+
+      // Sum production from producoes_contratos (imported paid production)
+      const totalGeralPCResult = await db.execute(sql`
+        SELECT 
+          COALESCE(SUM(valor_base), 0)::numeric as total,
+          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
+        FROM producoes_contratos
+        WHERE vendedor_id = ${vendedorId}
+          AND tenant_id = ${tenantId}
+          AND mes_referencia = ${mesRef}
+          AND confirmado = true
+      `);
+
+      const produzidoGeral = (parseFloat(totalGeralVCResult.rows[0]?.total as string) || 0)
+        + (parseFloat(totalGeralPCResult.rows[0]?.total as string) || 0);
+      const produzidoCartao = (parseFloat(totalCartaoVCResult.rows[0]?.total as string) || 0)
+        + (parseFloat(totalGeralPCResult.rows[0]?.total_cartao as string) || 0);
 
       function calcularNivel(produzido: number, niveis: any[]) {
         let nivelAtual = null;
@@ -15714,8 +15790,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         };
       }
 
-      const user = await storage.getUser(vendedorId);
-      const metaMensal = user?.metaMensal ? parseFloat(user.metaMensal as string) : 0;
+      // Pull meta from metas_individuais (priority) or fallback to user.metaMensal
+      let metaMensal = 0;
+      let metaCartaoInd = 0;
+      const metaIndResult = await db.execute(sql`
+        SELECT mi.meta_geral, mi.meta_cartao 
+        FROM metas_individuais mi
+        WHERE mi.usuario_id = ${vendedorId} AND mi.tenant_id = ${tenantId} AND mi.mes_referencia = ${mesRef}
+        LIMIT 1
+      `);
+      if (metaIndResult.rows.length > 0) {
+        metaMensal = parseFloat(metaIndResult.rows[0].meta_geral as string) || 0;
+        metaCartaoInd = parseFloat(metaIndResult.rows[0].meta_cartao as string) || 0;
+      } else {
+        const user = await storage.getUser(vendedorId);
+        metaMensal = user?.metaMensal ? parseFloat(user.metaMensal as string) : 0;
+      }
 
       const geralNiveis = niveisPorCategoria["GERAL"] || [];
       const cartaoNiveis = niveisPorCategoria["CARTAO"] || [];
@@ -15741,8 +15831,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         },
         cartao: {
           produzido: Math.round(produzidoCartao * 100) / 100,
-          meta: 0,
-          percentual: 0,
+          meta: metaCartaoInd,
+          percentual: metaCartaoInd > 0 ? Math.round((produzidoCartao / metaCartaoInd) * 10000) / 100 : 0,
           ...cartaoPerf,
           todosNiveis: cartaoNiveis.map((n: any) => ({
             nome: n.nome_nivel,
