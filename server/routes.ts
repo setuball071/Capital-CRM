@@ -16498,6 +16498,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== META NÍVEIS CRUD =====
 
+  function mapNivelRow(row: any) {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      categoria: row.categoria,
+      nomeNivel: row.nome_nivel,
+      ordem: row.ordem,
+      valorMinimo: row.valor_minimo,
+      valorMaximo: row.valor_maximo,
+      premio: row.premio,
+      cor: row.cor,
+      icone: row.icone,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   app.get("/api/meta-niveis", requireAuth, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
@@ -16508,7 +16525,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         WHERE tenant_id = ${tenantId}
         ORDER BY categoria, valor_minimo ASC
       `);
-      res.json(result.rows);
+      res.json(result.rows.map(mapNivelRow));
     } catch (error: any) {
       console.error("[META-NIVEIS] Error fetching:", error);
       res.status(500).json({ message: "Erro ao buscar níveis" });
@@ -16563,7 +16580,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         VALUES (${tenantId}, ${categoria}, ${nomeNivel.trim()}, ${minVal}, ${maxVal}, ${premioVal}, ${Math.floor(ordemVal)}, ${cor || null}, ${icone || null}, NOW(), NOW())
         RETURNING *
       `);
-      res.status(201).json(result.rows[0]);
+      res.status(201).json(mapNivelRow(result.rows[0]));
     } catch (error: any) {
       console.error("[META-NIVEIS] Error creating:", error);
       res.status(500).json({ message: "Erro ao criar nível" });
@@ -16635,7 +16652,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (result.rows.length === 0) {
         return res.status(404).json({ message: "Nível não encontrado" });
       }
-      res.json(result.rows[0]);
+      res.json(mapNivelRow(result.rows[0]));
     } catch (error: any) {
       console.error("[META-NIVEIS] Error updating:", error);
       res.status(500).json({ message: "Erro ao atualizar nível" });
