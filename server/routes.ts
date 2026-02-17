@@ -313,23 +313,25 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   req.user = user;
   
   // CRÍTICO: Derivar tenantId do usuário autenticado
-  // Prioridade: user.tenantId > session.tenantId > req.tenantId (domínio - apenas para masters)
-  if (user.tenantId) {
-    // Usuário tem tenant fixo - usar sempre esse
-    req.tenantId = user.tenantId;
+  // Prioridade: session.tenantId (set at login) > domain-based (resolveTenant) > user_tenants lookup > dev fallback
+  if (req.session.tenantId) {
+    req.tenantId = req.session.tenantId;
+  } else if (req.tenantId) {
+    // Domain-based tenant already resolved by resolveTenant middleware
+    req.session.tenantId = req.tenantId;
   } else if (user.isMaster) {
-    // Master pode operar em qualquer tenant - usar da sessão ou domínio
-    if (req.session.tenantId) {
-      req.tenantId = req.session.tenantId;
-    }
-    // Se ainda não tiver, req.tenantId pode vir do resolveTenant (domínio)
-    // Em dev, pode usar fallback para tenant 1
-    if (!req.tenantId && process.env.NODE_ENV === "development") {
+    // Master without session or domain tenant - dev fallback
+    if (process.env.NODE_ENV === "development") {
       req.tenantId = 1;
     }
+  } else {
+    // Non-master user without session or domain tenant - look up from user_tenants
+    const utResult = await db.execute(sql`SELECT tenant_id FROM user_tenants WHERE user_id = ${user.id} ORDER BY tenant_id ASC LIMIT 1`);
+    if (utResult.rows.length > 0) {
+      req.tenantId = utResult.rows[0].tenant_id as number;
+      req.session.tenantId = req.tenantId;
+    }
   }
-  // Para não-masters sem tenantId, req.tenantId permanece undefined
-  // e endpoints que exigem tenant retornarão 401
   
   // Aplicar validação de acesso (horário, dia, IP)
   validateAccess(req, res, next);
