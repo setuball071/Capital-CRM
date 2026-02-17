@@ -50,11 +50,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/login", { email, password });
     const data = await response.json();
-    setUser(data.user);
-    // Invalidate tenant cache to refetch with new session/cookie context
     queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
-    // Após login, recarregar permissões
-    await checkAuth();
+    const meResponse = await fetch("/api/auth/me", { credentials: "include" });
+    if (meResponse.ok) {
+      const meData = await meResponse.json();
+      setPermissions(meData.permissions || {});
+      setUser(meData.user);
+    } else {
+      setUser(data.user);
+    }
   };
 
   const logout = async () => {
