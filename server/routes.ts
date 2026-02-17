@@ -226,6 +226,24 @@ const uploadLogo = multer({
   },
 });
 
+// Configure multer for avatar uploads (JPEG, PNG, WebP - max 2MB)
+const uploadAvatar = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ["image/png", "image/jpeg", "image/webp"];
+    const allowedExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato inválido. Use JPG, PNG ou WebP (máximo 2MB)."));
+    }
+  },
+});
+
 // ============ ASYNC RESET JOB SYSTEM ============
 interface ResetJobStep {
   name: string;
@@ -2639,6 +2657,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Link employee to user error:", error);
       return res.status(500).json({ message: "Erro ao vincular funcionário" });
+    }
+  });
+
+  // ===== AVATAR UPLOAD =====
+
+  app.post("/api/users/:id/avatar", requireAuth, requireUserManagementAccess, uploadAvatar.single("file"), async (req: any, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ message: "ID inválido" });
+
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) return res.status(404).json({ message: "Usuário não encontrado" });
+
+      const isMaster = req.user?.isMaster === true;
+      if (!isMaster) {
+        const utCheck = await db.execute(sql`SELECT 1 FROM user_tenants WHERE user_id = ${userId} AND tenant_id = ${tenantId}`);
+        if (utCheck.rows.length === 0) return res.status(403).json({ message: "Usuário não pertence ao ambiente atual" });
+      }
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "Arquivo não enviado. Use JPG, PNG ou WebP (máximo 2MB)." });
+
+      const fsModule = await import("fs");
+      const pathModule = await import("path");
+
+      const avatarsDir = pathModule.join(process.cwd(), "uploads", "avatars");
+      if (!fsModule.existsSync(avatarsDir)) {
+        fsModule.mkdirSync(avatarsDir, { recursive: true });
+      }
+
+      const ext = pathModule.extname(file.originalname).toLowerCase() || ".jpg";
+      const filename = `avatar-${userId}${ext}`;
+      const filepath = pathModule.join(avatarsDir, filename);
+
+      for (const existingExt of [".png", ".jpg", ".jpeg", ".webp"]) {
+        if (existingExt !== ext) {
+          const oldPath = pathModule.join(avatarsDir, `avatar-${userId}${existingExt}`);
+          if (fsModule.existsSync(oldPath)) {
+            try { fsModule.unlinkSync(oldPath); } catch (e) {}
+          }
+        }
+      }
+
+      fsModule.writeFileSync(filepath, file.buffer);
+      const avatarUrl = `/uploads/avatars/${filename}?t=${Date.now()}`;
+
+      await db.execute(sql`UPDATE users SET avatar_url = ${avatarUrl} WHERE id = ${userId}`);
+
+      res.json({ avatarUrl });
+    } catch (error: any) {
+      console.error("[AVATAR] Upload error:", error);
+      res.status(500).json({ message: "Erro ao enviar foto" });
+    }
+  });
+
+  app.delete("/api/users/:id/avatar", requireAuth, requireUserManagementAccess, async (req: any, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ message: "ID inválido" });
+
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      await db.execute(sql`UPDATE users SET avatar_url = NULL WHERE id = ${userId}`);
+      res.json({ message: "Foto removida" });
+    } catch (error: any) {
+      console.error("[AVATAR] Delete error:", error);
+      res.status(500).json({ message: "Erro ao remover foto" });
     }
   });
 

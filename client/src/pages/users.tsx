@@ -48,7 +48,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock, Camera, X } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfigurarAcessoModal } from "@/components/ConfigurarAcessoModal";
 import { 
   type User, USER_ROLES, ROLE_LABELS, type UserRole, type UserPermission, type Tenant,
@@ -96,6 +97,7 @@ export default function UsersPage() {
   const [managerId, setManagerId] = useState<string>("");
   const [permissions, setPermissions] = useState<PermissionState[]>([]);
   const [selectedTenantIds, setSelectedTenantIds] = useState<number[]>([]);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
@@ -426,6 +428,49 @@ export default function UsersPage() {
     setSelectedTenantIds([]);
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingUser || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Erro", description: "Arquivo muito grande. Máximo 2MB.", variant: "destructive" });
+      return;
+    }
+    setIsUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/users/${editingUser.id}/avatar`, { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || "Erro ao enviar foto"); }
+      const data = await res.json();
+      setEditingUser({ ...editingUser, avatarUrl: data.avatarUrl });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Foto atualizada com sucesso" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!editingUser) return;
+    setIsUploadingAvatar(true);
+    try {
+      const res = await fetch(`/api/users/${editingUser.id}/avatar`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Erro ao remover foto");
+      setEditingUser({ ...editingUser, avatarUrl: null });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Foto removida" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleOpenCreateDialog = () => {
     setEditingUser(null);
     setName("");
@@ -666,6 +711,36 @@ export default function UsersPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {editingUser && canManageAllUsers && (
+                <div className="flex items-center gap-4">
+                  <div className="relative group">
+                    <Avatar className="w-16 h-16">
+                      {editingUser.avatarUrl && <AvatarImage src={editingUser.avatarUrl} alt={editingUser.name} className="object-cover" />}
+                      <AvatarFallback className="text-lg font-bold">
+                        {editingUser.name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" style={{ visibility: isUploadingAvatar ? "hidden" : "visible" }}>
+                      <Camera className="w-5 h-5 text-white" />
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarUpload} data-testid="input-avatar-upload" />
+                    </label>
+                    {isUploadingAvatar && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-medium">Foto do usuário</span>
+                    <span className="text-xs text-muted-foreground">JPG, PNG ou WebP (máx 2MB)</span>
+                    {editingUser.avatarUrl && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleAvatarDelete} disabled={isUploadingAvatar} className="justify-start px-0 text-destructive" data-testid="button-remove-avatar">
+                        <X className="w-3 h-3 mr-1" /> Remover foto
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="name">Nome</Label>
                 <Input
@@ -986,7 +1061,15 @@ export default function UsersPage() {
                       ) : null}
                     </TableCell>
                     <TableCell className="font-medium" data-testid={`user-name-${user.id}`}>
-                      {user.name}
+                      <div className="flex items-center gap-2">
+                        <Avatar className="w-7 h-7">
+                          {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} className="object-cover" />}
+                          <AvatarFallback className="text-[10px] font-bold">
+                            {user.name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {user.name}
+                      </div>
                     </TableCell>
                     <TableCell data-testid={`user-email-${user.id}`}>{user.email}</TableCell>
                     <TableCell>

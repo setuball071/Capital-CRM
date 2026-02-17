@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight } from "lucide-react";
 import {
   XAxis,
@@ -523,6 +523,7 @@ export default function DashboardVendedorPage() {
           <div className="relative shrink-0">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-primary p-0.5">
               <Avatar className="w-full h-full">
+                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} className="object-cover" />}
                 <AvatarFallback className="text-xs sm:text-sm font-bold">
                   {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
                 </AvatarFallback>
