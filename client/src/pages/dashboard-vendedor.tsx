@@ -521,20 +521,35 @@ export default function DashboardVendedorPage() {
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 sm:mb-8 gap-3 sm:gap-6">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <div className="relative shrink-0">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-primary p-0.5">
-              <Avatar className="w-full h-full">
-                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} className="object-cover" />}
-                <AvatarFallback className="text-xs sm:text-sm font-bold">
-                  {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-            {nivelGeral && (
-              <div
-                className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
-                style={{ backgroundColor: nivelGeral.cor }}
-              >
-                <NivelGeralIcon size={8} className="text-background" />
+            {user.avatarUrl ? (
+              <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
+                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-contain object-bottom" data-testid="img-vendedor-avatar" />
+                {nivelGeral && (
+                  <div
+                    className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
+                    style={{ backgroundColor: nivelGeral.cor }}
+                  >
+                    <NivelGeralIcon size={8} className="text-background" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-primary p-0.5">
+                  <Avatar className="w-full h-full">
+                    <AvatarFallback className="text-xs sm:text-sm font-bold">
+                      {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+                {nivelGeral && (
+                  <div
+                    className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
+                    style={{ backgroundColor: nivelGeral.cor }}
+                  >
+                    <NivelGeralIcon size={8} className="text-background" />
+                  </div>
+                )}
               </div>
             )}
           </div>
