@@ -15255,16 +15255,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (!data.funcaoEquipe) {
         return res.status(400).json({ message: "Função na equipe é obrigatória" });
       }
-      if (!data.tipoRemuneracao) {
-        return res.status(400).json({ message: "Tipo de remuneração é obrigatório" });
-      }
-      if (data.tipoRemuneracao === "salario_variavel" && !data.percentualComissao) {
-        return res.status(400).json({ message: "Percentual de comissão é obrigatório para remuneração variável" });
-      }
-      if (data.tipoRemuneracao === "premiacao_meta" && !data.percentualMeta) {
-        return res.status(400).json({ message: "Percentual de bônus é obrigatório para premiação por meta" });
-      }
-
       // Check if team exists
       const team = await db.execute(sql`
         SELECT id FROM commercial_teams WHERE id = ${teamId} AND tenant_id = ${tenantId}
@@ -15304,12 +15294,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const result = await db.execute(sql`
         INSERT INTO commercial_team_members (
           tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao,
-          percentual_comissao, valor_fixo_adicional, percentual_meta,
-          ativo, data_entrada, observacoes
+          ativo, data_entrada
         ) VALUES (
-          ${tenantId}, ${teamId}, ${data.employeeId}, ${data.funcaoEquipe}, ${data.tipoRemuneracao},
-          ${data.percentualComissao || null}, ${data.valorFixoAdicional || null}, ${data.percentualMeta || null},
-          true, ${new Date().toISOString().split('T')[0]}, ${data.observacoes || null}
+          ${tenantId}, ${teamId}, ${data.employeeId}, ${data.funcaoEquipe}, ${'salario_fixo'},
+          true, ${new Date().toISOString().split('T')[0]}
         )
         RETURNING *
       `);

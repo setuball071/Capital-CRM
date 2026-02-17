@@ -80,11 +80,6 @@ export default function EquipesPage() {
   const [newMemberForm, setNewMemberForm] = useState({
     employeeId: "",
     funcaoEquipe: "",
-    tipoRemuneracao: "",
-    percentualComissao: "",
-    valorFixoAdicional: "",
-    percentualMeta: "",
-    observacoes: "",
   });
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery<CommercialTeam[]>({
@@ -165,11 +160,6 @@ export default function EquipesPage() {
       return apiRequest("POST", `/api/commercial-teams/${data.teamId}/members`, {
         employeeId: parseInt(data.form.employeeId),
         funcaoEquipe: data.form.funcaoEquipe,
-        tipoRemuneracao: data.form.tipoRemuneracao,
-        percentualComissao: data.form.percentualComissao || null,
-        valorFixoAdicional: data.form.valorFixoAdicional || null,
-        percentualMeta: data.form.percentualMeta || null,
-        observacoes: data.form.observacoes || null,
       });
     },
     onSuccess: () => {
@@ -180,11 +170,6 @@ export default function EquipesPage() {
       setNewMemberForm({
         employeeId: "",
         funcaoEquipe: "",
-        tipoRemuneracao: "",
-        percentualComissao: "",
-        valorFixoAdicional: "",
-        percentualMeta: "",
-        observacoes: "",
       });
     },
     onError: (error: any) => {
@@ -255,16 +240,8 @@ export default function EquipesPage() {
   };
 
   const handleAddMember = () => {
-    if (!selectedTeam || !newMemberForm.employeeId || !newMemberForm.funcaoEquipe || !newMemberForm.tipoRemuneracao) {
+    if (!selectedTeam || !newMemberForm.employeeId || !newMemberForm.funcaoEquipe) {
       toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
-      return;
-    }
-    if (newMemberForm.tipoRemuneracao === "salario_variavel" && !newMemberForm.percentualComissao) {
-      toast({ title: "Percentual de comissão é obrigatório para remuneração variável", variant: "destructive" });
-      return;
-    }
-    if (newMemberForm.tipoRemuneracao === "premiacao_meta" && !newMemberForm.percentualMeta) {
-      toast({ title: "Percentual de bônus é obrigatório para premiação por meta", variant: "destructive" });
       return;
     }
     addMemberMutation.mutate({ teamId: selectedTeam.id, form: newMemberForm });
@@ -639,70 +616,6 @@ export default function EquipesPage() {
                         <SelectItem value="operacional">Operacional</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div>
-                    <Label>Tipo de Remuneração *</Label>
-                    <Select
-                      value={newMemberForm.tipoRemuneracao}
-                      onValueChange={(value) => setNewMemberForm({ ...newMemberForm, tipoRemuneracao: value })}
-                    >
-                      <SelectTrigger data-testid="select-member-remuneracao">
-                        <SelectValue placeholder="Selecione o tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="salario_fixo">Salário Fixo (apenas salário base)</SelectItem>
-                        <SelectItem value="salario_variavel">Salário + Variável (salário + comissão)</SelectItem>
-                        <SelectItem value="premiacao_meta">Premiação por Meta (salário + bônus)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {newMemberForm.tipoRemuneracao === "salario_variavel" && (
-                    <>
-                      <div>
-                        <Label>% Comissão sobre vendas *</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={newMemberForm.percentualComissao}
-                          onChange={(e) => setNewMemberForm({ ...newMemberForm, percentualComissao: e.target.value })}
-                          placeholder="Ex: 5.00"
-                          data-testid="input-member-comissao"
-                        />
-                      </div>
-                      <div>
-                        <Label>Valor Fixo Adicional</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={newMemberForm.valorFixoAdicional}
-                          onChange={(e) => setNewMemberForm({ ...newMemberForm, valorFixoAdicional: e.target.value })}
-                          placeholder="Ex: 500.00"
-                          data-testid="input-member-fixo-adicional"
-                        />
-                      </div>
-                    </>
-                  )}
-                  {newMemberForm.tipoRemuneracao === "premiacao_meta" && (
-                    <div>
-                      <Label>% Bônus ao atingir meta *</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={newMemberForm.percentualMeta}
-                        onChange={(e) => setNewMemberForm({ ...newMemberForm, percentualMeta: e.target.value })}
-                        placeholder="Ex: 10.00"
-                        data-testid="input-member-bonus"
-                      />
-                    </div>
-                  )}
-                  <div className="sm:col-span-2">
-                    <Label>Observações</Label>
-                    <Textarea
-                      value={newMemberForm.observacoes}
-                      onChange={(e) => setNewMemberForm({ ...newMemberForm, observacoes: e.target.value })}
-                      placeholder="Observações sobre o membro..."
-                      data-testid="input-member-observacoes"
-                    />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
