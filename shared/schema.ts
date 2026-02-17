@@ -1383,6 +1383,7 @@ export type TipoContato = keyof typeof TIPOS_CONTATO;
 // Removed: modulo_crm_vendas_campanhas, modulo_crm_vendas_atendimento (reorganized into modulo_alpha)
 // Removed: modulo_config_precos (future sub-permission of modulo_config_usuarios)
 export const MODULE_LIST = [
+  "modulo_meu_painel",       // Meu Painel (Dashboard Vendedor)
   "modulo_simulador",        // Simuladores
   "modulo_roteiros",         // Operacional
   "modulo_base_clientes",    // Base de Clientes
@@ -1396,6 +1397,9 @@ export type ModuleName = typeof MODULE_LIST[number];
 // Sub-items for each module - granular permission control
 // Format: module.subitem (e.g., "modulo_simulador.simulador_compra")
 export const MODULE_SUB_ITEMS = {
+  modulo_meu_painel: [
+    { key: "dashboard_vendedor", label: "Dashboard de Performance" },
+  ],
   modulo_simulador: [
     { key: "simulador_compra", label: "Simulador de Compra" },
     { key: "simulador_amortizacao", label: "Simulador de Amortização" },
@@ -1439,6 +1443,7 @@ export type SubItemKey<M extends ModuleName> = typeof MODULE_SUB_ITEMS[M][number
 
 // Module labels for display
 export const MODULE_LABELS: Record<ModuleName, string> = {
+  modulo_meu_painel: "Meu Painel",
   modulo_simulador: "Simuladores",
   modulo_roteiros: "Operacional",
   modulo_base_clientes: "Base de Clientes",

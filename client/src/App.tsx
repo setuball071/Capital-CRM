@@ -76,8 +76,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function HomePage() {
-  const { user, isLoading } = useAuth();
-  const { moduloPerformanceEnabled } = useTenant();
+  const { user, isLoading, hasModuleAccess } = useAuth();
   
   if (isLoading) {
     return (
@@ -95,7 +94,7 @@ function HomePage() {
     return <Redirect to="/dashboard" />;
   }
   
-  if (user.role === "vendedor" && moduloPerformanceEnabled) {
+  if (hasModuleAccess("modulo_meu_painel")) {
     return <Redirect to="/dashboard-vendedor" />;
   }
   
@@ -383,7 +382,7 @@ function Router() {
                 {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
               </Route>
               <Route path="/dashboard-vendedor">
-                {() => <TenantFeatureRoute component={DashboardVendedorPage} feature="moduloPerformanceEnabled" />}
+                {() => <ModuleRoute component={DashboardVendedorPage} module="modulo_meu_painel" />}
               </Route>
               <Route path="/vendas/gestao-comercial/dashboard">
                 {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master", "coordenacao"]} />}

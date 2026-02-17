@@ -58,7 +58,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
-  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor, moduloPerformanceEnabled } = useTenant();
+  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
@@ -76,9 +76,7 @@ export function AppSidebar() {
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const tenantFeatureFlags: Record<string, boolean> = {
-    moduloPerformanceEnabled,
-  };
+  const tenantFeatureFlags: Record<string, boolean> = {};
 
   const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string }): boolean => {
     if (item.tenantFeature && !tenantFeatureFlags[item.tenantFeature]) return false;
@@ -113,7 +111,7 @@ export function AppSidebar() {
       title: "Principal",
       icon: Home,
       items: [
-        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, roleOnly: "vendedor", tenantFeature: "moduloPerformanceEnabled" },
+        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, module: "modulo_meu_painel" },
       ],
     },
     {

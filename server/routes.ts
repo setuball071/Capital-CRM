@@ -900,12 +900,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[TENANT-BRANDING-UPDATE] userId=${userId} tenantId=${tenantId} timestamp=${new Date().toISOString()}`);
       console.log(`[TENANT-BRANDING-UPDATE] Data: name="${name}" slogan="${slogan}" fontFamily="${fontFamily}" logoHeight=${logoHeight}`);
       
+      const existingTheme = (currentTenant.themeJson as Record<string, any>) || {};
+      const incomingTheme = (themeJson as Record<string, any>) || {};
+      const mergedThemeJson = { ...existingTheme, ...incomingTheme };
+      
+      console.log(`[TENANT-BRANDING-UPDATE] Theme merge: preserved keys from existing = [${Object.keys(existingTheme).filter(k => !(k in incomingTheme)).join(', ')}]`);
+      
       const updateData: any = {
         name,
         slogan,
         fontFamily,
-        themeJson,
-        updatedAt: new Date(), // Sempre atualizar timestamp
+        themeJson: mergedThemeJson,
+        updatedAt: new Date(),
       };
       
       // Only update logoHeight if provided and valid
@@ -929,7 +935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if ((currentTenant as any).slogan !== slogan) changedFields.slogan = { before: (currentTenant as any).slogan, after: slogan };
       if ((currentTenant as any).fontFamily !== fontFamily) changedFields.fontFamily = { before: (currentTenant as any).fontFamily, after: fontFamily };
       if ((currentTenant as any).logoHeight !== updateData.logoHeight) changedFields.logoHeight = { before: (currentTenant as any).logoHeight, after: updateData.logoHeight };
-      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(themeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: themeJson };
+      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(mergedThemeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: mergedThemeJson };
       
       if (Object.keys(changedFields).length > 0) {
         await logTenantAudit(tenantId, userId, "BRANDING_UPDATE", changedFields, ipAddress);
@@ -13467,14 +13473,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       console.log(`[TENANT-ADMIN-UPDATE] userId=${userId} tenantId=${id} timestamp=${new Date().toISOString()}`);
       console.log(`[TENANT-ADMIN-UPDATE] Data: name="${name}" logoUrl="${logoUrl}" faviconUrl="${faviconUrl}" isActive=${isActive}`);
       
+      const existingAdminTheme = (currentTenant.themeJson as Record<string, any>) || {};
+      const incomingAdminTheme = (themeJson as Record<string, any>) || {};
+      const mergedAdminThemeJson = { ...existingAdminTheme, ...incomingAdminTheme };
+      
       const result = await db.update(tenants)
         .set({
           name,
           logoUrl,
           faviconUrl,
-          themeJson,
+          themeJson: mergedAdminThemeJson,
           isActive,
-          updatedAt: new Date(), // Sempre atualizar timestamp
+          updatedAt: new Date(),
         })
         .where(eq(tenants.id, id))
         .returning();
@@ -13489,7 +13499,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (currentTenant.name !== name) changedFields.name = { before: currentTenant.name, after: name };
       if (currentTenant.logoUrl !== logoUrl) changedFields.logoUrl = { before: currentTenant.logoUrl, after: logoUrl };
       if (currentTenant.faviconUrl !== faviconUrl) changedFields.faviconUrl = { before: currentTenant.faviconUrl, after: faviconUrl };
-      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(themeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: themeJson };
+      if (JSON.stringify(currentTenant.themeJson) !== JSON.stringify(mergedAdminThemeJson)) changedFields.themeJson = { before: currentTenant.themeJson, after: mergedAdminThemeJson };
       if (currentTenant.isActive !== isActive) changedFields.isActive = { before: currentTenant.isActive, after: isActive };
       
       if (Object.keys(changedFields).length > 0) {
