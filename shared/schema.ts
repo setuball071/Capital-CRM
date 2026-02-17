@@ -2129,7 +2129,8 @@ export const commercialTeamMembers = pgTable("commercial_team_members", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
   teamId: integer("team_id").references(() => commercialTeams.id, { onDelete: "cascade" }).notNull(),
-  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   funcaoEquipe: varchar("funcao_equipe", { length: 50 }), // coordenador, subcoordenador, assistente, vendedor, operacional
   ativo: boolean("ativo").default(true),
   

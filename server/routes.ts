@@ -14410,27 +14410,28 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       const result = await db.execute(sql`
-        SELECT e.id, e.nome_completo, e.cpf, e.cargo, e.departamento
-        FROM employees e
-        WHERE e.tenant_id = ${tenantId}
-        AND e.status = 'ativo'
-        AND (e.departamento ILIKE '%comercial%' OR e.departamento ILIKE '%operacional%' OR e.departamento IS NULL)
+        SELECT u.id, u.name, u.email, u.role
+        FROM users u
+        JOIN user_tenants ut ON u.id = ut.user_id
+        WHERE ut.tenant_id = ${tenantId}
+        AND u.is_active = true
+        AND u.role IN ('vendedor', 'operacional', 'atendimento', 'coordenacao')
         AND NOT EXISTS (
           SELECT 1 FROM commercial_team_members ctm
           JOIN commercial_teams ct ON ctm.team_id = ct.id
-          WHERE ctm.employee_id = e.id 
+          WHERE ctm.user_id = u.id 
           AND ctm.ativo = true 
           AND ct.ativa = true
           AND ctm.tenant_id = ${tenantId}
           AND ct.tenant_id = ${tenantId}
         )
-        ORDER BY e.nome_completo ASC
+        ORDER BY u.name ASC
       `);
 
       return res.json(result.rows);
     } catch (error) {
-      console.error("Error listing available employees:", error);
-      return res.status(500).json({ message: "Erro ao listar funcionários disponíveis" });
+      console.error("Error listing available users for team:", error);
+      return res.status(500).json({ message: "Erro ao listar usuários disponíveis" });
     }
   });
   
@@ -15213,11 +15214,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const result = await db.execute(sql`
         SELECT 
           ctm.*,
-          e.nome_completo as funcionario_nome,
-          e.cpf as funcionario_cpf,
-          e.cargo as funcionario_cargo
+          u.name as funcionario_nome,
+          u.email as funcionario_email,
+          u.role as funcionario_role
         FROM commercial_team_members ctm
-        JOIN employees e ON ctm.employee_id = e.id
+        LEFT JOIN users u ON ctm.user_id = u.id
         WHERE ctm.team_id = ${teamId} AND ctm.tenant_id = ${tenantId}
         ORDER BY 
           CASE ctm.funcao_equipe 
@@ -15228,7 +15229,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             WHEN 'operacional' THEN 5
             ELSE 6
           END,
-          e.nome_completo ASC
+          u.name ASC
       `);
 
       return res.json(result.rows);
@@ -15249,8 +15250,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const data = req.body;
 
       // Validate required fields
-      if (!data.employeeId) {
-        return res.status(400).json({ message: "Funcionário é obrigatório" });
+      if (!data.userId) {
+        return res.status(400).json({ message: "Usuário é obrigatório" });
       }
       if (!data.funcaoEquipe) {
         return res.status(400).json({ message: "Função na equipe é obrigatória" });
@@ -15263,12 +15264,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Equipe não encontrada" });
       }
 
-      // Check if employee is already in an active team
+      // Check if user is already in an active team
       const existingMember = await db.execute(sql`
         SELECT ctm.id, ct.nome_equipe 
         FROM commercial_team_members ctm
         JOIN commercial_teams ct ON ctm.team_id = ct.id
-        WHERE ctm.employee_id = ${data.employeeId} 
+        WHERE ctm.user_id = ${data.userId} 
         AND ctm.ativo = true 
         AND ct.ativa = true
         AND ctm.tenant_id = ${tenantId}
@@ -15276,7 +15277,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (existingMember.rows.length > 0) {
         const existingTeam = existingMember.rows[0] as any;
         return res.status(400).json({ 
-          message: `Este funcionário já é membro ativo da equipe "${existingTeam.nome_equipe}"` 
+          message: `Este usuário já é membro ativo da equipe "${existingTeam.nome_equipe}"` 
         });
       }
 
@@ -15293,10 +15294,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const result = await db.execute(sql`
         INSERT INTO commercial_team_members (
-          tenant_id, team_id, employee_id, funcao_equipe, tipo_remuneracao,
+          tenant_id, team_id, user_id, funcao_equipe, tipo_remuneracao,
           ativo, data_entrada
         ) VALUES (
-          ${tenantId}, ${teamId}, ${data.employeeId}, ${data.funcaoEquipe}, ${'salario_fixo'},
+          ${tenantId}, ${teamId}, ${data.userId}, ${data.funcaoEquipe}, ${'salario_fixo'},
           true, ${new Date().toISOString().split('T')[0]}
         )
         RETURNING *

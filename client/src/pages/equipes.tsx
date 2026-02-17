@@ -27,24 +27,19 @@ interface CommercialTeam {
 interface TeamMember {
   id: number;
   team_id: number;
-  employee_id: number;
+  user_id: number;
   funcionario_nome: string;
-  funcionario_cpf: string;
-  funcionario_cargo: string | null;
+  funcionario_email: string;
+  funcionario_role: string | null;
   funcao_equipe: string;
   tipo_remuneracao: string;
-  percentual_comissao: string | null;
-  valor_fixo_adicional: string | null;
-  percentual_meta: string | null;
-  observacoes: string | null;
 }
 
-interface Employee {
+interface AvailableUser {
   id: number;
-  nome_completo: string;
-  cpf: string;
-  cargo: string | null;
-  departamento: string | null;
+  name: string;
+  email: string;
+  role: string;
 }
 
 const funcaoLabels: Record<string, string> = {
@@ -78,7 +73,7 @@ export default function EquipesPage() {
   });
 
   const [newMemberForm, setNewMemberForm] = useState({
-    employeeId: "",
+    userId: "",
     funcaoEquipe: "",
   });
 
@@ -90,7 +85,7 @@ export default function EquipesPage() {
     queryKey: ["/api/users/coordenadores"],
   });
 
-  const { data: availableEmployees = [] } = useQuery<Employee[]>({
+  const { data: availableUsers = [] } = useQuery<AvailableUser[]>({
     queryKey: ["/api/employees/available-for-team"],
     enabled: showMembersModal,
   });
@@ -158,7 +153,7 @@ export default function EquipesPage() {
   const addMemberMutation = useMutation({
     mutationFn: async (data: { teamId: number; form: typeof newMemberForm }) => {
       return apiRequest("POST", `/api/commercial-teams/${data.teamId}/members`, {
-        employeeId: parseInt(data.form.employeeId),
+        userId: parseInt(data.form.userId),
         funcaoEquipe: data.form.funcaoEquipe,
       });
     },
@@ -168,7 +163,7 @@ export default function EquipesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/commercial-teams"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employees/available-for-team"] });
       setNewMemberForm({
-        employeeId: "",
+        userId: "",
         funcaoEquipe: "",
       });
     },
@@ -240,7 +235,7 @@ export default function EquipesPage() {
   };
 
   const handleAddMember = () => {
-    if (!selectedTeam || !newMemberForm.employeeId || !newMemberForm.funcaoEquipe) {
+    if (!selectedTeam || !newMemberForm.userId || !newMemberForm.funcaoEquipe) {
       toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
       return;
     }
@@ -522,8 +517,6 @@ export default function EquipesPage() {
                       <TableRow>
                         <TableHead>Funcionário</TableHead>
                         <TableHead>Função</TableHead>
-                        <TableHead>Remuneração</TableHead>
-                        <TableHead>Detalhes</TableHead>
                         <TableHead className="w-[80px]">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -533,23 +526,11 @@ export default function EquipesPage() {
                           <TableCell>
                             <div>
                               <p className="font-medium">{member.funcionario_nome}</p>
-                              <p className="text-xs text-muted-foreground">{member.funcionario_cpf}</p>
+                              <p className="text-xs text-muted-foreground">{member.funcionario_email}</p>
                             </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{funcaoLabels[member.funcao_equipe] || member.funcao_equipe}</Badge>
-                          </TableCell>
-                          <TableCell>{remuneracaoLabels[member.tipo_remuneracao] || member.tipo_remuneracao}</TableCell>
-                          <TableCell>
-                            {member.tipo_remuneracao === "salario_variavel" && member.percentual_comissao && (
-                              <span className="text-sm">Comissão: {member.percentual_comissao}%</span>
-                            )}
-                            {member.tipo_remuneracao === "premiacao_meta" && member.percentual_meta && (
-                              <span className="text-sm">Bônus: {member.percentual_meta}%</span>
-                            )}
-                            {member.tipo_remuneracao === "salario_fixo" && (
-                              <span className="text-sm text-muted-foreground">Apenas salário base</span>
-                            )}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -582,18 +563,18 @@ export default function EquipesPage() {
                 </h4>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label>Funcionário *</Label>
+                    <Label>Usuário *</Label>
                     <Select
-                      value={newMemberForm.employeeId}
-                      onValueChange={(value) => setNewMemberForm({ ...newMemberForm, employeeId: value })}
+                      value={newMemberForm.userId}
+                      onValueChange={(value) => setNewMemberForm({ ...newMemberForm, userId: value })}
                     >
-                      <SelectTrigger data-testid="select-member-employee">
-                        <SelectValue placeholder="Selecione um funcionário" />
+                      <SelectTrigger data-testid="select-member-user">
+                        <SelectValue placeholder="Selecione um usuário" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableEmployees.map((emp) => (
-                          <SelectItem key={emp.id} value={emp.id.toString()}>
-                            {emp.nome_completo} - {emp.cpf}
+                        {availableUsers.map((user) => (
+                          <SelectItem key={user.id} value={user.id.toString()}>
+                            {user.name} - {user.email}
                           </SelectItem>
                         ))}
                       </SelectContent>
