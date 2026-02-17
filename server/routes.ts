@@ -16496,6 +16496,177 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ===== META NÍVEIS CRUD =====
+
+  app.get("/api/meta-niveis", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const result = await db.execute(sql`
+        SELECT * FROM meta_niveis
+        WHERE tenant_id = ${tenantId}
+        ORDER BY categoria, valor_minimo ASC
+      `);
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[META-NIVEIS] Error fetching:", error);
+      res.status(500).json({ message: "Erro ao buscar níveis" });
+    }
+  });
+
+  app.post("/api/meta-niveis", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const user = req.user;
+      if (!user || !hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const { categoria, nomeNivel, valorMinimo, valorMaximo, premio, ordem, cor, icone } = req.body;
+
+      if (!categoria || !["GERAL", "CARTAO"].includes(categoria)) {
+        return res.status(400).json({ message: "Categoria deve ser GERAL ou CARTAO" });
+      }
+      if (!nomeNivel || typeof nomeNivel !== "string" || !nomeNivel.trim()) {
+        return res.status(400).json({ message: "Nome do nível é obrigatório" });
+      }
+      const minVal = Number(valorMinimo);
+      const premioVal = Number(premio);
+      const ordemVal = Number(ordem);
+      if (isNaN(minVal) || minVal < 0) {
+        return res.status(400).json({ message: "Valor mínimo deve ser um número válido >= 0" });
+      }
+      if (isNaN(premioVal) || premioVal < 0) {
+        return res.status(400).json({ message: "Valor do prêmio deve ser um número válido >= 0" });
+      }
+      if (isNaN(ordemVal) || ordemVal < 1) {
+        return res.status(400).json({ message: "Ordem deve ser um número inteiro >= 1" });
+      }
+      const maxVal = valorMaximo != null && valorMaximo !== "" ? Number(valorMaximo) : null;
+      if (maxVal !== null && (isNaN(maxVal) || maxVal < 0)) {
+        return res.status(400).json({ message: "Valor máximo deve ser um número válido >= 0" });
+      }
+
+      const dupCheck = await db.execute(sql`
+        SELECT id FROM meta_niveis
+        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND valor_minimo = ${minVal}
+      `);
+      if (dupCheck.rows.length > 0) {
+        return res.status(409).json({ message: "Já existe um nível com esse faturamento mínimo nesta categoria" });
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO meta_niveis (tenant_id, categoria, nome_nivel, valor_minimo, valor_maximo, premio, ordem, cor, icone, created_at, updated_at)
+        VALUES (${tenantId}, ${categoria}, ${nomeNivel.trim()}, ${minVal}, ${maxVal}, ${premioVal}, ${Math.floor(ordemVal)}, ${cor || null}, ${icone || null}, NOW(), NOW())
+        RETURNING *
+      `);
+      res.status(201).json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[META-NIVEIS] Error creating:", error);
+      res.status(500).json({ message: "Erro ao criar nível" });
+    }
+  });
+
+  app.put("/api/meta-niveis/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const user = req.user;
+      if (!user || !hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const { id } = req.params;
+      const nivelId = parseInt(id);
+      if (isNaN(nivelId)) return res.status(400).json({ message: "ID inválido" });
+
+      const { categoria, nomeNivel, valorMinimo, valorMaximo, premio, ordem, cor, icone } = req.body;
+
+      if (!categoria || !["GERAL", "CARTAO"].includes(categoria)) {
+        return res.status(400).json({ message: "Categoria deve ser GERAL ou CARTAO" });
+      }
+      if (!nomeNivel || typeof nomeNivel !== "string" || !nomeNivel.trim()) {
+        return res.status(400).json({ message: "Nome do nível é obrigatório" });
+      }
+      const minVal = Number(valorMinimo);
+      const premioVal = Number(premio);
+      const ordemVal = Number(ordem);
+      if (isNaN(minVal) || minVal < 0) {
+        return res.status(400).json({ message: "Valor mínimo deve ser um número válido >= 0" });
+      }
+      if (isNaN(premioVal) || premioVal < 0) {
+        return res.status(400).json({ message: "Valor do prêmio deve ser um número válido >= 0" });
+      }
+      if (isNaN(ordemVal) || ordemVal < 1) {
+        return res.status(400).json({ message: "Ordem deve ser um número inteiro >= 1" });
+      }
+      const maxVal = valorMaximo != null && valorMaximo !== "" ? Number(valorMaximo) : null;
+      if (maxVal !== null && (isNaN(maxVal) || maxVal < 0)) {
+        return res.status(400).json({ message: "Valor máximo deve ser um número válido >= 0" });
+      }
+
+      const dupCheck = await db.execute(sql`
+        SELECT id FROM meta_niveis
+        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND valor_minimo = ${minVal} AND id != ${nivelId}
+      `);
+      if (dupCheck.rows.length > 0) {
+        return res.status(409).json({ message: "Já existe um nível com esse faturamento mínimo nesta categoria" });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE meta_niveis SET
+          categoria = ${categoria},
+          nome_nivel = ${nomeNivel.trim()},
+          valor_minimo = ${minVal},
+          valor_maximo = ${maxVal},
+          premio = ${premioVal},
+          ordem = ${Math.floor(ordemVal)},
+          cor = ${cor || null},
+          icone = ${icone || null},
+          updated_at = NOW()
+        WHERE id = ${nivelId} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Nível não encontrado" });
+      }
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[META-NIVEIS] Error updating:", error);
+      res.status(500).json({ message: "Erro ao atualizar nível" });
+    }
+  });
+
+  app.delete("/api/meta-niveis/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const user = req.user;
+      if (!user || !hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const { id } = req.params;
+      const result = await db.execute(sql`
+        DELETE FROM meta_niveis WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId} RETURNING id
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Nível não encontrado" });
+      }
+      res.json({ message: "Nível removido com sucesso" });
+    } catch (error: any) {
+      console.error("[META-NIVEIS] Error deleting:", error);
+      res.status(500).json({ message: "Erro ao remover nível" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

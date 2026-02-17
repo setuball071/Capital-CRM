@@ -2198,7 +2198,12 @@ export const metaNiveis = pgTable("meta_niveis", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertMetaNivelSchema = createInsertSchema(metaNiveis).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMetaNivelSchema = createInsertSchema(metaNiveis, {
+  categoria: z.enum(["GERAL", "CARTAO"]),
+  nomeNivel: z.string().min(1, "Nome do nível é obrigatório"),
+  valorMinimo: z.string().min(1, "Valor mínimo é obrigatório"),
+  premio: z.string().min(1, "Valor do prêmio é obrigatório"),
+}).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type MetaNivel = typeof metaNiveis.$inferSelect;
 export type InsertMetaNivel = z.infer<typeof insertMetaNivelSchema>;
@@ -2296,4 +2301,5 @@ export const metasIndividuais = pgTable("metas_individuais", {
 export const insertMetaIndividualSchema = createInsertSchema(metasIndividuais).omit({ id: true, createdAt: true });
 export type MetaIndividual = typeof metasIndividuais.$inferSelect;
 export type InsertMetaIndividual = z.infer<typeof insertMetaIndividualSchema>;
+
 
