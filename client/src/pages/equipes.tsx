@@ -91,12 +91,9 @@ export default function EquipesPage() {
     queryKey: ["/api/commercial-teams"],
   });
 
-  const { data: employeesResponse } = useQuery<{ employees: Employee[], total: number } | Employee[]>({
-    queryKey: ["/api/employees", { departamento: "Comercial", status: "ativo" }],
+  const { data: coordenadores = [] } = useQuery<{ id: number; name: string; email: string }[]>({
+    queryKey: ["/api/users/coordenadores"],
   });
-  const employees = Array.isArray(employeesResponse) 
-    ? employeesResponse 
-    : (employeesResponse?.employees || []);
 
   const { data: availableEmployees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees/available-for-team"],
@@ -385,9 +382,9 @@ export default function EquipesPage() {
                   <SelectValue placeholder="Selecione o coordenador" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Array.isArray(employees) ? employees : []).filter(e => (e as any).status === "ativo").map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.nome_completo}
+                  {coordenadores.map((coord) => (
+                    <SelectItem key={coord.id} value={coord.id.toString()}>
+                      {coord.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -468,9 +465,9 @@ export default function EquipesPage() {
                   <SelectValue placeholder="Selecione o coordenador" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Array.isArray(employees) ? employees : []).filter(e => (e as any).status === "ativo").map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.nome_completo}
+                  {coordenadores.map((coord) => (
+                    <SelectItem key={coord.id} value={coord.id.toString()}>
+                      {coord.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

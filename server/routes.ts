@@ -14400,6 +14400,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro ao listar funcionários" });
     }
   });
+
+  // GET /api/employees/available-for-team - Must be before :id route
+  app.get("/api/employees/available-for-team", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        return res.status(403).json({ message: "Tenant não configurado" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT e.id, e.nome_completo, e.cpf, e.cargo, e.departamento
+        FROM employees e
+        WHERE e.tenant_id = ${tenantId}
+        AND e.status = 'ativo'
+        AND (e.departamento ILIKE '%comercial%' OR e.departamento ILIKE '%operacional%' OR e.departamento IS NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM commercial_team_members ctm
+          JOIN commercial_teams ct ON ctm.team_id = ct.id
+          WHERE ctm.employee_id = e.id 
+          AND ctm.ativo = true 
+          AND ct.ativa = true
+          AND ctm.tenant_id = ${tenantId}
+          AND ct.tenant_id = ${tenantId}
+        )
+        ORDER BY e.nome_completo ASC
+      `);
+
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("Error listing available employees:", error);
+      return res.status(500).json({ message: "Erro ao listar funcionários disponíveis" });
+    }
+  });
   
   // GET /api/employees/:id - Get single employee
   app.get("/api/employees/:id", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
@@ -15389,41 +15422,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Error removing team member:", error);
       return res.status(500).json({ message: "Erro ao remover membro da equipe" });
-    }
-  });
-
-  // GET /api/employees/available-for-team - List employees available to add to a team
-  app.get("/api/employees/available-for-team", requireAuth, requireModuleAccess("modulo_config_usuarios"), async (req, res) => {
-    try {
-      const tenantId = req.tenantId;
-      if (!tenantId) {
-        return res.status(403).json({ message: "Tenant não configurado" });
-      }
-      const { teamId } = req.query;
-
-      // Get employees from Commercial or Operational departments not in any active team
-      const result = await db.execute(sql`
-        SELECT e.id, e.nome_completo, e.cpf, e.cargo, e.departamento
-        FROM employees e
-        WHERE e.tenant_id = ${tenantId}
-        AND e.status = 'ativo'
-        AND (e.departamento ILIKE '%comercial%' OR e.departamento ILIKE '%operacional%' OR e.departamento IS NULL)
-        AND NOT EXISTS (
-          SELECT 1 FROM commercial_team_members ctm
-          JOIN commercial_teams ct ON ctm.team_id = ct.id
-          WHERE ctm.employee_id = e.id 
-          AND ctm.ativo = true 
-          AND ct.ativa = true
-          AND ctm.tenant_id = ${tenantId}
-          AND ct.tenant_id = ${tenantId}
-        )
-        ORDER BY e.nome_completo ASC
-      `);
-
-      return res.json(result.rows);
-    } catch (error) {
-      console.error("Error listing available employees:", error);
-      return res.status(500).json({ message: "Erro ao listar funcionários disponíveis" });
     }
   });
 
