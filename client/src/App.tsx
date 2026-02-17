@@ -395,7 +395,7 @@ function Router() {
                 {() => <RoleRoute component={GestaoComercialHistoricoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/gestao-comercial/metas-mensais">
-                {() => <ProtectedRoute component={MetasMensaisPage} />}
+                {() => <RoleRoute component={MetasMensaisPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/gestao-comercial/metas-niveis">
                 {() => <RoleRoute component={GestaoComercialMetasPage} allowedRoles={["master", "coordenacao"]} />}

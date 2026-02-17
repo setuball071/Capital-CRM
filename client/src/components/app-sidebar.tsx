@@ -188,7 +188,7 @@ export function AppSidebar() {
       items: [
         { title: "Dashboard da Empresa", url: "/vendas/gestao-comercial/dashboard", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
         { title: "Equipes", url: "/equipes", icon: Users, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Metas Mensais", url: "/vendas/gestao-comercial/metas-mensais", icon: Target, rolesAllowed: ["master", "coordenacao", "vendedor"] },
+        { title: "Metas Mensais", url: "/vendas/gestao-comercial/metas-mensais", icon: Target, rolesAllowed: ["master", "coordenacao"] },
         { title: "Importar Produção", url: "/vendas/gestao-comercial/importar-producao", icon: Upload, rolesAllowed: ["master", "coordenacao"] },
         { title: "Histórico Importações", url: "/vendas/gestao-comercial/historico-importacoes", icon: History, rolesAllowed: ["master", "coordenacao"] },
         { title: "Metas & Níveis", url: "/vendas/gestao-comercial/metas-niveis", icon: Target, rolesAllowed: ["master", "coordenacao"] },
