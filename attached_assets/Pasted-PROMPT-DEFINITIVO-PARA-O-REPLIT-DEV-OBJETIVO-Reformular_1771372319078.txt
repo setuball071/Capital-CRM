@@ -1,0 +1,200 @@
+PROMPT DEFINITIVO PARA O REPLIT DEV
+
+OBJETIVO: Reformular o sistema de metas/premiação para operar por PONTOS, sem remover nem alterar o layout/estrutura dos cards de produção e progressão já existentes.
+
+0) REGRAS IMPORTANTES (NÃO NEGOCIÁVEIS)
+
+Não alterar o layout dos cards de meta do dashboard do vendedor (os cards de “Meta Geral” e “Meta Cartão” continuam existindo e continuam mostrando produção e progressão).
+
+A produção continua sendo exibida em R$ nos cards (como está hoje), porém o cálculo de nível/premiação será por PONTOS.
+
+Os níveis (Elite, Diamante, etc) passam a ser definidos por faixas de pontos, não mais por R$ “ajustado”.
+
+Deve existir premiação dupla:
+
+Premiação Geral (pontos_geral): soma todos os contratos, inclusive cartão, mas cartão tem regra especial (cap)
+
+Premiação Cartão (pontos_cartao): soma apenas contratos de cartão usando pt.1000 real (sem cap)
+
+1) IMPORTAÇÃO DE PRODUÇÃO (AJUSTE O IMPORT)
+1.1 Nova coluna obrigatória no arquivo importado
+
+Adicionar no import de produção uma coluna chamada:
+
+pt.1000 (ou pt_1000, mas padronizar internamente como pt_1000)
+
+Significado: quantos pontos vale a cada R$ 1.000 vendidos.
+
+1.2 Detecção de “cartão”
+
+O sistema deve identificar se a linha é de cartão quando tipo do contrato contiver “cartão” em qualquer forma (case-insensitive). Ex.: “Cartão”, “Cartão benefício”, “Cartão com saque”, cartao beneficio com saque, saque complementar, saque complementar beneficio.
+
+2) CÁLCULO DE PONTOS (NA IMPORTAÇÃO)
+
+Ao importar cada linha de produção:
+
+2.1 Calcular pontos do mês (por linha)
+
+Use valor_base (ou o campo que representa valor de produção do contrato) como base do cálculo:
+
+milhares = valor_base / 1000
+
+2.1.1 Regra de pontos para META GERAL
+
+Se NÃO for cartão:
+
+pontos_geral = milhares * pt_1000
+
+Se for cartão:
+
+aplica cap: no máximo 100 pontos por mil na meta geral
+
+pontos_geral = milhares * min(pt_1000, 100)
+
+2.1.2 Regra de pontos para META CARTÃO
+
+Só se for cartão:
+
+pontos_cartao = milhares * pt_1000
+
+Se não for cartão:
+
+pontos_cartao = 0
+
+2.2 Persistir pontos calculados
+
+Salvar no banco junto com a produção importada:
+
+pt_1000
+
+pontos_geral
+
+pontos_cartao
+
+Motivo: dashboard não pode recalcular tudo sempre.
+
+3) BANCO DE DADOS (MIGRAÇÃO)
+3.1 Ajustar tabela de produção importada
+
+Adicionar colunas:
+
+pt_1000 NUMERIC/INTEGER
+
+pontos_geral NUMERIC
+
+pontos_cartao NUMERIC
+
+is_cartao BOOLEAN (opcional, mas recomendado para performance e filtros)
+
+Criar índices se necessário para consultas por mês e corretor.
+
+3.2 Não quebrar histórico
+
+Os imports antigos que não tenham pt_1000 devem:
+
+ou serem recalculados com default (ex.: 100) apenas se necessário
+
+ou ficarem sem pontos e o dashboard ignora (mas preferível rodar uma migração para preencher)
+
+4) DASHBOARD DO VENDEDOR (SEM MUDAR OS CARDS)
+4.1 Cards de Meta (produção em R$)
+
+Os cards atuais continuam mostrando:
+
+produção em R$ (como hoje)
+
+meta em R$ (como hoje)
+
+percentual (como hoje)
+
+Esses cards NÃO mudam.
+
+4.2 Cards de Nível (agora por pontos)
+
+O card “Nível Geral” e “Nível Cartão” devem mostrar:
+
+Nome do nível atual (ou “SEM NÍVEL”)
+
+Pontos alcançados
+
+Quantos pontos faltam para o próximo nível
+
+Próximo nível (nome + premiação)
+
+IMPORTANTE: Mesmo quando estiver “SEM NÍVEL”, o card deve mostrar:
+
+próximo nível = o primeiro nível configurado
+
+quanto falta em pontos para atingir esse primeiro nível
+
+5) CONFIGURAÇÃO DE METAS & NÍVEIS (ADMIN/GESTÃO COMERCIAL)
+5.1 Dois conjuntos de níveis
+
+Criar/configurar níveis separados:
+
+Níveis da Premiação Geral
+
+Níveis da Premiação Cartão
+
+Cada nível deve ter:
+
+nome
+
+pontos_minimos (faixa)
+
+premio (R$)
+
+icone (selecionável)
+
+cor (selecionável)
+
+5.2 Ordenação e cálculo do nível
+
+Nível atual = maior nível onde pontos_alcancados >= pontos_minimos
+Próximo nível = menor nível onde pontos_minimos > pontos_alcancados
+
+6) APIS / SERVIÇOS (O QUE ENTREGAR)
+
+Criar/ajustar endpoints para:
+
+Importação de produção com pt.1000 e cálculo de pontos
+
+Dashboard vendedor:
+
+retornar produção em R$ (como hoje)
+
+retornar pontos_geral somados do mês (por corretor)
+
+retornar pontos_cartao somados do mês (por corretor)
+
+retornar nível atual + próximo nível + faltante (para geral e cartão)
+
+7) VALIDAÇÃO PÓS-IMPORT (SIMPLES E OBRIGATÓRIO)
+
+Após import, registrar no histórico:
+
+total de linhas importadas
+
+soma de produção R$
+
+soma de pontos_geral
+
+soma de pontos_cartao
+
+quantidade de linhas identificadas como cartão
+
+8) CHECKLIST FINAL (ANTES DE ENTREGAR)
+
+ Importa planilha com coluna pt.1000
+
+ Calcula e salva pontos_geral com cap de cartão em 100
+
+ Calcula e salva pontos_cartao real
+
+ Cards de meta permanecem iguais (R$ e progressão)
+
+ Cards de nível agora mostram pontos atingidos e faltante
+
+ Mesmo “SEM NÍVEL” mostra próximo nível e faltante
+
+ Níveis configuráveis para geral e cartão com ícone/cor
