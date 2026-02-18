@@ -15,7 +15,7 @@ import {
   Target, Plus, Pencil, Trash2, GripVertical,
   Gem, Trophy, Medal, Star, Crown, Shield, Award, Flame, Rocket, Zap,
   TrendingUp, CircleDollarSign, Wheat, Dog, CreditCard, Swords, Coins,
-  Wallet, PiggyBank, Landmark, Mountain
+  Wallet, PiggyBank, Landmark, Mountain, Crosshair, Magnet, HandCoins, PawPrint
 } from "lucide-react";
 import type { MetaNivel } from "@shared/schema";
 
@@ -41,6 +41,10 @@ const ICON_OPTIONS = [
   { value: "PiggyBank", label: "Cofrinho", icon: PiggyBank },
   { value: "Landmark", label: "Banco", icon: Landmark },
   { value: "Mountain", label: "Montanha", icon: Mountain },
+  { value: "Crosshair", label: "Mira", icon: Crosshair },
+  { value: "Magnet", label: "Ímã", icon: Magnet },
+  { value: "HandCoins", label: "Dinheiro", icon: HandCoins },
+  { value: "PawPrint", label: "Pata", icon: PawPrint },
 ];
 
 const COLOR_PRESETS = [
