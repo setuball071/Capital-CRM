@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Target, Plus, Pencil, Trash2, GripVertical,
   Gem, Trophy, Medal, Star, Crown, Shield, Award, Flame, Rocket, Zap,
-  TrendingUp, CircleDollarSign
+  TrendingUp, CircleDollarSign, Wheat
 } from "lucide-react";
 import type { MetaNivel } from "@shared/schema";
 
@@ -31,6 +31,7 @@ const ICON_OPTIONS = [
   { value: "Rocket", label: "Foguete", icon: Rocket },
   { value: "Zap", label: "Raio", icon: Zap },
   { value: "TrendingUp", label: "Crescimento", icon: TrendingUp },
+  { value: "Wheat", label: "Milho", icon: Wheat },
 ];
 
 const COLOR_PRESETS = [

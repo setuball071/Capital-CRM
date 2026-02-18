@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight, FileText, Tag, Clock } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight, FileText, Tag, Clock, Wheat, Trophy, Award, Flame, Rocket, TrendingUp } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -77,7 +77,7 @@ const MESES: Record<string, string> = {
 };
 
 const TIER_ICONS: Record<string, typeof Shield> = {
-  Shield, Medal, Star, Gem, Crown,
+  Shield, Medal, Star, Gem, Crown, Wheat, Trophy, Award, Flame, Rocket, Zap, TrendingUp, Target,
 };
 
 function getTierIcon(iconName: string) {
