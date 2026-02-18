@@ -2306,4 +2306,18 @@ export const insertMetaIndividualSchema = createInsertSchema(metasIndividuais).o
 export type MetaIndividual = typeof metasIndividuais.$inferSelect;
 export type InsertMetaIndividual = z.infer<typeof insertMetaIndividualSchema>;
 
+export const regulamentos = pgTable("regulamentos", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  texto: text("texto").notNull(),
+  versao: varchar("versao", { length: 50 }).notNull().default("1.0"),
+  dataAtualizacao: timestamp("data_atualizacao").defaultNow().notNull(),
+  criadoPor: integer("criado_por").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRegulamentoSchema = createInsertSchema(regulamentos).omit({ id: true, createdAt: true });
+export type Regulamento = typeof regulamentos.$inferSelect;
+export type InsertRegulamento = z.infer<typeof insertRegulamentoSchema>;
+
 

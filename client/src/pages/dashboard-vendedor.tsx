@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight, FileText, Tag, Clock } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -298,7 +298,7 @@ function NivelSection({ performance, label, icon: IconComponent }: {
 
 export default function DashboardVendedorPage() {
   const { user } = useAuth();
-  const [view, setView] = useState<"dashboard" | "rules">("dashboard");
+  const [view, setView] = useState<"dashboard" | "premiacao" | "regulamento">("dashboard");
 
   const { data, isLoading, isError } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard-vendedor"],
@@ -309,6 +309,16 @@ export default function DashboardVendedorPage() {
     queryKey: ["/api/performance", user?.id],
     enabled: !!user?.id,
     refetchInterval: 60000,
+  });
+
+  const { data: regulamentoData } = useQuery<{
+    id: number;
+    texto: string;
+    versao: string;
+    data_atualizacao: string;
+    criado_por_nome: string | null;
+  } | null>({
+    queryKey: ["/api/regulamento"],
   });
 
   if (!user) return null;
@@ -517,6 +527,75 @@ export default function DashboardVendedorPage() {
     </div>
   );
 
+  const RegulamentoTextPanel = () => {
+    const formatDate = (dateStr: string) => {
+      try {
+        return new Date(dateStr).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return dateStr;
+      }
+    };
+
+    if (!regulamentoData) {
+      return (
+        <div className="max-w-5xl mx-auto">
+          <Card className="rounded-2xl">
+            <CardContent className="p-12 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+              <p className="text-muted-foreground text-lg font-medium">Regulamento ainda não disponível</p>
+              <p className="text-muted-foreground text-sm mt-2">O regulamento comercial será publicado em breve.</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-5xl mx-auto">
+        <Card className="rounded-2xl">
+          <CardContent className="p-5 sm:p-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <FileText className="text-primary" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-black text-foreground uppercase tracking-tight">Regulamento Comercial</h2>
+                  <p className="text-muted-foreground text-xs sm:text-sm">Regras e condições do programa</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg text-primary">
+                <Tag size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Versão {regulamentoData.versao}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-border text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Clock size={14} />
+                <span>Atualizado em {formatDate(regulamentoData.data_atualizacao)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2" data-testid="text-regulamento-vendedor">
+              {regulamentoData.texto.split("\n").map((line, i) => (
+                <p key={i} className={`text-sm leading-relaxed ${line.trim() === "" ? "h-3" : "text-foreground"}`}>
+                  {line || "\u00A0"}
+                </p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-5 lg:p-8 overflow-auto">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 sm:mb-8 gap-3 sm:gap-6">
@@ -569,7 +648,7 @@ export default function DashboardVendedorPage() {
         <div className="flex bg-muted p-1 rounded-lg border border-border shrink-0" data-testid="nav-toggle">
           <button
             onClick={() => setView("dashboard")}
-            className={`px-4 sm:px-6 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
               view === "dashboard"
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -579,19 +658,32 @@ export default function DashboardVendedorPage() {
             Dashboard
           </button>
           <button
-            onClick={() => setView("rules")}
-            className={`px-4 sm:px-6 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
-              view === "rules"
+            onClick={() => setView("premiacao")}
+            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+              view === "premiacao"
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            data-testid="button-view-rules"
+            data-testid="button-view-premiacao"
+          >
+            Premiação
+          </button>
+          <button
+            onClick={() => setView("regulamento")}
+            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+              view === "regulamento"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid="button-view-regulamento"
           >
             Regulamento
           </button>
         </div>
       </header>
-      {view === "dashboard" ? <DashboardPanel /> : <RegulationPanel />}
+      {view === "dashboard" && <DashboardPanel />}
+      {view === "premiacao" && <RegulationPanel />}
+      {view === "regulamento" && <RegulamentoTextPanel />}
       <footer className="mt-8 sm:mt-12 pt-4 sm:pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] sm:text-[10px] text-muted-foreground/50 font-bold uppercase tracking-wider">
         <div className="flex items-center gap-2">
           <Target size={10} className="text-primary/30" />

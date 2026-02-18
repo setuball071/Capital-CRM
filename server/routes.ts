@@ -16801,6 +16801,91 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  app.get("/api/regulamento", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const result = await db.execute(sql`
+        SELECT r.*, u.name as criado_por_nome
+        FROM regulamentos r
+        LEFT JOIN users u ON r.criado_por = u.id
+        WHERE r.tenant_id = ${tenantId}
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      `);
+
+      if (result.rows.length === 0) {
+        return res.json(null);
+      }
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[REGULAMENTO] Error fetching:", error);
+      res.status(500).json({ message: "Erro ao buscar regulamento" });
+    }
+  });
+
+  app.post("/api/regulamento", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const user = req.user;
+      if (!user || !hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const { texto, versao } = req.body;
+      if (!texto || !versao) {
+        return res.status(400).json({ message: "Texto e versão são obrigatórios" });
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO regulamentos (tenant_id, texto, versao, data_atualizacao, criado_por, created_at)
+        VALUES (${tenantId}, ${texto}, ${versao}, NOW(), ${user.id}, NOW())
+        RETURNING *
+      `);
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[REGULAMENTO] Error creating:", error);
+      res.status(500).json({ message: "Erro ao criar regulamento" });
+    }
+  });
+
+  app.put("/api/regulamento/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const user = req.user;
+      if (!user || !hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const { texto, versao } = req.body;
+      if (!texto || !versao) {
+        return res.status(400).json({ message: "Texto e versão são obrigatórios" });
+      }
+
+      const { id } = req.params;
+      const result = await db.execute(sql`
+        UPDATE regulamentos
+        SET texto = ${texto}, versao = ${versao}, data_atualizacao = NOW(), criado_por = ${user.id}
+        WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Regulamento não encontrado" });
+      }
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[REGULAMENTO] Error updating:", error);
+      res.status(500).json({ message: "Erro ao atualizar regulamento" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
