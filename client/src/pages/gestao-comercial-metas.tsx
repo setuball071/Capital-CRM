@@ -61,8 +61,8 @@ function formatCurrency(value: string | number | null | undefined): string {
 
 interface NivelFormData {
   nomeNivel: string;
-  valorMinimo: string;
-  valorMaximo: string;
+  pontosMinimos: string;
+  pontosMaximos: string;
   premio: string;
   ordem: string;
   cor: string;
@@ -71,8 +71,8 @@ interface NivelFormData {
 
 const EMPTY_FORM: NivelFormData = {
   nomeNivel: "",
-  valorMinimo: "",
-  valorMaximo: "",
+  pontosMinimos: "",
+  pontosMaximos: "",
   premio: "",
   ordem: "1",
   cor: "#cd7f32",
@@ -89,7 +89,7 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
 
   const filtered = niveis
     .filter((n) => n.categoria === categoria)
-    .sort((a, b) => parseFloat(String(a.valorMinimo)) - parseFloat(String(b.valorMinimo)));
+    .sort((a, b) => parseFloat(String(a.pontosMinimos)) - parseFloat(String(b.pontosMinimos)));
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -148,8 +148,8 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
     setEditingId(nivel.id);
     setForm({
       nomeNivel: nivel.nomeNivel,
-      valorMinimo: String(nivel.valorMinimo),
-      valorMaximo: nivel.valorMaximo ? String(nivel.valorMaximo) : "",
+      pontosMinimos: String(nivel.pontosMinimos),
+      pontosMaximos: nivel.pontosMaximos ? String(nivel.pontosMaximos) : "",
       premio: String(nivel.premio),
       ordem: String(nivel.ordem),
       cor: nivel.cor || "#cd7f32",
@@ -168,8 +168,8 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
       toast({ title: "Nome do nível é obrigatório", variant: "destructive" });
       return;
     }
-    if (!form.valorMinimo || parseFloat(form.valorMinimo) <= 0) {
-      toast({ title: "Valor mínimo deve ser maior que zero", variant: "destructive" });
+    if (!form.pontosMinimos || parseFloat(form.pontosMinimos) <= 0) {
+      toast({ title: "Pontos mínimos deve ser maior que zero", variant: "destructive" });
       return;
     }
     if (!form.premio || parseFloat(form.premio) < 0) {
@@ -180,8 +180,8 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
     const payload = {
       categoria,
       nomeNivel: form.nomeNivel.trim(),
-      valorMinimo: form.valorMinimo,
-      valorMaximo: form.valorMaximo || null,
+      pontosMinimos: form.pontosMinimos,
+      pontosMaximos: form.pontosMaximos || null,
       premio: form.premio,
       ordem: form.ordem,
       cor: form.cor,
@@ -227,7 +227,7 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
                   <TableHead className="w-16 text-center">Ordem</TableHead>
                   <TableHead className="w-12"></TableHead>
                   <TableHead>Nível</TableHead>
-                  <TableHead className="text-right">Faturamento Mínimo</TableHead>
+                  <TableHead className="text-right">Pontos Mínimos</TableHead>
                   <TableHead className="text-right">Prêmio</TableHead>
                   <TableHead className="w-16 text-center">Cor</TableHead>
                   <TableHead className="w-24 text-right">Ações</TableHead>
@@ -253,7 +253,7 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-nivel-min-${nivel.id}`}>
-                        {formatCurrency(nivel.valorMinimo)}
+                        {parseFloat(String(nivel.pontosMinimos)).toLocaleString("pt-BR")} pts
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-nivel-premio-${nivel.id}`}>
                         {formatCurrency(nivel.premio)}
@@ -342,16 +342,16 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="valorMinimo">Faturamento Mínimo (R$)</Label>
+                <Label htmlFor="pontosMinimos">Pontos Mínimos</Label>
                 <Input
-                  id="valorMinimo"
+                  id="pontosMinimos"
                   type="number"
-                  step="0.01"
+                  step="1"
                   min="0"
-                  placeholder="10000.00"
-                  value={form.valorMinimo}
-                  onChange={(e) => setForm({ ...form, valorMinimo: e.target.value })}
-                  data-testid="input-valor-minimo"
+                  placeholder="100"
+                  value={form.pontosMinimos}
+                  onChange={(e) => setForm({ ...form, pontosMinimos: e.target.value })}
+                  data-testid="input-pontos-minimos"
                 />
               </div>
               <div className="space-y-2">
@@ -371,16 +371,16 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="valorMaximo">Faturamento Máximo (R$)</Label>
+                <Label htmlFor="pontosMaximos">Pontos Máximos</Label>
                 <Input
-                  id="valorMaximo"
+                  id="pontosMaximos"
                   type="number"
-                  step="0.01"
+                  step="1"
                   min="0"
                   placeholder="Opcional"
-                  value={form.valorMaximo}
-                  onChange={(e) => setForm({ ...form, valorMaximo: e.target.value })}
-                  data-testid="input-valor-maximo"
+                  value={form.pontosMaximos}
+                  onChange={(e) => setForm({ ...form, pontosMaximos: e.target.value })}
+                  data-testid="input-pontos-maximos"
                 />
                 <p className="text-[10px] text-muted-foreground">Deixe vazio para o nível mais alto</p>
               </div>
@@ -465,7 +465,7 @@ function NiveisTab({ categoria, niveis, isLoading }: { categoria: "GERAL" | "CAR
                 <div>
                   <p className="font-bold text-sm" style={{ color: form.cor }}>{form.nomeNivel || "Nome do Nível"}</p>
                   <p className="text-xs text-muted-foreground">
-                    A partir de {form.valorMinimo ? formatCurrency(form.valorMinimo) : "R$ 0,00"} — Prêmio: {form.premio ? formatCurrency(form.premio) : "R$ 0,00"}
+                    A partir de {form.pontosMinimos ? `${parseFloat(form.pontosMinimos).toLocaleString("pt-BR")} pts` : "0 pts"} — Prêmio: {form.premio ? formatCurrency(form.premio) : "R$ 0,00"}
                   </p>
                 </div>
               </div>

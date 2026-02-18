@@ -20,12 +20,13 @@ interface NivelData {
   cor: string;
   icone: string;
   premio: number;
-  valorMinimo: number;
-  valorMaximo: number | null;
+  pontosMinimos: number;
+  pontosMaximos: number | null;
 }
 
 interface CategoriaPerformance {
   produzido: number;
+  pontos: number;
   meta: number;
   percentual: number;
   nivelAtual: NivelData | null;
@@ -258,7 +259,7 @@ function NivelSection({ performance, label, icon: IconComponent }: {
           </div>
           <div className="flex justify-between items-center gap-1 mb-1.5">
             <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground">
-              R$ {performance.faltaParaProximo.toLocaleString("pt-BR")} faltantes
+              {performance.faltaParaProximo.toLocaleString("pt-BR")} pts faltantes
             </span>
             <span className="text-[9px] sm:text-[10px] font-black text-primary">
               {performance.progressoNivel.toFixed(0)}%
@@ -373,7 +374,7 @@ export default function DashboardVendedorPage() {
                   <thead className="bg-muted/50 border-b border-border">
                     <tr>
                       <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Nível</th>
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Faturamento Mínimo</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Pontos Mínimos</th>
                       <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prêmio (R$)</th>
                     </tr>
                   </thead>
@@ -386,7 +387,7 @@ export default function DashboardVendedorPage() {
                             <TIcon size={18} style={{ color: nivel.cor }} />
                             <span className="text-foreground uppercase text-xs sm:text-sm font-bold tracking-wider">{nivel.nome}</span>
                           </td>
-                          <td className="px-4 sm:px-6 py-3 sm:py-5 text-muted-foreground text-xs sm:text-sm">R$ {nivel.valorMinimo.toLocaleString("pt-BR")}</td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-5 text-muted-foreground text-xs sm:text-sm">{nivel.pontosMinimos.toLocaleString("pt-BR")} pts</td>
                           <td className="px-4 sm:px-6 py-3 sm:py-5 text-base sm:text-xl text-emerald-600 dark:text-emerald-400 font-black">R$ {nivel.premio.toLocaleString("pt-BR")}</td>
                         </tr>
                       );

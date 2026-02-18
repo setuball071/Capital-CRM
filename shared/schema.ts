@@ -2189,8 +2189,8 @@ export const metaNiveis = pgTable("meta_niveis", {
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
   categoria: varchar("categoria", { length: 50 }).notNull(),
   nomeNivel: varchar("nome_nivel", { length: 100 }).notNull(),
-  valorMinimo: decimal("valor_minimo", { precision: 12, scale: 2 }).notNull(),
-  valorMaximo: decimal("valor_maximo", { precision: 12, scale: 2 }),
+  pontosMinimos: decimal("pontos_minimos", { precision: 12, scale: 2 }).notNull(),
+  pontosMaximos: decimal("pontos_maximos", { precision: 12, scale: 2 }),
   premio: decimal("premio", { precision: 12, scale: 2 }).notNull(),
   ordem: integer("ordem").notNull(),
   cor: varchar("cor", { length: 20 }),
@@ -2202,7 +2202,7 @@ export const metaNiveis = pgTable("meta_niveis", {
 export const insertMetaNivelSchema = createInsertSchema(metaNiveis, {
   categoria: z.enum(["GERAL", "CARTAO"]),
   nomeNivel: z.string().min(1, "Nome do nível é obrigatório"),
-  valorMinimo: z.string().min(1, "Valor mínimo é obrigatório"),
+  pontosMinimos: z.string().min(1, "Pontos mínimos é obrigatório"),
   premio: z.string().min(1, "Valor do prêmio é obrigatório"),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 
@@ -2258,6 +2258,9 @@ export const producoesContratos = pgTable("producoes_contratos", {
   mesReferencia: varchar("mes_referencia", { length: 7 }),
   importadoPor: integer("importado_por").references(() => users.id),
   confirmado: boolean("confirmado").default(false),
+  pt1000: decimal("pt_1000", { precision: 10, scale: 2 }).default("0"),
+  pontosGeral: decimal("pontos_geral", { precision: 14, scale: 2 }).default("0"),
+  pontosCartao: decimal("pontos_cartao", { precision: 14, scale: 2 }).default("0"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("idx_producoes_contrato_tenant").on(table.contratoId, table.tenantId),

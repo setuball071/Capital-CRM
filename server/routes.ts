@@ -15808,11 +15808,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND (LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%')
       `);
 
-      // Sum production from producoes_contratos (imported paid production)
+      // Sum production from producoes_contratos (imported paid production) - R$ values
       const totalGeralPCResult = await db.execute(sql`
         SELECT 
           COALESCE(SUM(valor_base), 0)::numeric as total,
           COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
+        FROM producoes_contratos
+        WHERE vendedor_id = ${vendedorId}
+          AND tenant_id = ${tenantId}
+          AND mes_referencia = ${mesRef}
+          AND confirmado = true
+      `);
+
+      // Sum points from producoes_contratos for level calculation
+      const totalPontosPCResult = await db.execute(sql`
+        SELECT 
+          COALESCE(SUM(pontos_geral), 0)::numeric as pontos_geral,
+          COALESCE(SUM(pontos_cartao), 0)::numeric as pontos_cartao
         FROM producoes_contratos
         WHERE vendedor_id = ${vendedorId}
           AND tenant_id = ${tenantId}
@@ -15825,7 +15837,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const produzidoCartao = (parseFloat(totalCartaoVCResult.rows[0]?.total as string) || 0)
         + (parseFloat(totalGeralPCResult.rows[0]?.total_cartao as string) || 0);
 
-      function calcularNivel(produzido: number, niveis: any[]) {
+      // Points for level calculation
+      const pontosGeral = parseFloat(totalPontosPCResult.rows[0]?.pontos_geral as string) || 0;
+      const pontosCartao = parseFloat(totalPontosPCResult.rows[0]?.pontos_cartao as string) || 0;
+
+      function calcularNivel(pontos: number, niveis: any[]) {
         let nivelAtual = null;
         let proximoNivel = null;
 
@@ -15833,10 +15849,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         for (let i = 0; i < sorted.length; i++) {
           const nivel = sorted[i];
-          const min = parseFloat(nivel.valor_minimo);
-          const max = nivel.valor_maximo ? parseFloat(nivel.valor_maximo) : Infinity;
+          const min = parseFloat(nivel.pontos_minimos);
+          const max = nivel.pontos_maximos ? parseFloat(nivel.pontos_maximos) : Infinity;
 
-          if (produzido >= min && produzido <= max) {
+          if (pontos >= min && pontos <= max) {
             nivelAtual = nivel;
             proximoNivel = sorted[i + 1] || null;
             break;
@@ -15845,7 +15861,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         if (!nivelAtual && sorted.length > 0) {
           const lastNivel = sorted[sorted.length - 1];
-          if (produzido >= parseFloat(lastNivel.valor_minimo)) {
+          if (pontos >= parseFloat(lastNivel.pontos_minimos)) {
             nivelAtual = lastNivel;
             proximoNivel = null;
           } else {
@@ -15857,17 +15873,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         let progressoNivel = 0;
 
         if (nivelAtual && proximoNivel) {
-          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido);
-          const min = parseFloat(nivelAtual.valor_minimo);
-          const max = nivelAtual.valor_maximo ? parseFloat(nivelAtual.valor_maximo) : parseFloat(proximoNivel.valor_minimo);
+          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.pontos_minimos) - pontos);
+          const min = parseFloat(nivelAtual.pontos_minimos);
+          const max = nivelAtual.pontos_maximos ? parseFloat(nivelAtual.pontos_maximos) : parseFloat(proximoNivel.pontos_minimos);
           const range = max - min;
-          progressoNivel = range > 0 ? Math.min(100, ((produzido - min) / range) * 100) : 100;
+          progressoNivel = range > 0 ? Math.min(100, ((pontos - min) / range) * 100) : 100;
         } else if (nivelAtual && !proximoNivel) {
           progressoNivel = 100;
         } else if (!nivelAtual && proximoNivel) {
-          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.valor_minimo) - produzido);
-          const targetMin = parseFloat(proximoNivel.valor_minimo);
-          progressoNivel = targetMin > 0 ? Math.min(100, (produzido / targetMin) * 100) : 0;
+          faltaParaProximo = Math.max(0, parseFloat(proximoNivel.pontos_minimos) - pontos);
+          const targetMin = parseFloat(proximoNivel.pontos_minimos);
+          progressoNivel = targetMin > 0 ? Math.min(100, (pontos / targetMin) * 100) : 0;
         }
 
         const formatNivel = (n: any) => ({
@@ -15876,8 +15892,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           cor: n.cor,
           icone: n.icone,
           premio: parseFloat(n.premio),
-          valorMinimo: parseFloat(n.valor_minimo),
-          valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+          pontosMinimos: parseFloat(n.pontos_minimos),
+          pontosMaximos: n.pontos_maximos ? parseFloat(n.pontos_maximos) : null,
         });
 
         return {
@@ -15888,7 +15904,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             cor: proximoNivel.cor,
             icone: proximoNivel.icone,
             premio: parseFloat(proximoNivel.premio),
-            valorMinimo: parseFloat(proximoNivel.valor_minimo),
+            pontosMinimos: parseFloat(proximoNivel.pontos_minimos),
           } : null,
           faltaParaProximo: Math.round(faltaParaProximo * 100) / 100,
           progressoNivel: Math.round(progressoNivel * 100) / 100,
@@ -15916,12 +15932,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const geralNiveis = niveisPorCategoria["GERAL"] || [];
       const cartaoNiveis = niveisPorCategoria["CARTAO"] || [];
 
-      const geralPerf = calcularNivel(produzidoGeral, geralNiveis);
-      const cartaoPerf = calcularNivel(produzidoCartao, cartaoNiveis);
+      const geralPerf = calcularNivel(pontosGeral, geralNiveis);
+      const cartaoPerf = calcularNivel(pontosCartao, cartaoNiveis);
 
       return res.json({
         geral: {
           produzido: Math.round(produzidoGeral * 100) / 100,
+          pontos: Math.round(pontosGeral * 100) / 100,
           meta: metaMensal,
           percentual: metaMensal > 0 ? Math.round((produzidoGeral / metaMensal) * 10000) / 100 : 0,
           ...geralPerf,
@@ -15931,12 +15948,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             cor: n.cor,
             icone: n.icone,
             premio: parseFloat(n.premio),
-            valorMinimo: parseFloat(n.valor_minimo),
-            valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+            pontosMinimos: parseFloat(n.pontos_minimos),
+            pontosMaximos: n.pontos_maximos ? parseFloat(n.pontos_maximos) : null,
           })),
         },
         cartao: {
           produzido: Math.round(produzidoCartao * 100) / 100,
+          pontos: Math.round(pontosCartao * 100) / 100,
           meta: metaCartaoInd,
           percentual: metaCartaoInd > 0 ? Math.round((produzidoCartao / metaCartaoInd) * 10000) / 100 : 0,
           ...cartaoPerf,
@@ -15946,8 +15964,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             cor: n.cor,
             icone: n.icone,
             premio: parseFloat(n.premio),
-            valorMinimo: parseFloat(n.valor_minimo),
-            valorMaximo: n.valor_maximo ? parseFloat(n.valor_maximo) : null,
+            pontosMinimos: parseFloat(n.pontos_minimos),
+            pontosMaximos: n.pontos_maximos ? parseFloat(n.pontos_maximos) : null,
           })),
         },
       });
@@ -16035,6 +16053,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const valorLiquido = parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
         const comissaoRepasseValor = parseFloat(String(row.ComissaoRepasseValor || "0").replace(",", ".")) || 0;
         const comissaoRepassePerc = parseFloat(String(row.ComissaoRepassePercentual || "0").replace(",", ".")) || 0;
+        const pt1000 = parseFloat(String(row["Pt.1000"] || row.Pt1000 || row.pt1000 || "0").replace(",", ".")) || 0;
 
         const contrato = {
           contratoId,
@@ -16057,6 +16076,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           comissaoRepassePerc,
           isCartao,
           mesReferencia,
+          pt1000,
         };
 
         contratos.push(contrato);
@@ -16247,6 +16267,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           ))
           .limit(1);
 
+        const pt1000Val = parseFloat(String(c.pt1000 || 0)) || 0;
+        const pontosGeral = pt1000Val * (valorBase / 1000);
+        const pontosCartao = c.isCartao ? Math.min(pontosGeral, 100) : 0;
+
         const contratoData = {
           nomeCliente: c.nomeCliente,
           cpfCliente: c.cpfCliente,
@@ -16271,6 +16295,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           mesReferencia: c.mesReferencia,
           importacaoId: importacao.id,
           confirmado: true,
+          pt1000: String(pt1000Val),
+          pontosGeral: String(Math.round(pontosGeral * 100) / 100),
+          pontosCartao: String(Math.round(pontosCartao * 100) / 100),
         };
 
         if (existing.length > 0) {
@@ -16594,8 +16621,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       categoria: row.categoria,
       nomeNivel: row.nome_nivel,
       ordem: row.ordem,
-      valorMinimo: row.valor_minimo,
-      valorMaximo: row.valor_maximo,
+      pontosMinimos: row.pontos_minimos,
+      pontosMaximos: row.pontos_maximos,
       premio: row.premio,
       cor: row.cor,
       icone: row.icone,
@@ -16612,7 +16639,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const result = await db.execute(sql`
         SELECT * FROM meta_niveis
         WHERE tenant_id = ${tenantId}
-        ORDER BY categoria, valor_minimo ASC
+        ORDER BY categoria, pontos_minimos ASC
       `);
       res.json(result.rows.map(mapNivelRow));
     } catch (error: any) {
@@ -16631,7 +16658,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(403).json({ message: "Sem permissão" });
       }
 
-      const { categoria, nomeNivel, valorMinimo, valorMaximo, premio, ordem, cor, icone } = req.body;
+      const { categoria, nomeNivel, pontosMinimos, pontosMaximos, premio, ordem, cor, icone } = req.body;
 
       if (!categoria || !["GERAL", "CARTAO"].includes(categoria)) {
         return res.status(400).json({ message: "Categoria deve ser GERAL ou CARTAO" });
@@ -16639,11 +16666,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (!nomeNivel || typeof nomeNivel !== "string" || !nomeNivel.trim()) {
         return res.status(400).json({ message: "Nome do nível é obrigatório" });
       }
-      const minVal = Number(valorMinimo);
+      const minVal = Number(pontosMinimos);
       const premioVal = Number(premio);
       const ordemVal = Number(ordem);
       if (isNaN(minVal) || minVal < 0) {
-        return res.status(400).json({ message: "Valor mínimo deve ser um número válido >= 0" });
+        return res.status(400).json({ message: "Pontos mínimos deve ser um número válido >= 0" });
       }
       if (isNaN(premioVal) || premioVal < 0) {
         return res.status(400).json({ message: "Valor do prêmio deve ser um número válido >= 0" });
@@ -16651,21 +16678,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (isNaN(ordemVal) || ordemVal < 1) {
         return res.status(400).json({ message: "Ordem deve ser um número inteiro >= 1" });
       }
-      const maxVal = valorMaximo != null && valorMaximo !== "" ? Number(valorMaximo) : null;
+      const maxVal = pontosMaximos != null && pontosMaximos !== "" ? Number(pontosMaximos) : null;
       if (maxVal !== null && (isNaN(maxVal) || maxVal < 0)) {
-        return res.status(400).json({ message: "Valor máximo deve ser um número válido >= 0" });
+        return res.status(400).json({ message: "Pontos máximos deve ser um número válido >= 0" });
       }
 
       const dupCheck = await db.execute(sql`
         SELECT id FROM meta_niveis
-        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND valor_minimo = ${minVal}
+        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND pontos_minimos = ${minVal}
       `);
       if (dupCheck.rows.length > 0) {
-        return res.status(409).json({ message: "Já existe um nível com esse faturamento mínimo nesta categoria" });
+        return res.status(409).json({ message: "Já existe um nível com esses pontos mínimos nesta categoria" });
       }
 
       const result = await db.execute(sql`
-        INSERT INTO meta_niveis (tenant_id, categoria, nome_nivel, valor_minimo, valor_maximo, premio, ordem, cor, icone, created_at, updated_at)
+        INSERT INTO meta_niveis (tenant_id, categoria, nome_nivel, pontos_minimos, pontos_maximos, premio, ordem, cor, icone, created_at, updated_at)
         VALUES (${tenantId}, ${categoria}, ${nomeNivel.trim()}, ${minVal}, ${maxVal}, ${premioVal}, ${Math.floor(ordemVal)}, ${cor || null}, ${icone || null}, NOW(), NOW())
         RETURNING *
       `);
@@ -16690,7 +16717,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const nivelId = parseInt(id);
       if (isNaN(nivelId)) return res.status(400).json({ message: "ID inválido" });
 
-      const { categoria, nomeNivel, valorMinimo, valorMaximo, premio, ordem, cor, icone } = req.body;
+      const { categoria, nomeNivel, pontosMinimos, pontosMaximos, premio, ordem, cor, icone } = req.body;
 
       if (!categoria || !["GERAL", "CARTAO"].includes(categoria)) {
         return res.status(400).json({ message: "Categoria deve ser GERAL ou CARTAO" });
@@ -16698,11 +16725,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (!nomeNivel || typeof nomeNivel !== "string" || !nomeNivel.trim()) {
         return res.status(400).json({ message: "Nome do nível é obrigatório" });
       }
-      const minVal = Number(valorMinimo);
+      const minVal = Number(pontosMinimos);
       const premioVal = Number(premio);
       const ordemVal = Number(ordem);
       if (isNaN(minVal) || minVal < 0) {
-        return res.status(400).json({ message: "Valor mínimo deve ser um número válido >= 0" });
+        return res.status(400).json({ message: "Pontos mínimos deve ser um número válido >= 0" });
       }
       if (isNaN(premioVal) || premioVal < 0) {
         return res.status(400).json({ message: "Valor do prêmio deve ser um número válido >= 0" });
@@ -16710,25 +16737,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (isNaN(ordemVal) || ordemVal < 1) {
         return res.status(400).json({ message: "Ordem deve ser um número inteiro >= 1" });
       }
-      const maxVal = valorMaximo != null && valorMaximo !== "" ? Number(valorMaximo) : null;
+      const maxVal = pontosMaximos != null && pontosMaximos !== "" ? Number(pontosMaximos) : null;
       if (maxVal !== null && (isNaN(maxVal) || maxVal < 0)) {
-        return res.status(400).json({ message: "Valor máximo deve ser um número válido >= 0" });
+        return res.status(400).json({ message: "Pontos máximos deve ser um número válido >= 0" });
       }
 
       const dupCheck = await db.execute(sql`
         SELECT id FROM meta_niveis
-        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND valor_minimo = ${minVal} AND id != ${nivelId}
+        WHERE tenant_id = ${tenantId} AND categoria = ${categoria} AND pontos_minimos = ${minVal} AND id != ${nivelId}
       `);
       if (dupCheck.rows.length > 0) {
-        return res.status(409).json({ message: "Já existe um nível com esse faturamento mínimo nesta categoria" });
+        return res.status(409).json({ message: "Já existe um nível com esses pontos mínimos nesta categoria" });
       }
 
       const result = await db.execute(sql`
         UPDATE meta_niveis SET
           categoria = ${categoria},
           nome_nivel = ${nomeNivel.trim()},
-          valor_minimo = ${minVal},
-          valor_maximo = ${maxVal},
+          pontos_minimos = ${minVal},
+          pontos_maximos = ${maxVal},
           premio = ${premioVal},
           ordem = ${Math.floor(ordemVal)},
           cor = ${cor || null},
