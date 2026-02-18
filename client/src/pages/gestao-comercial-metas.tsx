@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Target, Plus, Pencil, Trash2, GripVertical,
   Gem, Trophy, Medal, Star, Crown, Shield, Award, Flame, Rocket, Zap,
-  TrendingUp, CircleDollarSign, Wheat
+  TrendingUp, CircleDollarSign, Wheat, Dog, CreditCard, Swords, Coins,
+  Wallet, PiggyBank, Landmark, Mountain
 } from "lucide-react";
 import type { MetaNivel } from "@shared/schema";
 
@@ -32,6 +33,14 @@ const ICON_OPTIONS = [
   { value: "Zap", label: "Raio", icon: Zap },
   { value: "TrendingUp", label: "Crescimento", icon: TrendingUp },
   { value: "Wheat", label: "Milho", icon: Wheat },
+  { value: "Dog", label: "Lobo", icon: Dog },
+  { value: "CreditCard", label: "Cartão", icon: CreditCard },
+  { value: "Swords", label: "Titan", icon: Swords },
+  { value: "Coins", label: "Moedas", icon: Coins },
+  { value: "Wallet", label: "Carteira", icon: Wallet },
+  { value: "PiggyBank", label: "Cofrinho", icon: PiggyBank },
+  { value: "Landmark", label: "Banco", icon: Landmark },
+  { value: "Mountain", label: "Montanha", icon: Mountain },
 ];
 
 const COLOR_PRESETS = [
