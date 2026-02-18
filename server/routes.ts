@@ -16053,7 +16053,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const valorLiquido = parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
         const comissaoRepasseValor = parseFloat(String(row.ComissaoRepasseValor || "0").replace(",", ".")) || 0;
         const comissaoRepassePerc = parseFloat(String(row.ComissaoRepassePercentual || "0").replace(",", ".")) || 0;
-        const pt1000 = parseFloat(String(row["Pt.1000"] || row.Pt1000 || row.pt1000 || "0").replace(",", ".")) || 0;
+        const pt1000Raw = String(row["pt.1000"] || row["Pt.1000"] || row["PT.1000"] || row.Pt1000 || row.pt1000 || "0");
+        const pt1000 = parseFloat(pt1000Raw.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
 
         const contrato = {
           contratoId,
