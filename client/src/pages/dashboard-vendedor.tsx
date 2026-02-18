@@ -360,8 +360,45 @@ export default function DashboardVendedorPage() {
       { key: "cartao", label: "Meta Cartão", niveis: perfData?.cartao?.todosNiveis || [] },
     ];
 
+    const pontosGeral = perfData?.geral?.pontos || 0;
+    const pontosCartao = perfData?.cartao?.pontos || 0;
+    const nivelAtualGeral = perfData?.geral?.nivelAtual;
+    const nivelAtualCartao = perfData?.cartao?.nivelAtual;
+    const GeralIcon = nivelAtualGeral ? getTierIcon(nivelAtualGeral.icone) : Scale;
+    const CartaoIcon = nivelAtualCartao ? getTierIcon(nivelAtualCartao.icone) : CreditCard;
+
     return (
       <div className="max-w-5xl mx-auto space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card className="rounded-2xl" data-testid="card-pontos-geral">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="p-3 rounded-xl" style={{ backgroundColor: nivelAtualGeral ? `${nivelAtualGeral.cor}20` : undefined }}>
+                <GeralIcon size={28} style={{ color: nivelAtualGeral?.cor || "hsl(var(--primary))" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Pontos Geral</p>
+                <p className="text-2xl font-black text-foreground" data-testid="text-pontos-geral">{pontosGeral.toLocaleString("pt-BR")} <span className="text-sm font-medium text-muted-foreground">pts</span></p>
+                {nivelAtualGeral && (
+                  <p className="text-xs font-bold uppercase tracking-wide" data-testid="text-nivel-geral" style={{ color: nivelAtualGeral.cor }}>{nivelAtualGeral.nome}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl" data-testid="card-pontos-cartao">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="p-3 rounded-xl" style={{ backgroundColor: nivelAtualCartao ? `${nivelAtualCartao.cor}20` : undefined }}>
+                <CartaoIcon size={28} style={{ color: nivelAtualCartao?.cor || "hsl(var(--primary))" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Pontos Cartão</p>
+                <p className="text-2xl font-black text-foreground" data-testid="text-pontos-cartao">{pontosCartao.toLocaleString("pt-BR")} <span className="text-sm font-medium text-muted-foreground">pts</span></p>
+                {nivelAtualCartao && (
+                  <p className="text-xs font-bold uppercase tracking-wide" data-testid="text-nivel-cartao" style={{ color: nivelAtualCartao.cor }}>{nivelAtualCartao.nome}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
         {allCategorias.map((cat) => (
           <Card className="rounded-2xl" key={cat.key}>
             <CardContent className="p-5 sm:p-8">
