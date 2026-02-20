@@ -584,13 +584,14 @@ export default function BasesClientes() {
 
   const { data: bases = [], isLoading, refetch } = useQuery<BaseImportada[]>({
     queryKey: ["/api/bases"],
-    refetchInterval: 5000,
+    staleTime: 30000,
   });
 
   // Query para Import Runs (apenas master)
   const { data: importRuns = [] } = useQuery<ImportRun[]>({
     queryKey: ["/api/import-runs"],
     enabled: isMaster,
+    staleTime: 30000,
   });
 
   // Funções para visualizar detalhes e download de erros
@@ -1153,9 +1154,8 @@ export default function BasesClientes() {
       }
     };
     
-    // Poll immediately then every 500ms
     pollStatus();
-    resetPollingRef.current = setInterval(pollStatus, 500);
+    resetPollingRef.current = setInterval(pollStatus, 2000);
   };
 
   // Cleanup polling on unmount
