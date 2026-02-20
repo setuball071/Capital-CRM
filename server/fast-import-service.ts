@@ -493,7 +493,7 @@ class FastImportService {
         .update(importRuns)
         .set({
           status: realCounts.errorRows > 0 && realCounts.successRows === 0 ? "erro" : 
-                  realCounts.errorRows > 0 ? "concluido" : "concluido",
+                  realCounts.errorRows > 0 ? "concluido_com_erros" : "concluido",
           processedRows: realCounts.totalRows,
           successRows: realCounts.successRows,
           errorRows: realCounts.errorRows,

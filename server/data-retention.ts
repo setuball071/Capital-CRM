@@ -25,7 +25,7 @@ async function cleanupOldImportRunRows(): Promise<number> {
         DELETE FROM import_run_rows 
         WHERE id IN (
           SELECT id FROM import_run_rows 
-          WHERE created_at < NOW() - INTERVAL '3 days' 
+          WHERE created_at < NOW() - INTERVAL '1 day' * ${RETENTION_DAYS} 
           LIMIT ${BATCH_SIZE}
         )
       `);
@@ -39,10 +39,16 @@ async function cleanupOldImportRunRows(): Promise<number> {
       await new Promise(r => setTimeout(r, 1000));
     }
 
+    if (totalDeleted > 10000) {
+      try {
+        await db.execute(sql`ANALYZE import_run_rows`);
+      } catch (e) {}
+    }
+
     const countResult = await db.execute(sql`
-      SELECT reltuples::bigint AS estimated_rows FROM pg_class WHERE relname = 'import_run_rows'
+      SELECT COUNT(*) AS cnt FROM import_run_rows
     `);
-    const estimatedRows = Number((countResult.rows?.[0] as any)?.estimated_rows || 0);
+    const estimatedRows = Number((countResult.rows?.[0] as any)?.cnt || 0);
 
     if (estimatedRows > MAX_ROWS_TOTAL) {
       console.log(`[DataRetention] Table still has ~${estimatedRows} rows (max ${MAX_ROWS_TOTAL}). Cleaning oldest entries...`);
