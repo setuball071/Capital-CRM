@@ -6821,7 +6821,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
-  // POST /api/fast-imports/process/:id - Processa staging + merge
+  // POST /api/fast-imports/process/:id - Processa staging + merge (async background)
   app.post("/api/fast-imports/process/:id", requireAuth, requireMaster, async (req, res) => {
     try {
       const { fastImportService } = await import("./fast-import-service");
@@ -6831,48 +6831,38 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(400).json({ message: "ID de importação inválido" });
       }
       
-      console.log(`[FastImport] Processing run ${runId}...`);
+      console.log(`[FastImport] Starting background processing for run ${runId}...`);
       
-      const result = await fastImportService.processChunk(runId);
-      
-      console.log(`[FastImport] Result: phase=${result.phase}, staged=${result.stagedRows}, merged=${result.mergedRows}, elapsed=${result.elapsedMs}ms`);
-      
-      return res.json({
-        success: result.success,
-        importRunId: result.importRunId,
-        phase: result.phase,
-        stagedRows: result.stagedRows,
-        mergedRows: result.mergedRows,
-        errorRows: result.errorRows,
-        status: result.status,
-        pausedForResume: result.pausedForResume,
-        message: result.message,
-        elapsedMs: result.elapsedMs,
-        nextStep: result.pausedForResume ? `POST /api/fast-imports/process/${runId}` : null,
-        report: result.report,
+      res.json({
+        success: true,
+        importRunId: runId,
+        phase: "staging",
+        message: "Processamento iniciado em background. Consulte o status via polling.",
+        backgroundProcessing: true,
+      });
+
+      fastImportService.processChunk(runId).then(async (result) => {
+        console.log(`[FastImport] Background result: phase=${result.phase}, staged=${result.stagedRows}, merged=${result.mergedRows}, elapsed=${result.elapsedMs}ms`);
+      }).catch(async (error: any) => {
+        console.error("Fast import background process error:", error);
+        try {
+          await db.update(importRuns)
+            .set({ 
+              status: "erro", 
+              errorMessage: error.message || "Erro desconhecido",
+              updatedAt: new Date() 
+            })
+            .where(eq(importRuns.id, runId));
+        } catch (e) {
+          console.error("Failed to update import run status:", e);
+        }
       });
     } catch (error: any) {
       console.error("Fast import process error:", error);
-      const runId = parseInt(req.params.id);
-      
-      // Salvar erro no import_run
-      try {
-        await db.update(importRuns)
-          .set({ 
-            status: "erro", 
-            errorMessage: error.message || "Erro desconhecido",
-            updatedAt: new Date() 
-          })
-          .where(eq(importRuns.id, runId));
-      } catch (e) {
-        console.error("Failed to update import run status:", e);
-      }
-      
       return res.status(500).json({ 
         error: "FAST_IMPORT_FAILED",
         message: error.message || "Erro ao processar importação",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
-        importRunId: runId,
+        importRunId: parseInt(req.params.id),
       });
     }
   });

@@ -266,29 +266,8 @@ export default function BasesClientes() {
     },
     onSuccess: (data: any) => {
       setFastImportStatus(data);
-      
-      if (data.pausedForResume) {
-        // Continuar processando
-        setTimeout(() => {
-          processFastImportMutation.mutate(fastImportRunId!);
-        }, 100);
-      } else if (data.status === "concluida" || data.phase === "completed") {
-        toast({
-          title: "Importação concluída!",
-          description: `${data.mergedRows?.toLocaleString("pt-BR") || 0} registros processados em ${((data.elapsedMs || 0) / 1000).toFixed(1)}s`,
-        });
-        setIsPolling(false);
-        // Invalidate both bases and import-runs caches
-        queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
-      } else if (data.status === "erro") {
-        toast({
-          title: "Erro na importação",
-          description: data.message,
-          variant: "destructive",
-        });
-        setIsPolling(false);
-      }
+      setIsPolling(true);
+      startStatusPolling(data.importRunId);
     },
     onError: (error: any) => {
       toast({
@@ -299,6 +278,62 @@ export default function BasesClientes() {
       setIsPolling(false);
     },
   });
+
+  const statusPollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startStatusPolling = (runId: number) => {
+    if (statusPollingRef.current) clearInterval(statusPollingRef.current);
+    
+    statusPollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/fast-imports/status/${runId}`, { credentials: "include" });
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        setFastImportStatus({
+          importRunId: runId,
+          phase: data.status === "concluido" || data.status === "concluido_com_erros" ? "completed" : 
+                 data.status === "erro" ? "error" : "staging",
+          stagedRows: data.processedRows || 0,
+          mergedRows: data.successRows || 0,
+          errorRows: data.errorRows || 0,
+          status: data.status,
+          message: data.errorMessage || data.status,
+          percentComplete: data.percentComplete || 0,
+        });
+
+        if (data.status === "concluido" || data.status === "concluido_com_erros") {
+          if (statusPollingRef.current) clearInterval(statusPollingRef.current);
+          statusPollingRef.current = null;
+          setIsPolling(false);
+          toast({
+            title: "Importação concluída!",
+            description: `${(data.successRows || data.processedRows || 0).toLocaleString("pt-BR")} registros processados`,
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+        } else if (data.status === "erro") {
+          if (statusPollingRef.current) clearInterval(statusPollingRef.current);
+          statusPollingRef.current = null;
+          setIsPolling(false);
+          toast({
+            title: "Erro na importação",
+            description: data.errorMessage || "Erro durante o processamento",
+            variant: "destructive",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+        }
+      } catch (err) {
+        // Polling error, continue trying
+      }
+    }, 3000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (statusPollingRef.current) clearInterval(statusPollingRef.current);
+    };
+  }, []);
 
   const handleFastImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -355,7 +390,6 @@ export default function BasesClientes() {
     setImportQueue(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // Processar um item da fila
   const processQueueItem = async (item: ImportQueueItem): Promise<{ success: boolean; error?: string }> => {
     return new Promise((resolve) => {
       const formData = new FormData();
@@ -377,30 +411,30 @@ export default function BasesClientes() {
           if (!res.ok) throw new Error("Erro ao iniciar importação");
           return res.json();
         })
-        .then(data => {
+        .then(async (data) => {
           const runId = data.importRunId;
           
-          // Polling para processar
-          const pollProcess = async () => {
+          await apiRequest("POST", `/api/fast-imports/process/${runId}`);
+          
+          const pollStatus = async () => {
             try {
-              const processRes = await apiRequest("POST", `/api/fast-imports/process/${runId}`);
-              const processData = await processRes.json();
+              const statusRes = await fetch(`/api/fast-imports/status/${runId}`, { credentials: "include" });
+              if (!statusRes.ok) { setTimeout(pollStatus, 3000); return; }
+              const statusData = await statusRes.json();
               
-              if (processData.pausedForResume) {
-                setTimeout(pollProcess, 100);
-              } else if (processData.status === "concluida" || processData.phase === "completed") {
+              if (statusData.status === "concluido" || statusData.status === "concluido_com_erros") {
                 resolve({ success: true });
-              } else if (processData.status === "erro") {
-                resolve({ success: false, error: processData.message || "Erro no processamento" });
+              } else if (statusData.status === "erro") {
+                resolve({ success: false, error: statusData.errorMessage || "Erro no processamento" });
               } else {
-                setTimeout(pollProcess, 100);
+                setTimeout(pollStatus, 3000);
               }
             } catch (err: any) {
-              resolve({ success: false, error: err.message });
+              setTimeout(pollStatus, 3000);
             }
           };
           
-          pollProcess();
+          setTimeout(pollStatus, 3000);
         })
         .catch(err => resolve({ success: false, error: err.message }));
     });
@@ -2050,6 +2084,7 @@ export default function BasesClientes() {
                       )}
                     </div>
                     <Progress value={fastImportStatus?.phase === "completed" ? 100 : 
+                                     fastImportStatus?.percentComplete ? fastImportStatus.percentComplete :
                                      fastImportStatus?.phase === "merge" ? 75 : 
                                      fastImportStatus?.phase === "staging" ? 25 : 0} 
                               className="h-2" />

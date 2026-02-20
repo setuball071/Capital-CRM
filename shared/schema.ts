@@ -561,7 +561,7 @@ export type InsertNomenclatura = z.infer<typeof insertNomenclaturaSchema>;
 export const clientesPessoa = pgTable("clientes_pessoa", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant
-  cpf: varchar("cpf", { length: 14 }), // CPF como TEXT (preserva zeros)
+  cpf: varchar("cpf", { length: 20 }), // CPF como TEXT (preserva zeros)
   matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como TEXT (preserva zeros)
   nome: varchar("nome", { length: 255 }),
   orgaodesc: varchar("orgaodesc", { length: 255 }),
@@ -614,7 +614,7 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
 export const clientesVinculo = pgTable("clientes_vinculo", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
-  cpf: varchar("cpf", { length: 14 }).notNull(), // CPF padStart 11
+  cpf: varchar("cpf", { length: 20 }).notNull(), // CPF padStart 11
   matricula: varchar("matricula", { length: 50 }).notNull(), // Matrícula como texto
   pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }),
   convenio: varchar("convenio", { length: 100 }),
@@ -1226,7 +1226,7 @@ export const salesLeads = pgTable("sales_leads", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // Multi-tenant: nullable for migration
   campaignId: integer("campaign_id").references(() => salesCampaigns.id, { onDelete: "cascade" }).notNull(),
-  cpf: varchar("cpf", { length: 14 }),
+  cpf: varchar("cpf", { length: 20 }),
   nome: varchar("nome", { length: 255 }).notNull(),
   telefone1: varchar("telefone_1", { length: 20 }),
   telefone2: varchar("telefone_2", { length: 20 }),
@@ -1728,7 +1728,7 @@ export const importErrors = pgTable("import_errors", {
   id: serial("id").primaryKey(),
   importRunId: integer("import_run_id").references(() => importRuns.id, { onDelete: "cascade" }).notNull(),
   rowNumber: integer("row_number").notNull(), // Número da linha no arquivo original
-  cpf: varchar("cpf", { length: 14 }), // CPF da linha (se disponível)
+  cpf: varchar("cpf", { length: 20 }), // CPF da linha (se disponível)
   matricula: varchar("matricula", { length: 50 }), // Matrícula da linha (se disponível)
   errorType: varchar("error_type", { length: 50 }).notNull(), // validation, database, parsing, etc.
   errorMessage: text("error_message").notNull(),
@@ -1745,7 +1745,7 @@ export const importRunRows = pgTable("import_run_rows", {
   id: serial("id").primaryKey(),
   importRunId: integer("import_run_id").references(() => importRuns.id, { onDelete: "cascade" }).notNull(),
   rowNumber: integer("row_number").notNull(), // Número da linha no arquivo original (1-based)
-  cpf: varchar("cpf", { length: 14 }), // CPF da linha (se disponível)
+  cpf: varchar("cpf", { length: 20 }), // CPF da linha (se disponível)
   matricula: varchar("matricula", { length: 50 }), // Matrícula da linha (se disponível)
   status: varchar("status", { length: 10 }).notNull().default("ok"), // 'ok' ou 'erro'
   errorMessage: text("error_message"), // Mensagem de erro (se status='erro')
@@ -1883,7 +1883,7 @@ export type InsertCsvSplitRun = z.infer<typeof insertCsvSplitRunSchema>;
 export const stagingFolha = pgTable("staging_folha", {
   id: serial("id").primaryKey(),
   importRunId: integer("import_run_id").notNull(),
-  cpf: varchar("cpf", { length: 14 }),
+  cpf: varchar("cpf", { length: 20 }),
   matricula: varchar("matricula", { length: 50 }),
   nome: varchar("nome", { length: 255 }),
   orgaodesc: varchar("orgaodesc", { length: 255 }),
@@ -1923,7 +1923,7 @@ export const stagingFolha = pgTable("staging_folha", {
 export const stagingD8 = pgTable("staging_d8", {
   id: serial("id").primaryKey(),
   importRunId: integer("import_run_id").notNull(),
-  cpf: varchar("cpf", { length: 14 }),
+  cpf: varchar("cpf", { length: 20 }),
   matricula: varchar("matricula", { length: 50 }),
   nome: varchar("nome", { length: 255 }),
   natureza: varchar("natureza", { length: 50 }),
@@ -1939,7 +1939,7 @@ export const stagingD8 = pgTable("staging_d8", {
   dataInicio: varchar("data_inicio", { length: 20 }),
   dataFim: varchar("data_fim", { length: 20 }),
   mInstituidor: varchar("m_instituidor", { length: 50 }),
-  cpfInstituidor: varchar("cpf_instituidor", { length: 14 }),
+  cpfInstituidor: varchar("cpf_instituidor", { length: 20 }),
   rowNum: integer("row_num"),
   processed: boolean("processed").default(false),
   errorMessage: text("error_message"),
@@ -2164,7 +2164,7 @@ export const vendedorContratos = pgTable("vendedor_contratos", {
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
   vendedorId: integer("vendedor_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   clienteNome: varchar("cliente_nome", { length: 255 }).notNull(),
-  clienteCpf: varchar("cliente_cpf", { length: 14 }),
+  clienteCpf: varchar("cliente_cpf", { length: 20 }),
   banco: varchar("banco", { length: 100 }),
   convenio: varchar("convenio", { length: 100 }),
   tipoOperacao: varchar("tipo_operacao", { length: 100 }),
