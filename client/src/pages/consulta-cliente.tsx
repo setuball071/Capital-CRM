@@ -230,7 +230,9 @@ function formatCurrency(value: number | null | undefined): string {
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
-    return format(new Date(dateStr), "MMM/yyyy", { locale: ptBR });
+    const d = new Date(dateStr);
+    const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    return `${months[d.getUTCMonth()]}/${d.getUTCFullYear()}`;
   } catch {
     return "-";
   }
@@ -239,7 +241,10 @@ function formatDate(dateStr: string | null): string {
 function formatDateFull(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
-    return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+    const d = new Date(dateStr);
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    return `${day}/${month}/${d.getUTCFullYear()}`;
   } catch {
     return "-";
   }
