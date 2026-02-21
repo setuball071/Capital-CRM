@@ -1,6 +1,17 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
+
+function safeCompetencia(val: any): string | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, "0");
+    const d = String(val.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(val);
+}
 import { z } from "zod";
 import { storage, db } from "./storage";
 import {
@@ -6501,7 +6512,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         successRows: run.successRows,
         errorRows: run.errorRows,
         percentComplete,
-        competencia: run.competencia,
+        competencia: safeCompetencia(run.competencia),
         banco: run.banco,
         layoutD8: run.layoutD8,
         convenio: run.convenio,
@@ -6899,7 +6910,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         successRows: run.successRows,
         errorRows: run.errorRows,
         percentComplete,
-        competencia: run.competencia,
+        competencia: safeCompetencia(run.competencia),
         banco: run.banco,
         layoutD8: run.layoutD8,
         convenio: run.convenio,
@@ -6940,7 +6951,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         arquivoOrigem: run.arquivoOrigem,
         tipoImport: run.tipoImport,
         convenio: run.convenio,
-        competencia: run.competencia,
+        competencia: safeCompetencia(run.competencia),
         status: run.status,
         report,
       });
@@ -7553,7 +7564,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         },
         folha: {
           atual: folhaAtual ? {
-            competencia: folhaAtual.competencia,
+            competencia: safeCompetencia(folhaAtual.competencia),
             // Margem 5% (cartão crédito consignado) - usar != null para preservar valor 0
             margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(folhaAtual.margemBruta5) : null,
             margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(folhaAtual.margemUtilizada5) : null,
@@ -7587,7 +7598,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             extras_folha: folhaAtual.extrasFolha,
           } : null,
           historico: folhaHistorico.map(f => ({
-            competencia: f.competencia,
+            competencia: safeCompetencia(f.competencia),
             margem_saldo_5: f.margemSaldo5 != null ? parseFloat(f.margemSaldo5) : null,
             margem_beneficio_saldo_5: f.margemBeneficioSaldo5 != null ? parseFloat(f.margemBeneficioSaldo5) : null,
             margem_saldo_35: f.margemSaldo35 != null ? parseFloat(f.margemSaldo35) : null,
@@ -7604,7 +7615,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           saldo_devedor: c.saldoDevedor ? parseFloat(c.saldoDevedor) : null,
           parcelas_restantes: c.parcelasRestantes || null, // prazo remanescente exato da planilha
           numero_contrato: c.numeroContrato || null,
-          competencia: c.competencia,
+          competencia: safeCompetencia(c.competencia),
           base_tag: c.baseTag,
           dados_brutos: c.dadosBrutos,
         })),
@@ -7698,7 +7709,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       
       // Map all folhas with complete data
       const historico = folhaRegistros.map(f => ({
-        competencia: f.competencia,
+        competencia: safeCompetencia(f.competencia),
         // Margem 5% (cartão crédito consignado)
         margem_bruta_5: f.margemBruta5 != null ? parseFloat(f.margemBruta5) : null,
         margem_utilizada_5: f.margemUtilizada5 != null ? parseFloat(f.margemUtilizada5) : null,
@@ -10612,7 +10623,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Transform folha to snake_case
       const folhaFormatada = folhaAtual ? {
-        competencia: folhaAtual.competencia,
+        competencia: safeCompetencia(folhaAtual.competencia),
         margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
         margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
         margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
@@ -11010,7 +11021,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Transform folha data to snake_case format expected by frontend
       const folhaFormatada = folhaAtual ? {
-        competencia: folhaAtual.competencia,
+        competencia: safeCompetencia(folhaAtual.competencia),
         margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
         margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
         margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
@@ -11189,7 +11200,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Transform folha data to snake_case format expected by frontend
       const folhaFormatada = folhaAtual ? {
-        competencia: folhaAtual.competencia,
+        competencia: safeCompetencia(folhaAtual.competencia),
         margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
         margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
         margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
@@ -11386,7 +11397,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       
       // Transform folha data to snake_case format expected by frontend
       const folhaFormatada = folhaAtual ? {
-        competencia: folhaAtual.competencia,
+        competencia: safeCompetencia(folhaAtual.competencia),
         margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
         margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
         margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
