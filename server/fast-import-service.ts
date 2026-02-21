@@ -116,7 +116,7 @@ const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
 const D8_REQUIRED_HEADERS = [
   "banco",
   "orgao",
-  "matricula", 
+  "matricula",
   "uf",
   "nome",
   "cpf",
@@ -178,15 +178,17 @@ const CONTATOS_COLUMN_MAP: Record<string, string> = {
 class FastImportService {
   async startFastImport(
     filePath: string,
-    options: FastImportOptions
+    options: FastImportOptions,
   ): Promise<{ importRunId: number; message: string }> {
     const stats = fs.statSync(filePath);
     const totalEstimatedRows = await this.estimateRowCount(filePath);
     const baseTag = this.generateBaseTag(options);
-    
+
     // Normalize convenio for consistent storage
     const { normalizeConvenio } = await import("@shared/utils");
-    const normalizedConvenio = options.convenio ? normalizeConvenio(options.convenio) : null;
+    const normalizedConvenio = options.convenio
+      ? normalizeConvenio(options.convenio)
+      : null;
 
     // CRÍTICO: tenantId é obrigatório para isolamento multi-tenant
     // Fallback para tenant 1 (goldcard) para compatibilidade com workflows legados
@@ -214,7 +216,7 @@ class FastImportService {
       .returning();
 
     console.log(
-      `[FastImport] Job ${importRun.id} created for ${options.tipoImport}, estimated ${totalEstimatedRows} rows`
+      `[FastImport] Job ${importRun.id} created for ${options.tipoImport}, estimated ${totalEstimatedRows} rows`,
     );
 
     return {
@@ -225,7 +227,7 @@ class FastImportService {
 
   async processChunk(importRunId: number): Promise<FastImportResult> {
     const startTime = Date.now();
-    
+
     const [run] = await db
       .select()
       .from(importRuns)
@@ -253,7 +255,11 @@ class FastImportService {
 
     await db
       .update(importRuns)
-      .set({ status: "processando", startedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: "processando",
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(eq(importRuns.id, importRunId));
 
     const filePath = run.arquivoPath;
@@ -264,25 +270,25 @@ class FastImportService {
 
     try {
       const phase = run.currentChunk === 0 ? "staging" : "merge";
-      
+
       if (phase === "staging" || run.offsetAtual === 0) {
         const stagingResult = await this.loadToStaging(run);
-        
+
         if (stagingResult.pausedForResume) {
           return {
             ...stagingResult,
             elapsedMs: Date.now() - startTime,
           };
         }
-        
+
         await db
           .update(importRuns)
           .set({ currentChunk: 1, updatedAt: new Date() })
           .where(eq(importRuns.id, importRunId));
       }
-      
+
       const mergeResult = await this.mergeFromStaging(run);
-      
+
       return {
         ...mergeResult,
         elapsedMs: Date.now() - startTime,
@@ -297,55 +303,77 @@ class FastImportService {
     const filePath = run.arquivoPath!;
     const startOffset = run.offsetAtual || 0;
     const maxLinhas = run.maxLinhasExecucao || MAX_LINHAS_POR_EXECUCAO;
-    
+
     let processedInThisRun = 0;
     let errorCount = 0;
     let bytesRead = startOffset;
     let pausedForResume = false;
-    
+
     const headers = await this.readHeaders(filePath);
-    const normalizedHeaders = headers.map(h => normalizeCol(h));
-    
+    const normalizedHeaders = headers.map((h) => normalizeCol(h));
+
     // Auto-detectar layout D8 baseado na presença de m_instituidor
     let effectiveLayoutD8 = run.layoutD8;
     if (run.tipoImport === "d8" && !effectiveLayoutD8) {
       const hasInstituidor = normalizedHeaders.includes("m_instituidor");
       effectiveLayoutD8 = hasInstituidor ? "pensionista" : "servidor";
-      console.log(`[FastImport] Auto-detected D8 layout: ${effectiveLayoutD8} (m_instituidor: ${hasInstituidor})`);
-      
+      console.log(
+        `[FastImport] Auto-detected D8 layout: ${effectiveLayoutD8} (m_instituidor: ${hasInstituidor})`,
+      );
+
       // Atualizar run com layout detectado
       await db
         .update(importRuns)
         .set({ layoutD8: effectiveLayoutD8, updatedAt: new Date() })
         .where(eq(importRuns.id, run.id));
     }
-    
+
     const columnMap = this.getColumnMap(run.tipoImport, effectiveLayoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
-    
+
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
-      const requiredHeaders = effectiveLayoutD8 === "pensionista" 
-        ? D8_PENSIONISTA_REQUIRED_HEADERS 
-        : D8_REQUIRED_HEADERS;
-      
-      const missingHeaders = requiredHeaders.filter(req => {
+      const requiredHeaders =
+        effectiveLayoutD8 === "pensionista"
+          ? D8_PENSIONISTA_REQUIRED_HEADERS
+          : D8_REQUIRED_HEADERS;
+
+      const missingHeaders = requiredHeaders.filter((req) => {
         // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
-        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
-        if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
-        if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
-        if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
+        if (req === "pmt")
+          return (
+            !normalizedHeaders.includes("pmt") &&
+            !normalizedHeaders.includes("valor_parcela")
+          );
+        if (req === "numero_contrato")
+          return (
+            !normalizedHeaders.includes("numero_contrato") &&
+            !normalizedHeaders.includes("n_contrato")
+          );
+        if (req === "tipo_contrato")
+          return (
+            !normalizedHeaders.includes("tipo_contrato") &&
+            !normalizedHeaders.includes("tipo_produto")
+          );
+        if (req === "prazo_remanescente")
+          return (
+            !normalizedHeaders.includes("prazo_remanescente") &&
+            !normalizedHeaders.includes("prazo")
+          );
         return !normalizedHeaders.includes(req);
       });
-      
+
       if (missingHeaders.length > 0) {
-        const layoutName = effectiveLayoutD8 === "pensionista" ? "Pensionista" : "Servidor";
-        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+        const layoutName =
+          effectiveLayoutD8 === "pensionista" ? "Pensionista" : "Servidor";
+        throw new Error(
+          `Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`,
+        );
       }
     }
-    
+
     const batchBuffer: any[] = [];
-    
+
     const fileStream = fs.createReadStream(filePath, {
       start: startOffset,
       encoding: "utf8",
@@ -388,8 +416,16 @@ class FastImportService {
         batchBuffer.length = 0;
 
         if (processedInThisRun % 10000 === 0) {
-          await this.updateProgress(run.id, run.processedRows + processedInThisRun, 0, run.errorRows + errorCount, bytesRead);
-          console.log(`[FastImport] Staged ${run.processedRows + processedInThisRun} rows...`);
+          await this.updateProgress(
+            run.id,
+            run.processedRows + processedInThisRun,
+            0,
+            run.errorRows + errorCount,
+            bytesRead,
+          );
+          console.log(
+            `[FastImport] Staged ${run.processedRows + processedInThisRun} rows...`,
+          );
         }
       }
 
@@ -410,7 +446,13 @@ class FastImportService {
     const totalProcessed = run.processedRows + processedInThisRun;
     const totalErrors = run.errorRows + errorCount;
 
-    await this.updateProgress(run.id, totalProcessed, 0, totalErrors, bytesRead);
+    await this.updateProgress(
+      run.id,
+      totalProcessed,
+      0,
+      totalErrors,
+      bytesRead,
+    );
 
     if (pausedForResume) {
       await db
@@ -454,7 +496,7 @@ class FastImportService {
 
   private async mergeFromStaging(run: ImportRun): Promise<FastImportResult> {
     console.log(`[FastImport] Starting merge for run ${run.id}...`);
-    
+
     const tipoImport = run.tipoImport;
     let mergedCount = 0;
     let errorCount = 0;
@@ -485,15 +527,19 @@ class FastImportService {
 
       // Calcular contadores reais a partir de import_run_rows
       const realCounts = await this.getRealRowCounts(run.id);
-      
+
       // Gerar relatório detalhado
       const report = await this.getImportReport(run.id);
 
       await db
         .update(importRuns)
         .set({
-          status: realCounts.errorRows > 0 && realCounts.successRows === 0 ? "erro" : 
-                  realCounts.errorRows > 0 ? "concluido_com_erros" : "concluido",
+          status:
+            realCounts.errorRows > 0 && realCounts.successRows === 0
+              ? "erro"
+              : realCounts.errorRows > 0
+                ? "concluido_com_erros"
+                : "concluido",
           processedRows: realCounts.totalRows,
           successRows: realCounts.successRows,
           errorRows: realCounts.errorRows,
@@ -502,7 +548,9 @@ class FastImportService {
         })
         .where(eq(importRuns.id, run.id));
 
-      console.log(`[FastImport] Merge complete: ${realCounts.successRows} OK, ${realCounts.errorRows} errors`);
+      console.log(
+        `[FastImport] Merge complete: ${realCounts.successRows} OK, ${realCounts.errorRows} errors`,
+      );
 
       return {
         success: true,
@@ -528,54 +576,60 @@ class FastImportService {
     run: ImportRun,
     tipoImport: string,
     mergedCount: number,
-    errorCount: number
+    errorCount: number,
   ): Promise<void> {
-    console.log(`[FastImport] Registering all rows for run ${run.id}...`);
-    
-    const stagingTable = tipoImport === "folha" ? "staging_folha" : 
-                         tipoImport === "d8" ? "staging_d8" : "staging_contatos";
-    
-    // Inserir todas as linhas válidas como 'ok'
+    console.log(`[FastImport] Registering rows for run ${run.id}...`);
+
+    const stagingTable =
+      tipoImport === "folha"
+        ? "staging_folha"
+        : tipoImport === "d8"
+          ? "staging_d8"
+          : "staging_contatos";
+
     const okResult = await db.execute(sql`
-      INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, raw_data)
-      SELECT 
-        ${run.id},
-        COALESCE(s.row_num, s.id),
-        s.cpf,
-        ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
-        'ok',
-        row_to_json(s)
-      FROM ${sql.raw(stagingTable)} s
-      WHERE s.import_run_id = ${run.id}
-        AND s.cpf IS NOT NULL AND s.cpf != ''
-        AND (${tipoImport === "contatos" ? sql`TRUE` : sql`s.matricula IS NOT NULL AND s.matricula != ''`})
-    `);
+    INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status)
+    SELECT 
+      ${run.id},
+      COALESCE(s.row_num, s.id),
+      s.cpf,
+      ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
+      'ok'
+    FROM ${sql.raw(stagingTable)} s
+    WHERE s.import_run_id = ${run.id}
+      AND s.cpf IS NOT NULL AND s.cpf != ''
+      AND (${tipoImport === "contatos" ? sql`TRUE` : sql`s.matricula IS NOT NULL AND s.matricula != ''`})
+  `);
 
-    // Inserir linhas inválidas como 'erro'
     const errorResult = await db.execute(sql`
-      INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message, raw_data)
-      SELECT 
-        ${run.id},
-        COALESCE(s.row_num, s.id),
-        s.cpf,
-        ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
-        'erro',
-        CASE 
-          WHEN s.cpf IS NULL OR s.cpf = '' THEN 'CPF inválido ou vazio'
-          WHEN ${tipoImport !== "contatos"} AND (${tipoImport === "contatos" ? sql`FALSE` : sql`s.matricula IS NULL OR s.matricula = ''`}) THEN 'Matrícula inválida ou vazia'
-          ELSE 'Dados incompletos'
-        END,
-        row_to_json(s)
-      FROM ${sql.raw(stagingTable)} s
-      WHERE s.import_run_id = ${run.id}
-        AND (s.cpf IS NULL OR s.cpf = '' OR (${tipoImport !== "contatos"} AND ${tipoImport === "contatos" ? sql`FALSE` : sql`(s.matricula IS NULL OR s.matricula = '')`}))
-    `);
+    INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
+    SELECT 
+      ${run.id},
+      COALESCE(s.row_num, s.id),
+      s.cpf,
+      ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
+      'erro',
+      CASE 
+        WHEN s.cpf IS NULL OR s.cpf = '' THEN 'CPF inválido ou vazio'
+        ELSE 'Matrícula inválida ou vazia'
+      END
+    FROM ${sql.raw(stagingTable)} s
+    WHERE s.import_run_id = ${run.id}
+      AND (
+        s.cpf IS NULL OR s.cpf = ''
+        OR (${tipoImport !== "contatos"} AND (s.matricula IS NULL OR s.matricula = ''))
+      )
+  `);
 
-    console.log(`[FastImport] Registered: ${okResult.rowCount || 0} ok, ${errorResult.rowCount || 0} errors`);
+    console.log(
+      `[FastImport] Registered: ${okResult.rowCount || 0} ok, ${errorResult.rowCount || 0} errors`,
+    );
   }
 
   // Obter contadores reais de import_run_rows
-  private async getRealRowCounts(importRunId: number): Promise<{ totalRows: number; successRows: number; errorRows: number }> {
+  private async getRealRowCounts(
+    importRunId: number,
+  ): Promise<{ totalRows: number; successRows: number; errorRows: number }> {
     const result = await db.execute(sql`
       SELECT 
         COUNT(*) as total,
@@ -584,7 +638,7 @@ class FastImportService {
       FROM import_run_rows
       WHERE import_run_id = ${importRunId}
     `);
-    
+
     const row = result.rows[0] as any;
     return {
       totalRows: parseInt(row?.total || "0"),
@@ -603,9 +657,9 @@ class FastImportService {
       FROM import_run_rows
       WHERE import_run_id = ${importRunId}
     `);
-    
+
     const countsRow = countsResult.rows[0] as any;
-    
+
     // Agrupar motivos de rejeição
     const motivosResult = await db.execute(sql`
       SELECT 
@@ -617,12 +671,12 @@ class FastImportService {
       GROUP BY error_message
       ORDER BY contagem DESC
     `);
-    
+
     const motivosRejeicao: Record<string, number> = {};
     for (const row of motivosResult.rows as any[]) {
       motivosRejeicao[row.motivo] = parseInt(row.contagem || "0");
     }
-    
+
     return {
       totalLinhas: parseInt(countsRow?.total || "0"),
       importadas: parseInt(countsRow?.importadas || "0"),
@@ -631,7 +685,9 @@ class FastImportService {
     };
   }
 
-  private async mergeFolha(run: ImportRun): Promise<{ merged: number; errors: number }> {
+  private async mergeFolha(
+    run: ImportRun,
+  ): Promise<{ merged: number; errors: number }> {
     const competencia = run.competencia || new Date();
     const convenio = run.convenio || "SIAPE";
     // Fallback para tenant 1 (goldcard) para compatibilidade
@@ -717,7 +773,9 @@ class FastImportService {
         ultima_atualizacao = NOW()
     `);
 
-    console.log(`[FastImport] Vinculos upserted: ${vinculoResult.rowCount || 0}`);
+    console.log(
+      `[FastImport] Vinculos upserted: ${vinculoResult.rowCount || 0}`,
+    );
 
     const folhaResult = await db.execute(sql`
       INSERT INTO clientes_folha_mes (
@@ -798,17 +856,21 @@ class FastImportService {
     return { merged: mergedCount, errors: 0 };
   }
 
-  private async mergeD8(run: ImportRun): Promise<{ merged: number; errors: number }> {
+  private async mergeD8(
+    run: ImportRun,
+  ): Promise<{ merged: number; errors: number }> {
     const banco = run.banco || "DESCONHECIDO";
     // Fallback para tenant 1 (goldcard) para compatibilidade
     const tenantId = run.tenantId || 1;
     // Usar competência do run (selecionada na importação)
     const competencia = run.competencia || null;
 
-    console.log(`[FastImport] Starting SQL-based merge for D8 (competencia: ${competencia})...`);
+    console.log(
+      `[FastImport] Starting SQL-based merge for D8 (competencia: ${competencia})...`,
+    );
 
     const baseTag = run.baseTag || "";
-    
+
     // 1. Atualizar clientes_pessoa com nome e natureza do D8
     const pessoaResult = await db.execute(sql`
       UPDATE clientes_pessoa p
@@ -827,8 +889,10 @@ class FastImportService {
         AND p.tenant_id = ${tenantId}
     `);
 
-    console.log(`[FastImport] Pessoas updated from D8: ${pessoaResult.rowCount || 0}`);
-    
+    console.log(
+      `[FastImport] Pessoas updated from D8: ${pessoaResult.rowCount || 0}`,
+    );
+
     // 2. Atualizar extras_vinculo com M_INSTITUIDOR para pensionistas
     const instituidorResult = await db.execute(sql`
       UPDATE clientes_vinculo v
@@ -848,8 +912,10 @@ class FastImportService {
         AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
     `);
 
-    console.log(`[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`);
-    
+    console.log(
+      `[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`,
+    );
+
     // 3. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
     // Incluindo a competência selecionada na importação
     // IMPORTANTE: DISTINCT ON deve usar (p.id, numero_contrato) para evitar erro ON CONFLICT quando CPF tem múltiplos vínculos
@@ -887,13 +953,19 @@ class FastImportService {
         base_tag = ${baseTag}
     `);
 
-    console.log(`[FastImport] Contratos upserted: ${contratoResult.rowCount || 0}`);
+    console.log(
+      `[FastImport] Contratos upserted: ${contratoResult.rowCount || 0}`,
+    );
 
     return { merged: contratoResult.rowCount || 0, errors: 0 };
   }
 
-  private async mergeContatos(run: ImportRun): Promise<{ merged: number; errors: number }> {
-    console.log(`[FastImport] Starting SQL-based merge for contatos/dados complementares...`);
+  private async mergeContatos(
+    run: ImportRun,
+  ): Promise<{ merged: number; errors: number }> {
+    console.log(
+      `[FastImport] Starting SQL-based merge for contatos/dados complementares...`,
+    );
     const baseTag = run.baseTag || "";
 
     // 1. Inserir telefones na tabela client_contacts
@@ -963,9 +1035,13 @@ class FastImportService {
       ON CONFLICT (client_id, type, value) DO NOTHING
     `);
 
-    const totalContacts = (telefone1Result.rowCount || 0) + (telefone2Result.rowCount || 0) + 
-                          (telefone3Result.rowCount || 0) + (telefone4Result.rowCount || 0) + 
-                          (telefone5Result.rowCount || 0) + (emailResult.rowCount || 0);
+    const totalContacts =
+      (telefone1Result.rowCount || 0) +
+      (telefone2Result.rowCount || 0) +
+      (telefone3Result.rowCount || 0) +
+      (telefone4Result.rowCount || 0) +
+      (telefone5Result.rowCount || 0) +
+      (emailResult.rowCount || 0);
 
     console.log(`[FastImport] Contatos upserted: ${totalContacts}`);
 
@@ -1037,23 +1113,34 @@ class FastImportService {
     `);
 
     const totalPessoaUpdates = pessoaUpdateResult.rowCount || 0;
-    console.log(`[FastImport] Dados complementares (pessoa) atualizados: ${totalPessoaUpdates}`);
+    console.log(
+      `[FastImport] Dados complementares (pessoa) atualizados: ${totalPessoaUpdates}`,
+    );
 
     const totalInserted = totalContacts + totalPessoaUpdates;
 
     return { merged: totalInserted, errors: 0 };
   }
 
-  private async cleanupStaging(importRunId: number, tipoImport: string): Promise<void> {
+  private async cleanupStaging(
+    importRunId: number,
+    tipoImport: string,
+  ): Promise<void> {
     switch (tipoImport) {
       case "folha":
-        await db.delete(stagingFolha).where(eq(stagingFolha.importRunId, importRunId));
+        await db
+          .delete(stagingFolha)
+          .where(eq(stagingFolha.importRunId, importRunId));
         break;
       case "d8":
-        await db.delete(stagingD8).where(eq(stagingD8.importRunId, importRunId));
+        await db
+          .delete(stagingD8)
+          .where(eq(stagingD8.importRunId, importRunId));
         break;
       case "contatos":
-        await db.delete(stagingContatos).where(eq(stagingContatos.importRunId, importRunId));
+        await db
+          .delete(stagingContatos)
+          .where(eq(stagingContatos.importRunId, importRunId));
         break;
     }
     console.log(`[FastImport] Cleaned up staging for run ${importRunId}`);
@@ -1063,7 +1150,7 @@ class FastImportService {
     row: Record<string, any>,
     headerMap: Record<string, string>,
     run: ImportRun,
-    rowNum: number
+    rowNum: number,
   ): any | null {
     const tipoImport = run.tipoImport;
     const getValue = (field: string) => {
@@ -1073,7 +1160,7 @@ class FastImportService {
     const parseNum = (val: any): number | null => {
       if (!val) return null;
       const n = normalizeBrDecimal(String(val));
-      return (n === null || isNaN(n)) ? null : n;
+      return n === null || isNaN(n) ? null : n;
     };
 
     if (tipoImport === "folha") {
@@ -1091,7 +1178,9 @@ class FastImportService {
         margem5Utilizada: parseNum(getValue("margem_5_utilizada")),
         margem5Saldo: parseNum(getValue("margem_5_saldo")),
         margemBeneficio5Bruta: parseNum(getValue("margem_beneficio_5_bruta")),
-        margemBeneficio5Utilizada: parseNum(getValue("margem_beneficio_5_utilizada")),
+        margemBeneficio5Utilizada: parseNum(
+          getValue("margem_beneficio_5_utilizada"),
+        ),
         margemBeneficio5Saldo: parseNum(getValue("margem_beneficio_5_saldo")),
         margem35Bruta: parseNum(getValue("margem_35_bruta")),
         margem35Utilizada: parseNum(getValue("margem_35_utilizada")),
@@ -1099,8 +1188,12 @@ class FastImportService {
         margem70Bruta: parseNum(getValue("margem_70_bruta")),
         margem70Utilizada: parseNum(getValue("margem_70_utilizada")),
         margem70Saldo: parseNum(getValue("margem_70_saldo")),
-        margemCartaoCreditoSaldo: parseNum(getValue("margem_cartao_credito_saldo")),
-        margemCartaoBeneficioSaldo: parseNum(getValue("margem_cartao_beneficio_saldo")),
+        margemCartaoCreditoSaldo: parseNum(
+          getValue("margem_cartao_credito_saldo"),
+        ),
+        margemCartaoBeneficioSaldo: parseNum(
+          getValue("margem_cartao_beneficio_saldo"),
+        ),
         creditos: parseNum(getValue("creditos")),
         debitos: parseNum(getValue("debitos")),
         liquido: parseNum(getValue("liquido")),
@@ -1124,7 +1217,8 @@ class FastImportService {
         numeroContrato: preserveNumeroContrato(getValue("numero_contrato")),
         tipoContrato: getValue("tipo_contrato") || null,
         valorParcela: parseNum(getValue("valor_parcela")),
-        prazoRemanescente: parseInt(getValue("prazo_remanescente") || "0", 10) || null,
+        prazoRemanescente:
+          parseInt(getValue("prazo_remanescente") || "0", 10) || null,
         situacaoContrato: getValue("situacao_contrato") || null,
         mInstituidor: getValue("m_instituidor") || null,
         cpfInstituidor: padCpf(getValue("cpf_instituidor")),
@@ -1156,13 +1250,16 @@ class FastImportService {
     return null;
   }
 
-  private async insertStagingBatch(tipoImport: string, batch: any[]): Promise<void> {
+  private async insertStagingBatch(
+    tipoImport: string,
+    batch: any[],
+  ): Promise<void> {
     if (batch.length === 0) return;
 
     // Insert in smaller chunks to avoid Neon HTTP payload limit
     for (let i = 0; i < batch.length; i += SQL_INSERT_CHUNK) {
       const chunk = batch.slice(i, i + SQL_INSERT_CHUNK);
-      
+
       switch (tipoImport) {
         case "folha":
           await db.insert(stagingFolha).values(chunk);
@@ -1177,12 +1274,17 @@ class FastImportService {
     }
   }
 
-  private getColumnMap(tipoImport: string, layoutD8?: string | null): Record<string, string> {
+  private getColumnMap(
+    tipoImport: string,
+    layoutD8?: string | null,
+  ): Record<string, string> {
     switch (tipoImport) {
       case "folha":
         return COLUMN_MAP;
       case "d8":
-        return layoutD8 === "pensionista" ? D8_COLUMN_MAP_PENSIONISTA : D8_COLUMN_MAP_SERVIDOR;
+        return layoutD8 === "pensionista"
+          ? D8_COLUMN_MAP_PENSIONISTA
+          : D8_COLUMN_MAP_SERVIDOR;
       case "contatos":
         return CONTATOS_COLUMN_MAP;
       default:
@@ -1191,21 +1293,28 @@ class FastImportService {
   }
 
   private async readHeaders(filePath: string): Promise<string[]> {
-    const stream = fs.createReadStream(filePath, { start: 0, end: 20000, encoding: "utf8" });
+    const stream = fs.createReadStream(filePath, {
+      start: 0,
+      end: 20000,
+      encoding: "utf8",
+    });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-    
+
     let headers: string[] = [];
     for await (const line of rl) {
       headers = this.parseCSVLine(line);
       break;
     }
-    
+
     rl.close();
     stream.destroy();
     return headers;
   }
 
-  private buildHeaderMap(headers: string[], columnMap: Record<string, string>): Record<string, string> {
+  private buildHeaderMap(
+    headers: string[],
+    columnMap: Record<string, string>,
+  ): Record<string, string> {
     const headerMap: Record<string, string> = {};
     for (const h of headers) {
       const normalized = normalizeCol(h);
@@ -1250,8 +1359,11 @@ class FastImportService {
     return new Promise((resolve) => {
       let lines = 0;
       const stream = fs.createReadStream(filePath, { encoding: "utf8" });
-      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-      
+      const rl = readline.createInterface({
+        input: stream,
+        crlfDelay: Infinity,
+      });
+
       rl.on("line", () => {
         lines++;
         if (lines >= 10000) {
@@ -1259,7 +1371,7 @@ class FastImportService {
           stream.destroy();
         }
       });
-      
+
       rl.on("close", () => {
         const stats = fs.statSync(filePath);
         const sampleBytes = Math.min(stats.size, 1024 * 1024);
@@ -1293,7 +1405,7 @@ class FastImportService {
     processedRows: number,
     successRows: number,
     errorRows: number,
-    offsetAtual: number
+    offsetAtual: number,
   ): Promise<void> {
     await db
       .update(importRuns)
