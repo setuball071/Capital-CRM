@@ -759,7 +759,8 @@ class FastImportService {
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
-      ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
+      ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
+        tenant_id = COALESCE(clientes_vinculo.tenant_id, EXCLUDED.tenant_id),
         pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
         -- Substitui campos se novo valor não for vazio
         upag = CASE WHEN EXCLUDED.upag IS NOT NULL AND EXCLUDED.upag != '' 

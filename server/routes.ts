@@ -4421,7 +4421,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
             pessoa = processedPessoas.get(cpf);
           } else {
             // Buscar no banco de dados (filtered by tenant)
-            const pessoasEncontradas = await storage.getClientesByCpf(cpf, undefined, undefined, effectiveTenantIdBg);
+            const pessoasEncontradas = await storage.getClientesByCpf(cpf);
             pessoa = pessoasEncontradas[0];
           }
         }
@@ -4464,7 +4464,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               ${importRunId || null},
               ${baseTag}
             )
-            ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
+            ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
+              tenant_id = COALESCE(clientes_vinculo.tenant_id, EXCLUDED.tenant_id),
               pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
               upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
               sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
@@ -5081,7 +5082,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
               pessoa = processedPessoas.get(cpf);
             } else {
               // Buscar no banco de dados (filtered by tenant)
-              const pessoasEncontradas = await storage.getClientesByCpf(cpf, undefined, undefined, effectiveTenantIdSync);
+              const pessoasEncontradas = await storage.getClientesByCpf(cpf);
               pessoa = pessoasEncontradas[0];
             }
           }
@@ -5124,7 +5125,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
                 ${importRunRecord.id},
                 ${baseTag}
               )
-              ON CONFLICT (tenant_id, cpf, matricula, orgao) DO UPDATE SET
+              ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
+                tenant_id = COALESCE(clientes_vinculo.tenant_id, EXCLUDED.tenant_id),
                 pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
                 upag = COALESCE(EXCLUDED.upag, clientes_vinculo.upag),
                 sit_func = COALESCE(EXCLUDED.sit_func, clientes_vinculo.sit_func),
@@ -7358,7 +7360,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
   app.get("/api/clientes/consulta", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {
     try {
       const { cpf, matricula, convenio, base } = req.query;
-      const tenantId = req.tenantId;
       
       if (!cpf && !matricula) {
         return res.status(400).json({ 
@@ -7372,13 +7373,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       const convenioFiltro = convenio ? String(convenio).trim() : null;
       const baseFiltro = base ? String(base).trim() : null;
       
-      console.log(`[Consulta Cliente] user=${req.user?.id}, tenantId=${tenantId}, tipoBusca=${matricula ? 'matricula' : 'cpf'}, convenio=${convenioFiltro || 'all'}, base=${baseFiltro || 'all'}`);
+      console.log(`[Consulta Cliente] user=${req.user?.id}, tipoBusca=${matricula ? 'matricula' : 'cpf'}, convenio=${convenioFiltro || 'all'}, base=${baseFiltro || 'all'}`);
       
       if (matricula) {
         tipoBusca = "matricula";
         termo = String(matricula).trim();
         
-        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined, baseFiltro || undefined, tenantId);
+        const clientes = await storage.getClientesByMatricula(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -7401,7 +7402,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
           });
         }
         
-        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined, baseFiltro || undefined, tenantId);
+        const clientes = await storage.getClientesByCpf(termo, convenioFiltro || undefined, baseFiltro || undefined);
         resultados = clientes.map(cliente => ({
           pessoa_id: cliente.id,
           cpf: cliente.cpf,
@@ -7448,9 +7449,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
       
-      // Get all vínculos for this pessoa, filtered by tenant
-      const tenantId = (req as any).tenantId;
-      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId, tenantId);
+      // Get all vínculos for this pessoa (shared across tenants)
+      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId);
       
       // Determinar qual vínculo usar para buscar folha - PRIORIZAR folha mais recente (de TODOS os vínculos)
       let vinculoIdEfetivo: number | null = null;
@@ -7663,9 +7663,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
       
-      // Get all vínculos for this pessoa, filtered by tenant
-      const tenantId = (req as any).tenantId;
-      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId, tenantId);
+      // Get all vínculos for this pessoa (shared across tenants)
+      const vinculosTodos = await storage.getVinculosByPessoaId(pessoaId);
       
       // Determinar qual vínculo usar
       let vinculoIdEfetivo: number | null = null;
@@ -10584,8 +10583,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Cliente não localizado. Verifique os dados informados ou atualize a Base de Clientes." });
       }
       
-      // Get vínculos, filtered by tenant
-      const vinculos = await storage.getVinculosByPessoaId(cliente.id, tenantId);
+      // Get vínculos (shared across tenants)
+      const vinculos = await storage.getVinculosByPessoaId(cliente.id);
       
       // Selecionar vínculo com folha mais recente (de TODOS, não apenas os filtrados)
       let vinculoAtual: typeof vinculos[0] | null = null;
@@ -10919,8 +10918,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(lead.baseClienteId);
         if (clienteBase) {
-          // Get vínculos to find sit_func, rjur, orgao, upag (filtered by tenant)
-          const vinculos = await storage.getVinculosByPessoaId(lead.baseClienteId, (req as any).tenantId);
+          // Get vínculos to find sit_func, rjur, orgao, upag (shared across tenants)
+          const vinculos = await storage.getVinculosByPessoaId(lead.baseClienteId);
           
           // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
           if (vinculos.length > 0) {
@@ -11097,8 +11096,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
         if (clienteBase) {
-          // Get vínculos to find sit_func, rjur, orgao, upag (filtered by tenant)
-          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId, (req as any).tenantId);
+          // Get vínculos to find sit_func, rjur, orgao, upag (shared across tenants)
+          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
           
           // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
           if (vinculos.length > 0) {
@@ -11293,8 +11292,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (result.lead.baseClienteId) {
         clienteBase = await storage.getClientePessoaById(result.lead.baseClienteId);
         if (clienteBase) {
-          // Get vínculos to find sit_func, rjur, orgao, upag (filtered by tenant)
-          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId, (req as any).tenantId);
+          // Get vínculos to find sit_func, rjur, orgao, upag (shared across tenants)
+          const vinculos = await storage.getVinculosByPessoaId(result.lead.baseClienteId);
           
           // Selecionar vínculo com folha mais recente (de TODOS, ou por matrícula se especificada)
           if (vinculos.length > 0) {

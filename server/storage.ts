@@ -227,9 +227,9 @@ export interface IStorage {
   
   // Clientes Pessoa
   getClientePessoaByMatricula(matricula: string): Promise<ClientePessoa | undefined>;
-  getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string, tenantId?: number): Promise<ClientePessoa[]>;
+  getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
-  getClientesByCpf(cpf: string, convenio?: string, baseTag?: string, tenantId?: number): Promise<ClientePessoa[]>;
+  getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number }): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -243,7 +243,7 @@ export interface IStorage {
   getDistinctTiposContratoByBanco(banco: string): Promise<string[]>;
   
   // Clientes Vínculos
-  getVinculosByPessoaId(pessoaId: number, tenantId?: number): Promise<ClienteVinculo[]>;
+  getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]>;
   getVinculoById(id: number): Promise<ClienteVinculo | undefined>;
   
   // Dados Complementares
@@ -1057,13 +1057,10 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string, tenantId?: number): Promise<ClientePessoa[]> {
+  async getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
     const conditions: any[] = [
       eq(clientesPessoa.matricula, matricula),
     ];
-    if (tenantId) {
-      conditions.push(eq(clientesPessoa.tenantId, tenantId));
-    }
     if (convenio) {
       conditions.push(ilike(clientesPessoa.convenio, convenio));
     }
@@ -1071,7 +1068,7 @@ export class DbStorage implements IStorage {
       conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
     }
     const results = await db.select().from(clientesPessoa).where(and(...conditions));
-    console.log(`[getClientesByMatricula] matricula="${matricula}", tenantId=${tenantId}, found=${results.length}`);
+    console.log(`[getClientesByMatricula] matricula="${matricula}", found=${results.length}`);
     return results;
   }
 
@@ -1080,16 +1077,13 @@ export class DbStorage implements IStorage {
     return cliente;
   }
 
-  async getClientesByCpf(cpf: string, convenio?: string, baseTag?: string, tenantId?: number): Promise<ClientePessoa[]> {
+  async getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
     const cleanCpf = cpf.replace(/\D/g, "").padStart(11, "0");
     
     const conditions: any[] = [
       eq(clientesPessoa.cpf, cleanCpf),
     ];
     
-    if (tenantId) {
-      conditions.push(eq(clientesPessoa.tenantId, tenantId));
-    }
     if (convenio) {
       conditions.push(ilike(clientesPessoa.convenio, convenio));
     }
@@ -1100,7 +1094,7 @@ export class DbStorage implements IStorage {
     const results = await db.select()
       .from(clientesPessoa)
       .where(and(...conditions));
-    console.log(`[getClientesByCpf] cpf="${cleanCpf}", tenantId=${tenantId}, found=${results.length}`);
+    console.log(`[getClientesByCpf] cpf="${cleanCpf}", found=${results.length}`);
     return results;
   }
 
@@ -1681,14 +1675,10 @@ export class DbStorage implements IStorage {
   }
 
   // Clientes Vínculos
-  async getVinculosByPessoaId(pessoaId: number, tenantId?: number): Promise<ClienteVinculo[]> {
-    const conditions = [eq(clientesVinculo.pessoaId, pessoaId)];
-    if (tenantId) {
-      conditions.push(eq(clientesVinculo.tenantId, tenantId));
-    }
+  async getVinculosByPessoaId(pessoaId: number): Promise<ClienteVinculo[]> {
     return await db.select()
       .from(clientesVinculo)
-      .where(and(...conditions))
+      .where(eq(clientesVinculo.pessoaId, pessoaId))
       .orderBy(sql`${clientesVinculo.ultimaAtualizacao} DESC`);
   }
   

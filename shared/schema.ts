@@ -630,8 +630,8 @@ export const clientesVinculo = pgTable("clientes_vinculo", {
   importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
   baseTag: varchar("base_tag", { length: 100 }), // Tag da base para cascata
 }, (table) => ({
-  // Chave única multi-tenant: (tenant_id, cpf, matricula, orgao)
-  vinculoUnique: uniqueIndex("idx_vinculo_unique").on(table.tenantId, table.cpf, table.matricula, table.orgao),
+  // Chave única compartilhada: (cpf, matricula, orgao) - base de clientes é global entre tenants
+  vinculoUnique: uniqueIndex("idx_vinculo_unique").on(table.cpf, table.matricula, table.orgao),
 }));
 
 // 3) clientes_folha_mes - Dados agregados da folha por competência
