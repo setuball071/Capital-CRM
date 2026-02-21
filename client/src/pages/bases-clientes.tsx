@@ -2197,7 +2197,7 @@ export default function BasesClientes() {
                     </TableCell>
                     <TableCell>
                       {base.competencia
-                        ? (() => { const d = new Date(base.competencia); const m = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]; return `${m[d.getUTCMonth()]}/${d.getUTCFullYear()}`; })()
+                        ? (() => { const s = String(base.competencia); const mx = s.match(/(\d{4})-(\d{2})/); const m = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]; return mx ? `${m[parseInt(mx[2])-1]}/${mx[1]}` : (() => { const d = new Date(s); return `${m[d.getUTCMonth()]}/${d.getUTCFullYear()}`; })(); })()
                         : "-"}
                     </TableCell>
                     <TableCell>{base.totalLinhas?.toLocaleString("pt-BR") || 0}</TableCell>
@@ -2643,7 +2643,7 @@ export default function BasesClientes() {
                     <div><strong>Nome:</strong> {baseToDelete.nome}</div>
                     <div><strong>Convênio:</strong> {baseToDelete.convenio}</div>
                     <div><strong>Competência:</strong> {baseToDelete.competencia 
-                      ? (() => { const d = new Date(baseToDelete.competencia); const m = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]; return `${m[d.getUTCMonth()]}/${d.getUTCFullYear()}`; })()
+                      ? (() => { const s = String(baseToDelete.competencia); const mx = s.match(/(\d{4})-(\d{2})/); const m = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]; return mx ? `${m[parseInt(mx[2])-1]}/${mx[1]}` : (() => { const d = new Date(s); return `${m[d.getUTCMonth()]}/${d.getUTCFullYear()}`; })(); })()
                       : "-"}</div>
                     <div><strong>Total de linhas:</strong> {baseToDelete.totalLinhas?.toLocaleString("pt-BR") || 0}</div>
                   </div>

@@ -230,8 +230,15 @@ function formatCurrency(value: number | null | undefined): string {
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
-    const d = new Date(dateStr);
     const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const str = String(dateStr);
+    const match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = parseInt(match[1]);
+      const month = parseInt(match[2]) - 1;
+      return `${months[month]}/${year}`;
+    }
+    const d = new Date(str);
     return `${months[d.getUTCMonth()]}/${d.getUTCFullYear()}`;
   } catch {
     return "-";
@@ -241,7 +248,12 @@ function formatDate(dateStr: string | null): string {
 function formatDateFull(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
-    const d = new Date(dateStr);
+    const str = String(dateStr);
+    const match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+    const d = new Date(str);
     const day = String(d.getUTCDate()).padStart(2, "0");
     const month = String(d.getUTCMonth() + 1).padStart(2, "0");
     return `${day}/${month}/${d.getUTCFullYear()}`;
