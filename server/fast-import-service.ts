@@ -818,8 +818,7 @@ class FastImportService {
         ${run.id}
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
-      JOIN clientes_vinculo v ON v.tenant_id = ${tenantId}::integer
-        AND v.cpf = s.cpf 
+      JOIN clientes_vinculo v ON v.cpf = s.cpf 
         AND v.matricula = s.matricula 
         AND v.orgao = COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO')
       WHERE s.import_run_id = ${run.id}
@@ -873,6 +872,7 @@ class FastImportService {
     const baseTag = run.baseTag || "";
 
     // 1. Atualizar clientes_pessoa com nome e natureza do D8
+    // Base de clientes é global - não filtrar por tenant_id
     const pessoaResult = await db.execute(sql`
       UPDATE clientes_pessoa p
       SET 
@@ -887,7 +887,6 @@ class FastImportService {
         ORDER BY cpf, id DESC
       ) s
       WHERE p.cpf = s.cpf
-        AND p.tenant_id = ${tenantId}
     `);
 
     console.log(
@@ -895,6 +894,7 @@ class FastImportService {
     );
 
     // 2. Atualizar extras_vinculo com M_INSTITUIDOR para pensionistas
+    // Base de clientes é global - não filtrar por tenant_id
     const instituidorResult = await db.execute(sql`
       UPDATE clientes_vinculo v
       SET 
@@ -908,7 +908,6 @@ class FastImportService {
         ORDER BY cpf, matricula, orgao, id DESC
       ) s
       WHERE v.cpf = s.cpf
-        AND v.tenant_id = ${tenantId}
         AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
         AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
     `);
@@ -919,12 +918,12 @@ class FastImportService {
 
     // 3. Contratos: DELETE todos os contratos existentes dos vínculos que aparecem nesta importação, depois INSERT os novos
     // Contratos não têm histórico - cada importação substitui completamente os contratos do vínculo
+    // Base de clientes é global - não filtrar por tenant_id
     const deleteResult = await db.execute(sql`
       DELETE FROM clientes_contratos 
       WHERE vinculo_id IN (
         SELECT DISTINCT v.id FROM clientes_vinculo v
         JOIN staging_d8 s ON s.cpf = v.cpf 
-          AND v.tenant_id = ${tenantId}
           AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
           AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
         WHERE s.import_run_id = ${run.id}
@@ -936,6 +935,7 @@ class FastImportService {
       `[FastImport] Contratos antigos deletados: ${deleteResult.rowCount || 0}`,
     );
 
+    // Base de clientes é global - não filtrar por tenant_id
     const contratoResult = await db.execute(sql`
       INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, competencia, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
@@ -950,9 +950,8 @@ class FastImportService {
         ${run.id},
         ${baseTag}
       FROM staging_d8 s
-      JOIN clientes_pessoa p ON p.cpf = s.cpf AND p.tenant_id = ${tenantId}
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
       LEFT JOIN clientes_vinculo v ON v.cpf = s.cpf 
-        AND v.tenant_id = ${tenantId}
         AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
         AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
       WHERE s.import_run_id = ${run.id}
