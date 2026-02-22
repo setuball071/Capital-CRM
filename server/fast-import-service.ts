@@ -916,11 +916,14 @@ class FastImportService {
       `[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`,
     );
 
-    // 3. DELETE cirúrgico: apaga só contratos do mesmo banco + mesma competência para os vínculos da importação
+    // 3. DELETE cirúrgico: apaga contratos por banco real do CSV + mesma competência para os vínculos da importação
+    // Usa os bancos distintos do staging (CSV), não o banco do import_run que pode ser genérico como "DIVERSOS"
     const deleteResult = await db.execute(sql`
       DELETE FROM clientes_contratos c
-      WHERE c.banco = ${banco}
-      AND c.competencia = ${competencia}
+      WHERE c.competencia = ${competencia}
+      AND c.banco IN (
+        SELECT DISTINCT COALESCE(NULLIF(s2.banco, ''), ${banco}) FROM staging_d8 s2 WHERE s2.import_run_id = ${run.id}
+      )
       AND c.vinculo_id IN (
         SELECT DISTINCT v.id FROM clientes_vinculo v
         JOIN staging_d8 s ON s.cpf = v.cpf 
@@ -929,7 +932,7 @@ class FastImportService {
     `);
 
     console.log(
-      `[FastImport] Contratos antigos deletados (banco=${banco}, comp=${competencia}): ${deleteResult.rowCount || 0}`,
+      `[FastImport] Contratos antigos deletados (bancos do CSV, comp=${competencia}): ${deleteResult.rowCount || 0}`,
     );
 
     // 4. INSERT novos contratos
@@ -955,6 +958,15 @@ class FastImportService {
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.numero_contrato IS NOT NULL AND s.numero_contrato != ''
       ORDER BY p.id, s.numero_contrato, v.id NULLS LAST
+      ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
+        vinculo_id = EXCLUDED.vinculo_id,
+        banco = EXCLUDED.banco,
+        tipo_contrato = EXCLUDED.tipo_contrato,
+        valor_parcela = EXCLUDED.valor_parcela,
+        parcelas_restantes = EXCLUDED.parcelas_restantes,
+        competencia = EXCLUDED.competencia,
+        import_run_id = EXCLUDED.import_run_id,
+        base_tag = EXCLUDED.base_tag
     `);
 
     console.log(
