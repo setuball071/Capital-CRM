@@ -917,9 +917,25 @@ class FastImportService {
       `[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`,
     );
 
-    // 3. Inserir/atualizar contratos - associando ao vínculo correto (CPF + matrícula + órgão)
-    // Incluindo a competência selecionada na importação
-    // IMPORTANTE: DISTINCT ON deve usar (p.id, numero_contrato) para evitar erro ON CONFLICT quando CPF tem múltiplos vínculos
+    // 3. Contratos: DELETE todos os contratos existentes dos vínculos que aparecem nesta importação, depois INSERT os novos
+    // Contratos não têm histórico - cada importação substitui completamente os contratos do vínculo
+    const deleteResult = await db.execute(sql`
+      DELETE FROM clientes_contratos 
+      WHERE vinculo_id IN (
+        SELECT DISTINCT v.id FROM clientes_vinculo v
+        JOIN staging_d8 s ON s.cpf = v.cpf 
+          AND v.tenant_id = ${tenantId}
+          AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
+          AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
+        WHERE s.import_run_id = ${run.id}
+          AND s.cpf IS NOT NULL AND s.cpf != ''
+      )
+    `);
+
+    console.log(
+      `[FastImport] Contratos antigos deletados: ${deleteResult.rowCount || 0}`,
+    );
+
     const contratoResult = await db.execute(sql`
       INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, competencia, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
@@ -943,19 +959,10 @@ class FastImportService {
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.numero_contrato IS NOT NULL AND s.numero_contrato != ''
       ORDER BY p.id, s.numero_contrato, v.id NULLS LAST
-      ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
-        vinculo_id = COALESCE(EXCLUDED.vinculo_id, clientes_contratos.vinculo_id),
-        banco = COALESCE(EXCLUDED.banco, clientes_contratos.banco),
-        tipo_contrato = COALESCE(EXCLUDED.tipo_contrato, clientes_contratos.tipo_contrato),
-        valor_parcela = COALESCE(EXCLUDED.valor_parcela, clientes_contratos.valor_parcela),
-        parcelas_restantes = COALESCE(EXCLUDED.parcelas_restantes, clientes_contratos.parcelas_restantes),
-        competencia = COALESCE(EXCLUDED.competencia, clientes_contratos.competencia),
-        import_run_id = ${run.id},
-        base_tag = ${baseTag}
     `);
 
     console.log(
-      `[FastImport] Contratos upserted: ${contratoResult.rowCount || 0}`,
+      `[FastImport] Contratos inseridos: ${contratoResult.rowCount || 0}`,
     );
 
     return { merged: contratoResult.rowCount || 0, errors: 0 };
