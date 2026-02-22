@@ -602,7 +602,7 @@ export const clientesPessoa = pgTable("clientes_pessoa", {
   // === DADOS DE ENDEREÇO ===
   endereco: varchar("endereco", { length: 255 }), // Logradouro
   cidade: varchar("cidade", { length: 150 }),
-  enderecoUf: varchar("endereco_uf", { length: 2 }), // UF do endereço (separado do UF do órgão)
+  enderecoUf: varchar("endereco_uf", { length: 10 }), // UF do endereço (separado do UF do órgão)
   cep: varchar("cep", { length: 10 }),
 }, (table) => ({
   // Chave única: CPF - uma pessoa por CPF
@@ -1888,7 +1888,7 @@ export const stagingFolha = pgTable("staging_folha", {
   nome: varchar("nome", { length: 255 }),
   orgaodesc: varchar("orgaodesc", { length: 255 }),
   upag: varchar("upag", { length: 50 }),
-  uf: varchar("uf", { length: 2 }),
+  uf: varchar("uf", { length: 10 }),
   municipio: varchar("municipio", { length: 100 }),
   baseCalc: decimal("base_calc", { precision: 15, scale: 2 }),
   margem5Bruta: decimal("margem_5_bruta", { precision: 15, scale: 2 }),
@@ -1959,7 +1959,7 @@ export const stagingContatos = pgTable("staging_contatos", {
   email2: varchar("email_2", { length: 255 }),
   endereco: text("endereco"),
   cidade: varchar("cidade", { length: 100 }),
-  uf: varchar("uf", { length: 2 }),
+  uf: varchar("uf", { length: 10 }),
   cep: varchar("cep", { length: 10 }),
   dataNascimento: varchar("data_nascimento", { length: 20 }),
   bancoNome: varchar("banco_nome", { length: 100 }),
