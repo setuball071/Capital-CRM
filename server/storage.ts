@@ -1869,14 +1869,20 @@ export class DbStorage implements IStorage {
   async getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]> {
     return await db.select()
       .from(clientesContratos)
-      .where(eq(clientesContratos.pessoaId, pessoaId))
+      .where(and(
+        eq(clientesContratos.pessoaId, pessoaId),
+        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_folha_mes WHERE vinculo_id = ${clientesContratos.vinculoId})`
+      ))
       .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
 
   async getContratosByVinculoId(vinculoId: number): Promise<ClienteContrato[]> {
     return await db.select()
       .from(clientesContratos)
-      .where(eq(clientesContratos.vinculoId, vinculoId))
+      .where(and(
+        eq(clientesContratos.vinculoId, vinculoId),
+        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_folha_mes WHERE vinculo_id = ${clientesContratos.vinculoId})`
+      ))
       .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
 

@@ -96,6 +96,40 @@ async function cleanupOldImportRunRows(): Promise<number> {
   return totalDeleted;
 }
 
+async function cleanupOldContratos(): Promise<number> {
+  let totalDeleted = 0;
+  try {
+    console.log("[DataRetention] Starting cleanup of contratos older than 45 days...");
+
+    while (true) {
+      const result = await db.execute(sql`
+        DELETE FROM clientes_contratos
+        WHERE id IN (
+          SELECT id FROM clientes_contratos
+          WHERE competencia < NOW() - INTERVAL '45 days'
+          LIMIT ${BATCH_SIZE}
+        )
+      `);
+
+      const deleted = Number(result.rowCount || 0);
+      if (deleted === 0) break;
+
+      totalDeleted += deleted;
+      console.log(`[DataRetention] Deleted ${deleted} old contratos. Total: ${totalDeleted}`);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (totalDeleted > 0) {
+      console.log(`[DataRetention] Old contratos cleanup complete. Total deleted: ${totalDeleted}`);
+    } else {
+      console.log("[DataRetention] No old contratos to clean up.");
+    }
+  } catch (error: any) {
+    console.error("[DataRetention] Error cleaning old contratos:", error.message);
+  }
+  return totalDeleted;
+}
+
 async function cleanupOrphanedStaging(): Promise<void> {
   try {
     const activeRuns = await db.execute(sql`
@@ -155,11 +189,13 @@ export function startDataRetention(): void {
 
   setTimeout(async () => {
     await cleanupOldImportRunRows();
+    await cleanupOldContratos();
     await cleanupOrphanedStaging();
   }, 60 * 1000);
 
   intervalId = setInterval(async () => {
     await cleanupOldImportRunRows();
+    await cleanupOldContratos();
     await cleanupOrphanedStaging();
   }, CLEANUP_INTERVAL_MS);
 }

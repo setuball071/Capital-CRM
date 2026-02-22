@@ -916,26 +916,23 @@ class FastImportService {
       `[FastImport] Vínculos updated with m_instituidor: ${instituidorResult.rowCount || 0}`,
     );
 
-    // 3. Contratos: DELETE todos os contratos existentes dos vínculos que aparecem nesta importação, depois INSERT os novos
-    // Contratos não têm histórico - cada importação substitui completamente os contratos do vínculo
-    // Base de clientes é global - não filtrar por tenant_id
+    // 3. DELETE cirúrgico: apaga só contratos do mesmo banco + mesma competência para os vínculos da importação
     const deleteResult = await db.execute(sql`
-      DELETE FROM clientes_contratos 
-      WHERE vinculo_id IN (
+      DELETE FROM clientes_contratos c
+      WHERE c.banco = ${banco}
+      AND c.competencia = ${competencia}
+      AND c.vinculo_id IN (
         SELECT DISTINCT v.id FROM clientes_vinculo v
         JOIN staging_d8 s ON s.cpf = v.cpf 
-          AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
-          AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
         WHERE s.import_run_id = ${run.id}
-          AND s.cpf IS NOT NULL AND s.cpf != ''
       )
     `);
 
     console.log(
-      `[FastImport] Contratos antigos deletados: ${deleteResult.rowCount || 0}`,
+      `[FastImport] Contratos antigos deletados (banco=${banco}, comp=${competencia}): ${deleteResult.rowCount || 0}`,
     );
 
-    // Base de clientes é global - não filtrar por tenant_id
+    // 4. INSERT novos contratos
     const contratoResult = await db.execute(sql`
       INSERT INTO clientes_contratos (pessoa_id, vinculo_id, banco, numero_contrato, tipo_contrato, valor_parcela, parcelas_restantes, competencia, import_run_id, base_tag)
       SELECT DISTINCT ON (p.id, s.numero_contrato)
