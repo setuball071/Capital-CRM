@@ -17017,6 +17017,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(403).json({ message: "Sem permissão" });
       }
 
+      const valorExpr = sql`CAST(NULLIF(REPLACE(REPLACE(valor, '.', ''), ',', '.'), '') AS NUMERIC)`;
       const result = await db.execute(sql`
         SELECT
           COUNT(*) as total,
@@ -17027,7 +17028,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           COUNT(*) FILTER (WHERE status = 'cancelado') as cancelados,
           COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as hoje,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semana,
-          COALESCE(SUM(CAST(NULLIF(REPLACE(REPLACE(valor, '.', ''), ',', '.'), '') AS NUMERIC)), 0) as valor_total
+          COALESCE(SUM(${valorExpr}), 0) as valor_total,
+          COALESCE(SUM(${valorExpr}) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0) as valor_hoje,
+          COALESCE(SUM(${valorExpr}) FILTER (WHERE status = 'pendente'), 0) as valor_pendentes,
+          COALESCE(SUM(${valorExpr}) FILTER (WHERE status = 'cancelado'), 0) as valor_cancelados,
+          COALESCE(SUM(${valorExpr}) FILTER (WHERE status = 'concluido'), 0) as valor_concluidos
         FROM solicitacoes_boleto
         WHERE tenant_id = ${tenantId}
       `);

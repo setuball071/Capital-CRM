@@ -58,6 +58,10 @@ interface Stats {
   hoje: string;
   semana: string;
   valor_total: string;
+  valor_hoje: string;
+  valor_pendentes: string;
+  valor_cancelados: string;
+  valor_concluidos: string;
 }
 
 // ── Constantes ────────────────────────────────────────────────
@@ -246,40 +250,41 @@ export default function SolicitacoesBoleto() {
 
       {/* Stats cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-gray-900">{stats.hoje || "0"}</div>
+              <div className="text-sm font-semibold text-gray-900">
+                {Number(stats.valor_hoje || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </div>
               <div className="text-xs text-gray-500 mt-1">Solicitações hoje</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-yellow-600">{stats.pendentes || "0"}</div>
+              <div className="text-sm font-semibold text-yellow-600">
+                {Number(stats.valor_pendentes || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </div>
               <div className="text-xs text-gray-500 mt-1">Pendentes</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-red-600">{stats.cancelados || "0"}</div>
+              <div className="text-sm font-semibold text-red-600">
+                {Number(stats.valor_cancelados || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </div>
               <div className="text-xs text-gray-500 mt-1">Cancelados</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-green-600">{stats.concluidos || "0"}</div>
-              <div className="text-xs text-gray-500 mt-1">Concluídos</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="w-5 h-5 text-blue-600" />
-                <div className="text-2xl font-bold text-blue-600">
-                  {Number(stats.valor_total || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </div>
+              <div className="text-sm font-semibold text-green-600">
+                {Number(stats.valor_concluidos || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Valor Total</div>
+              <div className="text-xs text-gray-500 mt-1">Concluídos</div>
             </CardContent>
           </Card>
         </div>
