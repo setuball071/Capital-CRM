@@ -1340,15 +1340,6 @@ export default function VendasAtendimento() {
                                   >
                                     <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
                                   </Button>
-                                  <Button 
-                                    size="icon" 
-                                    variant="ghost"
-                                    className="h-7 w-7 text-destructive"
-                                    onClick={() => handleDeleteContact(contact)}
-                                    data-testid={`button-delete-contact-${contact.id}`}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
                                 </div>
                               </div>
                             ))}
@@ -1453,15 +1444,6 @@ export default function VendasAtendimento() {
                                   data-testid={`button-edit-email-${contact.id}`}
                                 >
                                   <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteContact(contact)}
-                                  data-testid={`button-delete-email-${contact.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
@@ -1603,15 +1585,6 @@ export default function VendasAtendimento() {
                                   data-testid={`button-edit-address-${contact.id}`}
                                 >
                                   <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteContact(contact)}
-                                  data-testid={`button-delete-address-${contact.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>

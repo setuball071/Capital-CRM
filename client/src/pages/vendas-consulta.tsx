@@ -1333,15 +1333,6 @@ export default function VendasConsulta() {
                         >
                           <Star className={`h-3 w-3 ${contact.isPrimary ? "fill-current" : ""}`} />
                         </Button>
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => handleDeleteContact(contact)}
-                          data-testid={`button-delete-contact-${contact.id}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1426,15 +1417,6 @@ export default function VendasConsulta() {
                           data-testid={`button-edit-email-${contact.id}`}
                         >
                           <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => handleDeleteContact(contact)}
-                          data-testid={`button-delete-email-${contact.id}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
