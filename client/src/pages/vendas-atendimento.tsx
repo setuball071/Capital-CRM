@@ -1322,6 +1322,7 @@ export default function VendasAtendimento() {
                                   >
                                     <Copy className="h-3 w-3" />
                                   </Button>
+                                  {contact.isManual && (
                                   <Button 
                                     size="icon" 
                                     variant="ghost"
@@ -1331,6 +1332,7 @@ export default function VendasAtendimento() {
                                   >
                                     <Pencil className="h-3 w-3" />
                                   </Button>
+                                  )}
                                   <Button 
                                     size="icon" 
                                     variant="ghost"

@@ -1315,6 +1315,7 @@ export default function VendasConsulta() {
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        {contact.isManual && (
                         <Button 
                           size="icon" 
                           variant="ghost"
@@ -1324,6 +1325,7 @@ export default function VendasConsulta() {
                         >
                           <Pencil className="h-3 w-3" />
                         </Button>
+                        )}
                         <Button 
                           size="icon" 
                           variant="ghost"
