@@ -601,25 +601,40 @@ class FastImportService {
       AND (${tipoImport === "contatos" ? sql`TRUE` : sql`s.matricula IS NOT NULL AND s.matricula != ''`})
   `);
 
-    const errorResult = await db.execute(sql`
-    INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
-    SELECT 
-      ${run.id},
-      COALESCE(s.row_num, s.id),
-      s.cpf,
-      ${tipoImport === "contatos" ? sql`NULL` : sql`s.matricula`},
-      'erro',
-      CASE 
-        WHEN s.cpf IS NULL OR s.cpf = '' THEN 'CPF inválido ou vazio'
-        ELSE 'Matrícula inválida ou vazia'
-      END
-    FROM ${sql.raw(stagingTable)} s
-    WHERE s.import_run_id = ${run.id}
-      AND (
-        s.cpf IS NULL OR s.cpf = ''
-        OR (${tipoImport !== "contatos"} AND (s.matricula IS NULL OR s.matricula = ''))
-      )
-  `);
+    const errorQuery = tipoImport === "contatos"
+      ? sql`
+        INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
+        SELECT 
+          ${run.id},
+          COALESCE(s.row_num, s.id),
+          s.cpf,
+          NULL,
+          'erro',
+          'CPF inválido ou vazio'
+        FROM ${sql.raw(stagingTable)} s
+        WHERE s.import_run_id = ${run.id}
+          AND (s.cpf IS NULL OR s.cpf = '')
+      `
+      : sql`
+        INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
+        SELECT 
+          ${run.id},
+          COALESCE(s.row_num, s.id),
+          s.cpf,
+          s.matricula,
+          'erro',
+          CASE 
+            WHEN s.cpf IS NULL OR s.cpf = '' THEN 'CPF inválido ou vazio'
+            ELSE 'Matrícula inválida ou vazia'
+          END
+        FROM ${sql.raw(stagingTable)} s
+        WHERE s.import_run_id = ${run.id}
+          AND (
+            s.cpf IS NULL OR s.cpf = ''
+            OR (s.matricula IS NULL OR s.matricula = '')
+          )
+      `;
+    const errorResult = await db.execute(errorQuery);
 
     console.log(
       `[FastImport] Registered: ${okResult.rowCount || 0} ok, ${errorResult.rowCount || 0} errors`,
