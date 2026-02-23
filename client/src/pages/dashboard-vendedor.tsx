@@ -637,11 +637,11 @@ export default function DashboardVendedorPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-5 lg:p-8 overflow-auto">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-5 sm:mb-8 gap-3 sm:gap-6 relative overflow-visible" style={{ minHeight: user.avatarUrl ? "110px" : "auto", zIndex: 10 }}>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-5 sm:mb-8 gap-3 sm:gap-6 relative overflow-visible" style={{ minHeight: user.avatarUrl ? "140px" : "auto", zIndex: 10 }}>
         <div className="flex items-end gap-3 sm:gap-5 min-w-0">
           <div className="relative shrink-0" style={{ zIndex: 10 }}>
             {user.avatarUrl ? (
-              <div className="relative w-[90px] h-[120px] sm:w-[130px] sm:h-[170px] lg:w-[150px] lg:h-[190px]" style={{ marginBottom: "-15px" }}>
+              <div className="relative w-[130px] h-[160px] sm:w-[180px] sm:h-[220px] lg:w-[200px] lg:h-[250px]" style={{ marginBottom: "-25px" }}>
                 <img 
                   src={user.avatarUrl} 
                   alt={user.name} 
