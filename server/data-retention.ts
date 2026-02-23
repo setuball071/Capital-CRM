@@ -132,22 +132,11 @@ async function cleanupOldContratos(): Promise<number> {
 
 async function cleanupOrphanedStaging(): Promise<void> {
   try {
-    const activeRuns = await db.execute(sql`
-      SELECT id FROM import_runs 
-      WHERE status IN ('processing', 'staging', 'merging', 'pending', 'processando')
-      AND created_at > NOW() - INTERVAL '2 hours'
-    `);
-
-    if (activeRuns.rows && activeRuns.rows.length > 0) {
-      console.log("[DataRetention] Active imports found, skipping staging cleanup.");
-      return;
-    }
-
     const stalledRuns = await db.execute(sql`
       UPDATE import_runs 
       SET status = 'erro', error_message = 'Importação travada - timeout automático'
-      WHERE status IN ('processing', 'staging', 'merging', 'pending', 'processando')
-      AND created_at < NOW() - INTERVAL '2 hours'
+      WHERE status IN ('processing', 'staging', 'merging', 'processando')
+      AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '24 hours'
       RETURNING id
     `);
 
@@ -156,25 +145,54 @@ async function cleanupOrphanedStaging(): Promise<void> {
       console.log(`[DataRetention] Marked ${ids.length} stalled imports as error: ${ids.join(', ')}`);
     }
 
-    const stagingCounts = await db.execute(sql`
-      SELECT 
-        (SELECT COUNT(*) FROM staging_folha) AS folha,
-        (SELECT COUNT(*) FROM staging_d8) AS d8,
-        (SELECT COUNT(*) FROM staging_contatos) AS contatos
+    const terminalRunIds = await db.execute(sql`
+      SELECT DISTINCT s.import_run_id FROM (
+        SELECT DISTINCT import_run_id FROM staging_folha
+        UNION ALL
+        SELECT DISTINCT import_run_id FROM staging_d8
+        UNION ALL
+        SELECT DISTINCT import_run_id FROM staging_contatos
+      ) AS s
+      WHERE s.import_run_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM import_runs ir 
+          WHERE ir.id = s.import_run_id
+            AND ir.status IN ('concluido', 'concluido_com_erros', 'erro', 'cancelado')
+        )
     `);
 
-    const row = stagingCounts.rows?.[0] as any;
-    const folha = Number(row?.folha || 0);
-    const d8 = Number(row?.d8 || 0);
-    const contatos = Number(row?.contatos || 0);
+    const orphanedRunIds = await db.execute(sql`
+      SELECT DISTINCT s.import_run_id FROM (
+        SELECT DISTINCT import_run_id FROM staging_folha
+        UNION ALL
+        SELECT DISTINCT import_run_id FROM staging_d8
+        UNION ALL
+        SELECT DISTINCT import_run_id FROM staging_contatos
+      ) AS s
+      WHERE s.import_run_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM import_runs ir 
+          WHERE ir.id = s.import_run_id
+        )
+    `);
 
-    if (folha + d8 + contatos === 0) return;
+    const idsToClean: number[] = [];
+    if (terminalRunIds.rows) {
+      for (const r of terminalRunIds.rows) idsToClean.push((r as any).import_run_id);
+    }
+    if (orphanedRunIds.rows) {
+      for (const r of orphanedRunIds.rows) idsToClean.push((r as any).import_run_id);
+    }
 
-    console.log(`[DataRetention] Cleaning orphaned staging data: folha=${folha}, d8=${d8}, contatos=${contatos}`);
+    if (idsToClean.length === 0) return;
 
-    if (folha > 0) await db.execute(sql`TRUNCATE TABLE staging_folha`);
-    if (d8 > 0) await db.execute(sql`TRUNCATE TABLE staging_d8`);
-    if (contatos > 0) await db.execute(sql`TRUNCATE TABLE staging_contatos`);
+    console.log(`[DataRetention] Cleaning staging data for ${idsToClean.length} terminal/orphaned import runs: ${idsToClean.join(', ')}`);
+
+    for (const runId of idsToClean) {
+      await db.execute(sql`DELETE FROM staging_folha WHERE import_run_id = ${runId}`);
+      await db.execute(sql`DELETE FROM staging_d8 WHERE import_run_id = ${runId}`);
+      await db.execute(sql`DELETE FROM staging_contatos WHERE import_run_id = ${runId}`);
+    }
 
     console.log("[DataRetention] Orphaned staging data cleaned.");
   } catch (error: any) {
