@@ -1093,11 +1093,17 @@ class FastImportService {
               CASE 
                 WHEN s.data_nascimento ~ '^\d{2}/\d{2}/\d{4}$' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YYYY')
+                WHEN s.data_nascimento ~ '^\d{2}-\d{2}-\d{4}$' THEN 
+                  TO_TIMESTAMP(s.data_nascimento, 'DD-MM-YYYY')
                 WHEN s.data_nascimento ~ '^\d{4}-\d{2}-\d{2}' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'YYYY-MM-DD')
-                WHEN s.data_nascimento ~ '^\d+$' AND LENGTH(s.data_nascimento) <= 6 THEN 
-                  -- Número serial do Excel (dias desde 1899-12-30)
-                  DATE '1899-12-30' + s.data_nascimento::integer
+                WHEN s.data_nascimento ~ '^\d{4}/\d{2}/\d{2}' THEN 
+                  TO_TIMESTAMP(s.data_nascimento, 'YYYY/MM/DD')
+                WHEN s.data_nascimento ~ '^\d{1,2}/\d{1,2}/\d{2}$' THEN 
+                  TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YY')
+                WHEN s.data_nascimento ~ '^\d+\.?\d*$' AND CAST(FLOOR(CAST(s.data_nascimento AS numeric)) AS integer) BETWEEN 1 AND 80000 THEN 
+                  -- Número serial do Excel (dias desde 1899-12-30), aceita inteiro ou decimal
+                  DATE '1899-12-30' + CAST(FLOOR(CAST(s.data_nascimento AS numeric)) AS integer)
                 ELSE NULL
               END
             ELSE NULL

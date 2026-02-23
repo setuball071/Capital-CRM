@@ -76,7 +76,10 @@ export function AppSidebar() {
   const userRole = user.role as UserRole;
   const isMaster = userRole === "master";
 
-  const tenantFeatureFlags: Record<string, boolean> = {};
+  const tenantName = (tenant?.name || "").toLowerCase().trim();
+  const tenantFeatureFlags: Record<string, boolean> = {
+    solicitar_boleto: tenantName.includes("capital"),
+  };
 
   const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string }): boolean => {
     if (item.tenantFeature && !tenantFeatureFlags[item.tenantFeature]) return false;
@@ -131,7 +134,7 @@ export function AppSidebar() {
         { title: "Bancos", url: "/banks", icon: Landmark, module: "modulo_roteiros", subItem: "bancos" },
         { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, module: "modulo_roteiros", subItem: "tabelas_coeficientes" },
         { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros", subItem: "roteiros_bancarios" },
-        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros" },
+        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
       ],
     },
     {
