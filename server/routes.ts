@@ -16888,7 +16888,163 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       res.status(500).json({ message: "Erro ao atualizar regulamento" });
     }
   });
+  // ══════════════════════════════════════════════════════════════
+  // SOLICITAÇÕES DE BOLETO
+  // ══════════════════════════════════════════════════════════════
 
+  // GET /api/solicitacoes-boleto → lista (vendedor vê só as suas, operacional/admin vê todas)
+  app.get("/api/solicitacoes-boleto", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const user = req.user;
+      if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
+
+      const isAdmin = hasRole(user, ["master", "coordenacao", "operacional", "atendimento"]);
+
+      let query = `
+        SELECT 
+          sb.*,
+          u1.name as solicitado_por_nome,
+          u2.name as atendido_por_nome
+        FROM solicitacoes_boleto sb
+        LEFT JOIN users u1 ON sb.solicitado_por_id = u1.id
+        LEFT JOIN users u2 ON sb.atendido_por_id = u2.id
+        WHERE sb.tenant_id = ${tenantId}
+      `;
+
+      if (!isAdmin) {
+        query += ` AND sb.solicitado_por_id = ${user.id}`;
+      }
+
+      query += ` ORDER BY sb.created_at DESC`;
+
+      const result = await db.execute(sql.raw(query));
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[BOLETO] Erro ao listar:", error);
+      res.status(500).json({ message: "Erro ao buscar solicitações" });
+    }
+  });
+
+  // GET /api/solicitacoes-boleto/stats → painel gestor
+  app.get("/api/solicitacoes-boleto/stats", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const user = req.user;
+      if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
+      if (!hasRole(user, ["master", "coordenacao", "operacional", "atendimento"])) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'pendente') as pendentes,
+          COUNT(*) FILTER (WHERE status = 'em_andamento') as em_andamento,
+          COUNT(*) FILTER (WHERE status = 'pendenciado') as pendenciados,
+          COUNT(*) FILTER (WHERE status = 'concluido') as concluidos,
+          COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as hoje,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semana
+        FROM solicitacoes_boleto
+        WHERE tenant_id = ${tenantId}
+      `);
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[BOLETO] Erro stats:", error);
+      res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
+  // POST /api/solicitacoes-boleto → vendedor abre solicitação
+  app.post("/api/solicitacoes-boleto", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const user = req.user;
+      if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
+
+      const { banco, tipoBoleto, nomeCliente, cpfCliente, dataNascimento, telefone, email, valor, observacaoVendedor } = req.body;
+
+      if (!banco || !tipoBoleto || !nomeCliente || !cpfCliente) {
+        return res.status(400).json({ message: "Banco, tipo, nome e CPF são obrigatórios" });
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO solicitacoes_boleto 
+          (tenant_id, banco, tipo_boleto, nome_cliente, cpf_cliente, data_nascimento, telefone, email, valor, observacao_vendedor, status, solicitado_por_id, created_at, updated_at)
+        VALUES 
+          (${tenantId}, ${banco}, ${tipoBoleto}, ${nomeCliente}, ${cpfCliente}, ${dataNascimento || null}, ${telefone || null}, ${email || null}, ${valor || null}, ${observacaoVendedor || null}, 'pendente', ${user.id}, NOW(), NOW())
+        RETURNING *
+      `);
+
+      res.status(201).json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[BOLETO] Erro ao criar:", error);
+      res.status(500).json({ message: "Erro ao criar solicitação" });
+    }
+  });
+
+  // PATCH /api/solicitacoes-boleto/:id/status → operacional atualiza status
+  app.patch("/api/solicitacoes-boleto/:id/status", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const user = req.user;
+      if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
+      if (!hasRole(user, ["master", "coordenacao", "operacional", "atendimento"])) {
+        return res.status(403).json({ message: "Sem permissão para atualizar status" });
+      }
+
+      const { id } = req.params;
+      const { status, observacaoOperacional } = req.body;
+
+      const statusValidos = ["pendente", "em_andamento", "solicitado_banco", "aguardando_retorno", "pendenciado", "concluido", "cancelado"];
+      if (!statusValidos.includes(status)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE solicitacoes_boleto
+        SET 
+          status = ${status},
+          observacao_operacional = ${observacaoOperacional || null},
+          atendido_por_id = ${user.id},
+          updated_at = NOW()
+        WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Solicitação não encontrada" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[BOLETO] Erro ao atualizar status:", error);
+      res.status(500).json({ message: "Erro ao atualizar status" });
+    }
+  });
+
+  // DELETE /api/solicitacoes-boleto/:id → só master/coordenacao
+  app.delete("/api/solicitacoes-boleto/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const user = req.user;
+      if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
+      if (!hasRole(user, ["master", "coordenacao"])) {
+        return res.status(403).json({ message: "Sem permissão para excluir" });
+      }
+
+      const { id } = req.params;
+      await db.execute(sql`
+        DELETE FROM solicitacoes_boleto WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+      `);
+
+      res.json({ message: "Solicitação excluída" });
+    } catch (error: any) {
+      console.error("[BOLETO] Erro ao excluir:", error);
+      res.status(500).json({ message: "Erro ao excluir" });
+    }
+  });
   const httpServer = createServer(app);
   return httpServer;
 }

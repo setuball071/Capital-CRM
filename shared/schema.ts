@@ -2320,4 +2320,29 @@ export const insertRegulamentoSchema = createInsertSchema(regulamentos).omit({ i
 export type Regulamento = typeof regulamentos.$inferSelect;
 export type InsertRegulamento = z.infer<typeof insertRegulamentoSchema>;
 
+// ── SOLICITAÇÕES DE BOLETO ──────────────────────────────────────
+export const solicitacoesBoleto = pgTable("solicitacoes_boleto", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  banco: varchar("banco", { length: 100 }).notNull(),
+  tipoBoleto: varchar("tipo_boleto", { length: 50 }).notNull(), // credito_consignado | cartao_beneficio | cartao_credito
+  nomeCliente: varchar("nome_cliente", { length: 200 }).notNull(),
+  cpfCliente: varchar("cpf_cliente", { length: 14 }).notNull(),
+  dataNascimento: varchar("data_nascimento", { length: 10 }),
+  telefone: varchar("telefone", { length: 20 }),
+  email: varchar("email", { length: 150 }),
+  valor: varchar("valor", { length: 20 }),
+  observacaoVendedor: text("observacao_vendedor"),
+  status: varchar("status", { length: 50 }).notNull().default("pendente"),
+  // pendente | em_andamento | solicitado_banco | aguardando_retorno | pendenciado | concluido | cancelado
+  observacaoOperacional: text("observacao_operacional"),
+  solicitadoPorId: integer("solicitado_por_id").references(() => users.id, { onDelete: "set null" }),
+  atendidoPorId: integer("atendido_por_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSolicitacaoBoletoSchema = createInsertSchema(solicitacoesBoleto).omit({ id: true, createdAt: true, updatedAt: true });
+export type SolicitacaoBoleto = typeof solicitacoesBoleto.$inferSelect;
+export type InsertSolicitacaoBoleto = z.infer<typeof insertSolicitacaoBoletoSchema>;
 
