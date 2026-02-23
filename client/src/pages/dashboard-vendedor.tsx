@@ -452,7 +452,7 @@ export default function DashboardVendedorPage() {
   };
 
   const DashboardPanel = () => (
-    <div className="space-y-5 sm:space-y-6" data-testid="dashboard-vendedor">
+    <div className="space-y-5 sm:space-y-6 relative" style={{ zIndex: 5 }} data-testid="dashboard-vendedor">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch">
         <div className="lg:col-span-3 flex">
           <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} />
@@ -637,24 +637,24 @@ export default function DashboardVendedorPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-5 lg:p-8 overflow-auto">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end sm:mb-8 gap-3 sm:gap-6 relative overflow-visible mt-[0px] mb-[0px]" style={{ minHeight: user.avatarUrl ? "140px" : "auto", zIndex: 10 }}>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-0 gap-3 sm:gap-6 relative overflow-visible" style={{ minHeight: user.avatarUrl ? "100px" : "auto", zIndex: 1 }}>
         <div className="flex items-end gap-3 sm:gap-5 min-w-0">
-          <div className="relative shrink-0" style={{ zIndex: 10 }}>
+          <div className="relative shrink-0" style={{ zIndex: 1 }}>
             {user.avatarUrl ? (
-              <div className="relative w-[130px] h-[160px] sm:w-[180px] sm:h-[220px] lg:w-[200px] lg:h-[250px]" style={{ marginBottom: "-25px" }}>
+              <div className="relative w-[160px] h-[140px] sm:w-[220px] sm:h-[190px] lg:w-[260px] lg:h-[230px]" style={{ marginBottom: "-60px" }}>
                 <img 
                   src={user.avatarUrl} 
                   alt={user.name} 
-                  className="w-full h-full object-contain object-bottom ml-[58px] mr-[58px] pl-[0px] pr-[0px] pt-[0px] pb-[0px] mt-[-69px] mb-[-69px]" 
+                  className="w-full h-full object-contain object-bottom" 
                   style={{ 
-                    filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.18))"
+                    filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.15))"
                   }}
                   data-testid="img-vendedor-avatar" 
                 />
                 {nivelGeral && (
                   <div
-                    className="absolute -bottom-1 -right-1 p-1.5 sm:p-2 rounded-full border-2 border-background"
-                    style={{ backgroundColor: nivelGeral.cor, zIndex: 11 }}
+                    className="absolute bottom-0 right-2 p-1.5 sm:p-2 rounded-full border-2 border-background"
+                    style={{ backgroundColor: nivelGeral.cor, zIndex: 2 }}
                   >
                     <NivelGeralIcon size={12} className="text-background" />
                   </div>
