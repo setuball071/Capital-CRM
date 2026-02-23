@@ -641,11 +641,11 @@ export default function DashboardVendedorPage() {
         <div className="flex items-end -space-x-4 sm:-space-x-6 min-w-0">
           <div className="relative shrink-0" style={{ zIndex: 1 }}>
             {user.avatarUrl ? (
-              <div className="relative w-[200px] h-[180px] sm:w-[280px] sm:h-[250px] lg:w-[340px] lg:h-[300px]" style={{ marginBottom: "-80px" }}>
+              <div className="relative w-[180px] sm:w-[240px] lg:w-[280px]" style={{ marginBottom: "-80px" }}>
                 <img 
                   src={user.avatarUrl} 
                   alt={user.name} 
-                  className="w-full h-full object-contain object-bottom" 
+                  className="w-full h-auto" 
                   style={{ 
                     filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.15))"
                   }}
