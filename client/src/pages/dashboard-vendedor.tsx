@@ -637,24 +637,32 @@ export default function DashboardVendedorPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-5 lg:p-8 overflow-auto">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 sm:mb-8 gap-3 sm:gap-6">
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-          <div className="relative shrink-0">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-5 sm:mb-8 gap-3 sm:gap-6 relative overflow-visible" style={{ minHeight: user.avatarUrl ? "110px" : "auto", zIndex: 10 }}>
+        <div className="flex items-end gap-3 sm:gap-5 min-w-0">
+          <div className="relative shrink-0" style={{ zIndex: 10 }}>
             {user.avatarUrl ? (
-              <div className="w-20 h-20 sm:w-28 sm:h-28 relative">
-                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-contain object-bottom" data-testid="img-vendedor-avatar" />
+              <div className="relative w-[90px] h-[120px] sm:w-[130px] sm:h-[170px] lg:w-[150px] lg:h-[190px]" style={{ marginBottom: "-15px" }}>
+                <img 
+                  src={user.avatarUrl} 
+                  alt={user.name} 
+                  className="w-full h-full object-contain object-bottom" 
+                  style={{ 
+                    filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.18))"
+                  }}
+                  data-testid="img-vendedor-avatar" 
+                />
                 {nivelGeral && (
                   <div
-                    className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
-                    style={{ backgroundColor: nivelGeral.cor }}
+                    className="absolute -bottom-1 -right-1 p-1.5 sm:p-2 rounded-full border-2 border-background"
+                    style={{ backgroundColor: nivelGeral.cor, zIndex: 11 }}
                   >
-                    <NivelGeralIcon size={8} className="text-background" />
+                    <NivelGeralIcon size={12} className="text-background" />
                   </div>
                 )}
               </div>
             ) : (
               <div className="relative">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-primary p-0.5">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-primary p-0.5">
                   <Avatar className="w-full h-full">
                     <AvatarFallback className="text-xs sm:text-sm font-bold">
                       {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
@@ -672,7 +680,7 @@ export default function DashboardVendedorPage() {
               </div>
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 pb-1">
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <h1 className="font-black italic text-2xl sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase leading-none truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
                 {data?.vendedorNome || user.name}

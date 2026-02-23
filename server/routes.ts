@@ -2693,29 +2693,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       if (!file) return res.status(400).json({ message: "Arquivo não enviado. Use JPG, PNG ou WebP (máximo 2MB)." });
 
-      const fsModule = await import("fs");
-      const pathModule = await import("path");
-
-      const avatarsDir = pathModule.join(process.cwd(), "uploads", "avatars");
-      if (!fsModule.existsSync(avatarsDir)) {
-        fsModule.mkdirSync(avatarsDir, { recursive: true });
-      }
-
-      const ext = pathModule.extname(file.originalname).toLowerCase() || ".jpg";
-      const filename = `avatar-${userId}${ext}`;
-      const filepath = pathModule.join(avatarsDir, filename);
-
-      for (const existingExt of [".png", ".jpg", ".jpeg", ".webp"]) {
-        if (existingExt !== ext) {
-          const oldPath = pathModule.join(avatarsDir, `avatar-${userId}${existingExt}`);
-          if (fsModule.existsSync(oldPath)) {
-            try { fsModule.unlinkSync(oldPath); } catch (e) {}
-          }
-        }
-      }
-
-      fsModule.writeFileSync(filepath, file.buffer);
-      const avatarUrl = `/uploads/avatars/${filename}?t=${Date.now()}`;
+      const mimeType = file.mimetype || "image/png";
+      const base64Data = file.buffer.toString("base64");
+      const avatarUrl = `data:${mimeType};base64,${base64Data}`;
 
       await db.execute(sql`UPDATE users SET avatar_url = ${avatarUrl} WHERE id = ${userId}`);
 
