@@ -6834,6 +6834,87 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  // POST /api/fast-imports/reprocess/:id - Reset e reprocessa uma importação existente
+  app.post("/api/fast-imports/reprocess/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { fastImportService } = await import("./fast-import-service");
+      const runId = parseInt(req.params.id);
+      
+      if (isNaN(runId)) {
+        return res.status(400).json({ message: "ID de importação inválido" });
+      }
+
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, runId)).limit(1);
+      if (!run) {
+        return res.status(404).json({ message: "Importação não encontrada" });
+      }
+
+      if (!["pending", "erro", "pausado"].includes(run.status)) {
+        return res.status(400).json({ message: `Importação com status '${run.status}' não pode ser reprocessada` });
+      }
+
+      const stagingTableMap: Record<string, string> = {
+        folha: "staging_folha",
+        d8: "staging_d8",
+        contatos: "staging_contatos",
+      };
+      const stagingTable = stagingTableMap[run.tipoImport];
+      if (!stagingTable) {
+        return res.status(400).json({ message: `Tipo de importação '${run.tipoImport}' não suporta reprocessamento` });
+      }
+
+      const filePath = run.arquivoPath;
+      if (!filePath || !fs.existsSync(filePath)) {
+        return res.status(400).json({ message: "Arquivo original não encontrado no servidor. Faça o upload novamente." });
+      }
+
+      await db.execute(sql`DELETE FROM import_run_rows WHERE import_run_id = ${runId}`);
+      await db.execute(sql`DELETE FROM ${sql.raw(stagingTable)} WHERE import_run_id = ${runId}`);
+
+      if (run.tipoImport === "contatos") {
+        await db.execute(sql`DELETE FROM client_contacts WHERE import_run_id = ${runId}`);
+      }
+
+      await db.update(importRuns).set({
+        status: "pending",
+        processedRows: 0,
+        successRows: 0,
+        errorRows: 0,
+        currentChunk: 0,
+        offsetAtual: 0,
+        completedAt: null,
+        errorMessage: null,
+        updatedAt: new Date(),
+      }).where(eq(importRuns.id, runId));
+
+      console.log(`[FastImport] Reprocessing run ${runId} (${run.tipoImport})...`);
+
+      res.json({
+        success: true,
+        importRunId: runId,
+        phase: "staging",
+        message: "Reprocessamento iniciado em background.",
+        backgroundProcessing: true,
+      });
+
+      fastImportService.processChunk(runId).then(async (result) => {
+        console.log(`[FastImport] Reprocess result: phase=${result.phase}, staged=${result.stagedRows}, merged=${result.mergedRows}, elapsed=${result.elapsedMs}ms`);
+      }).catch(async (error: any) => {
+        console.error("Fast import reprocess error:", error);
+        try {
+          await db.update(importRuns)
+            .set({ status: "erro", errorMessage: error.message || "Erro desconhecido", updatedAt: new Date() })
+            .where(eq(importRuns.id, runId));
+        } catch (e) {
+          console.error("Failed to update import run status:", e);
+        }
+      });
+    } catch (error: any) {
+      console.error("Fast import reprocess error:", error);
+      return res.status(500).json({ message: error.message || "Erro ao reprocessar importação" });
+    }
+  });
+
   // POST /api/fast-imports/process/:id - Processa staging + merge (async background)
   app.post("/api/fast-imports/process/:id", requireAuth, requireMaster, async (req, res) => {
     try {

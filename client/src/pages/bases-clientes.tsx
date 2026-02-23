@@ -702,6 +702,38 @@ export default function BasesClientes() {
     }
   };
 
+  const [reprocessingRunId, setReprocessingRunId] = useState<number | null>(null);
+
+  const reprocessImportRun = async (runId: number) => {
+    if (!confirm(`Deseja reprocessar a importação #${runId}? Todos os dados anteriores desta importação serão limpos e o arquivo será processado novamente.`)) {
+      return;
+    }
+    try {
+      setReprocessingRunId(runId);
+      const response = await fetch(`/api/fast-imports/reprocess/${runId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Erro ao reprocessar importação");
+      }
+      toast({
+        title: "Reprocessamento iniciado",
+        description: `A importação #${runId} está sendo reprocessada em background. Acompanhe o status na lista.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível reprocessar a importação.",
+        variant: "destructive",
+      });
+    } finally {
+      setReprocessingRunId(null);
+    }
+  };
+
   // Funções de seleção múltipla para exclusão em massa
   const handleSelectRun = (runId: number, checked: boolean) => {
     setSelectedRunIds(prev => {
@@ -2368,6 +2400,22 @@ export default function BasesClientes() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <XCircle className="w-4 h-4 text-orange-500" />
+                          )}
+                        </Button>
+                      )}
+                      {["pending", "erro", "pausado"].includes(run.status) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => reprocessImportRun(run.id)}
+                          disabled={reprocessingRunId === run.id}
+                          title="Reprocessar importação"
+                          data-testid={`button-reprocess-run-${run.id}`}
+                        >
+                          {reprocessingRunId === run.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4 text-blue-500" />
                           )}
                         </Button>
                       )}
