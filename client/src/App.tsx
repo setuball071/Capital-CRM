@@ -56,6 +56,7 @@ import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
+import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -296,6 +297,9 @@ function Router() {
               </Route>
               <Route path="/coefficient-tables">
                 {() => <ModuleRoute component={CoefficientTablesPage} module="modulo_roteiros" />}
+              </Route>
+              <Route path="/solicitar-boleto">
+                {() => <ModuleRoute component={SolicitacoesBoletoPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/roteiros">
                 {() => <ModuleRoute component={RoteirosPage} module="modulo_roteiros" />}
