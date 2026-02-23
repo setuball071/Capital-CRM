@@ -645,7 +645,7 @@ export default function DashboardVendedorPage() {
                 <img 
                   src={user.avatarUrl} 
                   alt={user.name} 
-                  className="w-full h-full object-contain object-bottom ml-[58px] mr-[58px] mt-[-70px] mb-[-70px] pl-[0px] pr-[0px] pt-[0px] pb-[0px]" 
+                  className="w-full h-full object-contain object-bottom ml-[58px] mr-[58px] pl-[0px] pr-[0px] pt-[0px] pb-[0px] mt-[-69px] mb-[-69px]" 
                   style={{ 
                     filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.18))"
                   }}
