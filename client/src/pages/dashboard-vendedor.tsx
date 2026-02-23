@@ -686,7 +686,7 @@ export default function DashboardVendedorPage() {
                 {data?.vendedorNome || user.name}
               </h1>
             </div>
-            <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 ml-[-13px] mr-[-13px]">
+            <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 ml-[-13px] mr-[-13px] text-right">
               {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
             </p>
           </div>
