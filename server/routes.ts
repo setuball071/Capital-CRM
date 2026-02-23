@@ -17024,8 +17024,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           COUNT(*) FILTER (WHERE status = 'em_andamento') as em_andamento,
           COUNT(*) FILTER (WHERE status = 'pendenciado') as pendenciados,
           COUNT(*) FILTER (WHERE status = 'concluido') as concluidos,
+          COUNT(*) FILTER (WHERE status = 'cancelado') as cancelados,
           COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as hoje,
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semana
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semana,
+          COALESCE(SUM(CAST(NULLIF(REPLACE(REPLACE(valor, '.', ''), ',', '.'), '') AS NUMERIC)), 0) as valor_total
         FROM solicitacoes_boleto
         WHERE tenant_id = ${tenantId}
       `);

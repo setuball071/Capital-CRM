@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Plus, Search, Loader2, CheckCircle, Clock, AlertCircle,
-  XCircle, FileText, RefreshCw, ChevronDown, Eye, Pencil
+  XCircle, FileText, RefreshCw, ChevronDown, Eye, Pencil, Trash2, DollarSign
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,10 @@ interface Stats {
   em_andamento: string;
   pendenciados: string;
   concluidos: string;
+  cancelados: string;
   hoje: string;
   semana: string;
+  valor_total: string;
 }
 
 // ── Constantes ────────────────────────────────────────────────
@@ -170,6 +172,24 @@ export default function SolicitacoesBoleto() {
     },
   });
 
+  const excluirMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/solicitacoes-boleto/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto/stats"] });
+      toast({ title: "Solicitação excluída com sucesso!" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro", description: err.message || "Erro ao excluir solicitação", variant: "destructive" });
+    },
+  });
+
+  function handleExcluir(id: number, nome: string) {
+    if (window.confirm(`Deseja excluir a solicitação de "${nome}"? Esta ação não pode ser desfeita.`)) {
+      excluirMutation.mutate(id);
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
   function resetForm() {
     setFormBanco(""); setFormTipo(""); setFormNome(""); setFormCpf("");
@@ -226,7 +246,7 @@ export default function SolicitacoesBoleto() {
 
       {/* Stats cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-gray-900">{stats.hoje || "0"}</div>
@@ -241,14 +261,25 @@ export default function SolicitacoesBoleto() {
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <div className="text-2xl font-bold text-red-600">{stats.pendenciados || "0"}</div>
-              <div className="text-xs text-gray-500 mt-1">Pendenciados</div>
+              <div className="text-2xl font-bold text-red-600">{stats.cancelados || "0"}</div>
+              <div className="text-xs text-gray-500 mt-1">Cancelados</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-green-600">{stats.concluidos || "0"}</div>
               <div className="text-xs text-gray-500 mt-1">Concluídos</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-1.5">
+                <DollarSign className="w-5 h-5 text-blue-600" />
+                <div className="text-2xl font-bold text-blue-600">
+                  {Number(stats.valor_total || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">Valor Total</div>
             </CardContent>
           </Card>
         </div>
@@ -352,9 +383,19 @@ export default function SolicitacoesBoleto() {
                           variant="ghost" size="sm"
                           onClick={() => abrirModalStatus(s)}
                           title="Atualizar status"
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          className="text-blue-600"
                         >
                           <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm"
+                          onClick={() => handleExcluir(s.id, s.nome_cliente)}
+                          title="Excluir solicitação"
+                          disabled={excluirMutation.isPending}
+                          className="text-red-600"
+                          data-testid={`button-delete-solicitacao-${s.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
