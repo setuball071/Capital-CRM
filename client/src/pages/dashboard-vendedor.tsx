@@ -682,7 +682,7 @@ export default function DashboardVendedorPage() {
           </div>
           <div className="min-w-0 pb-1 ml-[-30px] mr-[-30px]">
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h1 className="font-black italic text-2xl sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase leading-none truncate ml-[-13px] mr-[-13px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
+              <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate ml-[-13px] mr-[-13px] text-[46px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
                 {data?.vendedorNome || user.name}
               </h1>
             </div>
