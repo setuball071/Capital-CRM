@@ -93,6 +93,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import Papa from "papaparse";
+import { createNotification } from "./notification-service";
 
 // Configure multer for file uploads using memory storage (for smaller files)
 const upload = multer({
@@ -10380,6 +10381,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         leadsDistribuidos: (campanha.leadsDistribuidos || 0) + leadsDisponiveis.length,
       });
       
+      try {
+        await createNotification({
+          userId,
+          title: "Novos leads recebidos",
+          message: `Você recebeu ${leadsDisponiveis.length} lead(s) da campanha "${campanha.nome}".`,
+          type: "carteira",
+          actionUrl: "/vendas/atendimento",
+        });
+      } catch (e) { console.error("[NOTIFY] Erro ao notificar distribuição:", e); }
+
       return res.json({
         message: "Leads distribuídos com sucesso",
         quantidade: leadsDisponiveis.length,
@@ -10460,6 +10471,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           leadsDisponiveis: Math.max(0, (campanha.leadsDisponiveis || 0) - totalDistributed),
           leadsDistribuidos: (campanha.leadsDistribuidos || 0) + totalDistributed,
         });
+
+        for (const r of results) {
+          try {
+            await createNotification({
+              userId: r.userId,
+              title: "Novos leads recebidos",
+              message: `Você recebeu ${r.quantidade} lead(s) da campanha "${campanha.nome}".`,
+              type: "carteira",
+              actionUrl: "/vendas/atendimento",
+            });
+          } catch (e) { console.error("[NOTIFY] Erro ao notificar distribuição multi:", e); }
+        }
       }
       
       return res.json({
@@ -10563,6 +10586,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (transferred === 0) {
         return res.status(400).json({ message: "Nenhum lead disponível para transferir" });
       }
+
+      try {
+        await createNotification({
+          userId: toUserId,
+          title: "Leads transferidos para você",
+          message: `Você recebeu ${transferred} lead(s) transferidos da campanha "${campanha.nome}".`,
+          type: "carteira",
+          actionUrl: "/vendas/atendimento",
+        });
+      } catch (e) { console.error("[NOTIFY] Erro ao notificar transferência:", e); }
       
       return res.json({
         message: "Leads transferidos com sucesso",
@@ -17053,7 +17086,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         RETURNING *
       `);
 
-      res.status(201).json(result.rows[0]);
+      const novaSolicitacao = result.rows[0] as any;
+
+      try {
+        const operacionais = await db.execute(sql`
+          SELECT id FROM users WHERE tenant_id = ${tenantId} AND role IN ('operacional', 'master') AND is_active = true
+        `);
+        for (const op of operacionais.rows as any[]) {
+          await createNotification({
+            userId: op.id,
+            title: "Nova solicitação de boleto",
+            message: `${user.name} solicitou boleto ${banco} para ${nomeCliente}.`,
+            type: "demanda",
+            actionUrl: "/operacional",
+          });
+        }
+      } catch (e) { console.error("[NOTIFY] Erro ao notificar nova solicitação:", e); }
+
+      res.status(201).json(novaSolicitacao);
     } catch (error: any) {
       console.error("[BOLETO] Erro ao criar:", error);
       res.status(500).json({ message: "Erro ao criar solicitação" });
@@ -17111,7 +17161,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(404).json({ message: "Solicitação não encontrada" });
       }
 
-      res.json(result.rows[0]);
+      const solicitacao = result.rows[0] as any;
+      const statusLabels: Record<string, string> = {
+        pendente: "Pendente", em_andamento: "Em andamento", solicitado_banco: "Solicitado ao banco",
+        aguardando_retorno: "Aguardando retorno", pendenciado: "Pendenciado", concluido: "Concluído", cancelado: "Cancelado"
+      };
+
+      if (solicitacao.solicitado_por_id && solicitacao.solicitado_por_id !== user.id) {
+        try {
+          await createNotification({
+            userId: solicitacao.solicitado_por_id,
+            title: "Atualização de boleto",
+            message: `Seu boleto ${solicitacao.banco} (${solicitacao.nome_cliente}) foi atualizado para: ${statusLabels[status] || status}.`,
+            type: "demanda",
+            actionUrl: "/operacional",
+          });
+        } catch (e) { console.error("[NOTIFY] Erro ao notificar status boleto:", e); }
+      }
+
+      res.json(solicitacao);
     } catch (error: any) {
       console.error("[BOLETO] Erro ao atualizar status:", error);
       res.status(500).json({ message: "Erro ao atualizar status" });
