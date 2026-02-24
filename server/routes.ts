@@ -17306,6 +17306,197 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // =============================================
+  // APPOINTMENTS (Agendamentos)
+  // =============================================
+
+  // GET /api/appointments → listar agendamentos do usuário (com filtros opcionais)
+  app.get("/api/appointments", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const tenantId = req.tenantId;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const { status, from, to } = req.query;
+
+      let query = sql`
+        SELECT * FROM appointments
+        WHERE user_id = ${user.id} AND tenant_id = ${tenantId}
+      `;
+
+      if (status && typeof status === "string") {
+        query = sql`${query} AND status = ${status}`;
+      }
+      if (from && typeof from === "string") {
+        query = sql`${query} AND scheduled_for >= ${from}`;
+      }
+      if (to && typeof to === "string") {
+        query = sql`${query} AND scheduled_for <= ${to}`;
+      }
+
+      query = sql`${query} ORDER BY scheduled_for ASC`;
+
+      const result = await db.execute(query);
+
+      const appointments = result.rows.map((row: any) => ({
+        id: row.id,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        clientCpf: row.client_cpf,
+        clientName: row.client_name,
+        title: row.title,
+        notes: row.notes,
+        scheduledFor: row.scheduled_for,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
+      res.json(appointments);
+    } catch (error: any) {
+      console.error("[APPOINTMENTS] Erro ao listar:", error);
+      res.status(500).json({ message: "Erro ao listar agendamentos" });
+    }
+  });
+
+  // POST /api/appointments → criar agendamento
+  app.post("/api/appointments", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const tenantId = req.tenantId;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const { title, notes, scheduledFor, clientCpf, clientName } = req.body;
+
+      if (!title || !scheduledFor) {
+        return res.status(400).json({ message: "Título e data/hora são obrigatórios" });
+      }
+
+      const scheduledDate = new Date(scheduledFor);
+      if (isNaN(scheduledDate.getTime())) {
+        return res.status(400).json({ message: "Data/hora inválida" });
+      }
+
+      const result = await db.execute(sql`
+        INSERT INTO appointments (tenant_id, user_id, title, notes, scheduled_for, client_cpf, client_name, status, created_at, updated_at)
+        VALUES (${tenantId}, ${user.id}, ${title}, ${notes || null}, ${scheduledDate.toISOString()}, ${clientCpf || null}, ${clientName || null}, 'pendente', NOW(), NOW())
+        RETURNING *
+      `);
+
+      const row = result.rows[0] as any;
+      res.status(201).json({
+        id: row.id,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        clientCpf: row.client_cpf,
+        clientName: row.client_name,
+        title: row.title,
+        notes: row.notes,
+        scheduledFor: row.scheduled_for,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (error: any) {
+      console.error("[APPOINTMENTS] Erro ao criar:", error);
+      res.status(500).json({ message: "Erro ao criar agendamento" });
+    }
+  });
+
+  // PATCH /api/appointments/:id → atualizar agendamento
+  app.patch("/api/appointments/:id", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const tenantId = req.tenantId;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const numId = parseInt(req.params.id);
+      if (isNaN(numId)) return res.status(400).json({ message: "ID inválido" });
+
+      const { title, notes, scheduledFor, clientCpf, clientName, status } = req.body;
+
+      const existing = await db.execute(sql`
+        SELECT * FROM appointments WHERE id = ${numId} AND user_id = ${user.id} AND tenant_id = ${tenantId}
+      `);
+
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Agendamento não encontrado" });
+      }
+
+      const current = existing.rows[0] as any;
+
+      const newTitle = title ?? current.title;
+      const newNotes = notes !== undefined ? notes : current.notes;
+      let newScheduledFor = current.scheduled_for;
+      if (scheduledFor) {
+        const parsedDate = new Date(scheduledFor);
+        if (isNaN(parsedDate.getTime())) {
+          return res.status(400).json({ message: "Data/hora inválida" });
+        }
+        newScheduledFor = parsedDate.toISOString();
+      }
+      const newClientCpf = clientCpf !== undefined ? clientCpf : current.client_cpf;
+      const newClientName = clientName !== undefined ? clientName : current.client_name;
+      const newStatus = status ?? current.status;
+
+      const validStatuses = ["pendente", "confirmado", "cancelado", "concluido", "reagendado"];
+      if (!validStatuses.includes(newStatus)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE appointments
+        SET title = ${newTitle}, notes = ${newNotes}, scheduled_for = ${newScheduledFor},
+            client_cpf = ${newClientCpf}, client_name = ${newClientName}, status = ${newStatus}, updated_at = NOW()
+        WHERE id = ${numId} AND user_id = ${user.id} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      const row = result.rows[0] as any;
+      res.json({
+        id: row.id,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        clientCpf: row.client_cpf,
+        clientName: row.client_name,
+        title: row.title,
+        notes: row.notes,
+        scheduledFor: row.scheduled_for,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (error: any) {
+      console.error("[APPOINTMENTS] Erro ao atualizar:", error);
+      res.status(500).json({ message: "Erro ao atualizar agendamento" });
+    }
+  });
+
+  // DELETE /api/appointments/:id → excluir agendamento
+  app.delete("/api/appointments/:id", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const tenantId = req.tenantId;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const numId = parseInt(req.params.id);
+      if (isNaN(numId)) return res.status(400).json({ message: "ID inválido" });
+
+      const result = await db.execute(sql`
+        DELETE FROM appointments WHERE id = ${numId} AND user_id = ${user.id} AND tenant_id = ${tenantId}
+      `);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ message: "Agendamento não encontrado" });
+      }
+
+      res.json({ message: "Agendamento excluído" });
+    } catch (error: any) {
+      console.error("[APPOINTMENTS] Erro ao excluir:", error);
+      res.status(500).json({ message: "Erro ao excluir agendamento" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

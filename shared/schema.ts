@@ -2365,3 +2365,21 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
+export const appointments = pgTable("appointments", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  clientCpf: varchar("client_cpf", { length: 14 }),
+  clientName: varchar("client_name", { length: 255 }),
+  title: text("title").notNull(),
+  notes: text("notes"),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  status: varchar("status", { length: 30 }).notNull().default("pendente"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAppointmentSchema = createInsertSchema(appointments).omit({ id: true, createdAt: true, updatedAt: true });
+export type Appointment = typeof appointments.$inferSelect;
+export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
+
