@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setUser(data.user);
     }
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
   };
 
   const logout = async () => {

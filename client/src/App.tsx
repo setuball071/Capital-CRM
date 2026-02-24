@@ -57,6 +57,7 @@ import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
+import { NotificationBell } from "@/components/notification-bell";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -266,8 +267,9 @@ function Router() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between p-2 border-b">
+          <header className="flex items-center justify-between gap-2 p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <NotificationBell />
           </header>
           <main className="flex-1 overflow-auto">
             <Switch>
