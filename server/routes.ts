@@ -17139,6 +17139,105 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       res.status(500).json({ message: "Erro ao excluir" });
     }
   });
+  // ===== NOTIFICATIONS =====
+
+  // GET /api/notifications → listar notificações do usuário autenticado
+  app.get("/api/notifications", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const result = await db.execute(sql`
+        SELECT * FROM notifications 
+        WHERE user_id = ${user.id}
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("[NOTIFICATIONS] Erro ao listar:", error);
+      res.status(500).json({ message: "Erro ao listar notificações" });
+    }
+  });
+
+  // GET /api/notifications/unread-count → contagem de não lidas
+  app.get("/api/notifications/unread-count", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const result = await db.execute(sql`
+        SELECT COUNT(*)::int as count FROM notifications 
+        WHERE user_id = ${user.id} AND is_read = false
+      `);
+
+      res.json({ count: result.rows[0]?.count || 0 });
+    } catch (error: any) {
+      console.error("[NOTIFICATIONS] Erro ao contar:", error);
+      res.status(500).json({ message: "Erro ao contar notificações" });
+    }
+  });
+
+  // PATCH /api/notifications/read-all → marcar todas como lidas (MUST be before :id route)
+  app.patch("/api/notifications/read-all", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      await db.execute(sql`
+        UPDATE notifications SET is_read = true
+        WHERE user_id = ${user.id} AND is_read = false
+      `);
+
+      res.json({ message: "Todas notificações marcadas como lidas" });
+    } catch (error: any) {
+      console.error("[NOTIFICATIONS] Erro ao marcar todas:", error);
+      res.status(500).json({ message: "Erro ao atualizar notificações" });
+    }
+  });
+
+  // PATCH /api/notifications/:id/read → marcar como lida
+  app.patch("/api/notifications/:id/read", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const { id } = req.params;
+      const numId = parseInt(id);
+      if (isNaN(numId)) return res.status(400).json({ message: "ID inválido" });
+      await db.execute(sql`
+        UPDATE notifications SET is_read = true
+        WHERE id = ${numId} AND user_id = ${user.id}
+      `);
+
+      res.json({ message: "Notificação marcada como lida" });
+    } catch (error: any) {
+      console.error("[NOTIFICATIONS] Erro ao marcar como lida:", error);
+      res.status(500).json({ message: "Erro ao atualizar notificação" });
+    }
+  });
+
+  // DELETE /api/notifications/:id → excluir notificação
+  app.delete("/api/notifications/:id", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const { id } = req.params;
+      const numId = parseInt(id);
+      if (isNaN(numId)) return res.status(400).json({ message: "ID inválido" });
+      await db.execute(sql`
+        DELETE FROM notifications WHERE id = ${numId} AND user_id = ${user.id}
+      `);
+
+      res.json({ message: "Notificação excluída" });
+    } catch (error: any) {
+      console.error("[NOTIFICATIONS] Erro ao excluir:", error);
+      res.status(500).json({ message: "Erro ao excluir notificação" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

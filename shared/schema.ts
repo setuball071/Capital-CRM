@@ -2349,3 +2349,19 @@ export const insertSolicitacaoBoletoSchema = createInsertSchema(solicitacoesBole
 export type SolicitacaoBoleto = typeof solicitacoesBoleto.$inferSelect;
 export type InsertSolicitacaoBoleto = z.infer<typeof insertSolicitacaoBoletoSchema>;
 
+// ===== NOTIFICATIONS =====
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  actionUrl: text("action_url"),
+  isRead: boolean("is_read").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
