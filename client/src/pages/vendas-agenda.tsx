@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Calendar, Phone, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
-import type { LeadSchedule, SalesLead, SalesLeadAssignment, SalesCampaign } from "@shared/schema";
+import { Loader2, Calendar, Phone, CheckCircle, XCircle, Clock, AlertTriangle, User, Trash2, CalendarCheck } from "lucide-react";
+import type { LeadSchedule, SalesLead, SalesLeadAssignment, SalesCampaign, Appointment } from "@shared/schema";
 
 interface ScheduleDetalhado {
   schedule: LeadSchedule;
@@ -31,11 +31,28 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelado: "destructive",
 };
 
+const APPT_STATUS_LABELS: Record<string, string> = {
+  pendente: "Pendente",
+  confirmado: "Confirmado",
+  concluido: "Concluído",
+  cancelado: "Cancelado",
+  reagendado: "Reagendado",
+};
+
+const APPT_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pendente: "default",
+  confirmado: "outline",
+  concluido: "secondary",
+  cancelado: "destructive",
+  reagendado: "outline",
+};
+
 export default function VendasAgendaPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("todos");
   const [confirmDialog, setConfirmDialog] = useState<{ type: "realizado" | "cancelado"; scheduleId: number } | null>(null);
+  const [deleteApptDialog, setDeleteApptDialog] = useState<number | null>(null);
 
   const { data: schedules = [], isLoading } = useQuery<ScheduleDetalhado[]>({
     queryKey: ["/api/vendas/agenda/detalhado"],
@@ -72,6 +89,37 @@ export default function VendasAgendaPage() {
   const handleAtender = (assignmentId: number) => {
     atenderMutation.mutate(assignmentId);
   };
+
+  const { data: appointments = [], isLoading: isLoadingAppts } = useQuery<Appointment[]>({
+    queryKey: ["/api/appointments"],
+  });
+
+  const deleteApptMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/appointments/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Agendamento excluído!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+      setDeleteApptDialog(null);
+    },
+    onError: () => {
+      toast({ title: "Erro ao excluir agendamento", variant: "destructive" });
+    },
+  });
+
+  const updateApptStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      return apiRequest("PATCH", `/api/appointments/${id}`, { status });
+    },
+    onSuccess: () => {
+      toast({ title: "Status atualizado!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+    },
+  });
 
   const handleMarkStatus = (scheduleId: number, status: "realizado" | "cancelado") => {
     setConfirmDialog({ type: status, scheduleId });
@@ -285,6 +333,138 @@ export default function VendasAgendaPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarCheck className="h-5 w-5" />
+            Meus Agendamentos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoadingAppts ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CalendarCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhum agendamento registrado</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data/Hora</TableHead>
+                    <TableHead>Título</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Observações</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...appointments]
+                    .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
+                    .map((appt) => {
+                      const isOverdueAppt = appt.status === "pendente" && new Date(appt.scheduledFor) < new Date();
+                      return (
+                        <TableRow
+                          key={appt.id}
+                          className={isOverdueAppt ? "bg-destructive/10" : ""}
+                          data-testid={`row-appointment-${appt.id}`}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {isOverdueAppt && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                              <span className={isOverdueAppt ? "text-destructive font-medium" : ""}>
+                                {formatDateTime(appt.scheduledFor)}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-medium" data-testid={`text-appt-title-${appt.id}`}>{appt.title}</span>
+                          </TableCell>
+                          <TableCell>
+                            {appt.clientName ? (
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3 text-muted-foreground" />
+                                <span data-testid={`text-appt-client-${appt.id}`}>{appt.clientName}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground max-w-xs truncate block">
+                              {appt.notes || "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={APPT_STATUS_VARIANTS[appt.status] || "outline"}
+                              data-testid={`badge-appt-status-${appt.id}`}
+                            >
+                              {APPT_STATUS_LABELS[appt.status] || appt.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {appt.status === "pendente" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateApptStatusMutation.mutate({ id: appt.id, status: "concluido" })}
+                                  disabled={updateApptStatusMutation.isPending}
+                                  data-testid={`button-appt-concluir-${appt.id}`}
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Concluído
+                                </Button>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteApptDialog(appt.id)}
+                                data-testid={`button-appt-delete-${appt.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={deleteApptDialog !== null} onOpenChange={() => setDeleteApptDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Agendamento</DialogTitle>
+            <DialogDescription>Tem certeza que deseja excluir este agendamento?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteApptDialog(null)} data-testid="button-cancel-delete-appt">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteApptDialog !== null && deleteApptMutation.mutate(deleteApptDialog)}
+              disabled={deleteApptMutation.isPending}
+              data-testid="button-confirm-delete-appt"
+            >
+              {deleteApptMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>
