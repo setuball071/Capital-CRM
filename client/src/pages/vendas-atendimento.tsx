@@ -447,11 +447,22 @@ export default function VendasAtendimento() {
   const agendarMutation = useMutation({
     mutationFn: async (data: { dataHora: string; observacao: string }) => {
       if (!atendimentoAtual) throw new Error("Nenhum atendimento ativo");
-      return apiRequest("POST", `/api/vendas/atendimento/${atendimentoAtual.assignment.id}/agendar`, data);
+      const result = await apiRequest("POST", `/api/vendas/atendimento/${atendimentoAtual.assignment.id}/agendar`, data);
+      try {
+        await apiRequest("POST", "/api/appointments", {
+          title: `Retorno: ${atendimentoAtual.lead?.nome || "Cliente"}`,
+          notes: data.observacao || "",
+          scheduledFor: data.dataHora,
+          clientCpf: atendimentoAtual.lead?.cpf || null,
+          clientName: atendimentoAtual.lead?.nome || null,
+        });
+      } catch {}
+      return result;
     },
     onSuccess: () => {
       toast({ title: "Retorno agendado com sucesso!" });
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/agenda"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
       setScheduleDialogOpen(false);
       setScheduleData({ dataHora: "", observacao: "" });
     },
