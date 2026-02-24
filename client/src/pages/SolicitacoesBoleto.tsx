@@ -291,7 +291,6 @@ export default function SolicitacoesBoleto() {
           Nova Solicitação
         </Button>
       </div>
-
       {/* Stats cards */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -333,7 +332,6 @@ export default function SolicitacoesBoleto() {
           </Card>
         </div>
       )}
-
       {/* Filtros */}
       <Card className="mb-4">
         <CardContent className="pt-4 pb-4">
@@ -361,7 +359,6 @@ export default function SolicitacoesBoleto() {
           </div>
         </CardContent>
       </Card>
-
       {/* Tabela */}
       <Card>
         <CardContent className="p-0">
@@ -460,7 +457,6 @@ export default function SolicitacoesBoleto() {
           )}
         </CardContent>
       </Card>
-
       {/* ── Modal: Nova Solicitação ── */}
       <Dialog open={modalNova} onOpenChange={setModalNova}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
@@ -600,7 +596,6 @@ export default function SolicitacoesBoleto() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* ── Modal: Detalhes ── */}
       <Dialog open={!!modalDetalhe} onOpenChange={() => setModalDetalhe(null)}>
         <DialogContent className="max-w-lg">
@@ -675,7 +670,6 @@ export default function SolicitacoesBoleto() {
           )}
         </DialogContent>
       </Dialog>
-
       {/* ── Modal: Atualizar Status ── */}
       <Dialog open={!!modalStatus} onOpenChange={() => setModalStatus(null)}>
         <DialogContent className="max-w-md">
@@ -711,7 +705,8 @@ export default function SolicitacoesBoleto() {
                 />
               </div>
               <div>
-                <Label>Anexar Boleto (opcional)</Label>
+                <Label>Anexar Documento (opcional)
+</Label>
                 <div className="mt-1">
                   <input
                     ref={fileInputRef}
