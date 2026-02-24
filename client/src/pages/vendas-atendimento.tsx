@@ -450,6 +450,7 @@ export default function VendasAtendimento() {
       const result = await apiRequest("POST", `/api/vendas/atendimento/${atendimentoAtual.assignment.id}/agendar`, data);
       try {
         await apiRequest("POST", "/api/appointments", {
+          kind: "client_followup",
           title: `Retorno: ${atendimentoAtual.lead?.nome || "Cliente"}`,
           notes: data.observacao || "",
           scheduledFor: data.dataHora,

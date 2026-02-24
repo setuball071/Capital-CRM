@@ -2365,16 +2365,33 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
+export const APPOINTMENT_KINDS = ["client_followup", "task", "reminder", "pipeline_segment"] as const;
+export type AppointmentKind = typeof APPOINTMENT_KINDS[number];
+
+export const APPOINTMENT_KIND_LABELS: Record<string, string> = {
+  client_followup: "Retorno com Cliente",
+  task: "Tarefa",
+  reminder: "Lembrete / Compromisso",
+  pipeline_segment: "Ação de Pipeline",
+};
+
+export const APPOINTMENT_STATUSES = ["open", "done", "canceled"] as const;
+export type AppointmentStatus = typeof APPOINTMENT_STATUSES[number];
+
 export const appointments = pgTable("appointments", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  clientCpf: varchar("client_cpf", { length: 14 }),
-  clientName: varchar("client_name", { length: 255 }),
+  kind: varchar("kind", { length: 30 }).notNull().default("reminder"),
   title: text("title").notNull(),
   notes: text("notes"),
   scheduledFor: timestamp("scheduled_for").notNull(),
-  status: varchar("status", { length: 30 }).notNull().default("pendente"),
+  status: varchar("status", { length: 30 }).notNull().default("open"),
+  clientCpf: varchar("client_cpf", { length: 14 }),
+  clientName: varchar("client_name", { length: 255 }),
+  targetType: varchar("target_type", { length: 30 }),
+  targetId: integer("target_id"),
+  payload: jsonb("payload"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

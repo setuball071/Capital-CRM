@@ -17307,23 +17307,46 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // =============================================
-  // APPOINTMENTS (Agendamentos)
+  // APPOINTMENTS (Agendamentos Universais)
   // =============================================
 
-  // GET /api/appointments → listar agendamentos do usuário (com filtros opcionais)
+  function mapAppointmentRow(row: any) {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      userId: row.user_id,
+      kind: row.kind,
+      title: row.title,
+      notes: row.notes,
+      scheduledFor: row.scheduled_for,
+      status: row.status,
+      clientCpf: row.client_cpf,
+      clientName: row.client_name,
+      targetType: row.target_type,
+      targetId: row.target_id,
+      payload: row.payload,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  // GET /api/appointments → listar agendamentos com filtros (kind, status, from, to)
   app.get("/api/appointments", requireAuth, async (req: any, res) => {
     try {
       const user = req.user;
       const tenantId = req.tenantId;
       if (!user) return res.status(401).json({ message: "Não autenticado" });
 
-      const { status, from, to } = req.query;
+      const { status, kind, from, to } = req.query;
 
       let query = sql`
         SELECT * FROM appointments
         WHERE user_id = ${user.id} AND tenant_id = ${tenantId}
       `;
 
+      if (kind && typeof kind === "string") {
+        query = sql`${query} AND kind = ${kind}`;
+      }
       if (status && typeof status === "string") {
         query = sql`${query} AND status = ${status}`;
       }
@@ -17337,36 +17360,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       query = sql`${query} ORDER BY scheduled_for ASC`;
 
       const result = await db.execute(query);
-
-      const appointments = result.rows.map((row: any) => ({
-        id: row.id,
-        tenantId: row.tenant_id,
-        userId: row.user_id,
-        clientCpf: row.client_cpf,
-        clientName: row.client_name,
-        title: row.title,
-        notes: row.notes,
-        scheduledFor: row.scheduled_for,
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
-
-      res.json(appointments);
+      res.json(result.rows.map(mapAppointmentRow));
     } catch (error: any) {
       console.error("[APPOINTMENTS] Erro ao listar:", error);
       res.status(500).json({ message: "Erro ao listar agendamentos" });
     }
   });
 
-  // POST /api/appointments → criar agendamento
+  // POST /api/appointments → criar agendamento universal
   app.post("/api/appointments", requireAuth, async (req: any, res) => {
     try {
       const user = req.user;
       const tenantId = req.tenantId;
       if (!user) return res.status(401).json({ message: "Não autenticado" });
 
-      const { title, notes, scheduledFor, clientCpf, clientName } = req.body;
+      const { kind, title, notes, scheduledFor, clientCpf, clientName, targetType, targetId, payload } = req.body;
 
       if (!title || !scheduledFor) {
         return res.status(400).json({ message: "Título e data/hora são obrigatórios" });
@@ -17377,26 +17385,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Data/hora inválida" });
       }
 
+      const validKinds = ["client_followup", "task", "reminder", "pipeline_segment"];
+      const safeKind = validKinds.includes(kind) ? kind : "reminder";
+
       const result = await db.execute(sql`
-        INSERT INTO appointments (tenant_id, user_id, title, notes, scheduled_for, client_cpf, client_name, status, created_at, updated_at)
-        VALUES (${tenantId}, ${user.id}, ${title}, ${notes || null}, ${scheduledDate.toISOString()}, ${clientCpf || null}, ${clientName || null}, 'pendente', NOW(), NOW())
+        INSERT INTO appointments (tenant_id, user_id, kind, title, notes, scheduled_for, status, client_cpf, client_name, target_type, target_id, payload, created_at, updated_at)
+        VALUES (${tenantId}, ${user.id}, ${safeKind}, ${title}, ${notes || null}, ${scheduledDate.toISOString()}, 'open', ${clientCpf || null}, ${clientName || null}, ${targetType || null}, ${targetId || null}, ${payload ? JSON.stringify(payload) : null}::jsonb, NOW(), NOW())
         RETURNING *
       `);
 
-      const row = result.rows[0] as any;
-      res.status(201).json({
-        id: row.id,
-        tenantId: row.tenant_id,
-        userId: row.user_id,
-        clientCpf: row.client_cpf,
-        clientName: row.client_name,
-        title: row.title,
-        notes: row.notes,
-        scheduledFor: row.scheduled_for,
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      });
+      res.status(201).json(mapAppointmentRow(result.rows[0]));
     } catch (error: any) {
       console.error("[APPOINTMENTS] Erro ao criar:", error);
       res.status(500).json({ message: "Erro ao criar agendamento" });
@@ -17413,7 +17411,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const numId = parseInt(req.params.id);
       if (isNaN(numId)) return res.status(400).json({ message: "ID inválido" });
 
-      const { title, notes, scheduledFor, clientCpf, clientName, status } = req.body;
+      const { title, notes, scheduledFor, clientCpf, clientName, status, kind, targetType, targetId, payload } = req.body;
 
       const existing = await db.execute(sql`
         SELECT * FROM appointments WHERE id = ${numId} AND user_id = ${user.id} AND tenant_id = ${tenantId}
@@ -17438,34 +17436,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const newClientCpf = clientCpf !== undefined ? clientCpf : current.client_cpf;
       const newClientName = clientName !== undefined ? clientName : current.client_name;
       const newStatus = status ?? current.status;
+      const newKind = kind ?? current.kind;
+      const newTargetType = targetType !== undefined ? targetType : current.target_type;
+      const newTargetId = targetId !== undefined ? targetId : current.target_id;
+      const newPayload = payload !== undefined ? (payload ? JSON.stringify(payload) : null) : (current.payload ? JSON.stringify(current.payload) : null);
 
-      const validStatuses = ["pendente", "confirmado", "cancelado", "concluido", "reagendado"];
+      const validStatuses = ["open", "done", "canceled"];
       if (!validStatuses.includes(newStatus)) {
-        return res.status(400).json({ message: "Status inválido" });
+        return res.status(400).json({ message: "Status inválido. Use: open, done, canceled" });
       }
 
       const result = await db.execute(sql`
         UPDATE appointments
         SET title = ${newTitle}, notes = ${newNotes}, scheduled_for = ${newScheduledFor},
-            client_cpf = ${newClientCpf}, client_name = ${newClientName}, status = ${newStatus}, updated_at = NOW()
+            client_cpf = ${newClientCpf}, client_name = ${newClientName}, status = ${newStatus},
+            kind = ${newKind}, target_type = ${newTargetType}, target_id = ${newTargetId},
+            payload = ${newPayload}::jsonb, updated_at = NOW()
         WHERE id = ${numId} AND user_id = ${user.id} AND tenant_id = ${tenantId}
         RETURNING *
       `);
 
-      const row = result.rows[0] as any;
-      res.json({
-        id: row.id,
-        tenantId: row.tenant_id,
-        userId: row.user_id,
-        clientCpf: row.client_cpf,
-        clientName: row.client_name,
-        title: row.title,
-        notes: row.notes,
-        scheduledFor: row.scheduled_for,
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      });
+      res.json(mapAppointmentRow(result.rows[0]));
     } catch (error: any) {
       console.error("[APPOINTMENTS] Erro ao atualizar:", error);
       res.status(500).json({ message: "Erro ao atualizar agendamento" });

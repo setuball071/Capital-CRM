@@ -148,5 +148,9 @@ app.use((req, res, next) => {
     const { startDataRetention } = await import("./data-retention");
     startDataRetention();
     log("Data retention background runner started");
+
+    const { startAppointmentReminder } = await import("./appointment-reminder");
+    startAppointmentReminder();
+    log("Appointment reminder background runner started");
   });
 })();
