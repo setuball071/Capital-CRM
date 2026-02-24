@@ -39,6 +39,7 @@ interface SolicitacaoBoleto {
   email: string | null;
   valor: string | null;
   observacao_vendedor: string | null;
+  ultimos_digitos_cartao: string | null;
   status: string;
   observacao_operacional: string | null;
   boleto_anexo: string | null;
@@ -131,6 +132,7 @@ export default function SolicitacoesBoleto() {
   const [formEmail, setFormEmail] = useState("");
   const [formValor, setFormValor] = useState("");
   const [formObs, setFormObs] = useState("");
+  const [formDigitosCartao, setFormDigitosCartao] = useState("");
 
   // Form atualizar status
   const [novoStatus, setNovoStatus] = useState("");
@@ -202,12 +204,20 @@ export default function SolicitacoesBoleto() {
   // ── Helpers ───────────────────────────────────────────────────
   function resetForm() {
     setFormBanco(""); setFormTipo(""); setFormNome(""); setFormCpf("");
-    setFormNascimento(""); setFormTelefone(""); setFormEmail(""); setFormValor(""); setFormObs("");
+    setFormNascimento(""); setFormTelefone(""); setFormEmail(""); setFormValor(""); setFormObs(""); setFormDigitosCartao("");
   }
+
+  const bancosExigemDigitos = ["daycoval", "santander", "olé", "ole"];
+  const tiposExigemDigitos = ["cartao_beneficio", "cartao_credito"];
+  const exigeDigitosCartao = bancosExigemDigitos.some(b => formBanco.toLowerCase().includes(b)) && tiposExigemDigitos.includes(formTipo);
 
   function handleCriar() {
     if (!formBanco || !formTipo || !formNome || !formCpf) {
       toast({ title: "Campos obrigatórios", description: "Preencha banco, tipo, nome e CPF", variant: "destructive" });
+      return;
+    }
+    if (exigeDigitosCartao && (!formDigitosCartao || formDigitosCartao.replace(/\D/g, "").length !== 4)) {
+      toast({ title: "Campo obrigatório", description: "Informe os 4 últimos dígitos do cartão para este banco e tipo de boleto", variant: "destructive" });
       return;
     }
     criarMutation.mutate({
@@ -215,6 +225,7 @@ export default function SolicitacoesBoleto() {
       cpfCliente: formCpf.replace(/\D/g, ""), dataNascimento: formNascimento || null,
       telefone: formTelefone || null, email: formEmail || null,
       valor: formValor || null, observacaoVendedor: formObs || null,
+      ultimosDigitosCartao: exigeDigitosCartao ? formDigitosCartao.replace(/\D/g, "") : null,
     });
   }
 
@@ -486,6 +497,22 @@ export default function SolicitacoesBoleto() {
                   </SelectContent>
                 </Select>
               </div>
+              {exigeDigitosCartao && (
+                <div>
+                  <Label>4 últimos dígitos do cartão <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="Ex: 1234"
+                    value={formDigitosCartao}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, "").substring(0, 4);
+                      setFormDigitosCartao(v);
+                    }}
+                    maxLength={4}
+                    className="mt-1"
+                    data-testid="input-digitos-cartao"
+                  />
+                </div>
+              )}
               <div>
                 <Label>Valor</Label>
                 <Input
@@ -591,6 +618,9 @@ export default function SolicitacoesBoleto() {
                 <div><span className="text-gray-500">Tipo</span><p className="font-medium">{TIPOS_BOLETO.find(t=>t.value===modalDetalhe.tipo_boleto)?.label || modalDetalhe.tipo_boleto}</p></div>
                 <div><span className="text-gray-500">Valor</span><p className="font-medium">{modalDetalhe.valor ? `R$ ${modalDetalhe.valor}` : "—"}</p></div>
                 <div><span className="text-gray-500">Solicitado por</span><p className="font-medium">{modalDetalhe.solicitado_por_nome || "—"}</p></div>
+                {modalDetalhe.ultimos_digitos_cartao && (
+                  <div><span className="text-gray-500">Últimos 4 dígitos</span><p className="font-medium tracking-widest">**** {modalDetalhe.ultimos_digitos_cartao}</p></div>
+                )}
               </div>
               <hr />
               <div className="grid grid-cols-2 gap-3 text-sm">

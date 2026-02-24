@@ -2333,6 +2333,7 @@ export const solicitacoesBoleto = pgTable("solicitacoes_boleto", {
   email: varchar("email", { length: 150 }),
   valor: varchar("valor", { length: 20 }),
   observacaoVendedor: text("observacao_vendedor"),
+  ultimosDigitosCartao: varchar("ultimos_digitos_cartao", { length: 4 }),
   status: varchar("status", { length: 50 }).notNull().default("pendente"),
   // pendente | em_andamento | solicitado_banco | aguardando_retorno | pendenciado | concluido | cancelado
   observacaoOperacional: text("observacao_operacional"),

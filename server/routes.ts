@@ -17031,17 +17031,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const user = req.user;
       if (!tenantId || !user) return res.status(401).json({ message: "Não autenticado" });
 
-      const { banco, tipoBoleto, nomeCliente, cpfCliente, dataNascimento, telefone, email, valor, observacaoVendedor } = req.body;
+      const { banco, tipoBoleto, nomeCliente, cpfCliente, dataNascimento, telefone, email, valor, observacaoVendedor, ultimosDigitosCartao } = req.body;
 
       if (!banco || !tipoBoleto || !nomeCliente || !cpfCliente) {
         return res.status(400).json({ message: "Banco, tipo, nome e CPF são obrigatórios" });
       }
 
+      const bancosExigemDigitos = ["daycoval", "santander", "olé", "ole"];
+      const tiposExigemDigitos = ["cartao_beneficio", "cartao_credito"];
+      const exigeDigitos = bancosExigemDigitos.some(b => banco.toLowerCase().includes(b)) && tiposExigemDigitos.includes(tipoBoleto);
+      if (exigeDigitos && (!ultimosDigitosCartao || String(ultimosDigitosCartao).replace(/\D/g, "").length !== 4)) {
+        return res.status(400).json({ message: "Informe os 4 últimos dígitos do cartão para este banco e tipo de boleto" });
+      }
+      const digitosLimpos = ultimosDigitosCartao ? String(ultimosDigitosCartao).replace(/\D/g, "").substring(0, 4) : null;
+
       const result = await db.execute(sql`
         INSERT INTO solicitacoes_boleto 
-          (tenant_id, banco, tipo_boleto, nome_cliente, cpf_cliente, data_nascimento, telefone, email, valor, observacao_vendedor, status, solicitado_por_id, created_at, updated_at)
+          (tenant_id, banco, tipo_boleto, nome_cliente, cpf_cliente, data_nascimento, telefone, email, valor, observacao_vendedor, ultimos_digitos_cartao, status, solicitado_por_id, created_at, updated_at)
         VALUES 
-          (${tenantId}, ${banco}, ${tipoBoleto}, ${nomeCliente}, ${cpfCliente}, ${dataNascimento || null}, ${telefone || null}, ${email || null}, ${valor || null}, ${observacaoVendedor || null}, 'pendente', ${user.id}, NOW(), NOW())
+          (${tenantId}, ${banco}, ${tipoBoleto}, ${nomeCliente}, ${cpfCliente}, ${dataNascimento || null}, ${telefone || null}, ${email || null}, ${valor || null}, ${observacaoVendedor || null}, ${digitosLimpos}, 'pendente', ${user.id}, NOW(), NOW())
         RETURNING *
       `);
 
