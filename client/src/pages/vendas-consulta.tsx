@@ -248,6 +248,8 @@ export default function VendasConsulta() {
     propostaValorEstimado: "",
     observacao: "",
   });
+  const [agendamentoData, setAgendamentoData] = useState("");
+  const [agendamentoNota, setAgendamentoNota] = useState("");
 
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -444,6 +446,8 @@ export default function VendasConsulta() {
       propostaValorEstimado: string;
       observacao: string;
       addToPipeline: boolean;
+      agendamentoData?: string;
+      agendamentoNota?: string;
     }) => {
       if (!clientId) throw new Error("Cliente não identificado");
       
@@ -497,10 +501,27 @@ export default function VendasConsulta() {
         }
       }
       
+      if (data.marcador === "agendar_retorno" && data.agendamentoData) {
+        const nomeCliente = consultaData?.clienteBase?.nome || "";
+        const cpfCliente = consultaData?.clienteBase?.cpf || "";
+        const tituloAgendamento = `Retorno: ${nomeCliente || cpfCliente || "Cliente"}`;
+        await apiRequest("POST", "/api/appointments", {
+          kind: "client_followup",
+          title: tituloAgendamento,
+          scheduledFor: new Date(data.agendamentoData).toISOString(),
+          notes: data.agendamentoNota || data.observacao || "",
+          clientName: nomeCliente,
+          clientCpf: cpfCliente,
+          targetType: "pessoa",
+          targetId: clientId ? String(clientId) : undefined,
+        });
+      }
+
       return { success: true };
     },
     onSuccess: () => {
-      toast({ title: "Atendimento registrado!" });
+      const wasAgendamento = interactionFormData.marcador === "agendar_retorno" && agendamentoData;
+      toast({ title: wasAgendamento ? "Atendimento registrado e retorno agendado!" : "Atendimento registrado!" });
       setDrawerOpen(false);
       setInteractionFormData({
         tipoContato: "ligacao",
@@ -509,8 +530,11 @@ export default function VendasConsulta() {
         propostaValorEstimado: "",
         observacao: "",
       });
+      setAgendamentoData("");
+      setAgendamentoNota("");
       setAddToPipeline(true);
       queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
     },
     onError: (error: Error) => {
       toast({ title: error.message || "Erro ao registrar atendimento", variant: "destructive" });
@@ -601,9 +625,15 @@ export default function VendasConsulta() {
   };
 
   const handleRegistrarInteracao = () => {
+    if (interactionFormData.marcador === "agendar_retorno" && !agendamentoData) {
+      toast({ title: "Informe a data/hora do retorno", variant: "destructive" });
+      return;
+    }
     registrarInteracaoMutation.mutate({
       ...interactionFormData,
       addToPipeline,
+      agendamentoData: agendamentoData || undefined,
+      agendamentoNota: agendamentoNota || undefined,
     });
   };
 
@@ -1535,6 +1565,37 @@ export default function VendasConsulta() {
                 </Select>
               </div>
             </div>
+
+            {interactionFormData.marcador === "agendar_retorno" && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="pt-4 pb-3 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    <Label className="text-sm font-medium text-primary">Agendar Retorno</Label>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label className="text-sm">Data e Hora do Retorno *</Label>
+                      <Input
+                        type="datetime-local"
+                        value={agendamentoData}
+                        onChange={(e) => setAgendamentoData(e.target.value)}
+                        data-testid="input-agendamento-data"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Nota do Agendamento</Label>
+                      <Input
+                        value={agendamentoNota}
+                        onChange={(e) => setAgendamentoNota(e.target.value)}
+                        placeholder="Ex: Ligar para confirmar proposta"
+                        data-testid="input-agendamento-nota"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
