@@ -17063,11 +17063,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       const { id } = req.params;
-      const { status, observacaoOperacional } = req.body;
+      const { status, observacaoOperacional, boletoAnexo, boletoAnexoNome } = req.body;
 
       const statusValidos = ["pendente", "em_andamento", "solicitado_banco", "aguardando_retorno", "pendenciado", "concluido", "cancelado"];
       if (!statusValidos.includes(status)) {
         return res.status(400).json({ message: "Status inválido" });
+      }
+
+      let validatedAnexo: string | null = null;
+      let validatedAnexoNome: string | null = null;
+      if (boletoAnexo) {
+        const allowedPrefixes = ["data:application/pdf;base64,", "data:image/jpeg;base64,", "data:image/jpg;base64,", "data:image/png;base64,"];
+        const isValidDataUrl = allowedPrefixes.some(p => boletoAnexo.startsWith(p));
+        if (!isValidDataUrl) {
+          return res.status(400).json({ message: "Formato de arquivo inválido. Apenas PDF, JPG e PNG são aceitos." });
+        }
+        const maxSize = 5 * 1024 * 1024 * 1.37;
+        if (boletoAnexo.length > maxSize) {
+          return res.status(400).json({ message: "Arquivo muito grande. O tamanho máximo é 5MB." });
+        }
+        validatedAnexo = boletoAnexo;
+        validatedAnexoNome = typeof boletoAnexoNome === "string" ? boletoAnexoNome.substring(0, 255) : "boleto";
       }
 
       const result = await db.execute(sql`
@@ -17075,6 +17091,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SET 
           status = ${status},
           observacao_operacional = ${observacaoOperacional || null},
+          boleto_anexo = COALESCE(${validatedAnexo}, boleto_anexo),
+          boleto_anexo_nome = COALESCE(${validatedAnexoNome}, boleto_anexo_nome),
           atendido_por_id = ${user.id},
           updated_at = NOW()
         WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}

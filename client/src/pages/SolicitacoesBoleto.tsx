@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Plus, Search, Loader2, CheckCircle, Clock, AlertCircle,
-  XCircle, FileText, RefreshCw, ChevronDown, Eye, Pencil, Trash2, DollarSign
+  XCircle, FileText, RefreshCw, ChevronDown, Eye, Pencil, Trash2, DollarSign, Upload, Download, Paperclip, X
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ interface SolicitacaoBoleto {
   observacao_vendedor: string | null;
   status: string;
   observacao_operacional: string | null;
+  boleto_anexo: string | null;
+  boleto_anexo_nome: string | null;
   solicitado_por_id: number;
   solicitado_por_nome: string;
   atendido_por_nome: string | null;
@@ -133,6 +135,8 @@ export default function SolicitacoesBoleto() {
   // Form atualizar status
   const [novoStatus, setNovoStatus] = useState("");
   const [obsOperacional, setObsOperacional] = useState("");
+  const [boletoFile, setBoletoFile] = useState<{ base64: string; nome: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Queries ──────────────────────────────────────────────────
   const { data: solicitacoes = [], isLoading } = useQuery<SolicitacaoBoleto[]>({
@@ -161,8 +165,8 @@ export default function SolicitacoesBoleto() {
   });
 
   const atualizarStatusMutation = useMutation({
-    mutationFn: ({ id, status, observacaoOperacional }: any) =>
-      apiRequest("PATCH", `/api/solicitacoes-boleto/${id}/status`, { status, observacaoOperacional }).then(r => r.json()),
+    mutationFn: ({ id, status, observacaoOperacional, boletoAnexo, boletoAnexoNome }: any) =>
+      apiRequest("PATCH", `/api/solicitacoes-boleto/${id}/status`, { status, observacaoOperacional, boletoAnexo, boletoAnexoNome }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto"] });
       queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto/stats"] });
@@ -170,6 +174,7 @@ export default function SolicitacoesBoleto() {
       setModalStatus(null);
       setNovoStatus("");
       setObsOperacional("");
+      setBoletoFile(null);
     },
     onError: (err: any) => {
       toast({ title: "Erro", description: err.message || "Erro ao atualizar status", variant: "destructive" });
@@ -215,13 +220,41 @@ export default function SolicitacoesBoleto() {
 
   function handleAtualizarStatus() {
     if (!novoStatus || !modalStatus) return;
-    atualizarStatusMutation.mutate({ id: modalStatus.id, status: novoStatus, observacaoOperacional: obsOperacional || null });
+    atualizarStatusMutation.mutate({
+      id: modalStatus.id,
+      status: novoStatus,
+      observacaoOperacional: obsOperacional || null,
+      boletoAnexo: boletoFile?.base64 || null,
+      boletoAnexoNome: boletoFile?.nome || null,
+    });
   }
 
   function abrirModalStatus(s: SolicitacaoBoleto) {
     setModalStatus(s);
     setNovoStatus(s.status);
     setObsOperacional(s.observacao_operacional || "");
+    setBoletoFile(null);
+  }
+
+  function handleBoletoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O tamanho máximo é 5MB", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBoletoFile({ base64: reader.result as string, nome: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function downloadBoleto(base64: string, nome: string) {
+    const link = document.createElement("a");
+    link.href = base64;
+    link.download = nome;
+    link.click();
   }
 
   // ── Filtragem ─────────────────────────────────────────────────
@@ -365,7 +398,12 @@ export default function SolicitacoesBoleto() {
                         <span className="text-gray-400 text-sm">—</span>
                       )}
                     </TableCell>
-                    <TableCell><StatusBadge status={s.status} /></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <StatusBadge status={s.status} />
+                        {s.boleto_anexo && <Paperclip className="w-3.5 h-3.5 text-green-600" title="Boleto anexado" />}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">{s.solicitado_por_nome || "—"}</div>
                       {s.atendido_por_nome && (
@@ -574,6 +612,35 @@ export default function SolicitacoesBoleto() {
                   <p>{modalDetalhe.observacao_operacional}</p>
                 </div>
               )}
+              {modalDetalhe.boleto_anexo && (
+                <div className="bg-green-50 rounded-lg p-3 text-sm">
+                  <span className="text-green-700 block mb-2 font-medium">Boleto Anexado</span>
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
+                    <span className="text-sm truncate flex-1">{modalDetalhe.boleto_anexo_nome || "boleto"}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadBoleto(modalDetalhe.boleto_anexo!, modalDetalhe.boleto_anexo_nome || "boleto")}
+                      data-testid="button-download-boleto"
+                    >
+                      <Download className="w-4 h-4 mr-1" />
+                      Baixar
+                    </Button>
+                    {modalDetalhe.boleto_anexo.startsWith("data:image") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(modalDetalhe.boleto_anexo!, "_blank")}
+                        data-testid="button-view-boleto"
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Ver
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -612,6 +679,41 @@ export default function SolicitacoesBoleto() {
                   className="mt-1"
                   rows={3}
                 />
+              </div>
+              <div>
+                <Label>Anexar Boleto (opcional)</Label>
+                <div className="mt-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleBoletoFileChange}
+                    className="hidden"
+                    data-testid="input-boleto-file"
+                  />
+                  {boletoFile ? (
+                    <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
+                      <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{boletoFile.nome}</span>
+                      <Button size="icon" variant="ghost" onClick={() => { setBoletoFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} data-testid="button-remove-boleto-file">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : modalStatus?.boleto_anexo ? (
+                    <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
+                      <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
+                      <span className="text-sm truncate flex-1 text-green-700">{modalStatus.boleto_anexo_nome || "boleto_anexo"}</span>
+                      <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} data-testid="button-replace-boleto">
+                        <Upload className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full" data-testid="button-upload-boleto">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Selecionar arquivo (PDF ou Imagem)
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -2336,6 +2336,8 @@ export const solicitacoesBoleto = pgTable("solicitacoes_boleto", {
   status: varchar("status", { length: 50 }).notNull().default("pendente"),
   // pendente | em_andamento | solicitado_banco | aguardando_retorno | pendenciado | concluido | cancelado
   observacaoOperacional: text("observacao_operacional"),
+  boletoAnexo: text("boleto_anexo"),
+  boletoAnexoNome: varchar("boleto_anexo_nome", { length: 255 }),
   solicitadoPorId: integer("solicitado_por_id").references(() => users.id, { onDelete: "set null" }),
   atendidoPorId: integer("atendido_por_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
