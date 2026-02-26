@@ -1159,22 +1159,34 @@ export class DbStorage implements IStorage {
       // Build parameterized query using Drizzle's sql tagged template
       // Usar DISTINCT ON é muito mais eficiente que LATERAL join para buscar última folha
       // OTIMIZAÇÃO: Quando sit_func é usado, filtramos DENTRO do subquery para melhor performance
-      const folhaSitFuncFilter = filtros.sit_func 
-        ? sql`WHERE sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`
+      const baseRefFolha = filtros.base_ref ? filtros.base_ref + 'fo' : null;
+      const baseRefD8 = filtros.base_ref ? filtros.base_ref + 'd8' : null;
+
+      const folhaWhereFragments: ReturnType<typeof sql>[] = [];
+      if (filtros.sit_func) {
+        folhaWhereFragments.push(sql`sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`);
+      }
+      if (baseRefFolha) {
+        folhaWhereFragments.push(sql`base_tag = ${baseRefFolha}`);
+      }
+      const folhaInnerWhere = folhaWhereFragments.length > 0
+        ? sql`WHERE ${folhaWhereFragments.reduce((a, b, i) => i === 0 ? b : sql`${a} AND ${b}`)}`
         : sql``;
       
       const folhaJoinSql = needsFolhaJoin ? sql`
         INNER JOIN (
           SELECT DISTINCT ON (pessoa_id) *
           FROM clientes_folha_mes
-          ${folhaSitFuncFilter}
+          ${folhaInnerWhere}
           ORDER BY pessoa_id, competencia DESC
         ) folha ON folha.pessoa_id = p.id
       ` : sql``;
       
-      const contratoJoinSql = needsContratoJoin ? sql`
-        INNER JOIN clientes_contratos c ON c.pessoa_id = p.id
-      ` : sql``;
+      const contratoJoinSql = needsContratoJoin ? (
+        baseRefD8
+          ? sql`INNER JOIN clientes_contratos c ON c.pessoa_id = p.id AND c.base_tag = ${baseRefD8}`
+          : sql`INNER JOIN clientes_contratos c ON c.pessoa_id = p.id`
+      ) : sql``;
 
       // Build WHERE conditions using parameterized values (safe from SQL injection)
       const whereConditions: ReturnType<typeof sql>[] = [];
@@ -1274,21 +1286,20 @@ export class DbStorage implements IStorage {
         // Se base_tag for especificada, filtra apenas contratos dessa base específica
         // Caso contrário, conta TODOS os contratos do cliente (comportamento original)
         // Isso garante que "0 contratos" significa realmente nenhum contrato registrado
-        if (filtros.base_tag) {
-          // Filtrar por base específica
+        const qtdBaseTag = baseRefD8 || filtros.base_tag;
+        if (qtdBaseTag) {
           if (maxContratos !== undefined) {
             whereConditions.push(sql`(
               SELECT COUNT(*) FROM clientes_contratos cc 
-              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${filtros.base_tag}
+              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${qtdBaseTag}
             ) BETWEEN ${minContratos} AND ${maxContratos}`);
           } else {
             whereConditions.push(sql`(
               SELECT COUNT(*) FROM clientes_contratos cc 
-              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${filtros.base_tag}
+              WHERE cc.pessoa_id = p.id AND cc.base_tag = ${qtdBaseTag}
             ) >= ${minContratos}`);
           }
         } else {
-          // Sem base específica: contar todos os contratos do cliente
           if (maxContratos !== undefined) {
             whereConditions.push(sql`(
               SELECT COUNT(*) FROM clientes_contratos cc 

@@ -888,6 +888,7 @@ export type UpdatePacotePreco = z.infer<typeof updatePacotePrecoSchema>;
 export const filtrosPedidoListaSchema = z.object({
   // Filtros de contexto (base para filtrar contratos)
   base_tag: z.string().optional(),
+  base_ref: z.string().regex(/^\d{6}$/).optional(),
   // Filtros de pessoa
   convenio: z.string().optional(),
   orgao: z.string().optional(),

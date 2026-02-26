@@ -7428,6 +7428,43 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
     }
   });
 
+  app.get("/api/clientes/filtros/bases", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT base_tag, tipo_import, MAX(created_at) as ultimo_import
+        FROM import_runs
+        WHERE status = 'concluido' AND base_tag IS NOT NULL
+        GROUP BY base_tag, tipo_import
+        ORDER BY base_tag DESC
+      `);
+      const meses: Record<string, string> = {
+        '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+        '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+        '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+      };
+      const basesMap = new Map<string, { ref: string; label: string; folha: boolean; d8: boolean; contatos: boolean }>();
+      for (const row of result.rows) {
+        const tag = row.base_tag as string;
+        const tipo = row.tipo_import as string;
+        const ref = tag.substring(0, 6);
+        const ano = ref.substring(0, 4);
+        const mes = ref.substring(4, 6);
+        if (!basesMap.has(ref)) {
+          basesMap.set(ref, { ref, label: `${meses[mes] || mes}/${ano}`, folha: false, d8: false, contatos: false });
+        }
+        const entry = basesMap.get(ref)!;
+        if (tipo === 'folha') entry.folha = true;
+        if (tipo === 'd8') entry.d8 = true;
+        if (tipo === 'contatos') entry.contatos = true;
+      }
+      const bases = Array.from(basesMap.values()).sort((a, b) => b.ref.localeCompare(a.ref));
+      return res.json(bases);
+    } catch (error) {
+      console.error("Get bases error:", error);
+      return res.status(500).json({ message: "Erro ao buscar bases disponíveis" });
+    }
+  });
+
   // GET consulta de cliente por CPF ou matrícula
   // Base de clientes é compartilhada entre todos os ambientes
   app.get("/api/clientes/consulta", requireAuth, requireModuleAccess("modulo_base_clientes"), async (req: any, res) => {

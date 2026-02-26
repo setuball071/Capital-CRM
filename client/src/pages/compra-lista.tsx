@@ -20,8 +20,17 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useLocation } from "wouter";
 
+interface BaseRef {
+  ref: string;
+  label: string;
+  folha: boolean;
+  d8: boolean;
+  contatos: boolean;
+}
+
 interface Filtros {
   base_tag?: string;
+  base_ref?: string;
   convenio?: string;
   orgao?: string;
   uf?: string;
@@ -203,6 +212,10 @@ export default function CompraLista() {
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
+  });
+
+  const { data: basesDisponiveis } = useQuery<BaseRef[]>({
+    queryKey: ["/api/clientes/filtros/bases"],
   });
 
   // Buscar tipos de contrato dinamicamente quando os bancos mudarem
@@ -484,6 +497,31 @@ export default function CompraLista() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 p-3 rounded-md bg-muted/50 border">
+                <div className="space-y-2">
+                  <Label htmlFor="base_ref" className="font-semibold">Base de Referência</Label>
+                  <Select
+                    value={filtros.base_ref || "latest"}
+                    onValueChange={(v) => setFiltros({ ...filtros, base_ref: v === "latest" ? undefined : v })}
+                  >
+                    <SelectTrigger data-testid="select-base-ref">
+                      <SelectValue placeholder="Mais Recente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest">Mais Recente</SelectItem>
+                      {basesDisponiveis?.map((b) => (
+                        <SelectItem key={b.ref} value={b.ref}>
+                          {b.label}
+                          {b.folha && b.d8 ? " (Folha + D8)" : b.folha ? " (Folha)" : b.d8 ? " (D8)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Define qual competência será usada para filtrar folha e contratos
+                  </p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="convenio">Convênio</Label>
