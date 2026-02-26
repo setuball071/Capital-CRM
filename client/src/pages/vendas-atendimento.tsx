@@ -510,14 +510,6 @@ export default function VendasAtendimento() {
       toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
       return;
     }
-    if (!interactionFormData.margemValor || parseFloat(interactionFormData.margemValor) <= 0) {
-      toast({ title: "Informe a margem", description: "O valor da margem é obrigatório", variant: "destructive" });
-      return;
-    }
-    if (!interactionFormData.propostaValorEstimado || parseFloat(interactionFormData.propostaValorEstimado) <= 0) {
-      toast({ title: "Informe a proposta", description: "O valor da proposta estimada é obrigatório", variant: "destructive" });
-      return;
-    }
     registerInteractionMutation.mutate(interactionFormData);
   };
 
@@ -528,14 +520,6 @@ export default function VendasAtendimento() {
     }
     if (markerRequiresRetorno && !interactionFormData.retornoEm) {
       toast({ title: "Agende o retorno", description: "Este marcador exige uma data de retorno", variant: "destructive" });
-      return;
-    }
-    if (!interactionFormData.margemValor || parseFloat(interactionFormData.margemValor) <= 0) {
-      toast({ title: "Informe a margem", description: "O valor da margem é obrigatório", variant: "destructive" });
-      return;
-    }
-    if (!interactionFormData.propostaValorEstimado || parseFloat(interactionFormData.propostaValorEstimado) <= 0) {
-      toast({ title: "Informe a proposta", description: "O valor da proposta estimada é obrigatório", variant: "destructive" });
       return;
     }
     try {
@@ -1718,7 +1702,7 @@ export default function VendasAtendimento() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label className="text-sm">Valor da Margem (R$) *</Label>
+                <Label className="text-sm">Valor da Margem (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1730,7 +1714,7 @@ export default function VendasAtendimento() {
                 />
               </div>
               <div>
-                <Label className="text-sm">Proposta Estimada (R$) *</Label>
+                <Label className="text-sm">Proposta Estimada (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"

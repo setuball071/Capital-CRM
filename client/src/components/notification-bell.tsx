@@ -98,10 +98,10 @@ export function NotificationBell() {
           className="relative"
           data-testid="button-notifications"
         >
-          <Bell className="h-5 w-5" />
+          <Bell className={cn("h-6 w-6", unreadCount > 0 && "animate-bell-ring")} />
           {unreadCount > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
+              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground animate-bell-glow"
               data-testid="text-unread-count"
             >
               {unreadCount > 99 ? "99+" : unreadCount}

@@ -246,3 +246,28 @@
     inset: -1px;
   }
 }
+
+@keyframes bell-ring {
+  0% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(10deg); }
+  40% { transform: rotate(-8deg); }
+  50% { transform: rotate(4deg); }
+  60% { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes bell-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-bell-ring {
+  animation: bell-ring 1.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-bell-glow {
+  animation: bell-glow 2s ease-in-out infinite;
+}

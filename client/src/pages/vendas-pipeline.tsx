@@ -1076,7 +1076,7 @@ export default function VendasPipeline() {
                 />
               </div>
               <div>
-                <Label>Proposta Estimada (R$) *</Label>
+                <Label>Proposta Estimada (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"

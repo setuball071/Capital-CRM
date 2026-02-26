@@ -1599,7 +1599,7 @@ export default function VendasConsulta() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label className="text-sm">Valor da Margem (R$) *</Label>
+                <Label className="text-sm">Valor da Margem (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1611,7 +1611,7 @@ export default function VendasConsulta() {
                 />
               </div>
               <div>
-                <Label className="text-sm">Proposta Estimada (R$) *</Label>
+                <Label className="text-sm">Proposta Estimada (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"
