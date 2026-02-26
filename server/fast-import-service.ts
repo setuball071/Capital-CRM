@@ -29,7 +29,10 @@ import {
 
 // Reduced batch size to avoid Neon HTTP payload limit (~16MB)
 // Each folha row has ~30 fields, so 100 rows keeps payload under limit
-function safeVarchar(value: string | null | undefined, maxLen: number): string | null {
+function safeVarchar(
+  value: string | null | undefined,
+  maxLen: number,
+): string | null {
   if (value === null || value === undefined || value === "") return null;
   const str = String(value).trim();
   if (str.length === 0) return null;
@@ -614,8 +617,9 @@ class FastImportService {
       AND (${tipoImport === "contatos" ? sql`TRUE` : sql`s.matricula IS NOT NULL AND s.matricula != ''`})
   `);
 
-    const errorQuery = tipoImport === "contatos"
-      ? sql`
+    const errorQuery =
+      tipoImport === "contatos"
+        ? sql`
         INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
         SELECT 
           ${run.id},
@@ -628,7 +632,7 @@ class FastImportService {
         WHERE s.import_run_id = ${run.id}
           AND (s.cpf IS NULL OR s.cpf = '')
       `
-      : sql`
+        : sql`
         INSERT INTO import_run_rows (import_run_id, row_number, cpf, matricula, status, error_message)
         SELECT 
           ${run.id},
@@ -1187,9 +1191,9 @@ class FastImportService {
           .where(eq(stagingD8.importRunId, importRunId));
         break;
       case "contatos":
-        await db
-          .delete(stagingContatos)
-          .where(eq(stagingContatos.importRunId, importRunId));
+        // await db
+        // .delete(stagingContatos)
+        // .where(eq(stagingContatos.importRunId, importRunId));
         break;
     }
     console.log(`[FastImport] Cleaned up staging for run ${importRunId}`);
@@ -1263,7 +1267,10 @@ class FastImportService {
         natureza: safeVarchar(getValue("natureza"), 100),
         orgao: safeVarchar(getValue("orgao"), 100),
         banco: safeVarchar(getValue("banco") || run.banco, 100),
-        numeroContrato: safeVarchar(preserveNumeroContrato(getValue("numero_contrato")), 100),
+        numeroContrato: safeVarchar(
+          preserveNumeroContrato(getValue("numero_contrato")),
+          100,
+        ),
         tipoContrato: safeVarchar(getValue("tipo_contrato"), 100),
         valorParcela: parseNum(getValue("valor_parcela")),
         prazoRemanescente:
