@@ -29,6 +29,13 @@ import {
 
 // Reduced batch size to avoid Neon HTTP payload limit (~16MB)
 // Each folha row has ~30 fields, so 100 rows keeps payload under limit
+function safeVarchar(value: string | null | undefined, maxLen: number): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const str = String(value).trim();
+  if (str.length === 0) return null;
+  return str.length > maxLen ? str.substring(0, maxLen) : str;
+}
+
 const BATCH_INSERT_SIZE = 100;
 const MAX_LINHAS_POR_EXECUCAO = 500_000;
 const MERGE_BATCH_SIZE = 1000;
@@ -1091,18 +1098,17 @@ class FastImportService {
           CASE 
             WHEN s.data_nascimento IS NOT NULL AND s.data_nascimento != '' THEN
               CASE 
-                WHEN s.data_nascimento ~ '^\d{2}/\d{2}/\d{4}$' THEN 
+                WHEN s.data_nascimento ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YYYY')
-                WHEN s.data_nascimento ~ '^\d{2}-\d{2}-\d{4}$' THEN 
+                WHEN s.data_nascimento ~ '^\\d{2}-\\d{2}-\\d{4}$' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'DD-MM-YYYY')
-                WHEN s.data_nascimento ~ '^\d{4}-\d{2}-\d{2}' THEN 
+                WHEN s.data_nascimento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'YYYY-MM-DD')
-                WHEN s.data_nascimento ~ '^\d{4}/\d{2}/\d{2}' THEN 
+                WHEN s.data_nascimento ~ '^\\d{4}/\\d{2}/\\d{2}' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'YYYY/MM/DD')
-                WHEN s.data_nascimento ~ '^\d{1,2}/\d{1,2}/\d{2}$' THEN 
+                WHEN s.data_nascimento ~ '^\\d{1,2}/\\d{1,2}/\\d{2}$' THEN 
                   TO_TIMESTAMP(s.data_nascimento, 'DD/MM/YY')
-                WHEN s.data_nascimento ~ '^\d+\.?\d*$' AND CAST(FLOOR(CAST(s.data_nascimento AS numeric)) AS integer) BETWEEN 1 AND 80000 THEN 
-                  -- Número serial do Excel (dias desde 1899-12-30), aceita inteiro ou decimal
+                WHEN s.data_nascimento ~ '^\\d+\\.?\\d*$' AND CAST(FLOOR(CAST(s.data_nascimento AS numeric)) AS integer) BETWEEN 1 AND 80000 THEN 
                   DATE '1899-12-30' + CAST(FLOOR(CAST(s.data_nascimento AS numeric)) AS integer)
                 ELSE NULL
               END
@@ -1209,13 +1215,13 @@ class FastImportService {
     if (tipoImport === "folha") {
       return {
         importRunId: run.id,
-        cpf: padCpf(getValue("cpf")),
-        matricula: preserveMatricula(getValue("matricula")),
-        nome: getValue("nome") || null,
-        orgaodesc: getValue("orgaodesc") || null,
-        upag: padUpag(getValue("upag")),
-        uf: getValue("uf") || null,
-        municipio: getValue("municipio") || null,
+        cpf: safeVarchar(padCpf(getValue("cpf")), 20),
+        matricula: safeVarchar(preserveMatricula(getValue("matricula")), 50),
+        nome: safeVarchar(getValue("nome"), 255),
+        orgaodesc: safeVarchar(getValue("orgaodesc"), 255),
+        upag: safeVarchar(padUpag(getValue("upag")), 100),
+        uf: safeVarchar(getValue("uf"), 100),
+        municipio: safeVarchar(getValue("municipio"), 150),
         baseCalc: parseNum(getValue("base_calc")),
         margem5Bruta: parseNum(getValue("margem_5_bruta")),
         margem5Utilizada: parseNum(getValue("margem_5_utilizada")),
@@ -1242,50 +1248,50 @@ class FastImportService {
         liquido: parseNum(getValue("liquido")),
         excQtd: parseInt(getValue("exc_qtd") || "0", 10) || null,
         excSoma: parseNum(getValue("exc_soma")),
-        rjur: getValue("rjur") || null,
-        sitFunc: getValue("sit_func") || null,
+        rjur: safeVarchar(getValue("rjur"), 50),
+        sitFunc: safeVarchar(getValue("sit_func"), 100),
         margem: parseNum(getValue("margem")),
-        instituidor: getValue("instituidor") || null,
+        instituidor: safeVarchar(getValue("instituidor"), 255),
         rowNum,
       };
     } else if (tipoImport === "d8") {
       return {
         importRunId: run.id,
-        cpf: padCpf(getValue("cpf")),
-        matricula: preserveMatricula(getValue("matricula")),
-        nome: getValue("nome") || null,
-        natureza: getValue("natureza") || null,
-        orgao: getValue("orgao") || null,
-        banco: getValue("banco") || run.banco || null,
-        numeroContrato: preserveNumeroContrato(getValue("numero_contrato")),
-        tipoContrato: getValue("tipo_contrato") || null,
+        cpf: safeVarchar(padCpf(getValue("cpf")), 20),
+        matricula: safeVarchar(preserveMatricula(getValue("matricula")), 50),
+        nome: safeVarchar(getValue("nome"), 255),
+        natureza: safeVarchar(getValue("natureza"), 100),
+        orgao: safeVarchar(getValue("orgao"), 100),
+        banco: safeVarchar(getValue("banco") || run.banco, 100),
+        numeroContrato: safeVarchar(preserveNumeroContrato(getValue("numero_contrato")), 100),
+        tipoContrato: safeVarchar(getValue("tipo_contrato"), 100),
         valorParcela: parseNum(getValue("valor_parcela")),
         prazoRemanescente:
           parseInt(getValue("prazo_remanescente") || "0", 10) || null,
-        situacaoContrato: getValue("situacao_contrato") || null,
-        mInstituidor: getValue("m_instituidor") || null,
-        cpfInstituidor: padCpf(getValue("cpf_instituidor")),
+        situacaoContrato: safeVarchar(getValue("situacao_contrato"), 100),
+        mInstituidor: safeVarchar(getValue("m_instituidor"), 255),
+        cpfInstituidor: safeVarchar(padCpf(getValue("cpf_instituidor")), 20),
         rowNum,
       };
     } else if (tipoImport === "contatos") {
       return {
         importRunId: run.id,
-        cpf: padCpf(getValue("cpf")),
-        telefone1: getValue("telefone_1") || null,
-        telefone2: getValue("telefone_2") || null,
-        telefone3: getValue("telefone_3") || null,
-        telefone4: getValue("telefone_4") || null,
-        telefone5: getValue("telefone_5") || null,
-        email: getValue("email") || null,
-        email2: getValue("email_2") || null,
-        endereco: getValue("endereco") || null,
-        cidade: getValue("cidade") || null,
-        uf: getValue("uf") || null,
-        cep: getValue("cep") || null,
-        dataNascimento: getValue("data_nascimento") || null,
-        bancoNome: getValue("banco_nome") || null,
-        agencia: getValue("agencia") || null,
-        conta: getValue("conta") || null,
+        cpf: safeVarchar(padCpf(getValue("cpf")), 20),
+        telefone1: safeVarchar(getValue("telefone_1"), 20),
+        telefone2: safeVarchar(getValue("telefone_2"), 20),
+        telefone3: safeVarchar(getValue("telefone_3"), 20),
+        telefone4: safeVarchar(getValue("telefone_4"), 20),
+        telefone5: safeVarchar(getValue("telefone_5"), 20),
+        email: safeVarchar(getValue("email"), 255),
+        email2: safeVarchar(getValue("email_2"), 255),
+        endereco: safeVarchar(getValue("endereco"), 500),
+        cidade: safeVarchar(getValue("cidade"), 100),
+        uf: safeVarchar(getValue("uf"), 10),
+        cep: safeVarchar(getValue("cep"), 10),
+        dataNascimento: safeVarchar(getValue("data_nascimento"), 20),
+        bancoNome: safeVarchar(getValue("banco_nome"), 100),
+        agencia: safeVarchar(getValue("agencia"), 20),
+        conta: safeVarchar(getValue("conta"), 30),
         rowNum,
       };
     }

@@ -7908,7 +7908,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
       }
 
       const filtros = result.data;
-      const { clientes, total } = await storage.searchClientesPessoa(filtros);
+      const { clientes, total } = await storage.searchClientesPessoa(filtros, { limit: 10 });
       
       // Calcula preço usando modelo de pacotes
       const pricing = await calculatePackagePrice(total);
@@ -7919,8 +7919,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`
         nomePacote: pricing.nomePacote,
         quantidadePacote: pricing.quantidadePacote,
         precoTotal: pricing.precoTotal,
-        pacotes: await getPacotesPreco(), // Envia lista de pacotes para exibição
-        preview: clientes.slice(0, 10).map((c: any) => ({
+        pacotes: await getPacotesPreco(),
+        preview: clientes.map((c: any) => ({
           matricula: c.matricula,
           nome: c.nome,
           cpf: c.cpf ? `***${c.cpf.slice(-4)}` : null, // Mask CPF
