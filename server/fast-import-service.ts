@@ -1191,9 +1191,9 @@ class FastImportService {
           .where(eq(stagingD8.importRunId, importRunId));
         break;
       case "contatos":
-        // await db
-        // .delete(stagingContatos)
-        // .where(eq(stagingContatos.importRunId, importRunId));
+        await db
+          .delete(stagingContatos)
+          .where(eq(stagingContatos.importRunId, importRunId));
         break;
     }
     console.log(`[FastImport] Cleaned up staging for run ${importRunId}`);
