@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,8 @@ function formatName(name: string | null): string {
 
 export default function VendasEtiquetas() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const podeExportar = user?.role === 'master' || user?.role === 'coordenacao' || user?.isMaster;
   const [tagSelecionada, setTagSelecionada] = useState<LeadTag | null>(null);
   const [modalCriar, setModalCriar] = useState(false);
   const [modalEditar, setModalEditar] = useState<LeadTag | null>(null);
@@ -255,8 +258,8 @@ export default function VendasEtiquetas() {
                     <Badge variant="secondary">{clientes.length} cliente{clientes.length !== 1 ? "s" : ""}</Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    {clientes.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={exportarCSV}>
+                    {podeExportar && clientes.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={exportarCSV} data-testid="button-exportar-csv">
                         Exportar CSV
                       </Button>
                     )}
