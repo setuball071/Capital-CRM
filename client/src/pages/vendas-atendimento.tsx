@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TagManager } from "@/components/tag-manager";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
