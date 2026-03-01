@@ -571,19 +571,26 @@ export default function UsersPage() {
 
   // Helper to update permission state
   const updatePermission = (module: string, field: 'canView' | 'canEdit' | 'canDelegate', value: boolean) => {
-    setPermissions(prev => prev.map(p => {
-      if (p.module !== module) return p;
-      if (field === 'canEdit' && value) {
-        // If enabling edit, also enable view
-        return { ...p, canEdit: true, canView: true };
+    setPermissions(prev => {
+      const exists = prev.some(p => p.module === module);
+      if (!exists) {
+        const newPerm: any = { module, canView: false, canEdit: false, canDelegate: false, [field]: value };
+        if (field === 'canEdit' && value) {
+          newPerm.canView = true;
+        }
+        return [...prev, newPerm];
       }
-      if (field === 'canView' && !value) {
-        // If disabling view, also disable edit (but NOT canDelegate - delegation is independent)
-        return { ...p, canView: false, canEdit: false };
-      }
-      // canDelegate is independent - no automatic side effects
-      return { ...p, [field]: value };
-    }));
+      return prev.map(p => {
+        if (p.module !== module) return p;
+        if (field === 'canEdit' && value) {
+          return { ...p, canEdit: true, canView: true };
+        }
+        if (field === 'canView' && !value) {
+          return { ...p, canView: false, canEdit: false };
+        }
+        return { ...p, [field]: value };
+      });
+    });
   };
 
   // Check if user has Config. Usuários permission with canEdit
@@ -904,8 +911,7 @@ export default function UsersPage() {
                                   <div className="space-y-2">
                                     {subItems.map((subItem: { key: string; label: string }) => {
                                       const subItemKey = getSubItemPermissionKey(module as ModuleName, subItem.key);
-                                      const perm = permissions.find(p => p.module === subItemKey);
-                                      if (!perm) return null;
+                                      const perm = permissions.find(p => p.module === subItemKey) || { module: subItemKey, canView: false, canEdit: false, canDelegate: false };
                                       
                                       return (
                                         <div key={subItemKey} className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50" data-testid={`permission-row-${subItemKey}`}>
