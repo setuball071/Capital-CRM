@@ -84,6 +84,8 @@ import {
   type PricingSettings,
   producoesContratos,
   producoesImportacoes,
+  leadTags,
+  leadTagAssignments,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -22277,7 +22279,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // Vendedor: vê só as suas. Gestor/master/coordenacao: vê todas do tenant com info do dono
   app.get("/api/lead-tags", requireAuth, async (req, res) => {
     try {
-      const { tenantId, id: userId, role } = req.user!;
+      const { id: userId, role } = req.user!;
+      const tenantId = req.tenantId!;
       const isGestor = ["master", "coordenacao"].includes(role);
 
       if (isGestor) {
@@ -22313,7 +22316,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // POST /api/lead-tags — criar etiqueta
   app.post("/api/lead-tags", requireAuth, async (req, res) => {
     try {
-      const { tenantId, id: userId } = req.user!;
+      const { id: userId } = req.user!;
+      const tenantId = req.tenantId!;
       const { nome, cor } = req.body;
 
       if (!nome?.trim())
@@ -22337,7 +22341,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .returning();
 
       res.status(201).json(tag);
-    } catch {
+    } catch (err) {
+      console.error("Erro ao criar etiqueta:", err);
       res.status(500).json({ error: "Erro ao criar etiqueta" });
     }
   });
