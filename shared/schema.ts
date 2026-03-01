@@ -1824,6 +1824,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "atendimento", label: "Atendimento" },
     { key: "pipeline", label: "Pipeline" },
     { key: "consulta", label: "Consulta" },
+    { key: "etiquetas", label: "Etiquetas" },
     { key: "agenda", label: "Agenda" },
     { key: "gestao_pipeline", label: "Gestão Pipeline" },
   ],
