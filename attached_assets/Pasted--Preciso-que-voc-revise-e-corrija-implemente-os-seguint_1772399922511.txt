@@ -1,0 +1,62 @@
+"Preciso que você revise e corrija/implemente os seguintes itens no sistema. Leia com atenção cada ponto antes de executar:
+ITEM 1 — Criar tabelas no banco (PRIORIDADE)
+Execute este SQL no banco de produção (DATABASE_URL):
+sqlCREATE TABLE IF NOT EXISTS lead_tags (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  nome VARCHAR(50) NOT NULL,
+  cor VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, nome)
+);
+CREATE TABLE IF NOT EXISTS lead_tag_assignments (
+  id SERIAL PRIMARY KEY,
+  tag_id INTEGER NOT NULL REFERENCES lead_tags(id) ON DELETE CASCADE,
+  lead_id INTEGER NOT NULL REFERENCES sales_leads(id) ON DELETE CASCADE,
+  telefone VARCHAR(30) NOT NULL,
+  assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(tag_id, lead_id)
+);
+ITEM 2 — Tela de Atendimento (vendas-atendimento.tsx)
+A tela deve ter exatamente este layout no cabeçalho quando um lead está carregado:
+
+Nome do cliente em destaque com badge "Lista Manual"
+CPF e Matrícula na linha abaixo
+Componente TagManager (etiquetas) ao lado do nome
+Botões no topo fixo: "Contatos", "Registrar Atendimento", "Próximo" — NÃO deve ter botão flutuante no rodapé
+
+ITEM 3 — Tela de Consulta (vendas-consulta.tsx)
+Deve ter o componente TagManager no cabeçalho do cliente consultado, igual à tela de Atendimento. O TagManager só aparece se o cliente tiver um leadId associado.
+ITEM 4 — Página de Gestão de Etiquetas (vendas-etiquetas.tsx)
+Deve existir uma página em /vendas/etiquetas acessível pelo menu ALPHA. Esta página deve:
+
+Listar todas as etiquetas do usuário logado (vendedor vê só as suas, gestor/master vê todas separadas por vendedor)
+Permitir criar nova etiqueta com nome e cor
+Ao clicar em uma etiqueta, mostrar todos os clientes que têm aquela etiqueta com nome e telefone vinculado
+Ter botão de exportar CSV com nome e telefone dos clientes da etiqueta
+
+ITEM 5 — Componente TagManager (tag-manager.tsx)
+O componente deve:
+
+Mostrar etiquetas já aplicadas ao lead como badges coloridos com X para remover
+Ter botão + para abrir popover com lista de etiquetas disponíveis
+Ao aplicar uma etiqueta, OBRIGATORIAMENTE pedir para vincular um telefone (mostrar os telefones disponíveis do lead em um select, ou campo para digitar manualmente)
+Permitir criar nova etiqueta diretamente no popover
+Cada vendedor vê e gerencia apenas suas próprias etiquetas
+
+ITEM 6 — Menu lateral (app-sidebar.tsx)
+Adicionar item "Etiquetas" no grupo ALPHA entre "Consulta" e "Agenda" com ícone Tag e url /vendas/etiquetas. Adicionar /vendas/etiquetas no array de rotas do modulo_alpha.
+ITEM 7 — Rotas backend (routes.ts)
+Verificar se as seguintes rotas existem e estão funcionando DENTRO da função registerRoutes:
+
+GET /api/lead-tags — lista tags do usuário (gestor vê todas com nome do vendedor)*
+POST /api/lead-tags — cria nova tag*
+PATCH /api/lead-tags/:id — edita tag*
+DELETE /api/lead-tags/:id — exclui tag*
+GET /api/crm/leads/:leadId/tags — tags de um lead*
+POST /api/crm/leads/:leadId/tags — aplica tag com telefone obrigatório*
+DELETE /api/crm/leads/:leadId/tags/:tagId — remove tag de lead*
+GET /api/lead-tags/:id/clientes — lista clientes de uma etiqueta com nome e telefone*
+
