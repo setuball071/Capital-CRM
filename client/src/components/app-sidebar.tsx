@@ -43,7 +43,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts"],
-  modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline"],
+  modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas"],
 };
 
 function getModuleForUrl(url: string): string | undefined {
@@ -180,6 +180,7 @@ export function AppSidebar() {
         { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
         { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
         { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
+        { title: "Etiquetas", url: "/vendas/etiquetas", icon: Tag, module: "modulo_alpha", subItem: "etiquetas" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
       ],

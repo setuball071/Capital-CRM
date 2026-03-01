@@ -648,13 +648,12 @@ export default function VendasAtendimento() {
                     formatOnCopy={formatProperName}
                   />
                 </h1>
-                <Badge variant="default" data-testid="badge-status">Em Atendimento</Badge>
+                <Badge variant="default" data-testid="badge-status">Lista Manual</Badge>
                 {atendimentoAtual.campanha && (
                   <Badge variant="outline" data-testid="badge-campanha">
                     {atendimentoAtual.campanha.nome}
                   </Badge>
                 )}
-                {/* Lead marker badge */}
                 {atendimentoAtual.lead.leadMarker && atendimentoAtual.lead.leadMarker !== "NOVO" && (
                   <Badge variant="outline" className="text-xs" data-testid="badge-lead-marker">
                     {LEAD_MARKER_LABELS[atendimentoAtual.lead.leadMarker as LeadMarker] || atendimentoAtual.lead.leadMarker}
@@ -679,6 +678,58 @@ export default function VendasAtendimento() {
                   toast={toast}
                 />
               </div>
+            </div>
+            {/* TagManager - Etiquetas do lead */}
+            <div className="flex items-center">
+              <TagManager
+                leadId={atendimentoAtual.lead.id}
+                telefones={[
+                  atendimentoAtual.lead.telefone1,
+                  atendimentoAtual.lead.telefone2,
+                  atendimentoAtual.lead.telefone3,
+                  ...(atendimentoAtual.higienizacao?.telefones?.map((t: any) => t.telefone) || []),
+                ].filter((t): t is string => !!t)}
+              />
+            </div>
+            {/* Botões de ação no topo - igual à tela de Consulta */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={openNewContact}
+                data-testid="button-contatos-header"
+              >
+                <Phone className="h-4 w-4" />
+                Contatos
+                {leadContacts.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{leadContacts.length}</Badge>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={() => setDrawerOpen(true)}
+                data-testid="button-registrar-atendimento-header"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Registrar Atendimento
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={() => proximoMutation.mutate(undefined)}
+                disabled={proximoMutation.isPending}
+                data-testid="button-proximo-header"
+              >
+                {proximoMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SkipForward className="h-4 w-4" />
+                )}
+                Próximo
+              </Button>
             </div>
           </div>
         </div>
@@ -1613,17 +1664,7 @@ export default function VendasAtendimento() {
         </div>
       </div>
 
-      {/* BOTÃO FIXO - Registrar Atendimento */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <Button
-          className="px-6 py-6 text-base font-bold shadow-lg"
-          onClick={() => setDrawerOpen(true)}
-          data-testid="button-registrar-atendimento"
-        >
-          <MessageSquare className="h-5 w-5 mr-2" />
-          Registrar Atendimento
-        </Button>
-      </div>
+      {/* Botão removido do rodapé - agora fica no topo fixo */}
 
       {/* Dialog Registrar Atendimento */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>

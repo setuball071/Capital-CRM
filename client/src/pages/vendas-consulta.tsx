@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { TagManager } from "@/components/tag-manager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
@@ -719,6 +720,19 @@ export default function VendasConsulta() {
                 />
               </div>
             </div>
+            {/* TagManager - Etiquetas do lead (só aparece se vier de um lead de campanha) */}
+            {consultaData.clienteBase && (consultaData as any).leadId && (
+              <div className="flex items-center mt-1">
+                <TagManager
+                  leadId={(consultaData as any).leadId}
+                  telefones={[
+                    ...(consultaData.higienizacao?.telefones?.map((t: any) => t.telefone) || []),
+                    consultaData.clienteBase?.telefone1,
+                    consultaData.clienteBase?.telefone2,
+                  ].filter((t): t is string => !!t)}
+                />
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -851,6 +865,9 @@ export default function VendasConsulta() {
                       <p data-testid="text-upag">
                         {mapNomenclatura("UPAG", consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod)}
                       </p>
+                      {(consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod) && (
+                        <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod}</p>
+                      )}
                     </div>
                     <div className="space-y-1 md:col-span-2">
                       <p className="text-muted-foreground flex items-center gap-1">
@@ -860,6 +877,9 @@ export default function VendasConsulta() {
                       <p data-testid="text-orgao">
                         {mapNomenclatura("ORGAO", consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod)}
                       </p>
+                      {(consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod) && (
+                        <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground flex items-center gap-1">
