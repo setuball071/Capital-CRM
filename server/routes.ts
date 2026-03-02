@@ -20324,7 +20324,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           SELECT DISTINCT ctm.user_id
           FROM commercial_team_members ctm
           WHERE ctm.tenant_id = ${tenantId}
-            AND ctm.team_id = ANY(ARRAY[${sql.join(teamIds.map(id => sql`${id}`), sql`,`)}])
+            AND ctm.team_id = ANY(ARRAY[${sql.raw(teamIds.join(','))}]::int[])
             AND ctm.ativo = true
             AND ctm.user_id IS NOT NULL
         `);
@@ -20348,7 +20348,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                  COALESCE(SUM(me.meta_cartao), 0)::numeric as total_meta_cartao
           FROM metas_equipe me
           WHERE me.tenant_id = ${tenantId}
-            AND me.equipe_id = ANY(ARRAY[${sql.join(teamIds.map(id => sql`${id}`), sql`,`)}])
+            AND me.equipe_id = ANY(ARRAY[${sql.raw(teamIds.join(','))}]::int[])
             AND me.mes_referencia = ${mesRef}
         `);
         metaGeralEquipe = parseFloat(metaEquipeResult.rows[0]?.total_meta_geral as string) || 0;
