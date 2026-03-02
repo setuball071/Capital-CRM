@@ -20226,6 +20226,38 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allChartData = [...contratosPorDia, ...futureDays];
 
+      const allVendedoresRanking = await db.execute(sql`
+        SELECT u.id as user_id,
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true), 0)::numeric
+          + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()}), 0)::numeric as prod_geral,
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true), 0)::numeric
+          + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
+        FROM users u
+        INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+        WHERE u.role = 'vendedor' AND u.is_active = true
+        ORDER BY prod_geral DESC
+      `);
+
+      let posicaoRankingGeral = 0;
+      let posicaoRankingCartao = 0;
+      const totalVendedores = allVendedoresRanking.rows.length;
+
+      const geralSorted = [...allVendedoresRanking.rows].sort((a, b) => parseFloat(b.prod_geral as string) - parseFloat(a.prod_geral as string));
+      const cartaoSorted = [...allVendedoresRanking.rows].sort((a, b) => parseFloat(b.prod_cartao as string) - parseFloat(a.prod_cartao as string));
+
+      for (let i = 0; i < geralSorted.length; i++) {
+        if (parseInt(geralSorted[i].user_id as string) === userId) {
+          posicaoRankingGeral = i + 1;
+          break;
+        }
+      }
+      for (let i = 0; i < cartaoSorted.length; i++) {
+        if (parseInt(cartaoSorted[i].user_id as string) === userId) {
+          posicaoRankingCartao = i + 1;
+          break;
+        }
+      }
+
       return res.json({
         vendedorNome: user.name,
         metaMensal,
@@ -20247,10 +20279,170 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         nextTier,
         allTiers: PERFORMANCE_TIERS,
         mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+        posicaoRankingGeral,
+        posicaoRankingCartao,
+        totalVendedores,
       });
     } catch (error) {
       console.error("Error in dashboard-vendedor API:", error);
       return res.status(500).json({ message: "Erro ao carregar dashboard" });
+    }
+  });
+
+  // ========================
+  // Dashboard Gestor API (master/coordenacao)
+  // ========================
+  app.get("/api/dashboard-gestor", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const tenantId = req.tenantId!;
+      const user = await storage.getUser(userId);
+
+      if (!user || (user.role !== "master" && user.role !== "coordenacao")) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const mesRef = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const firstDayOfMonth = new Date(year, month, 1);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+
+      const teamsResult = await db.execute(sql`
+        SELECT ct.id as team_id, ct.nome_equipe
+        FROM commercial_teams ct
+        WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+        ${user.role === "coordenacao" ? sql`AND ct.coordenador_id = ${userId}` : sql``}
+      `);
+
+      const teamIds = teamsResult.rows.map((t: any) => parseInt(t.team_id));
+
+      let teamMemberIds: number[] = [];
+      if (teamIds.length > 0) {
+        const membersResult = await db.execute(sql`
+          SELECT DISTINCT ctm.user_id
+          FROM commercial_team_members ctm
+          WHERE ctm.tenant_id = ${tenantId}
+            AND ctm.team_id = ANY(${teamIds})
+            AND ctm.ativo = true
+            AND ctm.user_id IS NOT NULL
+        `);
+        teamMemberIds = membersResult.rows.map((r: any) => parseInt(r.user_id));
+      }
+
+      if (user.role === "master" && teamMemberIds.length === 0) {
+        const allVendedores = await db.execute(sql`
+          SELECT u.id FROM users u
+          INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+          WHERE u.role = 'vendedor' AND u.is_active = true
+        `);
+        teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
+      }
+
+      let metaGeralEquipe = 0;
+      let metaCartaoEquipe = 0;
+      if (teamIds.length > 0) {
+        const metaEquipeResult = await db.execute(sql`
+          SELECT COALESCE(SUM(me.meta_geral), 0)::numeric as total_meta_geral,
+                 COALESCE(SUM(me.meta_cartao), 0)::numeric as total_meta_cartao
+          FROM metas_equipe me
+          WHERE me.tenant_id = ${tenantId}
+            AND me.equipe_id = ANY(${teamIds})
+            AND me.mes_referencia = ${mesRef}
+        `);
+        metaGeralEquipe = parseFloat(metaEquipeResult.rows[0]?.total_meta_geral as string) || 0;
+        metaCartaoEquipe = parseFloat(metaEquipeResult.rows[0]?.total_meta_cartao as string) || 0;
+      }
+
+      const vendedoresData: any[] = [];
+      for (const vendedorId of teamMemberIds) {
+        const vendedorUser = await storage.getUser(vendedorId);
+        if (!vendedorUser) continue;
+
+        const prodResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_base), 0)::numeric as prod_geral,
+            COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COUNT(*)::int as contratos_total,
+            COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
+          FROM producoes_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND mes_referencia = ${mesRef}
+            AND confirmado = true
+        `);
+
+        const vendResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_contrato), 0)::numeric as prod_geral,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
+            COUNT(*)::int as contratos_total,
+            COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
+          FROM vendedor_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND data_contrato >= ${firstDayOfMonth.toISOString()}
+            AND data_contrato <= ${lastDayOfMonth.toISOString()}
+        `);
+
+        const prodGeral = (parseFloat(prodResult.rows[0]?.prod_geral as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_geral as string) || 0);
+        const prodCartao = (parseFloat(prodResult.rows[0]?.prod_cartao as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_cartao as string) || 0);
+        const contratosTotal = (parseInt(prodResult.rows[0]?.contratos_total as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_total as string) || 0);
+        const contratosCartao = (parseInt(prodResult.rows[0]?.contratos_cartao as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_cartao as string) || 0);
+
+        const metaIndResult = await db.execute(sql`
+          SELECT mi.meta_geral, mi.meta_cartao
+          FROM metas_individuais mi
+          WHERE mi.usuario_id = ${vendedorId} AND mi.tenant_id = ${tenantId} AND mi.mes_referencia = ${mesRef}
+          LIMIT 1
+        `);
+        let metaIndGeral = 0;
+        let metaIndCartao = 0;
+        if (metaIndResult.rows.length > 0) {
+          metaIndGeral = parseFloat(metaIndResult.rows[0].meta_geral as string) || 0;
+          metaIndCartao = parseFloat(metaIndResult.rows[0].meta_cartao as string) || 0;
+        } else {
+          metaIndGeral = vendedorUser.metaMensal ? parseFloat(vendedorUser.metaMensal as string) : 0;
+        }
+
+        vendedoresData.push({
+          userId: vendedorId,
+          nome: vendedorUser.name,
+          foto: vendedorUser.avatarUrl || null,
+          producaoGeral: Math.round(prodGeral * 100) / 100,
+          producaoCartao: Math.round(prodCartao * 100) / 100,
+          contratos: contratosTotal,
+          contratosCartao: contratosCartao,
+          metaGeral: metaIndGeral,
+          metaCartao: metaIndCartao,
+          percentualMeta: metaIndGeral > 0 ? Math.round((prodGeral / metaIndGeral) * 100) : 0,
+          percentualMetaCartao: metaIndCartao > 0 ? Math.round((prodCartao / metaIndCartao) * 100) : 0,
+        });
+      }
+
+      const totalProduzidoGeral = vendedoresData.reduce((s, v) => s + v.producaoGeral, 0);
+      const totalProduzidoCartao = vendedoresData.reduce((s, v) => s + v.producaoCartao, 0);
+
+      const rankingGeral = [...vendedoresData].sort((a, b) => b.producaoGeral - a.producaoGeral).map((v, i) => ({ ...v, posicao: i + 1 }));
+      const rankingCartao = [...vendedoresData].sort((a, b) => b.producaoCartao - a.producaoCartao).map((v, i) => ({ ...v, posicao: i + 1 }));
+
+      return res.json({
+        equipe: {
+          metaGeral: metaGeralEquipe,
+          metaCartao: metaCartaoEquipe,
+          totalProduzidoGeral: Math.round(totalProduzidoGeral * 100) / 100,
+          totalProduzidoCartao: Math.round(totalProduzidoCartao * 100) / 100,
+          percentualGeral: metaGeralEquipe > 0 ? Math.round((totalProduzidoGeral / metaGeralEquipe) * 100) : 0,
+          percentualCartao: metaCartaoEquipe > 0 ? Math.round((totalProduzidoCartao / metaCartaoEquipe) * 100) : 0,
+        },
+        rankingGeral,
+        rankingCartao,
+        mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+      });
+    } catch (error) {
+      console.error("Error in dashboard-gestor API:", error);
+      return res.status(500).json({ message: "Erro ao carregar dashboard do gestor" });
     }
   });
 

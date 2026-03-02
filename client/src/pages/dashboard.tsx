@@ -1,494 +1,274 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Users, FileText, TrendingUp, Building2, FileCheck, Clock, CreditCard } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Target, CreditCard, Trophy, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/formatters";
-import { format, subDays, startOfDay } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth";
 
-interface UserStats {
+interface VendedorRanking {
   userId: number;
-  userName: string;
-  userRole: string;
-  simulationCount: number;
-  totalContractValue: number;
-  totalClientRefund: number;
-  lastSimulation: string | null;
+  nome: string;
+  foto: string | null;
+  producaoGeral: number;
+  producaoCartao: number;
+  contratos: number;
+  contratosCartao: number;
+  metaGeral: number;
+  metaCartao: number;
+  percentualMeta: number;
+  percentualMetaCartao: number;
+  posicao: number;
 }
 
-interface Simulation {
-  id: number;
-  clientName: string;
-  agreementName: string;
-  operationType: string;
-  bank: string;
-  termMonths: number;
-  totalContractValue: string;
-  clientRefund: string;
-  createdAt: string;
-  userName?: string;
-}
-
-interface RankingItem {
-  count: number;
-}
-
-interface BankRanking extends RankingItem {
-  bank: string;
-}
-
-interface AgreementRanking extends RankingItem {
-  agreementName: string;
-}
-
-interface TermRanking extends RankingItem {
-  termMonths: number;
-}
-
-interface OperationTypeRanking extends RankingItem {
-  operationType: string;
-}
-
-interface StatsResponse {
-  totalSimulations: number;
-  statsByUser: UserStats[];
-  recentSimulations: Simulation[];
-  rankings: {
-    byBank: BankRanking[];
-    byAgreement: AgreementRanking[];
-    byTerm: TermRanking[];
-    byOperationType: OperationTypeRanking[];
+interface GestorDashboardData {
+  equipe: {
+    metaGeral: number;
+    metaCartao: number;
+    totalProduzidoGeral: number;
+    totalProduzidoCartao: number;
+    percentualGeral: number;
+    percentualCartao: number;
   };
+  rankingGeral: VendedorRanking[];
+  rankingCartao: VendedorRanking[];
+  mesAno: string;
 }
 
-const OPERATION_TYPES: Record<string, string> = {
-  credit_card: "Cartão de Crédito",
-  benefit_card: "Cartão Benefício",
-  consignado: "Consignado",
-};
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
 
-const ROLE_LABELS: Record<string, string> = {
-  master: "Administrador",
-  coordenacao: "Coordenador",
-  vendedor: "Vendedor",
-};
+function formatBRL(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
+}
 
-// Role-specific dashboard titles
-const DASHBOARD_TITLES: Record<string, { title: string; subtitle: string }> = {
-  master: {
-    title: "Dashboard Administrativo",
-    subtitle: "Controle de uso e relatórios de todos os usuários",
-  },
-  coordenacao: {
-    title: "Dashboard da Equipe",
-    subtitle: "Acompanhe o desempenho da sua equipe",
-  },
-  vendedor: {
-    title: "Meu Dashboard",
-    subtitle: "Acompanhe suas simulações e desempenho",
-  },
-};
+function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, variant }: {
+  label: string;
+  icon: typeof Target;
+  produzido: number;
+  meta: number;
+  percentual: number;
+  variant: "geral" | "cartao";
+}) {
+  const isCartao = variant === "cartao";
 
-// Dashboard view component that contains the stats query - works for all roles
-function DashboardView({ userRole }: { userRole: string }) {
-  const [periodFilter, setPeriodFilter] = useState<string>("all");
-  const dashboardInfo = DASHBOARD_TITLES[userRole] || DASHBOARD_TITLES.vendedor;
+  return (
+    <Card className={`flex-1 min-w-0 ${isCartao ? "bg-[#1a1a2e] dark:bg-[#111122] border-purple-500/20" : "border-primary/20"}`} data-testid={`card-equipe-meta-${variant}`}>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Icon size={16} className={isCartao ? "text-purple-400" : "text-primary"} />
+          <h3 className={`font-bold text-sm uppercase tracking-wider ${isCartao ? "text-purple-300" : "text-primary"}`}>
+            {label}
+          </h3>
+        </div>
 
-  const { data: stats, isLoading, error } = useQuery<StatsResponse>({
-    queryKey: ["/api/simulations/stats", periodFilter],
-    queryFn: async () => {
-      let url = "/api/simulations/stats";
-      const params = new URLSearchParams();
+        <div className="flex items-end justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${isCartao ? "text-purple-400" : ""}`} data-testid={`text-equipe-produzido-${variant}`}>
+              {formatBRL(produzido)}
+            </div>
+            <div className={`text-sm ${isCartao ? "text-gray-500" : "text-muted-foreground"}`}>
+              Meta: {formatBRL(meta)}
+            </div>
+          </div>
+          <div className={`shrink-0 px-3 py-1.5 rounded-md border ${isCartao ? "bg-purple-500/20 border-purple-500/30" : "bg-primary/10 border-primary/20"}`}>
+            <span className={`text-xl font-bold ${isCartao ? "text-purple-400" : "text-primary"}`} data-testid={`text-equipe-percent-${variant}`}>
+              {percentual}%
+            </span>
+          </div>
+        </div>
 
-      if (periodFilter !== "all") {
-        const now = new Date();
-        let startDate: Date;
+        <div className={`w-full h-2.5 rounded-full overflow-hidden ${isCartao ? "bg-gray-700" : "bg-muted"}`}>
+          <div
+            className={`h-full rounded-full transition-all duration-1000 ${isCartao ? "bg-gradient-to-r from-purple-600 to-purple-400" : "bg-gradient-to-r from-primary to-chart-2"}`}
+            style={{ width: `${Math.min(percentual, 100)}%` }}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-        switch (periodFilter) {
-          case "today":
-            startDate = startOfDay(now);
-            break;
-          case "week":
-            startDate = subDays(now, 7);
-            break;
-          case "month":
-            startDate = subDays(now, 30);
-            break;
-          case "year":
-            startDate = subDays(now, 365);
-            break;
-          default:
-            startDate = new Date(0);
-        }
+function RankingTable({ title, icon: Icon, data, type }: {
+  title: string;
+  icon: typeof Trophy;
+  data: VendedorRanking[];
+  type: "geral" | "cartao";
+}) {
+  const isCartao = type === "cartao";
 
-        params.append("startDate", startDate.toISOString());
-        params.append("endDate", now.toISOString());
-      }
+  return (
+    <Card data-testid={`card-ranking-${type}`}>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-2 p-4 pb-3 border-b">
+          <Icon size={18} className={isCartao ? "text-purple-400" : "text-primary"} />
+          <h3 className="font-bold text-base">{title}</h3>
+          <Badge variant="outline" className="ml-auto">{data.length} corretores</Badge>
+        </div>
 
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
+        {data.length === 0 ? (
+          <div className="p-6 text-center text-muted-foreground text-sm">
+            Nenhum corretor encontrado
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12 text-center">#</TableHead>
+                <TableHead>Corretor</TableHead>
+                <TableHead className="text-right">{isCartao ? "Prod. Cartao" : "Produção"}</TableHead>
+                <TableHead className="text-right">% Meta</TableHead>
+                <TableHead className="text-right">Contratos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((v) => {
+                const prod = isCartao ? v.producaoCartao : v.producaoGeral;
+                const pct = isCartao ? v.percentualMetaCartao : v.percentualMeta;
+                const contratos = isCartao ? v.contratosCartao : v.contratos;
 
-      const response = await fetch(url, { credentials: "include" });
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Dashboard API error:", response.status, errorText);
-        throw new Error(`Failed to fetch stats: ${response.status}`);
-      }
-      return response.json();
-    },
-    retry: 1,
+                return (
+                  <TableRow key={v.userId} data-testid={`row-ranking-${type}-${v.userId}`}>
+                    <TableCell className="text-center">
+                      {v.posicao <= 3 ? (
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
+                          v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
+                          v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
+                          "bg-orange-500/20 text-orange-600 dark:text-orange-400"
+                        }`}>
+                          {v.posicao}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">{v.posicao}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          {v.foto && <AvatarImage src={v.foto} alt={v.nome} />}
+                          <AvatarFallback className="text-xs">{getInitials(v.nome)}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-sm" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
+                      {formatBRL(prod)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge
+                        variant={pct >= 100 ? "default" : "outline"}
+                        className={pct >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
+                        data-testid={`text-ranking-pct-${type}-${v.userId}`}
+                      >
+                        {pct}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
+                      {contratos}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function GestorDashboard() {
+  const { data, isLoading, error } = useQuery<GestorDashboardData>({
+    queryKey: ["/api/dashboard-gestor"],
+    retry: 3,
+    retryDelay: 1000,
   });
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-muted-foreground">Carregando estatísticas...</div>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (error) {
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <div className="text-destructive font-medium">Erro ao carregar estatísticas</div>
-        <div className="text-sm text-muted-foreground">{errorMessage}</div>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          data-testid="button-retry"
-        >
-          Tentar novamente
-        </button>
+      <div className="flex flex-col items-center justify-center h-64 gap-2">
+        <div className="text-destructive font-medium">Erro ao carregar dashboard</div>
+        <div className="text-sm text-muted-foreground">{error instanceof Error ? error.message : "Erro desconhecido"}</div>
       </div>
     );
   }
 
-  const statsByUser = stats?.statsByUser || [];
-  const topUsers = [...statsByUser].sort((a, b) => b.simulationCount - a.simulationCount).slice(0, 5);
+  if (!data) return null;
+
+  const mesLabel = data.mesAno || "";
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="border-b bg-background p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{dashboardInfo.title}</h1>
-            <p className="text-sm text-muted-foreground">{dashboardInfo.subtitle}</p>
-          </div>
-        </div>
+    <div className="flex flex-col h-full">
+      <header className="border-b bg-background p-4 shrink-0">
+        <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard da Equipe</h1>
+        <p className="text-sm text-muted-foreground">Produção e rankings do mês {mesLabel}</p>
       </header>
 
-      <main className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Statistics Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card data-testid="card-total-simulations">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Simulações</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-total-simulations">
-                  {stats?.totalSimulations || 0}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Todas as simulações realizadas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-active-users">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Usuários Ativos</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-active-users">
-                  {statsByUser.length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Usuários com simulações
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-total-contract">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Valor Total Contratado</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-total-contract">
-                  {formatCurrency(
-                    statsByUser.reduce((sum, user) => sum + user.totalContractValue, 0)
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Soma de todas as simulações
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-total-refund">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Troco</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-total-refund">
-                  {formatCurrency(
-                    statsByUser.reduce((sum, user) => sum + user.totalClientRefund, 0)
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Total devolvido aos clientes
-                </p>
-              </CardContent>
-            </Card>
+      <main className="flex-1 overflow-auto p-4 sm:p-6">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <EquipeMetaCard
+              label="Meta Geral da Equipe"
+              icon={Target}
+              produzido={data.equipe.totalProduzidoGeral}
+              meta={data.equipe.metaGeral}
+              percentual={data.equipe.percentualGeral}
+              variant="geral"
+            />
+            <EquipeMetaCard
+              label="Meta Cartão da Equipe"
+              icon={CreditCard}
+              produzido={data.equipe.totalProduzidoCartao}
+              meta={data.equipe.metaCartao}
+              percentual={data.equipe.percentualCartao}
+              variant="cartao"
+            />
           </div>
 
-          {/* Rankings Section */}
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            {/* Ranking por Banco */}
-            <Card data-testid="card-ranking-banks">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Bancos</CardTitle>
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {(stats?.rankings?.byBank ?? []).slice(0, 3).map((item, index) => (
-                    <div key={item.bank} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {index + 1}. {item.bank}
-                      </span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
-                  {(!stats?.rankings?.byBank || stats.rankings.byBank.length === 0) && (
-                    <p className="text-xs text-muted-foreground">Sem dados</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+          <RankingTable
+            title="Ranking Geral dos Corretores"
+            icon={Trophy}
+            data={data.rankingGeral}
+            type="geral"
+          />
 
-            {/* Ranking por Convênio */}
-            <Card data-testid="card-ranking-agreements">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Convênios</CardTitle>
-                <FileCheck className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {(stats?.rankings?.byAgreement ?? []).slice(0, 3).map((item, index) => (
-                    <div key={item.agreementName} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {index + 1}. {item.agreementName}
-                      </span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
-                  {(!stats?.rankings?.byAgreement || stats.rankings.byAgreement.length === 0) && (
-                    <p className="text-xs text-muted-foreground">Sem dados</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Ranking por Prazo */}
-            <Card data-testid="card-ranking-terms">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Prazos</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {(stats?.rankings?.byTerm ?? []).slice(0, 3).map((item, index) => (
-                    <div key={item.termMonths} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {index + 1}. {item.termMonths} meses
-                      </span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
-                  {(!stats?.rankings?.byTerm || stats.rankings.byTerm.length === 0) && (
-                    <p className="text-xs text-muted-foreground">Sem dados</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Ranking por Tipo de Operação */}
-            <Card data-testid="card-ranking-operation-types">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Tipos</CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {(stats?.rankings?.byOperationType ?? []).slice(0, 3).map((item, index) => (
-                    <div key={item.operationType} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {index + 1}. {OPERATION_TYPES[item.operationType] || item.operationType}
-                      </span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
-                  {(!stats?.rankings?.byOperationType || stats.rankings.byOperationType.length === 0) && (
-                    <p className="text-xs text-muted-foreground">Sem dados</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Top Users Table */}
-          <Card data-testid="card-top-users">
-            <CardHeader>
-              <CardTitle>Top 5 Usuários</CardTitle>
-              <p className="text-sm text-muted-foreground">Usuários com mais simulações realizadas</p>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Função</TableHead>
-                    <TableHead className="text-right">Simulações</TableHead>
-                    <TableHead className="text-right">Valor Total</TableHead>
-                    <TableHead className="text-right">Última Simulação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        Nenhuma simulação encontrada
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    topUsers.map((user) => (
-                      <TableRow key={user.userId} data-testid={`row-user-${user.userId}`}>
-                        <TableCell className="font-medium">{user.userName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{ROLE_LABELS[user.userRole] || user.userRole}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right" data-testid={`text-simulations-${user.userId}`}>
-                          {user.simulationCount}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(user.totalContractValue)}
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {user.lastSimulation
-                            ? format(new Date(user.lastSimulation), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                            : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Recent Simulations Table */}
-          <Card data-testid="card-recent-simulations">
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <CardTitle>Simulações Recentes</CardTitle>
-                  <p className="text-sm text-muted-foreground">Simulações realizadas no período selecionado</p>
-                </div>
-                <Select value={periodFilter} onValueChange={setPeriodFilter} data-testid="select-period-filter">
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Selecione o período" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="today">Hoje</SelectItem>
-                    <SelectItem value="week">Última Semana</SelectItem>
-                    <SelectItem value="month">Último Mês</SelectItem>
-                    <SelectItem value="year">Último Ano</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Usuário</TableHead>
-                    <TableHead>Convênio</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Banco</TableHead>
-                    <TableHead className="text-right">Prazo</TableHead>
-                    <TableHead className="text-right">Valor Total</TableHead>
-                    <TableHead className="text-right">Troco</TableHead>
-                    <TableHead className="text-right">Data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {!stats?.recentSimulations || stats.recentSimulations.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground">
-                        Nenhuma simulação encontrada
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    stats.recentSimulations.map((simulation) => (
-                      <TableRow key={simulation.id} data-testid={`row-simulation-${simulation.id}`}>
-                        <TableCell className="font-medium">{simulation.clientName}</TableCell>
-                        <TableCell>{simulation.userName || "-"}</TableCell>
-                        <TableCell>{simulation.agreementName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {OPERATION_TYPES[simulation.operationType] || simulation.operationType}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{simulation.bank}</TableCell>
-                        <TableCell className="text-right">{simulation.termMonths} meses</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(parseFloat(simulation.totalContractValue))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(parseFloat(simulation.clientRefund))}
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {format(new Date(simulation.createdAt), "dd/MM HH:mm", { locale: ptBR })}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <RankingTable
+            title="Ranking Cartão dos Corretores"
+            icon={CreditCard}
+            data={data.rankingCartao}
+            type="cartao"
+          />
         </div>
       </main>
     </div>
   );
 }
 
-// Dashboard page shell - renders appropriate view for each role
 export default function DashboardPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
 
-  // Wait for auth to resolve
   if (isAuthLoading || !user) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-muted-foreground">Carregando...</div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  // Render dashboard view with user's role - API handles filtering
-  return <DashboardView userRole={user.role} />;
+  return <GestorDashboard />;
 }

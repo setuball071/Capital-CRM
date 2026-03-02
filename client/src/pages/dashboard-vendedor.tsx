@@ -68,6 +68,9 @@ interface DashboardData {
     excedente: number;
   }>;
   mesAno: string;
+  posicaoRankingGeral: number;
+  posicaoRankingCartao: number;
+  totalVendedores: number;
 }
 
 const MESES: Record<string, string> = {
@@ -86,10 +89,12 @@ function getTierIcon(iconName: string) {
   return TIER_ICONS[iconName] || Shield;
 }
 
-function MetaGeralCard({ performance, mesNome, metaMensal }: {
+function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, totalVendedores }: {
   performance: CategoriaPerformance | undefined;
   mesNome: string;
   metaMensal: number;
+  posicaoRanking?: number;
+  totalVendedores?: number;
 }) {
   if (!performance) return null;
   const nivel = performance.nivelAtual;
@@ -103,6 +108,11 @@ function MetaGeralCard({ performance, mesNome, metaMensal }: {
           <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-primary" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Meta Geral – {mesNome}
           </h3>
+          {posicaoRanking && posicaoRanking > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-geral">
+              <Trophy size={12} /> #{posicaoRanking}{totalVendedores ? `/${totalVendedores}` : ""}
+            </span>
+          )}
         </div>
 
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -143,10 +153,12 @@ function MetaGeralCard({ performance, mesNome, metaMensal }: {
   );
 }
 
-function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp }: {
+function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp, posicaoRanking, totalVendedores }: {
   performance: CategoriaPerformance | undefined;
   mesNome: string;
   metaCartao: number;
+  posicaoRanking?: number;
+  totalVendedores?: number;
 }) {
   if (!performance) return null;
   const nivel = performance.nivelAtual;
@@ -161,6 +173,11 @@ function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp }: {
           <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-purple-300" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Meta Cartão – {mesNome}
           </h3>
+          {posicaoRanking && posicaoRanking > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-cartao">
+              <Trophy size={12} /> #{posicaoRanking}{totalVendedores ? `/${totalVendedores}` : ""}
+            </span>
+          )}
         </div>
 
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -455,10 +472,10 @@ export default function DashboardVendedorPage() {
     <div className="space-y-5 sm:space-y-6 relative" style={{ zIndex: 5 }} data-testid="dashboard-vendedor">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch">
         <div className="lg:col-span-3 flex">
-          <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} />
+          <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} posicaoRanking={data?.posicaoRankingGeral} totalVendedores={data?.totalVendedores} />
         </div>
         <div className="lg:col-span-2 flex">
-          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} metaCartao={data?.metaCartao || 0} />
+          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} metaCartao={data?.metaCartao || 0} posicaoRanking={data?.posicaoRankingCartao} totalVendedores={data?.totalVendedores} />
         </div>
       </div>
 
