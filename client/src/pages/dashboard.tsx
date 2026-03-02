@@ -3,7 +3,6 @@ import { Target, CreditCard, Trophy, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth";
 
 interface VendedorRanking {
@@ -96,6 +95,21 @@ function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, varian
   );
 }
 
+function RankingAvatar({ nome, posicao }: { nome: string; posicao: number }) {
+  const initials = getInitials(nome);
+  const bgClass =
+    posicao === 1 ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 ring-yellow-500/30" :
+    posicao === 2 ? "bg-gray-300/20 text-gray-600 dark:text-gray-300 ring-gray-400/30" :
+    posicao === 3 ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 ring-orange-500/30" :
+    "bg-muted text-muted-foreground ring-border";
+
+  return (
+    <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ring-1 shrink-0 ${bgClass}`} data-testid={`avatar-ranking-${posicao}`}>
+      {initials}
+    </div>
+  );
+}
+
 function RankingTable({ title, icon: Icon, data, type }: {
   title: string;
   icon: typeof Trophy;
@@ -105,9 +119,9 @@ function RankingTable({ title, icon: Icon, data, type }: {
   const isCartao = type === "cartao";
 
   return (
-    <Card data-testid={`card-ranking-${type}`}>
-      <CardContent className="p-0">
-        <div className="flex items-center gap-2 p-4 pb-3 border-b">
+    <Card data-testid={`card-ranking-${type}`} className="flex flex-col">
+      <CardContent className="p-0 flex flex-col flex-1">
+        <div className="flex items-center gap-2 p-4 pb-3 border-b shrink-0">
           <Icon size={18} className={isCartao ? "text-purple-400" : "text-primary"} />
           <h3 className="font-bold text-base">{title}</h3>
           <Badge variant="outline" className="ml-auto">{data.length} corretores</Badge>
@@ -118,66 +132,65 @@ function RankingTable({ title, icon: Icon, data, type }: {
             Nenhum corretor encontrado
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 text-center">#</TableHead>
-                <TableHead>Corretor</TableHead>
-                <TableHead className="text-right">{isCartao ? "Prod. Cartao" : "Produção"}</TableHead>
-                <TableHead className="text-right">% Meta</TableHead>
-                <TableHead className="text-right">Contratos</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((v) => {
-                const prod = isCartao ? v.producaoCartao : v.producaoGeral;
-                const pct = isCartao ? v.percentualMetaCartao : v.percentualMeta;
-                const contratos = isCartao ? v.contratosCartao : v.contratos;
+          <div className="flex-1 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12 text-center">#</TableHead>
+                  <TableHead>Corretor</TableHead>
+                  <TableHead className="text-right">{isCartao ? "Prod. Cartão" : "Produção"}</TableHead>
+                  <TableHead className="text-right">% Meta</TableHead>
+                  <TableHead className="text-right">Contratos</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.map((v) => {
+                  const prod = isCartao ? v.producaoCartao : v.producaoGeral;
+                  const pct = isCartao ? v.percentualMetaCartao : v.percentualMeta;
+                  const contratos = isCartao ? v.contratosCartao : v.contratos;
 
-                return (
-                  <TableRow key={v.userId} data-testid={`row-ranking-${type}-${v.userId}`}>
-                    <TableCell className="text-center">
-                      {v.posicao <= 3 ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
-                          v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
-                          v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
-                          "bg-orange-500/20 text-orange-600 dark:text-orange-400"
-                        }`}>
-                          {v.posicao}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{v.posicao}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
-                          {v.foto && <AvatarImage src={v.foto} alt={v.nome} />}
-                          <AvatarFallback className="text-xs">{getInitials(v.nome)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-sm" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
-                      {formatBRL(prod)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant={pct >= 100 ? "default" : "outline"}
-                        className={pct >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
-                        data-testid={`text-ranking-pct-${type}-${v.userId}`}
-                      >
-                        {pct}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
-                      {contratos}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                  return (
+                    <TableRow key={v.userId} data-testid={`row-ranking-${type}-${v.userId}`}>
+                      <TableCell className="text-center">
+                        {v.posicao <= 3 ? (
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
+                            v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
+                            v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
+                            "bg-orange-500/20 text-orange-600 dark:text-orange-400"
+                          }`}>
+                            {v.posicao}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">{v.posicao}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <RankingAvatar nome={v.nome} posicao={v.posicao} />
+                          <span className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
+                        {formatBRL(prod)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={pct >= 100 ? "default" : "outline"}
+                          className={pct >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
+                          data-testid={`text-ranking-pct-${type}-${v.userId}`}
+                        >
+                          {pct}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
+                        {contratos}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -220,7 +233,7 @@ function GestorDashboard() {
       </header>
 
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <EquipeMetaCard
               label="Meta Geral da Equipe"
@@ -240,19 +253,21 @@ function GestorDashboard() {
             />
           </div>
 
-          <RankingTable
-            title="Ranking Geral dos Corretores"
-            icon={Trophy}
-            data={data.rankingGeral}
-            type="geral"
-          />
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+            <RankingTable
+              title="Ranking Geral dos Corretores"
+              icon={Trophy}
+              data={data.rankingGeral}
+              type="geral"
+            />
 
-          <RankingTable
-            title="Ranking Cartão dos Corretores"
-            icon={CreditCard}
-            data={data.rankingCartao}
-            type="cartao"
-          />
+            <RankingTable
+              title="Ranking Cartão dos Corretores"
+              icon={CreditCard}
+              data={data.rankingCartao}
+              type="cartao"
+            />
+          </div>
         </div>
       </main>
     </div>
