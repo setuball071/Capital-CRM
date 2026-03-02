@@ -1534,6 +1534,7 @@ export const LEAD_MARKERS = [
   "SEM_INTERESSE",
   "RETORNAR_DEPOIS",
   "TRANSFERIR",
+  "RECUSADO",
 ] as const;
 
 export type LeadMarker = (typeof LEAD_MARKERS)[number];
@@ -1552,6 +1553,7 @@ export const LEAD_MARKER_LABELS: Record<LeadMarker, string> = {
   SEM_INTERESSE: "Sem Interesse",
   RETORNAR_DEPOIS: "Retornar Depois",
   TRANSFERIR: "Transferir",
+  RECUSADO: "Recusado",
 };
 
 // Marcadores que requerem motivo
@@ -1821,9 +1823,9 @@ export const MODULE_SUB_ITEMS = {
   ],
   modulo_alpha: [
     { key: "campanhas", label: "Campanhas" },
-    { key: "atendimento", label: "Atendimento" },
+    { key: "atendimento", label: "Lista Manual" },
     { key: "pipeline", label: "Pipeline" },
-    { key: "consulta", label: "Consulta" },
+    { key: "consulta", label: "Consulta Individual" },
     { key: "etiquetas", label: "Etiquetas" },
     { key: "agenda", label: "Agenda" },
     { key: "gestao_pipeline", label: "Gestão Pipeline" },

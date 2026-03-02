@@ -61,13 +61,12 @@ export function AppSidebar() {
   const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    principal: true,
+    alpha: true,
     simuladores: false,
     operacional: false,
     clientes: false,
     admin: false,
     academia: false,
-    alpha: false,
     gestãocomercial: false,
   });
 
@@ -109,12 +108,20 @@ export function AppSidebar() {
     </div>
   );
 
+  const homeUrl = ["master", "coordenacao"].includes(userRole) ? "/dashboard" : "/dashboard-vendedor";
+
   const menuSections: MenuSection[] = [
     {
-      title: "Principal",
-      icon: Home,
+      title: "ALPHA",
+      icon: WolfIcon,
       items: [
-        { title: "Meu Painel", url: "/dashboard-vendedor", icon: LayoutDashboard, module: "modulo_meu_painel" },
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
+        { title: "Lista Manual", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
+        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
+        { title: "Consulta Individual", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
+        { title: "Etiquetas", url: "/vendas/etiquetas", icon: Tag, module: "modulo_alpha", subItem: "etiquetas" },
+        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
+        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
       ],
     },
     {
@@ -170,19 +177,6 @@ export function AppSidebar() {
         { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
         { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
         { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia", subItem: "dashboard" },
-      ],
-    },
-    {
-      title: "ALPHA",
-      icon: WolfIcon,
-      items: [
-        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
-        { title: "Atendimento", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
-        { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
-        { title: "Consulta", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
-        { title: "Etiquetas", url: "/vendas/etiquetas", icon: Tag, module: "modulo_alpha", subItem: "etiquetas" },
-        { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
-        { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
       ],
     },
     {
@@ -279,6 +273,18 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === homeUrl || location === "/dashboard-vendedor" || location === "/dashboard"}
+                  data-testid="sidebar-home"
+                >
+                  <button onClick={() => setLocation(homeUrl)} className="w-full">
+                    <Home className="h-4 w-4" />
+                    <span>Home</span>
+                  </button>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               {filteredSections.map((section) => {
                 const sectionKey = getSectionKey(section.title);
                 const isOpen = openSections[sectionKey] ?? false;

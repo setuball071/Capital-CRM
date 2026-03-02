@@ -74,6 +74,7 @@ const MARKER_COLORS: Record<LeadMarker, string> = {
   SEM_INTERESSE: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200",
   RETORNAR_DEPOIS: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   TRANSFERIR: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+  RECUSADO: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
 function formatPhone(phone: string | null | undefined): string {

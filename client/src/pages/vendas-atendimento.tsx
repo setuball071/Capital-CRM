@@ -20,7 +20,8 @@ import { TagManager } from "@/components/tag-manager";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
-  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator
+  Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator,
+  LogOut
 } from "lucide-react";
 import { 
   LEAD_STATUS, 
@@ -222,6 +223,7 @@ export default function VendasAtendimento() {
   const [atendimentoAtual, setAtendimentoAtual] = useState<AtendimentoData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [contatosModalOpen, setContatosModalOpen] = useState(false);
+  const [proximoDialogOpen, setProximoDialogOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
@@ -541,6 +543,31 @@ export default function VendasAtendimento() {
     }
   };
 
+  const handleRecusarEProximo = async () => {
+    if (!atendimentoAtual?.lead?.id) return;
+    try {
+      await apiRequest("POST", `/api/crm/leads/${atendimentoAtual.lead.id}/interaction`, {
+        tipoContato: "outro",
+        leadMarker: "RECUSADO",
+        motivo: "Cliente recusado pelo vendedor",
+        observacao: null,
+        retornoEm: null,
+        margemValor: null,
+        propostaValorEstimado: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
+      setProximoDialogOpen(false);
+      proximoMutation.mutate(undefined);
+    } catch {
+      toast({ title: "Erro ao registrar recusa", variant: "destructive" });
+    }
+  };
+
+  const handlePularCliente = () => {
+    setProximoDialogOpen(false);
+    proximoMutation.mutate(undefined);
+  };
+
   const handleAddContact = () => {
     if (!newContact.valor.trim()) {
       toast({ title: "Informe o telefone", variant: "destructive" });
@@ -727,7 +754,7 @@ export default function VendasAtendimento() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => proximoMutation.mutate(undefined)}
+                onClick={() => setProximoDialogOpen(true)}
                 disabled={proximoMutation.isPending}
                 data-testid="button-proximo-header"
               >
@@ -737,6 +764,14 @@ export default function VendasAtendimento() {
                   <SkipForward className="h-4 w-4" />
                 )}
                 Próximo
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setAtendimentoAtual(null)}
+                data-testid="button-sair-lista"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair da Lista
               </Button>
             </div>
           </div>
@@ -1907,6 +1942,41 @@ export default function VendasAtendimento() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               {editingContact ? "Atualizar" : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={proximoDialogOpen} onOpenChange={setProximoDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>O que deseja fazer?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={handlePularCliente}
+              disabled={proximoMutation.isPending}
+              data-testid="button-pular-cliente"
+            >
+              <SkipForward className="h-4 w-4 mr-2" />
+              Pular cliente
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full justify-start"
+              onClick={handleRecusarEProximo}
+              disabled={proximoMutation.isPending}
+              data-testid="button-recusar-cliente"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Não quero trabalhar este cliente
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setProximoDialogOpen(false)} data-testid="button-cancelar-proximo">
+              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
