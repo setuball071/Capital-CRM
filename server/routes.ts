@@ -20447,6 +20447,370 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // ========================
+  // Relatórios — Histórico de Produção
+  // ========================
+  app.get("/api/relatorios/historico-producao", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const tenantId = req.tenantId!;
+      const user = await storage.getUser(userId);
+
+      if (!user || (user.role !== "master" && user.role !== "coordenacao")) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const mes = (req.query.mes as string) || (() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      })();
+      const visao = (req.query.visao as string) || "empresa";
+      const equipeIdParam = req.query.equipeId ? parseInt(req.query.equipeId as string) : null;
+
+      const [yearStr, monthStr] = mes.split("-");
+      const year = parseInt(yearStr);
+      const month = parseInt(monthStr) - 1;
+      const firstDayOfMonth = new Date(year, month, 1);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+      const mesRef = mes;
+
+      const teamsResult = await db.execute(sql`
+        SELECT ct.id as team_id, ct.nome_equipe
+        FROM commercial_teams ct
+        WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+        ${user.role === "coordenacao" ? sql`AND ct.coordenador_id = ${userId}` : sql``}
+      `);
+      const allTeams = teamsResult.rows.map((t: any) => ({ id: parseInt(t.team_id), nome: t.nome_equipe }));
+
+      let teamIds: number[] = [];
+      if (visao === "equipe" && equipeIdParam) {
+        const validTeam = allTeams.find(t => t.id === equipeIdParam);
+        if (validTeam) teamIds = [equipeIdParam];
+        else teamIds = allTeams.map(t => t.id);
+      } else {
+        teamIds = allTeams.map(t => t.id);
+      }
+
+      let teamMemberIds: number[] = [];
+      if (teamIds.length > 0) {
+        const membersResult = await db.execute(sql`
+          SELECT DISTINCT ctm.user_id
+          FROM commercial_team_members ctm
+          WHERE ctm.tenant_id = ${tenantId}
+            AND ctm.team_id = ANY(ARRAY[${sql.raw(teamIds.join(','))}]::int[])
+            AND ctm.ativo = true
+            AND ctm.user_id IS NOT NULL
+        `);
+        teamMemberIds = membersResult.rows.map((r: any) => parseInt(r.user_id));
+      }
+
+      if (user.role === "master" && teamMemberIds.length === 0) {
+        const allVendedores = await db.execute(sql`
+          SELECT u.id FROM users u
+          INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+          WHERE u.role = 'vendedor' AND u.is_active = true
+        `);
+        teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
+      }
+
+      let metaGeralEquipe = 0;
+      let metaCartaoEquipe = 0;
+      if (teamIds.length > 0) {
+        const metaEquipeResult = await db.execute(sql`
+          SELECT COALESCE(SUM(me.meta_geral), 0)::numeric as total_meta_geral,
+                 COALESCE(SUM(me.meta_cartao), 0)::numeric as total_meta_cartao
+          FROM metas_equipe me
+          WHERE me.tenant_id = ${tenantId}
+            AND me.equipe_id = ANY(ARRAY[${sql.raw(teamIds.join(','))}]::int[])
+            AND me.mes_referencia = ${mesRef}
+        `);
+        metaGeralEquipe = parseFloat(metaEquipeResult.rows[0]?.total_meta_geral as string) || 0;
+        metaCartaoEquipe = parseFloat(metaEquipeResult.rows[0]?.total_meta_cartao as string) || 0;
+      }
+
+      const vendedoresData: any[] = [];
+      for (const vendedorId of teamMemberIds) {
+        const vendedorUser = await storage.getUser(vendedorId);
+        if (!vendedorUser) continue;
+
+        const prodResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_base), 0)::numeric as prod_geral,
+            COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COUNT(*)::int as contratos_total,
+            COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
+          FROM producoes_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND mes_referencia = ${mesRef}
+            AND confirmado = true
+        `);
+
+        const vendResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_contrato), 0)::numeric as prod_geral,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
+            COUNT(*)::int as contratos_total,
+            COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
+          FROM vendedor_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND data_contrato >= ${firstDayOfMonth.toISOString()}
+            AND data_contrato <= ${lastDayOfMonth.toISOString()}
+        `);
+
+        const prodGeral = (parseFloat(prodResult.rows[0]?.prod_geral as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_geral as string) || 0);
+        const prodCartao = (parseFloat(prodResult.rows[0]?.prod_cartao as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_cartao as string) || 0);
+        const contratosTotal = (parseInt(prodResult.rows[0]?.contratos_total as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_total as string) || 0);
+        const contratosCartao = (parseInt(prodResult.rows[0]?.contratos_cartao as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_cartao as string) || 0);
+
+        const metaIndResult = await db.execute(sql`
+          SELECT mi.meta_geral, mi.meta_cartao
+          FROM metas_individuais mi
+          WHERE mi.usuario_id = ${vendedorId} AND mi.tenant_id = ${tenantId} AND mi.mes_referencia = ${mesRef}
+          LIMIT 1
+        `);
+        let metaIndGeral = 0;
+        let metaIndCartao = 0;
+        if (metaIndResult.rows.length > 0) {
+          metaIndGeral = parseFloat(metaIndResult.rows[0].meta_geral as string) || 0;
+          metaIndCartao = parseFloat(metaIndResult.rows[0].meta_cartao as string) || 0;
+        }
+
+        vendedoresData.push({
+          userId: vendedorId,
+          nome: vendedorUser.name,
+          foto: vendedorUser.avatarUrl || null,
+          producaoGeral: Math.round(prodGeral * 100) / 100,
+          producaoCartao: Math.round(prodCartao * 100) / 100,
+          contratos: contratosTotal,
+          contratosCartao: contratosCartao,
+          metaGeral: metaIndGeral,
+          metaCartao: metaIndCartao,
+          percentualMeta: metaIndGeral > 0 ? Math.round((prodGeral / metaIndGeral) * 100) : 0,
+          percentualMetaCartao: metaIndCartao > 0 ? Math.round((prodCartao / metaIndCartao) * 100) : 0,
+        });
+      }
+
+      const totalProduzidoGeral = vendedoresData.reduce((s, v) => s + v.producaoGeral, 0);
+      const totalProduzidoCartao = vendedoresData.reduce((s, v) => s + v.producaoCartao, 0);
+
+      const rankingGeral = [...vendedoresData].sort((a, b) => b.producaoGeral - a.producaoGeral).map((v, i) => ({ ...v, posicao: i + 1 }));
+      const rankingCartao = [...vendedoresData].sort((a, b) => b.producaoCartao - a.producaoCartao).map((v, i) => ({ ...v, posicao: i + 1 }));
+
+      return res.json({
+        equipe: {
+          metaGeral: metaGeralEquipe,
+          metaCartao: metaCartaoEquipe,
+          totalProduzidoGeral: Math.round(totalProduzidoGeral * 100) / 100,
+          totalProduzidoCartao: Math.round(totalProduzidoCartao * 100) / 100,
+          percentualGeral: metaGeralEquipe > 0 ? Math.round((totalProduzidoGeral / metaGeralEquipe) * 100) : 0,
+          percentualCartao: metaCartaoEquipe > 0 ? Math.round((totalProduzidoCartao / metaCartaoEquipe) * 100) : 0,
+        },
+        rankingGeral,
+        rankingCartao,
+        mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+        equipes: allTeams,
+        visao,
+      });
+    } catch (error) {
+      console.error("Error in historico-producao API:", error);
+      return res.status(500).json({ message: "Erro ao carregar histórico de produção" });
+    }
+  });
+
+  // ========================
+  // Relatórios — Dia a Dia
+  // ========================
+  app.get("/api/relatorios/dia-a-dia", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const tenantId = req.tenantId!;
+      const user = await storage.getUser(userId);
+
+      if (!user || (user.role !== "master" && user.role !== "coordenacao")) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const defaultDe = new Date(now);
+      defaultDe.setDate(now.getDate() + mondayOffset);
+      const defaultAte = new Date(defaultDe);
+      defaultAte.setDate(defaultDe.getDate() + 4);
+
+      const de = (req.query.de as string) || defaultDe.toISOString().split("T")[0];
+      const ate = (req.query.ate as string) || defaultAte.toISOString().split("T")[0];
+      const equipeIdParam = req.query.equipeId ? parseInt(req.query.equipeId as string) : null;
+
+      const dateFrom = new Date(de + "T00:00:00.000Z");
+      const dateTo = new Date(ate + "T23:59:59.999Z");
+      const mesRef = `${dateFrom.getFullYear()}-${String(dateFrom.getMonth() + 1).padStart(2, "0")}`;
+
+      const teamsResult = await db.execute(sql`
+        SELECT ct.id as team_id, ct.nome_equipe
+        FROM commercial_teams ct
+        WHERE ct.tenant_id = ${tenantId} AND ct.ativa = true
+        ${user.role === "coordenacao" ? sql`AND ct.coordenador_id = ${userId}` : sql``}
+      `);
+      const allTeams = teamsResult.rows.map((t: any) => ({ id: parseInt(t.team_id), nome: t.nome_equipe }));
+
+      let teamIds: number[] = [];
+      if (equipeIdParam) {
+        const validTeam = allTeams.find(t => t.id === equipeIdParam);
+        if (validTeam) teamIds = [equipeIdParam];
+        else teamIds = allTeams.map(t => t.id);
+      } else {
+        teamIds = allTeams.map(t => t.id);
+      }
+
+      let teamMemberIds: number[] = [];
+      if (teamIds.length > 0) {
+        const membersResult = await db.execute(sql`
+          SELECT DISTINCT ctm.user_id
+          FROM commercial_team_members ctm
+          WHERE ctm.tenant_id = ${tenantId}
+            AND ctm.team_id = ANY(ARRAY[${sql.raw(teamIds.join(','))}]::int[])
+            AND ctm.ativo = true
+            AND ctm.user_id IS NOT NULL
+        `);
+        teamMemberIds = membersResult.rows.map((r: any) => parseInt(r.user_id));
+      }
+
+      if (user.role === "master" && teamMemberIds.length === 0) {
+        const allVendedores = await db.execute(sql`
+          SELECT u.id FROM users u
+          INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+          WHERE u.role = 'vendedor' AND u.is_active = true
+        `);
+        teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
+      }
+
+      const calcDiasUteisRange = (start: Date, end: Date) => {
+        let count = 0;
+        const cur = new Date(start);
+        while (cur <= end) {
+          const d = cur.getDay();
+          if (d !== 0 && d !== 6) count++;
+          cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+      };
+      const diasUteis = calcDiasUteisRange(dateFrom, dateTo);
+      const horasTrabalhadas = diasUteis * 8;
+
+      const corretoresData: any[] = [];
+      for (const vendedorId of teamMemberIds) {
+        const vendedorUser = await storage.getUser(vendedorId);
+        if (!vendedorUser) continue;
+
+        const interacoesResult = await db.execute(sql`
+          SELECT COUNT(DISTINCT lead_id)::int as clientes_consultados
+          FROM lead_interactions
+          WHERE user_id = ${vendedorId}
+            AND (tenant_id = ${tenantId} OR tenant_id IS NULL)
+            AND created_at >= ${dateFrom.toISOString()}
+            AND created_at <= ${dateTo.toISOString()}
+        `);
+        const clientesConsultados = parseInt(interacoesResult.rows[0]?.clientes_consultados as string) || 0;
+
+        const etiquetasResult = await db.execute(sql`
+          SELECT COUNT(*)::int as total
+          FROM lead_tag_assignments lta
+          INNER JOIN lead_tags lt ON lt.id = lta.tag_id AND (lt.tenant_id = ${tenantId} OR lt.tenant_id IS NULL)
+          WHERE lta.assigned_by = ${vendedorId}
+            AND lta.created_at >= ${dateFrom.toISOString()}
+            AND lta.created_at <= ${dateTo.toISOString()}
+        `);
+        const clientesEtiquetados = parseInt(etiquetasResult.rows[0]?.total as string) || 0;
+
+        const pipelineResult = await db.execute(sql`
+          SELECT COUNT(DISTINCT lead_id)::int as total
+          FROM lead_interactions
+          WHERE user_id = ${vendedorId}
+            AND (tenant_id = ${tenantId} OR tenant_id IS NULL)
+            AND lead_marker IS NOT NULL
+            AND lead_marker != ''
+            AND lead_marker NOT IN ('NOVO', 'EM_ATENDIMENTO')
+            AND created_at >= ${dateFrom.toISOString()}
+            AND created_at <= ${dateTo.toISOString()}
+        `);
+        const clientesPipeline = parseInt(pipelineResult.rows[0]?.total as string) || 0;
+
+        const markersResult = await db.execute(sql`
+          SELECT lead_marker, COUNT(*)::int as total
+          FROM lead_interactions
+          WHERE user_id = ${vendedorId}
+            AND (tenant_id = ${tenantId} OR tenant_id IS NULL)
+            AND lead_marker IS NOT NULL
+            AND lead_marker != ''
+            AND created_at >= ${dateFrom.toISOString()}
+            AND created_at <= ${dateTo.toISOString()}
+          GROUP BY lead_marker
+        `);
+        const markers: Record<string, number> = {};
+        for (const row of markersResult.rows as any[]) {
+          markers[row.lead_marker] = parseInt(row.total) || 0;
+        }
+
+        const prodResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_base), 0)::numeric as producao,
+            COUNT(*)::int as contratos
+          FROM producoes_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND confirmado = true
+            AND created_at >= ${dateFrom.toISOString()}
+            AND created_at <= ${dateTo.toISOString()}
+        `);
+
+        const vendResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_contrato), 0)::numeric as producao,
+            COUNT(*)::int as contratos
+          FROM vendedor_contratos
+          WHERE vendedor_id = ${vendedorId}
+            AND tenant_id = ${tenantId}
+            AND data_contrato >= ${dateFrom.toISOString()}
+            AND data_contrato <= ${dateTo.toISOString()}
+        `);
+
+        const producao = (parseFloat(prodResult.rows[0]?.producao as string) || 0) + (parseFloat(vendResult.rows[0]?.producao as string) || 0);
+        const contratos = (parseInt(prodResult.rows[0]?.contratos as string) || 0) + (parseInt(vendResult.rows[0]?.contratos as string) || 0);
+
+        corretoresData.push({
+          userId: vendedorId,
+          nome: vendedorUser.name,
+          clientesConsultados,
+          clientesEtiquetados,
+          clientesPipeline,
+          markers,
+          producao: Math.round(producao * 100) / 100,
+          contratos,
+          diasUteis,
+          horasTrabalhadas,
+          clientesPorDia: diasUteis > 0 ? Math.round((clientesConsultados / diasUteis) * 10) / 10 : 0,
+          clientesPorHora: horasTrabalhadas > 0 ? Math.round((clientesConsultados / horasTrabalhadas) * 10) / 10 : 0,
+        });
+      }
+
+      corretoresData.sort((a, b) => b.clientesConsultados - a.clientesConsultados);
+
+      return res.json({
+        corretores: corretoresData,
+        periodo: { de, ate },
+        diasUteis,
+        horasTrabalhadas,
+        equipes: allTeams,
+      });
+    } catch (error) {
+      console.error("Error in dia-a-dia API:", error);
+      return res.status(500).json({ message: "Erro ao carregar relatório dia a dia" });
+    }
+  });
+
+  // ========================
   // Performance API (Níveis Individuais)
   // ========================
 
