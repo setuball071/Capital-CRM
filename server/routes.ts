@@ -20704,6 +20704,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const vendedorUser = await storage.getUser(vendedorId);
         if (!vendedorUser) continue;
 
+        const atendidosResult = await db.execute(sql`
+          SELECT COUNT(DISTINCT lead_id)::int as total
+          FROM sales_lead_assignments
+          WHERE user_id = ${vendedorId}
+            AND status != 'pendente'
+            AND (
+              (data_primeiro_atendimento >= ${dateFrom.toISOString()} AND data_primeiro_atendimento <= ${dateTo.toISOString()})
+              OR (data_ultimo_atendimento >= ${dateFrom.toISOString()} AND data_ultimo_atendimento <= ${dateTo.toISOString()})
+            )
+        `);
+        const clientesAtendidos = parseInt(atendidosResult.rows[0]?.total as string) || 0;
+
         const interacoesResult = await db.execute(sql`
           SELECT COUNT(DISTINCT lead_id)::int as clientes_consultados
           FROM lead_interactions
@@ -20782,6 +20794,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         corretoresData.push({
           userId: vendedorId,
           nome: vendedorUser.name,
+          clientesAtendidos,
           clientesConsultados,
           clientesEtiquetados,
           clientesPipeline,

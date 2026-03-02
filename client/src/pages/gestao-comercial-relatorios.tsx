@@ -42,6 +42,7 @@ interface HistoricoData {
 interface CorretorDiaDia {
   userId: number;
   nome: string;
+  clientesAtendidos: number;
   clientesConsultados: number;
   clientesEtiquetados: number;
   clientesPipeline: number;
@@ -327,13 +328,14 @@ function DiaDiaTab() {
 
   const totals = data?.corretores?.reduce(
     (acc, c) => ({
+      atendidos: acc.atendidos + c.clientesAtendidos,
       consultados: acc.consultados + c.clientesConsultados,
       etiquetados: acc.etiquetados + c.clientesEtiquetados,
       pipeline: acc.pipeline + c.clientesPipeline,
       producao: acc.producao + c.producao,
       contratos: acc.contratos + c.contratos,
     }),
-    { consultados: 0, etiquetados: 0, pipeline: 0, producao: 0, contratos: 0 }
+    { atendidos: 0, consultados: 0, etiquetados: 0, pipeline: 0, producao: 0, contratos: 0 }
   );
 
   return (
@@ -387,13 +389,14 @@ function DiaDiaTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-10">Corretor</TableHead>
-                    <TableHead className="text-center" title="Clientes únicos atendidos (interações)">Consultados</TableHead>
+                    <TableHead className="text-center" title="Clientes atendidos na Lista Manual">Atendidos</TableHead>
+                    <TableHead className="text-center" title="Leads únicos com interações registradas">Consultados</TableHead>
                     <TableHead className="text-center" title="Clientes com etiquetas atribuídas">Etiquetados</TableHead>
                     <TableHead className="text-center" title="Clientes com mudança de status no pipeline">Pipeline</TableHead>
                     <TableHead className="text-right">Produção</TableHead>
                     <TableHead className="text-center">Contratos</TableHead>
-                    <TableHead className="text-center" title="Clientes por dia útil">Cl/Dia</TableHead>
-                    <TableHead className="text-center" title="Clientes por hora de trabalho">Cl/Hora</TableHead>
+                    <TableHead className="text-center" title="Clientes consultados por dia útil">Cl/Dia</TableHead>
+                    <TableHead className="text-center" title="Clientes consultados por hora de trabalho">Cl/Hora</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -410,6 +413,7 @@ function DiaDiaTab() {
                           <span className="font-medium text-sm truncate max-w-[150px]">{c.nome}</span>
                         </div>
                       </TableCell>
+                      <TableCell className="text-center font-mono">{c.clientesAtendidos}</TableCell>
                       <TableCell className="text-center font-mono">{c.clientesConsultados}</TableCell>
                       <TableCell className="text-center font-mono">{c.clientesEtiquetados}</TableCell>
                       <TableCell className="text-center font-mono">{c.clientesPipeline}</TableCell>
@@ -426,6 +430,7 @@ function DiaDiaTab() {
                   {totals && (
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell className="sticky left-0 bg-muted/50 z-10">Total</TableCell>
+                      <TableCell className="text-center font-mono">{totals.atendidos}</TableCell>
                       <TableCell className="text-center font-mono">{totals.consultados}</TableCell>
                       <TableCell className="text-center font-mono">{totals.etiquetados}</TableCell>
                       <TableCell className="text-center font-mono">{totals.pipeline}</TableCell>
