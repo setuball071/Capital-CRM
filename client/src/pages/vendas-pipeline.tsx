@@ -644,8 +644,8 @@ export default function VendasPipeline() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b bg-background sticky top-0 z-10">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="p-4 border-b bg-background shrink-0">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             {isGestorMode && (
