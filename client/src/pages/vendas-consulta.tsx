@@ -91,6 +91,7 @@ interface ConsultaData {
     natureza: string | null;
   } | null;
   pessoaId?: number;
+  leadId?: number;
 }
 
 interface HistoricoFolhaItem {
@@ -720,15 +721,14 @@ export default function VendasConsulta() {
                 />
               </div>
             </div>
-            {/* TagManager - Etiquetas do lead (só aparece se vier de um lead de campanha) */}
-            {consultaData.clienteBase && (consultaData as any).leadId && (
+            {consultaData.leadId && (
               <div className="flex items-center mt-1">
                 <TagManager
-                  leadId={(consultaData as any).leadId}
+                  leadId={consultaData.leadId}
                   telefones={[
-                    ...(consultaData.higienizacao?.telefones?.map((t: any) => t.telefone) || []),
                     consultaData.clienteBase?.telefone1,
                     consultaData.clienteBase?.telefone2,
+                    ...(consultaData.higienizacao?.telefones?.map((t: any) => t.telefone) || []),
                   ].filter((t): t is string => !!t)}
                 />
               </div>

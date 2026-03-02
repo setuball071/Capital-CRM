@@ -13539,7 +13539,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // POST /api/vendas/consulta/buscar - Buscar cliente por CPF ou Matrícula para consulta manual
   app.post("/api/vendas/consulta/buscar", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.user!.tenantId;
+      const tenantId = req.tenantId!;
       const { termo } = req.body;
 
       if (!termo || typeof termo !== "string" || termo.trim().length < 3) {
@@ -13760,6 +13760,78 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return true;
       });
 
+      let leadId: number | null = null;
+      const clienteCpf = cliente.cpf?.replace(/\D/g, "");
+      if (clienteCpf) {
+        const existingLeads = await db
+          .select({ id: salesLeads.id })
+          .from(salesLeads)
+          .where(
+            and(
+              eq(salesLeads.tenantId, tenantId),
+              eq(salesLeads.cpf, clienteCpf),
+            ),
+          )
+          .orderBy(desc(salesLeads.createdAt))
+          .limit(1);
+
+        if (existingLeads.length > 0) {
+          leadId = existingLeads[0].id;
+        } else {
+          let campanha = await db
+            .select()
+            .from(salesCampaigns)
+            .where(
+              and(
+                eq(salesCampaigns.tenantId, tenantId),
+                eq(salesCampaigns.origem, "__consulta_avulsa__"),
+              ),
+            )
+            .limit(1);
+
+          let campanhaId: number;
+          if (campanha.length > 0) {
+            campanhaId = campanha[0].id;
+          } else {
+            const [novaCampanha] = await db
+              .insert(salesCampaigns)
+              .values({
+                tenantId,
+                nome: "Consulta Avulsa",
+                descricao: "Campanha automática para leads criados via Consulta Individual",
+                origem: "__consulta_avulsa__",
+                status: "ativa",
+                totalLeads: 0,
+                leadsDisponiveis: 0,
+                leadsDistribuidos: 0,
+                createdBy: req.user!.id,
+              })
+              .returning();
+            campanhaId = novaCampanha.id;
+          }
+
+          const [novoLead] = await db
+            .insert(salesLeads)
+            .values({
+              tenantId,
+              campaignId: campanhaId,
+              cpf: clienteCpf,
+              nome: cliente.nome || "Sem Nome",
+              telefone1: cliente.telefone1 || null,
+              telefone2: cliente.telefone2 || null,
+              baseClienteId: cliente.id,
+              leadMarker: "NOVO",
+            })
+            .returning();
+          leadId = novoLead.id;
+
+          await db
+            .update(salesCampaigns)
+            .set({ totalLeads: sql`total_leads + 1` })
+            .where(eq(salesCampaigns.id, campanhaId));
+        }
+      }
+
       return res.json({
         clienteBase: cliente,
         folhaAtual: folhaFormatada,
@@ -13770,6 +13842,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         },
         vinculo: vinculoAtual,
         pessoaId: cliente.id,
+        leadId,
       });
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);
