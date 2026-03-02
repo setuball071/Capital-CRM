@@ -109,8 +109,8 @@ function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, total
             Meta Geral – {mesNome}
           </h3>
           {posicaoRanking && posicaoRanking > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-geral">
-              <Trophy size={12} /> #{posicaoRanking}{totalVendedores ? `/${totalVendedores}` : ""}
+            <span className="ml-auto inline-flex items-center bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-geral">
+              #{posicaoRanking}
             </span>
           )}
         </div>
@@ -174,8 +174,8 @@ function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp, posi
             Meta Cartão – {mesNome}
           </h3>
           {posicaoRanking && posicaoRanking > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-cartao">
-              <Trophy size={12} /> #{posicaoRanking}{totalVendedores ? `/${totalVendedores}` : ""}
+            <span className="ml-auto inline-flex items-center bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-cartao">
+              #{posicaoRanking}
             </span>
           )}
         </div>
