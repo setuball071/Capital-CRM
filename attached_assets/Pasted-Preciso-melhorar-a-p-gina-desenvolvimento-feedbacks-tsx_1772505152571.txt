@@ -1,0 +1,30 @@
+Preciso melhorar a página desenvolvimento-feedbacks.tsx com duas visões distintas e assistente de IA.
+VISÃO DO GESTOR (master/coordenacao):
+Formulário de criação com:
+
+Campo "Destinatário" (select de vendedores do tenant ou "Toda a equipe")
+Campo "Tipo": Elogio, Melhoria, Combinado, Aviso
+Campo "Rascunho" — textarea onde o gestor escreve livremente o que conversou pessoalmente
+Botão "Melhorar com IA" — chama POST /api/ai/melhorar-feedback que usa Claude para: (1) organizar e melhorar o texto do rascunho mantendo o tom do gestor, (2) sugerir pontos adicionais de desenvolvimento baseado no perfil DISC do vendedor (buscar perfilDisc e perfilDiscData do destinatário) e na produção do mês (buscar dados de produção do vendedor), (3) retornar versão melhorada do feedback
+Após IA processar: mostrar lado a lado "Rascunho original" vs "Versão melhorada pela IA" com opção de escolher qual enviar ou editar a versão da IA
+Botão "Enviar Feedback"
+
+Lista de feedbacks enviados mostrando: destinatário, tipo (badge colorido), título, data, quem leu (avatares) e quem não leu
+VISÃO DO VENDEDOR:
+
+Lista de feedbacks recebidos ordenados por data (mais recente primeiro)
+Badge vermelho no menu com contagem de não lidos
+Card de cada feedback mostra: tipo (badge colorido), título, data, nome do gestor que enviou
+Clicar abre modal com conteúdo completo
+Botão "Marcar como lido" dentro do modal
+Campo de comentário no modal — vendedor pode escrever uma resposta/reconhecimento que o gestor verá na lista
+
+ENDPOINT DE IA — POST /api/ai/melhorar-feedback:
+
+Recebe: { rascunho: string, destinatarioId: number, tipo: string }
+Busca perfil DISC e produção do destinatário
+Chama OpenAI/Claude com contexto: rascunho + perfil + produção
+Prompt do sistema: "Você é um assistente de RH especializado em feedback construtivo. Melhore o texto de feedback mantendo o tom do gestor. Considere o perfil comportamental [DISC] e produção [dados] do vendedor para sugerir pontos relevantes. Retorne JSON com: { titulo: string, mensagem: string, sugestoes: string[] }"
+Retorna versão melhorada + sugestões adicionais
+
+Use a mesma instância OpenAI já configurada no projeto."
