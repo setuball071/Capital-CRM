@@ -23249,6 +23249,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           mensagem: feedbacks.mensagem,
           tipo: feedbacks.tipo,
           lidoPor: feedbacks.lidoPor,
+          comentario: feedbacks.comentario,
+          comentarioAt: feedbacks.comentarioAt,
           createdAt: feedbacks.createdAt,
         })
         .from(feedbacks)
@@ -23418,6 +23420,180 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("PATCH /api/feedbacks/:id/lido error:", error);
       res.status(500).json({ message: "Erro ao marcar como lido" });
+    }
+  });
+
+  // ========== AI FEEDBACK IMPROVEMENT ==========
+
+  app.post("/api/ai/melhorar-feedback", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+      if (!isGestor) {
+        return res.status(403).json({ message: "Acesso restrito" });
+      }
+
+      const { rascunho, destinatarioId, tipo } = req.body;
+      if (!rascunho) {
+        return res.status(400).json({ message: "Rascunho é obrigatório" });
+      }
+
+      let perfilInfo = "";
+      let producaoInfo = "";
+
+      if (destinatarioId) {
+        const [tenantCheck] = await db
+          .select({ userId: userTenants.userId })
+          .from(userTenants)
+          .where(and(eq(userTenants.userId, destinatarioId), eq(userTenants.tenantId, tenantId)))
+          .limit(1);
+        if (!tenantCheck) {
+          return res.status(403).json({ message: "Destinatário não pertence ao seu tenant" });
+        }
+
+        const [destUser] = await db
+          .select({
+            name: users.name,
+            perfilDisc: users.perfilDisc,
+            perfilDiscData: users.perfilDiscData,
+          })
+          .from(users)
+          .where(eq(users.id, destinatarioId))
+          .limit(1);
+
+        if (destUser?.perfilDisc) {
+          const discData = destUser.perfilDiscData as any;
+          const discMap: Record<string, string> = {
+            EXECUTOR: "Executor (D) - Orientado a resultados, direto, decisivo",
+            COMUNICADOR: "Comunicador (I) - Entusiasta, persuasivo, sociável",
+            PLANEJADOR: "Planejador (S) - Estável, cooperativo, confiável",
+            ANALISTA: "Analista (C) - Preciso, lógico, orientado a qualidade",
+          };
+          perfilInfo = `\nPerfil DISC do vendedor: ${discMap[destUser.perfilDisc] || destUser.perfilDisc}`;
+          if (discData) {
+            perfilInfo += ` (D: ${discData.d}%, I: ${discData.i}%, S: ${discData.s}%, C: ${discData.c}%)`;
+          }
+        }
+
+        const now = new Date();
+        const mesRef = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        const prodResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_base), 0)::numeric as total_valor,
+            COUNT(*)::int as total_contratos
+          FROM producoes_contratos
+          WHERE vendedor_id = ${destinatarioId}
+            AND tenant_id = ${tenantId}
+            AND mes_referencia = ${mesRef}
+            AND confirmado = true
+        `);
+
+        const vendResult = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(valor_contrato), 0)::numeric as total_valor,
+            COUNT(*)::int as total_contratos
+          FROM vendedor_contratos
+          WHERE vendedor_id = ${destinatarioId}
+            AND tenant_id = ${tenantId}
+            AND data_contrato >= ${firstDay.toISOString()}
+            AND data_contrato <= ${lastDay.toISOString()}
+        `);
+
+        const totalValor =
+          (parseFloat(prodResult.rows[0]?.total_valor as string) || 0) +
+          (parseFloat(vendResult.rows[0]?.total_valor as string) || 0);
+        const totalContratos =
+          (parseInt(prodResult.rows[0]?.total_contratos as string) || 0) +
+          (parseInt(vendResult.rows[0]?.total_contratos as string) || 0);
+
+        if (totalContratos > 0 || totalValor > 0) {
+          producaoInfo = `\nProdução do mês atual: R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em ${totalContratos} contratos`;
+        } else {
+          producaoInfo = "\nProdução do mês atual: Sem produção registrada até o momento";
+        }
+      }
+
+      const tipoLabel: Record<string, string> = {
+        elogio: "Elogio (reconhecimento positivo)",
+        melhoria: "Melhoria (ponto de desenvolvimento)",
+        combinado: "Combinado (acordo entre gestor e vendedor)",
+        aviso: "Aviso (alerta importante)",
+      };
+
+      const { openai } = await import("./openaiClient");
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente de RH especializado em feedback construtivo para equipes de vendas no mercado financeiro brasileiro (crédito consignado). Sua tarefa é melhorar o texto de feedback mantendo o tom e a intenção original do gestor, mas tornando-o mais claro, estruturado e construtivo. Considere o perfil comportamental DISC e dados de produção do vendedor (se disponíveis) para sugerir pontos relevantes de desenvolvimento. Retorne um JSON válido com: { "titulo": "título conciso e profissional para o feedback", "mensagem": "versão melhorada e estruturada do feedback, com parágrafos", "sugestoes": ["lista de sugestões adicionais de desenvolvimento baseadas no perfil e produção"] }`,
+          },
+          {
+            role: "user",
+            content: `Tipo de feedback: ${tipoLabel[tipo] || tipo}\n\nRascunho do gestor:\n${rascunho}${perfilInfo}${producaoInfo}`,
+          },
+        ],
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: "Resposta vazia da IA" });
+      }
+
+      const parsed = JSON.parse(content);
+      res.json({
+        titulo: parsed.titulo || "",
+        mensagem: parsed.mensagem || "",
+        sugestoes: Array.isArray(parsed.sugestoes) ? parsed.sugestoes : [],
+      });
+    } catch (error) {
+      console.error("POST /api/ai/melhorar-feedback error:", error);
+      res.status(500).json({ message: "Erro ao melhorar feedback com IA" });
+    }
+  });
+
+  // ========== FEEDBACK COMMENTS ==========
+
+  app.post("/api/feedbacks/:id/comentario", requireAuth, async (req, res) => {
+    try {
+      const feedbackId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const tenantId = req.tenantId!;
+      const { comentario } = req.body;
+
+      if (!comentario || !comentario.trim()) {
+        return res.status(400).json({ message: "Comentário é obrigatório" });
+      }
+
+      const [fb] = await db
+        .select()
+        .from(feedbacks)
+        .where(
+          and(
+            eq(feedbacks.id, feedbackId),
+            eq(feedbacks.tenantId, tenantId),
+            eq(feedbacks.destinatarioId, userId),
+          ),
+        )
+        .limit(1);
+
+      if (!fb) return res.status(404).json({ message: "Feedback não encontrado ou sem permissão" });
+
+      await db
+        .update(feedbacks)
+        .set({ comentario: comentario.trim(), comentarioAt: new Date() })
+        .where(eq(feedbacks.id, feedbackId));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("POST /api/feedbacks/:id/comentario error:", error);
+      res.status(500).json({ message: "Erro ao salvar comentário" });
     }
   });
 

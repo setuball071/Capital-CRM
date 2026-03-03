@@ -319,6 +319,7 @@ function NivelSection({ performance, label, icon: IconComponent }: {
 
 export default function DashboardVendedorPage() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [view, setView] = useState<"dashboard" | "premiacao" | "regulamento">("dashboard");
 
   const { data, isLoading, isError } = useQuery<DashboardData>({
@@ -654,7 +655,6 @@ export default function DashboardVendedorPage() {
     );
   };
 
-  const [, navigate] = useLocation();
   const showProfilerBanner = user.role === "vendedor" && !user.perfilDiscCompletedAt;
 
   return (
