@@ -1,0 +1,59 @@
+Preciso implementar 2 itens no sistema:
+ITEM 1 — RENOMEAR MENU TREINAMENTO
+Em app-sidebar.tsx, renomear o grupo "Treinamento" para "Desenvolvimento". Manter apenas: Fundamentos, Roleplay IA, Abordagem IA. Remover: Quiz e Admin Treinamento. Adicionar dois novos itens: "Feedbacks" (rota /desenvolvimento/feedbacks, ícone MessageSquare) e "Profiler" (rota /desenvolvimento/profiler, ícone Brain).
+ITEM 2 — PROFILER COMPORTAMENTAL
+Criar página desenvolvimento-profiler.tsx acessível em /desenvolvimento/profiler.
+FLUXO:
+Tela 0 — Apresentação: título "Profiler Comportamental", descrição "Descubra seu perfil comportamental", informações (Duração: 5-10 min, Etapas: 2, Obrigatório: onboarding), botão "Iniciar Teste".
+Etapa 1 — "Como você realmente é": selecionar mínimo 5 adjetivos da lista abaixo. Barra de progresso no topo. Contador "X/5 selecionados". Botão "Próxima Etapa" ativa só com 5+.
+Lista etapa 1: Decidido, Competitivo, Direto, Assertivo, Ambicioso, Corajoso, Determinado, Independente, Audacioso, Persistente, Entusiasmado, Persuasivo, Otimista, Sociável, Inspirador, Carismático, Expressivo, Animado, Confiante, Criativo, Paciente, Leal, Confiável, Cooperativo, Estável, Calmo, Consistente, Atencioso, Diplomático, Compreensivo, Preciso, Analítico, Sistemático, Organizado, Detalhista, Cauteloso, Lógico, Perfeccionista, Meticuloso, Reflexivo
+Etapa 2 — "Como esperam que você seja": mesma mecânica, mínimo 5. Botão "Ver Resultado".
+Lista etapa 2: Líder, Rápido, Forte, Dominante, Desafiador, Orientado a Resultados, Autoconfiante, Empreendedor, Inovador, Proativo, Comunicativo, Amigável, Motivador, Popular, Influente, Extrovertido, Alegre, Espontâneo, Convincente, Articulado, Apoiador, Harmonioso, Previsível, Colaborador, Equilibrado, Tranquilo, Acolhedor, Generoso, Solidário, Dedicado, Criterioso, Técnico, Rigoroso, Especialista, Exigente, Objetivo, Metódico, Investigativo, Concentrado, Racional
+CÁLCULO DO PERFIL — cada adjetivo tem peso para um dos 4 perfis (D=Executor, I=Comunicador, S=Planejador, C=Analista):
+Etapa 1 — D: Decidido, Competitivo, Direto, Assertivo, Ambicioso, Corajoso, Determinado, Independente, Audacioso, Persistente. I: Entusiasmado, Persuasivo, Otimista, Sociável, Inspirador, Carismático, Expressivo, Animado, Confiante, Criativo. S: Paciente, Leal, Confiável, Cooperativo, Estável, Calmo, Consistente, Atencioso, Diplomático, Compreensivo. C: Preciso, Analítico, Sistemático, Organizado, Detalhista, Cauteloso, Lógico, Perfeccionista, Meticuloso, Reflexivo.
+Etapa 2 — D: Líder, Rápido, Forte, Dominante, Desafiador, Orientado a Resultados, Autoconfiante, Empreendedor, Inovador, Proativo. I: Comunicativo, Amigável, Motivador, Popular, Influente, Extrovertido, Alegre, Espontâneo, Convincente, Articulado. S: Apoiador, Harmonioso, Previsível, Colaborador, Equilibrado, Tranquilo, Acolhedor, Generoso, Solidário, Dedicado. C: Criterioso, Técnico, Rigoroso, Especialista, Exigente, Objetivo, Metódico, Investigativo, Concentrado, Racional.
+Somar pontos das duas etapas por perfil, calcular % de cada um. Perfil dominante = maior pontuação.
+TELA DE RESULTADO mostra:
+
+Badge com sigla (EXE/COM/PLA/ANA) e nome do perfil
+Subtítulo com estilo dominante
+Distribuição em barras (% de cada perfil)
+Habilidades Básicas + Categoria
+Principais Habilidades (parágrafo descritivo por perfil)
+Principais Vantagens (parágrafo por perfil)
+Pontos de Atenção e Desenvolvimento (parágrafo por perfil)
+Botões: "Imprimir Resultado" e "Salvar no Perfil"
+
+"Salvar no Perfil" chama PATCH /api/users/profile salvando: perfilDisc: "EXECUTOR", perfilDiscData: { d: %, i: %, s: %, c: % }, perfilDiscCompletedAt: timestamp.
+REGRA DE ONBOARDING: Se o usuário tem role vendedor e perfilDiscCompletedAt é null, mostrar banner no dashboard-vendedor.tsx: "Complete seu Profiler Comportamental para liberar todas as funcionalidades" com botão que redireciona para /desenvolvimento/profiler.
+VISIBILIDADE GESTOR: Criar página desenvolvimento-profiler-gestao.tsx em /desenvolvimento/profiler-gestao (somente master/coordenacao) listando todos os vendedores do tenant com: nome, foto/avatar, perfil DISC (badge colorido), data de conclusão. Ao clicar no vendedor abre modal com resultado completo do profiler dele.
+Adicionar rota /desenvolvimento/profiler-gestao no menu do gestor em app-sidebar.tsx (visível somente para master/coordenacao) com label "Perfis da Equipe".
+ITEM 3 — FEEDBACKS
+Criar página desenvolvimento-feedbacks.tsx em /desenvolvimento/feedbacks.
+Regras:
+
+Gestor cria feedbacks para vendedores específicos ou para toda a equipe
+Vendedor só vê feedbacks direcionados a ele ou para toda a equipe
+Feedback tem: título, mensagem (texto rico), tipo (Elogio/Melhoria/Combinado/Aviso), data, autor
+Vendedor pode marcar como "lido"
+Gestor vê quem leu e quem não leu
+Na sidebar, mostrar badge com número de feedbacks não lidos para o vendedor
+
+Backend necessário:
+
+GET /api/feedbacks — lista feedbacks do usuário (vendedor vê os seus, gestor vê todos)*
+POST /api/feedbacks — cria feedback (somente gestor)*
+PATCH /api/feedbacks/:id/lido — marca como lido*
+
+Criar tabela feedbacks no banco:
+sqlCREATE TABLE IF NOT EXISTS feedbacks (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  autor_id INTEGER NOT NULL REFERENCES users(id),
+  destinatario_id INTEGER REFERENCES users(id), -- null = toda equipe
+  titulo VARCHAR(200) NOT NULL,
+  mensagem TEXT NOT NULL,
+  tipo VARCHAR(20) NOT NULL DEFAULT 'combinado',
+  lido_por JSONB DEFAULT '[]',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);"*
