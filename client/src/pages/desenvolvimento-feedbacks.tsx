@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   ClipboardCheck, Plus, CheckCircle, Eye, EyeOff, Loader2, Send, ThumbsUp,
-  AlertTriangle, Handshake, Bell, Sparkles, ArrowRight, MessageCircle, Pencil,
+  AlertTriangle, Handshake, Bell, Sparkles, ArrowRight, MessageCircle, Pencil, Trash2,
 } from "lucide-react";
 
 interface FeedbackItem {
@@ -71,6 +71,7 @@ function GestorView() {
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [aiMode, setAiMode] = useState<"none" | "loading" | "ready">("none");
   const [usandoIA, setUsandoIA] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: feedbacksList = [], isLoading } = useQuery<FeedbackItem[]>({
     queryKey: ["/api/feedbacks"],
@@ -110,6 +111,20 @@ function GestorView() {
     },
     onError: () => {
       toast({ title: "Erro ao enviar feedback", variant: "destructive" });
+    },
+  });
+
+  const excluirMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/feedbacks/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/feedbacks"] });
+      toast({ title: "Feedback excluído com sucesso" });
+      setDeleteId(null);
+    },
+    onError: () => {
+      toast({ title: "Erro ao excluir feedback", variant: "destructive" });
     },
   });
 
@@ -376,7 +391,7 @@ function GestorView() {
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">{fb.mensagem}</p>
 
                         <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-3 flex-wrap">
                             {lidoIds.length > 0 ? (
                               <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                                 <Eye className="h-3 w-3" /> {lidoIds.length} {lidoIds.length === 1 ? "leu" : "leram"}
@@ -386,12 +401,20 @@ function GestorView() {
                                 <EyeOff className="h-3 w-3" /> Ninguém leu
                               </span>
                             )}
+                            {fb.comentario && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" /> Respondido
+                              </span>
+                            )}
                           </div>
-                          {fb.comentario && (
-                            <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                              <MessageCircle className="h-3 w-3" /> Respondido
-                            </span>
-                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeleteId(fb.id)}
+                            data-testid={`button-excluir-feedback-${fb.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                         </div>
 
                         {fb.comentario && (
@@ -415,6 +438,30 @@ function GestorView() {
           </div>
         )}
       </div>
+
+      <Dialog open={deleteId !== null} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Excluir Feedback</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir este feedback? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteId(null)} data-testid="button-cancelar-excluir">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteId && excluirMutation.mutate(deleteId)}
+              disabled={excluirMutation.isPending}
+              data-testid="button-confirmar-excluir"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> {excluirMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

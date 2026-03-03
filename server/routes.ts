@@ -23423,6 +23423,31 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  app.delete("/api/feedbacks/:id", requireAuth, async (req, res) => {
+    try {
+      const feedbackId = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+      if (!isGestor) {
+        return res.status(403).json({ message: "Apenas gestores podem excluir feedbacks" });
+      }
+
+      const [fb] = await db
+        .select({ id: feedbacks.id })
+        .from(feedbacks)
+        .where(and(eq(feedbacks.id, feedbackId), eq(feedbacks.tenantId, tenantId)))
+        .limit(1);
+
+      if (!fb) return res.status(404).json({ message: "Feedback não encontrado" });
+
+      await db.delete(feedbacks).where(eq(feedbacks.id, feedbackId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("DELETE /api/feedbacks/:id error:", error);
+      res.status(500).json({ message: "Erro ao excluir feedback" });
+    }
+  });
+
   // ========== AI FEEDBACK IMPROVEMENT ==========
 
   app.post("/api/ai/melhorar-feedback", requireAuth, async (req, res) => {
