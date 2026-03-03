@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight, FileText, Tag, Clock, Wheat, Trophy, Award, Flame, Rocket, TrendingUp, Dog, Swords, Coins, Wallet, PiggyBank, Landmark, Mountain, Crosshair, Magnet, HandCoins, PawPrint } from "lucide-react";
+import { Loader2, Shield, Medal, Star, Gem, Crown, Zap, Gauge, Scale, AlertCircle, CreditCard, Target, DollarSign, ChevronRight, FileText, Tag, Clock, Wheat, Trophy, Award, Flame, Rocket, TrendingUp, Dog, Swords, Coins, Wallet, PiggyBank, Landmark, Mountain, Crosshair, Magnet, HandCoins, PawPrint, Brain } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -652,8 +654,25 @@ export default function DashboardVendedorPage() {
     );
   };
 
+  const [, navigate] = useLocation();
+  const showProfilerBanner = user.role === "vendedor" && !user.perfilDiscCompletedAt;
+
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-5 lg:p-8 overflow-auto">
+      {showProfilerBanner && (
+        <Card className="mb-4 border-yellow-500/40 bg-yellow-500/10" data-testid="banner-profiler-onboarding">
+          <CardContent className="py-3 px-4 flex items-center gap-3 flex-wrap">
+            <Brain className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">Complete seu Profiler Comportamental</p>
+              <p className="text-xs text-muted-foreground">Descubra seu perfil DISC e receba orientações personalizadas</p>
+            </div>
+            <Button size="sm" onClick={() => navigate("/desenvolvimento/profiler")} data-testid="button-ir-profiler">
+              Fazer Agora <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-0 gap-3 sm:gap-6 relative overflow-visible" style={{ minHeight: user.avatarUrl ? "100px" : "auto", zIndex: 1 }}>
         <div className="flex items-end -space-x-4 sm:-space-x-6 min-w-0">
           <div className="relative shrink-0" style={{ zIndex: 1 }}>

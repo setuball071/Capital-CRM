@@ -75,6 +75,8 @@ import {
   nomenclaturas,
   insertNomenclaturaSchema,
   NOMENCLATURA_CATEGORIA,
+  feedbacks,
+  insertFeedbackSchema,
   type User,
   type InsertCoefficientTable,
   type InsertSalesLead,
@@ -23213,6 +23215,267 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       res.json(clientes);
     } catch {
       res.status(500).json({ error: "Erro ao buscar clientes da etiqueta" });
+    }
+  });
+
+
+  // ========== FEEDBACKS ==========
+
+  app.get("/api/feedbacks", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+
+      let whereClause;
+      if (isGestor) {
+        whereClause = eq(feedbacks.tenantId, tenantId);
+      } else {
+        whereClause = and(
+          eq(feedbacks.tenantId, tenantId),
+          or(
+            eq(feedbacks.destinatarioId, userId),
+            sql`${feedbacks.destinatarioId} IS NULL`,
+          ),
+        );
+      }
+
+      const result = await db
+        .select({
+          id: feedbacks.id,
+          autorId: feedbacks.autorId,
+          destinatarioId: feedbacks.destinatarioId,
+          titulo: feedbacks.titulo,
+          mensagem: feedbacks.mensagem,
+          tipo: feedbacks.tipo,
+          lidoPor: feedbacks.lidoPor,
+          createdAt: feedbacks.createdAt,
+        })
+        .from(feedbacks)
+        .where(whereClause)
+        .orderBy(desc(feedbacks.createdAt));
+
+      const userIds = new Set<number>();
+      for (const fb of result) {
+        userIds.add(fb.autorId);
+        if (fb.destinatarioId) userIds.add(fb.destinatarioId);
+      }
+
+      const userMap: Record<number, string> = {};
+      for (const uid of userIds) {
+        const u = await storage.getUser(uid);
+        if (u) userMap[uid] = u.name;
+      }
+
+      const enriched = result.map((fb) => ({
+        ...fb,
+        autorNome: userMap[fb.autorId] || "Desconhecido",
+        destinatarioNome: fb.destinatarioId ? (userMap[fb.destinatarioId] || "Desconhecido") : null,
+        lidoPor: Array.isArray(fb.lidoPor) ? fb.lidoPor : [],
+      }));
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("GET /api/feedbacks error:", error);
+      res.status(500).json({ message: "Erro ao buscar feedbacks" });
+    }
+  });
+
+  app.get("/api/feedbacks/team-users", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const result = await db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .innerJoin(userTenants, eq(users.id, userTenants.userId))
+        .where(
+          and(
+            eq(userTenants.tenantId, tenantId),
+            eq(users.isActive, true),
+          ),
+        )
+        .orderBy(users.name);
+      res.json(result);
+    } catch (error) {
+      console.error("GET /api/feedbacks/team-users error:", error);
+      res.status(500).json({ message: "Erro ao buscar usuários" });
+    }
+  });
+
+  app.get("/api/feedbacks/unread-count", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+
+      const result = await db.execute(sql`
+        SELECT COUNT(*)::int as total
+        FROM feedbacks
+        WHERE tenant_id = ${tenantId}
+          AND (destinatario_id = ${userId} OR destinatario_id IS NULL)
+          AND NOT (lido_por @> ${JSON.stringify([userId])}::jsonb)
+      `);
+      const count = parseInt(result.rows[0]?.total as string) || 0;
+      res.json({ count });
+    } catch (error) {
+      console.error("GET /api/feedbacks/unread-count error:", error);
+      res.json({ count: 0 });
+    }
+  });
+
+  app.post("/api/feedbacks", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+      if (!isGestor) {
+        return res.status(403).json({ message: "Somente gestores podem criar feedbacks" });
+      }
+
+      const { titulo, mensagem, tipo, destinatarioId } = req.body;
+      if (!titulo || !mensagem) {
+        return res.status(400).json({ message: "Título e mensagem são obrigatórios" });
+      }
+
+      if (destinatarioId) {
+        const [recipientCheck] = await db
+          .select({ id: userTenants.userId })
+          .from(userTenants)
+          .where(
+            and(
+              eq(userTenants.userId, destinatarioId),
+              eq(userTenants.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        if (!recipientCheck) {
+          return res.status(400).json({ message: "Destinatário não pertence a esta empresa" });
+        }
+      }
+
+      const [fb] = await db
+        .insert(feedbacks)
+        .values({
+          tenantId,
+          autorId: userId,
+          destinatarioId: destinatarioId || null,
+          titulo,
+          mensagem,
+          tipo: tipo || "combinado",
+          lidoPor: [],
+        })
+        .returning();
+
+      res.json(fb);
+    } catch (error) {
+      console.error("POST /api/feedbacks error:", error);
+      res.status(500).json({ message: "Erro ao criar feedback" });
+    }
+  });
+
+  app.patch("/api/feedbacks/:id/lido", requireAuth, async (req, res) => {
+    try {
+      const feedbackId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const tenantId = req.tenantId!;
+
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+
+      let whereCondition;
+      if (isGestor) {
+        whereCondition = and(
+          eq(feedbacks.id, feedbackId),
+          eq(feedbacks.tenantId, tenantId),
+        );
+      } else {
+        whereCondition = and(
+          eq(feedbacks.id, feedbackId),
+          eq(feedbacks.tenantId, tenantId),
+          or(
+            eq(feedbacks.destinatarioId, userId),
+            sql`${feedbacks.destinatarioId} IS NULL`,
+          ),
+        );
+      }
+
+      const [fb] = await db
+        .select()
+        .from(feedbacks)
+        .where(whereCondition)
+        .limit(1);
+
+      if (!fb) return res.status(404).json({ message: "Feedback não encontrado" });
+
+      const lidoPor = Array.isArray(fb.lidoPor) ? fb.lidoPor as number[] : [];
+      if (!lidoPor.includes(userId)) {
+        lidoPor.push(userId);
+        await db
+          .update(feedbacks)
+          .set({ lidoPor })
+          .where(eq(feedbacks.id, feedbackId));
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("PATCH /api/feedbacks/:id/lido error:", error);
+      res.status(500).json({ message: "Erro ao marcar como lido" });
+    }
+  });
+
+  // ========== PROFILER / USER PROFILE ==========
+
+  app.patch("/api/users/profile", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { perfilDisc, perfilDiscData } = req.body;
+
+      const updateData: any = {};
+      if (perfilDisc) updateData.perfilDisc = perfilDisc;
+      if (perfilDiscData) updateData.perfilDiscData = perfilDiscData;
+      updateData.perfilDiscCompletedAt = new Date();
+
+      await db
+        .update(users)
+        .set(updateData)
+        .where(eq(users.id, userId));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("PATCH /api/users/profile error:", error);
+      res.status(500).json({ message: "Erro ao salvar perfil" });
+    }
+  });
+
+  app.get("/api/users/team-profiles", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const isGestor = ["master", "coordenacao"].includes(req.user!.role);
+      if (!isGestor) {
+        return res.status(403).json({ message: "Acesso restrito" });
+      }
+
+      const result = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+          perfilDisc: users.perfilDisc,
+          perfilDiscData: users.perfilDiscData,
+          perfilDiscCompletedAt: users.perfilDiscCompletedAt,
+        })
+        .from(users)
+        .innerJoin(userTenants, eq(users.id, userTenants.userId))
+        .where(
+          and(
+            eq(userTenants.tenantId, tenantId),
+            eq(users.isActive, true),
+          ),
+        )
+        .orderBy(users.name);
+
+      res.json(result);
+    } catch (error) {
+      console.error("GET /api/users/team-profiles error:", error);
+      res.status(500).json({ message: "Erro ao buscar perfis" });
     }
   });
 

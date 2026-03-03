@@ -33,6 +33,9 @@ import AcademiaQuizPage from "@/pages/academia-quiz";
 import AcademiaRoleplayPage from "@/pages/academia-roleplay";
 import AcademiaAbordagemPage from "@/pages/academia-abordagem";
 import AcademiaAdminPage from "@/pages/academia-admin";
+import DesenvolvimentoProfilerPage from "@/pages/desenvolvimento-profiler";
+import DesenvolvimentoProfilerGestaoPage from "@/pages/desenvolvimento-profiler-gestao";
+import DesenvolvimentoFeedbacksPage from "@/pages/desenvolvimento-feedbacks";
 import VendasCampanhasPage from "@/pages/vendas-campanhas";
 import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import VendasAgendaPage from "@/pages/vendas-agenda";
@@ -348,6 +351,24 @@ function Router() {
               </Route>
               <Route path="/academia/admin">
                 {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
+              </Route>
+              <Route path="/desenvolvimento/fundamentos">
+                {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
+              </Route>
+              <Route path="/desenvolvimento/roleplay">
+                {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" />}
+              </Route>
+              <Route path="/desenvolvimento/abordagem">
+                {() => <ModuleRoute component={AcademiaAbordagemPage} module="modulo_academia" />}
+              </Route>
+              <Route path="/desenvolvimento/feedbacks">
+                {() => <ModuleRoute component={DesenvolvimentoFeedbacksPage} module="modulo_academia" />}
+              </Route>
+              <Route path="/desenvolvimento/profiler">
+                {() => <ModuleRoute component={DesenvolvimentoProfilerPage} module="modulo_academia" />}
+              </Route>
+              <Route path="/desenvolvimento/profiler-gestao">
+                {() => <RoleRoute component={DesenvolvimentoProfilerGestaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/campanhas">
                 {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" />}

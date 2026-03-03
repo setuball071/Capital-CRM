@@ -1,9 +1,11 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -42,7 +44,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
-  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts"],
+  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/abordagem", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas"],
 };
 
@@ -66,8 +68,13 @@ export function AppSidebar() {
     operacional: false,
     clientes: false,
     admin: false,
-    academia: false,
+    desenvolvimento: false,
     gestãocomercial: false,
+  });
+
+  const { data: feedbackUnread } = useQuery<{ count: number }>({
+    queryKey: ["/api/feedbacks/unread-count"],
+    refetchInterval: 60000,
   });
 
   if (!user) return null;
@@ -169,14 +176,15 @@ export function AppSidebar() {
       ],
     },
     {
-      title: "Treinamento",
+      title: "Desenvolvimento",
       icon: GraduationCap,
       items: [
-        { title: "Fundamentos", url: "/academia/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
-        { title: "Quiz", url: "/academia/quiz", icon: ClipboardCheck, module: "modulo_academia", subItem: "quiz" },
-        { title: "Roleplay IA", url: "/academia/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
-        { title: "Abordagem IA", url: "/academia/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
-        { title: "Admin Treinamento", url: "/academia/admin", icon: Award, module: "modulo_academia", subItem: "dashboard" },
+        { title: "Fundamentos", url: "/desenvolvimento/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
+        { title: "Roleplay IA", url: "/desenvolvimento/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
+        { title: "Abordagem IA", url: "/desenvolvimento/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
+        { title: "Feedbacks", url: "/desenvolvimento/feedbacks", icon: ClipboardCheck, module: "modulo_academia", subItem: "feedbacks" },
+        { title: "Profiler", url: "/desenvolvimento/profiler", icon: Brain, module: "modulo_academia", subItem: "profiler" },
+        { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
       ],
     },
     {
@@ -326,7 +334,12 @@ export function AppSidebar() {
                               >
                                 <button onClick={() => setLocation(item.url)} className="w-full">
                                   <item.icon className="h-4 w-4" />
-                                  <span>{item.title}</span>
+                                  <span className="flex-1">{item.title}</span>
+                                  {item.url === "/desenvolvimento/feedbacks" && (feedbackUnread?.count || 0) > 0 && (
+                                    <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-feedbacks-unread">
+                                      {feedbackUnread!.count}
+                                    </Badge>
+                                  )}
                                 </button>
                               </SidebarMenuButton>
                             </SidebarMenuItem>

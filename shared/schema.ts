@@ -253,6 +253,9 @@ export const users = pgTable("users", {
   employeeId: integer("employee_id"), // References employees(id) - FK constraint exists in DB
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
   avatarUrl: text("avatar_url"),
+  perfilDisc: varchar("perfil_disc", { length: 20 }),
+  perfilDiscData: jsonb("perfil_disc_data"),
+  perfilDiscCompletedAt: timestamp("perfil_disc_completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -1820,6 +1823,8 @@ export const MODULE_SUB_ITEMS = {
     { key: "roleplay", label: "Role Play" },
     { key: "scripts", label: "Scripts de Venda" },
     { key: "dashboard", label: "Dashboard Admin" },
+    { key: "feedbacks", label: "Feedbacks" },
+    { key: "profiler", label: "Profiler Comportamental" },
   ],
   modulo_alpha: [
     { key: "campanhas", label: "Campanhas" },
@@ -3111,3 +3116,26 @@ export const insertLeadTagSchema = createInsertSchema(leadTags).omit({
 
 export type LeadTag = typeof leadTags.$inferSelect;
 export type LeadTagAssignment = typeof leadTagAssignments.$inferSelect;
+
+export const feedbacks = pgTable("feedbacks", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  autorId: integer("autor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  destinatarioId: integer("destinatario_id").references(() => users.id, { onDelete: "set null" }),
+  titulo: varchar("titulo", { length: 200 }).notNull(),
+  mensagem: text("mensagem").notNull(),
+  tipo: varchar("tipo", { length: 20 }).notNull().default("combinado"),
+  lidoPor: jsonb("lido_por").default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedbacks).omit({
+  id: true,
+  createdAt: true,
+  tenantId: true,
+  autorId: true,
+  lidoPor: true,
+});
+
+export type Feedback = typeof feedbacks.$inferSelect;
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
