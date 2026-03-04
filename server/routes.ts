@@ -9408,6 +9408,30 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  app.get(
+    "/api/clientes/filtros/sit-func",
+    requireAuth,
+    requireModuleAccess("modulo_base_clientes"),
+    async (req, res) => {
+      try {
+        const tenantId = req.tenantId!;
+        const result = await db.execute(sql`
+          SELECT DISTINCT sit_func
+          FROM clientes_vinculo
+          WHERE tenant_id = ${tenantId}
+            AND sit_func IS NOT NULL
+            AND TRIM(sit_func) != ''
+          ORDER BY sit_func
+        `);
+        const valores = result.rows.map((r: any) => r.sit_func as string);
+        return res.json(valores);
+      } catch (error) {
+        console.error("Get sit-func filtros error:", error);
+        return res.status(500).json({ message: "Erro ao buscar situações funcionais" });
+      }
+    },
+  );
+
   // GET consulta de cliente por CPF ou matrícula
   // Base de clientes é compartilhada entre todos os ambientes
   app.get(

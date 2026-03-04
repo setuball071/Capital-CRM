@@ -36,7 +36,7 @@ interface Filtros {
   uf?: string;
   idade_min?: number;
   idade_max?: number;
-  sit_func?: string;
+  sit_func?: string[];
   // Filtros de margem
   margem_30_min?: number;
   margem_30_max?: number;
@@ -216,6 +216,10 @@ export default function CompraLista() {
 
   const { data: basesDisponiveis } = useQuery<BaseRef[]>({
     queryKey: ["/api/clientes/filtros/bases"],
+  });
+
+  const { data: sitFuncOpcoes = [] } = useQuery<string[]>({
+    queryKey: ["/api/clientes/filtros/sit-func"],
   });
 
   // Buscar tipos de contrato dinamicamente quando os bancos mudarem
@@ -428,7 +432,11 @@ export default function CompraLista() {
     if (f.idade_min || f.idade_max) {
       parts.push(`Idade: ${f.idade_min || 0} - ${f.idade_max || 99}`);
     }
-    if (f.sit_func) parts.push(`Situação: ${f.sit_func}`);
+    if (f.sit_func && f.sit_func.length > 0) {
+      const arr = Array.isArray(f.sit_func) ? f.sit_func : [f.sit_func];
+      const labels = arr.map((v: string) => v === "__VAZIO__" ? "Sem situação" : v);
+      parts.push(`Situação: ${labels.join(", ")}`);
+    }
     if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
       parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
     }
@@ -603,12 +611,17 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="sit_func">Situação Funcional</Label>
-                  <Input
-                    id="sit_func"
-                    placeholder="Ex: ATIVO, APOSENTADO"
-                    value={filtros.sit_func || ""}
-                    onChange={(e) => setFiltros({ ...filtros, sit_func: e.target.value || undefined })}
-                    data-testid="input-sit-func"
+                  <MultiSelectCombobox
+                    options={["Sem situação funcional", ...sitFuncOpcoes]}
+                    value={(Array.isArray(filtros.sit_func) ? filtros.sit_func : filtros.sit_func ? [filtros.sit_func] : []).map(v => v === "__VAZIO__" ? "Sem situação funcional" : v)}
+                    onValueChange={(v) => {
+                      const mapped = v.map(val => val === "Sem situação funcional" ? "__VAZIO__" : val);
+                      setFiltros({ ...filtros, sit_func: mapped.length > 0 ? mapped : undefined });
+                    }}
+                    placeholder="Todas as situações"
+                    searchPlaceholder="Buscar situação..."
+                    emptyText="Nenhuma situação encontrada."
+                    data-testid="multiselect-sit-func"
                   />
                 </div>
               </div>

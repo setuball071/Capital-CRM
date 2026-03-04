@@ -1127,7 +1127,7 @@ export class DbStorage implements IStorage {
       filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
       filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
       filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined ||
-      filtros.sit_func
+      (filtros.sit_func && (Array.isArray(filtros.sit_func) ? filtros.sit_func.length > 0 : true))
     );
     
     const needsContratoJoin = !!(
@@ -1151,7 +1151,20 @@ export class DbStorage implements IStorage {
       pessoaConditions.push(eq(clientesPessoa.uf, filtros.uf));
     }
     if (filtros.sit_func) {
-      pessoaConditions.push(ilike(clientesPessoa.sitFunc, `%${filtros.sit_func}%`));
+      const sitFuncArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
+      const sitConditions: ReturnType<typeof eq>[] = [];
+      for (const val of sitFuncArr) {
+        if (val === '__VAZIO__') {
+          sitConditions.push(sql`(${clientesPessoa.sitFunc} IS NULL OR TRIM(${clientesPessoa.sitFunc}) = '')` as any);
+        } else {
+          sitConditions.push(ilike(clientesPessoa.sitFunc, `%${val}%`) as any);
+        }
+      }
+      if (sitConditions.length === 1) {
+        pessoaConditions.push(sitConditions[0]);
+      } else if (sitConditions.length > 1) {
+        pessoaConditions.push(or(...sitConditions)!);
+      }
     }
 
     // If we need joins, count filter, or idade filter, use parameterized SQL query for safety
@@ -1164,7 +1177,20 @@ export class DbStorage implements IStorage {
 
       const folhaWhereFragments: ReturnType<typeof sql>[] = [];
       if (filtros.sit_func) {
-        folhaWhereFragments.push(sql`sit_func_no_mes ILIKE ${'%' + filtros.sit_func + '%'}`);
+        const sitFuncArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
+        const sitParts: ReturnType<typeof sql>[] = [];
+        for (const val of sitFuncArr) {
+          if (val === '__VAZIO__') {
+            sitParts.push(sql`(sit_func_no_mes IS NULL OR TRIM(sit_func_no_mes) = '')`);
+          } else {
+            sitParts.push(sql`sit_func_no_mes ILIKE ${'%' + val + '%'}`);
+          }
+        }
+        if (sitParts.length === 1) {
+          folhaWhereFragments.push(sitParts[0]);
+        } else if (sitParts.length > 1) {
+          folhaWhereFragments.push(sql`(${sitParts.reduce((a, b) => sql`${a} OR ${b}`)})`);
+        }
       }
       if (baseRefFolha) {
         folhaWhereFragments.push(sql`base_tag = ${baseRefFolha}`);

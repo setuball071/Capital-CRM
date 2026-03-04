@@ -1171,7 +1171,7 @@ export const filtrosPedidoListaSchema = z.object({
   uf: z.string().optional(),
   idade_min: z.number().optional(),
   idade_max: z.number().optional(),
-  sit_func: z.string().optional(),
+  sit_func: z.union([z.string(), z.array(z.string())]).optional(),
   // Filtros de margem 30%
   margem_30_min: z.number().optional(),
   margem_30_max: z.number().optional(),
