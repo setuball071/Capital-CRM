@@ -107,6 +107,7 @@ export default function BasesClientes() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isModeloOpen, setIsModeloOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [importTemplate, setImportTemplate] = useState<string>("federal");
   const [convenio, setConvenio] = useState("");
   const [competencia, setCompetencia] = useState("");
   const [nomeBase, setNomeBase] = useState("");
@@ -975,6 +976,7 @@ export default function BasesClientes() {
       });
       setIsDialogOpen(false);
       setFile(null);
+      setImportTemplate("federal");
       setConvenio("");
       setCompetencia("");
       setNomeBase("");
@@ -1009,8 +1011,9 @@ export default function BasesClientes() {
 
     const formData = new FormData();
     formData.append("arquivo", file);
-    formData.append("convenio", convenio);
+    formData.append("convenio", importTemplate === "estadual" ? "ESTADUAL" : convenio);
     formData.append("competencia", competencia);
+    formData.append("template", importTemplate);
     if (nomeBase) {
       formData.append("nome_base", nomeBase);
     }
@@ -1747,6 +1750,28 @@ export default function BasesClientes() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
+                <Label>Template de Importação *</Label>
+                <Select
+                  value={importTemplate}
+                  onValueChange={(v) => {
+                    setImportTemplate(v);
+                    if (v === "estadual") {
+                      setConvenio("ESTADUAL");
+                    } else {
+                      setConvenio("");
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="select-import-template">
+                    <SelectValue placeholder="Selecione o template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="federal">SIAPE / Federal</SelectItem>
+                    <SelectItem value="estadual">Governo Estadual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="file">Arquivo *</Label>
                 <Input
                   id="file"
@@ -1763,12 +1788,20 @@ export default function BasesClientes() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="convenio">Convênio *</Label>
-                <ConvenioCombobox
-                  value={convenio}
-                  onChange={setConvenio}
-                  placeholder="Selecione ou crie um convênio..."
-                  testId="combobox-convenio"
-                />
+                {importTemplate === "estadual" ? (
+                  <Input
+                    value="ESTADUAL"
+                    disabled
+                    data-testid="input-convenio-estadual"
+                  />
+                ) : (
+                  <ConvenioCombobox
+                    value={convenio}
+                    onChange={setConvenio}
+                    placeholder="Selecione ou crie um convênio..."
+                    testId="combobox-convenio"
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="competencia">Competência *</Label>

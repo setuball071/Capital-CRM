@@ -5265,6 +5265,32 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     "SITUACAO CONTRATO": "situacao_contrato",
   };
 
+  const ESTADUAL_COLUMN_MAP: Record<string, string> = {
+    CPF: "cpf",
+    "NOME DO SERVIDOR": "nome",
+    ORGAO_SECRETARIA: "orgaodesc",
+    "ORGAO_Secretaria": "orgaodesc",
+    CARGO: "cargo",
+    FUNCAO: "funcao",
+    NATUREZA: "natureza",
+    TOTAL_VANTAGENS: "salario_bruto",
+    SITUACAOFUNCIONAL: "sit_func",
+    SEXO: "sexo",
+    DT_NASC: "data_nascimento",
+    IDADE: "idade",
+    ENDERECO: "endereco",
+    NUMERO: "numero",
+    BAIRRO: "bairro",
+    CIDADE: "municipio",
+    UF: "uf",
+    CEP: "cep",
+    NOME_MAE: "nome_mae",
+    "DDICELULAR 1": "telefone_1",
+    "CELULAR 1": "telefone_2",
+    "CELULAR 2": "telefone_3",
+    "CELULAR 3": "telefone_4",
+  };
+
   // Headers esperados para template Folha Servidor (validação estrita)
   const FOLHA_SERVIDOR_EXPECTED_HEADERS = [
     "Orgão",
@@ -5436,24 +5462,33 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     convenio: string,
     competenciaDate: Date,
     tenantId?: number,
-    importRunId?: number, // Rastreabilidade obrigatória
+    importRunId?: number,
+    templateType?: string,
   ) {
+    const isEstadualBg = templateType === "estadual";
     console.log(
-      `[Import-BG] Starting background processing for base ${baseId}, importRun ${importRunId || "N/A"}, ${data.length} rows`,
+      `[Import-BG] Starting background processing for base ${baseId}, importRun ${importRunId || "N/A"}, ${data.length} rows, template: ${isEstadualBg ? 'estadual' : 'federal'}`,
     );
 
     const headers = data[0] ? Object.keys(data[0]) : [];
     const headerMap: Record<string, string> = {};
+    const activeMap = isEstadualBg ? ESTADUAL_COLUMN_MAP : COLUMN_MAP;
 
     for (const header of headers) {
       const normalized = normalizeCol(header);
-      if (COLUMN_MAP[normalized]) {
-        headerMap[header] = COLUMN_MAP[normalized];
+      if (activeMap[normalized]) {
+        headerMap[header] = activeMap[normalized];
+      }
+      if (isEstadualBg) {
+        const trimmed = header.trim();
+        if (ESTADUAL_COLUMN_MAP[trimmed]) {
+          headerMap[header] = ESTADUAL_COLUMN_MAP[trimmed];
+        }
       }
     }
 
     // Detecta automaticamente o layout (Servidor ou Pensionista)
-    const detectedLayout = detectFolhaLayout(headers);
+    const detectedLayout = isEstadualBg ? "servidor" as FolhaLayoutType : detectFolhaLayout(headers);
     console.log(
       `[Import-BG] Layout detectado: ${detectedLayout.toUpperCase()} (baseId: ${baseId})`,
     );
@@ -5469,26 +5504,37 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
       const row = data[i];
       try {
         let matricula: string | null = null;
-        for (const [col, field] of Object.entries(headerMap)) {
-          if (field === "matricula") {
-            matricula = String(row[col] || "").trim();
-            break;
+        if (isEstadualBg) {
+          let cpfRaw: string | null = null;
+          for (const [col, field] of Object.entries(headerMap)) {
+            if (field === "cpf") {
+              cpfRaw = String(row[col] || "").replace(/\D/g, "").trim();
+              break;
+            }
           }
+          if (!cpfRaw || cpfRaw.length < 5) continue;
+          matricula = `EST_${cpfRaw.padStart(11, "0")}`;
+        } else {
+          for (const [col, field] of Object.entries(headerMap)) {
+            if (field === "matricula") {
+              matricula = String(row[col] || "").trim();
+              break;
+            }
+          }
+          if (!matricula) continue;
         }
-
-        if (!matricula) continue;
 
         const pessoaData: Record<string, any> = {
           matricula,
           convenio,
           baseTagUltima: baseTag,
-          importRunId: importRunId || null, // Rastreabilidade obrigatória
+          importRunId: importRunId || null,
         };
 
         const folhaData: Record<string, any> = {
           competencia: competenciaDate,
           baseTag,
-          importRunId: importRunId || null, // Rastreabilidade obrigatória
+          importRunId: importRunId || null,
         };
 
         const telefones: string[] = [];
@@ -5496,7 +5542,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         const contratoData: Record<string, any> = {
           competencia: competenciaDate,
           baseTag,
-          importRunId: importRunId || null, // Rastreabilidade obrigatória
+          importRunId: importRunId || null,
         };
 
         for (const [col, value] of Object.entries(row)) {
@@ -5564,8 +5610,22 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             folhaData[camelField] = parseNum(value);
           } else if (field.startsWith("telefone_")) {
             const tel = String(value || "").trim();
-            if (tel) telefones.push(tel);
-          } else if (field === "banco_emprestimo") {
+            if (tel && !tel.includes("E+")) telefones.push(tel);
+          }
+          // ESTADUAL-SPECIFIC FIELDS
+          else if (field === "cargo" || field === "funcao") {
+            if (!pessoaData.extrasVinculo) pessoaData.extrasVinculo = {};
+            pessoaData.extrasVinculo[field] = String(value || "").trim() || null;
+          } else if (field === "natureza") {
+            pessoaData.natureza = String(value || "").trim() || null;
+          } else if (field === "sexo" || field === "cep" || field === "nome_mae") {
+            if (!pessoaData.extrasPessoa) pessoaData.extrasPessoa = {};
+            pessoaData.extrasPessoa[field] = String(value || "").trim() || null;
+          } else if (field === "endereco" || field === "numero" || field === "bairro") {
+            if (!pessoaData.extrasPessoa) pessoaData.extrasPessoa = {};
+            pessoaData.extrasPessoa[field] = String(value || "").trim() || null;
+          }
+          else if (field === "banco_emprestimo") {
             contratoData.banco = String(value || "").trim() || null;
           } else if (field === "valor_parcela") {
             contratoData.valorParcela = parseNum(value);
@@ -6052,7 +6112,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     async (req, res) => {
       try {
         const file = req.file;
-        const { convenio, competencia, nome_base } = req.body;
+        const { convenio, competencia, nome_base, template } = req.body;
+        const isEstadual = template === "estadual";
 
         if (!file || !convenio || !competencia) {
           return res.status(400).json({
@@ -6113,12 +6174,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         let data: any[] = [];
 
         if (ext === ".csv") {
-          console.log(`[Import] Parsing CSV with PapaParse...`);
+          console.log(`[Import] Parsing CSV with PapaParse... (template: ${isEstadual ? 'estadual' : 'federal'})`);
           const csvString = file.buffer.toString("utf-8");
           const parsed = Papa.parse(csvString, {
             header: true,
             skipEmptyLines: true,
-            delimiter: "", // auto-detect
+            delimiter: isEstadual ? ";" : "", // estadual uses ;, federal auto-detect
           });
           data = parsed.data as any[];
           console.log(`[Import] CSV parsed: ${data.length} rows`);
@@ -6162,6 +6223,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             competenciaDate,
             null,
             importRunRecord.id,
+            template,
           ).catch((err) => {
             console.error(`[Import] Background processing error:`, err);
           });
@@ -6172,16 +6234,27 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         // Build header mapping
         const headers = data[0] ? Object.keys(data[0]) : [];
         const headerMap: Record<string, string> = {};
+        const activeColumnMap = isEstadual ? ESTADUAL_COLUMN_MAP : COLUMN_MAP;
 
         for (const header of headers) {
           const normalized = normalizeCol(header);
-          if (COLUMN_MAP[normalized]) {
-            headerMap[header] = COLUMN_MAP[normalized];
+          if (activeColumnMap[normalized]) {
+            headerMap[header] = activeColumnMap[normalized];
+          }
+          if (isEstadual) {
+            const trimmed = header.trim();
+            if (ESTADUAL_COLUMN_MAP[trimmed]) {
+              headerMap[header] = ESTADUAL_COLUMN_MAP[trimmed];
+            }
           }
         }
 
+        if (isEstadual) {
+          console.log(`[Import] Using ESTADUAL template, mapped columns: ${Object.keys(headerMap).length}`);
+        }
+
         // Detecta automaticamente o layout (Servidor ou Pensionista)
-        const detectedLayout = detectFolhaLayout(headers);
+        const detectedLayout = isEstadual ? "servidor" as FolhaLayoutType : detectFolhaLayout(headers);
         console.log(
           `[Import] Layout detectado: ${detectedLayout.toUpperCase()} (baseId: ${base.id})`,
         );
@@ -6196,16 +6269,27 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         for (let i = 0; i < data.length; i++) {
           const row = data[i];
           try {
-            // Extract matricula (required)
+            // Extract matricula (required for federal; synthetic for estadual)
             let matricula: string | null = null;
-            for (const [col, field] of Object.entries(headerMap)) {
-              if (field === "matricula") {
-                matricula = String(row[col] || "").trim();
-                break;
+            if (isEstadual) {
+              let cpfRaw: string | null = null;
+              for (const [col, field] of Object.entries(headerMap)) {
+                if (field === "cpf") {
+                  cpfRaw = String(row[col] || "").replace(/\D/g, "").trim();
+                  break;
+                }
               }
+              if (!cpfRaw || cpfRaw.length < 5) continue;
+              matricula = `EST_${cpfRaw.padStart(11, "0")}`;
+            } else {
+              for (const [col, field] of Object.entries(headerMap)) {
+                if (field === "matricula") {
+                  matricula = String(row[col] || "").trim();
+                  break;
+                }
+              }
+              if (!matricula) continue;
             }
-
-            if (!matricula) continue;
 
             // Build pessoa data
             const pessoaData: Record<string, any> = {
@@ -6308,7 +6392,20 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               // TELEFONES
               else if (field.startsWith("telefone_")) {
                 const tel = String(value || "").trim();
-                if (tel) telefones.push(tel);
+                if (tel && !tel.includes("E+")) telefones.push(tel);
+              }
+              // ESTADUAL-SPECIFIC FIELDS
+              else if (field === "cargo" || field === "funcao") {
+                if (!pessoaData.extrasVinculo) pessoaData.extrasVinculo = {};
+                pessoaData.extrasVinculo[field] = String(value || "").trim() || null;
+              } else if (field === "natureza") {
+                pessoaData.natureza = String(value || "").trim() || null;
+              } else if (field === "sexo" || field === "cep" || field === "nome_mae") {
+                if (!pessoaData.extrasPessoa) pessoaData.extrasPessoa = {};
+                pessoaData.extrasPessoa[field] = String(value || "").trim() || null;
+              } else if (field === "endereco" || field === "numero" || field === "bairro") {
+                if (!pessoaData.extrasPessoa) pessoaData.extrasPessoa = {};
+                pessoaData.extrasPessoa[field] = String(value || "").trim() || null;
               }
               // CONTRATO FIELDS
               else if (field === "banco_emprestimo") {
