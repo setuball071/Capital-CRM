@@ -13614,7 +13614,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const campaignId = parseInt(req.params.id);
         const tenantId = req.tenantId!;
         const campanha = await storage.getSalesCampaign(campaignId);
-        if (!campanha || campanha.tenantId !== tenantId) {
+        if (!campanha || (campanha.tenantId !== null && campanha.tenantId !== tenantId)) {
           return res.status(404).json({ message: "Campanha não encontrada" });
         }
 
