@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
+import { eq, and, or, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
 
 // Neon connection caching is enabled by default for better connection handling
 
