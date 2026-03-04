@@ -23808,6 +23808,33 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
 
+  app.get(
+    "/api/export/cpfs-sem-nascimento",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const result = await db.execute(sql`
+          SELECT cpf, nome FROM clientes_pessoa 
+          WHERE data_nascimento IS NULL 
+          ORDER BY nome
+        `);
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", 'attachment; filename="cpfs_sem_nascimento.csv"');
+        
+        let csv = "CPF;NOME\n";
+        for (const row of result.rows) {
+          csv += `${row.cpf};${(row.nome || '').toString().replace(/;/g, ',')}\n`;
+        }
+        
+        res.send(csv);
+      } catch (error) {
+        console.error("GET /api/export/cpfs-sem-nascimento error:", error);
+        res.status(500).json({ message: "Erro ao exportar CPFs" });
+      }
+    }
+  );
+
   const httpServer = createServer(app);
   return httpServer;
 }
