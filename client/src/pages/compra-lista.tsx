@@ -438,20 +438,20 @@ export default function CompraLista() {
       parts.push(`Situação: ${labels.join(", ")}`);
     }
     if (f.margem_70_min !== undefined || f.margem_70_max !== undefined) {
-      parts.push(`Margem 70%: ${f.margem_70_min || 0} - ${f.margem_70_max || "∞"}`);
+      parts.push(`Margem 70%: ${f.margem_70_min ?? 0} - ${f.margem_70_max ?? "∞"}`);
     }
     if (f.margem_35_min !== undefined || f.margem_35_max !== undefined) {
-      parts.push(`Margem 35%: ${f.margem_35_min || 0} - ${f.margem_35_max || "∞"}`);
+      parts.push(`Margem 35%: ${f.margem_35_min ?? 0} - ${f.margem_35_max ?? "∞"}`);
     }
     if (f.margem_cartao_credito_min !== undefined || f.margem_cartao_credito_max !== undefined) {
-      parts.push(`Margem Cart.Créd: ${f.margem_cartao_credito_min || 0} - ${f.margem_cartao_credito_max || "∞"}`);
+      parts.push(`Margem Cart.Créd: ${f.margem_cartao_credito_min ?? 0} - ${f.margem_cartao_credito_max ?? "∞"}`);
     }
     if (f.margem_cartao_beneficio_min !== undefined || f.margem_cartao_beneficio_max !== undefined) {
-      parts.push(`Margem Cart.Benef: ${f.margem_cartao_beneficio_min || 0} - ${f.margem_cartao_beneficio_max || "∞"}`);
+      parts.push(`Margem Cart.Benef: ${f.margem_cartao_beneficio_min ?? 0} - ${f.margem_cartao_beneficio_max ?? "∞"}`);
     }
     if (f.bancos && f.bancos.length > 0) parts.push(`Bancos: ${f.bancos.join(", ")}`);
     if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
-      parts.push(`Parcela: ${f.parcela_min || 0} - ${f.parcela_max || "∞"}`);
+      parts.push(`Parcela: ${f.parcela_min ?? 0} - ${f.parcela_max ?? "∞"}`);
     }
     if (f.qtd_contratos_min !== undefined || f.qtd_contratos_max !== undefined) {
       if (f.qtd_contratos_min === 0 && f.qtd_contratos_max === 0) {
@@ -589,7 +589,7 @@ export default function CompraLista() {
                     min={0}
                     max={120}
                     placeholder="Ex: 30"
-                    value={filtros.idade_min || ""}
+                    value={filtros.idade_min ?? ""}
                     onChange={(e) => setFiltros({ ...filtros, idade_min: e.target.value ? parseInt(e.target.value) : undefined })}
                     data-testid="input-idade-min"
                   />
@@ -603,7 +603,7 @@ export default function CompraLista() {
                     min={0}
                     max={120}
                     placeholder="Ex: 75"
-                    value={filtros.idade_max || ""}
+                    value={filtros.idade_max ?? ""}
                     onChange={(e) => setFiltros({ ...filtros, idade_max: e.target.value ? parseInt(e.target.value) : undefined })}
                     data-testid="input-idade-max"
                   />
@@ -728,7 +728,7 @@ export default function CompraLista() {
                       min={0}
                       step={0.01}
                       placeholder="Ex: 100.00"
-                      value={filtros.parcela_min || ""}
+                      value={filtros.parcela_min ?? ""}
                       onChange={(e) => setFiltros({ ...filtros, parcela_min: e.target.value ? parseFloat(e.target.value) : undefined })}
                       data-testid="input-parcela-min"
                     />
@@ -742,7 +742,7 @@ export default function CompraLista() {
                       min={0}
                       step={0.01}
                       placeholder="Ex: 500.00"
-                      value={filtros.parcela_max || ""}
+                      value={filtros.parcela_max ?? ""}
                       onChange={(e) => setFiltros({ ...filtros, parcela_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                       data-testid="input-parcela-max"
                     />
@@ -785,7 +785,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Mín"
-                        value={filtros.margem_70_min || ""}
+                        value={filtros.margem_70_min ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_70_min: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-70-min"
                         className="w-1/2"
@@ -795,7 +795,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Máx"
-                        value={filtros.margem_70_max || ""}
+                        value={filtros.margem_70_max ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_70_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-70-max"
                         className="w-1/2"
@@ -811,7 +811,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Mín"
-                        value={filtros.margem_35_min || ""}
+                        value={filtros.margem_35_min ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_35_min: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-35-min"
                         className="w-1/2"
@@ -821,7 +821,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Máx"
-                        value={filtros.margem_35_max || ""}
+                        value={filtros.margem_35_max ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_35_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-35-max"
                         className="w-1/2"
@@ -837,7 +837,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Mín"
-                        value={filtros.margem_cartao_credito_min || ""}
+                        value={filtros.margem_cartao_credito_min ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_cartao_credito_min: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-cartao-credito-min"
                         className="w-1/2"
@@ -847,7 +847,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Máx"
-                        value={filtros.margem_cartao_credito_max || ""}
+                        value={filtros.margem_cartao_credito_max ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_cartao_credito_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-cartao-credito-max"
                         className="w-1/2"
@@ -863,7 +863,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Mín"
-                        value={filtros.margem_cartao_beneficio_min || ""}
+                        value={filtros.margem_cartao_beneficio_min ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_cartao_beneficio_min: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-cartao-beneficio-min"
                         className="w-1/2"
@@ -873,7 +873,7 @@ export default function CompraLista() {
                         min={0}
                         step={0.01}
                         placeholder="Máx"
-                        value={filtros.margem_cartao_beneficio_max || ""}
+                        value={filtros.margem_cartao_beneficio_max ?? ""}
                         onChange={(e) => setFiltros({ ...filtros, margem_cartao_beneficio_max: e.target.value ? parseFloat(e.target.value) : undefined })}
                         data-testid="input-margem-cartao-beneficio-max"
                         className="w-1/2"
