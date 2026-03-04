@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, Upload, Users, MoreVertical, Trash2, Pause, Play, Eye, RotateCcw, ArrowRightLeft, Tag } from "lucide-react";
+import { Loader2, Plus, Upload, Users, MoreVertical, Trash2, Pause, Play, Eye, RotateCcw, ArrowRightLeft, Tag, Download } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { SalesCampaign } from "@shared/schema";
 import { LEAD_MARKER_LABELS, type LeadMarker } from "@shared/schema";
@@ -457,6 +457,16 @@ export default function VendasCampanhas() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              window.open(`/api/vendas/campanhas/${campanha.id}/exportar-leads`, '_blank');
+                            }}
+                            disabled={(campanha.totalLeads || 0) === 0}
+                            data-testid={`button-export-csv-${campanha.id}`}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Exportar CSV
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedCampaign(campanha);

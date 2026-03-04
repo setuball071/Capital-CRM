@@ -1600,6 +1600,12 @@ export const salesLeads = pgTable("sales_leads", {
   ultimoTipoContato: varchar("ultimo_tipo_contato", { length: 30 }),
   currentMargin: decimal("current_margin", { precision: 12, scale: 2 }),
   currentProposal: decimal("current_proposal", { precision: 12, scale: 2 }),
+  matricula: varchar("matricula", { length: 50 }),
+  taxaReal: decimal("taxa_real", { precision: 8, scale: 4 }),
+  valorParcela: decimal("valor_parcela", { precision: 12, scale: 2 }),
+  bancoOferta: varchar("banco_oferta", { length: 100 }),
+  dadosHigienizados: jsonb("dados_higienizados"),
+  higienizadoEm: timestamp("higienizado_em"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

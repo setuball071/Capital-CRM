@@ -41,6 +41,7 @@ import VendasAtendimentoPage from "@/pages/vendas-atendimento";
 import VendasAgendaPage from "@/pages/vendas-agenda";
 import VendasPipelinePage from "@/pages/vendas-pipeline";
 import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
+import VendasImportarHigienizadosPage from "@/pages/vendas-importar-higienizados";
 import VendasConsultaPage from "@/pages/vendas-consulta";
 import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
 import ConfigPromptsPage from "@/pages/config-prompts";
@@ -372,6 +373,9 @@ function Router() {
               </Route>
               <Route path="/vendas/campanhas">
                 {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/vendas/importar-higienizados">
+                {() => <ModuleRoute component={VendasImportarHigienizadosPage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/atendimento">
                 {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" />}

@@ -13604,6 +13604,277 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     },
   );
 
+  // GET /api/vendas/campanhas/:id/exportar-leads - Exportar leads da campanha como CSV
+  app.get(
+    "/api/vendas/campanhas/:id/exportar-leads",
+    requireAuth,
+    requireCRMAdmin,
+    async (req: any, res) => {
+      try {
+        const campaignId = parseInt(req.params.id);
+        const tenantId = req.tenantId!;
+        const campanha = await storage.getSalesCampaign(campaignId);
+        if (!campanha || campanha.tenantId !== tenantId) {
+          return res.status(404).json({ message: "Campanha não encontrada" });
+        }
+
+        const result = await db.execute(sql`
+          SELECT 
+            sl.cpf,
+            sl.nome,
+            sl.telefone_1,
+            sl.telefone_2,
+            sl.telefone_3,
+            sl.observacoes,
+            sl.lead_marker,
+            vc.matricula,
+            p.convenio,
+            p.orgaodesc as orgao,
+            p.sit_func,
+            folha.margem_saldo_70,
+            folha.margem_saldo_5,
+            folha.salario_bruto
+          FROM sales_leads sl
+          LEFT JOIN clientes_pessoa p ON p.id = sl.base_cliente_id
+          LEFT JOIN (
+            SELECT DISTINCT ON (pessoa_id) pessoa_id, matricula
+            FROM clientes_vinculo
+            ORDER BY pessoa_id, id DESC
+          ) vc ON vc.pessoa_id = p.id
+          LEFT JOIN (
+            SELECT DISTINCT ON (pessoa_id) pessoa_id, margem_saldo_70, margem_saldo_5, salario_bruto
+            FROM clientes_folha_mes
+            ORDER BY pessoa_id, competencia DESC
+          ) folha ON folha.pessoa_id = p.id
+          WHERE sl.campaign_id = ${campaignId}
+            AND sl.tenant_id = ${tenantId}
+          ORDER BY sl.nome
+        `);
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="campanha_${campaignId}_leads.csv"`);
+        
+        const csvEscape = (v: any) => {
+          if (v == null) return '';
+          const s = String(v);
+          if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+            return '"' + s.replace(/"/g, '""') + '"';
+          }
+          return s;
+        };
+        let csv = "CPF;Nome;Telefone1;Telefone2;Telefone3;Matricula;Convenio;Orgao;SitFunc;Margem70;MargemCartao;Parcela;Taxa;Banco;Observacoes\n";
+        for (const row of result.rows) {
+          csv += [
+            csvEscape(row.cpf),
+            csvEscape(row.nome),
+            csvEscape(row.telefone_1),
+            csvEscape(row.telefone_2),
+            csvEscape(row.telefone_3),
+            csvEscape(row.matricula),
+            csvEscape(row.convenio),
+            csvEscape(row.orgao),
+            csvEscape(row.sit_func),
+            csvEscape(row.margem_saldo_70),
+            csvEscape(row.margem_saldo_5),
+            '', // Parcela
+            '', // Taxa
+            '', // Banco
+            csvEscape(row.observacoes),
+          ].join(';') + '\n';
+        }
+        
+        res.send(csv);
+      } catch (error) {
+        console.error("Exportar leads error:", error);
+        return res.status(500).json({ message: "Erro ao exportar leads" });
+      }
+    }
+  );
+
+  // POST /api/vendas/importar-higienizados - Importar lista higienizada e criar campanha
+  app.post(
+    "/api/vendas/importar-higienizados",
+    requireAuth,
+    requireCRMAdmin,
+    upload.single("file"),
+    async (req: any, res) => {
+      try {
+        const tenantId = req.tenantId!;
+        const userId = req.user!.id;
+        const { nomeCampanha, convenio, descricao } = req.body;
+
+        if (!nomeCampanha || !req.file) {
+          return res.status(400).json({ message: "Nome da campanha e arquivo CSV são obrigatórios" });
+        }
+
+        const fileContent = req.file.buffer.toString("utf-8");
+        const Papa = require("papaparse");
+        const parsed = Papa.parse(fileContent, {
+          header: true,
+          skipEmptyLines: true,
+          delimiter: "",
+          dynamicTyping: false,
+        });
+
+        if (!parsed.data || parsed.data.length === 0) {
+          return res.status(400).json({ message: "Arquivo CSV vazio ou inválido" });
+        }
+
+        const COLUMN_MAP: Record<string, string> = {
+          cpf: "cpf",
+          nome: "nome",
+          telefone1: "telefone1", telefone: "telefone1", celular: "telefone1", fone1: "telefone1", "telefone 1": "telefone1",
+          telefone2: "telefone2", fone2: "telefone2", "telefone 2": "telefone2",
+          telefone3: "telefone3", fone3: "telefone3", "telefone 3": "telefone3",
+          matricula: "matricula",
+          margem: "margem70", margem70: "margem70", "margem 70": "margem70", margem_70: "margem70",
+          margemcartao: "margemCartao", "margem cartao": "margemCartao", margem_cartao: "margemCartao", "margem cartão": "margemCartao",
+          parcela: "parcela", valor_parcela: "parcela",
+          taxa: "taxa", taxa_real: "taxa",
+          banco: "banco", banco_oferta: "banco",
+          convenio: "convenioCol", convênio: "convenioCol",
+          orgao: "orgao", "orgão": "orgao",
+          sitfunc: "sitfunc", sit_func: "sitfunc", "situacao funcional": "sitfunc", "situação funcional": "sitfunc",
+          observacoes: "observacoes", "observações": "observacoes", obs: "observacoes",
+        };
+
+        const rawHeaders = parsed.meta.fields || [];
+        const headerMapping: Record<string, string> = {};
+        for (const h of rawHeaders) {
+          const normalized = h.toLowerCase().trim().replace(/[_\s]+/g, '').replace(/[áàã]/g, 'a').replace(/[éè]/g, 'e').replace(/[íì]/g, 'i').replace(/[óòõ]/g, 'o').replace(/[úù]/g, 'u').replace(/ç/g, 'c');
+          for (const [key, mappedField] of Object.entries(COLUMN_MAP)) {
+            const normalizedKey = key.replace(/[_\s]+/g, '');
+            if (normalized === normalizedKey || normalized.includes(normalizedKey)) {
+              headerMapping[h] = mappedField;
+              break;
+            }
+          }
+        }
+
+        const newCampaign = await storage.createSalesCampaign({
+          tenantId,
+          nome: nomeCampanha,
+          descricao: descricao || null,
+          convenio: convenio || null,
+          origem: "__higienizado__",
+          status: "ativa",
+          totalLeads: 0,
+          leadsDisponiveis: 0,
+          leadsDistribuidos: 0,
+          createdBy: userId,
+        });
+
+        let imported = 0;
+        let updated = 0;
+        let ignored = 0;
+
+        for (const row of parsed.data as Record<string, string>[]) {
+          const mapped: Record<string, string> = {};
+          for (const [originalHeader, value] of Object.entries(row)) {
+            const field = headerMapping[originalHeader];
+            if (field && value && value.trim()) {
+              mapped[field] = value.trim();
+            }
+          }
+
+          if (!mapped.cpf && !mapped.nome) {
+            ignored++;
+            continue;
+          }
+
+          const cpfClean = mapped.cpf ? mapped.cpf.replace(/\D/g, '').padStart(11, '0') : null;
+
+          let baseClienteId: number | null = null;
+          if (cpfClean) {
+            const existingPessoa = await db.execute(
+              sql`SELECT id FROM clientes_pessoa WHERE cpf = ${cpfClean} LIMIT 1`
+            );
+            if (existingPessoa.rows.length > 0) {
+              baseClienteId = existingPessoa.rows[0].id as number;
+
+              if (mapped.matricula) {
+                await db.execute(sql`
+                  UPDATE clientes_vinculo 
+                  SET matricula = ${mapped.matricula}
+                  WHERE pessoa_id = ${baseClienteId}
+                  AND (matricula IS NULL OR matricula = '' OR matricula LIKE 'EST_%')
+                `);
+              }
+
+              if (mapped.margem70 || mapped.margemCartao) {
+                const updateParts: ReturnType<typeof sql>[] = [];
+                if (mapped.margem70) updateParts.push(sql`margem_saldo_70 = ${parseFloat(mapped.margem70)}`);
+                if (mapped.margemCartao) updateParts.push(sql`margem_saldo_5 = ${parseFloat(mapped.margemCartao)}`);
+                if (updateParts.length > 0) {
+                  const latestFolha = await db.execute(sql`
+                    SELECT id FROM clientes_folha_mes 
+                    WHERE pessoa_id = ${baseClienteId} 
+                    ORDER BY competencia DESC LIMIT 1
+                  `);
+                  if (latestFolha.rows.length > 0) {
+                    const folhaId = latestFolha.rows[0].id;
+                    const setClauses = updateParts.reduce((a, b) => sql`${a}, ${b}`);
+                    await db.execute(sql`UPDATE clientes_folha_mes SET ${setClauses} WHERE id = ${folhaId}`);
+                  }
+                }
+              }
+              updated++;
+            }
+          }
+
+          const dadosHigienizados: Record<string, string> = {};
+          if (mapped.orgao) dadosHigienizados.orgao = mapped.orgao;
+          if (mapped.sitfunc) dadosHigienizados.sitfunc = mapped.sitfunc;
+          if (mapped.convenioCol) dadosHigienizados.convenio = mapped.convenioCol;
+
+          try {
+            await db.execute(sql`
+              INSERT INTO sales_leads (
+                tenant_id, campaign_id, cpf, nome, 
+                telefone_1, telefone_2, telefone_3,
+                observacoes, base_cliente_id, lead_marker,
+                matricula, taxa_real, valor_parcela, banco_oferta,
+                dados_higienizados, higienizado_em,
+                created_at, updated_at
+              ) VALUES (
+                ${tenantId}, ${newCampaign.id}, ${cpfClean}, ${mapped.nome || 'Sem nome'},
+                ${mapped.telefone1 || null}, ${mapped.telefone2 || null}, ${mapped.telefone3 || null},
+                ${mapped.observacoes || null}, ${baseClienteId}, 'NOVO',
+                ${mapped.matricula || null}, 
+                ${mapped.taxa ? parseFloat(mapped.taxa) : null},
+                ${mapped.parcela ? parseFloat(mapped.parcela) : null},
+                ${mapped.banco || null},
+                ${Object.keys(dadosHigienizados).length > 0 ? JSON.stringify(dadosHigienizados) : null},
+                NOW(),
+                NOW(), NOW()
+              )
+            `);
+            imported++;
+          } catch (insertError) {
+            console.error(`Erro ao inserir lead CPF ${cpfClean}:`, insertError);
+            ignored++;
+          }
+        }
+
+        await db.execute(sql`
+          UPDATE sales_campaigns 
+          SET total_leads = ${imported}, leads_disponiveis = ${imported}
+          WHERE id = ${newCampaign.id}
+        `);
+
+        return res.json({
+          message: "Importação concluída",
+          campanha: { id: newCampaign.id, nome: nomeCampanha },
+          resumo: { imported, updated, ignored, total: parsed.data.length },
+          colunasDetectadas: Object.values(headerMapping),
+        });
+      } catch (error) {
+        console.error("Importar higienizados error:", error);
+        return res.status(500).json({ message: "Erro ao importar lista higienizada" });
+      }
+    }
+  );
+
   // GET /api/vendas/vendedores - Lista vendedores para distribuição
   app.get(
     "/api/vendas/vendedores",
