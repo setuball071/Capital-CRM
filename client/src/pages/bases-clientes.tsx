@@ -1878,7 +1878,12 @@ export default function BasesClientes() {
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="fast-tipo">Tipo de Importação *</Label>
-                  <Select value={fastImportTipo} onValueChange={setFastImportTipo}>
+                  <Select value={fastImportTipo} onValueChange={(value) => {
+                    setFastImportTipo(value);
+                    if (value === "estadual") {
+                      setFastImportConvenio("ESTADUAL");
+                    }
+                  }}>
                     <SelectTrigger data-testid="select-fast-tipo">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
@@ -1886,6 +1891,7 @@ export default function BasesClientes() {
                       <SelectItem value="folha">Folha (Servidor/Pensionista)</SelectItem>
                       <SelectItem value="d8">D8 (Contratos)</SelectItem>
                       <SelectItem value="contatos">Dados Complementares (Contatos/Endereço)</SelectItem>
+                      <SelectItem value="estadual">Governo Estadual</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1910,8 +1916,9 @@ export default function BasesClientes() {
                   <ConvenioCombobox
                     value={fastImportConvenio}
                     onChange={setFastImportConvenio}
-                    placeholder="Selecione ou crie um convênio..."
+                    placeholder={fastImportTipo === "estadual" ? "ESTADUAL (automático)" : "Selecione ou crie um convênio..."}
                     testId="combobox-fast-convenio"
+                    disabled={fastImportTipo === "estadual"}
                   />
                 </div>
                 

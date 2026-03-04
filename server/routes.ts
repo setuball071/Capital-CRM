@@ -8566,16 +8566,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
         if (
           !tipo_import ||
-          !["folha", "d8", "contatos"].includes(tipo_import)
+          !["folha", "d8", "contatos", "estadual"].includes(tipo_import)
         ) {
           return res
             .status(400)
-            .json({ message: "tipo_import deve ser folha, d8 ou contatos" });
+            .json({ message: "tipo_import deve ser folha, d8, contatos ou estadual" });
         }
 
-        if (tipo_import === "folha" && !competencia) {
+        if ((tipo_import === "folha" || tipo_import === "estadual") && !competencia) {
           return res.status(400).json({
-            message: "competencia é obrigatória para importação de folha",
+            message: "competencia é obrigatória para importação de folha ou estadual",
           });
         }
 
@@ -8584,6 +8584,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             .status(400)
             .json({ message: "banco é obrigatório para importação de D8" });
         }
+
+        // Force convênio to "ESTADUAL" for estadual tipo
+        const effectiveConvenio = tipo_import === "estadual" ? "ESTADUAL" : convenio;
 
         const [year, month] = (competencia || "").split("-");
         const competenciaDate = competencia
@@ -8595,7 +8598,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           competencia: competenciaDate,
           banco: banco || undefined,
           layoutD8: layout_d8 || undefined,
-          convenio: convenio || undefined,
+          convenio: effectiveConvenio || undefined,
           tenantId: req.tenantId || undefined,
           createdById: req.user?.id,
         });

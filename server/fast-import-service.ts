@@ -47,7 +47,7 @@ const MERGE_BATCH_SIZE = 1000;
 const SQL_INSERT_CHUNK = 50;
 
 export interface FastImportOptions {
-  tipoImport: "folha" | "d8" | "contatos";
+  tipoImport: "folha" | "d8" | "contatos" | "estadual";
   competencia?: Date;
   banco?: string;
   layoutD8?: "servidor" | "pensionista";
@@ -148,6 +148,24 @@ const D8_PENSIONISTA_REQUIRED_HEADERS = [
   "numero_contrato",
   "banco",
 ];
+
+const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
+  cpf: "cpf",
+  nome_do_servidor: "nome",
+  nome: "nome",
+  orgao_secretaria: "orgaodesc",
+  orgao: "orgaodesc",
+  situacaofuncional: "sit_func",
+  situacao_funcional: "sit_func",
+  sit_func: "sit_func",
+  total_vantagens: "base_calc",
+  cidade: "municipio",
+  municipio: "municipio",
+  uf: "uf",
+  natureza: "rjur",
+  cargo: "cargo",
+  funcao: "funcao",
+};
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
@@ -534,6 +552,11 @@ class FastImportService {
           mergedCount = contatosResult.merged;
           errorCount = contatosResult.errors;
           break;
+        case "estadual":
+          const estadualResult = await this.mergeEstadual(run);
+          mergedCount = estadualResult.merged;
+          errorCount = estadualResult.errors;
+          break;
       }
 
       // Registrar TODAS as linhas em import_run_rows ANTES de limpar staging
@@ -597,7 +620,7 @@ class FastImportService {
     console.log(`[FastImport] Registering rows for run ${run.id}...`);
 
     const stagingTable =
-      tipoImport === "folha"
+      tipoImport === "folha" || tipoImport === "estadual"
         ? "staging_folha"
         : tipoImport === "d8"
           ? "staging_d8"
@@ -886,6 +909,110 @@ class FastImportService {
     const mergedCount = folhaResult.rowCount || 0;
 
     return { merged: mergedCount, errors: 0 };
+  }
+
+  private async mergeEstadual(
+    run: ImportRun,
+  ): Promise<{ merged: number; errors: number }> {
+    const competencia = run.competencia || new Date();
+    const convenio = run.convenio || "ESTADUAL";
+    const tenantId = run.tenantId || 1;
+    const baseTag = run.baseTag || "";
+
+    console.log(`[FastImport] Starting SQL-based merge for estadual...`);
+
+    const pessoaResult = await db.execute(sql`
+      INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, uf, municipio, convenio, base_tag_ultima, import_run_id)
+      SELECT DISTINCT ON (s.cpf)
+        ${tenantId}::integer,
+        s.cpf,
+        'EST_' || s.cpf,
+        s.nome,
+        s.orgaodesc,
+        s.uf,
+        s.municipio,
+        ${convenio},
+        ${baseTag},
+        ${run.id}
+      FROM staging_folha s
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+      ON CONFLICT (cpf) DO UPDATE SET
+        nome = CASE WHEN EXCLUDED.nome IS NOT NULL AND EXCLUDED.nome != '' 
+                    THEN EXCLUDED.nome ELSE clientes_pessoa.nome END,
+        orgaodesc = CASE WHEN EXCLUDED.orgaodesc IS NOT NULL AND EXCLUDED.orgaodesc != '' 
+                         THEN EXCLUDED.orgaodesc ELSE clientes_pessoa.orgaodesc END,
+        uf = CASE WHEN EXCLUDED.uf IS NOT NULL AND EXCLUDED.uf != '' 
+                  THEN EXCLUDED.uf ELSE clientes_pessoa.uf END,
+        municipio = CASE WHEN EXCLUDED.municipio IS NOT NULL AND EXCLUDED.municipio != '' 
+                         THEN EXCLUDED.municipio ELSE clientes_pessoa.municipio END,
+        convenio = ${convenio},
+        base_tag_ultima = ${baseTag},
+        import_run_id = ${run.id},
+        atualizado_em = NOW()
+    `);
+
+    console.log(`[FastImport] Estadual pessoas upserted: ${pessoaResult.rowCount || 0}`);
+
+    const vinculoResult = await db.execute(sql`
+      INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, rjur, sit_func, import_run_id, base_tag)
+      SELECT DISTINCT ON (s.cpf, 'EST_' || s.cpf, COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
+        ${tenantId}::integer,
+        s.cpf,
+        'EST_' || s.cpf,
+        COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'),
+        ${convenio},
+        p.id,
+        s.rjur,
+        s.sit_func,
+        ${run.id},
+        ${baseTag}
+      FROM staging_folha s
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+      ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
+        tenant_id = COALESCE(clientes_vinculo.tenant_id, EXCLUDED.tenant_id),
+        pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
+        rjur = CASE WHEN EXCLUDED.rjur IS NOT NULL AND EXCLUDED.rjur != '' 
+                    THEN EXCLUDED.rjur ELSE clientes_vinculo.rjur END,
+        sit_func = CASE WHEN EXCLUDED.sit_func IS NOT NULL AND EXCLUDED.sit_func != '' 
+                        THEN EXCLUDED.sit_func ELSE clientes_vinculo.sit_func END,
+        import_run_id = ${run.id},
+        base_tag = ${baseTag},
+        ultima_atualizacao = NOW()
+    `);
+
+    console.log(`[FastImport] Estadual vinculos upserted: ${vinculoResult.rowCount || 0}`);
+
+    const folhaResult = await db.execute(sql`
+      INSERT INTO clientes_folha_mes (
+        pessoa_id, vinculo_id, competencia,
+        salario_bruto, base_tag, import_run_id
+      )
+      SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
+        p.id,
+        v.id,
+        ${competencia}::timestamp,
+        s.base_calc::numeric,
+        ${baseTag},
+        ${run.id}
+      FROM staging_folha s
+      JOIN clientes_pessoa p ON p.cpf = s.cpf
+      JOIN clientes_vinculo v ON v.cpf = s.cpf 
+        AND v.matricula = 'EST_' || s.cpf
+        AND v.orgao = COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO')
+      WHERE s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+      ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
+        salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
+        base_tag = ${baseTag},
+        import_run_id = ${run.id}
+    `);
+
+    console.log(`[FastImport] Estadual folha upserted: ${folhaResult.rowCount || 0}`);
+
+    return { merged: folhaResult.rowCount || 0, errors: 0 };
   }
 
   private async mergeD8(
@@ -1195,6 +1322,11 @@ class FastImportService {
           .delete(stagingContatos)
           .where(eq(stagingContatos.importRunId, importRunId));
         break;
+      case "estadual":
+        await db
+          .delete(stagingFolha)
+          .where(eq(stagingFolha.importRunId, importRunId));
+        break;
     }
     console.log(`[FastImport] Cleaned up staging for run ${importRunId}`);
   }
@@ -1301,6 +1433,54 @@ class FastImportService {
         conta: safeVarchar(getValue("conta"), 30),
         rowNum,
       };
+    } else if (tipoImport === "estadual") {
+      const cpfVal = safeVarchar(padCpf(getValue("cpf")), 20);
+      const syntheticMatricula = cpfVal ? `EST_${cpfVal}` : null;
+      const cargo = getValue("cargo") || "";
+      const funcao = getValue("funcao") || "";
+      const cargoFuncao = [cargo, funcao].filter(Boolean).join(" / ") || null;
+
+      const filterPhone = (val: any): string | null => {
+        const s = safeVarchar(val, 20);
+        if (s && /E\+/i.test(s)) return null;
+        return s;
+      };
+
+      return {
+        importRunId: run.id,
+        cpf: cpfVal,
+        matricula: safeVarchar(syntheticMatricula, 50),
+        nome: safeVarchar(getValue("nome"), 255),
+        orgaodesc: safeVarchar(getValue("orgaodesc"), 255),
+        upag: null,
+        uf: safeVarchar(getValue("uf"), 100),
+        municipio: safeVarchar(getValue("municipio"), 150),
+        baseCalc: parseNum(getValue("base_calc")),
+        margem5Bruta: null,
+        margem5Utilizada: null,
+        margem5Saldo: null,
+        margemBeneficio5Bruta: null,
+        margemBeneficio5Utilizada: null,
+        margemBeneficio5Saldo: null,
+        margem35Bruta: null,
+        margem35Utilizada: null,
+        margem35Saldo: null,
+        margem70Bruta: null,
+        margem70Utilizada: null,
+        margem70Saldo: null,
+        margemCartaoCreditoSaldo: null,
+        margemCartaoBeneficioSaldo: null,
+        creditos: null,
+        debitos: null,
+        liquido: null,
+        excQtd: null,
+        excSoma: null,
+        rjur: safeVarchar(getValue("rjur"), 50),
+        sitFunc: safeVarchar(getValue("sit_func"), 100),
+        margem: null,
+        instituidor: safeVarchar(cargoFuncao, 255),
+        rowNum,
+      };
     }
 
     return null;
@@ -1318,6 +1498,7 @@ class FastImportService {
 
       switch (tipoImport) {
         case "folha":
+        case "estadual":
           await db.insert(stagingFolha).values(chunk);
           break;
         case "d8":
@@ -1343,6 +1524,8 @@ class FastImportService {
           : D8_COLUMN_MAP_SERVIDOR;
       case "contatos":
         return CONTATOS_COLUMN_MAP;
+      case "estadual":
+        return FAST_ESTADUAL_COLUMN_MAP;
       default:
         return COLUMN_MAP;
     }
@@ -1442,7 +1625,8 @@ class FastImportService {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
-    return `${year}${month}${options.tipoImport.substring(0, 2)}`;
+    const prefix = options.tipoImport === "estadual" ? "es" : options.tipoImport.substring(0, 2);
+    return `${year}${month}${prefix}`;
   }
 
   private async markError(importRunId: number, message: string): Promise<void> {
