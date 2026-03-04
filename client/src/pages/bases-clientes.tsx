@@ -100,6 +100,11 @@ const MODELO_COLUNAS = {
   ],
 };
 
+const ESTADOS_BR = [
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
+  "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
+];
+
 export default function BasesClientes() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -111,6 +116,8 @@ export default function BasesClientes() {
   const [convenio, setConvenio] = useState("");
   const [competencia, setCompetencia] = useState("");
   const [nomeBase, setNomeBase] = useState("");
+  const [importUf, setImportUf] = useState<string>("");
+  const [fastImportUf, setFastImportUf] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [baseToDelete, setBaseToDelete] = useState<BaseImportada | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -340,6 +347,16 @@ export default function BasesClientes() {
     if (e.target.files && e.target.files.length > 0) {
       // Se múltiplos arquivos, adicionar à fila
       if (e.target.files.length > 1) {
+        if (!fastImportConvenio || !fastImportCompetencia || (fastImportTipo === "estadual" && !fastImportUf)) {
+          toast({
+            title: "Campos obrigatórios",
+            description: fastImportTipo === "estadual" && !fastImportUf
+              ? "Selecione a UF antes de adicionar arquivos à fila."
+              : "Preencha convênio e competência antes de adicionar arquivos.",
+            variant: "destructive",
+          });
+          return;
+        }
         const newItems: ImportQueueItem[] = Array.from(e.target.files).map((file, idx) => ({
           id: `${Date.now()}-${idx}`,
           file,
@@ -580,6 +597,7 @@ export default function BasesClientes() {
     setIsQueueProcessing(false);
     setCurrentQueueIndex(0);
     queueProcessingRef.current = false;
+    setFastImportUf("");
     setIsFastImportOpen(false);
   };
 
@@ -980,6 +998,7 @@ export default function BasesClientes() {
       setConvenio("");
       setCompetencia("");
       setNomeBase("");
+      setImportUf("");
       // Invalidate both bases and import-runs caches
       queryClient.invalidateQueries({ queryKey: ["/api/bases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/import-runs"] });
@@ -1011,7 +1030,7 @@ export default function BasesClientes() {
 
     const formData = new FormData();
     formData.append("arquivo", file);
-    formData.append("convenio", importTemplate === "estadual" ? "ESTADUAL" : convenio);
+    formData.append("convenio", convenio);
     formData.append("competencia", competencia);
     formData.append("template", importTemplate);
     if (nomeBase) {
@@ -1734,7 +1753,10 @@ export default function BasesClientes() {
             </Dialog>
           )}
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) setImportUf("");
+          }}>
             <DialogTrigger asChild>
               <Button data-testid="button-import-base">
                 <Upload className="w-4 h-4 mr-2" />
@@ -1756,9 +1778,11 @@ export default function BasesClientes() {
                   onValueChange={(v) => {
                     setImportTemplate(v);
                     if (v === "estadual") {
-                      setConvenio("ESTADUAL");
+                      setConvenio("");
+                      setImportUf("");
                     } else {
                       setConvenio("");
+                      setImportUf("");
                     }
                   }}
                 >
@@ -1787,20 +1811,36 @@ export default function BasesClientes() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="convenio">Convênio *</Label>
                 {importTemplate === "estadual" ? (
-                  <Input
-                    value="ESTADUAL"
-                    disabled
-                    data-testid="input-convenio-estadual"
-                  />
+                  <>
+                    <Label>UF *</Label>
+                    <Select
+                      value={importUf}
+                      onValueChange={(uf) => {
+                        setImportUf(uf);
+                        setConvenio("Estadual - " + uf);
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-import-uf">
+                        <SelectValue placeholder="Selecione o estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ESTADOS_BR.map((uf) => (
+                          <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
                 ) : (
-                  <ConvenioCombobox
-                    value={convenio}
-                    onChange={setConvenio}
-                    placeholder="Selecione ou crie um convênio..."
-                    testId="combobox-convenio"
-                  />
+                  <>
+                    <Label htmlFor="convenio">Convênio *</Label>
+                    <ConvenioCombobox
+                      value={convenio}
+                      onChange={setConvenio}
+                      placeholder="Selecione ou crie um convênio..."
+                      testId="combobox-convenio"
+                    />
+                  </>
                 )}
               </div>
               <div className="space-y-2">
@@ -1834,7 +1874,7 @@ export default function BasesClientes() {
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={importMutation.isPending}
+                disabled={importMutation.isPending || (importTemplate === "estadual" && !importUf)}
                 data-testid="button-submit-import"
               >
                 {importMutation.isPending ? (
@@ -1881,7 +1921,10 @@ export default function BasesClientes() {
                   <Select value={fastImportTipo} onValueChange={(value) => {
                     setFastImportTipo(value);
                     if (value === "estadual") {
-                      setFastImportConvenio("ESTADUAL");
+                      setFastImportConvenio("");
+                      setFastImportUf("");
+                    } else {
+                      setFastImportUf("");
                     }
                   }}>
                     <SelectTrigger data-testid="select-fast-tipo">
@@ -1912,14 +1955,37 @@ export default function BasesClientes() {
                 )}
                 
                 <div className="space-y-2">
-                  <Label htmlFor="fast-convenio">Convênio *</Label>
-                  <ConvenioCombobox
-                    value={fastImportConvenio}
-                    onChange={setFastImportConvenio}
-                    placeholder={fastImportTipo === "estadual" ? "ESTADUAL (automático)" : "Selecione ou crie um convênio..."}
-                    testId="combobox-fast-convenio"
-                    disabled={fastImportTipo === "estadual"}
-                  />
+                  {fastImportTipo === "estadual" ? (
+                    <>
+                      <Label>UF *</Label>
+                      <Select
+                        value={fastImportUf}
+                        onValueChange={(uf) => {
+                          setFastImportUf(uf);
+                          setFastImportConvenio("Estadual - " + uf);
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-fast-uf">
+                          <SelectValue placeholder="Selecione o estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ESTADOS_BR.map((uf) => (
+                            <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : (
+                    <>
+                      <Label htmlFor="fast-convenio">Convênio *</Label>
+                      <ConvenioCombobox
+                        value={fastImportConvenio}
+                        onChange={setFastImportConvenio}
+                        placeholder="Selecione ou crie um convênio..."
+                        testId="combobox-fast-convenio"
+                      />
+                    </>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -2177,7 +2243,7 @@ export default function BasesClientes() {
                   </Button>
                   <Button
                     onClick={handleStartFastImport}
-                    disabled={startFastImportMutation.isPending || (!fastImportFile && importQueue.length === 0)}
+                    disabled={startFastImportMutation.isPending || (!fastImportFile && importQueue.length === 0) || (fastImportTipo === "estadual" && !fastImportUf)}
                     className="bg-amber-600 hover:bg-amber-700"
                     data-testid="button-fast-submit"
                   >

@@ -8585,8 +8585,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             .json({ message: "banco é obrigatório para importação de D8" });
         }
 
-        // Force convênio to "ESTADUAL" for estadual tipo
-        const effectiveConvenio = tipo_import === "estadual" ? "ESTADUAL" : convenio;
+        if (tipo_import === "estadual" && !convenio) {
+          return res.status(400).json({
+            message: "convênio (UF) é obrigatório para importação estadual",
+          });
+        }
 
         const [year, month] = (competencia || "").split("-");
         const competenciaDate = competencia
@@ -8598,7 +8601,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           competencia: competenciaDate,
           banco: banco || undefined,
           layoutD8: layout_d8 || undefined,
-          convenio: effectiveConvenio || undefined,
+          convenio: convenio || undefined,
           tenantId: req.tenantId || undefined,
           createdById: req.user?.id,
         });
