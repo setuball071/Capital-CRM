@@ -1,0 +1,39 @@
+Preciso implementar um fluxo completo de exportação → higienização → reimportação de leads. São 3 partes:
+PARTE 1 — Exportar leads de campanha
+Criar endpoint GET /api/vendas/campanhas/:id/exportar-leads que gera CSV com:
+CPF;Nome;Telefone1;Telefone2;Telefone3;Matricula;Convenio;Orgao;SitFunc;Margem70;MargemCartao;Parcela;Taxa;Banco;Observacoes
+- Buscar dados do lead em sales_leads + join com clientes_pessoa + clientes_vinculo + clientes_folha_mes (mês mais recente)
+- Campos não disponíveis ficam em branco no CSV
+- Adicionar botão "Exportar CSV" na tela de gestão da campanha (vendas-gestao-pipeline.tsx ou similar)
+PARTE 2 — Schema: adicionar campos de higienização no sales_leads
+Em shared/schema.ts, adicionar campos ao sales_leads:
+
+matricula varchar(50) — matrícula higienizada
+taxaReal decimal(8,4) — taxa real do produto
+valorParcela decimal(12,2) — valor da parcela simulada
+bancoOferta varchar(100) — banco do produto ofertado
+dadosHigienizados jsonb — campos extras variáveis
+higienizadoEm timestamp — quando foi higienizado
+Rodar db:push
+
+PARTE 3 — Importar lista higienizada e criar campanha
+Criar endpoint POST /api/vendas/importar-higienizados que:
+1. Recebe CSV (multer) + campos: nomeCampanha, convenio, descricao (opcional)
+2. Detecta automaticamente quais colunas estão presentes no CSV (flexível — aceita qualquer combinação)
+3. Para cada linha do CSV:
+- Busca sales_leads existente pelo CPF no tenant (qualquer campanha)
+- Atualiza clientes_vinculo se vier matrícula nova
+- Atualiza clientes_folha_mes se vier margem nova
+4. Cria nova campanha em sales_campaigns com nome fornecido + convenio + data atual
+5. Insere leads na nova campanha com upsert por (campaignId, cpf) — adicionar unique constraint
+6. Preenche os campos enriquecidos: matricula, taxaReal, valorParcela, bancoOferta, dadosHigienizados
+7. Retorna resumo: campanha criada, leads importados, atualizados, ignorados
+Criar tela vendas-importar-higienizados.tsx na rota /vendas/importar-higienizados com:
+- Campo nome da campanha
+- Campo convênio
+- Upload do CSV
+- Preview das primeiras 5 linhas com mapeamento automático de colunas detectadas
+- Botão confirmar que cria a campanha e importa
+- Adicionar link no menu lateral (somente master/coordenacao), ícone Sparkles, label "Importar Higienizados"
+Colunas que o sistema deve reconhecer automaticamente (case-insensitive):
+cpf, nome, telefone1/telefone/celular, telefone2, telefone3, matricula, margem, margem70, margemcartao, parcela, taxa, banco, convenio, orgao, sitfunc, observacoes"
