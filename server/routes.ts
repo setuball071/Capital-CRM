@@ -13647,7 +13647,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             ORDER BY pessoa_id, competencia DESC
           ) folha ON folha.pessoa_id = p.id
           WHERE sl.campaign_id = ${campaignId}
-            AND sl.tenant_id = ${tenantId}
           ORDER BY sl.nome
         `);
 
