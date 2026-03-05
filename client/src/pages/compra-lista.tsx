@@ -50,6 +50,7 @@ interface Filtros {
   margem_cartao_beneficio_max?: number;
   // Filtros de contrato
   bancos?: string[];
+  bancos_excluir?: string[];
   tipos_contrato?: string[];
   parcela_min?: number;
   parcela_max?: number;
@@ -450,6 +451,7 @@ export default function CompraLista() {
       parts.push(`Margem Cart.Benef: ${f.margem_cartao_beneficio_min ?? 0} - ${f.margem_cartao_beneficio_max ?? "∞"}`);
     }
     if (f.bancos && f.bancos.length > 0) parts.push(`Bancos: ${f.bancos.join(", ")}`);
+    if (f.bancos_excluir && f.bancos_excluir.length > 0) parts.push(`Bancos excluídos: ${f.bancos_excluir.join(", ")}`);
     if (f.parcela_min !== undefined || f.parcela_max !== undefined) {
       parts.push(`Parcela: ${f.parcela_min ?? 0} - ${f.parcela_max ?? "∞"}`);
     }
@@ -630,12 +632,37 @@ export default function CompraLista() {
                 <h4 className="font-medium mb-4 text-sm text-muted-foreground">Filtros de Contrato</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bancos">Bancos</Label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Label htmlFor="bancos">Bancos</Label>
+                      <Button
+                        type="button"
+                        variant={filtros.bancos_excluir !== undefined ? "destructive" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          const currentValues = filtros.bancos || filtros.bancos_excluir || [];
+                          const isExcluding = filtros.bancos_excluir !== undefined;
+                          if (isExcluding) {
+                            setFiltros({ ...filtros, bancos: currentValues.length > 0 ? currentValues : undefined, bancos_excluir: undefined });
+                          } else {
+                            setFiltros({ ...filtros, bancos: undefined, bancos_excluir: currentValues.length > 0 ? currentValues : [] });
+                          }
+                        }}
+                        data-testid="toggle-bancos-excluir"
+                      >
+                        {filtros.bancos_excluir !== undefined ? "Sem estes bancos" : "Com estes bancos"}
+                      </Button>
+                    </div>
                     <MultiSelectCombobox
                       options={filtrosDisponiveis?.bancos || []}
-                      value={filtros.bancos || []}
-                      onValueChange={(v) => setFiltros({ ...filtros, bancos: v.length > 0 ? v : undefined, tipos_contrato: [] })}
-                      placeholder="Todos os bancos"
+                      value={(filtros.bancos_excluir !== undefined ? filtros.bancos_excluir : filtros.bancos) || []}
+                      onValueChange={(v) => {
+                        if (filtros.bancos_excluir !== undefined) {
+                          setFiltros({ ...filtros, bancos_excluir: v.length > 0 ? v : [], bancos: undefined, tipos_contrato: [] });
+                        } else {
+                          setFiltros({ ...filtros, bancos: v.length > 0 ? v : undefined, bancos_excluir: undefined, tipos_contrato: [] });
+                        }
+                      }}
+                      placeholder={filtros.bancos_excluir !== undefined ? "Selecione bancos a excluir..." : "Todos os bancos"}
                       searchPlaceholder="Buscar banco..."
                       emptyText="Nenhum banco encontrado."
                       data-testid="multiselect-bancos"

@@ -1265,6 +1265,20 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`folha.margem_beneficio_saldo_5 <= ${filtros.margem_cartao_beneficio_max}`);
       }
 
+      // Banco exclusion filter (NOT EXISTS subquery - no JOIN needed)
+      if (filtros.bancos_excluir && filtros.bancos_excluir.length > 0) {
+        const exclConditions = filtros.bancos_excluir.map(banco =>
+          sql`cx.banco ILIKE ${'%' + banco + '%'}`
+        );
+        const combinedExcl = exclConditions.reduce((acc, curr, idx) =>
+          idx === 0 ? curr : sql`${acc} OR ${curr}`
+        );
+        const baseScope = baseRefD8
+          ? sql` AND cx.base_tag = ${baseRefD8}`
+          : sql``;
+        whereConditions.push(sql`NOT EXISTS (SELECT 1 FROM clientes_contratos cx WHERE cx.pessoa_id = p.id AND (${combinedExcl})${baseScope})`);
+      }
+
       // Contrato conditions (parameterized)
       if (filtros.bancos && filtros.bancos.length > 0) {
         // Múltiplos bancos: usar OR com ILIKE para cada banco (lógica inclusiva)
