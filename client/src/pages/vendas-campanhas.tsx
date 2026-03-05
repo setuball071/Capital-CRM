@@ -458,8 +458,29 @@ export default function VendasCampanhas() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => {
-                              window.open(`/api/vendas/campanhas/${campanha.id}/exportar-leads`, '_blank');
+                            onClick={async () => {
+                              try {
+                                toast({ title: "Exportando CSV...", description: "Aguarde o download" });
+                                const response = await fetch(`/api/vendas/campanhas/${campanha.id}/exportar-leads`, {
+                                  credentials: "include",
+                                });
+                                if (!response.ok) {
+                                  const err = await response.json().catch(() => ({ message: "Erro ao exportar" }));
+                                  throw new Error(err.message);
+                                }
+                                const blob = await response.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `campanha_${campanha.id}_leads.csv`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                                toast({ title: "CSV exportado com sucesso" });
+                              } catch (error: any) {
+                                toast({ title: "Erro ao exportar", description: error.message, variant: "destructive" });
+                              }
                             }}
                             disabled={(campanha.totalLeads || 0) === 0}
                             data-testid={`button-export-csv-${campanha.id}`}
