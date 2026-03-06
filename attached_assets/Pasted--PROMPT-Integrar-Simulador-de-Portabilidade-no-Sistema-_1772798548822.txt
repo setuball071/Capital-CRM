@@ -1,0 +1,600 @@
+# PROMPT — Integrar Simulador de Portabilidade no Sistema Capital Go
+
+## O QUE FAZER
+
+No menu lateral, dentro de **Simuladores**, existe o item **"Simulador de Amortização"**.
+Preciso que ele seja substituído pelo **Simulador de Portabilidade** abaixo.
+
+A página deve se comportar exatamente como as outras páginas do sistema:
+- Usar o layout padrão (sidebar + header do sistema)
+- NÃO ter header/logo próprio (remover o `<header>` do HTML abaixo)
+- O conteúdo do simulador ocupa a área principal de conteúdo normalmente
+- Renomear o item de menu de "Simulador de Amortização" para **"Simulador de Portabilidade"**
+
+---
+
+## DADOS DO CORRETOR (puxar do usuário logado)
+
+No objeto `corretor` dentro da função `exportarPDF()`, substituir os valores fixos
+pelos dados do usuário autenticado na sessão:
+
+```js
+const corretor = {
+  nome:  usuarioLogado.nome,   // nome completo
+  email: usuarioLogado.email,
+  tel:   usuarioLogado.telefone,
+};
+```
+
+Usar a estrutura de autenticação que já existe no sistema.
+
+---
+
+## CÓDIGO COMPLETO DO SIMULADOR
+
+Cole o conteúdo abaixo como o corpo da página (sem o `<html>`, `<head>` e `<body>` externos,
+pois o sistema já fornece esses). Mantenha o `<style>`, todo o HTML interno e o `<script>`.
+
+**IMPORTANTE:** Remover o bloco `<header>...</header>` do HTML (linhas com class `header`, `logo`, `header-tag`),
+pois o sistema já tem seu próprio header.
+
+```html
+<!-- ============================================================
+     SIMULADOR DE PORTABILIDADE — Capital Go
+     Integrar na área de conteúdo do sistema, sem header próprio
+     ============================================================ -->
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary:    #6C2BD9;
+    --primary-dk: #4B1FA6;
+    --secondary:  #1E88E5;
+    --pink:       #E91E63;
+    --green:      #00C853;
+    --text:       #121212;
+    --text-sec:   #333333;
+    --muted:      #6B7280;
+    --bg:         #F3F4F6;
+    --surface:    #FFFFFF;
+    --border:     #E5E7EB;
+    --grad-main:  linear-gradient(135deg, #6C2BD9 0%, #1E88E5 100%);
+    --grad-btn:   linear-gradient(90deg,  #6C2BD9 0%, #1E88E5 100%);
+    --shadow-sm:  0 2px 4px rgba(0,0,0,0.08);
+    --shadow-md:  0 4px 12px rgba(108,43,217,0.12);
+  }
+
+  .sim-wrap * { box-sizing: border-box; }
+  .sim-wrap { font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text); }
+
+  .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+
+  .panel {
+    padding: 24px 28px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin-bottom: 18px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  }
+  .badge-left  { background: rgba(108,43,217,.1); color: var(--primary);   border: 1px solid rgba(108,43,217,.25); }
+  .badge-right { background: rgba(30,136,229,.1); color: var(--secondary); border: 1px solid rgba(30,136,229,.25); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .fg { display: flex; flex-direction: column; gap: 5px; }
+
+  .sim-wrap label { font-size: 11px; font-weight: 500; color: var(--muted); }
+
+  .sim-wrap input, .sim-wrap select {
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 500; padding: 9px 12px; width: 100%; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .sim-wrap input:focus, .sim-wrap select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(108,43,217,.1);
+  }
+  .sim-wrap input[readonly] {
+    opacity: .55; cursor: not-allowed; background: #FAFAFA; border-style: dashed;
+  }
+
+  .results {
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-top: 16px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  .ri label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .ri .v { font-size: 15px; font-weight: 700; color: var(--primary); margin-top: 3px; }
+  .panel:nth-child(2) .ri .v { color: var(--secondary); }
+  .ri .v.destaque { font-size: 20px; }
+
+  .btn-sim {
+    width: 100%; margin-top: 14px; padding: 12px;
+    border: none; border-radius: 8px; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: .04em;
+    transition: opacity .15s, transform .1s, box-shadow .15s;
+  }
+  .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-sim-left  { background: var(--grad-btn); color: #fff; }
+  .btn-sim-right { background: linear-gradient(90deg, #1E88E5 0%, #0d47a1 100%); color: #fff; }
+
+  .sim-section {
+    border-top: 1px solid var(--border);
+    padding: 24px 28px;
+    background: var(--bg);
+  }
+  .section-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin-bottom: 16px;
+  }
+  .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .prazos-col-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 10px;
+  }
+  .col-left-label  { color: var(--primary); }
+  .col-right-label { color: var(--secondary); }
+
+  .prazos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; }
+
+  .pc {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; cursor: pointer;
+    transition: all .15s; position: relative;
+    box-shadow: var(--shadow-sm);
+  }
+  .pc:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--primary); }
+  .pc.al { border-color: var(--primary);   background: rgba(108,43,217,.04); box-shadow: 0 0 0 3px rgba(108,43,217,.12); }
+  .pc.ar { border-color: var(--secondary); background: rgba(30,136,229,.04); box-shadow: 0 0 0 3px rgba(30,136,229,.12); }
+
+  .pc-meses { font-size: 20px; font-weight: 800; color: var(--text); }
+  .pc-meses small { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 3px; }
+  .pc-parc { font-size: 12px; font-weight: 600; color: var(--primary); margin-top: 5px; }
+  .pc.ar .pc-parc { color: var(--secondary); }
+  .pc-taxa { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .pc-tag {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 9px; font-weight: 700; letter-spacing: .05em;
+    padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none;
+  }
+  .pc.al .pc-tag { display: block; background: var(--primary);   color: #fff; }
+  .pc.ar .pc-tag { display: block; background: var(--secondary); color: #fff; }
+
+  .table-section {
+    border-top: 1px solid var(--border);
+    padding: 24px 28px;
+    background: var(--surface);
+  }
+  .table-header {
+    display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px;
+  }
+  .table-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .table-meta  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .btn-pdf {
+    background: var(--grad-btn); color: #fff;
+    border: none; border-radius: 8px; padding: 8px 18px;
+    font-family: 'Inter', sans-serif; font-weight: 600;
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+    transition: opacity .15s, box-shadow .15s;
+    box-shadow: var(--shadow-md);
+  }
+  .btn-pdf:hover { opacity: .88; box-shadow: 0 6px 18px rgba(108,43,217,.25); }
+
+  .sim-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sim-wrap thead th {
+    background: var(--bg); color: var(--muted);
+    text-transform: uppercase; font-size: 10px; font-weight: 600;
+    letter-spacing: .07em; padding: 10px 12px; text-align: left;
+    border-bottom: 2px solid var(--border);
+  }
+  .sim-wrap tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  .sim-wrap tbody tr:hover { background: #F9F6FF; }
+  .sim-wrap td { padding: 8px 12px; color: var(--text-sec); }
+  .tm  { color: var(--muted); font-weight: 500; }
+  .ta  { color: var(--primary); font-weight: 700; }
+  .ta2 { color: var(--text); font-weight: 500; }
+
+  .empty-sim { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
+  .empty-sim .ico { font-size: 32px; margin-bottom: 10px; }
+</style>
+
+<!-- WRAPPER PRINCIPAL -->
+<div class="sim-wrap">
+
+  <!-- PAINÉIS DE CÁLCULO -->
+  <div class="main-grid">
+
+    <!-- ESQUERDO: Contrato Novo -->
+    <div class="panel">
+      <div class="panel-label">
+        <span class="badge badge-left">CHEIA</span>
+        Contrato Novo — Tabela de Comissão
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>Órgão</label>
+          <select id="l-orgao">
+            <option>SIAPE</option><option>INSS</option><option>ESTADUAL</option>
+            <option>MUNICIPAL</option><option>MILITAR</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Prazo (meses)</label>
+          <input type="number" id="l-prazo" value="96" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>Margem / Parcela (R$)</label>
+          <input type="number" id="l-margem" placeholder="Ex: 500,00" step="0.01">
+        </div>
+        <div class="fg">
+          <label>Coeficiente</label>
+          <input type="number" id="l-coef" placeholder="Ex: 0.022000" step="0.000001">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="fg">
+          <label>IOF / Encargos (%)</label>
+          <input type="number" id="l-iof" step="0.01" value="4.5" min="4.5">
+        </div>
+      </div>
+      <button class="btn-sim btn-sim-left" onclick="simCalcLeft()">▶ Calcular Contrato Novo</button>
+      <div class="results">
+        <div class="ri"><label>Valor do Contrato</label><div class="v destaque" id="l-r-contrato">—</div></div>
+        <div class="ri"><label>Contrato + IOF</label><div class="v" id="l-r-iof">—</div></div>
+        <div class="ri"><label>Taxa Implícita a.m.</label><div class="v" id="l-r-taxa">—</div></div>
+        <div class="ri"><label>Parcela</label><div class="v" id="l-r-parcela">—</div></div>
+        <div class="ri"><label>Quanto Antecipado</label><div class="v" id="l-r-antecipado">—</div></div>
+        <div class="ri"><label>Saldo p/ Portabilidade</label><div class="v" id="l-r-saldo">—</div></div>
+        <div class="ri"><label>Remanescentes</label><div class="v" id="l-r-remanesc">—</div></div>
+      </div>
+    </div>
+
+    <!-- DIREITO: Contrato Final -->
+    <div class="panel">
+      <div class="panel-label">
+        <span class="badge badge-right">FINAL</span>
+        Contrato Final — Após Portabilidade
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>Órgão</label>
+          <select id="r-orgao">
+            <option>SIAPE</option><option>INSS</option><option>ESTADUAL</option>
+            <option>MUNICIPAL</option><option>MILITAR</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Prazo (meses)</label>
+          <input type="number" id="r-prazo" value="96" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>Contrato + IOF ← (herdado)</label>
+          <input type="number" id="r-contrato" placeholder="Calculado pelo lado ←" step="0.01" readonly>
+        </div>
+        <div class="fg">
+          <label>Taxa Final a.m. (%)</label>
+          <input type="number" id="r-taxa" placeholder="Ex: 1.45" step="0.0001">
+        </div>
+      </div>
+      <button class="btn-sim btn-sim-right" onclick="simCalcRight()">▶ Calcular Contrato Final</button>
+      <div class="results">
+        <div class="ri"><label>Nova Parcela</label><div class="v destaque" id="r-r-parcela">—</div></div>
+        <div class="ri"><label>Contrato + IOF</label><div class="v" id="r-r-iof">—</div></div>
+        <div class="ri"><label>Coeficiente Final</label><div class="v" id="r-r-coef">—</div></div>
+        <div class="ri"><label>Taxa Final</label><div class="v" id="r-r-taxa">—</div></div>
+        <div class="ri"><label>Quanto Antecipado</label><div class="v" id="r-r-antecipado">—</div></div>
+        <div class="ri"><label>Saldo p/ Portabilidade</label><div class="v" id="r-r-saldo">—</div></div>
+        <div class="ri"><label>Remanescentes</label><div class="v" id="r-r-remanesc">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESTRATÉGIA DE AMORTIZAÇÃO -->
+  <div class="sim-section">
+    <div class="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
+    <div class="prazos-wrap">
+      <div>
+        <div class="prazos-col-label col-left-label">← Tabela Cheia</div>
+        <div class="prazos-grid" id="pg-left">
+          <div class="empty-sim" style="padding:16px;grid-column:1/-1">Calcule o contrato novo primeiro.</div>
+        </div>
+      </div>
+      <div>
+        <div class="prazos-col-label col-right-label">Taxa Final →</div>
+        <div class="prazos-grid" id="pg-right">
+          <div class="empty-sim" style="padding:16px;grid-column:1/-1">Calcule o contrato final primeiro.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRONOGRAMA -->
+  <div class="table-section" id="sim-sec-tabela">
+    <div class="table-header">
+      <div>
+        <div class="table-title" id="sim-tab-titulo">Cronograma de Amortização</div>
+        <div class="table-meta" id="sim-tab-meta"></div>
+      </div>
+      <button class="btn-pdf" id="sim-btn-pdf" onclick="simExportarPDF()" style="display:none">⬇ Exportar PDF</button>
+    </div>
+    <div id="sim-tab-content">
+      <div class="empty-sim"><div class="ico">📋</div>Calcule um contrato e selecione um prazo acima.</div>
+    </div>
+  </div>
+
+</div><!-- /sim-wrap -->
+
+<script>
+(function() {
+/* ── ESTADO ── */
+const SIM = { left: null, right: null, cronograma: null };
+const PRAZOS = [10, 12, 15, 24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 140];
+const $s = id => document.getElementById(id);
+const fmtR = v => 'R$ ' + (+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtN = (v, d=2) => (+v||0).toFixed(d);
+
+/* ── COEF PRICE ── */
+function coefPrice(taxa_am_perc, n) {
+  const i = taxa_am_perc / 100;
+  if (i === 0) return 1 / n;
+  const f = Math.pow(1 + i, n);
+  return (i * f) / (f - 1);
+}
+
+/* ── TAXA DE COEF (Newton-Raphson) ── */
+function taxaDeCoef(coef, n) {
+  let t = Math.max(1e-7, coef - 1/n);
+  for (let k = 0; k < 600; k++) {
+    const f  = Math.pow(1 + t, n);
+    const fn = (t * f) / (f - 1) - coef;
+    const df = (f * (1 - Math.pow(1+t, -n) * (1 + t*n))) / (t * (f - 1));
+    const nt = t - fn / (df || 1e-12);
+    if (Math.abs(nt - t) < 1e-12) { t = nt; break; }
+    t = Math.max(1e-7, nt);
+  }
+  return t * 100;
+}
+
+/* ── CALC ESQUERDO ── */
+window.simCalcLeft = function() {
+  const margem  = parseFloat($s('l-margem').value) || 0;
+  const coef    = parseFloat($s('l-coef').value)   || 0;
+  const prazo   = parseInt($s('l-prazo').value)     || 96;
+  const iofPerc = parseFloat($s('l-iof').value)    || 0;
+  if (!margem || !coef || !prazo) { alert('Preencha Margem, Coeficiente e Prazo.'); return; }
+  const contrato = margem / coef;
+  const comIof   = contrato * (1 + iofPerc / 100);
+  const coefReal = margem / comIof;
+  const taxa     = taxaDeCoef(coefReal, prazo);
+  const saldo    = comIof;
+  SIM.left = { contrato, taxa, coef, comIof, saldo, margem, prazo, antecipa: 0, cliente: 0 };
+  $s('l-r-contrato').textContent   = fmtR(contrato);
+  $s('l-r-iof').textContent        = fmtR(comIof);
+  $s('l-r-taxa').textContent       = fmtN(taxa, 4) + '%';
+  $s('l-r-parcela').textContent    = fmtR(margem);
+  $s('l-r-antecipado').textContent = fmtR(0);
+  $s('l-r-saldo').textContent      = fmtR(saldo);
+  $s('l-r-remanesc').textContent   = prazo + 'x';
+  $s('r-contrato').value = comIof.toFixed(2);
+  $s('r-prazo').value    = prazo;
+  simRenderPrazos('left');
+};
+
+/* ── CALC DIREITO ── */
+window.simCalcRight = function() {
+  const contratoIof = parseFloat($s('r-contrato').value) || 0;
+  const taxa        = parseFloat($s('r-taxa').value)     || 0;
+  const prazo       = parseInt($s('r-prazo').value)       || 96;
+  if (!contratoIof) { alert('Calcule primeiro o Contrato Novo (←).'); return; }
+  if (!taxa)        { alert('Informe a Taxa Final a.m.'); return; }
+  const coef    = coefPrice(taxa, prazo);
+  const parcela = contratoIof * coef;
+  SIM.right = { contrato: contratoIof, taxa, coef, comIof: contratoIof, saldo: contratoIof, margem: parcela, prazo, antecipa: 0, cliente: 0 };
+  $s('r-r-parcela').textContent    = fmtR(parcela);
+  $s('r-r-iof').textContent        = fmtR(contratoIof);
+  $s('r-r-coef').textContent       = fmtN(coef, 6);
+  $s('r-r-taxa').textContent       = fmtN(taxa, 4) + '%';
+  $s('r-r-antecipado').textContent = '—';
+  $s('r-r-saldo').textContent      = '—';
+  $s('r-r-remanesc').textContent   = prazo + 'x';
+  simRenderPrazos('right');
+};
+
+/* ── RENDER CARDS DE PRAZO ── */
+function simRenderPrazos(side) {
+  const s   = side === 'left' ? SIM.left : SIM.right;
+  const pid = side === 'left' ? 'pg-left' : 'pg-right';
+  const container = $s(pid);
+  container.innerHTML = '';
+  PRAZOS.filter(p => p <= s.prazo).forEach(meses => {
+    const comIofCard = meses < 24 ? s.contrato * 1.15 : s.comIof;
+    const taxaCard   = taxaDeCoef(s.margem / comIofCard, s.prazo);
+    const sCard      = Object.assign({}, s, { taxa: taxaCard, comIof: comIofCard });
+    const fluxo      = simGerarFluxo(sCard, meses);
+    const totalPago  = fluxo.reduce((a, l) => a + l.totalMes, 0);
+    const parcMedia  = totalPago / meses;
+    const taxaImpl   = taxaDeCoef(parcMedia / comIofCard, meses);
+    const el = document.createElement('div');
+    el.className = 'pc';
+    el.dataset.side  = side;
+    el.dataset.meses = meses;
+    el.innerHTML = `
+      <div class="pc-meses">${meses}<small>meses</small></div>
+      <div class="pc-parc">${fmtR(parcMedia)}/mês</div>
+      <div class="pc-taxa">${fmtN(taxaImpl, 2)}% a.m.</div>
+      <div class="pc-tag">${side === 'left' ? 'CHEIA' : 'FINAL'}</div>
+    `;
+    el.addEventListener('click', () => simSelecionarPrazo(side, meses, parcMedia, taxaImpl, fluxo, totalPago));
+    container.appendChild(el);
+  });
+}
+
+/* ── GERAR FLUXO ── */
+function simGerarFluxo(s, meses) {
+  const taxa    = s.taxa / 100;
+  const n       = s.prazo;
+  const parcela = s.margem;
+  const trasDisp   = n - meses;
+  const extrasBase = Math.floor(trasDisp / meses);
+  const extrasRest = trasDisp % meses;
+  let frente = 0, tras = n - 1;
+  const linhas = [];
+  for (let mes = 0; mes < meses; mes++) {
+    if (frente > tras) break;
+    const extras     = extrasBase + (mes < extrasRest ? 1 : 0);
+    const prazosDoMes = [];
+    const amortsCols  = [];
+    let totalMes = parcela;
+    prazosDoMes.push(frente + 1);
+    frente++;
+    for (let e = 0; e < extras; e++) {
+      if (tras < frente - 1) break;
+      const k  = tras + 1;
+      const vp = parcela / Math.pow(1 + taxa, k);
+      prazosDoMes.push(k);
+      amortsCols.push({ prazo: k, vp });
+      totalMes += vp;
+      tras--;
+    }
+    linhas.push({ prazosStr: prazosDoMes.join(', '), amortsCols, amortTotal: amortsCols.reduce((a,x)=>a+x.vp,0), totalMes, parcela });
+  }
+  return linhas;
+}
+
+/* ── SELECIONAR PRAZO ── */
+function simSelecionarPrazo(side, meses, parcMedia, taxaImpl, fluxo, totalPago) {
+  document.querySelectorAll('.pc').forEach(c => c.classList.remove('al','ar'));
+  document.querySelectorAll(`[data-side="${side}"][data-meses="${meses}"]`).forEach(c => c.classList.add(side==='left'?'al':'ar'));
+  const s = side === 'left' ? SIM.left : SIM.right;
+  SIM.cronograma = { fluxo, s, meses, side, totalPago, parcMedia, taxaImpl };
+  $s('sim-tab-titulo').textContent = `Cronograma — ${meses} meses`;
+  $s('sim-tab-meta').textContent   = `Contrato: ${fmtR(s.contrato)} · Parcela Média: ${fmtR(parcMedia)} · Taxa Média: ${fmtN(taxaImpl,2)}% a.m. · Total Pago: ${fmtR(totalPago)}`;
+  let html = `<table><thead><tr>
+    <th>Mês</th><th>Valor Parcela</th><th>Prazos Amortizados</th>
+    <th>Amortização Aproximada</th><th>Total Aproximado</th>
+  </tr></thead><tbody>`;
+  fluxo.forEach((l, i) => {
+    const prazosAtras = l.amortsCols.map(a => a.prazo).join(', ');
+    const prazosExib  = prazosAtras ? `${i+1}, ${prazosAtras}` : `${i+1}`;
+    html += `<tr>
+      <td class="tm">${i+1}</td>
+      <td class="ta2">${fmtR(l.parcela)}</td>
+      <td class="tm">${prazosExib}</td>
+      <td>${fmtR(l.amortTotal)}</td>
+      <td class="ta">${fmtR(l.totalMes)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  $s('sim-tab-content').innerHTML = html;
+  $s('sim-btn-pdf').style.display = 'block';
+  $s('sim-sec-tabela').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ── EXPORTAR PDF ── */
+window.simExportarPDF = function() {
+  if (!SIM.cronograma) return;
+  const { fluxo, s, meses, totalPago, parcMedia, taxaImpl } = SIM.cronograma;
+
+  // ⚠️ SUBSTITUIR pelos dados do usuário logado no sistema
+  const corretor = {
+    nome:  usuarioLogado?.nome  || 'Capital Go',
+    email: usuarioLogado?.email || 'contato@capitalgo.com.br',
+    tel:   usuarioLogado?.telefone || '',
+  };
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const _html = [`<!DOCTYPE html><html lang="pt-BR"><head>
+  <meta charset="UTF-8"><title>Proposta Capital Go</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',Arial,sans-serif;font-size:11px;color:#121212;background:#fff}
+    .capa{background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);color:white;padding:28px 40px 22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logo-capa{font-size:26px;font-weight:900}
+    .logo-capital{background:linear-gradient(90deg,#0066FF,#6C2BD9);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .logo-go{background:linear-gradient(90deg,#A855F7,#E91E63);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .capa-sub{font-size:10px;color:rgba(255,255,255,0.6);margin-top:3px}
+    .card-corretor{background:linear-gradient(135deg,#4B1FA6,#6C2BD9);color:white;margin:18px 40px;border-radius:12px;display:flex;align-items:center;gap:16px;padding:14px 22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .foto-placeholder{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;border:2px solid rgba(255,255,255,0.3);flex-shrink:0}
+    .corretor-nome{font-size:15px;font-weight:800;margin-bottom:3px}
+    .corretor-contato{font-size:10px;color:rgba(255,255,255,0.8);line-height:1.8}
+    .corpo{padding:0 40px}
+    .resumo{display:flex;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:18px}
+    .resumo-item{flex:1;padding:12px 16px;border-right:1px solid #e5e7eb;background:#F3F4F6}
+    .resumo-item:last-child{border-right:none}
+    .resumo-item label{font-size:9px;color:#6B7280;text-transform:uppercase;letter-spacing:0.6px;display:block;margin-bottom:3px}
+    .resumo-item b{font-size:14px;font-weight:700;color:#121212}
+    .titulo{font-size:13px;font-weight:700;color:#6C2BD9;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#6C2BD9;color:#fff;padding:8px 10px;font-size:10px;font-weight:600;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    td{padding:6px 10px;border-bottom:1px solid #F3F4F6;color:#333}
+    tr:nth-child(even) td{background:#faf8ff}
+    td:last-child{font-weight:600;color:#121212}
+    .rodape{margin:16px 40px 28px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:9px;color:#6B7280;line-height:1.8}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style>
+</head><body>
+  <div class="capa">
+    <div class="logo-capa"><span class="logo-capital">Capital</span><span class="logo-go">Go</span></div>
+    <div class="capa-sub">Formalização de Proposta</div>
+  </div>
+  <div class="card-corretor">
+    <div class="foto-placeholder">${corretor.nome.charAt(0)}</div>
+    <div>
+      <div class="corretor-nome">${corretor.nome}</div>
+      <div class="corretor-contato">✉ ${corretor.email}<br>📱 ${corretor.tel}</div>
+    </div>
+  </div>
+  <div class="corpo">
+    <div class="resumo">
+      <div class="resumo-item"><label>Valor do Contrato</label><b>${fmtR(s.contrato)}</b></div>
+      <div class="resumo-item"><label>Prazo Estratégia</label><b>${meses} meses</b></div>
+      <div class="resumo-item"><label>Parcela Média</label><b>${fmtR(parcMedia)}</b></div>
+      <div class="resumo-item"><label>Taxa Média a.m.</label><b>${fmtN(taxaImpl,2)}%</b></div>
+    </div>
+    <div class="titulo">Cronograma de Amortização — ${meses} meses</div>
+    <table>
+      <thead><tr><th>Mês</th><th>Parcela</th><th>Prazos Pagos</th><th>Amortização Total</th><th>Total Pago no Mês</th></tr></thead>
+      <tbody>${fluxo.map((l,i)=>`<tr><td>${i+1}</td><td>${fmtR(l.parcela)}</td><td>${l.prazosStr}</td><td>${fmtR(l.amortTotal)}</td><td>${fmtR(l.totalMes)}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>
+  <div class="rodape">
+    * Cálculos de amortização de parcela são diários e sofrem alteração<br>
+    * Proposta válida até ${hoje} sujeito a alteração sem aviso prévio<br>
+    * A taxa de juros final do contrato e a redução real do valor da parcela poderá sofrer oscilações a critério das instituições bancárias.
+  </div>
+  <script>setTimeout(()=>{window.print();},400);<\/script>
+</body></html>`].join('');
+  const blob = new Blob([_html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (win) win.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+};
+
+})(); // fim do IIFE — evita conflito com outras variáveis do sistema
+</script>
+```
+
+---
+
+## RESUMO DAS MUDANÇAS NO SISTEMA
+
+1. **Menu:** Renomear "Simulador de Amortização" → **"Simulador de Portabilidade"**
+2. **Página/rota:** Substituir o conteúdo atual pelo código acima
+3. **Usuário logado:** No objeto `corretor` dentro de `simExportarPDF`, usar os dados da sessão autenticada
+4. **Sem conflito:** Todas as funções JS estão dentro de um IIFE `(function(){...})()` para não conflitar com o restante do sistema. As funções expostas globalmente são apenas `simCalcLeft`, `simCalcRight` e `simExportarPDF`
