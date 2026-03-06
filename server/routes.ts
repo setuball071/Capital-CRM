@@ -21637,7 +21637,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             .trim()
             .toUpperCase();
           const tipoContrato = String(row.TipoContrato || "").trim();
-          const isCartao = tipoContrato.toLowerCase().includes("cart");
+          const tipoLower = tipoContrato.toLowerCase();
+          const isCartao = tipoLower.includes("cart") || tipoLower.includes("saque complementar");
           const valorBase =
             parseFloat(String(row.ValorBase || "0").replace(",", ".")) || 0;
 
