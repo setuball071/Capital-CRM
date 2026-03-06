@@ -56,6 +56,16 @@ const fmtR = (v: number) =>
 
 const fmtN = (v: number, d = 2) => (+v || 0).toFixed(d);
 
+function maskCpf(cpf: string): string {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length !== 11) return "";
+  return `${digits.slice(0, 3)}.***.***-${digits.slice(9, 11)}`;
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function coefPrice(taxa_am_perc: number, n: number): number {
   const i = taxa_am_perc / 100;
   if (i === 0) return 1 / n;
@@ -158,6 +168,23 @@ export default function SimuladorPortabilidadePage() {
   const [rightCards, setRightCards] = useState<PrazoCard[]>([]);
   const [cronograma, setCronograma] = useState<CronogramaState | null>(null);
   const [selectedCard, setSelectedCard] = useState<{ side: string; meses: number } | null>(null);
+  const [calcMode, setCalcMode] = useState<"parcela" | "contrato">("parcela");
+  const switchCalcMode = useCallback((mode: "parcela" | "contrato") => {
+    setCalcMode(mode);
+    setLeftState(null);
+    setRightState(null);
+    setLeftCards([]);
+    setRightCards([]);
+    setCronograma(null);
+    setSelectedCard(null);
+    if (lMargemRef.current) lMargemRef.current.value = "";
+    if (rContratoRef.current) rContratoRef.current.value = "";
+    if (rTaxaRef.current) rTaxaRef.current.value = "";
+  }, []);
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
+  const [pdfClientName, setPdfClientName] = useState("");
+  const [pdfClientCpf, setPdfClientCpf] = useState("");
+  const [pdfClientConvenio, setPdfClientConvenio] = useState("");
 
   const lOrgaoRef = useRef<HTMLSelectElement>(null);
   const lPrazoRef = useRef<HTMLInputElement>(null);
@@ -173,15 +200,22 @@ export default function SimuladorPortabilidadePage() {
   const tabelaRef = useRef<HTMLDivElement>(null);
 
   const calcLeft = useCallback(() => {
-    const margem = parseFloat(lMargemRef.current?.value || "0") || 0;
+    const inputVal = parseFloat(lMargemRef.current?.value || "0") || 0;
     const coef = parseFloat(lCoefRef.current?.value || "0") || 0;
     const prazo = parseInt(lPrazoRef.current?.value || "96") || 96;
     const iofPerc = parseFloat(lIofRef.current?.value || "0") || 0;
-    if (!margem || !coef || !prazo) {
-      alert("Preencha Margem, Coeficiente e Prazo.");
+    if (!inputVal || !coef || !prazo) {
+      alert(calcMode === "parcela" ? "Preencha Parcela, Coeficiente e Prazo." : "Preencha Valor do Contrato, Coeficiente e Prazo.");
       return;
     }
-    const contrato = margem / coef;
+    let contrato: number, margem: number;
+    if (calcMode === "parcela") {
+      margem = inputVal;
+      contrato = margem / coef;
+    } else {
+      contrato = inputVal;
+      margem = contrato * coef;
+    }
     const comIof = contrato * (1 + iofPerc / 100);
     const coefReal = margem / comIof;
     const taxa = taxaDeCoef(coefReal, prazo);
@@ -191,7 +225,7 @@ export default function SimuladorPortabilidadePage() {
     setLeftCards(buildPrazoCards(s));
     if (rContratoRef.current) rContratoRef.current.value = comIof.toFixed(2);
     if (rPrazoRef.current) rPrazoRef.current.value = String(prazo);
-  }, []);
+  }, [calcMode]);
 
   const calcRight = useCallback(() => {
     const contratoIof = parseFloat(rContratoRef.current?.value || "0") || 0;
@@ -234,7 +268,7 @@ export default function SimuladorPortabilidadePage() {
     [leftState, rightState]
   );
 
-  const exportarPDF = useCallback(() => {
+  const doExportPDF = useCallback(() => {
     if (!cronograma) return;
     const { fluxo, s, meses, parcMedia, taxaImpl } = cronograma;
     const corretor = {
@@ -242,6 +276,10 @@ export default function SimuladorPortabilidadePage() {
       email: user?.email || "",
       tel: "",
     };
+    const clienteNome = escHtml(pdfClientName.trim());
+    const clienteCpf = pdfClientCpf.trim() ? escHtml(maskCpf(pdfClientCpf)) : "";
+    const clienteConvenio = escHtml(pdfClientConvenio.trim());
+    const hasCliente = clienteNome || clienteCpf || clienteConvenio;
     const hoje = new Date().toLocaleDateString("pt-BR");
     const logoHtml = logoBase64
       ? `<img src="${logoBase64}" alt="Logo" style="height:44px;width:auto;object-fit:contain;">`
@@ -281,6 +319,10 @@ export default function SimuladorPortabilidadePage() {
     td.prazos{color:#94a3b8;font-size:10px}
     td.total{color:#6C2BD9;font-weight:800;font-size:12px}
     .rodape{margin:18px 40px 24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:1.9;letter-spacing:0.1px}
+    .cliente-bar{display:flex;align-items:center;gap:24px;padding:12px 40px;background:#f0f4ff;border-bottom:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .cliente-bar .cli-item{display:flex;flex-direction:column;gap:2px}
+    .cliente-bar .cli-label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
+    .cliente-bar .cli-val{font-size:12px;font-weight:700;color:#1a1a2e}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:0}}
   </style>
 </head><body>
@@ -298,6 +340,11 @@ export default function SimuladorPortabilidadePage() {
       <div class="corretor-contato">${corretor.email}${corretor.tel ? " &middot; " + corretor.tel : ""}</div>
     </div>
   </div>
+  ${hasCliente ? `<div class="cliente-bar">
+    ${clienteNome ? `<div class="cli-item"><div class="cli-label">Cliente</div><div class="cli-val">${clienteNome}</div></div>` : ""}
+    ${clienteCpf ? `<div class="cli-item"><div class="cli-label">CPF</div><div class="cli-val">${clienteCpf}</div></div>` : ""}
+    ${clienteConvenio ? `<div class="cli-item"><div class="cli-label">Convênio</div><div class="cli-val">${clienteConvenio}</div></div>` : ""}
+  </div>` : ""}
   <div class="corpo">
     <div class="resumo">
       <div class="resumo-item"><label>Valor do Contrato</label><div class="val">${fmtR(s.contrato)}</div></div>
@@ -327,7 +374,8 @@ export default function SimuladorPortabilidadePage() {
     const url = URL.createObjectURL(blob);
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
-  }, [cronograma, user, logoBase64]);
+    setShowPdfDialog(false);
+  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -391,6 +439,19 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .ta { color: #6C2BD9; font-weight: 700; }
         .sim-wrap .ta2 { color: #121212; font-weight: 500; }
         .sim-wrap .empty-sim { text-align: center; padding: 48px; color: #6B7280; font-size: 13px; }
+        .sim-wrap .mode-toggle { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1.5px solid #E5E7EB; }
+        .sim-wrap .mode-btn { flex: 1; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .03em; border: none; cursor: pointer; transition: all .15s; background: #F3F4F6; color: #6B7280; }
+        .sim-wrap .mode-btn.active { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
+        .sim-wrap .mode-btn:first-child { border-right: 1px solid #E5E7EB; }
+        .sim-wrap .pdf-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .sim-wrap .pdf-dialog { background: #fff; border-radius: 12px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+        .sim-wrap .pdf-dialog-title { font-size: 15px; font-weight: 700; color: #121212; margin-bottom: 4px; }
+        .sim-wrap .pdf-dialog-sub { font-size: 11px; color: #6B7280; margin-bottom: 18px; }
+        .sim-wrap .pdf-dialog .fg { margin-bottom: 12px; }
+        .sim-wrap .pdf-dialog-actions { display: flex; gap: 10px; margin-top: 18px; }
+        .sim-wrap .pdf-dialog-actions button { flex: 1; }
+        .sim-wrap .btn-cancel { padding: 10px; border: 1.5px solid #E5E7EB; border-radius: 8px; background: #F3F4F6; color: #6B7280; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; transition: opacity .15s; }
+        .sim-wrap .btn-cancel:hover { opacity: .8; }
         @media (max-width: 768px) {
           .sim-wrap .main-grid { grid-template-columns: 1fr; }
           .sim-wrap .prazos-wrap { grid-template-columns: 1fr; }
@@ -404,6 +465,24 @@ export default function SimuladorPortabilidadePage() {
             <div className="panel-label">
               <span className="sim-badge badge-left">CHEIA</span>
               Contrato Novo — Tabela de Comissão
+            </div>
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={`mode-btn${calcMode === "parcela" ? " active" : ""}`}
+                onClick={() => switchCalcMode("parcela")}
+                data-testid="button-mode-parcela"
+              >
+                Por Parcela
+              </button>
+              <button
+                type="button"
+                className={`mode-btn${calcMode === "contrato" ? " active" : ""}`}
+                onClick={() => switchCalcMode("contrato")}
+                data-testid="button-mode-contrato"
+              >
+                Por Valor do Contrato
+              </button>
             </div>
             <div className="form-row">
               <div className="fg">
@@ -420,8 +499,8 @@ export default function SimuladorPortabilidadePage() {
             </div>
             <div className="form-row">
               <div className="fg">
-                <label>Margem / Parcela (R$)</label>
-                <input type="number" ref={lMargemRef} placeholder="Ex: 500,00" step="0.01" data-testid="input-left-margem" />
+                <label>{calcMode === "parcela" ? "Margem / Parcela (R$)" : "Valor do Contrato (R$)"}</label>
+                <input type="number" ref={lMargemRef} placeholder={calcMode === "parcela" ? "Ex: 500,00" : "Ex: 25000,00"} step="0.01" data-testid="input-left-margem" />
               </div>
               <div className="fg">
                 <label>Coeficiente</label>
@@ -558,7 +637,7 @@ export default function SimuladorPortabilidadePage() {
               )}
             </div>
             {cronograma && (
-              <button className="btn-pdf" onClick={exportarPDF} data-testid="button-exportar-pdf">
+              <button className="btn-pdf" onClick={() => setShowPdfDialog(true)} data-testid="button-exportar-pdf">
                 Exportar PDF
               </button>
             )}
@@ -598,6 +677,54 @@ export default function SimuladorPortabilidadePage() {
             )}
           </div>
         </div>
+
+        {showPdfDialog && (
+          <div className="pdf-overlay" onClick={() => setShowPdfDialog(false)} data-testid="pdf-dialog-overlay">
+            <div className="pdf-dialog" onClick={(e) => e.stopPropagation()} data-testid="pdf-dialog">
+              <div className="pdf-dialog-title">Dados do Cliente para o PDF</div>
+              <div className="pdf-dialog-sub">Preencha os dados do cliente (opcional). Eles serão incluídos na proposta.</div>
+              <div className="fg">
+                <label>Nome do Cliente</label>
+                <input
+                  type="text"
+                  value={pdfClientName}
+                  onChange={(e) => setPdfClientName(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  data-testid="input-pdf-nome"
+                />
+              </div>
+              <div className="fg">
+                <label>CPF do Cliente</label>
+                <input
+                  type="text"
+                  value={pdfClientCpf}
+                  onChange={(e) => setPdfClientCpf(e.target.value)}
+                  placeholder="Ex: 12345678900"
+                  maxLength={14}
+                  data-testid="input-pdf-cpf"
+                />
+              </div>
+              <div className="fg">
+                <label>Convênio</label>
+                <input
+                  type="text"
+                  value={pdfClientConvenio}
+                  onChange={(e) => setPdfClientConvenio(e.target.value)}
+                  placeholder="Ex: SIAPE"
+                  data-testid="input-pdf-convenio"
+                />
+              </div>
+              <div className="pdf-dialog-actions">
+                <button className="btn-cancel" onClick={() => setShowPdfDialog(false)} data-testid="button-pdf-cancelar">
+                  Cancelar
+                </button>
+                <button className="btn-sim btn-sim-left" onClick={doExportPDF} data-testid="button-pdf-confirmar">
+                  Exportar PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
