@@ -1681,7 +1681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Save session before responding
-      req.session.save((err) => {
+      req.session.save(async (err) => {
         if (err) {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Erro ao salvar sessão" });
@@ -1690,9 +1690,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't send password hash to client
         const { passwordHash: _, ...userWithoutPassword } = user;
 
+        const permissions = await storage.getUserPermissions(user.id);
+        const permissionsMap: Record<string, { canView: boolean; canEdit: boolean; canDelegate: boolean }> = {};
+        for (const perm of permissions) {
+          permissionsMap[perm.module] = {
+            canView: perm.canView,
+            canEdit: perm.canEdit,
+            canDelegate: perm.canDelegate,
+          };
+        }
+
         return res.json({
           message: "Login realizado com sucesso",
           user: userWithoutPassword,
+          permissions: permissionsMap,
           tenant: req.tenant
             ? {
                 id: req.tenant.id,

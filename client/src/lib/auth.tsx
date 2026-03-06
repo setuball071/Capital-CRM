@@ -51,12 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await apiRequest("POST", "/api/auth/login", { email, password });
     const data = await response.json();
     queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
+    const loginPermissions = data.permissions || {};
     const meResponse = await fetch("/api/auth/me", { credentials: "include" });
     if (meResponse.ok) {
       const meData = await meResponse.json();
-      setPermissions(meData.permissions || {});
+      setPermissions(meData.permissions || loginPermissions);
       setUser(meData.user);
     } else {
+      setPermissions(loginPermissions);
       setUser(data.user);
     }
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
