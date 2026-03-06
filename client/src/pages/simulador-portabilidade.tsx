@@ -1,5 +1,6 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/components/tenant-theme-provider";
 
 interface SimState {
   contrato: number;
@@ -131,6 +132,25 @@ function buildPrazoCards(s: SimState): PrazoCard[] {
 
 export default function SimuladorPortabilidadePage() {
   const { user } = useAuth();
+  const { logoUrl } = useTenant();
+  const [logoBase64, setLogoBase64] = useState<string>("");
+
+  useEffect(() => {
+    if (!logoUrl) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        setLogoBase64(canvas.toDataURL("image/png"));
+      }
+    };
+    img.src = logoUrl;
+  }, [logoUrl]);
 
   const [leftState, setLeftState] = useState<SimState | null>(null);
   const [rightState, setRightState] = useState<SimState | null>(null);
@@ -223,70 +243,83 @@ export default function SimuladorPortabilidadePage() {
       tel: "",
     };
     const hoje = new Date().toLocaleDateString("pt-BR");
+    const logoHtml = logoBase64
+      ? `<img src="${logoBase64}" alt="Logo" style="height:44px;width:auto;object-fit:contain;">`
+      : `<div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">Proposta</div>`;
     const _html = `<!DOCTYPE html><html lang="pt-BR"><head>
-  <meta charset="UTF-8"><title>Proposta</title>
+  <meta charset="UTF-8"><title>Proposta de Amortização</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Inter',Arial,sans-serif;font-size:11px;color:#121212;background:#fff}
-    .capa{background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);color:white;padding:28px 40px 22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .logo-capa{font-size:26px;font-weight:900}
-    .logo-capital{background:linear-gradient(90deg,#0066FF,#6C2BD9);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .logo-go{background:linear-gradient(90deg,#A855F7,#E91E63);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .capa-sub{font-size:10px;color:rgba(255,255,255,0.6);margin-top:3px}
-    .card-corretor{background:linear-gradient(135deg,#4B1FA6,#6C2BD9);color:white;margin:18px 40px;border-radius:12px;display:flex;align-items:center;gap:16px;padding:14px 22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .foto-placeholder{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;border:2px solid rgba(255,255,255,0.3);flex-shrink:0}
-    .corretor-nome{font-size:15px;font-weight:800;margin-bottom:3px}
-    .corretor-contato{font-size:10px;color:rgba(255,255,255,0.8);line-height:1.8}
-    .corpo{padding:0 40px}
-    .resumo{display:flex;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:18px}
-    .resumo-item{flex:1;padding:12px 16px;border-right:1px solid #e5e7eb;background:#F3F4F6}
+    body{font-family:'Inter',Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff}
+    .header{display:flex;align-items:center;justify-content:space-between;padding:24px 40px 20px;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .header-left{display:flex;align-items:center;gap:14px}
+    .header-left img{filter:brightness(0) invert(1)}
+    .header-right{text-align:right}
+    .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
+    .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
+    .corretor-bar{display:flex;align-items:center;gap:14px;padding:14px 40px;background:linear-gradient(90deg,#6C2BD9,#1E88E5);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .avatar{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;border:2px solid rgba(255,255,255,0.35)}
+    .corretor-info{flex:1}
+    .corretor-nome{font-size:14px;font-weight:700;letter-spacing:-0.2px}
+    .corretor-contato{font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px}
+    .corpo{padding:20px 40px 0}
+    .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:20px}
+    .resumo-item{padding:14px 16px;background:#f8fafc;border-right:1px solid #e2e8f0}
     .resumo-item:last-child{border-right:none}
-    .resumo-item label{font-size:9px;color:#6B7280;text-transform:uppercase;letter-spacing:0.6px;display:block;margin-bottom:3px}
-    .resumo-item b{font-size:14px;font-weight:700;color:#121212}
-    .titulo{font-size:13px;font-weight:700;color:#6C2BD9;margin-bottom:12px}
-    table{width:100%;border-collapse:collapse}
-    th{background:#6C2BD9;color:#fff;padding:8px 10px;font-size:10px;font-weight:600;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    td{padding:6px 10px;border-bottom:1px solid #F3F4F6;color:#333}
-    tr:nth-child(even) td{background:#faf8ff}
-    td:last-child{font-weight:600;color:#121212}
-    .rodape{margin:16px 40px 28px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:9px;color:#6B7280;line-height:1.8}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    .resumo-item label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:5px;font-weight:600}
+    .resumo-item .val{font-size:15px;font-weight:800;color:#1a1a2e}
+    .resumo-item:first-child .val{color:#6C2BD9}
+    .section-label{font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #6C2BD9;display:inline-block}
+    table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0}
+    thead th{background:#1a1a2e;color:#fff;padding:10px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    tbody td{padding:7px 12px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
+    tbody tr:nth-child(even) td{background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    tbody tr:last-child td{border-bottom:none}
+    td.mes{color:#94a3b8;font-weight:600;font-size:10px}
+    td.parcela{color:#1a1a2e;font-weight:500}
+    td.prazos{color:#94a3b8;font-size:10px}
+    td.total{color:#6C2BD9;font-weight:800;font-size:12px}
+    .rodape{margin:18px 40px 24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:1.9;letter-spacing:0.1px}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:0}}
   </style>
 </head><body>
-  <div class="capa">
-    <div class="logo-capa"><span class="logo-capital">Capital</span><span class="logo-go">Go</span></div>
-    <div class="capa-sub">Formalização de Proposta</div>
+  <div class="header">
+    <div class="header-left">${logoHtml}</div>
+    <div class="header-right">
+      <div class="header-tag">Proposta de Amortização</div>
+      <div class="header-date">${hoje}</div>
+    </div>
   </div>
-  <div class="card-corretor">
-    <div class="foto-placeholder">${corretor.nome.charAt(0)}</div>
-    <div>
+  <div class="corretor-bar">
+    <div class="avatar">${corretor.nome.charAt(0).toUpperCase()}</div>
+    <div class="corretor-info">
       <div class="corretor-nome">${corretor.nome}</div>
-      <div class="corretor-contato">${corretor.email}${corretor.tel ? "<br>" + corretor.tel : ""}</div>
+      <div class="corretor-contato">${corretor.email}${corretor.tel ? " &middot; " + corretor.tel : ""}</div>
     </div>
   </div>
   <div class="corpo">
     <div class="resumo">
-      <div class="resumo-item"><label>Valor do Contrato</label><b>${fmtR(s.contrato)}</b></div>
-      <div class="resumo-item"><label>Prazo Estratégia</label><b>${meses} meses</b></div>
-      <div class="resumo-item"><label>Parcela Média</label><b>${fmtR(parcMedia)}</b></div>
-      <div class="resumo-item"><label>Taxa Média a.m.</label><b>${fmtN(taxaImpl, 2)}%</b></div>
+      <div class="resumo-item"><label>Valor do Contrato</label><div class="val">${fmtR(s.contrato)}</div></div>
+      <div class="resumo-item"><label>Prazo Estratégia</label><div class="val">${meses} meses</div></div>
+      <div class="resumo-item"><label>Parcela Média</label><div class="val">${fmtR(parcMedia)}</div></div>
+      <div class="resumo-item"><label>Taxa Média a.m.</label><div class="val">${fmtN(taxaImpl, 2)}%</div></div>
     </div>
-    <div class="titulo">Cronograma de Amortização — ${meses} meses</div>
+    <div class="section-label">Cronograma de Amortização — ${meses} meses</div>
     <table>
-      <thead><tr><th>Mês</th><th>Parcela</th><th>Prazos Pagos</th><th>Amortização Total</th><th>Total Pago no Mês</th></tr></thead>
+      <thead><tr><th>Mês</th><th>Parcela</th><th>Prazos Pagos</th><th>Amortização Total</th><th style="text-align:right">Total no Mês</th></tr></thead>
       <tbody>${fluxo
         .map(
           (l, i) =>
-            `<tr><td>${i + 1}</td><td>${fmtR(l.parcela)}</td><td>${l.prazosStr}</td><td>${fmtR(l.amortTotal)}</td><td>${fmtR(l.totalMes)}</td></tr>`
+            `<tr><td class="mes">${String(i + 1).padStart(2, "0")}</td><td class="parcela">${fmtR(l.parcela)}</td><td class="prazos">${l.prazosStr}</td><td>${fmtR(l.amortTotal)}</td><td class="total" style="text-align:right">${fmtR(l.totalMes)}</td></tr>`
         )
         .join("")}</tbody>
     </table>
   </div>
   <div class="rodape">
-    * Cálculos de amortização de parcela são diários e sofrem alteração<br>
-    * Proposta válida até ${hoje} sujeito a alteração sem aviso prévio<br>
-    * A taxa de juros final do contrato e a redução real do valor da parcela poderá sofrer oscilações a critério das instituições bancárias.
+    * Cálculos de amortização de parcela são diários e sofrem alteração.<br>
+    * Proposta válida até ${hoje}, sujeita a alteração sem aviso prévio.<br>
+    * A taxa de juros final e a redução do valor da parcela poderão sofrer oscilações a critério das instituições bancárias.
   </div>
   <script>setTimeout(()=>{window.print();},400);<\/script>
 </body></html>`;
@@ -294,7 +327,7 @@ export default function SimuladorPortabilidadePage() {
     const url = URL.createObjectURL(blob);
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
-  }, [cronograma, user]);
+  }, [cronograma, user, logoBase64]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
