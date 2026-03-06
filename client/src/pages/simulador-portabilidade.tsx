@@ -281,6 +281,8 @@ export default function SimuladorPortabilidadePage() {
     const clienteConvenio = escHtml(pdfClientConvenio.trim());
     const hasCliente = clienteNome || clienteCpf || clienteConvenio;
     const hoje = new Date().toLocaleDateString("pt-BR");
+    const dAmanha = new Date(); dAmanha.setDate(dAmanha.getDate() + 1);
+    const amanha = dAmanha.toLocaleDateString("pt-BR");
     const logoHtml = logoBase64
       ? `<img src="${logoBase64}" alt="Logo" style="height:44px;width:auto;object-fit:contain;">`
       : `<div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">Proposta</div>`;
@@ -365,7 +367,7 @@ export default function SimuladorPortabilidadePage() {
   </div>
   <div class="rodape">
     * Cálculos de amortização de parcela são diários e sofrem alteração.<br>
-    * Proposta válida até ${hoje}, sujeita a alteração sem aviso prévio.<br>
+    * Proposta válida até ${amanha}, sujeita a alteração sem aviso prévio.<br>
     * A taxa de juros final e a redução do valor da parcela poderão sofrer oscilações a critério das instituições bancárias.
   </div>
   <script>setTimeout(()=>{window.print();},400);<\/script>
