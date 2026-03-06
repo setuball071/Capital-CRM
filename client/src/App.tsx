@@ -47,7 +47,6 @@ import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import AdminTenantsPage from "@/pages/admin-tenants";
 import AdminBrandingPage from "@/pages/admin-branding";
-import SimuladorAmortizacaoPage from "@/pages/simulador-amortizacao";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
@@ -400,9 +399,6 @@ function Router() {
               </Route>
               <Route path="/admin/branding">
                 {() => <MasterRoute component={AdminBrandingPage} />}
-              </Route>
-              <Route path="/simulador-amortizacao">
-                {() => <ModuleRoute component={SimuladorAmortizacaoPage} module="modulo_simulador" />}
               </Route>
               <Route path="/simulador-portabilidade">
                 {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}

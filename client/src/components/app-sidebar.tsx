@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, TrendingDown, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -40,7 +40,7 @@ interface MenuSection {
 
 // Module URL mapping - matches new module structure
 const MODULE_URL_MAPPING: Record<string, string[]> = {
-  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-amortizacao", "/simulador-portabilidade"],
+  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-portabilidade"],
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
@@ -137,7 +137,6 @@ export function AppSidebar() {
       icon: Calculator,
       items: [
         { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
-        { title: "Simulador de Amortização", url: "/simulador-amortizacao", icon: TrendingDown, module: "modulo_simulador", subItem: "simulador_amortizacao" },
         { title: "Simulador de Portabilidade", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
       ],
     },
