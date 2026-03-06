@@ -537,7 +537,7 @@ export default function VendasAtendimento() {
     try {
       await registerInteractionMutation.mutateAsync(interactionFormData);
       setDrawerOpen(false);
-      proximoMutation.mutate(undefined);
+      proximoMutation.mutate(atendimentoAtual?.campanha?.id);
     } catch {
       // Error already handled by mutation
     }
@@ -557,7 +557,7 @@ export default function VendasAtendimento() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
       setProximoDialogOpen(false);
-      proximoMutation.mutate(undefined);
+      proximoMutation.mutate(atendimentoAtual?.campanha?.id);
     } catch {
       toast({ title: "Erro ao registrar recusa", variant: "destructive" });
     }
@@ -565,7 +565,7 @@ export default function VendasAtendimento() {
 
   const handlePularCliente = () => {
     setProximoDialogOpen(false);
-    proximoMutation.mutate(undefined);
+    proximoMutation.mutate(atendimentoAtual?.campanha?.id);
   };
 
   const handleAddContact = () => {
