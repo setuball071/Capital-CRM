@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { X, Download, Upload, Loader2 } from "lucide-react";
+import QRCode from "qrcode";
 import type { Creative } from "@shared/schema";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -14,6 +15,9 @@ const ROLE_LABELS: Record<string, string> = {
   operacional: "Operacional",
   atendimento: "Atendimento",
 };
+
+const INSTAGRAM_URL = "https://www.instagram.com/capitalgo.oficial";
+const INSTAGRAM_HANDLE = "@capitalgo.oficial";
 
 interface CardFinalizerProps {
   aberto: boolean;
@@ -60,7 +64,7 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
     img.src = photoData;
   }, [photoData]);
 
-  const drawPreview = useCallback(() => {
+  const drawPreview = useCallback(async () => {
     const canvas = previewCanvasRef.current;
     if (!canvas || !bgImage) return;
     const W = 400;
@@ -69,9 +73,8 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
     canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    document.fonts.ready.then(() => {
-      renderCardCalibrated(ctx, bgImage, W, H, photoImg, nome, cargo, whatsapp);
-    });
+    await document.fonts.ready;
+    await renderCardCalibrated(ctx, bgImage, W, H, photoImg, nome, cargo, whatsapp);
   }, [bgImage, photoImg, nome, cargo, whatsapp]);
 
   useEffect(() => {
@@ -402,7 +405,41 @@ function drawWhatsappIcon(
   ctx.restore();
 }
 
-function renderCardCalibrated(
+function drawInstagramIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  size: number
+) {
+  const grad = ctx.createLinearGradient(x, y + size, x + size, y);
+  grad.addColorStop(0, "#f09433");
+  grad.addColorStop(0.25, "#e6683c");
+  grad.addColorStop(0.5, "#dc2743");
+  grad.addColorStop(0.75, "#cc2366");
+  grad.addColorStop(1, "#bc1888");
+
+  const r = size * 0.22;
+
+  ctx.fillStyle = grad;
+  roundRect(ctx, x, y, size, size, r);
+  ctx.fill();
+
+  const pad = size * 0.18;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = size * 0.08;
+  roundRect(ctx, x + pad, y + pad, size - pad * 2, size - pad * 2, size * 0.12);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size * 0.16, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(x + size * 0.72, y + size * 0.28, size * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+async function renderCardCalibrated(
   ctx: CanvasRenderingContext2D,
   bgImg: HTMLImageElement,
   W: number,
@@ -456,12 +493,46 @@ function renderCardCalibrated(
   const fPhone = Math.round(W * 0.033);
   const waSize = Math.round(W * 0.04);
 
+  const qrSize = Math.round(bH * 0.75);
+  const qrX = bX + bW - marg - qrSize;
+  const qrY = bY + Math.round((bH - qrSize) / 2);
+
+  try {
+    const qrDataUrl = await QRCode.toDataURL(INSTAGRAM_URL, {
+      width: qrSize * 2,
+      margin: 1,
+      color: { dark: "#1a0030", light: "#ffffff" },
+    });
+    const qrImg = await loadImage(qrDataUrl);
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    const instaIconSize = Math.round(W * 0.025);
+    const captionY = qrY + qrSize + Math.round(bH * 0.06);
+    const captionX = qrX + Math.round(qrSize / 2);
+
+    drawInstagramIcon(ctx, captionX - instaIconSize - Math.round(W * 0.008), captionY - instaIconSize, instaIconSize);
+
+    ctx.fillStyle = "#555";
+    ctx.font = `600 ${Math.round(W * 0.018)}px Montserrat, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillText(INSTAGRAM_HANDLE, captionX - instaIconSize + Math.round(W * 0.004), captionY - Math.round(instaIconSize * 0.1));
+    ctx.textAlign = "left";
+  } catch {
+    // QR generation failed silently — card still works without it
+  }
+
+  const zonaCorretorMaxX = qrX - Math.round(W * 0.03);
+
   ctx.font = `700 ${fBadge}px Montserrat, sans-serif`;
   const badgeText = "Aproveite a menor taxa!";
-  const bw = ctx.measureText(badgeText).width + Math.round(W * 0.055);
+  const bwMax = zonaCorretorMaxX - tX;
+  const bw = Math.min(
+    ctx.measureText(badgeText).width + Math.round(W * 0.055),
+    bwMax
+  );
   const bh = Math.round(bH * 0.26);
   const bxp = tX;
-  const byp = bY + Math.round(bH * 0.09);
+  const byp = bY + Math.round(bH * 0.08);
   const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
   grad.addColorStop(0, "#9b3dd6");
   grad.addColorStop(1, "#e91e8c");
@@ -475,13 +546,13 @@ function renderCardCalibrated(
 
   ctx.fillStyle = "#1a0030";
   ctx.font = `900 ${fName}px Montserrat, sans-serif`;
-  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.57));
+  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.46));
 
   ctx.fillStyle = "#aaa";
   ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
-  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.73));
+  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.65));
 
-  const waY = bY + Math.round(bH * 0.90);
+  const waY = bY + Math.round(bH * 0.87);
   const waTop = waY - waSize * 0.8;
   drawWhatsappIcon(ctx, tX, waTop, waSize);
   ctx.fillStyle = "#222";
@@ -516,7 +587,7 @@ async function downloadCardCalibrated(
   }
 
   await document.fonts.ready;
-  renderCardCalibrated(ctx, bg, W, H, photoImg, nome, cargo, telefone);
+  await renderCardCalibrated(ctx, bg, W, H, photoImg, nome, cargo, telefone);
 
   const a = document.createElement("a");
   a.download = `card-capitalgo-${nomeArquivo}.png`;
