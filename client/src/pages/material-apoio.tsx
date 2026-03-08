@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { TabelasSimulator } from "@/components/tabelas-simulator";
+import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -178,6 +179,8 @@ export default function MaterialApoioPage() {
 
       {activeCategory === "tabelas" ? (
         <TabelasSimulator />
+      ) : activeCategory === "criativos" ? (
+        <CriativosGallery />
       ) : isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

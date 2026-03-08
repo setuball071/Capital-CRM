@@ -92,6 +92,10 @@ import {
   insertMaterialSchema,
   commissionTables,
   insertCommissionTableSchema,
+  creativePacks,
+  insertCreativePackSchema,
+  creatives,
+  insertCreativeSchema,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -24387,6 +24391,147 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
     }
   );
+
+  // ===== CREATIVE PACKS =====
+
+  app.get("/api/creative-packs", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const rows = await db.select().from(creativePacks)
+        .where(and(eq(creativePacks.tenantId, req.tenantId!), eq(creativePacks.ativo, true)))
+        .orderBy(desc(creativePacks.createdAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("GET /api/creative-packs error:", error);
+      res.status(500).json({ message: "Erro ao listar packs" });
+    }
+  });
+
+  app.post("/api/creative-packs", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const parsed = insertCreativePackSchema.parse(req.body);
+      const [created] = await db.insert(creativePacks).values({ ...parsed, tenantId: req.tenantId!, createdBy: req.user!.id }).returning();
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("POST /api/creative-packs error:", error);
+      res.status(500).json({ message: "Erro ao criar pack" });
+    }
+  });
+
+  app.put("/api/creative-packs/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const id = parseInt(req.params.id);
+      const { nome, descricao, ativo } = req.body;
+      const updateData: Record<string, any> = {};
+      if (typeof nome === "string" && nome.trim()) updateData.nome = nome.trim();
+      if (descricao !== undefined) updateData.descricao = descricao;
+      if (ativo !== undefined) updateData.ativo = Boolean(ativo);
+      const [updated] = await db.update(creativePacks).set(updateData)
+        .where(and(eq(creativePacks.id, id), eq(creativePacks.tenantId, req.tenantId!)))
+        .returning();
+      if (!updated) return res.status(404).json({ message: "Pack não encontrado" });
+      res.json(updated);
+    } catch (error) {
+      console.error("PUT /api/creative-packs/:id error:", error);
+      res.status(500).json({ message: "Erro ao atualizar pack" });
+    }
+  });
+
+  app.delete("/api/creative-packs/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(creativePacks)
+        .where(and(eq(creativePacks.id, id), eq(creativePacks.tenantId, req.tenantId!)));
+      if (!existing) return res.status(404).json({ message: "Pack não encontrado" });
+      await db.delete(creatives).where(and(eq(creatives.packId, id), eq(creatives.tenantId, req.tenantId!)));
+      await db.delete(creativePacks).where(and(eq(creativePacks.id, id), eq(creativePacks.tenantId, req.tenantId!)));
+      res.json({ message: "Pack removido" });
+    } catch (error) {
+      console.error("DELETE /api/creative-packs/:id error:", error);
+      res.status(500).json({ message: "Erro ao remover pack" });
+    }
+  });
+
+  // ===== CREATIVES =====
+
+  app.get("/api/creatives", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conditions = [eq(creatives.tenantId, req.tenantId!), eq(creatives.ativo, true)];
+      if (req.query.packId) conditions.push(eq(creatives.packId, parseInt(req.query.packId as string)));
+      if (req.query.tipo) conditions.push(eq(creatives.tipo, req.query.tipo as string));
+      const rows = await db.select().from(creatives).where(and(...conditions)).orderBy(desc(creatives.createdAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("GET /api/creatives error:", error);
+      res.status(500).json({ message: "Erro ao listar criativos" });
+    }
+  });
+
+  app.post("/api/creatives", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const parsed = insertCreativeSchema.parse(req.body);
+      const [validPack] = await db.select().from(creativePacks)
+        .where(and(eq(creativePacks.id, parsed.packId), eq(creativePacks.tenantId, req.tenantId!)));
+      if (!validPack) return res.status(400).json({ message: "Pack inválido" });
+      const [created] = await db.insert(creatives).values({ ...parsed, tenantId: req.tenantId!, createdBy: req.user!.id }).returning();
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("POST /api/creatives error:", error);
+      res.status(500).json({ message: "Erro ao criar criativo" });
+    }
+  });
+
+  app.put("/api/creatives/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const id = parseInt(req.params.id);
+      const { title, packId, imageUrl, tipo, ativo } = req.body;
+      const updateData: Record<string, any> = {};
+      if (typeof title === "string" && title.trim()) updateData.title = title.trim();
+      if (packId !== undefined) {
+        const pid = parseInt(String(packId));
+        const [validPack] = await db.select().from(creativePacks)
+          .where(and(eq(creativePacks.id, pid), eq(creativePacks.tenantId, req.tenantId!)));
+        if (!validPack) return res.status(400).json({ message: "Pack inválido" });
+        updateData.packId = pid;
+      }
+      if (typeof imageUrl === "string" && imageUrl.trim()) updateData.imageUrl = imageUrl.trim();
+      if (typeof tipo === "string") updateData.tipo = tipo;
+      if (ativo !== undefined) updateData.ativo = Boolean(ativo);
+      const [updated] = await db.update(creatives).set(updateData)
+        .where(and(eq(creatives.id, id), eq(creatives.tenantId, req.tenantId!)))
+        .returning();
+      if (!updated) return res.status(404).json({ message: "Criativo não encontrado" });
+      res.json(updated);
+    } catch (error) {
+      console.error("PUT /api/creatives/:id error:", error);
+      res.status(500).json({ message: "Erro ao atualizar criativo" });
+    }
+  });
+
+  app.delete("/api/creatives/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(creatives)
+        .where(and(eq(creatives.id, id), eq(creatives.tenantId, req.tenantId!)));
+      if (!existing) return res.status(404).json({ message: "Criativo não encontrado" });
+      await db.delete(creatives).where(and(eq(creatives.id, id), eq(creatives.tenantId, req.tenantId!)));
+      res.json({ message: "Criativo removido" });
+    } catch (error) {
+      console.error("DELETE /api/creatives/:id error:", error);
+      res.status(500).json({ message: "Erro ao remover criativo" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

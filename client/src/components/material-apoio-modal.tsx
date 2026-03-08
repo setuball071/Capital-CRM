@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { TabelasSimulator } from "@/components/tabelas-simulator";
+import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -156,7 +157,7 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canManage && categoria !== "tabelas" && (
+            {canManage && categoria !== "tabelas" && categoria !== "criativos" && (
               <Button size="sm" onClick={() => setAddOpen(!addOpen)} data-testid="modal-btn-add">
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Adicionar
@@ -240,6 +241,8 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
         <div className="flex-1 overflow-auto p-6">
           {categoria === "tabelas" ? (
             <TabelasSimulator />
+          ) : categoria === "criativos" ? (
+            <CriativosGallery />
           ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

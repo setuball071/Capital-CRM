@@ -3196,3 +3196,45 @@ export const insertCommissionTableSchema = createInsertSchema(commissionTables).
 
 export type CommissionTable = typeof commissionTables.$inferSelect;
 export type InsertCommissionTable = z.infer<typeof insertCommissionTableSchema>;
+
+export const creativePacks = pgTable("creative_packs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  ativo: boolean("ativo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+export const insertCreativePackSchema = createInsertSchema(creativePacks).omit({
+  id: true,
+  createdAt: true,
+  tenantId: true,
+  createdBy: true,
+});
+
+export type CreativePack = typeof creativePacks.$inferSelect;
+export type InsertCreativePack = z.infer<typeof insertCreativePackSchema>;
+
+export const creatives = pgTable("creatives", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  packId: integer("pack_id").notNull().references(() => creativePacks.id),
+  title: text("title").notNull(),
+  imageUrl: text("image_url").notNull(),
+  tipo: text("tipo").notNull(),
+  ativo: boolean("ativo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+export const insertCreativeSchema = createInsertSchema(creatives).omit({
+  id: true,
+  createdAt: true,
+  tenantId: true,
+  createdBy: true,
+});
+
+export type Creative = typeof creatives.$inferSelect;
+export type InsertCreative = z.infer<typeof insertCreativeSchema>;
