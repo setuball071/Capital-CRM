@@ -1111,7 +1111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/webhooks/whatsapp-labels", async (req: any, res) => {
+  const whatsappLabelsHandler = async (req: any, res: any) => {
     const body = req.body;
     const secret = req.headers["x-webhook-secret"];
 
@@ -1220,7 +1220,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (_) {}
       return res.status(200).json({ status: "error", message: "Erro interno" });
     }
-  });
+  };
+
+  app.post("/api/webhooks/whatsapp-labels", whatsappLabelsHandler);
+  app.post("/webhooks/labels", whatsappLabelsHandler);
 
   // ===== TENANT ROUTES =====
 
