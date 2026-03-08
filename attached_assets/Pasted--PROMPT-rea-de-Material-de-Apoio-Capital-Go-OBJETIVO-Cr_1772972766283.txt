@@ -1,0 +1,153 @@
+# PROMPT — Área de Material de Apoio — Capital Go
+
+## OBJETIVO
+
+Criar uma área de **Material de Apoio** acessível a todos os usuários do sistema,
+com atalhos rápidos na barra superior e uma página organizada por categorias.
+Apenas usuários com role `master` ou `coordenacao` podem adicionar/remover materiais.
+
+---
+
+## T001 — Banco de dados: tabela `materials`
+
+Criar a tabela via Drizzle ORM:
+
+```ts
+export const materials = pgTable('materials', {
+  id:          serial('id').primaryKey(),
+  title:       text('title').notNull(),
+  category:    text('category').notNull(), // 'tabelas' | 'criativos' | 'processos' | 'tutoriais'
+  type:        text('type').notNull(),     // 'pdf' | 'video' | 'image' | 'link'
+  url:         text('url').notNull(),      // link do Google Drive ou externo
+  description: text('description'),
+  createdAt:   timestamp('created_at').defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id),
+});
+```
+
+Rodar migration.
+
+---
+
+## T002 — API REST: `/api/materials`
+
+Criar as rotas em `server/routes.ts` (ou arquivo dedicado):
+
+```
+GET    /api/materials              → lista todos (autenticado)
+GET    /api/materials?category=X   → filtra por categoria
+POST   /api/materials              → cria (só master/coordenacao)
+DELETE /api/materials/:id          → remove (só master/coordenacao)
+```
+
+- `POST` body: `{ title, category, type, url, description }`
+- Validar role antes de criar/deletar — retornar 403 se for `vendedor`
+- Usar o padrão de autenticação já existente no sistema (session/JWT)
+
+---
+
+## T003 — Atalhos na barra superior (Header)
+
+No componente de header existente (`client/src/components/header.tsx` ou equivalente),
+adicionar **4 botões de atalho** entre o ícone da esquerda e o sino da direita:
+
+```
+📊 Tabelas   📱 Criativos   ⚙️ Processos   🎓 Tutoriais
+```
+
+**Comportamento:**
+- Cada botão navega para `/material-apoio?categoria=X`
+- Estilo: botões pequenos, discretos, sem preencher muito a barra
+- Usar a paleta Capital Go:
+  - Texto: `#6B7280` no estado normal
+  - Hover: texto `#6C2BD9`, fundo `rgba(108,43,217,0.07)`, border-radius `6px`
+- Fonte Inter, tamanho 12px, padding `4px 10px`
+- Visível para **todos os roles**
+
+---
+
+## T004 — Página `/material-apoio`
+
+Criar `client/src/pages/material-apoio.tsx`.
+Adicionar rota em `App.tsx` e item no menu lateral em `app-sidebar.tsx`
+(dentro de uma seção existente que faça sentido, ex: abaixo de Simuladores ou numa seção nova "Recursos").
+
+### Layout da página
+
+**Cabeçalho da página:**
+```
+Material de Apoio
+Acesse tabelas, criativos, tutoriais e processos internos
+```
+
+**Abas de categoria** (filtro):
+```
+[ Todos ] [ 📊 Tabelas ] [ 📱 Criativos ] [ ⚙️ Processos ] [ 🎓 Tutoriais ]
+```
+- A aba ativa destaca com cor `#6C2BD9`
+- Ao carregar com `?categoria=X` na URL, abre direto nessa aba
+
+**Grid de cards** (3 colunas no desktop, 1 no mobile):
+
+Cada card contém:
+- Ícone do tipo no canto superior direito:
+  - PDF → 📄 fundo vermelho claro
+  - Vídeo → 🎬 fundo roxo claro
+  - Imagem → 🖼️ fundo azul claro
+  - Link → 🔗 fundo cinza
+- **Título** (bold, `#121212`)
+- **Categoria** (badge pequeno, cor da categoria)
+- **Descrição** (quando existir, `#6B7280`, 2 linhas max)
+- **Botão "Abrir"** → `window.open(url, '_blank')`
+  - Estilo: gradiente `linear-gradient(90deg, #6C2BD9, #1E88E5)`, texto branco
+- **Botão "Remover"** (ícone lixeira, vermelho) → só visível para `master`/`coordenacao`
+
+**Estado vazio:**
+```
+📂
+Nenhum material nesta categoria ainda.
+[+ Adicionar Material]  ← só aparece para master/coordenacao
+```
+
+---
+
+## T005 — Modal: Adicionar Material
+
+Visível apenas para `master` e `coordenacao`.
+Botão **"+ Adicionar Material"** no canto superior direito da página.
+
+Modal com os campos:
+- **Título** (text, obrigatório)
+- **Categoria** (select: Tabelas / Criativos / Processos / Tutoriais)
+- **Tipo** (select: PDF / Vídeo / Imagem / Link)
+- **URL** (text, obrigatório — link do Google Drive ou qualquer URL)
+- **Descrição** (textarea, opcional)
+
+Botões: `Cancelar` | `Salvar`
+
+Ao salvar: chama `POST /api/materials`, fecha modal, atualiza lista.
+
+---
+
+## T006 — Cores das categorias (referência)
+
+| Categoria  | Cor badge       | Ícone |
+|------------|-----------------|-------|
+| tabelas    | `#6C2BD9` roxo  | 📊    |
+| criativos  | `#E91E63` rosa  | 📱    |
+| processos  | `#1E88E5` azul  | ⚙️    |
+| tutoriais  | `#00C853` verde | 🎓    |
+
+---
+
+## RESUMO TÉCNICO
+
+| Item | Detalhe |
+|------|---------|
+| Stack | React + TypeScript + Drizzle + PostgreSQL (Neon) |
+| Auth | Usar `useAuth()` para checar role |
+| Roles que gerenciam | `master`, `coordenacao` |
+| Roles que visualizam | todos (`master`, `coordenacao`, `vendedor`) |
+| Links externos | Abrir em `_blank` |
+| Fonte | Inter (já carregada no sistema) |
+| Paleta | Brandbook Capital Go (`#6C2BD9` primário) |
