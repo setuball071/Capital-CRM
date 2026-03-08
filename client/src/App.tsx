@@ -58,8 +58,9 @@ import GestaoComercialRegulamentoPage from "@/pages/gestao-comercial-regulamento
 import GestaoComercialRelatoriosPage from "@/pages/gestao-comercial-relatorios";
 import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
+import MaterialApoioPage from "@/pages/material-apoio";
 import NotFound from "@/pages/not-found";
-import { Loader2 } from "lucide-react";
+import { Loader2, BarChart3, Smartphone, Settings, GraduationCap } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -232,7 +233,7 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 
 function Router() {
   const { user, isLoading } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
 
   // Wait for auth to resolve before rendering any routes
   if (isLoading) {
@@ -273,6 +274,27 @@ function Router() {
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between gap-2 p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-1">
+              {[
+                { key: "tabelas", label: "Tabelas", Icon: BarChart3 },
+                { key: "criativos", label: "Criativos", Icon: Smartphone },
+                { key: "processos", label: "Processos", Icon: Settings },
+                { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap },
+              ].map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => navigate(`/material-apoio?categoria=${s.key}`)}
+                  className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+                  style={{ color: "#6B7280", fontFamily: "Inter, sans-serif" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#6C2BD9"; e.currentTarget.style.backgroundColor = "rgba(108,43,217,0.07)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#6B7280"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                  data-testid={`header-shortcut-${s.key}`}
+                >
+                  <s.Icon className="h-3.5 w-3.5" />
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <NotificationBell />
           </header>
           <main className="flex-1 overflow-auto">
@@ -435,6 +457,9 @@ function Router() {
               </Route>
               <Route path="/vendas/etiquetas">
                 {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/material-apoio">
+                {() => <ProtectedRoute component={MaterialApoioPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

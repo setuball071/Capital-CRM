@@ -88,6 +88,8 @@ import {
   producoesImportacoes,
   leadTags,
   leadTagAssignments,
+  materials,
+  insertMaterialSchema,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -24113,6 +24115,84 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } catch (error) {
         console.error("GET /api/export/cpfs-sem-nascimento error:", error);
         res.status(500).json({ message: "Erro ao exportar CPFs" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/materials",
+    requireAuth,
+    resolveTenant,
+    requireTenant,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.tenantId!;
+        const category = req.query.category as string | undefined;
+        let query;
+        if (category) {
+          query = await db.select().from(materials)
+            .where(and(eq(materials.tenantId, tenantId), eq(materials.category, category)))
+            .orderBy(desc(materials.createdAt));
+        } else {
+          query = await db.select().from(materials)
+            .where(eq(materials.tenantId, tenantId))
+            .orderBy(desc(materials.createdAt));
+        }
+        res.json(query);
+      } catch (error) {
+        console.error("GET /api/materials error:", error);
+        res.status(500).json({ message: "Erro ao buscar materiais" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/materials",
+    requireAuth,
+    resolveTenant,
+    requireTenant,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const parsed = insertMaterialSchema.parse(req.body);
+        const [created] = await db.insert(materials).values({
+          ...parsed,
+          tenantId: req.tenantId!,
+          createdBy: req.user!.id,
+        }).returning();
+        res.status(201).json(created);
+      } catch (error) {
+        console.error("POST /api/materials error:", error);
+        res.status(500).json({ message: "Erro ao criar material" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/materials/:id",
+    requireAuth,
+    resolveTenant,
+    requireTenant,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const id = parseInt(req.params.id);
+        const [item] = await db.select().from(materials)
+          .where(and(eq(materials.id, id), eq(materials.tenantId, req.tenantId!)));
+        if (!item) {
+          return res.status(404).json({ message: "Material não encontrado" });
+        }
+        await db.delete(materials).where(eq(materials.id, id));
+        res.json({ message: "Material removido" });
+      } catch (error) {
+        console.error("DELETE /api/materials/:id error:", error);
+        res.status(500).json({ message: "Erro ao remover material" });
       }
     }
   );

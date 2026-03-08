@@ -3150,3 +3150,25 @@ export const insertFeedbackSchema = createInsertSchema(feedbacks).omit({
 
 export type Feedback = typeof feedbacks.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+
+export const materials = pgTable("materials", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  type: text("type").notNull(),
+  url: text("url").notNull(),
+  description: text("description"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+export const insertMaterialSchema = createInsertSchema(materials).omit({
+  id: true,
+  createdAt: true,
+  tenantId: true,
+  createdBy: true,
+});
+
+export type Material = typeof materials.$inferSelect;
+export type InsertMaterial = z.infer<typeof insertMaterialSchema>;

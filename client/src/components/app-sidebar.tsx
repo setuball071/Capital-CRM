@@ -185,6 +185,7 @@ export function AppSidebar() {
         { title: "Feedbacks", url: "/desenvolvimento/feedbacks", icon: ClipboardCheck, module: "modulo_academia", subItem: "feedbacks" },
         { title: "Profiler", url: "/desenvolvimento/profiler", icon: Brain, module: "modulo_academia", subItem: "profiler" },
         { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
+        { title: "Material de Apoio", url: "/material-apoio", icon: FileText },
       ],
     },
     {
