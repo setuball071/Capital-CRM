@@ -1,0 +1,217 @@
+# PROMPT — Módulo de Tabelas com Simulador de Ranking — Capital Go
+
+## OBJETIVO
+
+Substituir a categoria "Tabelas" do Material de Apoio por um módulo inteligente:
+o corretor informa os parâmetros do cliente e o sistema calcula e rankeia
+as tabelas disponíveis da mais rentável para a menos rentável.
+
+---
+
+## T001 — Banco de dados: tabela `commission_tables`
+
+Adicionar ao `shared/schema.ts`:
+
+```ts
+export const commissionTables = pgTable('commission_tables', {
+  id:          serial('id').primaryKey(),
+  tenantId:    integer('tenant_id').references(() => tenants.id).notNull(),
+  convenio:    text('convenio').notNull(),      // ex: 'SIAPE', 'INSS', 'ESTADUAL - MA', 'MUNICIPAL'
+  banco:       text('banco').notNull(),          // ex: 'Facta', 'Pan', 'BMG', 'Sabemi'
+  tipoProduto: text('tipo_produto').notNull(),   // 'contrato_novo' | 'cartao_beneficio' | 'cartao_consignado'
+  prazo:       integer('prazo').notNull(),       // ex: 96
+  coeficiente: numeric('coeficiente', { precision: 10, scale: 6 }).notNull(),
+  pontos:      numeric('pontos', { precision: 10, scale: 4 }).notNull(), // comissão/pontuação
+  ativo:       boolean('ativo').default(true),
+  createdAt:   timestamp('created_at').defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id),
+});
+
+export const insertCommissionTableSchema = createInsertSchema(commissionTables).omit({ id: true, createdAt: true });
+export type InsertCommissionTable = z.infer<typeof insertCommissionTableSchema>;
+export type CommissionTable = typeof commissionTables.$inferSelect;
+```
+
+Rodar `db:push`.
+
+---
+
+## T002 — API REST: `/api/commission-tables`
+
+```
+GET    /api/commission-tables              → lista todas da tenant (auth obrigatório)
+GET    /api/commission-tables/simulate     → simulação com query params (auth obrigatório)
+POST   /api/commission-tables              → cria (só master/coordenacao)
+PUT    /api/commission-tables/:id          → edita (só master/coordenacao)
+DELETE /api/commission-tables/:id          → remove (só master/coordenacao)
+```
+
+### GET /api/commission-tables/simulate
+
+Query params obrigatórios: `convenio`, `tipoProduto`, `banco`, `prazo`
+Query params opcionais (um dos dois obrigatório): `parcela` OU `valorContrato`
+
+**Lógica de cálculo:**
+
+```ts
+// Se informou parcela:
+//   valorContrato = parcela / coeficiente
+// Se informou valorContrato:
+//   parcela = valorContrato * coeficiente
+
+// Para cada tabela que bate nos filtros:
+const valorContrato = parcela
+  ? parseFloat(parcela) / table.coeficiente
+  : parseFloat(valorContrato);
+
+// Retornar ordenado por pontos DESC (mais rentável primeiro)
+// Limitar às 10 primeiras
+```
+
+Resposta por item:
+```json
+{
+  "id": 1,
+  "banco": "Facta",
+  "convenio": "SIAPE",
+  "tipoProduto": "contrato_novo",
+  "prazo": 96,
+  "coeficiente": "0.021500",
+  "pontos": "3.2000",
+  "valorContratoLibera": 23255.81,
+  "parcelaResultante": 500.00
+}
+```
+
+---
+
+## T003 — Componente: Simulador de Tabelas
+
+Criar `client/src/components/tabelas-simulator.tsx`.
+
+Este componente é usado tanto na página `/material-apoio?categoria=tabelas`
+quanto dentro do `MaterialApoioModal` quando categoria = 'tabelas'.
+
+### Layout do simulador
+
+**Bloco de filtros (topo):**
+
+```
+[ Convênio ▾ ]  [ Tipo de Produto ▾ ]  [ Banco ▾ ]  [ Prazo ▾ ]
+
+  ○ Informar Parcela    ○ Informar Valor do Contrato
+  [ R$ _________ ]
+
+  [ 🔍 Simular ]
+```
+
+- Todos os 4 filtros são obrigatórios para habilitar o botão Simular
+- O campo de valor (parcela ou contrato) também é obrigatório
+- Botão Simular desabilitado enquanto campos não preenchidos
+- Ao clicar em Simular: chama `GET /api/commission-tables/simulate` com os params
+
+**Opções dos selects** (valores são cadastrados dinamicamente via banco,
+mas os tipos de produto são fixos):
+- Tipo de Produto: `Contrato Novo`, `Cartão Benefício`, `Cartão Consignado`
+- Convênio, Banco e Prazo: populados com valores distintos do banco
+  via `GET /api/commission-tables` (extrair unique values no frontend)
+
+**Bloco de resultados (abaixo dos filtros):**
+
+Título: `Top 10 — ordenado por rentabilidade`
+
+Cards de resultado em lista vertical (não grid), cada card:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  🏦 [BANCO]          [PRAZO] meses      ★ [PONTOS]pts │
+│                                                       │
+│  Valor do Contrato Liberado                          │
+│  R$ XX.XXX,XX  (grande, destaque roxo)               │
+│                                                       │
+│  Coeficiente: 0.021500    Parcela: R$ 500,00         │
+└─────────────────────────────────────────────────────┘
+```
+
+- Primeiro card tem badge "🥇 Melhor opção" em verde
+- Ordenado por pontos DESC
+- Máximo 10 resultados
+- Se nenhuma tabela encontrada: "Nenhuma tabela disponível para esses filtros."
+- Loading skeleton enquanto busca
+
+**Botão de gerenciamento** (só master/coordenacao):
+`+ Cadastrar Tabela` no canto superior direito do simulador
+
+---
+
+## T004 — Modal de Cadastro de Tabela
+
+Visível apenas para `master` e `coordenacao`.
+
+Campos do formulário:
+- **Convênio** (text input — ex: SIAPE, INSS, ESTADUAL - MA)
+- **Banco** (text input — ex: Facta, Pan, BMG)
+- **Tipo de Produto** (select: Contrato Novo / Cartão Benefício / Cartão Consignado)
+- **Prazo** (number — ex: 96)
+- **Coeficiente** (number, 6 casas decimais — ex: 0.021500)
+- **Pontos** (number, 4 casas decimais — ex: 3.2000)
+- **Ativo** (toggle, default true)
+
+Botões: `Cancelar` | `Salvar`
+
+Ao salvar: `POST /api/commission-tables`, fecha modal, invalida query.
+
+Permitir também **editar** e **desativar** tabelas existentes (ícones no card de resultado,
+visíveis só para master/coordenacao).
+
+---
+
+## T005 — Integrar no Material de Apoio
+
+### Na página `material-apoio.tsx`:
+Quando a aba ativa for `tabelas`, renderizar o `<TabelasSimulator />`
+ao invés do grid padrão de cards.
+
+### No modal `material-apoio-modal.tsx`:
+Quando `categoria === 'tabelas'`, renderizar `<TabelasSimulator />`
+ao invés do grid de cards.
+
+---
+
+## T006 — Dados de exemplo (seed opcional)
+
+Inserir 3-5 tabelas de exemplo para facilitar testes:
+
+```ts
+// Exemplos
+{ convenio: 'SIAPE', banco: 'Facta', tipoProduto: 'contrato_novo', prazo: 96, coeficiente: 0.021500, pontos: 3.20 }
+{ convenio: 'SIAPE', banco: 'Pan',   tipoProduto: 'contrato_novo', prazo: 96, coeficiente: 0.022000, pontos: 2.80 }
+{ convenio: 'INSS',  banco: 'BMG',   tipoProduto: 'contrato_novo', prazo: 84, coeficiente: 0.023100, pontos: 2.50 }
+{ convenio: 'SIAPE', banco: 'BMG',   tipoProduto: 'cartao_beneficio', prazo: 0, coeficiente: 0.018000, pontos: 4.10 }
+```
+
+---
+
+## RESUMO TÉCNICO
+
+| Item | Detalhe |
+|------|---------|
+| Stack | React + TypeScript + Drizzle + PostgreSQL (Neon) |
+| Cálculo | Frontend chama API `/simulate`, backend faz o cálculo e ordena |
+| Auth | `useAuth()` para checar role nos botões de gestão |
+| Roles que gerenciam | `master`, `coordenacao` |
+| Roles que simulam | todos |
+| Paleta | `#6C2BD9` para destaques, `#00C853` para melhor opção |
+| Fonte | Inter (já carregada) |
+
+---
+
+## ARQUIVOS A CRIAR/MODIFICAR
+
+| Arquivo | Ação |
+|---------|------|
+| `shared/schema.ts` | Adicionar `commissionTables` |
+| `server/routes.ts` | Adicionar rotas `/api/commission-tables` |
+| `client/src/components/tabelas-simulator.tsx` | Criar componente |
+| `client/src/pages/material-apoio.tsx` | Integrar TabelasSimulator na aba Tabelas |
+| `client/src/components/material-apoio-modal.tsx` | Integrar TabelasSimulator quando categoria=tabelas |
