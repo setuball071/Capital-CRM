@@ -1,0 +1,269 @@
+# PROMPT — Módulo de Criativos com Personalizador — Capital Go
+
+## OBJETIVO
+
+Substituir a categoria "Criativos" do Material de Apoio por um módulo completo:
+galeria de criativos organizados por packs semanais, com dois tipos:
+- **Personalizáveis**: abrem um finalizador onde o corretor adiciona sua assinatura e baixa
+- **Avulsos**: download direto sem personalização
+
+---
+
+## T001 — Banco de dados: tabela `creatives`
+
+Adicionar ao `shared/schema.ts`:
+
+```ts
+export const creatives = pgTable('creatives', {
+  id:             serial('id').primaryKey(),
+  tenantId:       integer('tenant_id').references(() => tenants.id).notNull(),
+  packId:         integer('pack_id').references(() => creativePacks.id).notNull(),
+  title:          text('title').notNull(),
+  imageUrl:       text('image_url').notNull(),   // link do Google Drive (direto/preview)
+  tipo:           text('tipo').notNull(),         // 'personalizavel' | 'avulso'
+  ativo:          boolean('ativo').default(true),
+  createdAt:      timestamp('created_at').defaultNow(),
+  createdBy:      integer('created_by').references(() => users.id),
+});
+
+export const creativePacks = pgTable('creative_packs', {
+  id:          serial('id').primaryKey(),
+  tenantId:    integer('tenant_id').references(() => tenants.id).notNull(),
+  nome:        text('nome').notNull(),            // ex: "Pack Semana 23 • Jun/2025"
+  descricao:   text('descricao'),
+  ativo:       boolean('ativo').default(true),
+  createdAt:   timestamp('created_at').defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id),
+});
+```
+
+**IMPORTANTE:** Criar `creativePacks` ANTES de `creatives` por causa da referência.
+
+Adicionar schemas Zod e types para ambas as tabelas.
+Rodar `db:push` ou raw SQL para criar as tabelas.
+
+Seed com 1 pack e 3-4 criativos de exemplo (usar imagens placeholder do picsum.photos).
+
+---
+
+## T002 — API REST
+
+### `/api/creative-packs`
+```
+GET    /api/creative-packs           → lista packs ativos da tenant
+POST   /api/creative-packs           → cria pack (master/coordenacao)
+PUT    /api/creative-packs/:id       → edita (master/coordenacao)
+DELETE /api/creative-packs/:id       → remove (master/coordenacao)
+```
+
+### `/api/creatives`
+```
+GET    /api/creatives                → lista todos ativos da tenant
+GET    /api/creatives?packId=X       → filtra por pack
+GET    /api/creatives?tipo=X         → filtra por tipo (personalizavel/avulso)
+POST   /api/creatives                → cria (master/coordenacao)
+PUT    /api/creatives/:id            → edita (master/coordenacao)
+DELETE /api/creatives/:id            → remove (master/coordenacao)
+```
+
+Todas as rotas requerem auth. Tenant isolation via `req.tenantId!`.
+
+---
+
+## T003 — Componente: Galeria de Criativos
+
+Criar `client/src/components/criativos-gallery.tsx`.
+
+Usado na página `/material-apoio?categoria=criativos` e no modal quando categoria = 'criativos'.
+
+### Layout
+
+**Filtros no topo:**
+```
+[ Todos os tipos ▾ ]  [ Pack atual ▾ ]   (+ Gerenciar Packs — só master/coordenacao)
+```
+
+**Abas de tipo** (logo abaixo dos filtros):
+```
+[ ✏️ Personalizáveis ]  [ 📥 Avulsos ]
+```
+
+**Grid de thumbnails** — 4 colunas no desktop, 2 no mobile:
+
+Cada thumbnail card:
+- Imagem de preview (usando a `imageUrl` do Drive)
+- Título do criativo
+- Badge do tipo: roxo "Personalizável" / cinza "Avulso"
+- Nome do pack (pequeno, abaixo)
+
+**Para Personalizáveis:**
+- Botão **"✏️ Personalizar"** → abre o Finalizador (T004)
+
+**Para Avulsos:**
+- Botão **"⬇️ Baixar"** → `window.open(imageUrl, '_blank')`
+
+**Botões de gestão** (só master/coordenacao):
+- Ícone de editar e lixeira em cada card
+- Botão **"+ Adicionar Criativo"** no topo direito
+
+**Estado vazio:**
+```
+🎨
+Nenhum criativo disponível ainda.
+[+ Adicionar Criativo]
+```
+
+---
+
+## T004 — Finalizador de Card (Personalizador)
+
+Criar `client/src/components/card-finalizer.tsx`.
+
+Este componente é um **modal fullscreen** (ou modal grande centralizado)
+que contém toda a lógica do finalizador de card.
+
+### Como funciona
+
+O HTML de referência já existe e foi fornecido. A lógica deve ser portada para React
+mantendo EXATAMENTE o mesmo comportamento:
+
+1. **Imagem de fundo** — pré-carregada automaticamente com a `imageUrl` do criativo selecionado
+   (não pede mais upload de card — já vem do sistema)
+2. **Upload de foto do corretor** — com crop circular (arrastar + zoom slider)
+3. **Campos de texto** — Nome, Cargo, WhatsApp
+4. **Preview em tempo real** — usando `<canvas>` ou overlay CSS igual ao HTML original
+5. **Download** — exporta PNG na resolução original via Canvas com:
+   - Caixa branca no rodapé
+   - Círculo da foto transpassando pra cima
+   - Badge gradiente roxo→rosa "Aproveite a menor taxa!"
+   - Nome (bold grande), Cargo (uppercase pequeno), ícone WhatsApp + telefone
+
+### Pré-preenchimento dos dados do corretor
+
+Puxar do usuário logado (`useAuth()`) para pré-preencher os campos:
+- Nome: `user.name`
+- WhatsApp: `user.phone` (se existir no modelo)
+- Cargo: `user.role` formatado (vendedor → "Consultor Financeiro", coordenacao → "Coordenador", master → "Gestor")
+
+O corretor pode editar qualquer campo antes de baixar.
+
+### Estrutura do componente
+
+```tsx
+interface CardFinalizerProps {
+  aberto: boolean;
+  criativo: Creative;  // contém imageUrl, title
+  onClose: () => void;
+}
+```
+
+Modal com:
+- Header: título do criativo + botão X fechar
+- Corpo em duas colunas (desktop): esquerda = controles, direita = preview
+- Footer: botão "⬇️ Baixar Card Finalizado"
+
+### Lógica Canvas (portar do HTML original)
+
+A função `downloadCard()` do HTML original deve ser portada para TypeScript
+dentro do componente. Ela:
+1. Cria canvas com dimensões da imagem original
+2. Desenha imagem de fundo
+3. Calcula proporções da caixa branca e círculo baseado na largura da imagem
+4. Desenha caixa branca com border-radius
+5. Desenha foto circular (se fornecida) ou placeholder
+6. Desenha badge gradiente, nome, cargo, ícone WhatsApp, telefone
+7. Dispara download do PNG
+
+**Manter todas as proporções do HTML original** — elas foram calibradas para funcionar
+em qualquer resolução de imagem.
+
+### Crop de foto
+
+Portar o sistema de crop do HTML:
+- Modal de crop com viewport circular 260×260
+- Arrastar para reposicionar (mouse + touch)
+- Slider de zoom
+- Confirmar → gera canvas circular → usa como foto da assinatura
+
+---
+
+## T005 — Modal de Gestão (master/coordenacao)
+
+### Modal: Adicionar/Editar Criativo
+Campos:
+- **Título** (text)
+- **Pack** (select — lista packs ativos)
+- **Tipo** (select: Personalizável / Avulso)
+- **URL da Imagem** (text — link do Google Drive)
+- **Ativo** (toggle)
+
+### Modal: Gerenciar Packs
+Acessado pelo botão "Gerenciar Packs" na galeria.
+Lista os packs com opções de criar, editar nome/descrição, ativar/desativar.
+
+---
+
+## T006 — Integrar na página e modal do Material de Apoio
+
+### `material-apoio.tsx`
+Quando `activeCategory === 'criativos'`, renderizar `<CriativosGallery />`.
+
+### `material-apoio-modal.tsx`
+Quando `categoria === 'criativos'`, renderizar `<CriativosGallery />`.
+
+O `<CardFinalizer>` é renderizado dentro de `CriativosGallery` como modal interno —
+não precisa subir para o nível do Material de Apoio.
+
+---
+
+## OBSERVAÇÕES TÉCNICAS IMPORTANTES
+
+### Imagens do Google Drive
+Links do Drive precisam estar no formato compartilhado público.
+Para exibir como `<img>` thumbnail, usar:
+```
+https://drive.google.com/thumbnail?id=FILE_ID&sz=w400
+```
+Para download/canvas, a `imageUrl` deve ser o link direto que o master cadastrou.
+**Não fazer proxy das imagens** — usar direto no canvas com `crossOrigin = 'anonymous'`
+e orientar o master a usar links públicos do Drive.
+
+### Canvas e CORS
+Ao carregar imagem externa no canvas:
+```ts
+const img = new Image();
+img.crossOrigin = 'anonymous';
+img.src = imageUrl;
+```
+Se der erro de CORS com Drive, mostrar aviso ao usuário para usar link de incorporação.
+
+### Responsividade do Finalizador
+- Desktop: duas colunas (controles | preview)
+- Mobile: coluna única (controles em cima, preview embaixo)
+
+---
+
+## ARQUIVOS A CRIAR/MODIFICAR
+
+| Arquivo | Ação |
+|---------|------|
+| `shared/schema.ts` | Adicionar `creativePacks` e `creatives` |
+| `server/routes.ts` | Rotas `/api/creative-packs` e `/api/creatives` |
+| `client/src/components/criativos-gallery.tsx` | Criar galeria |
+| `client/src/components/card-finalizer.tsx` | Criar finalizador (portar HTML) |
+| `client/src/pages/material-apoio.tsx` | Integrar CriativosGallery na aba Criativos |
+| `client/src/components/material-apoio-modal.tsx` | Integrar CriativosGallery quando categoria=criativos |
+
+---
+
+## RESUMO
+
+| Item | Detalhe |
+|------|---------|
+| Stack | React + TypeScript + Canvas API + Drizzle + PostgreSQL |
+| Sem processamento no servidor | Tudo canvas no browser |
+| Auth | `useAuth()` para pré-preencher dados e checar role |
+| Roles que gerenciam | `master`, `coordenacao` |
+| Roles que usam | todos |
+| Paleta finalizador | Manter original: `#9b3dd6`, `#e91e8c`, `#4a1080` |
+| Paleta galeria | Capital Go brandbook: `#6C2BD9` primário |
