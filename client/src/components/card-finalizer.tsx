@@ -23,7 +23,6 @@ interface CardFinalizerProps {
 
 export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps) {
   const { user } = useAuth();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [nome, setNome] = useState(user?.name || "");
@@ -65,12 +64,14 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
     const canvas = previewCanvasRef.current;
     if (!canvas || !bgImage) return;
     const W = 400;
-    const H = Math.round((bgImage.height / bgImage.width) * W);
+    const H = Math.round((bgImage.naturalHeight / bgImage.naturalWidth) * W);
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    renderCard(ctx, bgImage, W, H, photoImg, nome, cargo, whatsapp);
+    document.fonts.ready.then(() => {
+      renderCardCalibrated(ctx, bgImage, W, H, photoImg, nome, cargo, whatsapp);
+    });
   }, [bgImage, photoImg, nome, cargo, whatsapp]);
 
   useEffect(() => {
@@ -162,22 +163,18 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
     setCropOffset({ x: t.clientX - dragStart.x, y: t.clientY - dragStart.y });
   };
 
-  const downloadCard = async () => {
-    if (!bgImage) return;
+  const handleDownload = async () => {
+    if (!criativo.imageUrl) return;
     setDownloading(true);
     try {
-      const W = bgImage.width;
-      const H = bgImage.height;
-      const offscreen = document.createElement("canvas");
-      offscreen.width = W;
-      offscreen.height = H;
-      const ctx = offscreen.getContext("2d");
-      if (!ctx) return;
-      renderCard(ctx, bgImage, W, H, photoImg, nome, cargo, whatsapp);
-      const link = document.createElement("a");
-      link.download = `card-${criativo.title.replace(/\s+/g, "-").toLowerCase()}.png`;
-      link.href = offscreen.toDataURL("image/png");
-      link.click();
+      await downloadCardCalibrated(
+        criativo.imageUrl,
+        photoData,
+        nome,
+        cargo,
+        whatsapp,
+        nome.replace(/\s+/g, "-").toLowerCase() || "card"
+      );
     } finally {
       setDownloading(false);
     }
@@ -270,7 +267,7 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
               <Button
                 className="w-full"
                 disabled={downloading || bgLoading}
-                onClick={downloadCard}
+                onClick={handleDownload}
                 style={{ background: "linear-gradient(90deg, #9b3dd6, #e91e8c)" }}
                 data-testid="button-download"
               >
@@ -353,7 +350,59 @@ export function CardFinalizer({ aberto, criativo, onClose }: CardFinalizerProps)
   );
 }
 
-function renderCard(
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  w: number, h: number,
+  r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawWhatsappIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  size: number
+) {
+  ctx.fillStyle = "#25D366";
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.save();
+  ctx.translate(x + size / 2, y + size / 2);
+  const s = size / 24;
+  ctx.scale(s, s);
+  ctx.translate(-12, -12);
+  const p = new Path2D(
+    "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
+  );
+  ctx.fill(p);
+  ctx.restore();
+}
+
+function renderCardCalibrated(
   ctx: CanvasRenderingContext2D,
   bgImg: HTMLImageElement,
   W: number,
@@ -365,100 +414,112 @@ function renderCard(
 ) {
   ctx.drawImage(bgImg, 0, 0, W, H);
 
-  const footerH = H * 0.18;
-  const footerY = H - footerH;
-  const photoR = W * 0.065;
-  const photoCY = footerY - photoR * 0.3;
-  const photoCX = W * 0.12;
-  const pad = W * 0.04;
-  const radius = W * 0.02;
+  const marg = W * 0.03;
+  const bH = Math.round(H * 0.115);
+  const bX = marg;
+  const bW = W - marg * 2;
+  const bY = H - bH - marg;
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(pad, footerY + radius);
-  ctx.arcTo(pad, footerY, pad + radius, footerY, radius);
-  ctx.lineTo(W - pad - radius, footerY);
-  ctx.arcTo(W - pad, footerY, W - pad, footerY + radius, radius);
-  ctx.lineTo(W - pad, H - pad - radius);
-  ctx.arcTo(W - pad, H - pad, W - pad - radius, H - pad, radius);
-  ctx.lineTo(pad + radius, H - pad);
-  ctx.arcTo(pad, H - pad, pad, H - pad - radius, radius);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.fillStyle = "rgba(255,255,255,0.97)";
+  roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.04));
   ctx.fill();
-  ctx.restore();
+
+  const aR = Math.round(bH * 0.68);
+  const aX = bX + Math.round(W * 0.04) + aR;
+  const aY = bY + bH - aR;
+
+  ctx.strokeStyle = "#c9a8f0";
+  ctx.lineWidth = Math.round(W * 0.007);
+  ctx.beginPath();
+  ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
+  ctx.stroke();
 
   if (photoImg) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
+    ctx.arc(aX, aY, aR, 0, Math.PI * 2);
     ctx.clip();
-    ctx.drawImage(photoImg, photoCX - photoR, photoCY - photoR, photoR * 2, photoR * 2);
+    ctx.drawImage(photoImg, aX - aR, aY - aR, aR * 2, aR * 2);
     ctx.restore();
-    ctx.beginPath();
-    ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = W * 0.005;
-    ctx.stroke();
   } else {
-    ctx.save();
+    ctx.fillStyle = "#e0ccf5";
     ctx.beginPath();
-    ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
-    ctx.fillStyle = "#e0d4f5";
+    ctx.arc(aX, aY, aR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = W * 0.005;
-    ctx.stroke();
-    ctx.restore();
   }
 
-  const badgeW = W * 0.45;
-  const badgeH = H * 0.03;
-  const badgeX = W * 0.5 - badgeW / 2;
-  const badgeY = footerY + footerH * 0.08;
-  const badgeR = badgeH / 2;
-  const grad = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeW, badgeY);
+  const tX = aX + aR + Math.round(W * 0.035);
+
+  const fBadge = Math.round(W * 0.026);
+  const fName = Math.round(W * 0.048);
+  const fRole = Math.round(W * 0.022);
+  const fPhone = Math.round(W * 0.033);
+  const waSize = Math.round(W * 0.04);
+
+  ctx.font = `700 ${fBadge}px Montserrat, sans-serif`;
+  const badgeText = "Aproveite a menor taxa!";
+  const bw = ctx.measureText(badgeText).width + Math.round(W * 0.055);
+  const bh = Math.round(bH * 0.26);
+  const bxp = tX;
+  const byp = bY + Math.round(bH * 0.09);
+  const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
   grad.addColorStop(0, "#9b3dd6");
   grad.addColorStop(1, "#e91e8c");
-  ctx.beginPath();
-  ctx.moveTo(badgeX + badgeR, badgeY);
-  ctx.lineTo(badgeX + badgeW - badgeR, badgeY);
-  ctx.arc(badgeX + badgeW - badgeR, badgeY + badgeR, badgeR, -Math.PI / 2, Math.PI / 2);
-  ctx.lineTo(badgeX + badgeR, badgeY + badgeH);
-  ctx.arc(badgeX + badgeR, badgeY + badgeR, badgeR, Math.PI / 2, -Math.PI / 2);
-  ctx.closePath();
   ctx.fillStyle = grad;
+  roundRect(ctx, bxp, byp, bw, bh, Math.round(bh / 2));
   ctx.fill();
-  ctx.font = `bold ${W * 0.018}px Inter, Arial, sans-serif`;
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
-  ctx.fillText("Aproveite a menor taxa!", W * 0.5, badgeY + badgeH * 0.72);
-
-  const textX = photoCX + photoR + W * 0.03;
-  const nameY = footerY + footerH * 0.45;
-  ctx.font = `bold ${W * 0.032}px Inter, Arial, sans-serif`;
-  ctx.fillStyle = "#1a1a2e";
+  ctx.fillText(badgeText, bxp + bw / 2, byp + Math.round(bh * 0.73));
   ctx.textAlign = "left";
-  ctx.fillText(nome || "Seu Nome", textX, nameY);
 
-  ctx.font = `${W * 0.016}px Inter, Arial, sans-serif`;
-  ctx.fillStyle = "#666";
-  ctx.fillText((cargo || "Consultor Financeiro").toUpperCase(), textX, nameY + W * 0.03);
+  ctx.fillStyle = "#1a0030";
+  ctx.font = `900 ${fName}px Montserrat, sans-serif`;
+  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.57));
 
-  if (whatsapp) {
-    const wpY = nameY + W * 0.06;
-    ctx.fillStyle = "#25D366";
-    ctx.beginPath();
-    const iconR = W * 0.012;
-    ctx.arc(textX + iconR, wpY - iconR * 0.3, iconR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = `bold ${W * 0.011}px Inter, Arial, sans-serif`;
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "center";
-    ctx.fillText("W", textX + iconR, wpY + iconR * 0.15);
-    ctx.textAlign = "left";
-    ctx.font = `${W * 0.018}px Inter, Arial, sans-serif`;
-    ctx.fillStyle = "#333";
-    ctx.fillText(whatsapp, textX + iconR * 3, wpY);
+  ctx.fillStyle = "#aaa";
+  ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
+  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.73));
+
+  const waY = bY + Math.round(bH * 0.90);
+  const waTop = waY - waSize * 0.8;
+  drawWhatsappIcon(ctx, tX, waTop, waSize);
+  ctx.fillStyle = "#222";
+  ctx.font = `700 ${fPhone}px Montserrat, sans-serif`;
+  ctx.fillText(
+    whatsapp || "(48) 99999-9999",
+    tX + waSize + Math.round(W * 0.012),
+    waY
+  );
+}
+
+async function downloadCardCalibrated(
+  bgImageUrl: string,
+  croppedPhotoUrl: string | null,
+  nome: string,
+  cargo: string,
+  telefone: string,
+  nomeArquivo: string
+) {
+  const bg = await loadImage(bgImageUrl);
+  const W = bg.naturalWidth;
+  const H = bg.naturalHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+
+  let photoImg: HTMLImageElement | null = null;
+  if (croppedPhotoUrl) {
+    photoImg = await loadImage(croppedPhotoUrl);
   }
+
+  await document.fonts.ready;
+  renderCardCalibrated(ctx, bg, W, H, photoImg, nome, cargo, telefone);
+
+  const a = document.createElement("a");
+  a.download = `card-capitalgo-${nomeArquivo}.png`;
+  a.href = canvas.toDataURL("image/png");
+  a.click();
 }
