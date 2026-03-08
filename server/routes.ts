@@ -90,6 +90,8 @@ import {
   leadTagAssignments,
   materials,
   insertMaterialSchema,
+  commissionTables,
+  insertCommissionTableSchema,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -24193,6 +24195,195 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } catch (error) {
         console.error("DELETE /api/materials/:id error:", error);
         res.status(500).json({ message: "Erro ao remover material" });
+      }
+    }
+  );
+
+  // ===== COMMISSION TABLES / TABELAS DE COMISSÃO =====
+
+  app.get(
+    "/api/commission-tables",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.tenantId!;
+        const rows = await db
+          .select()
+          .from(commissionTables)
+          .where(eq(commissionTables.tenantId, tenantId))
+          .orderBy(desc(commissionTables.pontos));
+        res.json(rows);
+      } catch (error) {
+        console.error("GET /api/commission-tables error:", error);
+        res.status(500).json({ message: "Erro ao listar tabelas" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/commission-tables/simulate",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.tenantId!;
+        const { convenio, tipoProduto, banco, prazo, parcela, valorContrato } = req.query as Record<string, string>;
+
+        if (!convenio || !tipoProduto) {
+          return res.status(400).json({ message: "convenio e tipoProduto são obrigatórios" });
+        }
+        if (!parcela && !valorContrato) {
+          return res.status(400).json({ message: "Informe parcela ou valorContrato" });
+        }
+
+        const conditions = [
+          eq(commissionTables.tenantId, tenantId),
+          eq(commissionTables.convenio, convenio),
+          eq(commissionTables.tipoProduto, tipoProduto),
+          eq(commissionTables.ativo, true),
+        ];
+
+        if (banco) {
+          conditions.push(eq(commissionTables.banco, banco));
+        }
+        if (prazo) {
+          conditions.push(eq(commissionTables.prazo, parseInt(prazo)));
+        }
+
+        const rows = await db
+          .select()
+          .from(commissionTables)
+          .where(and(...conditions))
+          .orderBy(desc(commissionTables.pontos))
+          .limit(10);
+
+        const parcelaNum = parcela ? parseFloat(parcela) : 0;
+        const contratoNum = valorContrato ? parseFloat(valorContrato) : 0;
+        if ((parcela && (isNaN(parcelaNum) || parcelaNum <= 0)) || (valorContrato && (isNaN(contratoNum) || contratoNum <= 0))) {
+          return res.status(400).json({ message: "Valor inválido" });
+        }
+
+        const results = rows.map((row) => {
+          const coef = parseFloat(row.coeficiente);
+          if (!coef || isNaN(coef) || coef <= 0) return null;
+          let valorContratoLibera: number;
+          let parcelaResultante: number;
+
+          if (parcela) {
+            parcelaResultante = parcelaNum;
+            valorContratoLibera = parcelaResultante / coef;
+          } else {
+            valorContratoLibera = contratoNum;
+            parcelaResultante = valorContratoLibera * coef;
+          }
+
+          return {
+            id: row.id,
+            banco: row.banco,
+            convenio: row.convenio,
+            tipoProduto: row.tipoProduto,
+            prazo: row.prazo,
+            coeficiente: row.coeficiente,
+            pontos: row.pontos,
+            valorContratoLibera: Math.round(valorContratoLibera * 100) / 100,
+            parcelaResultante: Math.round(parcelaResultante * 100) / 100,
+          };
+        });
+
+        res.json(results.filter(Boolean));
+      } catch (error) {
+        console.error("GET /api/commission-tables/simulate error:", error);
+        res.status(500).json({ message: "Erro na simulação" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/commission-tables",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const parsed = insertCommissionTableSchema.parse(req.body);
+        const [created] = await db
+          .insert(commissionTables)
+          .values({
+            ...parsed,
+            tenantId: req.tenantId!,
+            createdBy: req.user!.id,
+          })
+          .returning();
+        res.status(201).json(created);
+      } catch (error) {
+        console.error("POST /api/commission-tables error:", error);
+        res.status(500).json({ message: "Erro ao criar tabela" });
+      }
+    }
+  );
+
+  app.put(
+    "/api/commission-tables/:id",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const id = parseInt(req.params.id);
+        const [existing] = await db
+          .select()
+          .from(commissionTables)
+          .where(and(eq(commissionTables.id, id), eq(commissionTables.tenantId, req.tenantId!)));
+        if (!existing) {
+          return res.status(404).json({ message: "Tabela não encontrada" });
+        }
+        const { convenio, banco, tipoProduto, prazo, coeficiente, pontos, ativo } = req.body;
+        const updateData: Record<string, any> = {};
+        if (typeof convenio === "string" && convenio.trim()) updateData.convenio = convenio.trim();
+        if (typeof banco === "string" && banco.trim()) updateData.banco = banco.trim();
+        if (typeof tipoProduto === "string" && tipoProduto.trim()) updateData.tipoProduto = tipoProduto.trim();
+        if (prazo !== undefined) updateData.prazo = parseInt(String(prazo));
+        if (coeficiente !== undefined) updateData.coeficiente = String(coeficiente);
+        if (pontos !== undefined) updateData.pontos = String(pontos);
+        if (ativo !== undefined) updateData.ativo = Boolean(ativo);
+        const [updated] = await db
+          .update(commissionTables)
+          .set(updateData)
+          .where(and(eq(commissionTables.id, id), eq(commissionTables.tenantId, req.tenantId!)))
+          .returning();
+        res.json(updated);
+      } catch (error) {
+        console.error("PUT /api/commission-tables/:id error:", error);
+        res.status(500).json({ message: "Erro ao atualizar tabela" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/commission-tables/:id",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const id = parseInt(req.params.id);
+        const [existing] = await db
+          .select()
+          .from(commissionTables)
+          .where(and(eq(commissionTables.id, id), eq(commissionTables.tenantId, req.tenantId!)));
+        if (!existing) {
+          return res.status(404).json({ message: "Tabela não encontrada" });
+        }
+        await db.delete(commissionTables).where(and(eq(commissionTables.id, id), eq(commissionTables.tenantId, req.tenantId!)));
+        res.json({ message: "Tabela removida" });
+      } catch (error) {
+        console.error("DELETE /api/commission-tables/:id error:", error);
+        res.status(500).json({ message: "Erro ao remover tabela" });
       }
     }
   );

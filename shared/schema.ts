@@ -3172,3 +3172,27 @@ export const insertMaterialSchema = createInsertSchema(materials).omit({
 
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
+
+export const commissionTables = pgTable("commission_tables", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  convenio: text("convenio").notNull(),
+  banco: text("banco").notNull(),
+  tipoProduto: text("tipo_produto").notNull(),
+  prazo: integer("prazo").notNull(),
+  coeficiente: decimal("coeficiente", { precision: 10, scale: 6 }).notNull(),
+  pontos: decimal("pontos", { precision: 10, scale: 4 }).notNull(),
+  ativo: boolean("ativo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+export const insertCommissionTableSchema = createInsertSchema(commissionTables).omit({
+  id: true,
+  createdAt: true,
+  tenantId: true,
+  createdBy: true,
+});
+
+export type CommissionTable = typeof commissionTables.$inferSelect;
+export type InsertCommissionTable = z.infer<typeof insertCommissionTableSchema>;
