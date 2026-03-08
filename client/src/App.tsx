@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -59,6 +60,7 @@ import GestaoComercialRelatoriosPage from "@/pages/gestao-comercial-relatorios";
 import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
+import { MaterialApoioModal } from "@/components/material-apoio-modal";
 import NotFound from "@/pages/not-found";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
@@ -234,6 +236,8 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 function Router() {
   const { user, isLoading } = useAuth();
   const [location, navigate] = useLocation();
+  const [modalAberto, setModalAberto] = useState(false);
+  const [modalCategoria, setModalCategoria] = useState("");
 
   // Wait for auth to resolve before rendering any routes
   if (isLoading) {
@@ -267,6 +271,22 @@ function Router() {
     "--sidebar-width-icon": "3rem",
   };
 
+  const rotasDeVenda = ["/vendas/campanhas", "/vendas/atendimento", "/vendas/consulta", "/vendas/pipeline"];
+  const estaNaVenda = rotasDeVenda.some((r) => location.startsWith(r));
+
+  const handleAtalho = (categoria: string) => {
+    if (categoria === "processos") {
+      window.open("/material-apoio?categoria=processos", "_blank");
+      return;
+    }
+    if (estaNaVenda) {
+      setModalCategoria(categoria);
+      setModalAberto(true);
+    } else {
+      navigate(`/material-apoio?categoria=${categoria}`);
+    }
+  };
+
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
       <div className="flex h-screen w-full">
@@ -283,7 +303,7 @@ function Router() {
               ].map((s) => (
                 <button
                   key={s.key}
-                  onClick={() => navigate(`/material-apoio?categoria=${s.key}`)}
+                  onClick={() => handleAtalho(s.key)}
                   className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
                   style={{ color: "#6B7280", fontFamily: "Inter, sans-serif" }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "#6C2BD9"; e.currentTarget.style.backgroundColor = "rgba(108,43,217,0.07)"; }}
@@ -466,6 +486,11 @@ function Router() {
           </main>
         </div>
       </div>
+      <MaterialApoioModal
+        aberto={modalAberto}
+        categoria={modalCategoria}
+        onClose={() => setModalAberto(false)}
+      />
     </SidebarProvider>
   );
 }
