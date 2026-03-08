@@ -1,0 +1,251 @@
+# PROMPT — Integração Webhook: Etiquetas WhatsApp → CRM Capital Go
+
+## OBJETIVO
+
+Receber eventos de etiquetagem da plataforma de WhatsApp e aplicar
+as etiquetas nos clientes correspondentes do CRM, usando CPF como chave de ligação.
+Adicionar também o botão de acesso à plataforma de WhatsApp na interface do CRM.
+
+---
+
+## T001 — Verificar/adicionar campo de tags no modelo de cliente
+
+Verificar se a tabela de clientes (`clients` ou equivalente) já possui um campo
+para armazenar etiquetas/tags recebidas do WhatsApp.
+
+Se não existir, adicionar ao `shared/schema.ts`:
+```ts
+whatsappLabels: text('whatsapp_labels').array().default([]),
+// Array de strings com os nomes das etiquetas ativas do WhatsApp
+```
+
+Se já existir campo similar, reutilizá-lo e apenas documentar o nome correto.
+
+Rodar `db:push` ou raw SQL se necessário.
+
+---
+
+## T002 — Endpoint webhook: POST /api/webhooks/whatsapp-labels
+
+Criar endpoint **público** (sem autenticação de usuário, mas com validação de secret):
+
+```ts
+POST /api/webhooks/whatsapp-labels
+```
+
+### Headers esperados:
+```
+x-webhook-secret: {WHATSAPP_WEBHOOK_SECRET}   // variável de ambiente
+Content-Type: application/json
+```
+
+### Body recebido (enviado pela plataforma de WhatsApp):
+```json
+{
+  "event": "label.applied",
+  "label": {
+    "id": "abc123",
+    "name": "Compra Dívida",
+    "color": "#6C2BD9"
+  },
+  "contact": {
+    "phone_number": "5548999999999",
+    "name": "Marta Alves Vieira",
+    "cpf": "316.298.903-59"
+  },
+  "conversation_id": "conv_xyz",
+  "timestamp": "2025-06-01T14:30:00Z"
+}
+```
+
+### Eventos suportados:
+- `label.applied` → adicionar etiqueta ao cliente
+- `label.removed` → remover etiqueta do cliente
+
+### Lógica do endpoint:
+
+```ts
+// 1. Validar secret
+const secret = req.headers['x-webhook-secret'];
+if (secret !== process.env.WHATSAPP_WEBHOOK_SECRET) {
+  return res.status(401).json({ error: 'Unauthorized' });
+}
+
+// 2. Extrair CPF do body (limpar máscara)
+const cpfLimpo = body.contact.cpf.replace(/\D/g, '');
+
+// 3. Buscar cliente no CRM pelo CPF (tenant-agnostic neste endpoint,
+//    ou usar tenant fixo se toda a plataforma é single-tenant por ora)
+const cliente = await db.query.clients.findFirst({
+  where: eq(clients.cpf, cpfLimpo)  // ajustar nome da coluna conforme schema atual
+});
+
+if (!cliente) {
+  // Logar tentativa sem match para auditoria
+  console.warn(`[webhook] Cliente não encontrado para CPF: ${cpfLimpo}`);
+  return res.status(200).json({ 
+    status: 'not_found', 
+    message: 'Cliente não encontrado no CRM' 
+  });
+  // Retorna 200 para a plataforma não retentar indefinidamente
+}
+
+// 4. Atualizar labels
+const labelsAtuais: string[] = cliente.whatsappLabels || [];
+const nomeEtiqueta = body.label.name;
+
+let labelsAtualizadas: string[];
+
+if (body.event === 'label.applied') {
+  // Adicionar se não existir
+  labelsAtualizadas = labelsAtuais.includes(nomeEtiqueta)
+    ? labelsAtuais
+    : [...labelsAtuais, nomeEtiqueta];
+} else if (body.event === 'label.removed') {
+  // Remover
+  labelsAtualizadas = labelsAtuais.filter(l => l !== nomeEtiqueta);
+} else {
+  return res.status(200).json({ status: 'ignored', event: body.event });
+}
+
+// 5. Salvar no banco
+await db.update(clients)
+  .set({ 
+    whatsappLabels: labelsAtualizadas,
+    updatedAt: new Date()
+  })
+  .where(eq(clients.id, cliente.id));
+
+// 6. Retornar sucesso
+return res.status(200).json({
+  status: 'success',
+  clienteId: cliente.id,
+  labels: labelsAtualizadas
+});
+```
+
+### Variável de ambiente necessária:
+Adicionar ao `.env` e ao Replit Secrets:
+```
+WHATSAPP_WEBHOOK_SECRET=capitalgo_whatsapp_secret_2025
+```
+
+---
+
+## T003 — Log de eventos webhook (tabela de auditoria)
+
+Criar tabela `webhook_logs` para rastrear todos os eventos recebidos:
+
+```ts
+export const webhookLogs = pgTable('webhook_logs', {
+  id:           serial('id').primaryKey(),
+  source:       text('source').notNull(),        // 'whatsapp'
+  event:        text('event').notNull(),          // 'label.applied' | 'label.removed'
+  cpf:          text('cpf'),                      // CPF recebido (sem máscara)
+  clienteId:    integer('cliente_id'),            // null se não encontrado
+  labelName:    text('label_name'),
+  payload:      jsonb('payload'),                 // body completo recebido
+  status:       text('status').notNull(),         // 'success' | 'not_found' | 'error'
+  errorMessage: text('error_message'),
+  createdAt:    timestamp('created_at').defaultNow(),
+});
+```
+
+Registrar cada chamada ao webhook nessa tabela (success ou failure).
+
+---
+
+## T004 — Exibir etiquetas do WhatsApp no perfil do cliente
+
+Na página/modal de detalhes do cliente no CRM, exibir as etiquetas do WhatsApp:
+
+```tsx
+{cliente.whatsappLabels && cliente.whatsappLabels.length > 0 && (
+  <div className="flex flex-col gap-1">
+    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
+      Etiquetas WhatsApp
+    </span>
+    <div className="flex flex-wrap gap-1">
+      {cliente.whatsappLabels.map(label => (
+        <span 
+          key={label}
+          className="px-2 py-0.5 rounded-full text-xs font-semibold"
+          style={{ background: '#f3e8ff', color: '#6C2BD9' }}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  </div>
+)}
+```
+
+---
+
+## T005 — Botão "Meu WhatsApp" no header/sidebar do CRM
+
+Adicionar botão de acesso rápido à plataforma de WhatsApp.
+
+### Variável de ambiente:
+```
+WHATSAPP_PLATFORM_URL=https://url-da-sua-plataforma.com
+```
+
+### Botão no header (junto aos outros ícones de atalho):
+
+```tsx
+<a
+  href={import.meta.env.VITE_WHATSAPP_PLATFORM_URL || '#'}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors"
+  title="Abrir plataforma WhatsApp"
+>
+  {/* Ícone WhatsApp roxo */}
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="#6C2BD9">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+  <span className="text-sm font-semibold text-purple-700">Meu WhatsApp</span>
+</a>
+```
+
+Adicionar `VITE_WHATSAPP_PLATFORM_URL` no `.env` do cliente também.
+
+---
+
+## T006 — Filtro por etiqueta WhatsApp na listagem de clientes (opcional)
+
+Se a listagem de clientes tiver filtros, adicionar filtro por etiqueta do WhatsApp:
+
+```ts
+// Na query de listagem, se vier ?whatsappLabel=Compra Dívida
+if (whatsappLabel) {
+  query = query.where(
+    sql`${clients.whatsappLabels} @> ARRAY[${whatsappLabel}]::text[]`
+  );
+}
+```
+
+---
+
+## RESUMO TÉCNICO
+
+| Item | Detalhe |
+|------|---------|
+| Chave de ligação | CPF (sem máscara nos dois lados) |
+| Autenticação webhook | Header `x-webhook-secret` + env var |
+| Eventos suportados | `label.applied`, `label.removed` |
+| Retorno em caso de CPF não encontrado | HTTP 200 (evita retry loop) |
+| Auditoria | Tabela `webhook_logs` com payload completo |
+| Botão WhatsApp | Header do CRM, abre em nova aba |
+| Env vars necessárias | `WHATSAPP_WEBHOOK_SECRET`, `WHATSAPP_PLATFORM_URL`, `VITE_WHATSAPP_PLATFORM_URL` |
+
+## ARQUIVOS A CRIAR/MODIFICAR
+
+| Arquivo | Ação |
+|---------|------|
+| `shared/schema.ts` | Adicionar `whatsappLabels` em clients + tabela `webhookLogs` |
+| `server/routes.ts` | Endpoint `POST /api/webhooks/whatsapp-labels` |
+| `client/src/components/client-details.tsx` | Exibir etiquetas WhatsApp |
+| `client/src/App.tsx` ou header | Botão "Meu WhatsApp" |
+| `.env` | Variáveis `WHATSAPP_WEBHOOK_SECRET` e `WHATSAPP_PLATFORM_URL` |
