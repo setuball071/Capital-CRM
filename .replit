@@ -45,5 +45,5 @@ integrations = ["javascript_openai_ai_integrations:1.0.0"]
 
 [userenv.shared]
 WHATSAPP_WEBHOOK_SECRET = "capitalgo_whatsapp_secret_2025"
-VITE_WHATSAPP_PLATFORM_URL = "https://app.whatsapp.com"
+VITE_WHATSAPP_PLATFORM_URL = "https://capitalgo-whats.lovable.app"
 CRM_INTEGRATION_SECRET = "capitalgo_integration_secret_2025"
