@@ -733,6 +733,16 @@ export default function VendasConsulta() {
                 />
               </div>
             )}
+            {consultaData.clienteBase?.whatsappLabels && consultaData.clienteBase.whatsappLabels.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-1" data-testid="whatsapp-labels-section">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Etiquetas WhatsApp</span>
+                {consultaData.clienteBase.whatsappLabels.map((label: string) => (
+                  <Badge key={label} variant="secondary" className="text-xs" data-testid={`whatsapp-label-${label}`}>
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"

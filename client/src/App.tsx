@@ -62,7 +62,7 @@ import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
 import NotFound from "@/pages/not-found";
-import { Loader2, BarChart3, Smartphone, Settings, GraduationCap } from "lucide-react";
+import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -315,7 +315,24 @@ function Router() {
                 </button>
               ))}
             </div>
-            <NotificationBell />
+            <div className="flex items-center gap-1">
+              {import.meta.env.VITE_WHATSAPP_PLATFORM_URL && (
+                <a
+                  href={import.meta.env.VITE_WHATSAPP_PLATFORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+                  style={{ color: "#25D366", fontFamily: "Inter, sans-serif" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(37,211,102,0.07)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  data-testid="header-shortcut-whatsapp"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Meu WhatsApp
+                </a>
+              )}
+              <NotificationBell />
+            </div>
           </header>
           <main className="flex-1 overflow-auto">
             <Switch>

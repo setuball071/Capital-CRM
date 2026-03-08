@@ -765,6 +765,7 @@ export const clientesPessoa = pgTable(
     importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
     // Observações/notas de atendimento
     notes: text("notes"), // Histórico de observações do cliente
+    whatsappLabels: text("whatsapp_labels").array(),
     // === DADOS DE ENDEREÇO ===
     endereco: varchar("endereco", { length: 255 }), // Logradouro
     cidade: varchar("cidade", { length: 150 }),
@@ -3238,3 +3239,24 @@ export const insertCreativeSchema = createInsertSchema(creatives).omit({
 
 export type Creative = typeof creatives.$inferSelect;
 export type InsertCreative = z.infer<typeof insertCreativeSchema>;
+
+export const webhookLogs = pgTable("webhook_logs", {
+  id: serial("id").primaryKey(),
+  source: text("source").notNull(),
+  event: text("event").notNull(),
+  cpf: text("cpf"),
+  clienteId: integer("cliente_id"),
+  labelName: text("label_name"),
+  payload: jsonb("payload"),
+  status: text("status").notNull(),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWebhookLogSchema = createInsertSchema(webhookLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WebhookLog = typeof webhookLogs.$inferSelect;
+export type InsertWebhookLog = z.infer<typeof insertWebhookLogSchema>;

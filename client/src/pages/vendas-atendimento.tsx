@@ -728,6 +728,16 @@ export default function VendasAtendimento() {
                 ].filter((t): t is string => !!t)}
               />
             </div>
+            {atendimentoAtual.clienteBase?.whatsappLabels && atendimentoAtual.clienteBase.whatsappLabels.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap" data-testid="whatsapp-labels-section">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Etiquetas WhatsApp</span>
+                {atendimentoAtual.clienteBase.whatsappLabels.map((label: string) => (
+                  <Badge key={label} variant="secondary" className="text-xs" data-testid={`whatsapp-label-${label}`}>
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+            )}
             {/* Botões de ação no topo - igual à tela de Consulta */}
             <div className="flex items-center gap-2 flex-wrap">
               <Button
