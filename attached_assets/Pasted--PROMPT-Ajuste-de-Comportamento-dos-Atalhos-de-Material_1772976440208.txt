@@ -1,0 +1,146 @@
+# PROMPT — Ajuste de Comportamento dos Atalhos de Material de Apoio
+
+## CONTEXTO
+
+Os atalhos de Material de Apoio já foram implementados na barra superior
+(Tabelas, Criativos, Processos, Tutoriais). Agora precisamos tornar o
+comportamento **inteligente** dependendo de onde o usuário está no sistema.
+
+---
+
+## REGRA DE COMPORTAMENTO
+
+### Quando o usuário estiver em telas de venda:
+Rotas consideradas "telas de venda":
+- Qualquer rota que contenha: `/campanhas`, `/lista-manual`, `/consulta`, `/pipeline`
+
+| Atalho | Comportamento |
+|--------|--------------|
+| Tabelas | Abre **modal centralizado** por cima da tela atual |
+| Criativos | Abre **modal centralizado** por cima da tela atual |
+| Tutoriais | Abre **modal centralizado** por cima da tela atual |
+| Processos | Abre em **nova aba** (`/material-apoio?categoria=processos`) |
+
+### Quando o usuário estiver em qualquer outra tela:
+Todos os atalhos navegam normalmente para `/material-apoio?categoria=X`
+sem modal — comportamento padrão de navegação.
+
+---
+
+## T001 — Lógica de detecção de rota no Header
+
+No componente do header onde estão os atalhos, adicionar a detecção:
+
+```ts
+import { useLocation } from 'wouter'; // ou react-router, dependendo do projeto
+
+const [location] = useLocation();
+
+const rotasDeVenda = ['/campanhas', '/lista-manual', '/consulta', '/pipeline'];
+const estaNaVenda = rotasDeVenda.some(r => location.includes(r));
+```
+
+Para cada atalho, criar a função `handleAtalho(categoria)`:
+
+```ts
+const handleAtalho = (categoria: string) => {
+  if (categoria === 'processos') {
+    // processos sempre abre nova aba, independente de onde está
+    window.open(`/material-apoio?categoria=processos`, '_blank');
+    return;
+  }
+
+  if (estaNaVenda) {
+    // abre modal centralizado
+    setModalCategoria(categoria);
+    setModalAberto(true);
+  } else {
+    // navega normalmente
+    navigate(`/material-apoio?categoria=${categoria}`);
+  }
+};
+```
+
+---
+
+## T002 — Modal centralizado de Material de Apoio
+
+Criar um modal que pode ser aberto a partir do header.
+
+**Especificações do modal:**
+- Centralizado na tela (não drawer lateral)
+- Largura: `min(90vw, 900px)`
+- Altura: `min(85vh, 700px)`
+- Fundo escurecido por baixo (`backdrop: rgba(0,0,0,0.5)`)
+- Border-radius: `16px`
+- Scroll interno se o conteúdo for longo
+- Botão **X** para fechar no canto superior direito
+- Tecla `Escape` também fecha
+
+**Conteúdo do modal:**
+- Mesmo conteúdo da página `/material-apoio`, mas filtrado pela categoria que foi clicada
+- Header do modal: ícone + nome da categoria + contador de itens
+- Grid de cards igual à página (adaptar para caber no modal)
+- Botão "+ Adicionar" visível para master/coordenacao dentro do modal também
+- Botão "Abrir" em cada card continua abrindo o link em `_blank`
+
+**Estrutura sugerida:**
+
+```tsx
+// Estado no header ou em um contexto global
+const [modalAberto, setModalAberto] = useState(false);
+const [modalCategoria, setModalCategoria] = useState<string>('');
+
+// Componente
+<MaterialApoioModal
+  aberto={modalAberto}
+  categoria={modalCategoria}
+  onClose={() => setModalAberto(false)}
+/>
+```
+
+O componente `MaterialApoioModal` pode ser criado em:
+`client/src/components/material-apoio-modal.tsx`
+
+Ele reutiliza a mesma query `GET /api/materials?category=X` já existente —
+não precisa criar nova API.
+
+---
+
+## T003 — Processos sempre em nova aba
+
+Independente de onde o usuário estiver, ao clicar em **Processos**:
+```ts
+window.open('/material-apoio?categoria=processos', '_blank');
+```
+
+Motivo: processos é leitura longa/operacional — o usuário precisa
+ter as duas telas abertas ao mesmo tempo para seguir o passo a passo.
+
+---
+
+## RESUMO VISUAL DO COMPORTAMENTO
+
+```
+Usuário clica em atalho
+        │
+        ├── Processos? ──────────────────→ Nova aba sempre
+        │
+        └── Tabelas / Criativos / Tutoriais?
+                │
+                ├── Está em tela de venda? ──→ Modal centralizado
+                │   (/campanhas, /lista-manual,
+                │    /consulta, /pipeline)
+                │
+                └── Está em outra tela? ─────→ Navega para /material-apoio?categoria=X
+```
+
+---
+
+## ARQUIVOS A MODIFICAR
+
+| Arquivo | O que muda |
+|---------|-----------|
+| `client/src/App.tsx` (ou header component) | Adicionar lógica `handleAtalho` + estado do modal |
+| `client/src/components/material-apoio-modal.tsx` | Criar componente modal novo |
+| Nenhuma mudança na API | Modal reutiliza endpoints existentes |
