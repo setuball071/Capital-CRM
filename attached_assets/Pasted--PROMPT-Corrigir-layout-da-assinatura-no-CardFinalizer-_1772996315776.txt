@@ -1,0 +1,210 @@
+# PROMPT — Corrigir layout da assinatura no CardFinalizer
+
+## PROBLEMAS A CORRIGIR
+
+1. **Textos sobrepostos**: nome, cargo e telefone estão amontoados um em cima do outro
+2. **Espaço branco**: lado direito da caixa branca está vazio
+3. **Solução para o espaço**: QR code do Instagram da Capital Go no lado direito
+
+---
+
+## CORREÇÃO 1 — Espaçamento vertical dos textos
+
+O problema está nas posições Y de cada elemento. Elas precisam ser distribuídas
+uniformemente dentro da altura da caixa (`bH`), com espaço suficiente entre cada linha.
+
+Substituir as posições Y atuais pelas seguintes proporções calibradas:
+
+```typescript
+// Badge "Aproveite a menor taxa!" — topo da caixa
+const byp = bY + Math.round(bH * 0.08);        // era 0.09, ok
+
+// Nome do corretor — logo abaixo do badge com espaço
+const nameY = bY + Math.round(bH * 0.46);       // era 0.57 — muito baixo, causava sobreposição
+
+// Cargo — abaixo do nome
+const roleY = bY + Math.round(bH * 0.65);       // era 0.73
+
+// WhatsApp — rodapé da caixa
+const waY   = bY + Math.round(bH * 0.87);       // era 0.90
+```
+
+Esses valores distribuem os 4 elementos uniformemente na altura da caixa sem sobreposição.
+
+---
+
+## CORREÇÃO 2 — QR code do Instagram no lado direito
+
+### Biblioteca para gerar QR code no canvas
+
+Usar a biblioteca `qrcode` (já disponível via npm ou CDN):
+
+```bash
+npm install qrcode
+npm install @types/qrcode
+```
+
+Import no componente:
+```typescript
+import QRCode from 'qrcode';
+```
+
+### Layout da assinatura após a correção
+
+A caixa branca deve ser dividida em **duas zonas**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [FOTO]  | Badge / Nome / Cargo / WhatsApp  |  QR + @caption │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Zona esquerda** (do avatar até ~65% da largura da caixa): textos do corretor
+- **Zona direita** (~65% até a borda direita): QR code + texto "@capitalgo.oficial"
+
+### Implementação no canvas
+
+Adicionar após o desenho dos textos do corretor (dentro da função `downloadCard` e `renderCard`):
+
+```typescript
+// ── ZONA DIREITA — Instagram QR Code ─────────────────────────
+
+const instaUrl = 'https://www.instagram.com/capitalgo.oficial';
+const instaHandle = '@capitalgo.oficial';
+
+// Tamanho e posição do QR code
+const qrSize  = Math.round(bH * 0.75);           // QR ocupa 75% da altura da caixa
+const qrX     = bX + bW - marg - qrSize;         // alinhado à direita com margem
+const qrY     = bY + Math.round((bH - qrSize) / 2); // centralizado verticalmente
+
+// Gerar QR code como Data URL e desenhar no canvas
+const qrDataUrl = await QRCode.toDataURL(instaUrl, {
+  width: qrSize * 2,          // alta resolução
+  margin: 1,
+  color: {
+    dark: '#1a0030',           // roxo escuro da marca
+    light: '#ffffff'
+  }
+});
+
+const qrImg = await loadImage(qrDataUrl);
+ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+// Ícone do Instagram + handle abaixo do QR
+const instaIconSize = Math.round(W * 0.025);
+const captionY = qrY + qrSize + Math.round(bH * 0.06);
+const captionX = qrX + Math.round(qrSize / 2);   // centro do QR
+
+// Ícone Instagram (gradiente característico)
+drawInstagramIcon(ctx, captionX - instaIconSize - Math.round(W * 0.008), captionY - instaIconSize, instaIconSize);
+
+// Texto @capitalgo.oficial
+ctx.fillStyle = '#555';
+ctx.font = `600 ${Math.round(W * 0.018)}px Montserrat, sans-serif`;
+ctx.textAlign = 'left';
+ctx.fillText(instaHandle, captionX - instaIconSize + Math.round(W * 0.004), captionY - Math.round(instaIconSize * 0.1));
+ctx.textAlign = 'left';
+```
+
+### Limitar tX (textos do corretor) para não invadir a zona do QR
+
+Atualizar o limite de texto à direita:
+
+```typescript
+// Zona do corretor vai até onde começa o QR, com margem
+const zonaCorretorMaxX = qrX - Math.round(W * 0.03);
+
+// Badge não pode ser mais largo que a zona do corretor
+const bwMax = zonaCorretorMaxX - tX;
+const bw = Math.min(
+  ctx.measureText(badgeText).width + Math.round(W * 0.055),
+  bwMax
+);
+```
+
+### Função helper: drawInstagramIcon
+
+Adicionar junto com os outros helpers:
+
+```typescript
+function drawInstagramIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number
+) {
+  // Gradiente Instagram: amarelo → laranja → rosa → roxo
+  const grad = ctx.createLinearGradient(x, y + size, x + size, y);
+  grad.addColorStop(0,    '#f09433');
+  grad.addColorStop(0.25, '#e6683c');
+  grad.addColorStop(0.5,  '#dc2743');
+  grad.addColorStop(0.75, '#cc2366');
+  grad.addColorStop(1,    '#bc1888');
+
+  const r = size * 0.22;
+
+  // Fundo com border-radius
+  ctx.fillStyle = grad;
+  roundRect(ctx, x, y, size, size, r);
+  ctx.fill();
+
+  // Quadrado branco interno (câmera)
+  const pad = size * 0.18;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = size * 0.08;
+  roundRect(ctx, x + pad, y + pad, size - pad * 2, size - pad * 2, size * 0.12);
+  ctx.stroke();
+
+  // Círculo central (lente)
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size * 0.16, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Ponto superior direito
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x + size * 0.72, y + size * 0.28, size * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+}
+```
+
+---
+
+## ATUALIZAR TAMBÉM O PREVIEW (renderCard)
+
+O preview ao vivo deve refletir as mesmas correções.
+Como o preview usa canvas menor, as proporções são as mesmas (tudo relativo a W e H),
+então aplicar as mesmas mudanças na função `renderCard` / `drawPreview`.
+
+Para o QR no preview: usar `QRCode.toDataURL` da mesma forma —
+a biblioteca funciona tanto no download quanto no preview.
+
+---
+
+## CAMPO INSTAGRAM NO FORMULÁRIO (opcional — para versão futura)
+
+Por ora o Instagram é fixo (`capitalgo.oficial`).
+Mas deixar a constante isolada no topo do componente para fácil troca futura:
+
+```typescript
+// Constante no topo do componente (fora das funções)
+const INSTAGRAM_URL    = 'https://www.instagram.com/capitalgo.oficial';
+const INSTAGRAM_HANDLE = '@capitalgo.oficial';
+```
+
+---
+
+## RESUMO DAS MUDANÇAS
+
+| O que muda | Detalhe |
+|------------|---------|
+| Posições Y dos textos | Redistribuídas para não sobrepor |
+| Zona direita da caixa | QR code do Instagram gerado via `qrcode` lib |
+| Badge | Limitado para não ultrapassar a zona do corretor |
+| Helper novo | `drawInstagramIcon` com gradiente real do Instagram |
+| Constantes | `INSTAGRAM_URL` e `INSTAGRAM_HANDLE` isoladas no topo |
+| Preview | Mesmas correções aplicadas no `renderCard` |
+
+## ARQUIVO A MODIFICAR
+
+`client/src/components/card-finalizer.tsx` — funções de renderização e download apenas.
