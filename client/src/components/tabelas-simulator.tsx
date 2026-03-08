@@ -397,9 +397,14 @@ export function TabelasSimulator() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5" style={{ color: "#F59E0B" }} />
-                        <span className="text-sm font-semibold">{parseFloat(r.pontos).toFixed(2)}pts</span>
+                      <div className="text-right">
+                        <div className="flex items-center gap-1">
+                          <Star className="h-3.5 w-3.5" style={{ color: "#F59E0B" }} />
+                          <span className="text-sm font-semibold">{parseFloat(r.pontos).toFixed(2)}pts</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground" data-testid={`total-pontos-${r.id}`}>
+                          Total: {(parseFloat(r.pontos) * r.valorContratoLibera / 1000).toFixed(2)} pts
+                        </p>
                       </div>
                       {canManage && (
                         <>
