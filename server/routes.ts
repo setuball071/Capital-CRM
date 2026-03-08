@@ -1074,7 +1074,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // ===== WEBHOOK ROUTES (PUBLIC — no session auth) =====
+  // ===== INTEGRATION & WEBHOOK ROUTES (PUBLIC — no session auth) =====
+
+  app.get("/api/integration/users", async (req: any, res) => {
+    if (!process.env.CRM_INTEGRATION_SECRET) {
+      return res.status(503).json({ error: "Integration not configured" });
+    }
+    const secret = req.headers["x-integration-secret"];
+    if (secret !== process.env.CRM_INTEGRATION_SECRET) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const usuarios = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        })
+        .from(users)
+        .where(eq(users.isActive, true))
+        .orderBy(asc(users.name));
+
+      return res.json({
+        usuarios: usuarios.map((u) => ({
+          crm_user_id: u.id,
+          nome: u.name,
+          login: u.email,
+          role: u.role,
+        })),
+      });
+    } catch (error) {
+      console.error("[integration] Erro ao buscar usuários:", error);
+      return res.status(500).json({ error: "Erro interno" });
+    }
+  });
 
   app.post("/api/webhooks/whatsapp-labels", async (req: any, res) => {
     const body = req.body;
