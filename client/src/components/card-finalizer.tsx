@@ -424,12 +424,12 @@ async function renderCardCalibrated(
   roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.03));
   ctx.fill();
 
-  const aR  = Math.round(bH * 0.85);
+  const aR  = Math.round(bH * 0.60);
   const aX  = bX + Math.round(W * 0.015) + aR;
-  const aY  = bY + Math.round(bH * 0.5);
+  const aY  = bY + Math.round(bH * 0.50);
 
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth   = Math.round(W * 0.005);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.lineWidth   = Math.round(W * 0.008);
   ctx.beginPath();
   ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
   ctx.stroke();
