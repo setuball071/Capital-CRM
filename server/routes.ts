@@ -8448,7 +8448,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
         // Parse CSV ou XLSX
         if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
-          const Papa = await import("papaparse");
           const csvContent = file.buffer.toString("utf-8");
           const parsed = Papa.parse(csvContent, {
             header: true,
@@ -13725,7 +13724,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
 
         const fileContent = req.file.buffer.toString("utf-8");
-        const Papa = require("papaparse");
         const parsed = Papa.parse(fileContent, {
           header: true,
           skipEmptyLines: true,
