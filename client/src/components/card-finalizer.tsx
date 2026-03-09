@@ -415,7 +415,7 @@ async function renderCardCalibrated(
   ctx.drawImage(bgImg, 0, 0, W, H);
 
   const marg = W * 0.03;
-  const bH   = Math.round(H * 0.11);
+  const bH   = Math.round(H * 0.14);
   const bX   = marg;
   const bW   = W - marg * 2;
   const bY   = H - bH - marg;
@@ -424,7 +424,7 @@ async function renderCardCalibrated(
   roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.03));
   ctx.fill();
 
-  const aR  = Math.round(bH * 0.60);
+  const aR  = Math.round(bH * 0.85);
   const aX  = bX + Math.round(W * 0.015) + aR;
   const aY  = bY + Math.round(bH * 0.50);
 
