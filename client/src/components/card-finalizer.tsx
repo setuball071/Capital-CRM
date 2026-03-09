@@ -467,7 +467,7 @@ async function renderCardCalibrated(
   );
   const bh = Math.round(bH * 0.26);
   const bxp = tX;
-  const byp = bY + Math.round(bH * 0.06);
+  const byp = bY + Math.round(bH * 0.05);
   const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
   grad.addColorStop(0, "#9b3dd6");
   grad.addColorStop(1, "#e91e8c");
@@ -482,14 +482,14 @@ async function renderCardCalibrated(
   ctx.textAlign = "left";
   ctx.fillStyle = "#1a0030";
   ctx.font = `900 ${fName}px Montserrat, sans-serif`;
-  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.42));
+  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.48));
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#aaa";
   ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
-  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.62));
+  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.66));
 
-  const waY = bY + Math.round(bH * 0.82);
+  const waY = bY + Math.round(bH * 0.84);
   const waTop = waY - waSize * 0.8;
   drawWhatsappIcon(ctx, tX, waTop, waSize);
   ctx.textAlign = "left";
