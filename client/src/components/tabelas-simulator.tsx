@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
@@ -32,7 +38,12 @@ import {
   Star,
   Trophy,
   Calculator,
+  Settings,
+  Upload,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
+import Papa from "papaparse";
 import type { CommissionTable } from "@shared/schema";
 
 const TIPO_PRODUTO_OPTIONS = [
@@ -63,6 +74,16 @@ interface SimResult {
   parcelaResultante: number;
 }
 
+interface CsvRow {
+  nome: string;
+  convenio: string;
+  banco: string;
+  tipoProduto: string;
+  prazo: string;
+  coeficiente: string;
+  pontos: string;
+}
+
 export function TabelasSimulator() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -90,6 +111,13 @@ export function TabelasSimulator() {
     ativo: true,
   });
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerSearch, setDrawerSearch] = useState("");
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<CsvRow[]>([]);
+  const [csvError, setCsvError] = useState("");
+  const csvFileRef = useRef<HTMLInputElement>(null);
+
   const { data: allTables = [], isLoading: tablesLoading } = useQuery<CommissionTable[]>({
     queryKey: ["/api/commission-tables"],
   });
@@ -108,6 +136,17 @@ export function TabelasSimulator() {
         .sort((a, b) => a - b),
     [allTables]
   );
+
+  const filteredDrawerTables = useMemo(() => {
+    if (!drawerSearch.trim()) return allTables;
+    const q = drawerSearch.toLowerCase();
+    return allTables.filter(
+      (t) =>
+        (t.nome || "").toLowerCase().includes(q) ||
+        t.convenio.toLowerCase().includes(q) ||
+        t.banco.toLowerCase().includes(q)
+    );
+  }, [allTables, drawerSearch]);
 
   const canSimulate = convenio && tipoProduto && valorInput && parseFloat(valorInput) > 0;
 
@@ -201,12 +240,79 @@ export function TabelasSimulator() {
     onError: () => toast({ title: "Erro ao remover", variant: "destructive" }),
   });
 
+  const importMutation = useMutation({
+    mutationFn: async (tabelas: CsvRow[]) => {
+      const body = {
+        tabelas: tabelas.map((r) => ({
+          nome: r.nome || "",
+          convenio: r.convenio,
+          banco: r.banco,
+          tipoProduto: r.tipoProduto,
+          prazo: parseInt(r.prazo),
+          coeficiente: r.coeficiente,
+          pontos: r.pontos,
+          ativo: true,
+        })),
+      };
+      return apiRequest("POST", "/api/commission-tables/import", body);
+    },
+    onSuccess: async (response) => {
+      const data = await response.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tables"] });
+      setCsvDialogOpen(false);
+      setCsvPreview([]);
+      setCsvError("");
+      toast({ title: `Importação concluída: ${data.inseridas} inseridas, ${data.ignoradas} ignoradas` });
+    },
+    onError: () => toast({ title: "Erro ao importar", variant: "destructive" }),
+  });
+
   const handleSave = () => {
     if (!form.convenio.trim() || !form.banco.trim() || !form.prazo || !form.coeficiente || !form.pontos) {
       toast({ title: "Preencha todos os campos", variant: "destructive" });
       return;
     }
     saveMutation.mutate(form);
+  };
+
+  const handleCsvFile = (file: File) => {
+    setCsvError("");
+    setCsvPreview([]);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const required = ["nome", "convenio", "banco", "tipoProduto", "prazo", "coeficiente", "pontos"];
+        const headers = Object.keys((results.data as Record<string, string>[])[0] || {});
+        const missing = required.filter((col) => !headers.includes(col));
+        if (missing.length > 0) {
+          setCsvError(`Colunas faltando: ${missing.join(", ")}`);
+          return;
+        }
+        const validRows = (results.data as CsvRow[]).filter(
+          (r) => r.convenio && r.banco && r.tipoProduto && r.prazo && r.coeficiente && r.pontos
+        );
+        if (validRows.length === 0) {
+          setCsvError("Nenhuma linha válida encontrada no CSV");
+          return;
+        }
+        setCsvPreview(validRows);
+      },
+      error: () => setCsvError("Erro ao ler arquivo CSV"),
+    });
+  };
+
+  const downloadModelo = () => {
+    const modelo = `nome,convenio,banco,tipoProduto,prazo,coeficiente,pontos
+SIAPE Facta 96x,SIAPE,Facta,contrato_novo,96,0.021500,3.2000
+INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
+    const blob = new Blob([modelo], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "modelo-tabelas-capitalgo.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -218,12 +324,25 @@ export function TabelasSimulator() {
             Simulador de Tabelas
           </h3>
         </div>
-        {canManage && (
-          <Button size="sm" onClick={openAddDialog} data-testid="button-add-table">
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Cadastrar Tabela
-          </Button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {canManage && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDrawerOpen(true)}
+                data-testid="button-manage-tables"
+              >
+                <Settings className="h-3.5 w-3.5 mr-1" />
+                Gerenciar Tabelas
+              </Button>
+              <Button size="sm" onClick={openAddDialog} data-testid="button-add-table">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Cadastrar Tabela
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Card className="p-4 space-y-4">
@@ -572,6 +691,216 @@ export function TabelasSimulator() {
               >
                 {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
                 Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[600px] flex flex-col p-0" data-testid="drawer-manage-tables">
+          <SheetHeader className="px-4 pt-4 pb-3 border-b">
+            <SheetTitle>Gerenciar Tabelas</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 py-3 border-b space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" onClick={() => { openAddDialog(); }} data-testid="drawer-button-add">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Cadastrar Tabela
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setCsvPreview([]); setCsvError(""); setCsvDialogOpen(true); }}
+                data-testid="drawer-button-import"
+              >
+                <Upload className="h-3.5 w-3.5 mr-1" />
+                Importar CSV
+              </Button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={drawerSearch}
+                onChange={(e) => setDrawerSearch(e.target.value)}
+                placeholder="Buscar tabela..."
+                className="pl-8"
+                data-testid="input-drawer-search"
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {filteredDrawerTables.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <FileSpreadsheet className="h-8 w-8 mb-2" />
+                <p className="text-sm">Nenhuma tabela encontrada</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredDrawerTables.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
+                    data-testid={`drawer-row-${t.id}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium truncate">{t.nome || `${t.convenio} ${t.banco}`}</span>
+                        <Badge
+                          variant="outline"
+                          className={
+                            t.ativo !== false
+                              ? "text-xs border-green-300 text-green-700 dark:border-green-700 dark:text-green-400"
+                              : "text-xs"
+                          }
+                        >
+                          {t.ativo !== false ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t.convenio} · {t.banco} · {t.prazo > 0 ? `${t.prazo}m` : "S/prazo"} · {TIPO_LABELS[t.tipoProduto] || t.tipoProduto}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => openEditDialog(t)}
+                        data-testid={`drawer-edit-${t.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => {
+                          if (confirm("Remover esta tabela?")) deleteMutation.mutate(t.id);
+                        }}
+                        data-testid={`drawer-delete-${t.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="px-4 py-3 border-t">
+            <p className="text-xs text-muted-foreground" data-testid="text-table-count">
+              {allTables.length} tabela{allTables.length !== 1 ? "s" : ""} cadastrada{allTables.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
+        <DialogContent className="max-w-lg" data-testid="dialog-csv-import">
+          <DialogHeader>
+            <DialogTitle>Importar Tabelas via CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Formato esperado das colunas:</p>
+              <p className="font-mono">nome, convenio, banco, tipoProduto, prazo, coeficiente, pontos</p>
+              <p className="mt-2">tipoProduto deve ser:</p>
+              <p className="font-mono">contrato_novo | cartao_beneficio | cartao_consignado</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={downloadModelo} data-testid="button-download-modelo">
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Baixar modelo CSV
+            </Button>
+
+            <input
+              ref={csvFileRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              data-testid="input-csv-file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCsvFile(file);
+              }}
+            />
+
+            {csvPreview.length === 0 ? (
+              <div
+                className="border-2 border-dashed rounded-md p-6 flex flex-col items-center gap-2 cursor-pointer hover-elevate"
+                onClick={() => csvFileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleCsvFile(file);
+                }}
+                data-testid="dropzone-csv"
+              >
+                <FileSpreadsheet className="h-8 w-8 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Arraste o CSV aqui ou clique para selecionar</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="border rounded-md max-h-48 overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-medium">Nome</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Convênio</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Banco</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Tipo</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Prazo</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Coef.</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreview.slice(0, 50).map((r, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="px-2 py-1">{r.nome}</td>
+                          <td className="px-2 py-1">{r.convenio}</td>
+                          <td className="px-2 py-1">{r.banco}</td>
+                          <td className="px-2 py-1">{r.tipoProduto}</td>
+                          <td className="px-2 py-1 text-right">{r.prazo}</td>
+                          <td className="px-2 py-1 text-right">{r.coeficiente}</td>
+                          <td className="px-2 py-1 text-right">{r.pontos}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {csvPreview.length > 50 && (
+                  <p className="text-xs text-muted-foreground">
+                    Mostrando 50 de {csvPreview.length} linhas
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setCsvPreview([]); setCsvError(""); if (csvFileRef.current) csvFileRef.current.value = ""; }}
+                  data-testid="button-clear-csv"
+                >
+                  Trocar arquivo
+                </Button>
+              </div>
+            )}
+
+            {csvError && (
+              <p className="text-sm text-destructive" data-testid="text-csv-error">{csvError}</p>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setCsvDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={csvPreview.length === 0 || importMutation.isPending}
+                onClick={() => importMutation.mutate(csvPreview)}
+                data-testid="button-confirm-import"
+              >
+                {importMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                Importar {csvPreview.length} tabela{csvPreview.length !== 1 ? "s" : ""}
               </Button>
             </div>
           </div>

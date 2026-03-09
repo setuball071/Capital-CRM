@@ -24417,6 +24417,44 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   );
 
+  // ===== COMMISSION TABLES IMPORT =====
+
+  app.post(
+    "/api/commission-tables/import",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const { tabelas } = req.body;
+        if (!Array.isArray(tabelas) || tabelas.length === 0) {
+          return res.status(400).json({ message: "Nenhuma tabela para importar" });
+        }
+        let inseridas = 0;
+        let ignoradas = 0;
+        for (const row of tabelas) {
+          try {
+            const parsed = insertCommissionTableSchema.parse(row);
+            await db.insert(commissionTables).values({
+              ...parsed,
+              tenantId: req.tenantId!,
+              createdBy: req.user!.id,
+            });
+            inseridas++;
+          } catch (e) {
+            ignoradas++;
+          }
+        }
+        res.json({ inseridas, ignoradas });
+      } catch (error) {
+        console.error("POST /api/commission-tables/import error:", error);
+        res.status(500).json({ message: "Erro ao importar tabelas" });
+      }
+    }
+  );
+
   // ===== CREATIVE PACKS =====
 
   app.get("/api/creative-packs", requireAuth, async (req: Request, res: Response) => {
