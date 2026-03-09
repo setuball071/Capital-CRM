@@ -424,7 +424,7 @@ async function renderCardCalibrated(
   roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.03));
   ctx.fill();
 
-  const aR  = Math.round(bH * 0.85);
+  const aR  = Math.round(bH * 0.65);
   const aX  = bX + Math.round(W * 0.015) + aR;
   const aY  = bY + Math.round(bH * 0.50);
 
