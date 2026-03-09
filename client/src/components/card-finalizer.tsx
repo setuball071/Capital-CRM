@@ -493,9 +493,9 @@ async function renderCardCalibrated(
   const fPhone = Math.round(W * 0.033);
   const waSize = Math.round(W * 0.04);
 
-  const qrSize = Math.round(bH * 0.75);
+  const qrSize = Math.round(bH * 0.60);
   const qrX = bX + bW - marg - qrSize;
-  const qrY = bY + Math.round((bH - qrSize) / 2);
+  const qrY = bY + Math.round((bH - qrSize - Math.round(bH * 0.20)) / 2);
 
   try {
     const qrDataUrl = await QRCode.toDataURL(INSTAGRAM_URL, {
@@ -507,7 +507,7 @@ async function renderCardCalibrated(
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
     const instaIconSize = Math.round(W * 0.025);
-    const captionY = qrY + qrSize + Math.round(bH * 0.06);
+    const captionY = qrY + qrSize + Math.round(bH * 0.12);
     const captionX = qrX + Math.round(qrSize / 2);
 
     drawInstagramIcon(ctx, captionX - instaIconSize - Math.round(W * 0.008), captionY - instaIconSize, instaIconSize);
@@ -544,10 +544,12 @@ async function renderCardCalibrated(
   ctx.fillText(badgeText, bxp + bw / 2, byp + Math.round(bh * 0.73));
   ctx.textAlign = "left";
 
+  ctx.textAlign = "left";
   ctx.fillStyle = "#1a0030";
   ctx.font = `900 ${fName}px Montserrat, sans-serif`;
   ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.42));
 
+  ctx.textAlign = "left";
   ctx.fillStyle = "#aaa";
   ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
   ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.62));
@@ -555,6 +557,7 @@ async function renderCardCalibrated(
   const waY = bY + Math.round(bH * 0.82);
   const waTop = waY - waSize * 0.8;
   drawWhatsappIcon(ctx, tX, waTop, waSize);
+  ctx.textAlign = "left";
   ctx.fillStyle = "#222";
   ctx.font = `700 ${fPhone}px Montserrat, sans-serif`;
   ctx.fillText(
