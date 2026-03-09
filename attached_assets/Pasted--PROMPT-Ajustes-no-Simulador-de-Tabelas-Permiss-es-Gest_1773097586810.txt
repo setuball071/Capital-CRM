@@ -1,0 +1,186 @@
+# PROMPT — Ajustes no Simulador de Tabelas: Permissões + Gestão + Importação CSV
+
+## OBJETIVO
+
+1. Restringir cadastro/edição/exclusão de tabelas para `master` e `coordenacao`
+2. Criar drawer de gestão com lista editável de tabelas
+3. Adicionar importação em massa via CSV
+
+---
+
+## T001 — Corrigir permissões no backend
+
+Em `server/routes.ts`, garantir que as rotas de escrita verificam role:
+
+```ts
+// POST /api/commission-tables — criar
+// PUT  /api/commission-tables/:id — editar  
+// DELETE /api/commission-tables/:id — excluir
+
+// Verificação a adicionar no início de cada handler:
+const userRole = req.user?.role; // ou equivalente no sistema
+if (userRole !== 'master' && userRole !== 'coordenacao') {
+  return res.status(403).json({ error: 'Sem permissão para esta ação' });
+}
+```
+
+GET continua público para todos os usuários autenticados.
+
+---
+
+## T002 — Botão "Gerenciar Tabelas" no simulador
+
+Em `client/src/components/tabelas-simulator.tsx`:
+
+Adicionar botão visível apenas para `master` e `coordenacao`:
+
+```tsx
+{(isAdmin) && (
+  <button
+    onClick={() => setDrawerAberto(true)}
+    className="flex items-center gap-2 px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50"
+  >
+    <Settings size={16} />
+    Gerenciar Tabelas
+  </button>
+)}
+```
+
+Onde `isAdmin = user?.role === 'master' || user?.role === 'coordenacao'`.
+
+---
+
+## T003 — Drawer de Gestão de Tabelas
+
+Criar drawer lateral (slide da direita) dentro de `tabelas-simulator.tsx`.
+
+### Layout do drawer:
+
+```
+┌─────────────────────────────────────┐
+│ Gerenciar Tabelas              [X]  │
+├─────────────────────────────────────┤
+│ [+ Cadastrar Tabela]  [⬆ Importar CSV] │
+├─────────────────────────────────────┤
+│ Buscar tabela...                    │
+├─────────────────────────────────────┤
+│ NOME          CONVÊNIO  BANCO  AÇÕES│
+│ SIAPE Facta   SIAPE     Facta  ✏️🗑️ │
+│ INSS Pan 84   INSS      Pan    ✏️🗑️ │
+│ ...                                 │
+└─────────────────────────────────────┘
+```
+
+### Especificações:
+- Largura: `min(100vw, 600px)`, altura: 100vh
+- Backdrop escuro, fecha com X ou Escape
+- Lista todas as tabelas da tenant (ativas e inativas)
+- Campo de busca filtra por nome, convênio ou banco em tempo real
+- Botão ✏️ abre modal de edição (reutilizar modal de cadastro já existente)
+- Botão 🗑️ abre confirmação antes de deletar
+- Badge de status: verde "Ativo" / cinza "Inativo"
+- Paginação ou scroll infinito se muitas tabelas
+
+---
+
+## T004 — Importação via CSV
+
+### Botão "Importar CSV" no drawer:
+
+Ao clicar, abre um sub-modal de importação com:
+
+```
+┌─────────────────────────────────────┐
+│ Importar Tabelas via CSV       [X]  │
+├─────────────────────────────────────┤
+│ Formato esperado das colunas:       │
+│ nome, convenio, banco, tipoProduto, │
+│ prazo, coeficiente, pontos          │
+│                                     │
+│ tipoProduto deve ser:               │
+│ contrato_novo | cartao_beneficio |  │
+│ cartao_consignado                   │
+│                                     │
+│ [⬇ Baixar modelo CSV]              │
+│                                     │
+│ ┌─────────────────────────────────┐ │
+│ │  📎 Arraste o CSV aqui          │ │
+│ │  ou clique para selecionar      │ │
+│ └─────────────────────────────────┘ │
+│                                     │
+│ [preview da tabela após upload]     │
+│                                     │
+│ [Cancelar]  [Importar X tabelas]    │
+└─────────────────────────────────────┘
+```
+
+### Lógica de importação no frontend:
+
+```ts
+// Parse do CSV com PapaParse (já disponível no projeto)
+import Papa from 'papaparse';
+
+const handleCSV = (file: File) => {
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      // Validar colunas obrigatórias
+      const required = ['nome','convenio','banco','tipoProduto','prazo','coeficiente','pontos'];
+      const headers = Object.keys(results.data[0] || {});
+      const missing = required.filter(col => !headers.includes(col));
+      if (missing.length > 0) {
+        setErro(`Colunas faltando: ${missing.join(', ')}`);
+        return;
+      }
+      setPreviewRows(results.data);
+    }
+  });
+};
+```
+
+### Endpoint de importação em lote no backend:
+
+```ts
+POST /api/commission-tables/import
+
+Body: { tabelas: InsertCommissionTable[] }
+
+// Inserir todas de uma vez com onConflictDoNothing ou upsert por nome+convenio+banco+prazo
+// Retornar: { inseridas: N, ignoradas: M }
+```
+
+### Modelo CSV para download:
+
+Gerar e fazer download do arquivo modelo ao clicar em "Baixar modelo CSV":
+
+```ts
+const modelo = `nome,convenio,banco,tipoProduto,prazo,coeficiente,pontos
+SIAPE Facta 96x,SIAPE,Facta,contrato_novo,96,0.021500,3.2000
+INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
+
+const blob = new Blob([modelo], { type: 'text/csv' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'modelo-tabelas-capitalgo.csv';
+a.click();
+```
+
+---
+
+## RESUMO
+
+| Item | Detalhe |
+|------|---------|
+| Permissão CRUD | Só `master` e `coordenacao` no backend e frontend |
+| Gestão | Drawer lateral com lista, busca, editar e excluir |
+| Importação | CSV via PapaParse, preview antes de confirmar, endpoint em lote |
+| Modelo CSV | Download direto no modal de importação |
+
+## ARQUIVOS A MODIFICAR
+
+| Arquivo | Ação |
+|---------|------|
+| `server/routes.ts` | Adicionar checagem de role nas rotas POST/PUT/DELETE + endpoint `/import` |
+| `client/src/components/tabelas-simulator.tsx` | Botão Gerenciar + Drawer + Modal importação |
