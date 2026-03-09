@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { X, Download, Upload, Loader2 } from "lucide-react";
-import QRCode from "qrcode";
 import type { Creative } from "@shared/schema";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -16,8 +15,6 @@ const ROLE_LABELS: Record<string, string> = {
   atendimento: "Atendimento",
 };
 
-const INSTAGRAM_URL = "https://www.instagram.com/capitalgo.oficial";
-const INSTAGRAM_HANDLE = "@capitalgo.oficial";
 
 interface CardFinalizerProps {
   aberto: boolean;
@@ -405,40 +402,6 @@ function drawWhatsappIcon(
   ctx.restore();
 }
 
-function drawInstagramIcon(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number,
-  size: number
-) {
-  const grad = ctx.createLinearGradient(x, y + size, x + size, y);
-  grad.addColorStop(0, "#f09433");
-  grad.addColorStop(0.25, "#e6683c");
-  grad.addColorStop(0.5, "#dc2743");
-  grad.addColorStop(0.75, "#cc2366");
-  grad.addColorStop(1, "#bc1888");
-
-  const r = size * 0.22;
-
-  ctx.fillStyle = grad;
-  roundRect(ctx, x, y, size, size, r);
-  ctx.fill();
-
-  const pad = size * 0.18;
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = size * 0.08;
-  roundRect(ctx, x + pad, y + pad, size - pad * 2, size - pad * 2, size * 0.12);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(x + size / 2, y + size / 2, size * 0.16, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(x + size * 0.72, y + size * 0.28, size * 0.06, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 async function renderCardCalibrated(
   ctx: CanvasRenderingContext2D,
   bgImg: HTMLImageElement,
@@ -493,35 +456,7 @@ async function renderCardCalibrated(
   const fPhone = Math.round(W * 0.033);
   const waSize = Math.round(W * 0.04);
 
-  const qrSize = Math.round(bH * 0.60);
-  const qrX = bX + bW - marg - qrSize;
-  const qrY = bY + Math.round((bH - qrSize - Math.round(bH * 0.20)) / 2);
-
-  try {
-    const qrDataUrl = await QRCode.toDataURL(INSTAGRAM_URL, {
-      width: qrSize * 2,
-      margin: 1,
-      color: { dark: "#1a0030", light: "#ffffff" },
-    });
-    const qrImg = await loadImage(qrDataUrl);
-    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-    const instaIconSize = Math.round(W * 0.025);
-    const captionY = qrY + qrSize + Math.round(bH * 0.12);
-    const captionX = qrX + Math.round(qrSize / 2);
-
-    drawInstagramIcon(ctx, captionX - instaIconSize - Math.round(W * 0.008), captionY - instaIconSize, instaIconSize);
-
-    ctx.fillStyle = "#555";
-    ctx.font = `600 ${Math.round(W * 0.018)}px Montserrat, sans-serif`;
-    ctx.textAlign = "left";
-    ctx.fillText(INSTAGRAM_HANDLE, captionX - instaIconSize + Math.round(W * 0.004), captionY - Math.round(instaIconSize * 0.1));
-    ctx.textAlign = "left";
-  } catch {
-    // QR generation failed silently — card still works without it
-  }
-
-  const zonaCorretorMaxX = qrX - Math.round(W * 0.03);
+  const zonaCorretorMaxX = bX + bW - marg;
 
   ctx.font = `700 ${fBadge}px Montserrat, sans-serif`;
   const badgeText = "Aproveite a menor taxa!";
