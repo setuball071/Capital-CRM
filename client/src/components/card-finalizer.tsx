@@ -415,7 +415,7 @@ async function renderCardCalibrated(
   ctx.drawImage(bgImg, 0, 0, W, H);
 
   const marg = W * 0.03;
-  const bH = Math.round(H * 0.18);
+  const bH = Math.round(H * 0.14);
   const bX = marg;
   const bW = W - marg * 2;
   const bY = H - bH - marg;
@@ -424,12 +424,12 @@ async function renderCardCalibrated(
   roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.04));
   ctx.fill();
 
-  const aR = Math.round(bH * 0.65);
-  const aX = bX + Math.round(W * 0.06) + aR;
-  const aY = bY + Math.round(bH * 0.15);
+  const aR  = Math.round(H * 0.18);
+  const aX  = bX + aR + Math.round(W * 0.01);
+  const aY  = bY + Math.round(bH * 0.5);
 
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = Math.round(W * 0.006);
+  ctx.lineWidth   = Math.round(W * 0.006);
   ctx.beginPath();
   ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
   ctx.stroke();
