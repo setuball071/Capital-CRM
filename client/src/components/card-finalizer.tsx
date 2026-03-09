@@ -461,8 +461,8 @@ async function renderCardCalibrated(
   roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.04));
   ctx.fill();
 
-  const aR = Math.round(bH * 0.68);
-  const aX = bX + Math.round(W * 0.04) + aR;
+  const aR = Math.round(bH * 0.55);
+  const aX = bX + Math.round(W * 0.06) + aR;
   const aY = bY + bH - aR;
 
   ctx.strokeStyle = "#c9a8f0";
@@ -485,7 +485,7 @@ async function renderCardCalibrated(
     ctx.fill();
   }
 
-  const tX = aX + aR + Math.round(W * 0.035);
+  const tX = aX + aR + Math.round(W * 0.04);
 
   const fBadge = Math.round(W * 0.026);
   const fName = Math.round(W * 0.038);
