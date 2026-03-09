@@ -1,0 +1,120 @@
+# PROMPT — Reescrever função renderCardCalibrated completa
+
+## PROBLEMA
+Os ajustes incrementais não estão funcionando pois o agente mantém lógica antiga.
+Substituir a função `renderCardCalibrated` INTEIRA pelo código abaixo.
+
+## AÇÃO
+Em `client/src/components/card-finalizer.tsx`, localizar a função `renderCardCalibrated`
+e substituir TODO o seu conteúdo interno pelo seguinte:
+
+```typescript
+// Dimensões reais da imagem
+const W = bgImage.naturalWidth  || bgImage.width;
+const H = bgImage.naturalHeight || bgImage.height;
+
+const canvas = document.createElement('canvas');
+canvas.width  = W;
+canvas.height = H;
+const ctx = canvas.getContext('2d')!;
+
+// 1. Fundo
+ctx.drawImage(bgImage, 0, 0, W, H);
+
+// 2. Dimensões da caixa branca
+const marg = W * 0.03;
+const bH   = Math.round(H * 0.14);
+const bX   = marg;
+const bW   = W - marg * 2;
+const bY   = H - bH - marg;
+
+// 3. Caixa branca
+ctx.fillStyle = 'rgba(255,255,255,0.97)';
+roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.03));
+ctx.fill();
+
+// 4. Avatar — grande, encostado na esquerda, centralizado na caixa
+const aR  = Math.round(bH * 0.85);
+const aX  = bX + Math.round(W * 0.015) + aR;
+const aY  = bY + Math.round(bH * 0.5);
+
+// Borda branca
+ctx.strokeStyle = '#ffffff';
+ctx.lineWidth   = Math.round(W * 0.005);
+ctx.beginPath();
+ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
+ctx.stroke();
+
+// Foto ou placeholder
+if (croppedPhotoUrl) {
+  const photo = await loadImage(croppedPhotoUrl);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(aX, aY, aR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(photo, aX - aR, aY - aR, aR * 2, aR * 2);
+  ctx.restore();
+} else {
+  ctx.fillStyle = '#e0ccf5';
+  ctx.beginPath();
+  ctx.arc(aX, aY, aR, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// 5. Textos — começam depois do avatar
+const tX = aX + aR + Math.round(W * 0.04);
+
+const fBadge = Math.round(W * 0.022);
+const fName  = Math.round(W * 0.036);
+const fRole  = Math.round(W * 0.018);
+const fPhone = Math.round(W * 0.026);
+const waSize = Math.round(W * 0.032);
+
+// Badge gradiente
+ctx.font = `700 ${fBadge}px Montserrat, sans-serif`;
+const badgeText = 'Aproveite a menor taxa!';
+const bw  = ctx.measureText(badgeText).width + Math.round(W * 0.04);
+const bh  = Math.round(bH * 0.24);
+const bxp = tX;
+const byp = bY + Math.round(bH * 0.08);
+const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
+grad.addColorStop(0, '#9b3dd6');
+grad.addColorStop(1, '#e91e8c');
+ctx.fillStyle = grad;
+roundRect(ctx, bxp, byp, bw, bh, Math.round(bh / 2));
+ctx.fill();
+ctx.fillStyle   = '#fff';
+ctx.textAlign   = 'center';
+ctx.fillText(badgeText, bxp + bw / 2, byp + Math.round(bh * 0.64));
+
+// Nome
+ctx.textAlign   = 'left';
+ctx.fillStyle   = '#1a0030';
+ctx.font        = `900 ${fName}px Montserrat, sans-serif`;
+ctx.fillText(nome || 'Seu Nome', tX, bY + Math.round(bH * 0.52));
+
+// Cargo
+ctx.fillStyle   = '#aaa';
+ctx.font        = `500 ${fRole}px Montserrat, sans-serif`;
+ctx.fillText((cargo || 'Consultoria Financeira').toUpperCase(), tX, bY + Math.round(bH * 0.70));
+
+// WhatsApp
+const waY   = bY + Math.round(bH * 0.88);
+const waTop = waY - waSize * 0.8;
+drawWhatsappIcon(ctx, tX, waTop, waSize);
+ctx.fillStyle = '#222';
+ctx.font      = `700 ${fPhone}px Montserrat, sans-serif`;
+ctx.fillText(
+  telefone || '(48) 99999-9999',
+  tX + waSize + Math.round(W * 0.01),
+  waY
+);
+
+return canvas;
+```
+
+## IMPORTANTE
+- A função deve receber os parâmetros: `bgImage`, `croppedPhotoUrl`, `nome`, `cargo`, `telefone`
+- Deve retornar o `canvas`
+- Os helpers `roundRect`, `loadImage`, `drawWhatsappIcon` já existem no arquivo — não recriar
+- O preview e o download chamam esta mesma função — ambos serão corrigidos automaticamente

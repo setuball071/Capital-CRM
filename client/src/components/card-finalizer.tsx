@@ -415,21 +415,21 @@ async function renderCardCalibrated(
   ctx.drawImage(bgImg, 0, 0, W, H);
 
   const marg = W * 0.03;
-  const bH = Math.round(H * 0.14);
-  const bX = marg;
-  const bW = W - marg * 2;
-  const bY = H - bH - marg;
+  const bH   = Math.round(H * 0.14);
+  const bX   = marg;
+  const bW   = W - marg * 2;
+  const bY   = H - bH - marg;
 
   ctx.fillStyle = "rgba(255,255,255,0.97)";
-  roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.04));
+  roundRect(ctx, bX, bY, bW, bH, Math.round(W * 0.03));
   ctx.fill();
 
-  const aR  = Math.round(H * 0.18);
-  const aX  = bX + aR + Math.round(W * 0.01);
+  const aR  = Math.round(bH * 0.85);
+  const aX  = bX + Math.round(W * 0.015) + aR;
   const aY  = bY + Math.round(bH * 0.5);
 
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth   = Math.round(W * 0.006);
+  ctx.lineWidth   = Math.round(W * 0.005);
   ctx.beginPath();
   ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
   ctx.stroke();
@@ -450,54 +450,45 @@ async function renderCardCalibrated(
 
   const tX = aX + aR + Math.round(W * 0.04);
 
-  const fBadge = Math.round(W * 0.026);
-  const fName = Math.round(W * 0.038);
-  const fRole = Math.round(W * 0.022);
-  const fPhone = Math.round(W * 0.033);
-  const waSize = Math.round(W * 0.04);
-
-  const zonaCorretorMaxX = bX + bW - marg;
+  const fBadge = Math.round(W * 0.022);
+  const fName  = Math.round(W * 0.036);
+  const fRole  = Math.round(W * 0.018);
+  const fPhone = Math.round(W * 0.026);
+  const waSize = Math.round(W * 0.032);
 
   ctx.font = `700 ${fBadge}px Montserrat, sans-serif`;
   const badgeText = "Aproveite a menor taxa!";
-  const bwMax = zonaCorretorMaxX - tX;
-  const bw = Math.min(
-    ctx.measureText(badgeText).width + Math.round(W * 0.055),
-    bwMax
-  );
-  const bh = Math.round(bH * 0.26);
+  const bw  = ctx.measureText(badgeText).width + Math.round(W * 0.04);
+  const bh  = Math.round(bH * 0.24);
   const bxp = tX;
-  const byp = bY + Math.round(bH * 0.05);
+  const byp = bY + Math.round(bH * 0.08);
   const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
   grad.addColorStop(0, "#9b3dd6");
   grad.addColorStop(1, "#e91e8c");
   ctx.fillStyle = grad;
   roundRect(ctx, bxp, byp, bw, bh, Math.round(bh / 2));
   ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
-  ctx.fillText(badgeText, bxp + bw / 2, byp + Math.round(bh * 0.62));
-  ctx.textAlign = "left";
+  ctx.fillStyle   = "#fff";
+  ctx.textAlign   = "center";
+  ctx.fillText(badgeText, bxp + bw / 2, byp + Math.round(bh * 0.64));
 
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#1a0030";
-  ctx.font = `900 ${fName}px Montserrat, sans-serif`;
-  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.48));
+  ctx.textAlign   = "left";
+  ctx.fillStyle   = "#1a0030";
+  ctx.font        = `900 ${fName}px Montserrat, sans-serif`;
+  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.52));
 
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#aaa";
-  ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
-  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.66));
+  ctx.fillStyle   = "#aaa";
+  ctx.font        = `500 ${fRole}px Montserrat, sans-serif`;
+  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.70));
 
-  const waY = bY + Math.round(bH * 0.84);
+  const waY   = bY + Math.round(bH * 0.88);
   const waTop = waY - waSize * 0.8;
   drawWhatsappIcon(ctx, tX, waTop, waSize);
-  ctx.textAlign = "left";
   ctx.fillStyle = "#222";
-  ctx.font = `700 ${fPhone}px Montserrat, sans-serif`;
+  ctx.font      = `700 ${fPhone}px Montserrat, sans-serif`;
   ctx.fillText(
     whatsapp || "(48) 99999-9999",
-    tX + waSize + Math.round(W * 0.012),
+    tX + waSize + Math.round(W * 0.01),
     waY
   );
 }
