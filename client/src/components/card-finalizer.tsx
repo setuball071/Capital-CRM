@@ -462,7 +462,7 @@ async function renderCardCalibrated(
   ctx.fill();
 
   const aR = Math.round(bH * 0.55);
-  const aX = bX + Math.round(W * 0.06) + aR;
+  const aX = bX + Math.round(W * 0.10) + aR;
   const aY = bY + bH - aR;
 
   ctx.strokeStyle = "#c9a8f0";
