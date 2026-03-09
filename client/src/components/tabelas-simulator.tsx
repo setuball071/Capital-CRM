@@ -80,6 +80,7 @@ export function TabelasSimulator() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CommissionTable | null>(null);
   const [form, setForm] = useState({
+    nome: "",
     convenio: "",
     banco: "",
     tipoProduto: "contrato_novo",
@@ -139,6 +140,7 @@ export function TabelasSimulator() {
   const openAddDialog = () => {
     setEditingItem(null);
     setForm({
+      nome: "",
       convenio: "",
       banco: "",
       tipoProduto: "contrato_novo",
@@ -153,6 +155,7 @@ export function TabelasSimulator() {
   const openEditDialog = (item: CommissionTable) => {
     setEditingItem(item);
     setForm({
+      nome: item.nome || "",
       convenio: item.convenio,
       banco: item.banco,
       tipoProduto: item.tipoProduto,
@@ -167,6 +170,7 @@ export function TabelasSimulator() {
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       const body = {
+        nome: data.nome,
         convenio: data.convenio,
         banco: data.banco,
         tipoProduto: data.tipoProduto,
@@ -469,6 +473,15 @@ export function TabelasSimulator() {
             <DialogTitle>{editingItem ? "Editar Tabela" : "Cadastrar Tabela"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Nome da Tabela</Label>
+              <Input
+                value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                placeholder="Ex: SIAPE Facta 96x"
+                data-testid="form-nome"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Convênio</Label>

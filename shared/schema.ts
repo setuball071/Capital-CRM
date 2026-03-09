@@ -3176,6 +3176,7 @@ export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
 export const commissionTables = pgTable("commission_tables", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  nome: text("nome").notNull(),
   convenio: text("convenio").notNull(),
   banco: text("banco").notNull(),
   tipoProduto: text("tipo_produto").notNull(),

@@ -24343,8 +24343,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (!existing) {
           return res.status(404).json({ message: "Tabela não encontrada" });
         }
-        const { convenio, banco, tipoProduto, prazo, coeficiente, pontos, ativo } = req.body;
+        const { nome, convenio, banco, tipoProduto, prazo, coeficiente, pontos, ativo } = req.body;
         const updateData: Record<string, any> = {};
+        if (typeof nome === "string" && nome.trim()) updateData.nome = nome.trim();
         if (typeof convenio === "string" && convenio.trim()) updateData.convenio = convenio.trim();
         if (typeof banco === "string" && banco.trim()) updateData.banco = banco.trim();
         if (typeof tipoProduto === "string" && tipoProduto.trim()) updateData.tipoProduto = tipoProduto.trim();
