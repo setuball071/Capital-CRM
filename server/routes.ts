@@ -282,6 +282,33 @@ const uploadAvatar = multer({
   },
 });
 
+// Configure multer for creative image uploads (JPEG, PNG, WebP - max 5MB)
+const uploadCreativeImage = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ["image/png", "image/jpeg", "image/webp"];
+    const allowedExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (
+      allowedMimeTypes.includes(file.mimetype) &&
+      allowedExtensions.includes(ext)
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato inválido. Use JPG, PNG ou WebP (máximo 5MB)."));
+    }
+  },
+});
+
+const mimeToExt: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
 // ============ ASYNC RESET JOB SYSTEM ============
 interface ResetJobStep {
   name: string;
@@ -24467,6 +24494,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("GET /api/creatives error:", error);
       res.status(500).json({ message: "Erro ao listar criativos" });
+    }
+  });
+
+  app.post("/api/creatives/upload-image", requireAuth, uploadCreativeImage.single("image"), async (req: Request, res: Response) => {
+    try {
+      const role = req.user!.role;
+      if (role !== "master" && role !== "coordenacao") return res.status(403).json({ message: "Sem permissão" });
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "Arquivo de imagem é obrigatório" });
+
+      const fsModule = await import("fs");
+      const pathModule = await import("path");
+
+      const uploadsDir = pathModule.join(process.cwd(), "uploads", "creatives");
+      if (!fsModule.existsSync(uploadsDir)) {
+        fsModule.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const ext = mimeToExt[file.mimetype] || ".png";
+      const filename = `creative-${req.tenantId}-${Date.now()}${ext}`;
+      const filepath = pathModule.join(uploadsDir, filename);
+
+      fsModule.writeFileSync(filepath, file.buffer);
+
+      const imageUrl = `/uploads/creatives/${filename}`;
+      res.json({ imageUrl });
+    } catch (error) {
+      console.error("POST /api/creatives/upload-image error:", error);
+      res.status(500).json({ message: "Erro ao fazer upload da imagem" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +32,7 @@ import {
   Settings2,
   ImageIcon,
   FolderOpen,
+  Upload,
 } from "lucide-react";
 import { CardFinalizer } from "@/components/card-finalizer";
 import type { Creative, CreativePack } from "@shared/schema";
@@ -51,6 +52,10 @@ export function CriativosGallery() {
 
   const [finalizerOpen, setFinalizerOpen] = useState(false);
   const [selectedCreative, setSelectedCreative] = useState<Creative | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -84,24 +89,62 @@ export function CriativosGallery() {
   const openAddCreative = () => {
     setEditingCreative(null);
     setForm({ title: "", packId: packs[0]?.id ? String(packs[0].id) : "", imageUrl: "", tipo: "personalizavel", ativo: true });
+    setSelectedFile(null);
+    setPreviewUrl("");
     setDialogOpen(true);
   };
 
   const openEditCreative = (c: Creative) => {
     setEditingCreative(c);
     setForm({ title: c.title, packId: String(c.packId), imageUrl: c.imageUrl, tipo: c.tipo, ativo: c.ativo !== false });
+    setSelectedFile(null);
+    setPreviewUrl(c.imageUrl);
     setDialogOpen(true);
+  };
+
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setForm({ ...form, imageUrl: "" });
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await fetch("/api/creatives/upload-image", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: "Erro no upload" }));
+      throw new Error(err.message);
+    }
+    const data = await response.json();
+    return data.imageUrl;
   };
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const body = { title: data.title, packId: parseInt(data.packId), imageUrl: data.imageUrl, tipo: data.tipo, ativo: data.ativo };
+      let imageUrl = data.imageUrl;
+      if (selectedFile) {
+        setUploadingImage(true);
+        try {
+          imageUrl = await uploadImage(selectedFile);
+        } finally {
+          setUploadingImage(false);
+        }
+      }
+      const body = { title: data.title, packId: parseInt(data.packId), imageUrl, tipo: data.tipo, ativo: data.ativo };
       if (editingCreative) return apiRequest("PUT", `/api/creatives/${editingCreative.id}`, body);
       return apiRequest("POST", "/api/creatives", body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/creatives"] });
       setDialogOpen(false);
+      setSelectedFile(null);
+      setPreviewUrl("");
       toast({ title: editingCreative ? "Criativo atualizado" : "Criativo adicionado" });
     },
     onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
@@ -296,8 +339,56 @@ export function CriativosGallery() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">URL da Imagem</Label>
-              <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://drive.google.com/..." data-testid="form-creative-url" />
+              <Label className="text-xs">Imagem</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                data-testid="input-creative-file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileSelect(file);
+                }}
+              />
+              {(previewUrl || form.imageUrl) ? (
+                <div className="relative border rounded-md overflow-hidden">
+                  <img
+                    src={previewUrl || form.imageUrl}
+                    alt="Preview"
+                    className="w-full h-40 object-contain bg-muted"
+                    data-testid="img-creative-preview"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="absolute bottom-2 right-2"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-change-image"
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Trocar
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="border-2 border-dashed rounded-md p-6 flex flex-col items-center gap-2 cursor-pointer hover-elevate"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type.startsWith("image/")) handleFileSelect(file);
+                  }}
+                  data-testid="dropzone-creative-image"
+                >
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Clique ou arraste uma imagem</span>
+                  <span className="text-xs text-muted-foreground">JPG, PNG ou WebP (máx. 5MB)</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.ativo} onCheckedChange={(v) => setForm({ ...form, ativo: v })} data-testid="form-creative-ativo" />
@@ -306,18 +397,22 @@ export function CriativosGallery() {
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || uploadingImage}
                 onClick={() => {
-                  if (!form.title.trim() || !form.imageUrl.trim() || !form.packId) {
+                  if (!form.title.trim() || !form.packId) {
                     toast({ title: "Preencha todos os campos", variant: "destructive" });
+                    return;
+                  }
+                  if (!selectedFile && !form.imageUrl.trim()) {
+                    toast({ title: "Selecione uma imagem", variant: "destructive" });
                     return;
                   }
                   saveMutation.mutate(form);
                 }}
                 data-testid="button-save-creative"
               >
-                {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                Salvar
+                {(saveMutation.isPending || uploadingImage) && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                {uploadingImage ? "Enviando..." : "Salvar"}
               </Button>
             </div>
           </div>
