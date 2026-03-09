@@ -678,7 +678,7 @@ export default function DashboardVendedorPage() {
           <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate text-[47px] ml-[0px] mr-[0px] pl-[9px] pr-[9px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
             {data?.vendedorNome || user.name}
           </h1>
-          <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 text-left ml-[10px] mr-[10px]">
+          <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 text-left ml-[8px] mr-[8px]">
             {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
           </p>
         </div>
