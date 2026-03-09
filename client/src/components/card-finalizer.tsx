@@ -452,7 +452,7 @@ async function renderCardCalibrated(
   ctx.drawImage(bgImg, 0, 0, W, H);
 
   const marg = W * 0.03;
-  const bH = Math.round(H * 0.115);
+  const bH = Math.round(H * 0.18);
   const bX = marg;
   const bW = W - marg * 2;
   const bY = H - bH - marg;
@@ -488,7 +488,7 @@ async function renderCardCalibrated(
   const tX = aX + aR + Math.round(W * 0.035);
 
   const fBadge = Math.round(W * 0.026);
-  const fName = Math.round(W * 0.048);
+  const fName = Math.round(W * 0.038);
   const fRole = Math.round(W * 0.022);
   const fPhone = Math.round(W * 0.033);
   const waSize = Math.round(W * 0.04);
@@ -532,7 +532,7 @@ async function renderCardCalibrated(
   );
   const bh = Math.round(bH * 0.26);
   const bxp = tX;
-  const byp = bY + Math.round(bH * 0.08);
+  const byp = bY + Math.round(bH * 0.06);
   const grad = ctx.createLinearGradient(bxp, 0, bxp + bw, 0);
   grad.addColorStop(0, "#9b3dd6");
   grad.addColorStop(1, "#e91e8c");
@@ -546,13 +546,13 @@ async function renderCardCalibrated(
 
   ctx.fillStyle = "#1a0030";
   ctx.font = `900 ${fName}px Montserrat, sans-serif`;
-  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.46));
+  ctx.fillText(nome || "Seu Nome", tX, bY + Math.round(bH * 0.42));
 
   ctx.fillStyle = "#aaa";
   ctx.font = `500 ${fRole}px Montserrat, sans-serif`;
-  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.65));
+  ctx.fillText((cargo || "Consultoria Financeira").toUpperCase(), tX, bY + Math.round(bH * 0.62));
 
-  const waY = bY + Math.round(bH * 0.87);
+  const waY = bY + Math.round(bH * 0.82);
   const waTop = waY - waSize * 0.8;
   drawWhatsappIcon(ctx, tX, waTop, waSize);
   ctx.fillStyle = "#222";
