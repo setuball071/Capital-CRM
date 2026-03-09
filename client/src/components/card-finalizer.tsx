@@ -416,8 +416,9 @@ async function renderCardCalibrated(
 
   const marg = W * 0.03;
   const bH   = Math.round(H * 0.14);
-  const bX   = marg;
-  const bW   = W - marg * 2;
+  const sideMarg = Math.round(W * 0.06);
+  const bX   = sideMarg;
+  const bW   = W - sideMarg * 2;
   const bY   = H - bH - marg;
 
   ctx.fillStyle = "rgba(255,255,255,0.97)";
@@ -426,7 +427,18 @@ async function renderCardCalibrated(
 
   const aR  = Math.round(bH * 0.65);
   const aX  = bX + Math.round(W * 0.015) + aR;
-  const aY  = bY + Math.round(bH * 0.50);
+  const aY  = bY + bH - aR - Math.round(bH * 0.08);
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = Math.round(W * 0.015);
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = Math.round(W * 0.004);
+  ctx.beginPath();
+  ctx.arc(aX, aY, aR, 0, Math.PI * 2);
+  ctx.fillStyle = "#e0ccf5";
+  ctx.fill();
+  ctx.restore();
 
   if (photoImg) {
     ctx.save();
