@@ -96,7 +96,6 @@ import {
   insertCreativePackSchema,
   creatives,
   insertCreativeSchema,
-  webhookLogs,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -1073,157 +1072,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error(`[TENANT-AUDIT] Failed to log audit entry:`, error);
     }
   }
-
-  // ===== INTEGRATION & WEBHOOK ROUTES (PUBLIC — no session auth) =====
-
-  app.get("/api/integration/users", async (req: any, res) => {
-    if (!process.env.CRM_INTEGRATION_SECRET) {
-      return res.status(503).json({ error: "Integration not configured" });
-    }
-    const secret = req.headers["x-integration-secret"];
-    if (secret !== process.env.CRM_INTEGRATION_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-      const usuarios = await db
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-        })
-        .from(users)
-        .where(eq(users.isActive, true))
-        .orderBy(asc(users.name));
-
-      return res.json({
-        usuarios: usuarios.map((u) => ({
-          crm_user_id: u.id,
-          nome: u.name,
-          login: u.email,
-          role: u.role,
-        })),
-      });
-    } catch (error) {
-      console.error("[integration] Erro ao buscar usuários:", error);
-      return res.status(500).json({ error: "Erro interno" });
-    }
-  });
-
-  const whatsappLabelsHandler = async (req: any, res: any) => {
-    const body = req.body;
-    const secret = req.headers["x-webhook-secret"];
-
-    if (secret !== process.env.WHATSAPP_WEBHOOK_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-      const cpfLimpo = (body?.contact?.cpf || "").replace(/\D/g, "");
-      const nomeEtiqueta = body?.label?.name;
-      const evento = body?.event;
-
-      if (!cpfLimpo || !nomeEtiqueta || !evento) {
-        await db.insert(webhookLogs).values({
-          source: "whatsapp",
-          event: evento || "unknown",
-          cpf: cpfLimpo || null,
-          clienteId: null,
-          labelName: nomeEtiqueta || null,
-          payload: body,
-          status: "error",
-          errorMessage: "Campos obrigatórios ausentes (cpf, label.name, event)",
-        });
-        return res.status(200).json({ status: "error", message: "Campos obrigatórios ausentes" });
-      }
-
-      const [cliente] = await db
-        .select()
-        .from(clientesPessoa)
-        .where(eq(clientesPessoa.cpf, cpfLimpo))
-        .limit(1);
-
-      if (!cliente) {
-        console.warn(`[webhook] Cliente não encontrado para CPF: ${cpfLimpo}`);
-        await db.insert(webhookLogs).values({
-          source: "whatsapp",
-          event: evento,
-          cpf: cpfLimpo,
-          clienteId: null,
-          labelName: nomeEtiqueta,
-          payload: body,
-          status: "not_found",
-          errorMessage: "Cliente não encontrado no CRM",
-        });
-        return res.status(200).json({ status: "not_found", message: "Cliente não encontrado no CRM" });
-      }
-
-      const labelsAtuais: string[] = (cliente.whatsappLabels as string[]) || [];
-      let labelsAtualizadas: string[];
-
-      if (evento === "label.applied") {
-        labelsAtualizadas = labelsAtuais.includes(nomeEtiqueta)
-          ? labelsAtuais
-          : [...labelsAtuais, nomeEtiqueta];
-      } else if (evento === "label.removed") {
-        labelsAtualizadas = labelsAtuais.filter((l) => l !== nomeEtiqueta);
-      } else {
-        await db.insert(webhookLogs).values({
-          source: "whatsapp",
-          event: evento,
-          cpf: cpfLimpo,
-          clienteId: cliente.id,
-          labelName: nomeEtiqueta,
-          payload: body,
-          status: "ignored",
-          errorMessage: null,
-        });
-        return res.status(200).json({ status: "ignored", event: evento });
-      }
-
-      await db
-        .update(clientesPessoa)
-        .set({ whatsappLabels: labelsAtualizadas })
-        .where(eq(clientesPessoa.id, cliente.id));
-
-      await db.insert(webhookLogs).values({
-        source: "whatsapp",
-        event: evento,
-        cpf: cpfLimpo,
-        clienteId: cliente.id,
-        labelName: nomeEtiqueta,
-        payload: body,
-        status: "success",
-        errorMessage: null,
-      });
-
-      console.log(`[webhook] WhatsApp label "${nomeEtiqueta}" ${evento} para cliente ${cliente.id}`);
-      return res.status(200).json({
-        status: "success",
-        clienteId: cliente.id,
-        labels: labelsAtualizadas,
-      });
-    } catch (error: any) {
-      console.error("[webhook] Erro ao processar webhook WhatsApp:", error);
-      try {
-        await db.insert(webhookLogs).values({
-          source: "whatsapp",
-          event: body?.event || "unknown",
-          cpf: (body?.contact?.cpf || "").replace(/\D/g, "") || null,
-          clienteId: null,
-          labelName: body?.label?.name || null,
-          payload: body,
-          status: "error",
-          errorMessage: error?.message || String(error),
-        });
-      } catch (_) {}
-      return res.status(200).json({ status: "error", message: "Erro interno" });
-    }
-  };
-
-  app.post("/api/webhooks/whatsapp-labels", whatsappLabelsHandler);
-  app.post("/webhooks/labels", whatsappLabelsHandler);
 
   // ===== TENANT ROUTES =====
 
@@ -9714,7 +9562,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     requireModuleAccess("modulo_base_clientes"),
     async (req: any, res) => {
       try {
-        const { cpf, matricula, convenio, base, whatsappLabel } = req.query;
+        const { cpf, matricula, convenio, base } = req.query;
 
         if (!cpf && !matricula) {
           return res.status(400).json({
@@ -9727,8 +9575,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         let resultados: any[] = [];
         const convenioFiltro = convenio ? String(convenio).trim() : null;
         const baseFiltro = base ? String(base).trim() : null;
-        const whatsappLabelFiltro = whatsappLabel ? String(whatsappLabel).trim() : null;
-
         console.log(
           `[Consulta Cliente] user=${req.user?.id}, tipoBusca=${matricula ? "matricula" : "cpf"}, convenio=${convenioFiltro || "all"}, base=${baseFiltro || "all"}`,
         );
@@ -9782,23 +9628,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           }));
         } else {
           return res.status(400).json({ message: "Parâmetro inválido" });
-        }
-
-        if (whatsappLabelFiltro && resultados.length > 0) {
-          const pessoaIds = resultados.map((r: any) => r.pessoa_id).filter(Boolean);
-          if (pessoaIds.length > 0) {
-            const pessoas = await db
-              .select({ id: clientesPessoa.id, whatsappLabels: clientesPessoa.whatsappLabels })
-              .from(clientesPessoa)
-              .where(
-                and(
-                  inArray(clientesPessoa.id, pessoaIds),
-                  sql`${clientesPessoa.whatsappLabels} @> ARRAY[${whatsappLabelFiltro}]::text[]`
-                )
-              );
-            const idsComLabel = new Set(pessoas.map((p) => p.id));
-            resultados = resultados.filter((r: any) => idsComLabel.has(r.pessoa_id));
-          }
         }
 
         console.log(

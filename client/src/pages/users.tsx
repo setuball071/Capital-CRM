@@ -88,7 +88,6 @@ export default function UsersPage() {
   // Access configuration modal state
   const [acessoModalUser, setAcessoModalUser] = useState<User | null>(null);
   const [showAcessoModal, setShowAcessoModal] = useState(false);
-  const [copiedCrmId, setCopiedCrmId] = useState<number | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -1163,65 +1162,6 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {isMaster && (
-        <Card className="mt-4" data-testid="card-crm-ids-whatsapp">
-          <CardHeader>
-            <CardTitle className="text-base">IDs para Integração WhatsApp</CardTitle>
-            <CardDescription>
-              Use estes IDs ao cadastrar agentes na plataforma de WhatsApp (campo crm_user_id)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">CRM ID</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Login</TableHead>
-                  <TableHead>Função</TableHead>
-                  <TableHead className="w-24">Copiar</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.filter(u => u.isActive).map((u) => (
-                  <TableRow key={`crm-${u.id}`} data-testid={`row-crm-id-${u.id}`}>
-                    <TableCell>
-                      <code className="bg-muted px-2 py-0.5 rounded text-sm font-mono font-bold">
-                        {u.id}
-                      </code>
-                    </TableCell>
-                    <TableCell>{u.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs">
-                        {ROLE_LABELS[u.role as UserRole] || u.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          navigator.clipboard.writeText(String(u.id));
-                          setCopiedCrmId(u.id);
-                          setTimeout(() => setCopiedCrmId(null), 2000);
-                        }}
-                        data-testid={`button-copy-crm-id-${u.id}`}
-                      >
-                        {copiedCrmId === u.id ? (
-                          <Check className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
         <AlertDialogContent>
