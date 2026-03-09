@@ -674,36 +674,13 @@ export default function DashboardVendedorPage() {
         </Card>
       )}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-0 gap-3 sm:gap-6 relative overflow-visible" style={{ zIndex: 1 }}>
-        <div className="flex items-end -space-x-4 sm:-space-x-6 min-w-0">
-          <div className="relative shrink-0" style={{ zIndex: 1 }}>
-            <div className="relative">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-primary p-0.5">
-                <Avatar className="w-full h-full">
-                  <AvatarFallback className="text-xs sm:text-sm font-bold">
-                    {user.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-              {nivelGeral && (
-                <div
-                  className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 rounded-full border-2 border-background"
-                  style={{ backgroundColor: nivelGeral.cor }}
-                >
-                  <NivelGeralIcon size={8} className="text-background" />
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="min-w-0 pb-1 ml-[-30px] mr-[-30px]">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate ml-[-13px] mr-[-13px] text-[46px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
-                {data?.vendedorNome || user.name}
-              </h1>
-            </div>
-            <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 ml-[-13px] mr-[-13px] text-right">
-              {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate text-[46px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
+            {data?.vendedorNome || user.name}
+          </h1>
+          <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1">
+            {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
+          </p>
         </div>
 
         <div className="flex bg-muted p-1 rounded-lg border border-border shrink-0" data-testid="nav-toggle">
