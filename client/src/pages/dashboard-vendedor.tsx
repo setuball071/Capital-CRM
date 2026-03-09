@@ -675,7 +675,7 @@ export default function DashboardVendedorPage() {
       )}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-0 gap-3 sm:gap-6 relative overflow-visible" style={{ zIndex: 1 }}>
         <div className="min-w-0">
-          <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate text-[46px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
+          <h1 className="font-black italic sm:text-4xl lg:text-5xl text-foreground tracking-tight uppercase truncate text-[47px] ml-[0px] mr-[0px] pl-[9px] pr-[9px]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-dashboard-title">
             {data?.vendedorNome || user.name}
           </h1>
           <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1">
