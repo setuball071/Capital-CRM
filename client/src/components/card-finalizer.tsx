@@ -428,10 +428,7 @@ async function renderCardCalibrated(
   const aX = bX + Math.round(W * 0.10) + aR;
   const aY = bY + bH - aR - Math.round(bH * 0.15);
 
-  const borderGrad = ctx.createLinearGradient(aX - aR, aY - aR, aX + aR, aY + aR);
-  borderGrad.addColorStop(0, "#9b3dd6");
-  borderGrad.addColorStop(1, "#e91e8c");
-  ctx.strokeStyle = borderGrad;
+  ctx.strokeStyle = "#6C2BD9";
   ctx.lineWidth = Math.round(W * 0.007);
   ctx.beginPath();
   ctx.arc(aX, aY, aR + ctx.lineWidth, 0, Math.PI * 2);
