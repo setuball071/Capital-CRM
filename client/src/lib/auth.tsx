@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/login", { email, password });
     const data = await response.json();
-    queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
+    queryClient.clear();
     const loginPermissions = data.permissions || {};
     const meResponse = await fetch("/api/auth/me", { credentials: "include" });
     if (meResponse.ok) {
@@ -61,17 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPermissions(loginPermissions);
       setUser(data.user);
     }
-    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
   };
 
   const logout = async () => {
-    await apiRequest("POST", "/api/auth/logout");
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } catch (_) {}
     setUser(null);
     setPermissions({});
-    // Invalidate tenant cache to force refetch with new session state
-    // Use partial key match to invalidate all host-specific tenant caches
-    queryClient.invalidateQueries({ queryKey: ["/api/tenant"], exact: false });
+    queryClient.clear();
   };
 
   // Helper para verificar permissão dada a chave e tipo de acesso

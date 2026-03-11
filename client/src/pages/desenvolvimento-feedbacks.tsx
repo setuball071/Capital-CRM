@@ -72,6 +72,7 @@ function GestorView() {
   const [aiMode, setAiMode] = useState<"none" | "loading" | "ready">("none");
   const [usandoIA, setUsandoIA] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [selectedFb, setSelectedFb] = useState<FeedbackItem | null>(null);
 
   const { data: feedbacksList = [], isLoading } = useQuery<FeedbackItem[]>({
     queryKey: ["/api/feedbacks"],
@@ -372,7 +373,12 @@ function GestorView() {
               const TipoIcon = tipoConf.icon;
               const lidoIds = Array.isArray(fb.lidoPor) ? fb.lidoPor : [];
               return (
-                <Card key={fb.id} data-testid={`card-feedback-${fb.id}`}>
+                <Card
+                  key={fb.id}
+                  className="cursor-pointer hover-elevate"
+                  onClick={() => setSelectedFb(fb)}
+                  data-testid={`card-feedback-${fb.id}`}
+                >
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -410,7 +416,7 @@ function GestorView() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => setDeleteId(fb.id)}
+                            onClick={(e) => { e.stopPropagation(); setDeleteId(fb.id); }}
                             data-testid={`button-excluir-feedback-${fb.id}`}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -438,6 +444,67 @@ function GestorView() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!selectedFb} onOpenChange={(open) => { if (!open) setSelectedFb(null); }}>
+        <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+          {selectedFb && (() => {
+            const tipoConf = TIPO_CONFIG[selectedFb.tipo] || TIPO_CONFIG.combinado;
+            const TipoIcon = tipoConf.icon;
+            const lidoIds = Array.isArray(selectedFb.lidoPor) ? selectedFb.lidoPor : [];
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className={`text-xs border ${tipoConf.badgeCor}`}>
+                      <TipoIcon className="h-3 w-3 mr-1" /> {tipoConf.label}
+                    </Badge>
+                    {selectedFb.destinatarioNome ? (
+                      <span className="text-xs text-muted-foreground">para <span className="font-medium">{selectedFb.destinatarioNome}</span></span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">para <span className="font-medium">toda equipe</span></span>
+                    )}
+                  </div>
+                  <DialogTitle className="text-lg mt-2" data-testid="text-gestor-feedback-modal-titulo">{selectedFb.titulo}</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    Enviado em {formatDate(selectedFb.createdAt)}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed" data-testid="text-gestor-feedback-modal-mensagem">{selectedFb.mensagem}</p>
+
+                  <Separator />
+
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {lidoIds.length > 0 ? (
+                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                        <Eye className="h-3 w-3" /> {lidoIds.length} {lidoIds.length === 1 ? "leu" : "leram"}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <EyeOff className="h-3 w-3" /> Ninguém leu ainda
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedFb.comentario && (
+                    <div className="p-3 rounded-md bg-muted/50 border border-border">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-[8px]">{getInitials(selectedFb.destinatarioNome || "")}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-medium">{selectedFb.destinatarioNome}</span>
+                        {selectedFb.comentarioAt && <span className="text-xs text-muted-foreground">{formatDate(selectedFb.comentarioAt)}</span>}
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{selectedFb.comentario}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteId !== null} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <DialogContent className="sm:max-w-[400px]">
