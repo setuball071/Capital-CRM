@@ -10344,26 +10344,38 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           precoFinal = pricing.precoTotal;
         }
 
-        // Create pedido com informações do pacote
-        // Usar quantidadeEfetiva (limitada pelo pacote) em vez de total
+        const isMaster = req.user!.role === "master";
+        const statusInicial = isMaster ? "aprovado" : "pendente";
+
         const pedido = await storage.createPedidoLista({
           coordenadorId: req.user!.id,
           filtrosUsados: filtros,
           quantidadeRegistros: quantidadeEfetiva,
           tipo: "exportacao_base",
-          status: "pendente",
+          status: statusInicial,
           nomePacote: nomePacote,
           custoEstimado: String(precoFinal),
           statusFinanceiro: "pendente",
         });
 
-        // Informar se houve corte na quantidade
+        if (isMaster) {
+          generatePedidoListaFile(pedido.id, pedido).catch(async (err) => {
+            console.error("[PedidoLista] Error generating file (auto-approved):", err);
+            try {
+              await storage.updatePedidoLista(pedido.id, { status: "erro" });
+            } catch (e) {
+              console.error("[PedidoLista] Failed to update status on error:", e);
+            }
+          });
+        }
+
         const corteFoiAplicado = quantidadeEfetiva < total;
+        const baseMsg = corteFoiAplicado
+          ? `Pedido criado com sucesso. Foi aplicado corte automático: ${quantidadeEfetiva.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros serão exportados.`
+          : "Pedido criado com sucesso";
 
         return res.json({
-          message: corteFoiAplicado
-            ? `Pedido criado com sucesso. Foi aplicado corte automático: ${quantidadeEfetiva.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros serão exportados.`
-            : "Pedido criado com sucesso",
+          message: isMaster ? `${baseMsg} O arquivo está sendo gerado.` : baseMsg,
           pedido: {
             id: pedido.id,
             quantidade: quantidadeEfetiva,
