@@ -1,5 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
 
+function getBrazilTime(): { horaAtual: string; diaDaSemana: string } {
+  const agora = new Date();
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(agora);
+
+  const h = parts.find(p => p.type === 'hour')!.value;
+  const m = parts.find(p => p.type === 'minute')!.value;
+  const weekdayRaw = parts.find(p => p.type === 'weekday')!.value.toLowerCase().replace('.', '');
+
+  const weekdayMap: Record<string, string> = {
+    dom: 'dom', seg: 'seg', ter: 'ter', qua: 'qua', qui: 'qui', sex: 'sex', sáb: 'sab', sab: 'sab',
+  };
+
+  return {
+    horaAtual: `${h}:${m}`,
+    diaDaSemana: weekdayMap[weekdayRaw] || weekdayRaw,
+  };
+}
+
 export const validateAccess = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user as any;
@@ -8,29 +32,34 @@ export const validateAccess = async (req: Request, res: Response, next: NextFunc
       return next();
     }
 
-    // 1. VALIDAR HORÁRIO
+    const { horaAtual, diaDaSemana } = getBrazilTime();
+
     if (user.horarioAcessoInicio && user.horarioAcessoFim) {
-      const agora = new Date();
-      const horaAtual = `${agora.getHours().toString().padStart(2, '0')}:${agora.getMinutes().toString().padStart(2, '0')}`;
+      const inicio = String(user.horarioAcessoInicio).substring(0, 5);
+      const fim = String(user.horarioAcessoFim).substring(0, 5);
       
-      if (horaAtual < user.horarioAcessoInicio || horaAtual > user.horarioAcessoFim) {
+      let foraDoPeriodo: boolean;
+      if (inicio <= fim) {
+        foraDoPeriodo = horaAtual < inicio || horaAtual > fim;
+      } else {
+        foraDoPeriodo = horaAtual < inicio && horaAtual > fim;
+      }
+      
+      if (foraDoPeriodo) {
         return res.status(403).json({
           error: 'Acesso negado',
-          message: `Horário de acesso: ${user.horarioAcessoInicio} às ${user.horarioAcessoFim}`
+          message: `Horário de acesso: ${inicio} às ${fim}`
         });
       }
     }
 
-    // 2. VALIDAR DIA DA SEMANA
     if (user.diasAcessoPermitidos) {
       try {
         const diasPermitidos = JSON.parse(user.diasAcessoPermitidos);
         
         if (diasPermitidos.length > 0) {
-          const hoje = new Date();
-          const diaDaSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'][hoje.getDay()];
-          
-          if (!diasPermitidos.includes(diaDaSemana)) {
+          const normalized = diasPermitidos.map((d: string) => d.toLowerCase().replace('.', '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+          if (!normalized.includes(diaDaSemana)) {
             return res.status(403).json({
               error: 'Acesso negado',
               message: 'Você não tem permissão para acessar hoje'
@@ -42,18 +71,16 @@ export const validateAccess = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    // 3. VALIDAR IP
     if (user.restringirPorIp && user.ipsPermitidos) {
       try {
         const ipsPermitidos = JSON.parse(user.ipsPermitidos);
         const ipCliente = req.ip || req.socket?.remoteAddress || req.headers['x-forwarded-for'];
         
         if (ipCliente && ipsPermitidos.length > 0) {
-          // Limpar IP (remover ::ffff: se tiver)
           const ipLimpo = String(ipCliente).replace('::ffff:', '').split(',')[0].trim();
           
           if (!ipsPermitidos.includes(ipLimpo)) {
-            console.log(`❌ IP bloqueado: ${ipLimpo} - Usuário: ${user.name}`);
+            console.log(`IP bloqueado: ${ipLimpo} - Usuário: ${user.name}`);
             return res.status(403).json({
               error: 'Acesso negado',
               message: 'Seu IP não está autorizado a acessar o sistema'
@@ -65,11 +92,10 @@ export const validateAccess = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    // Tudo OK, permitir acesso
     next();
 
   } catch (error) {
     console.error('Erro no middleware de validação:', error);
-    next(); // Em caso de erro, permite acesso (segurança fail-open)
+    next();
   }
 };
