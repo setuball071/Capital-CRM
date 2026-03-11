@@ -10594,7 +10594,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     );
 
     const CHUNK_SIZE = 5000; // Process 5000 records at a time
-    const MAX_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max timeout
+    const MAX_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes max timeout
 
     let writeStream: fs.WriteStream | null = null;
     let filePath: string = "";
