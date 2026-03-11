@@ -1,0 +1,272 @@
+# PROMPT — Ajustes no módulo de Feedbacks
+
+## T001 — Gestor vê rascunho + versão final
+
+Quando o gestor abre um card de feedback, exibir AMBAS as versões:
+
+### Na página/modal de visualização do feedback (para role master/coordenacao):
+
+```tsx
+{/* Versão Final — visível para todos */}
+<div>
+  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+    Versão Enviada ao Colaborador
+  </h4>
+  <p>{feedback.conteudo}</p>
+</div>
+
+{/* Rascunho — visível apenas para gestor */}
+{isGestor && feedback.rascunho && (
+  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+    <h4 className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">
+      📝 Rascunho Original (visível só para gestores)
+    </h4>
+    <p className="text-amber-900">{feedback.rascunho}</p>
+  </div>
+)}
+```
+
+Verificar se a tabela de feedbacks já possui coluna `rascunho` (draft). 
+Se não existir, adicionar:
+```sql
+ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS rascunho text;
+```
+
+---
+
+## T002 — Badge em cascata na sidebar
+
+### Objetivo:
+A bolinha vermelha de notificação de feedback deve aparecer em cascata:
+- No item "Feedbacks" (já existe)
+- No item pai "Desenvolvimento" (mesmo fechado)
+
+### Implementação na sidebar (App.tsx ou componente de sidebar):
+
+```tsx
+// Buscar contagem de feedbacks não lidos do usuário logado
+const { data: unreadCount } = useQuery({
+  queryKey: ['feedbacks-unread', user?.id],
+  queryFn: () => fetch('/api/feedbacks/unread-count').then(r => r.json()),
+  refetchInterval: 30000, // atualiza a cada 30s
+});
+
+const feedbacksNaoLidos = unreadCount?.count || 0;
+```
+
+### Na renderização do item "Desenvolvimento" na sidebar:
+
+```tsx
+<SidebarItem
+  label="Desenvolvimento"
+  icon={<BookOpen />}
+  expandable
+  badge={feedbacksNaoLidos > 0 ? feedbacksNaoLidos : undefined}
+  // badge aparece tanto quando fechado quanto aberto
+/>
+```
+
+### No item filho "Feedbacks":
+
+```tsx
+<SidebarSubItem
+  label="Feedbacks"
+  badge={feedbacksNaoLidos > 0 ? feedbacksNaoLidos : undefined}
+/>
+```
+
+O badge deve ser uma bolinha vermelha pequena (não precisa mostrar número,
+só indicar que há notificação) — mas se quiser número, usar `feedbacksNaoLidos`.
+
+### Endpoint necessário:
+
+```ts
+GET /api/feedbacks/unread-count
+// Retorna: { count: N }
+// Conta feedbacks destinados ao usuário logado onde read_at IS NULL
+```
+
+---
+
+## T003 — Marcar como lido automaticamente ao abrir
+
+### Quando o colaborador abre/visualiza um feedback:
+
+Disparar a marcação de leitura imediatamente ao montar o componente de visualização,
+sem necessidade de clique em botão.
+
+```tsx
+// No componente de visualização do feedback (useEffect no mount)
+useEffect(() => {
+  if (feedback && !feedback.readAt && !isGestor) {
+    // Marcar como lido imediatamente
+    markAsRead(feedback.id);
+  }
+}, [feedback?.id]);
+
+const markAsRead = async (feedbackId: number) => {
+  await fetch(`/api/feedbacks/${feedbackId}/read`, {
+    method: 'POST',
+  });
+  // Invalidar queries de unread-count e do feedback
+  queryClient.invalidateQueries(['feedbacks-unread']);
+  queryClient.invalidateQueries(['feedbacks']);
+};
+```
+
+### Endpoint:
+
+```ts
+POST /api/feedbacks/:id/read
+
+// Atualizar no banco:
+// read_at = NOW()
+// read_by = req.user.id (se não estiver preenchido ainda)
+
+// Verificar se colunas existem, se não:
+ALTER TABLE feedbacks 
+  ADD COLUMN IF NOT EXISTS read_at timestamp,
+  ADD COLUMN IF NOT EXISTS read_by integer REFERENCES users(id);
+```
+
+Retornar 200 com os dados atualizados.
+
+---
+
+## T004 — Exibir registro de leitura
+
+### Para o colaborador (após leitura):
+
+```tsx
+{feedback.readAt && (
+  <div className="flex items-center gap-2 text-xs text-green-600 mt-3">
+    <CheckCircle size={14} />
+    <span>
+      Visualizado em {format(new Date(feedback.readAt), "dd/MM/yyyy 'às' HH:mm")}
+    </span>
+  </div>
+)}
+```
+
+### Para o gestor (no card e na visualização):
+
+```tsx
+{isGestor && (
+  <div className="mt-3">
+    {feedback.readAt ? (
+      <div className="flex items-center gap-2 text-xs text-green-600">
+        <CheckCircle size={14} />
+        <span>
+          Lido por <strong>{feedback.readByName}</strong> em{' '}
+          {format(new Date(feedback.readAt), "dd/MM/yyyy 'às' HH:mm")}
+        </span>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2 text-xs text-gray-400">
+        <Clock size={14} />
+        <span>Ainda não visualizado</span>
+      </div>
+    )}
+  </div>
+)}
+```
+
+Na query do feedback, fazer JOIN com users para trazer `read_by_name`:
+```ts
+// No SELECT, incluir nome do usuário que leu
+// LEFT JOIN users ON feedbacks.read_by = users.id
+// Adicionar campo readByName no retorno
+```
+
+---
+
+## T005 — Campo de resposta do colaborador
+
+Adicionar área de resposta no modal de visualização do feedback para o colaborador:
+
+```tsx
+{/* Área de resposta — visível para o colaborador */}
+{!isGestor && (
+  <div className="mt-6 border-t pt-4">
+    <h4 className="text-sm font-semibold text-gray-700 mb-2">
+      Sua resposta (opcional)
+    </h4>
+    {feedback.resposta ? (
+      // Resposta já enviada — mostrar em modo leitura
+      <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
+        <p>{feedback.resposta}</p>
+        <span className="text-xs text-gray-400 mt-2 block">
+          Enviado em {format(new Date(feedback.respostaAt!), "dd/MM/yyyy 'às' HH:mm")}
+        </span>
+      </div>
+    ) : (
+      // Formulário de resposta
+      <div className="flex flex-col gap-2">
+        <textarea
+          value={respostaTexto}
+          onChange={(e) => setRespostaTexto(e.target.value)}
+          placeholder="Escreva sua resposta ou anotação..."
+          rows={3}
+          className="w-full border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+        />
+        <button
+          onClick={handleEnviarResposta}
+          disabled={!respostaTexto.trim()}
+          className="self-end px-4 py-2 bg-purple-600 text-white text-sm rounded-lg disabled:opacity-50"
+        >
+          Enviar resposta
+        </button>
+      </div>
+    )}
+  </div>
+)}
+
+{/* Gestor vê a resposta do colaborador */}
+{isGestor && feedback.resposta && (
+  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+    <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1">
+      💬 Resposta do Colaborador
+    </h4>
+    <p className="text-sm text-blue-900">{feedback.resposta}</p>
+    <span className="text-xs text-blue-400 mt-1 block">
+      {format(new Date(feedback.respostaAt!), "dd/MM/yyyy 'às' HH:mm")}
+    </span>
+  </div>
+)}
+```
+
+### Colunas necessárias:
+```sql
+ALTER TABLE feedbacks
+  ADD COLUMN IF NOT EXISTS resposta text,
+  ADD COLUMN IF NOT EXISTS resposta_at timestamp;
+```
+
+### Endpoint:
+```ts
+POST /api/feedbacks/:id/resposta
+Body: { resposta: string }
+// Salva resposta e resposta_at = NOW()
+// Só o destinatário pode responder (req.user.id === feedback.destinatario_id)
+```
+
+---
+
+## RESUMO DE COLUNAS NOVAS NA TABELA feedbacks
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `rascunho` | text | Versão original do gestor antes de editar |
+| `read_at` | timestamp | Quando foi visualizado |
+| `read_by` | integer FK | Quem visualizou |
+| `resposta` | text | Resposta do colaborador |
+| `resposta_at` | timestamp | Quando respondeu |
+
+## ARQUIVOS A MODIFICAR
+
+| Arquivo | Ação |
+|---------|------|
+| `shared/schema.ts` | Adicionar colunas novas em feedbacks |
+| `server/routes.ts` | Endpoints /read, /resposta, /unread-count |
+| `client/src/components/feedback-*.tsx` | Leitura automática, rascunho, resposta, registro |
+| `client/src/components/sidebar.tsx` ou `App.tsx` | Badge em cascata em Desenvolvimento |

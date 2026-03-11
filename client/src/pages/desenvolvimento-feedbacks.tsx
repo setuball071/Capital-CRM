@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -28,8 +28,10 @@ interface FeedbackItem {
   mensagem: string;
   tipo: string;
   lidoPor: number[];
+  rascunho: string | null;
   comentario: string | null;
   comentarioAt: string | null;
+  readAt: string | null;
   createdAt: string;
 }
 
@@ -102,7 +104,7 @@ function GestorView() {
   });
 
   const criarMutation = useMutation({
-    mutationFn: async (payload: { titulo: string; mensagem: string; tipo: string; destinatarioId: number | null }) => {
+    mutationFn: async (payload: { titulo: string; mensagem: string; tipo: string; destinatarioId: number | null; rascunho: string | null }) => {
       await apiRequest("POST", "/api/feedbacks", payload);
     },
     onSuccess: () => {
@@ -336,11 +338,13 @@ function GestorView() {
                     toast({ title: "Adicione um título", variant: "destructive" });
                     return;
                   }
+                  const draftText = rascunho.trim();
                   criarMutation.mutate({
                     titulo,
                     mensagem: msg,
                     tipo,
                     destinatarioId: destinatarioId === "todos" ? null : parseInt(destinatarioId),
+                    rascunho: draftText && draftText !== msg.trim() ? draftText : null,
                   });
                 }}
                 disabled={criarMutation.isPending}
@@ -471,32 +475,44 @@ function GestorView() {
                 </DialogHeader>
 
                 <div className="space-y-4">
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed" data-testid="text-gestor-feedback-modal-mensagem">{selectedFb.mensagem}</p>
+                  <div>
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">Versão Enviada ao Colaborador</h4>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed" data-testid="text-gestor-feedback-modal-mensagem">{selectedFb.mensagem}</p>
+                  </div>
+
+                  {selectedFb.rascunho && (
+                    <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30">
+                      <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <Pencil className="h-3 w-3" /> Rascunho Original
+                      </h4>
+                      <p className="text-sm whitespace-pre-wrap text-amber-900 dark:text-amber-200">{selectedFb.rascunho}</p>
+                    </div>
+                  )}
 
                   <Separator />
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {lidoIds.length > 0 ? (
+                    {selectedFb.readAt ? (
                       <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <Eye className="h-3 w-3" /> {lidoIds.length} {lidoIds.length === 1 ? "leu" : "leram"}
+                        <CheckCircle className="h-3 w-3" />
+                        Lido por <span className="font-medium">{selectedFb.destinatarioNome || "equipe"}</span> em {formatDate(selectedFb.readAt)}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
-                        <EyeOff className="h-3 w-3" /> Ninguém leu ainda
+                        <EyeOff className="h-3 w-3" /> Ainda não visualizado
                       </span>
                     )}
                   </div>
 
                   {selectedFb.comentario && (
-                    <div className="p-3 rounded-md bg-muted/50 border border-border">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Avatar className="h-5 w-5">
-                          <AvatarFallback className="text-[8px]">{getInitials(selectedFb.destinatarioNome || "")}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs font-medium">{selectedFb.destinatarioNome}</span>
-                        {selectedFb.comentarioAt && <span className="text-xs text-muted-foreground">{formatDate(selectedFb.comentarioAt)}</span>}
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{selectedFb.comentario}</p>
+                    <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/30">
+                      <h4 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" /> Resposta do Colaborador
+                      </h4>
+                      <p className="text-sm whitespace-pre-wrap text-blue-900 dark:text-blue-200">{selectedFb.comentario}</p>
+                      {selectedFb.comentarioAt && (
+                        <span className="text-xs text-muted-foreground mt-1 block">{formatDate(selectedFb.comentarioAt)}</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -551,10 +567,16 @@ function VendedorView() {
       queryClient.invalidateQueries({ queryKey: ["/api/feedbacks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/feedbacks/unread-count"] });
       if (selectedFb) {
-        setSelectedFb((prev) => prev ? { ...prev, lidoPor: [...(prev.lidoPor || []), user?.id || 0] } : null);
+        setSelectedFb((prev) => prev ? { ...prev, lidoPor: [...(prev.lidoPor || []), user?.id || 0], readAt: new Date().toISOString() } : null);
       }
     },
   });
+
+  useEffect(() => {
+    if (selectedFb && !selectedFb.lidoPor?.includes(user?.id || 0)) {
+      marcarLidoMutation.mutate(selectedFb.id);
+    }
+  }, [selectedFb?.id]);
 
   const comentarioMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -673,20 +695,10 @@ function VendedorView() {
                 <div className="space-y-4">
                   <p className="text-sm whitespace-pre-wrap leading-relaxed" data-testid="text-feedback-modal-mensagem">{selectedFb.mensagem}</p>
 
-                  {!isLido && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => marcarLidoMutation.mutate(selectedFb.id)}
-                      disabled={marcarLidoMutation.isPending}
-                      data-testid="button-marcar-lido"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" /> {marcarLidoMutation.isPending ? "Marcando..." : "Marcar como Lido"}
-                    </Button>
-                  )}
-                  {isLido && (
-                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                      <CheckCircle className="h-4 w-4" /> Lido
+                  {selectedFb.readAt && (
+                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      <span>Visualizado em {formatDate(selectedFb.readAt)}</span>
                     </div>
                   )}
 
@@ -696,7 +708,7 @@ function VendedorView() {
 
                     <div className="space-y-3">
                       <Label className="text-sm font-semibold flex items-center gap-1.5">
-                        <MessageCircle className="h-4 w-4" /> Resposta / Reconhecimento
+                        <MessageCircle className="h-4 w-4" /> Sua Resposta
                       </Label>
                       {selectedFb.comentario ? (
                         <div className="p-3 rounded-md bg-muted/50 border border-border">
@@ -720,7 +732,7 @@ function VendedorView() {
                             disabled={!comentarioText.trim() || comentarioMutation.isPending}
                             data-testid="button-enviar-comentario"
                           >
-                            <Send className="h-3 w-3 mr-1.5" /> {comentarioMutation.isPending ? "Enviando..." : "Enviar Comentário"}
+                            <Send className="h-3 w-3 mr-1.5" /> {comentarioMutation.isPending ? "Enviando..." : "Enviar Resposta"}
                           </Button>
                         </div>
                       )}

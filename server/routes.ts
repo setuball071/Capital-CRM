@@ -23681,19 +23681,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         );
       }
 
+      const selectFields: Record<string, any> = {
+        id: feedbacks.id,
+        autorId: feedbacks.autorId,
+        destinatarioId: feedbacks.destinatarioId,
+        titulo: feedbacks.titulo,
+        mensagem: feedbacks.mensagem,
+        tipo: feedbacks.tipo,
+        lidoPor: feedbacks.lidoPor,
+        comentario: feedbacks.comentario,
+        comentarioAt: feedbacks.comentarioAt,
+        readAt: feedbacks.readAt,
+        createdAt: feedbacks.createdAt,
+      };
+      if (isGestor) {
+        selectFields.rascunho = feedbacks.rascunho;
+      }
+
       const result = await db
-        .select({
-          id: feedbacks.id,
-          autorId: feedbacks.autorId,
-          destinatarioId: feedbacks.destinatarioId,
-          titulo: feedbacks.titulo,
-          mensagem: feedbacks.mensagem,
-          tipo: feedbacks.tipo,
-          lidoPor: feedbacks.lidoPor,
-          comentario: feedbacks.comentario,
-          comentarioAt: feedbacks.comentarioAt,
-          createdAt: feedbacks.createdAt,
-        })
+        .select(selectFields)
         .from(feedbacks)
         .where(whereClause)
         .orderBy(desc(feedbacks.createdAt));
@@ -23774,7 +23780,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(403).json({ message: "Somente gestores podem criar feedbacks" });
       }
 
-      const { titulo, mensagem, tipo, destinatarioId } = req.body;
+      const { titulo, mensagem, tipo, destinatarioId, rascunho } = req.body;
       if (!titulo || !mensagem) {
         return res.status(400).json({ message: "Título e mensagem são obrigatórios" });
       }
@@ -23803,6 +23809,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           destinatarioId: destinatarioId || null,
           titulo,
           mensagem,
+          rascunho: rascunho || null,
           tipo: tipo || "combinado",
           lidoPor: [],
         })
@@ -23851,9 +23858,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const lidoPor = Array.isArray(fb.lidoPor) ? fb.lidoPor as number[] : [];
       if (!lidoPor.includes(userId)) {
         lidoPor.push(userId);
+        const updateData: any = { lidoPor };
+        if (!fb.readAt) {
+          updateData.readAt = new Date();
+        }
         await db
           .update(feedbacks)
-          .set({ lidoPor })
+          .set(updateData)
           .where(eq(feedbacks.id, feedbackId));
       }
 

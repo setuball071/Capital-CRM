@@ -3133,8 +3133,10 @@ export const feedbacks = pgTable("feedbacks", {
   mensagem: text("mensagem").notNull(),
   tipo: varchar("tipo", { length: 20 }).notNull().default("combinado"),
   lidoPor: jsonb("lido_por").default([]),
+  rascunho: text("rascunho"),
   comentario: text("comentario"),
   comentarioAt: timestamp("comentario_at"),
+  readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -3144,8 +3146,10 @@ export const insertFeedbackSchema = createInsertSchema(feedbacks).omit({
   tenantId: true,
   autorId: true,
   lidoPor: true,
+  rascunho: true,
   comentario: true,
   comentarioAt: true,
+  readAt: true,
 });
 
 export type Feedback = typeof feedbacks.$inferSelect;

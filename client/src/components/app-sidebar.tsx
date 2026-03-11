@@ -316,12 +316,17 @@ export function AppSidebar() {
                               {section.title}
                             </span>
                           </div>
-                          <ChevronDown 
-                            className={cn(
-                              "h-4 w-4 transition-transform duration-200",
-                              isOpen && "rotate-180"
-                            )} 
-                          />
+                          <div className="flex items-center gap-1">
+                            {section.title === "Desenvolvimento" && (feedbackUnread?.count || 0) > 0 && (
+                              <span className="h-2 w-2 rounded-full bg-destructive" data-testid="badge-desenvolvimento-unread" />
+                            )}
+                            <ChevronDown 
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                isOpen && "rotate-180"
+                              )} 
+                            />
+                          </div>
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
