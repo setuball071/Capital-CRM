@@ -3321,3 +3321,180 @@ export const insertPromissoryNoteSchema = createInsertSchema(promissoryNotes, {
 export type PromissoryNote = typeof promissoryNotes.$inferSelect;
 export type InsertPromissoryNote = z.infer<typeof insertPromissoryNoteSchema>;
 
+// ===== MÓDULO DE CONTRATOS =====
+
+export const commissionGroups = pgTable("commission_groups", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  percentage: decimal("percentage", { precision: 5, scale: 4 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCommissionGroupSchema = createInsertSchema(commissionGroups, {
+  name: z.string().min(1, "Nome é obrigatório"),
+  percentage: z.string().refine((v) => parseFloat(v) > 0 && parseFloat(v) <= 1, { message: "Percentual deve ser entre 0 e 1 (ex: 0.30)" }),
+}).omit({ id: true, createdAt: true, tenantId: true });
+
+export type CommissionGroup = typeof commissionGroups.$inferSelect;
+export type InsertCommissionGroup = z.infer<typeof insertCommissionGroupSchema>;
+
+export const contractFlows = pgTable("contract_flows", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  bank: varchar("bank", { length: 255 }).notNull(),
+  convenio: varchar("convenio", { length: 255 }).notNull(),
+  product: varchar("product", { length: 50 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertContractFlowSchema = createInsertSchema(contractFlows, {
+  name: z.string().min(1, "Nome é obrigatório"),
+  bank: z.string().min(1, "Banco é obrigatório"),
+  convenio: z.string().min(1, "Convênio é obrigatório"),
+  product: z.enum(["NOVO", "PORTABILIDADE", "REFINANCIAMENTO", "CARTAO"]),
+}).omit({ id: true, createdAt: true, tenantId: true });
+
+export type ContractFlow = typeof contractFlows.$inferSelect;
+export type InsertContractFlow = z.infer<typeof insertContractFlowSchema>;
+
+export const contractFlowSteps = pgTable("contract_flow_steps", {
+  id: serial("id").primaryKey(),
+  flowId: integer("flow_id").notNull().references(() => contractFlows.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  requiredRole: varchar("required_role", { length: 50 }),
+  requiresDocuments: boolean("requires_documents").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertContractFlowStepSchema = createInsertSchema(contractFlowSteps, {
+  name: z.string().min(1, "Nome é obrigatório"),
+  stepOrder: z.number().int().positive(),
+}).omit({ id: true, createdAt: true });
+
+export type ContractFlowStep = typeof contractFlowSteps.$inferSelect;
+export type InsertContractFlowStep = z.infer<typeof insertContractFlowStepSchema>;
+
+export const proposals = pgTable("proposals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  clientName: varchar("client_name", { length: 255 }).notNull(),
+  clientCpf: varchar("client_cpf", { length: 14 }).notNull(),
+  clientMatricula: varchar("client_matricula", { length: 100 }),
+  clientConvenio: varchar("client_convenio", { length: 255 }),
+  bank: varchar("bank", { length: 255 }),
+  product: varchar("product", { length: 50 }),
+  tableId: integer("table_id").references(() => coefficientTables.id),
+  contractValue: decimal("contract_value", { precision: 12, scale: 2 }),
+  installmentValue: decimal("installment_value", { precision: 12, scale: 2 }),
+  term: integer("term"),
+  flowId: integer("flow_id").references(() => contractFlows.id),
+  currentStepId: integer("current_step_id").references(() => contractFlowSteps.id),
+  status: varchar("status", { length: 50 }).notNull().default("CADASTRADA"),
+  isPaused: boolean("is_paused").notNull().default(false),
+  pausedAtStepId: integer("paused_at_step_id").references(() => contractFlowSteps.id),
+  ade: varchar("ade", { length: 100 }),
+  commissionPercentage: decimal("commission_percentage", { precision: 5, scale: 4 }),
+  corretorCommissionPercentage: decimal("corretor_commission_percentage", { precision: 5, scale: 4 }),
+  corretorCommissionValue: decimal("corretor_commission_value", { precision: 12, scale: 2 }),
+  companyCommissionValue: decimal("company_commission_value", { precision: 12, scale: 2 }),
+  commissionStatus: varchar("commission_status", { length: 20 }).default("PENDENTE"),
+  commissionPaidAt: timestamp("commission_paid_at"),
+  vendorId: integer("vendor_id").references(() => users.id),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertProposalSchema = createInsertSchema(proposals, {
+  clientName: z.string().min(1, "Nome do cliente é obrigatório"),
+  clientCpf: z.string().min(11, "CPF inválido"),
+  product: z.enum(["NOVO", "PORTABILIDADE", "REFINANCIAMENTO", "CARTAO"]).optional(),
+  status: z.enum(["CADASTRADA", "EM_ANALISE", "DIGITADA", "EM_ANDAMENTO", "PENDENTE_CORRETOR", "PENDENTE_BANCO", "PAGO", "CANCELADA"]).optional(),
+  commissionStatus: z.enum(["PENDENTE", "RECEBIDA"]).optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true, tenantId: true, createdBy: true });
+
+export type Proposal = typeof proposals.$inferSelect;
+export type InsertProposal = z.infer<typeof insertProposalSchema>;
+
+export const proposalHistory = pgTable("proposal_history", {
+  id: serial("id").primaryKey(),
+  proposalId: integer("proposal_id").notNull().references(() => proposals.id, { onDelete: "cascade" }),
+  fromStatus: varchar("from_status", { length: 50 }),
+  toStatus: varchar("to_status", { length: 50 }),
+  fromStepId: integer("from_step_id").references(() => contractFlowSteps.id),
+  toStepId: integer("to_step_id").references(() => contractFlowSteps.id),
+  action: varchar("action", { length: 50 }).notNull(),
+  notes: text("notes"),
+  performedBy: integer("performed_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertProposalHistorySchema = createInsertSchema(proposalHistory, {
+  action: z.enum(["AVANCO", "PENDENCIA", "RESOLUCAO", "CANCELAMENTO", "PAGAMENTO"]),
+}).omit({ id: true, createdAt: true, performedBy: true });
+
+export type ProposalHistory = typeof proposalHistory.$inferSelect;
+export type InsertProposalHistory = z.infer<typeof insertProposalHistorySchema>;
+
+export const proposalMessages = pgTable("proposal_messages", {
+  id: serial("id").primaryKey(),
+  proposalId: integer("proposal_id").notNull().references(() => proposals.id, { onDelete: "cascade" }),
+  senderId: integer("sender_id").notNull().references(() => users.id),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertProposalMessageSchema = createInsertSchema(proposalMessages, {
+  message: z.string().min(1, "Mensagem é obrigatória"),
+}).omit({ id: true, createdAt: true, senderId: true });
+
+export type ProposalMessage = typeof proposalMessages.$inferSelect;
+export type InsertProposalMessage = z.infer<typeof insertProposalMessageSchema>;
+
+export const proposalDocuments = pgTable("proposal_documents", {
+  id: serial("id").primaryKey(),
+  proposalId: integer("proposal_id").notNull().references(() => proposals.id, { onDelete: "cascade" }),
+  documentType: varchar("document_type", { length: 50 }).notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
+  messageId: integer("message_id").references(() => proposalMessages.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertProposalDocumentSchema = createInsertSchema(proposalDocuments, {
+  documentType: z.enum(["RG_CNH", "COMPROVANTE_RESIDENCIA", "CONTRACHEQUE", "SELFIE", "EXTRATO_CONSIGNACOES", "OUTRO"]),
+  fileUrl: z.string().url("URL inválida"),
+  fileName: z.string().min(1, "Nome do arquivo é obrigatório"),
+}).omit({ id: true, createdAt: true, uploadedBy: true });
+
+export type ProposalDocument = typeof proposalDocuments.$inferSelect;
+export type InsertProposalDocument = z.infer<typeof insertProposalDocumentSchema>;
+
+export const financialDebits = pgTable("financial_debits", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  vendorId: integer("vendor_id").notNull().references(() => users.id),
+  proposalId: integer("proposal_id").references(() => proposals.id),
+  type: varchar("type", { length: 50 }).notNull(),
+  value: decimal("value", { precision: 12, scale: 2 }).notNull(),
+  description: text("description"),
+  referenceDate: text("reference_date").notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFinancialDebitSchema = createInsertSchema(financialDebits, {
+  type: z.enum(["VALE", "ESTORNO", "BONUS", "OUTRO"]),
+  value: z.string().refine((v) => !isNaN(parseFloat(v)), { message: "Valor inválido" }),
+  referenceDate: z.string().min(1, "Data de referência é obrigatória"),
+}).omit({ id: true, createdAt: true, tenantId: true, createdBy: true });
+
+export type FinancialDebit = typeof financialDebits.$inferSelect;
+export type InsertFinancialDebit = z.infer<typeof insertFinancialDebitSchema>;
+

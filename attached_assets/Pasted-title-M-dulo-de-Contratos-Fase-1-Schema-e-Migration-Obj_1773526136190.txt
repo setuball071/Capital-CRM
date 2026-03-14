@@ -1,0 +1,129 @@
+title: "Módulo de Contratos — Fase 1: Schema e Migration"
+Objetivo
+Adicionar ao sistema as 8 tabelas do Módulo de Contratos conforme especificado. Apenas schema e migration — sem rotas nem UI.
+
+Padrões do projeto (obrigatório)
+Drizzle ORM em shared/schema.ts — snake_case colunas, camelCase TypeScript
+Migrations via arquivo SQL em migrations/add_contracts_module.sql com CREATE TABLE IF NOT EXISTS (idempotente)
+NÃO usar db:push — o script scripts/post-merge.sh roda os arquivos SQL diretamente via pg
+Para testar a migration: node -e "const { Pool } = require('pg'); const fs = require('fs'); const pool = new Pool({ connectionString: process.env.DATABASE_URL }); pool.query(fs.readFileSync('migrations/add_contracts_module.sql', 'utf-8')).then(() => { console.log('OK'); pool.end(); }).catch(e => { console.error('FAIL:', e.message); pool.end(); process.exit(1); });"
+Exportar types (type X = typeof table.$inferSelect) e insert schemas (createInsertSchema(...).omit({...})) para cada tabela
+Tabelas a criar
+1. commission_groups
+id SERIAL PK
+tenant_id INTEGER FK tenants(id) ON DELETE CASCADE NOT NULL
+name VARCHAR(255) NOT NULL  -- ex: "30% Comissionado"
+percentage DECIMAL(5,4) NOT NULL  -- ex: 0.3000
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+2. contract_flows
+id SERIAL PK
+tenant_id INTEGER FK tenants(id) ON DELETE CASCADE NOT NULL
+name VARCHAR(255) NOT NULL
+bank VARCHAR(255) NOT NULL
+convenio VARCHAR(255) NOT NULL
+product VARCHAR(50) NOT NULL  -- enum: NOVO, PORTABILIDADE, REFINANCIAMENTO, CARTAO
+is_active BOOLEAN NOT NULL DEFAULT TRUE
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+3. contract_flow_steps
+id SERIAL PK
+flow_id INTEGER FK contract_flows(id) ON DELETE CASCADE NOT NULL
+step_order INTEGER NOT NULL  -- coluna "order" é palavra reservada SQL — usar step_order
+name VARCHAR(255) NOT NULL  -- ex: "Conferência de Documentos"
+description TEXT
+required_role VARCHAR(50)  -- operacional, vendedor, financeiro
+requires_documents BOOLEAN NOT NULL DEFAULT FALSE
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+4. proposals
+id SERIAL PK
+tenant_id INTEGER FK tenants(id) ON DELETE CASCADE NOT NULL
+-- Dados do cliente
+client_name VARCHAR(255) NOT NULL
+client_cpf VARCHAR(14) NOT NULL
+client_matricula VARCHAR(100)
+client_convenio VARCHAR(255)
+-- Dados da operação
+bank VARCHAR(255)
+product VARCHAR(50)  -- NOVO/PORTABILIDADE/REFINANCIAMENTO/CARTAO
+table_id INTEGER FK coefficient_tables(id) nullable
+contract_value DECIMAL(12,2)
+installment_value DECIMAL(12,2)
+term INTEGER  -- prazo em meses
+-- Controle de fluxo
+flow_id INTEGER FK contract_flows(id) nullable
+current_step_id INTEGER FK contract_flow_steps(id) nullable
+status VARCHAR(50) NOT NULL DEFAULT 'CADASTRADA'
+  -- CADASTRADA/EM_ANALISE/DIGITADA/EM_ANDAMENTO/PENDENTE_CORRETOR/PENDENTE_BANCO/PAGO/CANCELADA
+is_paused BOOLEAN NOT NULL DEFAULT FALSE
+paused_at_step_id INTEGER FK contract_flow_steps(id) nullable
+-- Dados bancários
+ade VARCHAR(100) nullable
+-- Comissão
+commission_percentage DECIMAL(5,4)
+corretor_commission_percentage DECIMAL(5,4)
+corretor_commission_value DECIMAL(12,2)
+company_commission_value DECIMAL(12,2)
+commission_status VARCHAR(20) DEFAULT 'PENDENTE'  -- PENDENTE/RECEBIDA
+commission_paid_at TIMESTAMP nullable
+-- Controle geral
+vendor_id INTEGER FK users(id) nullable
+created_by INTEGER FK users(id) NOT NULL
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+5. proposal_history
+id SERIAL PK
+proposal_id INTEGER FK proposals(id) ON DELETE CASCADE NOT NULL
+from_status VARCHAR(50)
+to_status VARCHAR(50)
+from_step_id INTEGER FK contract_flow_steps(id) nullable
+to_step_id INTEGER FK contract_flow_steps(id) nullable
+action VARCHAR(50) NOT NULL  -- AVANCO/PENDENCIA/RESOLUCAO/CANCELAMENTO/PAGAMENTO
+notes TEXT
+performed_by INTEGER FK users(id) NOT NULL
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+6. proposal_messages
+id SERIAL PK
+proposal_id INTEGER FK proposals(id) ON DELETE CASCADE NOT NULL
+sender_id INTEGER FK users(id) NOT NULL
+message TEXT NOT NULL
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+7. proposal_documents
+id SERIAL PK
+proposal_id INTEGER FK proposals(id) ON DELETE CASCADE NOT NULL
+document_type VARCHAR(50) NOT NULL
+  -- RG_CNH/COMPROVANTE_RESIDENCIA/CONTRACHEQUE/SELFIE/EXTRATO_CONSIGNACOES/OUTRO
+file_url TEXT NOT NULL
+file_name VARCHAR(255) NOT NULL
+uploaded_by INTEGER FK users(id) NOT NULL
+message_id INTEGER FK proposal_messages(id) nullable
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+8. financial_debits
+id SERIAL PK
+tenant_id INTEGER FK tenants(id) ON DELETE CASCADE NOT NULL
+vendor_id INTEGER FK users(id) NOT NULL
+proposal_id INTEGER FK proposals(id) nullable
+type VARCHAR(50) NOT NULL  -- VALE/ESTORNO/BONUS/OUTRO
+value DECIMAL(12,2) NOT NULL  -- negativo = débito, positivo = crédito
+description TEXT
+reference_date DATE NOT NULL
+created_by INTEGER FK users(id) NOT NULL
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+Índices recomendados
+proposals(tenant_id, status) — para listar propostas por tenant/status
+proposals(tenant_id, vendor_id) — para listar propostas por corretor
+proposals(tenant_id, created_at) — para ordem cronológica
+proposal_history(proposal_id)
+proposal_messages(proposal_id)
+proposal_documents(proposal_id)
+financial_debits(tenant_id, vendor_id)
+financial_debits(proposal_id)
+Entregáveis
+migrations/add_contracts_module.sql — migration SQL idempotente
+shared/schema.ts — 8 tabelas adicionadas ao final (seção // ===== MÓDULO DE CONTRATOS =====)
+pgTable declarations
+insertSchema para cada tabela
+export types (select + insert) para cada tabela
+Confirmação de que a migration rodou com sucesso e as tabelas existem no banco
+Listar colunas de cada tabela via SQL (information_schema.columns) como prova
+Sem alterações em
+Frontend / rotas da API
+Nenhuma tabela existente modificada

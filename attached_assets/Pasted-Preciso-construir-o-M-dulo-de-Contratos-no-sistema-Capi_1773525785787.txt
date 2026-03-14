@@ -1,0 +1,90 @@
+Preciso construir o Módulo de Contratos no sistema Capital Go. Este é um sistema de crédito consignado já existente em Express + Neon PostgreSQL + Drizzle ORM. Vamos construir em fases. Esta é a Fase 1: banco de dados e estrutura base.
+FASE 1 — DATABASE SCHEMA
+Criar as seguintes tabelas no schema Drizzle:
+1. commission_groups
+id, tenant_id, name (ex: "30% Comissionado"), 
+percentage (decimal, ex: 0.30), 
+created_at
+2. contract_flows
+id, tenant_id, name, 
+bank (nome do banco),
+convenio (convênio),
+product (tipo de operação: NOVO, PORTABILIDADE, REFINANCIAMENTO, CARTAO),
+is_active (boolean),
+created_at
+3. contract_flow_steps
+id, flow_id (FK contract_flows),
+order (integer, ordem da etapa),
+name (nome da etapa, ex: "Conferência de Documentos"),
+description,
+required_role (role que executa: operacional, vendedor, financeiro),
+requires_documents (boolean),
+created_at
+4. proposals
+id, tenant_id,
+-- Dados do cliente
+client_name, client_cpf, client_matricula, client_convenio,
+-- Dados da operação  
+bank, product (NOVO/PORTABILIDADE/REFINANCIAMENTO/CARTAO),
+table_id (FK para tabela de coeficientes existente),
+contract_value (decimal), installment_value (decimal), term (integer, prazo em meses),
+-- Controle de fluxo
+flow_id (FK contract_flows),
+current_step_id (FK contract_flow_steps),
+status (CADASTRADA/EM_ANALISE/DIGITADA/EM_ANDAMENTO/PENDENTE_CORRETOR/PENDENTE_BANCO/PAGO/CANCELADA),
+is_paused (boolean, default false),
+paused_at_step_id (FK contract_flow_steps, nullable),
+-- Dados bancários
+ade (número ADE do banco, nullable),
+-- Controle de comissão
+commission_percentage (decimal, % que o banco paga à empresa),
+corretor_commission_percentage (decimal, % do corretor calculado pelo grupo),
+corretor_commission_value (decimal, valor R$ do corretor),
+company_commission_value (decimal, valor R$ da empresa),
+commission_status (PENDENTE/RECEBIDA),
+commission_paid_at (nullable),
+-- Controle geral
+vendor_id (FK users),
+created_by (FK users),
+created_at, updated_at
+5. proposal_history
+id, proposal_id (FK),
+from_status, to_status,
+from_step_id (FK nullable), to_step_id (FK nullable),
+action (AVANCO/PENDENCIA/RESOLUCAO/CANCELAMENTO/PAGAMENTO),
+notes (texto livre),
+performed_by (FK users),
+created_at
+6. proposal_messages
+id, proposal_id (FK),
+sender_id (FK users),
+message (text),
+created_at
+7. proposal_documents
+id, proposal_id (FK),
+document_type (RG_CNH/COMPROVANTE_RESIDENCIA/CONTRACHEQUE/SELFIE/EXTRATO_CONSIGNACOES/OUTRO),
+file_url (string),
+file_name (string),
+uploaded_by (FK users),
+message_id (FK proposal_messages, nullable — documento enviado junto com mensagem de pendência),
+created_at
+8. financial_debits
+id, tenant_id,
+vendor_id (FK users),
+proposal_id (FK nullable),
+type (VALE/ESTORNO/BONUS/OUTRO),
+value (decimal, negativo = débito, positivo = crédito),
+description,
+reference_date,
+created_by (FK users),
+created_at
+REGRAS IMPORTANTES:
+
+Todas as tabelas com tenant_id para isolamento multi-tenant
+Usar padrão snake_case já existente no projeto
+Adicionar ao schema.ts existente, não substituir
+Gerar e rodar a migration com drizzle-kit
+Não criar rotas nem UI ainda — apenas o schema e a migration
+
+VERIFICAÇÃO FINAL:
+Após rodar a migration, confirmar que todas as 8 tabelas foram criadas no banco sem erros e listar as colunas de cada uma.
