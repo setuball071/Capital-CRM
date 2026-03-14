@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -363,6 +363,20 @@ export function AppSidebar() {
       
       <SidebarFooter>
         <SidebarMenu>
+          {user.isMaster && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location === "/hub"}
+                data-testid="sidebar-hub-beta"
+              >
+                <button onClick={() => setLocation("/hub")} className="w-full">
+                  <FlaskConical className="h-4 w-4" />
+                  <span>Layout Beta</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
