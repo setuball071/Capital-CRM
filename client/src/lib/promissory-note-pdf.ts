@@ -111,16 +111,10 @@ export function generatePromissoryNotePDF(data: PromissoryNoteData) {
     }
     .doc-header .np-title {
       text-align: right;
-    }
-    .doc-header .np-title .label {
-      font-size: 14pt;
+      font-size: 13pt;
       font-weight: bold;
       text-transform: uppercase;
-      letter-spacing: 2px;
-    }
-    .doc-header .np-title .number {
-      font-size: 12pt;
-      font-weight: bold;
+      letter-spacing: 1px;
     }
 
     .valor-box {
@@ -241,10 +235,7 @@ export function generatePromissoryNotePDF(data: PromissoryNoteData) {
 
     <div class="doc-header">
       <div class="company-name">${escapeHtml(data.companyRazaoSocial)}</div>
-      <div class="np-title">
-        <div class="label">Nota Promissória</div>
-        <div class="number">N.º ${escapeHtml(data.npNumber)}</div>
-      </div>
+      <div class="np-title">NOTA PROMISSÓRIA / Nº ${escapeHtml(data.npNumber)}</div>
     </div>
 
     <div class="valor-box">
