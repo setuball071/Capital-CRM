@@ -412,7 +412,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   } else if (user.isMaster) {
     // Master without session or domain tenant - dev fallback
     if (process.env.NODE_ENV === "development") {
-      req.tenantId = 1;
+      req.tenantId = 4;
     }
   } else {
     // Non-master user without session or domain tenant - look up from user_tenants
