@@ -3,7 +3,9 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/layout-variants/CommandPalette.tsx": () => import("../components/mockups/layout-variants/CommandPalette.tsx"),
   "./components/mockups/layout-variants/ContextualTabs.tsx": () => import("../components/mockups/layout-variants/ContextualTabs.tsx"),
+  "./components/mockups/layout-variants/HubCampanhas.tsx": () => import("../components/mockups/layout-variants/HubCampanhas.tsx"),
   "./components/mockups/layout-variants/HubCentral.tsx": () => import("../components/mockups/layout-variants/HubCentral.tsx"),
+  "./components/mockups/layout-variants/HubInsideAlpha.tsx": () => import("../components/mockups/layout-variants/HubInsideAlpha.tsx"),
   "./components/mockups/layout-variants/IconRail.tsx": () => import("../components/mockups/layout-variants/IconRail.tsx"),
   "./components/mockups/layout-variants/MobileBottomNav.tsx": () => import("../components/mockups/layout-variants/MobileBottomNav.tsx"),
   "./components/mockups/layout-variants/OverlayDrawer.tsx": () => import("../components/mockups/layout-variants/OverlayDrawer.tsx"),
