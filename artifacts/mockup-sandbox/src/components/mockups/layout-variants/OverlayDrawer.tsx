@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Menu, X, Home, Target, Calculator, Briefcase, Users, Settings, 
-  BookOpen, TrendingUp, ChevronDown, ChevronRight, Bell, Search, 
+  BookOpen, TrendingUp, ChevronDown, ChevronUp, ChevronRight, Bell, Search, 
   User, BarChart3, ArrowUpRight, DollarSign, Clock, LayoutDashboard,
   Filter, MoreHorizontal
 } from 'lucide-react';

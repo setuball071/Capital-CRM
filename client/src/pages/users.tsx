@@ -687,7 +687,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="container max-w-6xl py-8 px-4">
+    <div className="w-full py-8 px-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
@@ -1034,7 +1034,7 @@ export default function UsersPage() {
               </Button>
             </div>
           )}
-          <Table className="min-w-[900px]">
+          <Table className="min-w-[960px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -1049,7 +1049,7 @@ export default function UsersPage() {
                 <TableHead>Função</TableHead>
                 {canManageAllUsers && <TableHead>Coordenador</TableHead>}
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right min-w-[260px]">Ações</TableHead>
+                <TableHead className="text-right min-w-[280px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
