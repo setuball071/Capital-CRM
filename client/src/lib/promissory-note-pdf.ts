@@ -74,9 +74,10 @@ export function generatePromissoryNotePDF(data: PromissoryNoteData) {
   let operationParagraph = "";
   if (data.descricao) {
     operationParagraph = `<p class="legal-text">${escapeHtml(data.descricao)}</p>`;
-  } else if (data.bancoOrigem) {
-    const pagDateStr = data.dataPagamento ? formatDateBr(data.dataPagamento) : "";
-    operationParagraph = `<p class="legal-text">A presente nota promissória é emitida em caráter <strong>pro solvendo</strong>, vinculada à operação de quitação de contrato junto ao banco <strong>${escapeHtml(data.bancoOrigem)}</strong>${pagDateStr ? `, com pagamento realizado em <strong>${escapeHtml(pagDateStr)}</strong>` : ""}, no valor de <strong>${escapeHtml(valorFormatado)}</strong>.</p>`;
+  } else {
+    const banco = data.bancoOrigem ? ` junto ao banco <strong>${escapeHtml(data.bancoOrigem)}</strong>` : "";
+    const pagDateStr = data.dataPagamento ? `, com pagamento realizado em <strong>${escapeHtml(formatDateBr(data.dataPagamento))}</strong>` : "";
+    operationParagraph = `<p class="legal-text">A presente nota promissória é emitida em caráter <strong>pro solvendo</strong>, vinculada à operação de quitação de contrato${banco}${pagDateStr}, no valor de <strong>${escapeHtml(valorFormatado)}</strong>.</p>`;
   }
 
   const html = `<!DOCTYPE html>
