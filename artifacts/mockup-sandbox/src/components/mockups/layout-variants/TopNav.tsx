@@ -14,7 +14,7 @@ import {
   PlayCircle,
   ListTodo,
   Columns,
-  SearchUser,
+  UserSearch,
   Tags,
   Calendar,
   Settings2,
@@ -119,7 +119,7 @@ export function TopNav() {
                   Pipeline
                 </button>
                 <button className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-                  <SearchUser className="w-4 h-4 text-slate-400" />
+                  <UserSearch className="w-4 h-4 text-slate-400" />
                   Consulta Individual
                 </button>
                 <button className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900">
