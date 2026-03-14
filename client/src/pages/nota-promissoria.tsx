@@ -182,7 +182,7 @@ export default function NotaPromissoriaPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Empresa Emissora</h3>
-                  {user?.role === "master" && (
+                  {user?.isMaster && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -447,8 +447,16 @@ export default function NotaPromissoriaPage() {
         </Card>
       </div>
 
-      {user?.role === "master" && (
-        <CompanyManagerSheet open={companySheetOpen} onOpenChange={setCompanySheetOpen} />
+      {user?.isMaster && (
+        <CompanyManagerSheet
+          open={companySheetOpen}
+          onOpenChange={(open) => {
+            setCompanySheetOpen(open);
+            if (!open) {
+              queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+            }
+          }}
+        />
       )}
     </div>
   );

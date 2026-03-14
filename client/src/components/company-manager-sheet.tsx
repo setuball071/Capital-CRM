@@ -101,6 +101,18 @@ export function CompanyManagerSheet({ open, onOpenChange }: CompanyManagerSheetP
     defaultValues: { razaoSocial: "", cnpj: "", cidade: "", uf: "", endereco: "" },
   });
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setIsCreateOpen(false);
+      setIsEditOpen(false);
+      setIsDeactivateOpen(false);
+      setSelected(null);
+      createForm.reset();
+      editForm.reset();
+    }
+    onOpenChange(nextOpen);
+  };
+
   const { data: companiesList, isLoading } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
     enabled: open,
@@ -275,7 +287,7 @@ export function CompanyManagerSheet({ open, onOpenChange }: CompanyManagerSheetP
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
