@@ -62,6 +62,10 @@ import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
 import NotaPromissoriaPage from "@/pages/nota-promissoria";
+import ContratosListaPage from "@/pages/contratos-lista";
+import ContratosPropostaPage from "@/pages/contratos-proposta";
+import ContratosDetalhePage from "@/pages/contratos-detalhe";
+import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
@@ -508,6 +512,18 @@ function Router() {
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}
+              </Route>
+              <Route path="/contratos/nova">
+                {() => <ProtectedRoute component={ContratosPropostaPage} />}
+              </Route>
+              <Route path="/contratos/fluxos">
+                {() => <ProtectedRoute component={ContratosFluxosPage} />}
+              </Route>
+              <Route path="/contratos/:id">
+                {() => <ProtectedRoute component={ContratosDetalhePage} />}
+              </Route>
+              <Route path="/contratos">
+                {() => <ProtectedRoute component={ContratosListaPage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

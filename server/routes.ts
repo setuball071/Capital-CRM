@@ -108,6 +108,7 @@ import * as path from "path";
 import * as os from "os";
 import Papa from "papaparse";
 import { createNotification } from "./notification-service";
+import { registerContractRoutes } from "./contracts";
 
 // Configure multer for file uploads using memory storage (for smaller files)
 const upload = multer({
@@ -24842,6 +24843,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       res.status(500).json({ message: "Erro ao criar nota promissória" });
     }
   });
+
+  // ===== MÓDULO DE CONTRATOS =====
+  registerContractRoutes(app, requireAuth);
 
   const httpServer = createServer(app);
   return httpServer;

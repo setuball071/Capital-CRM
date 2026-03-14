@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, FileSignature } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, FileSignature, ScrollText, GitBranch, PlusCircle } from "lucide-react";
 import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -150,6 +150,15 @@ export function AppSidebar() {
         { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros", subItem: "roteiros_bancarios" },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
         { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature },
+      ],
+    },
+    {
+      title: "Contratos",
+      icon: ScrollText,
+      items: [
+        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
+        { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
+        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
       ],
     },
     {

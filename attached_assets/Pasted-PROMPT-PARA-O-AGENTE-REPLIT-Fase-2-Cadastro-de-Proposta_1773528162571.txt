@@ -1,0 +1,110 @@
+PROMPT PARA O AGENTE REPLIT — Fase 2: Cadastro de Proposta + Fluxo Operacional
+
+Módulo de Contratos — Fase 2: Rotas da API e UI base.
+As 8 tabelas já existem no banco. Agora construir as rotas e as primeiras telas.
+PARTE A — ROTAS DA API
+Criar em server/routes.ts (ou arquivo separado server/contracts.ts importado no routes principal):
+Fluxos (master only)
+GET    /api/contracts/flows              — listar fluxos do tenant
+POST   /api/contracts/flows              — criar fluxo
+PUT    /api/contracts/flows/:id          — editar fluxo
+DELETE /api/contracts/flows/:id          — remover fluxo
+GET    /api/contracts/flows/:id/steps    — listar etapas do fluxo
+POST   /api/contracts/flows/:id/steps    — adicionar etapa
+PUT    /api/contracts/flows/steps/:id    — editar etapa
+DELETE /api/contracts/flows/steps/:id    — remover etapa
+Propostas
+GET  /api/contracts/proposals            — listar (filtra por role: vendedor vê só as suas)
+POST /api/contracts/proposals            — criar proposta (vendedor, coordenacao, master)
+GET  /api/contracts/proposals/:id        — detalhe da proposta
+PUT  /api/contracts/proposals/:id/status — avançar status / registrar ADE (operacional+)
+POST /api/contracts/proposals/:id/pause  — pendenciar para corretor ou banco
+POST /api/contracts/proposals/:id/resume — retomar após pendência
+GET  /api/contracts/proposals/:id/history   — histórico de movimentações
+GET  /api/contracts/proposals/:id/messages  — mensagens da proposta
+POST /api/contracts/proposals/:id/messages  — enviar mensagem + upload de documento
+Grupos de comissão (master/financeiro)
+GET  /api/contracts/commission-groups    — listar grupos
+POST /api/contracts/commission-groups    — criar grupo
+PUT  /api/contracts/commission-groups/:id
+DELETE /api/contracts/commission-groups/:id
+Regras de negócio nas rotas:
+
+Toda rota verifica tenant_id do usuário logado
+vendedor só acessa propostas onde vendor_id = currentUser.id
+operacional acessa todas as propostas do tenant
+Ao criar proposta: buscar fluxo ativo que bata com bank + convenio + product, atribuir automaticamente. Se não encontrar fluxo, criar proposta sem fluxo vinculado
+Ao avançar status: registrar em proposal_history automaticamente
+Ao pausar: setar is_paused = true e paused_at_step_id = current_step_id
+Ao retomar: setar is_paused = false, paused_at_step_id = null, manter na mesma etapa
+
+PARTE B — UI
+Criar 3 páginas em client/src/pages/:
+1. contratos-proposta.tsx — Cadastro de proposta (vendedor)
+
+Formulário com campos: nome cliente, CPF, matrícula, convênio, banco, produto (select: NOVO/PORTABILIDADE/REFINANCIAMENTO/CARTÃO), tabela (select carregado da API de tabelas existente), valor do contrato, prazo, parcela
+Upload de documentos: múltiplos arquivos, categorizado por tipo (RG_CNH, COMPROVANTE_RESIDENCIA, CONTRACHEQUE, SELFIE, EXTRATO_CONSIGNACOES)
+Ao submeter: POST /api/contracts/proposals
+Usar identidade visual Capital Go (#6C2BD9, #1E88E5, #E91E63)
+
+2. contratos-lista.tsx — Lista de propostas
+
+Tabela com colunas: ID, Cliente, CPF, Banco, Produto, Tabela, Valor, Status, ADE, Corretor (se operacional+), Data, Ações
+Filtros: status, banco, produto, período
+Badge colorido por status:
+
+CADASTRADA = cinza
+EM_ANALISE = azul
+DIGITADA = roxo
+EM_ANDAMENTO = laranja
+PENDENTE_CORRETOR = vermelho
+PENDENTE_BANCO = amarelo
+PAGO = verde
+CANCELADA = vermelho escuro
+
+
+Clique na linha abre detalhe
+Vendedor vê só as próprias. Operacional/master vê todas com filtro de corretor
+Botão "Nova Proposta" para vendedor/coordenacao/master
+
+3. contratos-detalhe.tsx — Detalhe da proposta
+
+Cabeçalho: ID, cliente, status atual, badge colorido
+Dados completos da proposta
+Timeline do histórico (vertical, com ícone, data, responsável, observação)
+Etapa atual do fluxo destacada
+Se is_paused: banner vermelho "PENDENTE — aguardando ação"
+Seção de mensagens estilo chat (igual ao Capital Chat): mensagem + possibilidade de anexar documento
+Ações disponíveis por role:
+
+operacional: botão "Avançar Etapa", "Registrar ADE", "Pendenciar", "Retomar", "Cancelar"
+vendedor: botão "Responder Pendência" (só aparece se is_paused = true e pendência for PENDENTE_CORRETOR)
+master/coordenacao: visualização completa + pode cancelar
+
+
+
+PARTE C — NAVEGAÇÃO
+Adicionar no app-sidebar.tsx um item "Contratos" com subitens:
+
+"Minhas Propostas" → /contratos (todos os roles)
+"Nova Proposta" → /contratos/nova (vendedor, coordenacao, master)
+"Gestão de Fluxos" → /contratos/fluxos (master only)
+
+Adicionar as rotas no App.tsx:
+/contratos          → contratos-lista
+/contratos/nova     → contratos-proposta
+/contratos/:id      → contratos-detalhe
+/contratos/fluxos   → (página simples por ora, só placeholder)
+NÃO construir ainda:
+
+Módulo financeiro / comissões
+Relatórios PDF
+Importação de tabelas CSV
+Gestão de fluxos UI completa (só placeholder)
+
+VERIFICAÇÃO FINAL:
+
+Todas as rotas respondem sem erro 500
+Vendedor consegue cadastrar uma proposta e ver na lista
+Operacional consegue ver todas as propostas e avançar status
+Histórico é registrado a cada mudança de status
