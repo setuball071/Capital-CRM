@@ -1,0 +1,203 @@
+# Prompt — Módulo Nota Promissória (Replit Agent)
+
+## Contexto do sistema
+Sistema interno da Capital Go construído em **Express + Neon PostgreSQL + Drizzle ORM**.
+Autenticação já existe com três roles: `master`, `coordenacao`, `vendedor`.
+O sistema já possui módulo operacional no menu lateral — este módulo será adicionado como uma nova aba/seção dentro dele.
+
+---
+
+## O que construir
+
+### 1. Banco de dados — duas novas tabelas (Drizzle schema)
+
+**Tabela `companies`** — empresas emissoras cadastradas pelo master:
+```
+id              serial primary key
+name            text not null          -- razão social
+cnpj            text not null unique
+city            text not null          -- cidade (ex: Florianópolis)
+state           text not null          -- UF (ex: SC)
+address         text                   -- endereço completo (opcional)
+is_active       boolean default true
+created_at      timestamp default now()
+```
+
+**Tabela `promissory_notes`** — notas emitidas (histórico):
+```
+id              serial primary key
+np_number       text not null unique   -- ex: NP-2026-00001
+company_id      integer references companies(id)
+debtor_name     text not null
+debtor_cpf      text not null
+debtor_address  text not null
+amount          numeric(12,2) not null
+due_date        date not null
+bank_origin     text
+payment_date    date
+fine_pct        numeric(5,2) default 2
+interest_pct    numeric(5,2) default 1
+protest_days    integer default 5
+operation_desc  text                   -- descrição customizada (nullable)
+issued_at       date not null
+created_by      integer references users(id)
+created_at      timestamp default now()
+```
+
+Rodar migration via Drizzle após criar o schema.
+
+---
+
+### 2. API REST — rotas Express
+
+**Empresas (somente role `master`):**
+- `GET    /api/companies`              — lista todas as empresas ativas
+- `POST   /api/companies`              — cadastra nova empresa
+- `PUT    /api/companies/:id`          — edita empresa
+- `DELETE /api/companies/:id`          — desativa empresa (soft delete: `is_active = false`)
+
+Middleware de autorização: bloquear `coordenacao` e `vendedor` nas rotas de companies com status 403.
+
+**Notas Promissórias:**
+- `GET    /api/promissory-notes`       — lista notas (paginado, filtro por empresa e data)
+- `POST   /api/promissory-notes`       — salva nova nota e retorna os dados para geração do PDF
+- `GET    /api/promissory-notes/:id`   — busca nota pelo id (para reimpressão)
+
+Geração de número automático no backend:
+```js
+// Formato: NP-YYYY-NNNNN (sequencial por ano, com zero-fill)
+// Buscar o último número do ano corrente e incrementar
+```
+
+---
+
+### 3. Frontend — dentro do Módulo Operacional
+
+Adicionar duas abas no módulo operacional:
+
+#### Aba "Empresas" (visível apenas para role `master`)
+- Listagem em tabela: Nome, CNPJ, Cidade/UF, Status, Ações
+- Botão "Nova empresa" → modal com formulário:
+  - Razão Social *
+  - CNPJ * (com máscara 00.000.000/0001-00)
+  - Cidade *
+  - UF * (select com todos os estados brasileiros)
+  - Endereço completo
+  - Botão Salvar / Cancelar
+- Ação Editar → abre mesmo modal preenchido
+- Ação Desativar → confirmação antes de soft delete
+- Empresas inativas aparecem com badge cinza e sem ação de editar
+
+#### Aba "Nota Promissória"
+Interface em duas colunas (ou steps em mobile):
+
+**Coluna esquerda — Formulário:**
+
+Seção: Empresa emissora
+- Select "Selecione a empresa" → carrega do `GET /api/companies` (apenas ativas)
+- Ao selecionar: preenche automaticamente os campos ocultos CNPJ e "Local de emissão" (Cidade – UF da empresa)
+- Local de emissão é exibido como texto read-only (não editável pelo usuário)
+
+Seção: Emitente (devedor)
+- Nome completo *
+- CPF * (máscara 000.000.000-00)
+- Endereço completo *
+
+Seção: Valor e condições
+- Valor total (R$) * (máscara monetária)
+- Data de vencimento *
+- Local de pagamento (pré-preenchido com cidade da empresa, editável)
+- Multa por atraso % (default: 2)
+- Juros de mora % a.m. (default: 1)
+
+Seção: Operação
+- Banco de origem da dívida
+- Data do pagamento pela empresa
+- Descrição da operação (textarea, opcional — se vazio usa texto jurídico padrão)
+
+Seção: Protesto automático
+- Select: prazo após vencimento (3 / 5 / 10 / 30 dias)
+- Label informativo: "Incluído automaticamente conforme Lei nº 9.492/97"
+
+Botão: **"Gerar Nota Promissória"** → chama `POST /api/promissory-notes`, salva no banco e dispara impressão do PDF.
+
+---
+
+### 4. Geração do PDF (client-side via window.print())
+
+Após o POST retornar sucesso com os dados da nota, abrir uma nova janela (`window.open`) com o HTML do documento preenchido e executar `window.print()` automaticamente.
+
+**Estrutura do documento impresso** (layout A4, font-family serif):
+
+```
+[Razão social da empresa]              NOTA PROMISSÓRIA
+                                       Nº NP-YYYY-NNNNN
+
+┌─────────────────────────────────────────────────────┐
+│  R$ X.XXX,XX   (valor por extenso)   Venc: DD/MM/AAAA│
+│                                      Local: Cidade/UF │
+└─────────────────────────────────────────────────────┘
+
+PROMESSA DE PAGAMENTO
+Por esta Nota Promissória, eu [nome], inscrito(a) no CPF nº [cpf],
+residente e domiciliado(a) em [endereço], prometo pagar...
+[texto jurídico padrão OU descrição customizada]
+
+CLÁUSULA DE VENCIMENTO ANTECIPADO
+[7 incisos fixos conforme modelo jurídico]
+
+CLÁUSULA DE PROTESTO
+[texto com prazo selecionado] conforme Lei nº 9.492/1997
+
+ENCARGOS EM CASO DE INADIMPLEMENTO
+• Multa moratória de X%
+• Juros de mora de X% ao mês
+• Correção monetária conforme índice legal
+
+FORO
+Foro da Comarca de [cidade da empresa], Estado de [estado],
+com renúncia expressa a qualquer outro...
+
+Emitida em [Cidade – UF da empresa], em [data de emissão]
+
+______________________________    ______________________________
+[Nome do devedor]                  [Razão social da empresa]
+CPF: [cpf]                         CNPJ: [cnpj]
+EMITENTE / DEVEDOR                 CREDOR / BENEFICIÁRIO
+
+Documento gerado eletronicamente | [NP-number] | Lei 14.063/2020
+```
+
+**Função de valor por extenso** deve ser implementada em JS puro no frontend (sem lib externa).
+
+**CSS @media print:** ocultar toda a UI do sistema, exibir apenas o documento.
+
+---
+
+### 5. Regras de negócio importantes
+
+- Número da NP é gerado no **backend** (não no frontend) para garantir unicidade
+- Local de emissão = sempre `{cidade} – {UF}` da empresa selecionada (não editável)
+- Foro = sempre a comarca da cidade da empresa selecionada
+- Se `operation_desc` estiver vazio, usar o texto jurídico padrão no PDF
+- Notas salvas ficam acessíveis para reimpressão via histórico (listagem com botão "Reimprimir")
+- Role `vendedor` pode emitir notas mas não pode cadastrar/editar empresas
+
+---
+
+### 6. Ordem de execução sugerida ao agente
+
+1. Criar schema Drizzle (`companies`, `promissory_notes`) e rodar migration
+2. Criar rotas da API com middleware de autorização
+3. Criar aba "Empresas" no módulo operacional (CRUD completo, só master)
+4. Criar aba "Nota Promissória" com formulário e lógica de auto-preenchimento
+5. Implementar geração do PDF via window.print() com layout A4
+6. Testar fluxo completo: cadastrar empresa → emitir nota → gerar PDF → verificar histórico
+
+---
+
+### Observações finais
+- Manter padrão visual do sistema existente (mesmas cores, componentes, sidebar)
+- Não criar arquivos de configuração externos — tudo persiste no Neon/PostgreSQL
+- Não usar bibliotecas de PDF externas — apenas window.print() com CSS @media print
+- Apresentar o plano de execução antes de começar a construir
