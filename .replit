@@ -55,3 +55,7 @@ integrations = ["javascript_openai_ai_integrations:1.0.0"]
 WHATSAPP_WEBHOOK_SECRET = "capitalgo_whatsapp_secret_2025"
 VITE_WHATSAPP_PLATFORM_URL = "https://capitalgo-whats.lovable.app"
 CRM_INTEGRATION_SECRET = "capitalgo_integration_secret_2025"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
