@@ -149,6 +149,12 @@ import {
   type PersonalTask,
   type InsertPersonalTask,
   type Convenio,
+  companies,
+  promissoryNotes,
+  type Company,
+  type InsertCompany,
+  type PromissoryNote,
+  type InsertPromissoryNote,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -437,6 +443,31 @@ export interface IStorage {
   getRoleplayNivelPrompt(nivel: number, tenantId: number): Promise<RoleplayNivelPrompt | undefined>;
   upsertRoleplayNivelPrompt(data: InsertRoleplayNivelPrompt): Promise<RoleplayNivelPrompt>;
   seedRoleplayNivelPrompts(tenantId: number): Promise<void>;
+
+  // ===== EMPRESAS (NOTA PROMISSÓRIA) =====
+  getActiveCompanies(tenantId: number): Promise<Company[]>;
+  getAllCompanies(tenantId: number): Promise<Company[]>;
+  getCompany(id: number, tenantId: number): Promise<Company | undefined>;
+  createCompany(tenantId: number, data: InsertCompany): Promise<Company>;
+  updateCompany(id: number, tenantId: number, data: Partial<InsertCompany>): Promise<Company | undefined>;
+  softDeleteCompany(id: number, tenantId: number): Promise<Company | undefined>;
+
+  // ===== NOTAS PROMISSÓRIAS =====
+  getPromissoryNotes(tenantId: number, filters?: { companyId?: number; startDate?: string; endDate?: string; page?: number; limit?: number }): Promise<{ notes: PromissoryNote[]; total: number }>;
+  getPromissoryNote(id: number, tenantId: number): Promise<PromissoryNote | undefined>;
+  createPromissoryNote(tenantId: number, data: Omit<InsertPromissoryNote, 'companyId'> & {
+    npNumber: string;
+    companyId: number;
+    companyRazaoSocial: string;
+    companyCnpj: string;
+    companyCidade: string;
+    companyUf: string;
+    localEmissao: string;
+    dataEmissao: string;
+    emitidoPorId: number;
+    emitidoPorNome: string;
+  }): Promise<PromissoryNote>;
+  getNextNpNumber(tenantId: number): Promise<string>;
 }
 
 export class DbStorage implements IStorage {
@@ -3413,6 +3444,121 @@ REGRAS:
         eq(personalTasks.column, column)
       ));
     return result?.count ?? 0;
+  }
+
+  // ===== EMPRESAS (NOTA PROMISSÓRIA) =====
+
+  async getActiveCompanies(tenantId: number): Promise<Company[]> {
+    return await db.select().from(companies)
+      .where(and(eq(companies.tenantId, tenantId), eq(companies.isActive, true)));
+  }
+
+  async getAllCompanies(tenantId: number): Promise<Company[]> {
+    return await db.select().from(companies)
+      .where(eq(companies.tenantId, tenantId));
+  }
+
+  async getCompany(id: number, tenantId: number): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies)
+      .where(and(eq(companies.id, id), eq(companies.tenantId, tenantId)));
+    return company;
+  }
+
+  async createCompany(tenantId: number, data: InsertCompany): Promise<Company> {
+    const [company] = await db.insert(companies).values({
+      ...data,
+      tenantId,
+    }).returning();
+    return company;
+  }
+
+  async updateCompany(id: number, tenantId: number, data: Partial<InsertCompany>): Promise<Company | undefined> {
+    const [updated] = await db.update(companies)
+      .set(data)
+      .where(and(eq(companies.id, id), eq(companies.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async softDeleteCompany(id: number, tenantId: number): Promise<Company | undefined> {
+    const [updated] = await db.update(companies)
+      .set({ isActive: false })
+      .where(and(eq(companies.id, id), eq(companies.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // ===== NOTAS PROMISSÓRIAS =====
+
+  async getPromissoryNotes(tenantId: number, filters?: { companyId?: number; startDate?: string; endDate?: string; page?: number; limit?: number }): Promise<{ notes: PromissoryNote[]; total: number }> {
+    const conditions = [eq(promissoryNotes.tenantId, tenantId)];
+    if (filters?.companyId) {
+      conditions.push(eq(promissoryNotes.companyId, filters.companyId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(promissoryNotes.dataEmissao, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(promissoryNotes.dataEmissao, filters.endDate));
+    }
+    const whereClause = and(...conditions);
+
+    const [countResult] = await db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(promissoryNotes)
+      .where(whereClause);
+    const total = countResult?.count ?? 0;
+
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 50;
+    const offset = (page - 1) * limit;
+
+    const notes = await db.select().from(promissoryNotes)
+      .where(whereClause)
+      .orderBy(sql`${promissoryNotes.createdAt} DESC`)
+      .limit(limit)
+      .offset(offset);
+
+    return { notes, total };
+  }
+
+  async getPromissoryNote(id: number, tenantId: number): Promise<PromissoryNote | undefined> {
+    const [note] = await db.select().from(promissoryNotes)
+      .where(and(eq(promissoryNotes.id, id), eq(promissoryNotes.tenantId, tenantId)));
+    return note;
+  }
+
+  async createPromissoryNote(tenantId: number, data: Omit<InsertPromissoryNote, 'companyId'> & {
+    npNumber: string;
+    companyId: number;
+    companyRazaoSocial: string;
+    companyCnpj: string;
+    companyCidade: string;
+    companyUf: string;
+    localEmissao: string;
+    dataEmissao: string;
+    emitidoPorId: number;
+    emitidoPorNome: string;
+  }): Promise<PromissoryNote> {
+    const [note] = await db.insert(promissoryNotes).values({
+      ...data,
+      tenantId,
+    }).returning();
+    return note;
+  }
+
+  async getNextNpNumber(tenantId: number): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `NP-${year}-`;
+    const [result] = await db.select({
+      maxSeq: sql<string | null>`MAX(SUBSTRING(${promissoryNotes.npNumber} FROM '\\d+$'))`
+    })
+      .from(promissoryNotes)
+      .where(and(
+        eq(promissoryNotes.tenantId, tenantId),
+        sql`${promissoryNotes.npNumber} LIKE ${prefix + '%'}`
+      ));
+    const nextSeq = (result?.maxSeq ? parseInt(result.maxSeq, 10) : 0) + 1;
+    return `${prefix}${String(nextSeq).padStart(5, '0')}`;
   }
 }
 

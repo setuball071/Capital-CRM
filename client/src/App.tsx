@@ -61,6 +61,8 @@ import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
+import EmpresasPage from "@/pages/empresas";
+import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
@@ -501,6 +503,12 @@ function Router() {
               </Route>
               <Route path="/vendas/etiquetas">
                 {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/empresas">
+                {() => <MasterRoute component={EmpresasPage} />}
+              </Route>
+              <Route path="/nota-promissoria">
+                {() => <ProtectedRoute component={NotaPromissoriaPage} />}
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}

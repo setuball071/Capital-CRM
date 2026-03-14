@@ -3244,3 +3244,80 @@ export const insertCreativeSchema = createInsertSchema(creatives).omit({
 export type Creative = typeof creatives.$inferSelect;
 export type InsertCreative = z.infer<typeof insertCreativeSchema>;
 
+// ===== NOTA PROMISSÓRIA =====
+
+export const BRAZILIAN_STATES = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
+  "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+  "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+] as const;
+
+export type BrazilianState = (typeof BRAZILIAN_STATES)[number];
+
+export const companies = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  razaoSocial: varchar("razao_social", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 18 }).notNull(),
+  cidade: varchar("cidade", { length: 255 }).notNull(),
+  uf: varchar("uf", { length: 2 }).notNull(),
+  endereco: text("endereco"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_company_cnpj_tenant").on(table.tenantId, table.cnpj),
+]);
+
+export const insertCompanySchema = createInsertSchema(companies, {
+  razaoSocial: z.string().min(1, "Razão Social é obrigatória").max(255),
+  cnpj: z.string().min(14, "CNPJ inválido").max(18),
+  cidade: z.string().min(1, "Cidade é obrigatória").max(255),
+  uf: z.string().min(2).max(2),
+  endereco: z.string().optional(),
+}).omit({ id: true, createdAt: true, tenantId: true });
+
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+
+export const promissoryNotes = pgTable("promissory_notes", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  npNumber: varchar("np_number", { length: 20 }).notNull(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  companyRazaoSocial: varchar("company_razao_social", { length: 255 }).notNull(),
+  companyCnpj: varchar("company_cnpj", { length: 18 }).notNull(),
+  companyCidade: varchar("company_cidade", { length: 255 }).notNull(),
+  companyUf: varchar("company_uf", { length: 2 }).notNull(),
+  devedorNome: varchar("devedor_nome", { length: 255 }).notNull(),
+  devedorCpf: varchar("devedor_cpf", { length: 14 }).notNull(),
+  devedorEndereco: text("devedor_endereco").notNull(),
+  valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
+  dataVencimento: varchar("data_vencimento", { length: 10 }).notNull(),
+  localPagamento: varchar("local_pagamento", { length: 255 }),
+  multaPercentual: decimal("multa_percentual", { precision: 5, scale: 2 }).default("2"),
+  jurosPercentual: decimal("juros_percentual", { precision: 5, scale: 2 }).default("1"),
+  bancoOrigem: varchar("banco_origem", { length: 255 }),
+  dataPagamento: varchar("data_pagamento", { length: 10 }),
+  descricao: text("descricao"),
+  prazoProtesto: integer("prazo_protesto").default(5),
+  localEmissao: varchar("local_emissao", { length: 255 }).notNull(),
+  dataEmissao: varchar("data_emissao", { length: 10 }).notNull(),
+  emitidoPorId: integer("emitido_por_id").references(() => users.id),
+  emitidoPorNome: varchar("emitido_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_np_number_tenant").on(table.tenantId, table.npNumber),
+]);
+
+export const insertPromissoryNoteSchema = createInsertSchema(promissoryNotes, {
+  companyId: z.number().positive("Empresa é obrigatória"),
+  devedorNome: z.string().min(1, "Nome do devedor é obrigatório"),
+  devedorCpf: z.string().min(11, "CPF inválido"),
+  devedorEndereco: z.string().min(1, "Endereço do devedor é obrigatório"),
+  valor: z.string().refine((val) => parseFloat(val) > 0, { message: "Valor deve ser positivo" }),
+  dataVencimento: z.string().min(1, "Data de vencimento é obrigatória"),
+}).omit({ id: true, createdAt: true, tenantId: true, npNumber: true, emitidoPorId: true, emitidoPorNome: true });
+
+export type PromissoryNote = typeof promissoryNotes.$inferSelect;
+export type InsertPromissoryNote = z.infer<typeof insertPromissoryNoteSchema>;
+

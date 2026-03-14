@@ -96,6 +96,8 @@ import {
   insertCreativePackSchema,
   creatives,
   insertCreativeSchema,
+  companies,
+  insertCompanySchema,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -24645,6 +24647,199 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("DELETE /api/creatives/:id error:", error);
       res.status(500).json({ message: "Erro ao remover criativo" });
+    }
+  });
+
+  // ===== EMPRESAS (NOTA PROMISSÓRIA) =====
+
+  app.get("/api/companies", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const isMasterUser = req.user?.isMaster;
+      const allCompanies = isMasterUser
+        ? await storage.getAllCompanies(tenantId)
+        : await storage.getActiveCompanies(tenantId);
+      res.json(allCompanies);
+    } catch (error) {
+      console.error("GET /api/companies error:", error);
+      res.status(500).json({ message: "Erro ao listar empresas" });
+    }
+  });
+
+  app.post("/api/companies", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user?.isMaster) {
+        return res.status(403).json({ message: "Apenas administradores podem criar empresas" });
+      }
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const parsed = insertCompanySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+      }
+      const company = await storage.createCompany(tenantId, parsed.data);
+      res.status(201).json(company);
+    } catch (error) {
+      console.error("POST /api/companies error:", error);
+      res.status(500).json({ message: "Erro ao criar empresa" });
+    }
+  });
+
+  app.put("/api/companies/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user?.isMaster) {
+        return res.status(403).json({ message: "Apenas administradores podem editar empresas" });
+      }
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      const existing = await storage.getCompany(id, tenantId);
+      if (!existing) return res.status(404).json({ message: "Empresa não encontrada" });
+      const parsed = insertCompanySchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+      }
+      const updated = await storage.updateCompany(id, tenantId, parsed.data);
+      res.json(updated);
+    } catch (error) {
+      console.error("PUT /api/companies/:id error:", error);
+      res.status(500).json({ message: "Erro ao atualizar empresa" });
+    }
+  });
+
+  app.delete("/api/companies/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user?.isMaster) {
+        return res.status(403).json({ message: "Apenas administradores podem desativar empresas" });
+      }
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      const existing = await storage.getCompany(id, tenantId);
+      if (!existing) return res.status(404).json({ message: "Empresa não encontrada" });
+      const updated = await storage.softDeleteCompany(id, tenantId);
+      res.json(updated);
+    } catch (error) {
+      console.error("DELETE /api/companies/:id error:", error);
+      res.status(500).json({ message: "Erro ao desativar empresa" });
+    }
+  });
+
+  // ===== NOTAS PROMISSÓRIAS =====
+
+  app.get("/api/promissory-notes", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const filters: { companyId?: number; startDate?: string; endDate?: string; page?: number; limit?: number } = {};
+      if (req.query.companyId) filters.companyId = parseInt(req.query.companyId as string);
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
+      if (req.query.page) filters.page = parseInt(req.query.page as string);
+      if (req.query.limit) filters.limit = Math.min(parseInt(req.query.limit as string), 100);
+      const result = await storage.getPromissoryNotes(tenantId, filters);
+      res.json(result);
+    } catch (error) {
+      console.error("GET /api/promissory-notes error:", error);
+      res.status(500).json({ message: "Erro ao listar notas promissórias" });
+    }
+  });
+
+  app.get("/api/promissory-notes/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      const note = await storage.getPromissoryNote(id, tenantId);
+      if (!note) return res.status(404).json({ message: "Nota promissória não encontrada" });
+      res.json(note);
+    } catch (error) {
+      console.error("GET /api/promissory-notes/:id error:", error);
+      res.status(500).json({ message: "Erro ao buscar nota promissória" });
+    }
+  });
+
+  const createPromissoryNoteBodySchema = z.object({
+    companyId: z.number({ coerce: true }).positive("Empresa é obrigatória"),
+    devedorNome: z.string().min(1, "Nome do devedor é obrigatório"),
+    devedorCpf: z.string().min(11, "CPF inválido"),
+    devedorEndereco: z.string().min(1, "Endereço do devedor é obrigatório"),
+    valor: z.string().refine((val) => parseFloat(val) > 0, { message: "Valor deve ser positivo" }),
+    dataVencimento: z.string().min(1, "Data de vencimento é obrigatória"),
+    localPagamento: z.string().nullable().optional(),
+    multaPercentual: z.string().optional().default("2"),
+    jurosPercentual: z.string().optional().default("1"),
+    bancoOrigem: z.string().nullable().optional(),
+    dataPagamento: z.string().nullable().optional(),
+    descricao: z.string().nullable().optional(),
+    prazoProtesto: z.number({ coerce: true }).optional().default(5),
+  });
+
+  app.post("/api/promissory-notes", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const parsed = createPromissoryNoteBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+      }
+      const data = parsed.data;
+
+      const company = await storage.getCompany(data.companyId, tenantId);
+      if (!company || !company.isActive) {
+        return res.status(400).json({ message: "Empresa não encontrada ou inativa" });
+      }
+
+      const today = new Date();
+      const dataEmissao = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const localEmissao = `${company.cidade}/${company.uf}`;
+
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const npNumber = await storage.getNextNpNumber(tenantId);
+          const note = await storage.createPromissoryNote(tenantId, {
+            npNumber,
+            companyId: company.id,
+            companyRazaoSocial: company.razaoSocial,
+            companyCnpj: company.cnpj,
+            companyCidade: company.cidade,
+            companyUf: company.uf,
+            devedorNome: data.devedorNome,
+            devedorCpf: data.devedorCpf,
+            devedorEndereco: data.devedorEndereco,
+            valor: data.valor,
+            dataVencimento: data.dataVencimento,
+            localPagamento: data.localPagamento || null,
+            multaPercentual: data.multaPercentual || "2",
+            jurosPercentual: data.jurosPercentual || "1",
+            bancoOrigem: data.bancoOrigem || null,
+            dataPagamento: data.dataPagamento || null,
+            descricao: data.descricao || null,
+            prazoProtesto: data.prazoProtesto || 5,
+            localEmissao,
+            dataEmissao,
+            emitidoPorId: req.user!.id,
+            emitidoPorNome: req.user!.name,
+          });
+          return res.status(201).json(note);
+        } catch (insertError: any) {
+          const isUniqueViolation = insertError?.code === "23505" ||
+            insertError?.message?.includes("idx_np_number_tenant") ||
+            insertError?.message?.includes("unique") ||
+            insertError?.message?.includes("duplicate");
+          if (isUniqueViolation && attempt < maxRetries - 1) {
+            continue;
+          }
+          throw insertError;
+        }
+      }
+      res.status(409).json({ message: "Conflito de numeração após múltiplas tentativas. Tente novamente." });
+    } catch (error: any) {
+      console.error("POST /api/promissory-notes error:", error);
+      res.status(500).json({ message: "Erro ao criar nota promissória" });
     }
   });
 
