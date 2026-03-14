@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, FileText, Printer } from "lucide-react";
+import { Loader2, FileText, Printer, Settings } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import type { Company, PromissoryNote } from "@shared/schema";
+import { CompanyManagerSheet } from "@/components/company-manager-sheet";
 import { generatePromissoryNotePDF } from "@/lib/promissory-note-pdf";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +64,8 @@ function formatDateBr(dateStr: string): string {
 
 export default function NotaPromissoriaPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [companySheetOpen, setCompanySheetOpen] = useState(false);
 
   const [companyId, setCompanyId] = useState("");
   const [devedorNome, setDevedorNome] = useState("");
@@ -176,7 +180,19 @@ export default function NotaPromissoriaPage() {
           <CardContent>
             <div className="space-y-6">
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Empresa Emissora</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Empresa Emissora</h3>
+                  {user?.role === "master" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCompanySheetOpen(true)}
+                      data-testid="button-manage-companies"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Empresa <span className="text-destructive">*</span></Label>
@@ -430,6 +446,10 @@ export default function NotaPromissoriaPage() {
           </CardContent>
         </Card>
       </div>
+
+      {user?.role === "master" && (
+        <CompanyManagerSheet open={companySheetOpen} onOpenChange={setCompanySheetOpen} />
+      )}
     </div>
   );
 }

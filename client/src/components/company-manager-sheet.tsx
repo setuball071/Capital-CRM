@@ -9,12 +9,12 @@ import { useToast } from "@/hooks/use-toast";
 import { BRAZILIAN_STATES, type Company } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +79,12 @@ function formatCnpj(value: string): string {
   return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
 }
 
-export default function EmpresasPage() {
+interface CompanyManagerSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function CompanyManagerSheet({ open, onOpenChange }: CompanyManagerSheetProps) {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -98,6 +103,7 @@ export default function EmpresasPage() {
 
   const { data: companiesList, isLoading } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
+    enabled: open,
   });
 
   const createMutation = useMutation({
@@ -164,7 +170,13 @@ export default function EmpresasPage() {
     setIsDeactivateOpen(true);
   };
 
-  const renderForm = (form: ReturnType<typeof useForm<CompanyFormData>>, onSubmit: (data: CompanyFormData) => void, isPending: boolean, submitLabel: string) => (
+  const renderForm = (
+    form: ReturnType<typeof useForm<CompanyFormData>>,
+    onSubmit: (data: CompanyFormData) => void,
+    isPending: boolean,
+    submitLabel: string,
+    onCancel: () => void,
+  ) => (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
@@ -249,7 +261,7 @@ export default function EmpresasPage() {
           )}
         />
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); }} data-testid="button-cancel">
+          <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel">
             Cancelar
           </Button>
           <Button type="submit" disabled={isPending} data-testid="button-submit">
@@ -262,30 +274,23 @@ export default function EmpresasPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary text-primary-foreground">
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Empresas Emissoras</h1>
-              <p className="text-sm text-muted-foreground">Gerencie as empresas emissoras de Nota Promissória</p>
-            </div>
-          </div>
-          <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-company">
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Empresa
-          </Button>
-        </div>
+              Empresas Emissoras
+            </SheetTitle>
+            <SheetDescription>Gerencie as empresas emissoras de Nota Promissória</SheetDescription>
+          </SheetHeader>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Lista de Empresas</CardTitle>
-            <CardDescription>Empresas cadastradas para emissão de Nota Promissória</CardDescription>
-          </CardHeader>
-          <CardContent>
+          <div className="mt-6 space-y-4">
+            <Button onClick={() => setIsCreateOpen(true)} className="w-full" data-testid="button-create-company">
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Empresa
+            </Button>
+
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -294,9 +299,7 @@ export default function EmpresasPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Razão Social</TableHead>
-                    <TableHead>CNPJ</TableHead>
-                    <TableHead>Cidade/UF</TableHead>
+                    <TableHead>Empresa</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -304,12 +307,15 @@ export default function EmpresasPage() {
                 <TableBody>
                   {companiesList.map((company) => (
                     <TableRow key={company.id} data-testid={`row-company-${company.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-razao-social-${company.id}`}>
-                        {company.razaoSocial}
-                      </TableCell>
-                      <TableCell data-testid={`text-cnpj-${company.id}`}>{company.cnpj}</TableCell>
-                      <TableCell data-testid={`text-cidade-uf-${company.id}`}>
-                        {company.cidade}/{company.uf}
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm" data-testid={`text-razao-social-${company.id}`}>
+                            {company.razaoSocial}
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid={`text-cnpj-${company.id}`}>
+                            {company.cnpj} — {company.cidade}/{company.uf}
+                          </p>
+                        </div>
                       </TableCell>
                       <TableCell data-testid={`status-company-${company.id}`}>
                         <Badge variant={company.isActive ? "default" : "secondary"}>
@@ -317,18 +323,16 @@ export default function EmpresasPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {company.isActive && (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(company)} data-testid={`button-edit-company-${company.id}`}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeactivate(company)} data-testid={`button-deactivate-company-${company.id}`}>
-                                <Power className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                        {company.isActive && (
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(company)} data-testid={`button-edit-company-${company.id}`}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeactivate(company)} data-testid={`button-deactivate-company-${company.id}`}>
+                              <Power className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -336,14 +340,14 @@ export default function EmpresasPage() {
               </Table>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhuma empresa cadastrada</p>
-                <p className="text-sm mt-1">Clique em "Nova Empresa" para adicionar</p>
+                <Building2 className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">Nenhuma empresa cadastrada</p>
+                <p className="text-xs mt-1">Clique em "Nova Empresa" para adicionar</p>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent>
@@ -351,7 +355,7 @@ export default function EmpresasPage() {
             <DialogTitle>Nova Empresa Emissora</DialogTitle>
             <DialogDescription>Cadastre uma nova empresa para emissão de Nota Promissória</DialogDescription>
           </DialogHeader>
-          {renderForm(createForm, (data) => createMutation.mutate(data), createMutation.isPending, "Criar Empresa")}
+          {renderForm(createForm, (data) => createMutation.mutate(data), createMutation.isPending, "Criar Empresa", () => setIsCreateOpen(false))}
         </DialogContent>
       </Dialog>
 
@@ -361,7 +365,7 @@ export default function EmpresasPage() {
             <DialogTitle>Editar Empresa</DialogTitle>
             <DialogDescription>Atualize as informações da empresa</DialogDescription>
           </DialogHeader>
-          {renderForm(editForm, (data) => updateMutation.mutate(data), updateMutation.isPending, "Salvar Alterações")}
+          {renderForm(editForm, (data) => updateMutation.mutate(data), updateMutation.isPending, "Salvar Alterações", () => setIsEditOpen(false))}
         </DialogContent>
       </Dialog>
 
@@ -388,6 +392,6 @@ export default function EmpresasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
