@@ -1,0 +1,36 @@
+The generated PDF content is incorrect. The legal text must be rebuilt to match the specified model exactly.
+Replace the current PDF generation logic with the following structure:
+Section 1 — PROMESSA DE PAGAMENTO
+Full formal paragraph: "Por esta Nota Promissória, eu [nome], inscrito(a) no CPF nº [cpf], residente e domiciliado(a) em [endereço], prometo pagar, de forma incondicional, irrevogável e irretratável, na data de vencimento acima indicada, a [credor_nome], pessoa jurídica de direito privado inscrita no CNPJ nº [credor_cnpj], ou à sua ordem, a quantia de R$ [valor] ([valor por extenso])."
+Followed by the operation paragraph (custom operation_desc if filled, otherwise default text mentioning bank origin, payment date, and amount).
+Section 2 — CLÁUSULA DE VENCIMENTO ANTECIPADO
+Full paragraph intro + exactly these 7 numbered incisos:
+
+I – cancelamento da operação de quitação realizada em favor do emitente
+II – impedimento, bloqueio, estorno ou chargeback do pagamento efetuado pela credora
+III – fornecimento de informações falsas ou inexatas pelo emitente no momento da contratação
+IV – prática de fraude ou qualquer ato que inviabilize, prejudique ou reverta a operação realizada
+V – inadimplemento de qualquer obrigação relacionada à operação que originou este título
+VI – constatação de que a dívida quitada não era de titularidade do emitente ou não existia nos termos declarados
+VII – ausência, cancelamento ou impossibilidade de averbação da margem consignável necessária à viabilização da operação, por qualquer motivo imputável ao emitente
+
+Section 3 — CLÁUSULA DE PROTESTO
+"O presente título será encaminhado a protesto junto ao Cartório de Protesto de Títulos competente decorridos [N] dias corridos do vencimento sem que o pagamento integral tenha sido efetuado, nos termos da Lei nº 9.492/1997, independentemente de qualquer notificação prévia ao emitente."
+Section 4 — ENCARGOS EM CASO DE INADIMPLEMENTO
+Three separate bullet points:
+
+Multa moratória de [multa]% sobre o valor devido
+Juros de mora de [juros]% ao mês
+Correção monetária conforme índice legal aplicável
+
+Section 5 — FORO
+"Fica eleito o foro da Comarca de [cidade da empresa], Estado de [estado da empresa], com renúncia expressa a qualquer outro, por mais privilegiado que seja, para dirimir quaisquer dúvidas ou controvérsias decorrentes desta Nota Promissória."
+Emission line:
+"Emitida em [cidade] – [UF], em [data_emissao]"
+Signature block — two columns:
+Left: signature line / [debtor name] / CPF: [cpf] / EMITENTE / DEVEDOR
+Right: signature line / [company name] / CNPJ: [cnpj] / CREDOR / BENEFICIÁRIO
+Footer:
+"Documento gerado eletronicamente | [NP number] | Assinatura eletrônica válida nos termos da MP 2.200-2/2001 e Lei 14.063/2020"
+Remove the current tabular data block at the top (the table with CREDOR/EMITENTE rows). Replace with a clean header: company name on the left, "NOTA PROMISSÓRIA / Nº [number]" on the right, separated by a bottom border. Below that, the value box with amount, written-out value, due date, and payment location.
+Do not use any PDF library. Keep window.print() approach. Use serif font (Times New Roman) for the printed document.
