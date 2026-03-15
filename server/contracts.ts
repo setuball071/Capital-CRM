@@ -155,6 +155,28 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  app.put("/api/contracts/flows/:id/steps/reorder", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const flowId = parseInt(req.params.id);
+      const items: { id: number; stepOrder: number }[] = req.body;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ message: "Body deve ser array de {id, stepOrder}" });
+      }
+      // neon-http does not support transactions — sequential updates
+      for (const item of items) {
+        await db
+          .update(contractFlowSteps)
+          .set({ stepOrder: item.stepOrder })
+          .where(and(eq(contractFlowSteps.id, item.id), eq(contractFlowSteps.flowId, flowId)));
+      }
+      return res.json({ message: "Ordem atualizada" });
+    } catch (e: any) {
+      console.error("PUT /api/contracts/flows/:id/steps/reorder error:", e);
+      return res.status(500).json({ message: "Erro ao reordenar etapas" });
+    }
+  });
+
   // ===================== PROPOSTAS =====================
 
   app.get("/api/contracts/proposals", requireAuth, async (req: any, res) => {

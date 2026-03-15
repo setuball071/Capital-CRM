@@ -1,0 +1,61 @@
+Construir a página de Gestão de Fluxos no Módulo de Contratos. Substituir o placeholder atual em /contratos/fluxos.
+PÁGINA: contratos-fluxos.tsx
+Layout em duas colunas:
+
+Coluna esquerda (1/3): lista de fluxos cadastrados
+Coluna direita (2/3): editor de etapas do fluxo selecionado
+
+COLUNA ESQUERDA — Lista de Fluxos
+Card com header "Fluxos Operacionais" + botão "Novo Fluxo".
+Cada fluxo na lista mostra:
+
+Nome do fluxo
+Badge: banco | convênio | produto
+Badge de status: Ativo (verde) / Inativo (cinza)
+Botões: Editar, Ativar/Desativar, Excluir
+
+Ao clicar num fluxo: carrega as etapas na coluna direita.
+Modal "Novo Fluxo" / "Editar Fluxo" com campos:
+
+Nome (text)
+Banco (text)
+Convênio (text)
+Produto (select: NOVO / PORTABILIDADE / REFINANCIAMENTO / CARTAO)
+Status ativo (toggle)
+
+COLUNA DIREITA — Etapas do Fluxo
+Header: nome do fluxo selecionado + botão "Adicionar Etapa".
+Lista de etapas em ordem (step_order) com:
+
+Número da etapa
+Nome da etapa
+Role responsável (badge)
+Ícone de arrastar para reordenar
+Botões: Editar, Excluir
+
+Modal "Adicionar/Editar Etapa" com campos:
+
+Nome da etapa (text) — ex: "Conferência de Documentos"
+Descrição (textarea, opcional)
+Role responsável (select: operacional / vendedor / financeiro / coordenacao)
+Exige documentos? (toggle)
+
+Ao reordenar (drag): atualizar step_order via PUT em lote.
+ROTAS DA API necessárias (verificar se já existem, criar se não):
+GET    /api/contracts/flows
+POST   /api/contracts/flows
+PUT    /api/contracts/flows/:id
+DELETE /api/contracts/flows/:id
+GET    /api/contracts/flows/:id/steps
+POST   /api/contracts/flows/:id/steps
+PUT    /api/contracts/flows/steps/:id
+DELETE /api/contracts/flows/steps/:id
+PUT    /api/contracts/flows/:id/steps/reorder  — recebe array [{id, step_order}]
+ACESSO: somente roles master. Se outro role acessar /contratos/fluxos, redirecionar para /contratos.
+IDENTIDADE VISUAL: padrão Capital Go (#6C2BD9, #1E88E5). Usar componentes shadcn/ui já existentes no projeto.
+VERIFICAÇÃO:
+
+Master consegue criar um fluxo com banco + convênio + produto
+Consegue adicionar etapas e reordenar
+Fluxo ativo aparece na lista
+Ao cadastrar uma proposta com banco+convênio+produto que bate com um fluxo ativo, o flow_id é vinculado automaticamente na proposta

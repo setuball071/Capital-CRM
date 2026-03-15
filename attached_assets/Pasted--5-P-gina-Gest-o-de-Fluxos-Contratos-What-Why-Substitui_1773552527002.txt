@@ -1,0 +1,26 @@
+#5 - Página Gestão de Fluxos — Contratos
+What & Why
+Substituir o placeholder em /contratos/fluxos pela página completa de gestão de fluxos operacionais. Permite ao master criar, editar, ativar/desativar e excluir fluxos, e configurar as etapas de cada fluxo com drag-to-reorder.
+
+Done looks like
+Master acessa /contratos/fluxos e vê layout de duas colunas
+Coluna esquerda: lista de fluxos com nome, badges (banco | convênio | produto | status), botões editar/ativar/excluir e botão "Novo Fluxo"
+Modal "Novo/Editar Fluxo" com campos: Nome, Banco, Convênio, Produto (select NOVO/PORTABILIDADE/REFINANCIAMENTO/CARTAO), toggle Ativo
+Coluna direita: ao clicar num fluxo, exibe suas etapas em ordem com drag-to-reorder (usando atributos HTML draggable), número, nome, role badge, botões editar/excluir e botão "Adicionar Etapa"
+Modal "Adicionar/Editar Etapa" com campos: Nome, Descrição (textarea), Role responsável (select), toggle "Exige documentos?"
+Drag-and-drop reordena etapas e chama PUT /api/contracts/flows/:id/steps/reorder (endpoint novo)
+Usuário não-master que acessa /contratos/fluxos é redirecionado para /contratos
+Ao cadastrar proposta com banco+convênio+produto que bate com um fluxo ativo, o flow_id é vinculado automaticamente (já implementado na Fase 2, apenas verificar)
+Out of scope
+Nenhuma mudança no schema do banco (todas as tabelas já existem)
+UI de comissões/financeiro
+Relatórios ou exportação de fluxos
+Tasks
+Endpoint de reordenação — Adicionar PUT /api/contracts/flows/:id/steps/reorder em server/contracts.ts que recebe [{ id, stepOrder }] e atualiza em lote com queries sequenciais (neon-http não suporta transações).
+
+Página de gestão — Reescrever client/src/pages/contratos-fluxos.tsx com layout de duas colunas, lista de fluxos, editor de etapas, dois modais (fluxo e etapa), drag-to-reorder com atributos HTML5 nativos, controle de acesso (redirect não-master). Usar componentes shadcn/ui existentes (Dialog, Form, Select, Switch).
+
+Relevant files
+server/contracts.ts
+client/src/pages/contratos-fluxos.tsx
+shared/schema.ts:3345-3383
