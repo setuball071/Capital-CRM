@@ -45,10 +45,10 @@ export function buildImagePrompt(formData: CreativeFormData): string {
 
 export function getAspectRatioForFormat(formato: CreativeFormat): string {
   const map: Record<CreativeFormat, string> = {
-    square: "1024x1024",
-    portrait: "1024x1792",
-    story: "1024x1792",
-    banner: "1024x1792",
+    square: "1:1",
+    portrait: "4:5",
+    story: "9:16",
+    banner: "4:5",
   };
-  return map[formato];
+  return map[formato] ?? "1:1";
 }

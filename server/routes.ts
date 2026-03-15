@@ -24902,35 +24902,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }).returning();
 
       // Generate images
-      const { generateCreativeImages } = await import("./services/imagenService");
-      let result;
+      const { buildImagePrompt, getAspectRatioForFormat } = await import("./services/creativePromptService");
+      const { generateImages } = await import("./services/imagenService");
+      const prompt = buildImagePrompt({ tema, convenio, formato, headline, examples: examples ?? [], cta, style });
+      const aspectRatio = getAspectRatioForFormat(formato);
+      let imageUrls: string[];
       try {
-        result = await generateCreativeImages({ tema, convenio, formato, headline, examples: examples ?? [], cta, style });
+        imageUrls = await generateImages(prompt, aspectRatio);
       } catch (genErr: any) {
         await db.update(creativeGenerations).set({ status: "error" }).where(eq(creativeGenerations.id, gen.id));
         console.error("Image generation error:", genErr?.message);
-        return res.status(502).json({ message: "Erro ao gerar imagens. Tente novamente." });
+        return res.status(502).json({ message: genErr?.message || "Erro ao gerar imagens. Tente novamente." });
       }
 
       // Update record
       await db.update(creativeGenerations).set({
-        promptUsed: result.promptUsed,
-        imageUrls: result.imageUrls,
+        promptUsed: prompt,
+        imageUrls,
         status: "generated",
       }).where(eq(creativeGenerations.id, gen.id));
 
-      // Increment quota ONLY after success
-      if (quotaRow) {
-        await db.update(creativeGenerationQuota)
-          .set({ count: quotaRow.count + 1 })
-          .where(and(eq(creativeGenerationQuota.userId, userId), eq(creativeGenerationQuota.date, today)));
-      } else {
-        await db.insert(creativeGenerationQuota).values({ userId, date: today, count: 1 });
-      }
+      // Increment quota ONLY after success (upsert to avoid race conditions)
+      await db.execute(
+        sql`INSERT INTO creative_generation_quota (user_id, date, count) VALUES (${userId}, ${today}, 1)
+            ON CONFLICT (user_id, date) DO UPDATE SET count = creative_generation_quota.count + 1`
+      );
 
       return res.status(201).json({
         generationId: gen.id,
-        images: result.imageUrls,
+        images: imageUrls,
         quotaUsed: used + 1,
         quotaLimit: 5,
       });
