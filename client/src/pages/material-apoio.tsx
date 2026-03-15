@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { TabelasSimulator } from "@/components/tabelas-simulator";
 import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
@@ -180,7 +180,16 @@ export default function MaterialApoioPage() {
       {activeCategory === "tabelas" ? (
         <TabelasSimulator />
       ) : activeCategory === "criativos" ? (
-        <CriativosGallery />
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Link to="/criador-criativos">
+              <Button variant="outline" size="sm" data-testid="button-criar-criativo">
+                Criar novo criativo
+              </Button>
+            </Link>
+          </div>
+          <CriativosGallery />
+        </div>
       ) : isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

@@ -7,6 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ const formSchema = z.object({
   examples: z.array(exampleSchema).max(3),
   cta: z.string().min(1, "Informe o CTA"),
   style: z.enum(["fotorrealista", "moderno_clean", "bold_typographic"], { required_error: "Selecione o estilo" }),
+  customInstructions: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -162,6 +164,7 @@ export default function CriadorCriativosPage() {
       examples: [],
       cta: "",
       style: "moderno_clean",
+      customInstructions: "",
     },
   });
 
@@ -346,6 +349,22 @@ export default function CriadorCriativosPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                {/* Instruções adicionais */}
+                <FormField control={form.control} name="customInstructions" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Instruções adicionais <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Ex: use uma foto de pessoa sorrindo, fundo com paisagem urbana, tons mais escuros..."
+                        data-testid="textarea-custom-instructions"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
