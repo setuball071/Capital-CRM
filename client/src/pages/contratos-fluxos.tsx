@@ -181,15 +181,15 @@ function StepModal({
   const form = useForm<StepForm>({
     resolver: zodResolver(stepSchema),
     values: editing
-      ? { name: editing.name, description: editing.description ?? "", requiredRole: editing.requiredRole ?? "", requiresDocuments: editing.requiresDocuments ?? false }
-      : { name: "", description: "", requiredRole: "", requiresDocuments: false },
+      ? { name: editing.name, description: editing.description ?? "", requiredRole: editing.requiredRole ?? "none", requiresDocuments: editing.requiresDocuments ?? false }
+      : { name: "", description: "", requiredRole: "none", requiresDocuments: false },
   });
 
   const saveMutation = useMutation({
     mutationFn: (data: StepForm) => {
       const payload = {
         ...data,
-        requiredRole: data.requiredRole || null,
+        requiredRole: (data.requiredRole && data.requiredRole !== "none") ? data.requiredRole : null,
         stepOrder: editing?.stepOrder ?? nextOrder,
       };
       return editing
@@ -237,7 +237,7 @@ function StepModal({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">Qualquer role</SelectItem>
+                    <SelectItem value="none">Qualquer role</SelectItem>
                     {ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
