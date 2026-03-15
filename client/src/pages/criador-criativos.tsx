@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -133,7 +133,16 @@ export default function CriadorCriativosPage() {
     quotaUsed: number;
   } | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPreviewImage(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const { data: quota, refetch: refetchQuota } = useQuery<{ used: number; limit: number; resetsAt: string }>({
     queryKey: ["/api/creatives/quota"],
@@ -325,7 +334,7 @@ export default function CriadorCriativosPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    Clique em uma imagem para selecioná-la
+                    Clique para visualizar em tela cheia
                   </p>
                   {selectedImage && (
                     <Badge variant="secondary" className="text-purple-600">1 selecionada</Badge>
@@ -343,7 +352,7 @@ export default function CriadorCriativosPage() {
                           ? "border-purple-500 ring-2 ring-purple-200 dark:ring-purple-800"
                           : "border-transparent hover:border-muted-foreground/30"
                       )}
-                      onClick={() => setSelectedImage(url)}
+                      onClick={() => setPreviewImage(url)}
                     >
                       <img
                         src={url}
@@ -429,6 +438,47 @@ export default function CriadorCriativosPage() {
           setSelectedImage(null);
         }}
       />
+
+      {/* ── Fullscreen Image Preview Modal ── */}
+      {previewImage && (
+        <div
+          data-testid="overlay-image-preview"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="flex flex-col items-center gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewImage}
+              alt="Visualização em tela cheia"
+              style={{ maxHeight: "80vh", maxWidth: "90vw" }}
+              className="rounded-md object-contain shadow-2xl"
+            />
+            <div className="flex gap-3">
+              <Button
+                data-testid="button-preview-select"
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => {
+                  setSelectedImage(previewImage);
+                  setPreviewImage(null);
+                }}
+              >
+                Selecionar esta imagem
+              </Button>
+              <Button
+                data-testid="button-preview-close"
+                variant="outline"
+                className="border-white/30 text-white hover:bg-white/10"
+                onClick={() => setPreviewImage(null)}
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

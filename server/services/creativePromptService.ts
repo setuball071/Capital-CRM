@@ -3,14 +3,16 @@ export function buildImagePrompt(
   aspectRatio: string,
   personalizable: boolean,
 ): string {
-  const personalizableBlock = personalizable
-    ? `Reserve bottom white card area (full width, ~110px tall, white background, clearly separated) for agent signature: circular profile photo on left, name in bold, role text, WhatsApp number. Leave this area completely empty/white. `
+  const signatureBlock = personalizable
+    ? `Reserve bottom white card area (full width, ~110px tall, white background, completely empty) for agent signature overlay. No text, no elements in this zone.`
     : "";
 
-  return `Professional marketing creative for Brazilian financial services company Capital Go.
-Brand colors: deep purple #6C2BD9 (dominant), electric blue #1E88E5 (accent), hot pink #E91E63 (CTA/highlights). Dark background.
-Reserve top area for company logo (clean rectangular space, light background, ~200x60px).
-${personalizableBlock}User instructions:
-${userPrompt}
-Technical specs: high quality, marketing material, no watermarks, crisp text rendering.`;
+  return `${userPrompt}
+
+Technical requirements (do not override the above):
+
+Image format: ${aspectRatio} vertical orientation
+High quality, sharp rendering, no watermarks
+Brand: Capital Go (if not specified otherwise in prompt above)
+${signatureBlock}`.trim();
 }

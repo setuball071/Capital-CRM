@@ -1,0 +1,59 @@
+Dois ajustes no módulo Criador de Criativos. Verificar arquivos reais antes de editar.
+
+---
+
+## AJUSTE 1 — creativePromptService.ts: prompt do usuário deve ser o comando principal
+
+Problema atual: o sistema envolve o prompt do usuário com instruções fixas que sobrescrevem
+o que ele escreveu, resultando em imagens que ignoram o prompt.
+
+Nova lógica da função buildImagePrompt:
+
+O prompt enviado à API deve ter esta estrutura EXATA:
+{userPrompt}
+
+Technical requirements (do not override the above):
+
+Image format: {aspectRatio} vertical orientation
+High quality, sharp rendering, no watermarks
+Brand: Capital Go (if not specified otherwise in prompt above)
+{signatureBlock}
+
+
+Onde signatureBlock, SE personalizable = true:
+
+Reserve bottom white card area (full width, ~110px tall, white background, completely empty) for agent signature overlay. No text, no elements in this zone.
+
+
+Se personalizable = false: signatureBlock = "" (vazio)
+
+IMPORTANTE: O userPrompt vem PRIMEIRO e INTEIRO, sem modificação.
+As instruções técnicas vêm depois como complemento, nunca sobrescrevendo.
+Remover qualquer lógica que reformate, traduza ou substitua o conteúdo do userPrompt.
+
+---
+
+## AJUSTE 2 — Frontend: clique na imagem abre modal de visualização fullscreen
+
+Problema atual: clicar na imagem apenas seleciona, não permite ver em tamanho real.
+
+Implementar:
+- Clique simples na imagem → abre modal fullscreen com a imagem em tamanho real
+- Dentro do modal: botão "✓ Selecionar esta imagem" e botão "✕ Fechar"
+- Clique fora do modal (overlay escuro) → fecha
+- Tecla ESC → fecha
+- A seleção atual (borda destacada no grid) continua funcionando normalmente
+  mas agora é acionada pelo botão dentro do modal OU por um clique duplo na imagem do grid
+
+O modal deve ser simples:
+- Overlay escuro semi-transparente cobrindo toda a tela
+- Imagem centralizada com max-height: 90vh e max-width: 90vw
+- Botões abaixo da imagem: "Selecionar" (roxo, estilo do sistema) e "Fechar" (outline)
+- Sem biblioteca externa, usar estado React (useState) e portal ou div absoluta
+
+---
+
+## RESTRIÇÕES
+- Não alterar banco, rotas, quota, imagenService.ts
+- Não alterar outros módulos do sistema
+- UI em português brasileiro
