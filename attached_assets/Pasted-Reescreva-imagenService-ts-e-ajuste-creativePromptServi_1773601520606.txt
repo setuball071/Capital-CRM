@@ -1,0 +1,56 @@
+Reescreva imagenService.ts e ajuste creativePromptService.ts conforme abaixo. Não altere nenhum outro arquivo.
+
+---
+
+## TAREFA 1 — server/services/imagenService.ts
+
+Substituir completamente o conteúdo. Usar chamada HTTP direta (sem SDK) ao endpoint do Imagen via Generative Language API:
+
+Endpoint: POST https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key={GOOGLE_AI_API_KEY}
+
+Body da requisição:
+{
+  "instances": [{ "prompt": "<texto do prompt>" }],
+  "parameters": {
+    "sampleCount": 4,
+    "aspectRatio": "<1:1 | 9:16 | 4:5>",
+    "safetyFilterLevel": "BLOCK_MEDIUM_AND_ABOVE",
+    "personGeneration": "ALLOW_ADULT"
+  }
+}
+
+Resposta da API — as imagens vêm em:
+response.predictions[].bytesBase64Encoded  (string base64)
+response.predictions[].mimeType            (ex: "image/png" ou "image/jpeg")
+
+Converter cada uma para data URL: `data:${mimeType};base64,${bytesBase64Encoded}`
+
+A função exportada deve ter a assinatura:
+export async function generateImages(prompt: string, aspectRatio: string): Promise<string[]>
+Retorna array de 4 data URLs.
+
+Tratamento de erro:
+- Se GOOGLE_AI_API_KEY não estiver definida → throw new Error('GOOGLE_AI_API_KEY não configurada')
+- Se a API retornar status != 200 → logar o body e throw new Error('Erro ao gerar imagens: ' + status)
+- Se predictions vier vazio → throw new Error('A API não retornou imagens')
+
+---
+
+## TAREFA 2 — server/services/creativePromptService.ts
+
+Apenas ajustar a função getAspectRatioForFormat (ou equivalente) para retornar strings no formato que o Imagen aceita:
+
+- formato 'square' ou '1:1'   → retornar "1:1"
+- formato 'portrait' ou '4:5' → retornar "4:5"  
+- formato 'story' ou '9:16'   → retornar "9:16"
+- default                      → retornar "1:1"
+
+Não alterar mais nada neste arquivo.
+
+---
+
+## RESTRIÇÕES
+- Não instalar nenhum pacote novo (usar fetch nativo do Node 18+)
+- Não alterar rotas, frontend, banco ou qualquer outro arquivo
+- Toda mensagem de erro em português brasileiro para o usuário final
+- A chave deve ser lida de process.env.GOOGLE_AI_API_KEY
