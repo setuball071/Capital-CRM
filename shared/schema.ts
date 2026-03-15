@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   time,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -3498,3 +3499,31 @@ export const insertFinancialDebitSchema = createInsertSchema(financialDebits, {
 export type FinancialDebit = typeof financialDebits.$inferSelect;
 export type InsertFinancialDebit = z.infer<typeof insertFinancialDebitSchema>;
 
+
+// ===== CRIADOR DE CRIATIVOS =====
+
+export const creativeGenerations = pgTable("creative_generations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  promptUsed: text("prompt_used").notNull(),
+  formData: jsonb("form_data"),
+  imageUrls: text("image_urls").array(),
+  selectedImageUrl: text("selected_image_url"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCreativeGenerationSchema = createInsertSchema(creativeGenerations).omit({
+  id: true, createdAt: true, tenantId: true, userId: true,
+});
+export type CreativeGeneration = typeof creativeGenerations.$inferSelect;
+export type InsertCreativeGeneration = z.infer<typeof insertCreativeGenerationSchema>;
+
+export const creativeGenerationQuota = pgTable("creative_generation_quota", {
+  userId: integer("user_id").notNull().references(() => users.id),
+  date: text("date").notNull(),
+  count: integer("count").notNull().default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.userId, t.date] }),
+}));

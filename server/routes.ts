@@ -96,6 +96,8 @@ import {
   insertCreativePackSchema,
   creatives,
   insertCreativeSchema,
+  creativeGenerations,
+  creativeGenerationQuota,
   companies,
   insertCompanySchema,
 } from "@shared/schema";
@@ -24841,6 +24843,134 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error: any) {
       console.error("POST /api/promissory-notes error:", error);
       res.status(500).json({ message: "Erro ao criar nota promissória" });
+    }
+  });
+
+  // ===== CRIADOR DE CRIATIVOS =====
+
+  function todayBR(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function getQuotaRecord(userId: number, date: string) {
+    const [row] = await db
+      .select()
+      .from(creativeGenerationQuota)
+      .where(and(eq(creativeGenerationQuota.userId, userId), eq(creativeGenerationQuota.date, date)));
+    return row ?? null;
+  }
+
+  app.get("/api/creatives/quota", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const today = todayBR();
+      const row = await getQuotaRecord(req.user!.id, today);
+      const used = row?.count ?? 0;
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const resetsAt = tomorrow.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às 00:00";
+      return res.json({ used, limit: 5, resetsAt });
+    } catch (err) {
+      console.error("GET /api/creatives/quota error:", err);
+      return res.status(500).json({ message: "Erro ao consultar cota" });
+    }
+  });
+
+  app.post("/api/creatives/generate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const today = todayBR();
+      const userId = req.user!.id;
+
+      // Check quota
+      const quotaRow = await getQuotaRecord(userId, today);
+      const used = quotaRow?.count ?? 0;
+      if (used >= 5) {
+        return res.status(429).json({ message: "Você atingiu o limite de 5 criações por dia. Tente novamente amanhã." });
+      }
+
+      const { tema, convenio, formato, headline, examples, cta, style } = req.body;
+      if (!tema || !convenio || !formato || !headline || !cta || !style) {
+        return res.status(400).json({ message: "Preencha todos os campos obrigatórios" });
+      }
+
+      // Create pending record
+      const [gen] = await db.insert(creativeGenerations).values({
+        tenantId: req.tenantId!,
+        userId,
+        promptUsed: "",
+        formData: req.body,
+        status: "pending",
+      }).returning();
+
+      // Generate images
+      const { generateCreativeImages } = await import("./services/imagenService");
+      let result;
+      try {
+        result = await generateCreativeImages({ tema, convenio, formato, headline, examples: examples ?? [], cta, style });
+      } catch (genErr: any) {
+        await db.update(creativeGenerations).set({ status: "error" }).where(eq(creativeGenerations.id, gen.id));
+        console.error("Image generation error:", genErr?.message);
+        return res.status(502).json({ message: "Erro ao gerar imagens. Tente novamente." });
+      }
+
+      // Update record
+      await db.update(creativeGenerations).set({
+        promptUsed: result.promptUsed,
+        imageUrls: result.imageUrls,
+        status: "generated",
+      }).where(eq(creativeGenerations.id, gen.id));
+
+      // Increment quota ONLY after success
+      if (quotaRow) {
+        await db.update(creativeGenerationQuota)
+          .set({ count: quotaRow.count + 1 })
+          .where(and(eq(creativeGenerationQuota.userId, userId), eq(creativeGenerationQuota.date, today)));
+      } else {
+        await db.insert(creativeGenerationQuota).values({ userId, date: today, count: 1 });
+      }
+
+      return res.status(201).json({
+        generationId: gen.id,
+        images: result.imageUrls,
+        quotaUsed: used + 1,
+        quotaLimit: 5,
+      });
+    } catch (err: any) {
+      console.error("POST /api/creatives/generate error:", err);
+      return res.status(500).json({ message: "Erro interno ao gerar criativo" });
+    }
+  });
+
+  app.post("/api/creatives/save-generation", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { generationId, selectedImageUrl, name, packId } = req.body;
+      if (!generationId || !selectedImageUrl || !name || !packId) {
+        return res.status(400).json({ message: "Dados incompletos para salvar" });
+      }
+
+      // Verify generation belongs to this tenant
+      const [gen] = await db.select().from(creativeGenerations)
+        .where(and(eq(creativeGenerations.id, Number(generationId)), eq(creativeGenerations.tenantId, req.tenantId!)));
+      if (!gen) return res.status(404).json({ message: "Geração não encontrada" });
+
+      // Save to main creatives gallery
+      const [saved] = await db.insert(creatives).values({
+        tenantId: req.tenantId!,
+        packId: Number(packId),
+        title: name,
+        imageUrl: selectedImageUrl,
+        tipo: "personalizado",
+        ativo: true,
+        createdBy: req.user!.id,
+      }).returning();
+
+      // Mark generation as saved
+      await db.update(creativeGenerations).set({ selectedImageUrl, status: "saved" })
+        .where(eq(creativeGenerations.id, Number(generationId)));
+
+      return res.status(201).json(saved);
+    } catch (err) {
+      console.error("POST /api/creatives/save-generation error:", err);
+      return res.status(500).json({ message: "Erro ao salvar criativo" });
     }
   });
 

@@ -1,0 +1,167 @@
+Você é um engenheiro fullstack sênior trabalhando no sistema interno da Capital Go (Express + Neon PostgreSQL + Drizzle ORM). Implemente o módulo "Criador de Criativos" seguindo EXATAMENTE as especificações abaixo. Antes de qualquer código, apresente um plano de execução e aguarde confirmação.
+
+---
+
+## CONTEXTO DO SISTEMA
+- Stack: Express.js, Neon PostgreSQL, Drizzle ORM, sessão com roles (master / coordenacao / vendedor)
+- Já existe tabela de criativos e galeria de criativos no sistema
+- Identidade visual Capital Go: roxo #6C2BD9, azul #1E88E5, rosa #E91E63
+- Todos os três roles podem criar criativos, com limite de 5 gerações por dia por usuário
+
+---
+
+## O QUE CONSTRUIR
+
+### 1. Migration / Schema (Drizzle)
+
+Adicionar à tabela de criativos (ou criar tabela separada `creative_generations`):
+- `id` uuid PK
+- `user_id` FK → users
+- `prompt_used` text (prompt completo enviado à API)
+- `form_data` jsonb (dados do formulário preenchido)
+- `images_urls` text[] (URLs das 4 imagens retornadas)
+- `selected_image_url` text (imagem escolhida pelo usuário)
+- `status` enum: 'pending' | 'generated' | 'saved' | 'error'
+- `created_at` timestamp
+
+Adicionar tabela `creative_generation_quota`:
+- `user_id` FK → users
+- `date` date
+- `count` integer default 0
+- PK composta (user_id, date)
+
+---
+
+### 2. Serviço de Prompt (server/services/creativePromptService.ts)
+
+Função `buildImagePrompt(formData)` que recebe:
+- `theme`: string (ex: "portabilidade consignado", "refinanciamento")
+- `convenio`: string (ex: "SIAPE", "INSS", "Governo Estadual - SC")
+- `formato`: enum 'square' | 'portrait' | 'story' (1:1, 9:16, 4:5)
+- `headline`: string (frase principal do criativo)
+- `examples`: array de até 3 objetos { label, value } (ex: {label: "Parcela", value: "R$ 320/mês"})
+- `cta`: string (call to action, ex: "Solicite uma simulação agora")
+- `style`: enum 'fotorrealista' | 'moderno_clean' | 'bold_typographic'
+
+E retorna um prompt em inglês, otimizado para Imagen 4, seguindo este template:
+Professional financial services advertisement for Brazilian consignado credit company.
+[style_instruction].
+Color palette: deep purple (#6C2BD9), electric blue (#1E88E5), vibrant pink (#E91E63) as accents on dark background.
+Logo area reserved at top center.
+Main headline in large bold white text: "[headline]"
+Subtitle: "[convenio] - [theme]"
+[examples_block: se houver, mostrar em cards/badges dentro do criativo]
+CTA button: "[cta]"
+Bottom area: clean space for agent signature.
+Style: [fotorrealista = cinematic lighting, real people, professional photography style | moderno_clean = flat design, geometric shapes, minimal | bold_typographic = typography-focused, strong contrast, editorial]
+High quality, marketing material, no watermarks, no text errors.
+
+---
+
+### 3. Serviço de Geração (server/services/imagenService.ts)
+
+Usar a Gemini API (Google AI Studio) com o modelo `imagen-4.0-generate-001`.
+
+Variável de ambiente necessária: `GOOGLE_AI_API_KEY`
+
+Endpoint: `POST https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:generateImages?key={API_KEY}`
+
+Body:
+```json
+{
+  "prompt": { "text": "<prompt gerado>" },
+  "imageCount": 4,
+  "aspectRatio": "<1:1 | 9:16 | 4:5 conforme formato>",
+  "safetyFilterLevel": "BLOCK_MEDIUM_AND_ABOVE"
+}
+```
+
+A resposta retorna base64. Salvar as imagens no próprio banco como data URLs (temporário) ou fazer upload para storage se já existir no sistema.
+
+---
+
+### 4. Rate Limiting (middleware)
+
+Criar middleware `checkCreativeQuota` que:
+1. Lê `creative_generation_quota` para (user_id, hoje)
+2. Se count >= 5 → retorna 429 com mensagem: "Você atingiu o limite de 5 criações por dia. Tente novamente amanhã."
+3. Se count < 5 → deixa passar e incrementa o counter após geração bem-sucedida
+4. Se não existe registro → cria com count = 1
+
+---
+
+### 5. Rotas (server/routes/creatives.ts)
+
+`POST /api/creatives/generate`
+- Auth: todos os roles
+- Middleware: `checkCreativeQuota`
+- Body: formData (theme, convenio, formato, headline, examples, cta, style)
+- Chama `buildImagePrompt` → `imagenService.generate` → salva na tabela
+- Retorna: { generationId, images: [url1, url2, url3, url4], quotaUsed: N, quotaLimit: 5 }
+
+`POST /api/creatives/save`
+- Auth: todos os roles
+- Body: { generationId, selectedImageUrl, name, pack }
+- Salva o criativo selecionado na tabela principal de criativos
+- Marca a geração como status = 'saved'
+
+`GET /api/creatives/quota`
+- Retorna: { used: N, limit: 5, resetsAt: "amanhã às 00:00" }
+
+---
+
+### 6. Frontend (client/src/pages/CriadorCriativos.tsx ou .jsx)
+
+Página com duas colunas:
+
+**Coluna esquerda — Formulário:**
+- Select: Formato (Post WhatsApp 1:1 / Flyer Vertical 9:16 / Story 1:1920 / Banner 4:5)
+- Input text: Convênio
+- Input text: Tema/Campanha
+- Input text: Headline principal
+- Seção "Exemplos" com botão "+ Adicionar exemplo" (máximo 3), cada um com dois campos: Label e Valor
+- Input text: CTA (call to action)
+- Select: Estilo visual (Fotorrealista / Moderno Clean / Bold Typographic)
+- Indicador de cota: "3 de 5 gerações usadas hoje"
+- Botão "Gerar criativo" (disabled se cota = 5)
+
+**Coluna direita — Resultado:**
+- Loading skeleton enquanto gera (estimativa: 10-20s)
+- Grid 2x2 com as 4 imagens geradas
+- Cada imagem clicável para selecionar (borda destacada na selecionada)
+- Botão "Salvar na Galeria" (habilitado só com imagem selecionada)
+- Campo "Nome do criativo" e "Pack" antes de salvar
+
+**Estilo:** seguir o design system já existente no sistema. Cores Capital Go. Sem bibliotecas externas além das já usadas.
+
+---
+
+### 7. Sidebar / Navegação
+
+Adicionar item "Criador de Criativos" no menu lateral, visível para todos os roles, com ícone de pincel ou estrela, abaixo de "Material de Apoio" (ou onde fizer mais sentido na estrutura atual).
+
+---
+
+## RESTRIÇÕES IMPORTANTES
+
+- NÃO alterar tabelas existentes de criativos sem verificar o schema atual primeiro
+- NÃO expor a GOOGLE_AI_API_KEY no frontend — toda chamada à API passa pelo backend
+- Tratar erros da API Imagen com mensagem clara ao usuário (ex: "Erro ao gerar imagens. Tente novamente.")
+- A cota NÃO deve ser decrementada se a geração falhar
+- Todas as mensagens de erro e UI em português brasileiro
+
+---
+
+## ORDEM DE EXECUÇÃO
+
+1. Ler o schema atual do banco (tabelas de criativos e usuários)
+2. Apresentar o plano completo com arquivos a criar/modificar
+3. Aguardar confirmação antes de executar
+4. Migration → Serviços → Rotas → Frontend → Sidebar
+
+---
+
+## VARIÁVEL DE AMBIENTE A ADICIONAR
+GOOGLE_AI_API_KEY=<sua chave do Google AI Studio>
+
+Adicionar no .env e documentar no README.

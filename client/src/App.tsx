@@ -61,6 +61,7 @@ import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
+import CriadorCriativosPage from "@/pages/criador-criativos";
 import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
@@ -512,6 +513,9 @@ function Router() {
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}
+              </Route>
+              <Route path="/criador-criativos">
+                {() => <ProtectedRoute component={CriadorCriativosPage} />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

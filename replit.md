@@ -30,6 +30,7 @@ The frontend is built with React 18 and TypeScript, using Vite for development, 
 *   **Dashboard do Vendedor**: Individual seller dashboard displaying ranking badges for general and credit card goals.
 *   **Relatórios (Reports Module)**: Provides "Histórico de Produção" (production history) and "Dia a Dia" (daily activity) reports for commercial management, with month/date range selectors and team filters.
 *   **WhatsApp Integration**: "Meu WhatsApp" shortcut button in header opens external platform URL with `?crm_user_id={id}`. Env var: `VITE_WHATSAPP_PLATFORM_URL`.
+*   **Criador de Criativos IA**: AI-powered creative image generator at `/criador-criativos`. Two-column layout: form (format, convenio, tema, headline, examples, CTA, visual style) and result grid (4 variants, selectable, downloadable, saveable to gallery). Uses DALL-E 3 via `OPENAI_API_KEY`. Daily quota: 5 generations per user. Tables: `creative_generations`, `creative_generation_quota`. Routes: `GET /api/creatives/quota`, `POST /api/creatives/generate`, `POST /api/creatives/save-generation`. Services: `server/services/creativePromptService.ts`, `server/services/imagenService.ts`.
 
 ### System Design Choices
 The architecture prioritizes client-side calculations for performance, a modular design for extensibility, and robust authentication/authorization with granular control. AI integration is central to advanced features. A granular permission system allows fine-grained control. Multi-tenant branding provides extensive white-label customization with an audit system.
