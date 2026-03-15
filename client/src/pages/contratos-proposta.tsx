@@ -78,10 +78,19 @@ export default function ContratosPropostaPage() {
     },
   });
 
+  function parseBrNumber(value: string | undefined) {
+    if (!value) return undefined;
+    const clean = String(value).replace(/\./g, "").replace(",", ".");
+    const n = parseFloat(clean);
+    return isNaN(n) ? undefined : n;
+  }
+
   const createMutation = useMutation({
     mutationFn: (data: FormValues) =>
       apiRequest("POST", "/api/contracts/proposals", {
         ...data,
+        contractValue: parseBrNumber(data.contractValue),
+        installmentValue: parseBrNumber(data.installmentValue),
         tableId: data.tableId || undefined,
         term: data.term || undefined,
       }),
