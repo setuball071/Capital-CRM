@@ -24862,6 +24862,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   app.get("/api/creatives/quota", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.user!.isMaster) {
+        return res.json({ used: 0, limit: null, resetsAt: null, unlimited: true });
+      }
       const today = todayBR();
       const row = await getQuotaRecord(req.user!.id, today);
       const used = row?.count ?? 0;
@@ -24880,10 +24883,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const today = todayBR();
       const userId = req.user!.id;
 
-      // Check quota
-      const quotaRow = await getQuotaRecord(userId, today);
+      // Check quota (master users have no limit)
+      const isMaster = req.user!.isMaster;
+      const quotaRow = isMaster ? null : await getQuotaRecord(userId, today);
       const used = quotaRow?.count ?? 0;
-      if (used >= 5) {
+      if (!isMaster && used >= 5) {
         return res.status(429).json({ message: "Você atingiu o limite de 5 criações por dia. Tente novamente amanhã." });
       }
 
@@ -24922,11 +24926,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         status: "generated",
       }).where(eq(creativeGenerations.id, gen.id));
 
-      // Increment quota ONLY after success (upsert to avoid race conditions)
-      await db.execute(
-        sql`INSERT INTO creative_generation_quota (user_id, date, count) VALUES (${userId}, ${today}, 1)
-            ON CONFLICT (user_id, date) DO UPDATE SET count = creative_generation_quota.count + 1`
-      );
+      // Increment quota ONLY after success, and only for non-master users
+      if (!isMaster) {
+        await db.execute(
+          sql`INSERT INTO creative_generation_quota (user_id, date, count) VALUES (${userId}, ${today}, 1)
+              ON CONFLICT (user_id, date) DO UPDATE SET count = creative_generation_quota.count + 1`
+        );
+      }
 
       return res.status(201).json({
         generationId: gen.id,

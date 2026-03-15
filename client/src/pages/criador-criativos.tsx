@@ -144,7 +144,7 @@ export default function CriadorCriativosPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const { data: quota, refetch: refetchQuota } = useQuery<{ used: number; limit: number; resetsAt: string }>({
+  const { data: quota, refetch: refetchQuota } = useQuery<{ used: number; limit: number | null; resetsAt: string | null; unlimited?: boolean }>({
     queryKey: ["/api/creatives/quota"],
   });
 
@@ -177,9 +177,10 @@ export default function CriadorCriativosPage() {
     },
   });
 
+  const isUnlimited = quota?.unlimited === true;
   const quotaUsed = quota?.used ?? 0;
   const quotaLimit = quota?.limit ?? 5;
-  const atLimit = quotaUsed >= quotaLimit;
+  const atLimit = !isUnlimited && quotaUsed >= quotaLimit;
 
   function downloadImage(url: string, idx: number) {
     const a = document.createElement("a");
@@ -272,22 +273,26 @@ export default function CriadorCriativosPage() {
                 {/* Quota indicator */}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Gerações hoje:</span>
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      {Array.from({ length: quotaLimit }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            "w-3 h-3 rounded-full",
-                            i < quotaUsed ? "bg-purple-500" : "bg-muted"
-                          )}
-                        />
-                      ))}
+                  {isUnlimited ? (
+                    <span className="font-medium text-purple-500">Ilimitado</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {Array.from({ length: quotaLimit }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={cn(
+                              "w-3 h-3 rounded-full",
+                              i < quotaUsed ? "bg-purple-500" : "bg-muted"
+                            )}
+                          />
+                        ))}
+                      </div>
+                      <span className={cn("font-medium", atLimit ? "text-destructive" : "text-foreground")}>
+                        {quotaUsed} / {quotaLimit}
+                      </span>
                     </div>
-                    <span className={cn("font-medium", atLimit ? "text-destructive" : "text-foreground")}>
-                      {quotaUsed} / {quotaLimit}
-                    </span>
-                  </div>
+                  )}
                 </div>
 
                 {atLimit && (
