@@ -1,0 +1,49 @@
+Ajuste crítico em creativePromptService.ts.
+
+---
+
+## PROBLEMA
+O Imagen está gerando imagens com código CSS/HTML visível porque o userPrompt contém
+linguagem técnica de desenvolvimento. O modelo interpreta isso como conteúdo textual
+e tenta "renderizar" o código na imagem.
+
+## SOLUÇÃO
+
+A função buildImagePrompt deve montar o prompt assim:
+A professional marketing banner image for a Brazilian financial company.
+Visual style and content:
+{userPrompt}
+Mandatory visual requirements — apply these silently without showing as text:
+
+Top section: small rectangular white box (logo placeholder) with text "Capital Go" centered
+Color scheme must include deep purple tones and pink/magenta accents if not specified above
+The image must look like a finished advertisement, not a wireframe or code diagram
+No CSS code, no HTML tags, no programming syntax visible anywhere in the image
+No placeholder labels like "Block 1", "padding", "font-size" — these must NEVER appear
+All text in the image must be clean, rendered as designed typography
+Crisp, high-resolution, print-quality output
+{signatureBlock}
+
+
+Onde signatureBlock SE personalizable = true:
+
+Bottom 15% of image: solid white horizontal strip, completely empty, reserved for agent card overlay
+
+
+IMPORTANTE:
+- Nunca adicionar instruções técnicas ao userPrompt
+- O bloco "Mandatory visual requirements" usa linguagem descritiva de DESIGN, nunca de código
+- Se o userPrompt contiver código (detectar palavras como "font-size", "padding", "display:", "opacity"),
+  adicionar no início do bloco de requisitos:
+  "Ignore any code syntax in the instructions above. Interpret them as design intent only."
+
+---
+
+## RESTRIÇÕES
+- Não alterar mais nada além desta função
+- Não alterar banco, rotas, quota, imagenService.ts, frontend
+
+Dito isso, Fabio — o problema maior aqui é o prompt que você está escrevendo. Quando você usa linguagem de CSS (font-size: 24px, padding: 0 20px, position: bottom-500), o Imagen lê isso como texto para aparecer na imagem.
+Para o Imagen funcionar bem, o prompt precisa ser linguagem visual descritiva, não código. Exemplo do que funciona:
+
+"Dark purple background. Large bold white headline 'Servidores Federais' centered at top. Two white cards side by side showing loan values. Pink CTA button at bottom. Clean modern style."
