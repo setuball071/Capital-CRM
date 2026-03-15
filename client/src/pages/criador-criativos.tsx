@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -7,51 +7,40 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Sparkles, ImageIcon, Download, Save } from "lucide-react";
+import { Sparkles, ImageIcon, Download, Save } from "lucide-react";
 import type { CreativePack } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
-const exampleSchema = z.object({
-  label: z.string().min(1, "Informe o rótulo"),
-  value: z.string().min(1, "Informe o valor"),
-});
-
 const formSchema = z.object({
-  formato: z.enum(["square", "portrait", "story", "banner"], { required_error: "Selecione o formato" }),
-  convenio: z.string().min(1, "Informe o convênio"),
-  tema: z.string().min(1, "Informe o tema"),
-  headline: z.string().min(1, "Informe a headline"),
-  examples: z.array(exampleSchema).max(3),
-  cta: z.string().min(1, "Informe o CTA"),
-  style: z.enum(["fotorrealista", "moderno_clean", "bold_typographic"], { required_error: "Selecione o estilo" }),
-  customInstructions: z.string().optional(),
+  formato: z.enum(["9:16", "1:1", "4:5", "16:9"], { required_error: "Selecione o formato" }),
+  personalizable: z.boolean().default(true),
+  prompt: z.string().min(10, "Descreva o criativo com pelo menos 10 caracteres"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-const FORMAT_LABELS: Record<string, string> = {
-  square: "Post WhatsApp (1:1)",
-  portrait: "Flyer Vertical (4:5)",
-  story: "Story (9:16)",
-  banner: "Banner (4:5)",
-};
+const FORMAT_OPTIONS = [
+  { value: "9:16", label: "Story / Status WhatsApp (9:16)" },
+  { value: "1:1", label: "Feed Instagram / Facebook (1:1)" },
+  { value: "4:5", label: "Feed Retrato (4:5)" },
+  { value: "16:9", label: "Banner Horizontal (16:9)" },
+];
 
-const STYLE_LABELS: Record<string, string> = {
-  fotorrealista: "Fotorrealista",
-  moderno_clean: "Moderno Clean",
-  bold_typographic: "Bold Typographic",
-};
+const PROMPT_PLACEHOLDER = `Descreva o criativo que você quer gerar. Inclua: cores, estilo, tema, textos que devem aparecer, elementos visuais, público-alvo...
+
+Exemplo: Arte para SIAPE sobre redução de taxa. Fundo escuro com roxo #6C2BD9. Headline grande: 'Reduza suas parcelas'. Botão rosa com 'Chame Agora'. Estilo moderno, sem pessoas.`;
 
 // ─── Save Dialog ──────────────────────────────────────────────────────────────
 
@@ -157,18 +146,11 @@ export default function CriadorCriativosPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      formato: "square",
-      convenio: "",
-      tema: "",
-      headline: "",
-      examples: [],
-      cta: "",
-      style: "moderno_clean",
-      customInstructions: "",
+      formato: "1:1",
+      personalizable: true,
+      prompt: "",
     },
   });
-
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "examples" });
 
   const generateMutation = useMutation({
     mutationFn: async (data: FormValues) => {
@@ -218,7 +200,7 @@ export default function CriadorCriativosPage() {
               <form
                 data-testid="form-criador"
                 onSubmit={form.handleSubmit((data) => generateMutation.mutate(data))}
-                className="space-y-4"
+                className="space-y-5"
               >
                 {/* Formato */}
                 <FormField control={form.control} name="formato" render={({ field }) => (
@@ -231,8 +213,8 @@ export default function CriadorCriativosPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {Object.entries(FORMAT_LABELS).map(([v, l]) => (
-                          <SelectItem key={v} value={v}>{l}</SelectItem>
+                        {FORMAT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -240,129 +222,36 @@ export default function CriadorCriativosPage() {
                   </FormItem>
                 )} />
 
-                {/* Convênio */}
-                <FormField control={form.control} name="convenio" render={({ field }) => (
+                {/* Personalizável */}
+                <FormField control={form.control} name="personalizable" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Convênio</FormLabel>
-                    <FormControl>
-                      <Input data-testid="input-convenio" placeholder="Ex: INSS, SIAPE, Governo Estadual" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                {/* Tema */}
-                <FormField control={form.control} name="tema" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tema / Campanha</FormLabel>
-                    <FormControl>
-                      <Input data-testid="input-tema" placeholder="Ex: Portabilidade Consignado, Refinanciamento" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                {/* Headline */}
-                <FormField control={form.control} name="headline" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Headline principal</FormLabel>
-                    <FormControl>
-                      <Input data-testid="input-headline" placeholder="Ex: Transfira seu empréstimo e pague menos" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                {/* Exemplos */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Exemplos de valores <span className="text-muted-foreground text-xs">(máx. 3)</span></Label>
-                    {fields.length < 3 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        data-testid="button-add-example"
-                        onClick={() => append({ label: "", value: "" })}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Adicionar
-                      </Button>
-                    )}
-                  </div>
-                  {fields.map((field, idx) => (
-                    <div key={field.id} className="flex gap-2 items-start">
-                      <FormField control={form.control} name={`examples.${idx}.label`} render={({ field: f }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <Input data-testid={`input-example-label-${idx}`} placeholder="Rótulo (ex: Parcela)" {...f} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name={`examples.${idx}.value`} render={({ field: f }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <Input data-testid={`input-example-value-${idx}`} placeholder="Valor (ex: R$ 320/mês)" {...f} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        data-testid={`button-remove-example-${idx}`}
-                        onClick={() => remove(idx)}
-                        className="mt-0.5 shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* CTA */}
-                <FormField control={form.control} name="cta" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Call to Action (CTA)</FormLabel>
-                    <FormControl>
-                      <Input data-testid="input-cta" placeholder="Ex: Solicite uma simulação agora" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                {/* Estilo */}
-                <FormField control={form.control} name="style" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estilo visual</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <div className="flex items-start gap-3">
                       <FormControl>
-                        <SelectTrigger data-testid="select-style">
-                          <SelectValue placeholder="Selecione o estilo" />
-                        </SelectTrigger>
+                        <Checkbox
+                          data-testid="checkbox-personalizable"
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="mt-0.5"
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {Object.entries(STYLE_LABELS).map(([v, l]) => (
-                          <SelectItem key={v} value={v}>{l}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <FormLabel className="cursor-pointer font-normal leading-snug">
+                        Arte personalizável (adicionar espaço para assinatura do corretor)
+                      </FormLabel>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )} />
 
-                {/* Instruções adicionais */}
-                <FormField control={form.control} name="customInstructions" render={({ field }) => (
+                {/* Prompt */}
+                <FormField control={form.control} name="prompt" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Instruções adicionais <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                    <FormLabel>Descreva o criativo</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
-                        rows={3}
-                        placeholder="Ex: use uma foto de pessoa sorrindo, fundo com paisagem urbana, tons mais escuros..."
-                        data-testid="textarea-custom-instructions"
+                        rows={6}
+                        data-testid="textarea-prompt"
+                        placeholder={PROMPT_PLACEHOLDER}
                       />
                     </FormControl>
                     <FormMessage />
@@ -422,7 +311,6 @@ export default function CriadorCriativosPage() {
           </CardHeader>
           <CardContent>
             {generateMutation.isPending ? (
-              /* Loading skeletons */
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground text-center mb-4">
                   Gerando 4 variações... Isso pode levar alguns segundos.
@@ -514,7 +402,6 @@ export default function CriadorCriativosPage() {
                 )}
               </div>
             ) : (
-              /* Empty state */
               <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
                   <ImageIcon className="w-7 h-7 text-muted-foreground" />
@@ -531,7 +418,6 @@ export default function CriadorCriativosPage() {
         </Card>
       </div>
 
-      {/* Save dialog */}
       <SaveDialog
         open={saveDialogOpen}
         onClose={() => setSaveDialogOpen(false)}

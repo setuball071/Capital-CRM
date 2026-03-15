@@ -24887,8 +24887,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(429).json({ message: "Você atingiu o limite de 5 criações por dia. Tente novamente amanhã." });
       }
 
-      const { tema, convenio, formato, headline, examples, cta, style } = req.body;
-      if (!tema || !convenio || !formato || !headline || !cta || !style) {
+      const { prompt, formato, personalizable } = req.body;
+      if (!prompt || !formato) {
         return res.status(400).json({ message: "Preencha todos os campos obrigatórios" });
       }
 
@@ -24902,13 +24902,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }).returning();
 
       // Generate images
-      const { buildImagePrompt, getAspectRatioForFormat } = await import("./services/creativePromptService");
+      const { buildImagePrompt } = await import("./services/creativePromptService");
       const { generateImages } = await import("./services/imagenService");
-      const prompt = buildImagePrompt({ tema, convenio, formato, headline, examples: examples ?? [], cta, style });
-      const aspectRatio = getAspectRatioForFormat(formato);
+      const aspectRatio = formato; // formato value IS the aspectRatio (e.g. "1:1", "9:16")
+      const builtPrompt = buildImagePrompt(prompt, aspectRatio, !!personalizable);
       let imageUrls: string[];
       try {
-        imageUrls = await generateImages(prompt, aspectRatio);
+        imageUrls = await generateImages(builtPrompt, aspectRatio);
       } catch (genErr: any) {
         await db.update(creativeGenerations).set({ status: "error" }).where(eq(creativeGenerations.id, gen.id));
         console.error("Image generation error:", genErr?.message);
@@ -24917,7 +24917,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       // Update record
       await db.update(creativeGenerations).set({
-        promptUsed: prompt,
+        promptUsed: builtPrompt,
         imageUrls,
         status: "generated",
       }).where(eq(creativeGenerations.id, gen.id));

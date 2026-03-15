@@ -1,0 +1,54 @@
+Refatorar completamente o formulário do Criador de Criativos. Verificar nomes reais dos componentes antes de editar.
+
+---
+
+## NOVA ESTRUTURA DO FORMULÁRIO
+
+Remover todos os campos atuais exceto Formato. Substituir por:
+
+### Campo 1 — Formato
+Select com as opções:
+- "Story / Status WhatsApp (9:16)" → aspectRatio: "9:16"
+- "Feed Instagram / Facebook (1:1)" → aspectRatio: "1:1"  
+- "Feed Retrato (4:5)" → aspectRatio: "4:5"
+- "Banner Horizontal (16:9)" → aspectRatio: "16:9"
+
+### Campo 2 — Personalizável
+Toggle ou checkbox com label: "Arte personalizável (adicionar espaço para assinatura do corretor)"
+Default: true
+
+### Campo 3 — Prompt
+Label: "Descreva o criativo"
+Textarea grande (mínimo 6 rows), não opcional, com placeholder:
+"Descreva o criativo que você quer gerar. Inclua: cores, estilo, tema, textos que devem aparecer, elementos visuais, público-alvo...
+
+Exemplo: Arte para SIAPE sobre redução de taxa. Fundo escuro com roxo #6C2BD9. Headline grande: 'Reduza suas parcelas'. Botão rosa com 'Chame Agora'. Estilo moderno, sem pessoas."
+
+Remover completamente: campo Convênio, Tema/Campanha, Headline principal, Exemplos de valores, Call to Action, Estilo visual, Instruções adicionais.
+
+---
+
+## LÓGICA DO PROMPT ENVIADO À API (creativePromptService.ts)
+
+A função buildImagePrompt agora recebe apenas:
+- userPrompt: string (texto livre do usuário)
+- aspectRatio: string
+- personalizable: boolean
+
+E monta o prompt final assim:
+Professional marketing creative for Brazilian financial services company Capital Go.
+Brand colors: deep purple #6C2BD9 (dominant), electric blue #1E88E5 (accent), hot pink #E91E63 (CTA/highlights). Dark background.
+Reserve top area for company logo (clean rectangular space, light background, ~200x60px).
+[SE personalizable = true, adicionar:]
+Reserve bottom white card area (full width, ~110px tall, white background, clearly separated) for agent signature: circular profile photo on left, name in bold, role text, WhatsApp number. Leave this area completely empty/white.
+User instructions:
+{userPrompt}
+Technical specs: high quality, marketing material, no watermarks, crisp text rendering.
+
+---
+
+## RESTRIÇÕES
+- Não alterar banco, rotas, quota, imagenService.ts
+- Manter o campo aspectRatio mapeado corretamente para a API
+- Verificar nomes reais dos arquivos antes de editar
+- Toda UI em português brasileiro
