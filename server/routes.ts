@@ -24906,10 +24906,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }).returning();
 
       // Generate images
-      const { buildImagePrompt } = await import("./services/creativePromptService");
+      const { buildImagePrompt, sanitizePrompt } = await import("./services/creativePromptService");
       const { generateImages } = await import("./services/imagenService");
       const aspectRatio = formato; // formato value IS the aspectRatio (e.g. "1:1", "9:16")
-      const builtPrompt = buildImagePrompt(prompt, aspectRatio, !!personalizable);
+      const cleanPrompt = await sanitizePrompt(prompt);
+      const builtPrompt = buildImagePrompt(cleanPrompt, aspectRatio, !!personalizable);
       let imageUrls: string[];
       try {
         imageUrls = await generateImages(builtPrompt, aspectRatio);

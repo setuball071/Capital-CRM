@@ -1,0 +1,67 @@
+Ajuste em creativePromptService.ts — sanitização automática do userPrompt.
+
+---
+
+## PROBLEMA
+Usuários estão colando prompts com sintaxe técnica (CSS, HTML, código) e o Imagen
+renderiza esse código como texto visível na imagem.
+
+## SOLUÇÃO — Função de sanitização antes de montar o prompt
+
+Adicionar função sanitizePrompt(userPrompt: string): string que:
+
+1. Remove padrões de CSS:
+   - Qualquer coisa com "font-size:", "font-weight:", "font-family:", "padding:", 
+     "margin:", "display:", "position:", "opacity:", "color:", "background:",
+     "border:", "radius:", "transform:", "transition:", "flex", "grid",
+     "top:", "left:", "right:", "bottom:", "width:", "height:", "z-index:"
+   - Remover a linha inteira que contém qualquer desses termos
+
+2. Remove padrões de código:
+   - Linhas que contém: "{", "}", "//", "/*", "*/", "=>", "px;", "em;", "%;"
+   - Linhas que são só símbolos: "!! -", "==", "->", "<<", ">>"
+
+3. Remove hex codes soltos (ex: "#2d0041", "#e6000e") que não estão dentro de
+   uma frase descritiva. Critério: se a linha inteira for só um hex ou hex + número,
+   remover. Se estiver numa frase como "use purple color #6C2BD9", manter.
+
+4. Após limpeza, passar o texto restante por uma chamada ao Gemini Flash para
+   reescrever como prompt visual descritivo:
+
+   Chamar: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GOOGLE_AI_API_KEY}
+
+   System prompt:
+   "You are a creative director converting user descriptions into clean visual prompts
+   for an AI image generator. Rewrite the input as a clear, descriptive visual prompt
+   in English. Focus on: colors, layout, typography style, mood, visual elements.
+   Remove any code syntax. Keep brand names and Portuguese text values (like headlines)
+   as-is but describe them visually. Maximum 150 words. Return only the rewritten prompt,
+   no explanations."
+
+   User message: o texto sanitizado
+
+5. Usar o resultado do Gemini como {userPrompt} no buildImagePrompt
+
+---
+
+## FLUXO FINAL
+
+userPrompt digitado pelo usuário
+→ sanitizePrompt() remove código
+→ Gemini Flash reescreve como prompt visual limpo  
+→ buildImagePrompt monta o prompt final com requisitos da marca
+→ Imagen gera a imagem
+
+---
+
+## TRATAMENTO DE ERRO
+- Se a chamada ao Gemini falhar, usar o texto sanitizado diretamente (sem reescrita)
+- Nunca bloquear a geração por falha na sanitização
+- Log de warning no console se sanitização falhar
+
+---
+
+## RESTRIÇÕES
+- Não instalar pacotes novos (usar fetch nativo)
+- Não alterar banco, rotas, quota, imagenService.ts, frontend
+- A chave já está em process.env.GOOGLE_AI_API_KEY
