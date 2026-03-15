@@ -68,13 +68,15 @@ function SaveDialog({ open, onClose, generationId, selectedImageUrl, packs, onSa
   const [packId, setPackId] = useState<string>("");
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/creatives/save-generation", {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/creatives/save-generation", {
         generationId,
         selectedImageUrl,
         name,
         packId: Number(packId),
-      }),
+      });
+      return await res.json();
+    },
     onSuccess: () => {
       toast({ title: "Criativo salvo na galeria!" });
       onSaved();
@@ -166,7 +168,10 @@ export default function CriadorCriativosPage() {
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "examples" });
 
   const generateMutation = useMutation({
-    mutationFn: (data: FormValues) => apiRequest("POST", "/api/creatives/generate", data),
+    mutationFn: async (data: FormValues) => {
+      const res = await apiRequest("POST", "/api/creatives/generate", data);
+      return await res.json();
+    },
     onSuccess: (data: any) => {
       setGenerationResult(data);
       setSelectedImage(null);
