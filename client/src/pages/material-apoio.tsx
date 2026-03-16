@@ -181,13 +181,15 @@ export default function MaterialApoioPage() {
         <TabelasSimulator />
       ) : activeCategory === "criativos" ? (
         <div className="space-y-4">
-          <div className="flex justify-end">
-            <Link to="/criador-criativos">
-              <Button variant="outline" size="sm" data-testid="button-criar-criativo">
-                Criar novo criativo
-              </Button>
-            </Link>
-          </div>
+          {user?.isMaster && (
+            <div className="flex justify-end">
+              <Link to="/criador-criativos">
+                <Button variant="outline" size="sm" data-testid="button-criar-criativo">
+                  Criar novo criativo
+                </Button>
+              </Link>
+            </div>
+          )}
           <CriativosGallery />
         </div>
       ) : isLoading ? (

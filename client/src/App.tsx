@@ -91,6 +91,23 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function MasterOnlyRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return <Redirect to="/login" />;
+  if (!user.isMaster) return <Redirect to="/" />;
+
+  return <Component />;
+}
+
 function HomePage() {
   const { user, isLoading, hasModuleAccess } = useAuth();
   
@@ -515,7 +532,7 @@ function Router() {
                 {() => <ProtectedRoute component={MaterialApoioPage} />}
               </Route>
               <Route path="/criador-criativos">
-                {() => <ProtectedRoute component={CriadorCriativosPage} />}
+                {() => <MasterOnlyRoute component={CriadorCriativosPage} />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

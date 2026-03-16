@@ -196,7 +196,7 @@ export function AppSidebar() {
         { title: "Profiler", url: "/desenvolvimento/profiler", icon: Brain, module: "modulo_academia", subItem: "profiler" },
         { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
         { title: "Material de Apoio", url: "/material-apoio", icon: FileText },
-        { title: "Criador de Criativos IA", url: "/criador-criativos", icon: Sparkles },
+        { title: "Criador de Criativos IA", url: "/criador-criativos", icon: Sparkles, masterOnly: true },
       ],
     },
     {
