@@ -1,0 +1,114 @@
+Implementar aba de configuração de marca no Criador de Criativos, visível apenas para role master. Verificar nomes reais de arquivos e rotas antes de editar.
+
+---
+
+## PARTE 1 — Banco de dados
+
+Criar tabela creative_brand_config:
+- id: uuid PK default gen_random_uuid()
+- system_prompt: text (diretrizes de marca em texto livre)
+- logo_url: text nullable (URL da logo após upload)
+- logo_base64: text nullable (base64 da imagem para envio à API)
+- updated_at: timestamp default now()
+- updated_by: uuid FK → users
+
+Regra: sempre terá apenas 1 linha (upsert por id fixo ou update sem where com limit 1).
+
+Criar migration Drizzle para esta tabela.
+
+---
+
+## PARTE 2 — Rotas backend
+
+GET /api/creatives/brand-config
+- Auth: todos os roles (leitura do system_prompt para usar na geração)
+- Retorna: { systemPrompt, logoUrl, hasLogo }
+
+POST /api/creatives/brand-config
+- Auth: apenas master
+- Body: multipart/form-data com campos:
+  - systemPrompt: string
+  - logo: file (imagem PNG/JPG, máx 2MB) — opcional
+- Se logo enviada: converter para base64, salvar logoBase64 e logoUrl (data URL)
+- Fazer upsert na tabela
+- Retorna: { success: true }
+
+---
+
+## PARTE 3 — Frontend: aba "Configuração de Marca" (só master)
+
+No componente CriadorCriativos, adicionar sistema de abas no topo:
+- Aba "Criar Criativo" (padrão, todos os roles)
+- Aba "Configuração de Marca" (visível e acessível apenas para master)
+
+Conteúdo da aba Configuração de Marca:
+[ Upload da Logo ]
+
+Área de drop ou botão "Enviar logo"
+Aceita PNG, JPG, SVG — máx 2MB
+Preview da logo atual se existir
+Botão "Remover logo" se existir
+
+[ System Prompt da Marca ]
+Label: "Diretrizes de geração de criativos"
+Textarea grande (10 rows)
+Placeholder:
+"Defina aqui as diretrizes que a IA deve sempre seguir ao gerar criativos.
+Exemplo:
+
+Marca: Capital Go — empresa de crédito consignado
+Paleta de cores: roxo escuro #6C2BD9 (dominante), azul elétrico #1E88E5 (destaque), rosa #E91E63 (CTAs)
+Estilo: moderno, profissional, sem poluição visual
+Sempre reservar espaço no topo para a logo
+Nunca usar fotos de pessoas não autorizadas
+Tom: confiança, agilidade, resultado"
+
+Botão "Salvar configurações" (roxo, largura total)
+Mensagem de confirmação após salvar.
+
+---
+
+## PARTE 4 — Integrar config na geração (creativePromptService.ts)
+
+A função buildImagePrompt agora recebe também:
+- brandConfig: { systemPrompt: string, logoBase64?: string }
+
+Montar o prompt final assim:
+BRAND DIRECTIVES (always follow these):
+{brandConfig.systemPrompt}
+
+USER REQUEST:
+{userPromptSanitizado}
+
+Technical requirements:
+
+Format: {aspectRatio}
+High quality, sharp rendering, no watermarks
+No CSS code, no HTML, no programming syntax visible in the image
+Render as a finished advertisement
+{signatureBlock}
+
+
+Se brandConfig.logoBase64 existir, enviar a logo como imagem de referência junto com o prompt na chamada à API do Imagen (campo instances[0].referenceImages se suportado, ou mencionar no prompt: "The company logo is provided as reference — place it in the top area").
+
+Se a API não suportar imagem de referência no Imagen, apenas mencionar no prompt:
+"Place the Capital Go logo text/brand mark in the top-left or top-center area."
+
+---
+
+## PARTE 5 — Carregar brand config na rota de geração
+
+Em POST /api/creatives/generate:
+- Antes de chamar buildImagePrompt, fazer SELECT na tabela creative_brand_config
+- Passar o resultado para buildImagePrompt
+- Se tabela vazia, usar brandConfig = { systemPrompt: "" }
+
+---
+
+## RESTRIÇÕES
+- Aba "Configuração de Marca" invisível para roles vendedor e coordenacao
+- Não alterar lógica de quota, imagenService.ts além do necessário
+- Upload de logo processado no backend, nunca exposto direto no frontend
+- Toda UI em português brasileiro
+- Verificar nomes reais de componentes e rotas antes de editar
+- Apresentar plano completo e aguardar confirmação antes de executar
