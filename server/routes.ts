@@ -98,6 +98,7 @@ import {
   insertCreativeSchema,
   creativeGenerations,
   creativeGenerationQuota,
+  creativeBrandConfig,
   companies,
   insertCompanySchema,
 } from "@shared/schema";
@@ -24909,8 +24910,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const { buildImagePrompt, sanitizePrompt } = await import("./services/creativePromptService");
       const { generateImages } = await import("./services/imagenService");
       const aspectRatio = formato; // formato value IS the aspectRatio (e.g. "1:1", "9:16")
+
+      // Load brand config (global, single row)
+      const brandRows = await db.select().from(creativeBrandConfig).limit(1);
+      const brandCfg = brandRows[0]
+        ? { systemPrompt: brandRows[0].systemPrompt || "", logoBase64: brandRows[0].logoBase64 || undefined }
+        : { systemPrompt: "" };
+
       const cleanPrompt = await sanitizePrompt(prompt);
-      const builtPrompt = buildImagePrompt(cleanPrompt, aspectRatio, !!personalizable);
+      const builtPrompt = buildImagePrompt(cleanPrompt, aspectRatio, !!personalizable, brandCfg);
       let imageUrls: string[];
       try {
         imageUrls = await generateImages(builtPrompt, aspectRatio);
@@ -24946,6 +24954,91 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       return res.status(500).json({ message: "Erro interno ao gerar criativo" });
     }
   });
+
+  // ─── Brand Config ─────────────────────────────────────────────────────────
+
+  app.get("/api/creatives/brand-config", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const [row] = await db.select().from(creativeBrandConfig).limit(1);
+      if (!row) {
+        return res.json({ systemPrompt: "", logoUrl: null, hasLogo: false });
+      }
+      return res.json({
+        systemPrompt: row.systemPrompt || "",
+        logoUrl: row.logoUrl || null,
+        hasLogo: !!row.logoUrl,
+      });
+    } catch (err) {
+      console.error("GET /api/creatives/brand-config error:", err);
+      return res.status(500).json({ message: "Erro ao carregar configuração de marca" });
+    }
+  });
+
+  app.post("/api/creatives/brand-config", requireAuth, upload.single("logo"), async (req: Request, res: Response) => {
+    try {
+      if (!req.user!.isMaster) {
+        return res.status(403).json({ message: "Acesso negado: apenas administradores podem configurar a marca" });
+      }
+
+      const { systemPrompt = "" } = req.body;
+
+      let logoUrl: string | null = null;
+      let logoBase64: string | null = null;
+
+      if (req.file) {
+        const mime = req.file.mimetype || "image/png";
+        const b64 = req.file.buffer.toString("base64");
+        logoBase64 = b64;
+        logoUrl = `data:${mime};base64,${b64}`;
+      }
+
+      // Check if a row exists
+      const [existing] = await db.select({ id: creativeBrandConfig.id }).from(creativeBrandConfig).limit(1);
+
+      if (existing) {
+        const updateData: Record<string, any> = {
+          systemPrompt,
+          updatedAt: new Date(),
+          updatedBy: req.user!.id,
+        };
+        if (logoUrl !== null) {
+          updateData.logoUrl = logoUrl;
+          updateData.logoBase64 = logoBase64;
+        }
+        await db.update(creativeBrandConfig).set(updateData).where(eq(creativeBrandConfig.id, existing.id));
+      } else {
+        await db.insert(creativeBrandConfig).values({
+          systemPrompt,
+          logoUrl,
+          logoBase64,
+          updatedBy: req.user!.id,
+        });
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/creatives/brand-config error:", err);
+      return res.status(500).json({ message: "Erro ao salvar configuração de marca" });
+    }
+  });
+
+  app.delete("/api/creatives/brand-config/logo", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user!.isMaster) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      const [existing] = await db.select({ id: creativeBrandConfig.id }).from(creativeBrandConfig).limit(1);
+      if (existing) {
+        await db.update(creativeBrandConfig).set({ logoUrl: null, logoBase64: null, updatedAt: new Date(), updatedBy: req.user!.id }).where(eq(creativeBrandConfig.id, existing.id));
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("DELETE /api/creatives/brand-config/logo error:", err);
+      return res.status(500).json({ message: "Erro ao remover logo" });
+    }
+  });
+
+  // ─── Save Generation ───────────────────────────────────────────────────────
 
   app.post("/api/creatives/save-generation", requireAuth, async (req: Request, res: Response) => {
     try {

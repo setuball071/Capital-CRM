@@ -78,23 +78,36 @@ export async function sanitizePrompt(userPrompt: string): Promise<string> {
   }
 }
 
+// ─── Brand Config type ────────────────────────────────────────────────────────
+export interface BrandConfig {
+  systemPrompt?: string;
+  logoBase64?: string;
+}
+
 // ─── Build final prompt for Imagen ───────────────────────────────────────────
 export function buildImagePrompt(
   userPrompt: string,
   aspectRatio: string,
   personalizable: boolean,
+  brandConfig?: BrandConfig,
 ): string {
   const signatureBlock = personalizable
     ? `Bottom 15% of image: solid white horizontal strip, completely empty, reserved for agent card overlay`
     : "";
 
-  return `A professional marketing banner image for a Brazilian financial company.
-Visual style and content:
-${userPrompt}
-Mandatory visual requirements — apply these silently without showing as text:
+  const brandDirectives = brandConfig?.systemPrompt?.trim()
+    ? `BRAND DIRECTIVES (always follow these):\n${brandConfig.systemPrompt.trim()}\n\n`
+    : "";
 
-Top section: small rectangular white box (logo placeholder) with text "Capital Go" centered
-Color scheme must include deep purple tones and pink/magenta accents if not specified above
+  const logoHint = brandConfig?.logoBase64
+    ? `The company logo is provided as reference — place it prominently in the top-left or top-center area of the image.\n`
+    : `Top section: small rectangular white box (logo placeholder) with the brand name centered\n`;
+
+  return `${brandDirectives}USER REQUEST:
+${userPrompt}
+
+Technical requirements — apply these silently:
+${logoHint}Color scheme must include deep purple tones and pink/magenta accents if not specified above
 The image must look like a finished advertisement, not a wireframe or code diagram
 No CSS code, no HTML tags, no programming syntax visible anywhere in the image
 No placeholder labels like "Block 1", "padding", "font-size" — these must NEVER appear

@@ -3527,3 +3527,13 @@ export const creativeGenerationQuota = pgTable("creative_generation_quota", {
 }, (t) => ({
   pk: primaryKey({ columns: [t.userId, t.date] }),
 }));
+
+export const creativeBrandConfig = pgTable("creative_brand_config", {
+  id: serial("id").primaryKey(),
+  systemPrompt: text("system_prompt").notNull().default(""),
+  logoUrl: text("logo_url"),
+  logoBase64: text("logo_base64"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
+});
+export type CreativeBrandConfig = typeof creativeBrandConfig.$inferSelect;
