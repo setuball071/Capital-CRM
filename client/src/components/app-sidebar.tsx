@@ -309,7 +309,7 @@ export function AppSidebar() {
                     <SidebarMenuItem>
                       <div className={cn(
                         "transition-all duration-200 rounded-md",
-                        isOpen && "border-l-2 border-[#6C2BD9]"
+                        isOpen && "border-l-2 border-primary"
                       )}>
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton
