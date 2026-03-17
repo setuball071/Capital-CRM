@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "@/components/theme-provider";
 
 interface TenantTheme {
   primary?: string;
@@ -116,57 +117,75 @@ function parseColor(value: string | undefined): string | null {
   return null;
 }
 
-function applyThemeVariables(theme: TenantTheme) {
+const BRAND_VARS: Record<string, keyof TenantTheme> = {
+  "--primary": "primary",
+  "--primary-foreground": "primaryForeground",
+  "--ring": "primary",
+};
+
+const THEME_SENSITIVE_VARS: Record<string, keyof TenantTheme> = {
+  "--accent": "accent",
+  "--accent-foreground": "accentForeground",
+  "--background": "background",
+  "--foreground": "foreground",
+  "--muted": "muted",
+  "--muted-foreground": "mutedForeground",
+  "--border": "border",
+  "--card": "card",
+  "--card-foreground": "cardForeground",
+  "--sidebar": "sidebar",
+  "--sidebar-foreground": "sidebarForeground",
+};
+
+function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
   const root = document.documentElement;
-  
-  const mappings: Record<string, keyof TenantTheme> = {
-    "--primary": "primary",
-    "--primary-foreground": "primaryForeground",
-    "--accent": "accent",
-    "--accent-foreground": "accentForeground",
-    "--background": "background",
-    "--foreground": "foreground",
-    "--muted": "muted",
-    "--muted-foreground": "mutedForeground",
-    "--border": "border",
-    "--card": "card",
-    "--card-foreground": "cardForeground",
-    "--sidebar": "sidebar",
-    "--sidebar-foreground": "sidebarForeground",
-  };
-  
-  Object.entries(mappings).forEach(([cssVar, themeKey]) => {
+
+  // Brand vars — always apply (tenant identity, consistent in both modes)
+  Object.entries(BRAND_VARS).forEach(([cssVar, themeKey]) => {
     const value = parseColor(theme[themeKey]);
     if (value) {
       root.style.setProperty(cssVar, value);
     }
   });
-  
-  // Apply sidebar colors from branding settings (sidebarBgColor/sidebarFontColor)
-  // These take precedence over the theme's sidebar/sidebarForeground if set
-  if (theme.sidebarBgColor) {
-    const sidebarBg = parseColor(theme.sidebarBgColor);
-    if (sidebarBg) {
-      root.style.setProperty("--sidebar", sidebarBg);
+
+  if (isDark) {
+    // Dark mode: remove theme-sensitive overrides so .dark CSS class takes over
+    Object.keys(THEME_SENSITIVE_VARS).forEach((cssVar) => {
+      root.style.removeProperty(cssVar);
+    });
+    // Also remove sidebar-specific overrides so dark sidebar CSS variables apply
+    root.style.removeProperty("--sidebar");
+    root.style.removeProperty("--sidebar-foreground");
+  } else {
+    // Light mode: apply all theme-sensitive vars from tenant config
+    Object.entries(THEME_SENSITIVE_VARS).forEach(([cssVar, themeKey]) => {
+      const value = parseColor(theme[themeKey]);
+      if (value) {
+        root.style.setProperty(cssVar, value);
+      }
+    });
+
+    // Sidebar brand colors (take precedence in light mode)
+    if (theme.sidebarBgColor) {
+      const sidebarBg = parseColor(theme.sidebarBgColor);
+      if (sidebarBg) root.style.setProperty("--sidebar", sidebarBg);
+    }
+    if (theme.sidebarFontColor) {
+      const sidebarFg = parseColor(theme.sidebarFontColor);
+      if (sidebarFg) root.style.setProperty("--sidebar-foreground", sidebarFg);
+    }
+
+    if (theme.surface) {
+      const surfaceHsl = parseColor(theme.surface);
+      if (surfaceHsl) {
+        root.style.setProperty("--card", surfaceHsl);
+        root.style.setProperty("--popover", surfaceHsl);
+      }
     }
   }
-  if (theme.sidebarFontColor) {
-    const sidebarFg = parseColor(theme.sidebarFontColor);
-    if (sidebarFg) {
-      root.style.setProperty("--sidebar-foreground", sidebarFg);
-    }
-  }
-  
+
   if (theme.radius) {
     root.style.setProperty("--radius", theme.radius);
-  }
-  
-  if (theme.surface) {
-    const surfaceHsl = parseColor(theme.surface);
-    if (surfaceHsl) {
-      root.style.setProperty("--card", surfaceHsl);
-      root.style.setProperty("--popover", surfaceHsl);
-    }
   }
 }
 
@@ -182,6 +201,7 @@ function updateFavicon(url: string) {
 
 export function TenantThemeProvider({ children }: { children: React.ReactNode }) {
   const [appliedTheme, setAppliedTheme] = useState(false);
+  const { theme } = useTheme();
   
   const { data: rawData, isLoading } = useQuery<TenantApiResponse>({
     queryKey: ["/api/tenant", window.location.host],
@@ -243,12 +263,18 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   
   useEffect(() => {
     if (isLoading) return;
-    
+
+    const isDark = theme === "dark";
     if (tenant?.theme) {
-      applyThemeVariables(tenant.theme);
+      applyThemeVariables(tenant.theme, isDark);
+    } else if (isDark) {
+      // No tenant theme, but dark mode is on — remove any lingering inline overrides
+      [...Object.keys(THEME_SENSITIVE_VARS), "--sidebar", "--sidebar-foreground"].forEach(v =>
+        document.documentElement.style.removeProperty(v)
+      );
     }
     setAppliedTheme(true);
-  }, [tenant, isLoading]);
+  }, [tenant, isLoading, theme]);
   
   useEffect(() => {
     if (faviconUrl) {

@@ -564,16 +564,16 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TenantThemeProvider>
-        <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="light">
+        <TenantThemeProvider>
           <TooltipProvider>
             <AuthProvider>
               <Toaster />
               <Router />
             </AuthProvider>
           </TooltipProvider>
-        </ThemeProvider>
-      </TenantThemeProvider>
+        </TenantThemeProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
