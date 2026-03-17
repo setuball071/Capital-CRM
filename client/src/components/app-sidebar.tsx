@@ -1,5 +1,5 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Award, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Scissors, Palette, RefreshCw, Zap, CircleDot, LayoutDashboard, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, FileSignature, ScrollText, GitBranch, PlusCircle } from "lucide-react";
-import wolfLogoUrl from "@assets/Design_sem_nome_(1)_1767752468659.png";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, FileSignature, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench } from "lucide-react";
+
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -63,12 +63,13 @@ export function AppSidebar() {
   const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    alpha: true,
+    vendas: true,
     simuladores: false,
     operacional: false,
-    clientes: false,
-    admin: false,
+    referências: false,
     desenvolvimento: false,
+    basedeclientes: false,
+    administração: false,
     gestãocomercial: false,
   });
 
@@ -104,30 +105,19 @@ export function AppSidebar() {
     return hasModuleAccess(module as ModuleName);
   };
 
-  // Wolf icon component - larger than other icons, preserves aspect ratio
-  const WolfIcon = ({ className }: { className?: string }) => (
-    <div className="relative flex items-center justify-center h-4 w-4 overflow-visible" style={{ marginLeft: '-4px', marginRight: '2px' }}>
-      <img 
-        src={wolfLogoUrl} 
-        alt="Alpha" 
-        className="max-h-9 max-w-9 object-contain"
-      />
-    </div>
-  );
-
   const homeUrl = ["master", "coordenacao"].includes(userRole) ? "/dashboard" : "/dashboard-vendedor";
 
   const menuSections: MenuSection[] = [
     {
-      title: "ALPHA",
-      icon: WolfIcon,
+      title: "Vendas",
+      icon: Kanban,
       items: [
-        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
-        { title: "Lista Manual", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
         { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
         { title: "Consulta Individual", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
+        { title: "Lista Manual", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
         { title: "Etiquetas", url: "/vendas/etiquetas", icon: Tag, module: "modulo_alpha", subItem: "etiquetas" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },
+        { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
         { title: "Importar Higienizados", url: "/vendas/importar-higienizados", icon: Sparkles, module: "modulo_alpha", subItem: "importacao_higienizados", rolesAllowed: ["master", "coordenacao"] },
       ],
@@ -142,23 +132,37 @@ export function AppSidebar() {
     },
     {
       title: "Operacional",
-      icon: FileText,
+      icon: Wrench,
+      items: [
+        { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
+        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
+        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
+        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
+      ],
+    },
+    {
+      title: "Referências",
+      icon: BookMarked,
       items: [
         { title: "Convênios", url: "/agreements", icon: FileText, module: "modulo_roteiros", subItem: "convenios" },
         { title: "Bancos", url: "/banks", icon: Landmark, module: "modulo_roteiros", subItem: "bancos" },
         { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, module: "modulo_roteiros", subItem: "tabelas_coeficientes" },
         { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros", subItem: "roteiros_bancarios" },
-        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
-        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Material de Apoio", url: "/material-apoio", icon: FileText },
       ],
     },
     {
-      title: "Contratos",
-      icon: ScrollText,
+      title: "Desenvolvimento",
+      icon: GraduationCap,
       items: [
-        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
-        { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
-        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
+        { title: "Profiler DISC", url: "/desenvolvimento/profiler", icon: Brain, module: "modulo_academia", subItem: "profiler" },
+        { title: "Feedbacks", url: "/desenvolvimento/feedbacks", icon: ClipboardCheck, module: "modulo_academia", subItem: "feedbacks" },
+        { title: "Fundamentos", url: "/desenvolvimento/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
+        { title: "Roleplay IA", url: "/desenvolvimento/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
+        { title: "Abordagem IA", url: "/desenvolvimento/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
+        { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
+        { title: "Criador de Criativos IA", url: "/criador-criativos", icon: Sparkles, masterOnly: true },
       ],
     },
     {
@@ -183,20 +187,6 @@ export function AppSidebar() {
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Funcionários", url: "/funcionarios", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
-      ],
-    },
-    {
-      title: "Desenvolvimento",
-      icon: GraduationCap,
-      items: [
-        { title: "Fundamentos", url: "/desenvolvimento/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
-        { title: "Roleplay IA", url: "/desenvolvimento/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
-        { title: "Abordagem IA", url: "/desenvolvimento/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
-        { title: "Feedbacks", url: "/desenvolvimento/feedbacks", icon: ClipboardCheck, module: "modulo_academia", subItem: "feedbacks" },
-        { title: "Profiler", url: "/desenvolvimento/profiler", icon: Brain, module: "modulo_academia", subItem: "profiler" },
-        { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
-        { title: "Material de Apoio", url: "/material-apoio", icon: FileText },
-        { title: "Criador de Criativos IA", url: "/criador-criativos", icon: Sparkles, masterOnly: true },
       ],
     },
     {
@@ -308,6 +298,7 @@ export function AppSidebar() {
               {filteredSections.map((section) => {
                 const sectionKey = getSectionKey(section.title);
                 const isOpen = openSections[sectionKey] ?? false;
+                const hasActiveItem = section.items.some(item => location === item.url);
 
                 return (
                   <Collapsible
@@ -316,53 +307,67 @@ export function AppSidebar() {
                     onOpenChange={() => toggleSection(section.title)}
                   >
                     <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          className="w-full justify-between font-medium"
-                          data-testid={`sidebar-section-${sectionKey}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <section.icon className="h-4 w-4" />
-                            <span className={section.title === "ALPHA" ? "font-bold" : ""}>
-                              {section.title}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {section.title === "Desenvolvimento" && (feedbackUnread?.count || 0) > 0 && (
-                              <span className="h-2 w-2 rounded-full bg-destructive" data-testid="badge-desenvolvimento-unread" />
+                      <div className={cn(
+                        "transition-all duration-200 rounded-md",
+                        isOpen && "border-l-2 border-[#6C2BD9]"
+                      )}>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            className={cn(
+                              "w-full justify-between transition-all duration-200",
+                              isOpen
+                                ? "font-medium text-foreground bg-sidebar-accent/10"
+                                : "font-normal text-muted-foreground"
                             )}
-                            <ChevronDown 
-                              className={cn(
-                                "h-4 w-4 transition-transform duration-200",
-                                isOpen && "rotate-180"
-                              )} 
-                            />
-                          </div>
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenu className="ml-4 mt-1 border-l border-border pl-2">
-                          {section.items.map((item) => (
-                            <SidebarMenuItem key={item.title}>
-                              <SidebarMenuButton
-                                asChild
-                                isActive={location === item.url}
-                                data-testid={`sidebar-${item.url.replace(/\//g, '-').slice(1) || "home"}`}
-                              >
-                                <button onClick={() => setLocation(item.url)} className="w-full">
-                                  <item.icon className="h-4 w-4" />
-                                  <span className="flex-1">{item.title}</span>
-                                  {item.url === "/desenvolvimento/feedbacks" && (feedbackUnread?.count || 0) > 0 && (
-                                    <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-feedbacks-unread">
-                                      {feedbackUnread!.count}
-                                    </Badge>
-                                  )}
-                                </button>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          ))}
-                        </SidebarMenu>
-                      </CollapsibleContent>
+                            data-testid={`sidebar-section-${sectionKey}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <section.icon className="h-4 w-4" />
+                              <span>{section.title}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {section.title === "Desenvolvimento" && (feedbackUnread?.count || 0) > 0 && (
+                                <span className="h-2 w-2 rounded-full bg-destructive" data-testid="badge-desenvolvimento-unread" />
+                              )}
+                              <ChevronDown 
+                                className={cn(
+                                  "h-4 w-4 transition-transform duration-200",
+                                  isOpen && "rotate-180"
+                                )} 
+                              />
+                            </div>
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="transition-all duration-200">
+                          <SidebarMenu className="ml-4 mt-1 border-l border-border pl-2">
+                            {section.items.map((item) => {
+                              const isActive = location === item.url;
+                              return (
+                                <SidebarMenuItem key={item.title}>
+                                  <SidebarMenuButton
+                                    asChild
+                                    isActive={isActive}
+                                    data-testid={`sidebar-${item.url.replace(/\//g, '-').slice(1) || "home"}`}
+                                  >
+                                    <button onClick={() => setLocation(item.url)} className={cn(
+                                      "w-full",
+                                      isActive && "font-medium"
+                                    )}>
+                                      <item.icon className="h-4 w-4" />
+                                      <span className="flex-1">{item.title}</span>
+                                      {item.url === "/desenvolvimento/feedbacks" && (feedbackUnread?.count || 0) > 0 && (
+                                        <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-feedbacks-unread">
+                                          {feedbackUnread!.count}
+                                        </Badge>
+                                      )}
+                                    </button>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </CollapsibleContent>
+                      </div>
                     </SidebarMenuItem>
                   </Collapsible>
                 );
