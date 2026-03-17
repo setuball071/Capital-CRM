@@ -269,7 +269,7 @@ export function AppSidebar() {
             <img 
               src={logoUrl} 
               alt={tenant?.name || "Logo"} 
-              className="max-w-full object-contain"
+              className={cn("max-w-full object-contain", theme === "dark" && "brightness-0 invert")}
               style={{ maxHeight: `${logoHeight}px`, display: 'block' }}
               onError={() => setLogoFailed(true)}
               data-testid="sidebar-logo-image"
