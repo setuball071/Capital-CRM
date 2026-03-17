@@ -9729,12 +9729,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           }
         }
 
-        // Filtrar vínculos para exibição: se existir pelo menos um com orgao válido, remover os "DESCONHECIDO"
-        const vinculosValidos = vinculosTodos.filter(
-          (v) => v.orgao && v.orgao !== "DESCONHECIDO",
-        );
-        const vinculos =
-          vinculosValidos.length > 0 ? vinculosValidos : vinculosTodos;
+        const vinculos = vinculosTodos;
 
         // Get folha data - sempre buscar por vínculo quando disponível, senão por pessoa (fallback para dados legados)
         let folhaRegistros;
