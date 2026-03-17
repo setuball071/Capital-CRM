@@ -314,10 +314,10 @@ export function AppSidebar() {
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton
                             className={cn(
-                              "w-full justify-between transition-all duration-200",
+                              "w-full justify-between transition-all duration-200 font-medium",
                               isOpen
-                                ? "font-medium text-foreground bg-sidebar-accent/10"
-                                : "font-normal text-muted-foreground"
+                                ? "text-foreground bg-sidebar-accent/10"
+                                : "text-foreground/70"
                             )}
                             data-testid={`sidebar-section-${sectionKey}`}
                           >
@@ -332,7 +332,7 @@ export function AppSidebar() {
                               <ChevronDown 
                                 className={cn(
                                   "h-4 w-4 transition-transform duration-200",
-                                  isOpen && "rotate-180"
+                                  isOpen ? "rotate-180" : "text-foreground/50"
                                 )} 
                               />
                             </div>
