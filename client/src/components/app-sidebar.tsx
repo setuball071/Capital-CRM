@@ -149,7 +149,7 @@ export function AppSidebar() {
         { title: "Tabelas de Coeficientes", url: "/coefficient-tables", icon: Table, module: "modulo_roteiros", subItem: "tabelas_coeficientes" },
         { title: "Roteiros Bancários", url: "/roteiros", icon: Map, module: "modulo_roteiros", subItem: "roteiros_bancarios" },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
-        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature },
+        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
       ],
     },
     {
