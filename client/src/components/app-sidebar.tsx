@@ -383,7 +383,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={toggleTheme}
-              className="w-full text-muted-foreground hover:text-foreground"
+              className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground"
               data-testid="button-theme-toggle"
             >
               {theme === "dark" ? (
