@@ -315,7 +315,7 @@ export function AppSidebar() {
                           <SidebarMenuButton
                             className={cn(
                               "w-full justify-between transition-all duration-200 text-foreground",
-                              isOpen ? "font-semibold bg-sidebar-accent/15" : "font-normal"
+                              isOpen ? "font-semibold bg-sidebar-accent/30" : "font-normal"
                             )}
                             data-testid={`sidebar-section-${sectionKey}`}
                           >
