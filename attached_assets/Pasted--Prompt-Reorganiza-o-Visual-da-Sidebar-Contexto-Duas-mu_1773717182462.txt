@@ -1,0 +1,78 @@
+# Prompt — Reorganização + Visual da Sidebar
+
+## Contexto
+Duas mudanças em `client/src/components/app-sidebar.tsx`:
+1. Reorganizar grupos e itens
+2. Melhorar distinção visual entre grupo aberto e fechado
+
+Nenhuma rota, página ou lógica de backend é alterada.
+
+---
+
+## 1. Nova estrutura de grupos (ordem exata)
+
+### Vendas
+- Pipeline
+- Consulta Individual
+- Lista Manual
+- Etiquetas
+- Agenda
+
+### Simuladores
+- Simulador de Compra
+- Simulador de Amortização
+- *(demais simuladores existentes, manter)*
+
+### Operacional
+- Nova Proposta
+- Minhas Propostas
+- Solicitar Boleto
+- Nota Promissória
+
+### Referências
+- Convênios
+- Bancos
+- Tabelas de Coeficientes
+- Roteiros Bancários
+- Material de Apoio
+
+### Desenvolvimento
+- Profiler DISC *(atualmente "Profiler")*
+- Feedbacks
+- Videoaulas *(se existir rota, senão omitir)*
+
+**Remover** o grupo "Contratos" — seus itens (Nova Proposta, Minhas Propostas) vão para "Operacional".
+**Remover** o grupo "ALPHA" — seus itens vão para "Vendas".
+
+Manter todos os href/to das rotas exatamente como estão. Apenas muda o agrupamento e os labels dos grupos.
+
+---
+
+## 2. Distinção visual grupo aberto vs fechado
+
+### Grupo FECHADO
+- Label do grupo: cor secundária (text-muted-foreground), peso normal
+- Ícone chevron apontando para baixo
+- Sem destaque de fundo
+
+### Grupo ABERTO
+- Label do grupo: cor primária (text-foreground), peso font-medium
+- Fundo sutil no header do grupo: bg-sidebar-accent com opacidade baixa (~10%)
+- Borda esquerda de 2px na cor brand (#6C2BD9) no container do grupo aberto
+- Ícone chevron apontando para cima
+- Itens filhos com indentação clara (pl-6 ou equivalente)
+
+### Item ativo (página atual)
+- Fundo: bg-sidebar-accent
+- Texto: text-sidebar-accent-foreground, peso font-medium
+- Pequeno indicador à esquerda (borda 2px ou dot) na cor brand
+
+### Transição
+- Adicionar transition-all duration-200 na abertura/fechamento dos grupos
+
+---
+
+## Regras gerais
+- Não alterar rotas, lógica de autenticação ou controle de roles
+- Manter visibilidade condicional por role onde já existe (ex: itens master-only)
+- Apresentar plano antes de executar
