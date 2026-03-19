@@ -259,6 +259,7 @@ export default function BasesClientes() {
       processFastImportMutation.mutate(data.importRunId);
     },
     onError: (error: any) => {
+      setIsPolling(false);
       toast({
         title: "Erro ao iniciar importação",
         description: error.message,
