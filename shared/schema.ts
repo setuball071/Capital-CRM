@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   time,
   primaryKey,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -3569,6 +3570,8 @@ export const systemUpdateReads = pgTable("system_update_reads", {
   updateId: integer("update_id").references(() => systemUpdates.id, { onDelete: "cascade" }).notNull(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   readAt: timestamp("read_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  uniqUpdateUser: unique().on(t.updateId, t.userId),
+}));
 
 export type SystemUpdateRead = typeof systemUpdateReads.$inferSelect;

@@ -25096,7 +25096,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // POST /api/system-updates/generate — gera conteúdo com IA a partir de raw_input
   app.post("/api/system-updates/generate", requireAuth, requireMaster, async (req: any, res) => {
     try {
-      const { rawInput } = req.body;
+      const rawInput = req.body.rawInput ?? req.body.raw_input;
       if (!rawInput || typeof rawInput !== "string" || rawInput.trim().length < 10) {
         return res.status(400).json({ message: "raw_input é obrigatório e deve ter pelo menos 10 caracteres" });
       }
@@ -25280,11 +25280,26 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const user = req.user;
       if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const tenantId = req.tenantId!;
       const { id } = req.params;
+      const updateId = parseInt(id);
+
+      // Verify update exists, belongs to this tenant, is active, and targets this user
+      const check = await db.execute(sql`
+        SELECT id FROM system_updates
+        WHERE id = ${updateId}
+          AND tenant_id = ${tenantId}
+          AND is_active = true
+          AND (target_roles && ARRAY[${user.role}::text] OR 'todos' = ANY(target_roles))
+      `);
+
+      if (check.rows.length === 0) {
+        return res.status(404).json({ message: "Atualização não encontrada ou não aplicável" });
+      }
 
       await db.execute(sql`
         INSERT INTO system_update_reads (update_id, user_id)
-        VALUES (${parseInt(id)}, ${user.id})
+        VALUES (${updateId}, ${user.id})
         ON CONFLICT (update_id, user_id) DO NOTHING
       `);
       res.json({ message: "Leitura registrada" });

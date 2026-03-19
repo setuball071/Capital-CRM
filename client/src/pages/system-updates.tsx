@@ -59,18 +59,19 @@ interface UpdateRead {
 
 const ROLE_OPTIONS = [
   { value: "todos", label: "Todos os usuários" },
-  { value: "master", label: "Master" },
   { value: "coordenacao", label: "Coordenação" },
+  { value: "atendimento", label: "Atendimento" },
+  { value: "operacional", label: "Operacional" },
   { value: "vendedor", label: "Vendedor" },
-  { value: "parceiro", label: "Parceiro" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
   todos: "Todos",
   master: "Master",
   coordenacao: "Coordenação",
+  atendimento: "Atendimento",
+  operacional: "Operacional",
   vendedor: "Vendedor",
-  parceiro: "Parceiro",
 };
 
 function getRoleColor(role: string) {
