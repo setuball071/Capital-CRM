@@ -3537,3 +3537,38 @@ export const creativeBrandConfig = pgTable("creative_brand_config", {
   updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
 });
 export type CreativeBrandConfig = typeof creativeBrandConfig.$inferSelect;
+
+// ===== CENTRAL DE ATUALIZAÇÕES =====
+
+export const systemUpdates = pgTable("system_updates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  rawInput: text("raw_input").notNull(),
+  contentWhat: text("content_what").notNull(),
+  contentHow: text("content_how").notNull(),
+  contentImpact: text("content_impact").notNull(),
+  targetRoles: text("target_roles").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  publishedAt: timestamp("published_at").notNull().defaultNow(),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSystemUpdateSchema = createInsertSchema(systemUpdates).omit({
+  id: true,
+  createdAt: true,
+  publishedAt: true,
+});
+
+export type SystemUpdate = typeof systemUpdates.$inferSelect;
+export type InsertSystemUpdate = z.infer<typeof insertSystemUpdateSchema>;
+
+export const systemUpdateReads = pgTable("system_update_reads", {
+  id: serial("id").primaryKey(),
+  updateId: integer("update_id").references(() => systemUpdates.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  readAt: timestamp("read_at").notNull().defaultNow(),
+});
+
+export type SystemUpdateRead = typeof systemUpdateReads.$inferSelect;

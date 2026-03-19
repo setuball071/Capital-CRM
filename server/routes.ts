@@ -25091,6 +25091,227 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ===== CENTRAL DE ATUALIZAÇÕES =====
+
+  // POST /api/system-updates/generate — gera conteúdo com IA a partir de raw_input
+  app.post("/api/system-updates/generate", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const { rawInput } = req.body;
+      if (!rawInput || typeof rawInput !== "string" || rawInput.trim().length < 10) {
+        return res.status(400).json({ message: "raw_input é obrigatório e deve ter pelo menos 10 caracteres" });
+      }
+
+      const { openai } = await import("./openaiClient");
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um comunicador interno de uma empresa de crédito consignado chamada Capital Go.
+Com base no texto técnico fornecido (output de um sistema de desenvolvimento),
+reescreva em linguagem simples e direta para os colaboradores da empresa.
+Retorne APENAS um JSON válido com exatamente estas 3 chaves:
+{
+  "content_what": "O que foi atualizado (2-3 frases simples)",
+  "content_how": "Como funciona agora (passo a passo simples, máx 4 itens)",
+  "content_impact": "Como isso impacta seu dia a dia (1-2 frases diretas)"
+}`,
+          },
+          {
+            role: "user",
+            content: `Texto técnico:\n${rawInput.trim()}`,
+          },
+        ],
+        temperature: 0.4,
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      });
+
+      const jsonText = completion.choices[0].message.content || "{}";
+      const parsed = JSON.parse(jsonText);
+
+      if (!parsed.content_what || !parsed.content_how || !parsed.content_impact) {
+        return res.status(500).json({ message: "A IA não retornou os campos esperados" });
+      }
+
+      return res.json({
+        contentWhat: parsed.content_what,
+        contentHow: parsed.content_how,
+        contentImpact: parsed.content_impact,
+      });
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao gerar conteúdo:", err);
+      return res.status(500).json({ message: "Erro ao gerar conteúdo com IA" });
+    }
+  });
+
+  // GET /api/system-updates — lista todas (master only)
+  app.get("/api/system-updates", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const result = await db.execute(sql`
+        SELECT
+          su.*,
+          u.name AS created_by_name,
+          (
+            SELECT COUNT(*)::int FROM system_update_reads sur WHERE sur.update_id = su.id
+          ) AS reads_count,
+          (
+            SELECT COUNT(*)::int FROM users us
+            INNER JOIN user_tenants ut ON ut.user_id = us.id
+            WHERE ut.tenant_id = ${tenantId}
+              AND us.is_active = true
+              AND (
+                su.target_roles && ARRAY[us.role::text] OR 'todos' = ANY(su.target_roles)
+              )
+          ) AS target_count
+        FROM system_updates su
+        LEFT JOIN users u ON u.id = su.created_by
+        WHERE su.tenant_id = ${tenantId}
+        ORDER BY su.published_at DESC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao listar:", err);
+      res.status(500).json({ message: "Erro ao listar atualizações" });
+    }
+  });
+
+  // POST /api/system-updates — criar nova (master only)
+  app.post("/api/system-updates", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive } = req.body;
+
+      if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles) || targetRoles.length === 0) {
+        return res.status(400).json({ message: "Campos obrigatórios: title, rawInput, contentWhat, contentHow, contentImpact, targetRoles" });
+      }
+
+      const pgArrayLiteral = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
+      const result = await db.execute(sql`
+        INSERT INTO system_updates (tenant_id, title, raw_input, content_what, content_how, content_impact, target_roles, is_active, created_by)
+        VALUES (${tenantId}, ${title}, ${rawInput}, ${contentWhat}, ${contentHow}, ${contentImpact}, ${pgArrayLiteral}::text[], ${isActive !== false}, ${req.user!.id})
+        RETURNING *
+      `);
+      res.status(201).json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao criar:", err);
+      res.status(500).json({ message: "Erro ao criar atualização" });
+    }
+  });
+
+  // PUT /api/system-updates/:id — editar (master only)
+  app.put("/api/system-updates/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive } = req.body;
+
+      if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles)) {
+        return res.status(400).json({ message: "Campos obrigatórios faltando" });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE system_updates SET
+          title = ${title},
+          raw_input = ${rawInput},
+          content_what = ${contentWhat},
+          content_how = ${contentHow},
+          content_impact = ${contentImpact},
+          target_roles = ${'{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}'}::text[],
+          is_active = ${isActive !== false}
+        WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Atualização não encontrada" });
+      }
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao editar:", err);
+      res.status(500).json({ message: "Erro ao editar atualização" });
+    }
+  });
+
+  // DELETE /api/system-updates/:id — remover (master only)
+  app.delete("/api/system-updates/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      await db.execute(sql`
+        DELETE FROM system_updates WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+      `);
+      res.json({ message: "Atualização removida com sucesso" });
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao remover:", err);
+      res.status(500).json({ message: "Erro ao remover atualização" });
+    }
+  });
+
+  // GET /api/system-updates/pending — atualizações não lidas pelo usuário logado
+  app.get("/api/system-updates/pending", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+
+      const result = await db.execute(sql`
+        SELECT su.*
+        FROM system_updates su
+        WHERE su.tenant_id = ${tenantId}
+          AND su.is_active = true
+          AND (su.target_roles && ARRAY[${user.role}::text] OR 'todos' = ANY(su.target_roles))
+          AND NOT EXISTS (
+            SELECT 1 FROM system_update_reads sur
+            WHERE sur.update_id = su.id AND sur.user_id = ${user.id}
+          )
+        ORDER BY su.published_at ASC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao buscar pendentes:", err);
+      res.status(500).json({ message: "Erro ao buscar atualizações pendentes" });
+    }
+  });
+
+  // POST /api/system-updates/:id/read — registra confirmação de leitura
+  app.post("/api/system-updates/:id/read", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const { id } = req.params;
+
+      await db.execute(sql`
+        INSERT INTO system_update_reads (update_id, user_id)
+        VALUES (${parseInt(id)}, ${user.id})
+        ON CONFLICT (update_id, user_id) DO NOTHING
+      `);
+      res.json({ message: "Leitura registrada" });
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao registrar leitura:", err);
+      res.status(500).json({ message: "Erro ao registrar leitura" });
+    }
+  });
+
+  // GET /api/system-updates/:id/reads — quem leu (master only)
+  app.get("/api/system-updates/:id/reads", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const result = await db.execute(sql`
+        SELECT sur.read_at, u.name AS user_name, u.role AS user_role
+        FROM system_update_reads sur
+        INNER JOIN users u ON u.id = sur.user_id
+        WHERE sur.update_id = ${parseInt(id)}
+        ORDER BY sur.read_at ASC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[SystemUpdates] Erro ao buscar leituras:", err);
+      res.status(500).json({ message: "Erro ao buscar leituras" });
+    }
+  });
+
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
 

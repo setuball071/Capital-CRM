@@ -67,6 +67,8 @@ import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
+import SystemUpdatesPage from "@/pages/system-updates";
+import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
@@ -535,6 +537,9 @@ function Router() {
               <Route path="/criador-criativos">
                 {() => <MasterOnlyRoute component={CriadorCriativosPage} />}
               </Route>
+              <Route path="/admin/atualizacoes">
+                {() => <MasterOnlyRoute component={SystemUpdatesPage} />}
+              </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}
               </Route>
@@ -557,6 +562,7 @@ function Router() {
         categoria={modalCategoria}
         onClose={() => setModalAberto(false)}
       />
+      <UpdatesPopup />
     </SidebarProvider>
   );
 }
