@@ -179,19 +179,45 @@ export interface ImportJobResult {
 const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
   orgao: "orgao",
+  orgao_desc: "orgao",
+  orgaodesc: "orgao",
   matricula: "matricula",
+  matr: "matricula",
+  matricula_siape: "matricula",
+  matricula_servidor: "matricula",
   nome: "nome",
+  nome_servidor: "nome",
+  nome_do_servidor: "nome",
   banco: "banco",
+  banco_operacao: "banco",
+  banco_contrato: "banco",
   uf: "uf",
+  estado: "uf",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
+  num_contrato: "numero_contrato",
+  contrato: "numero_contrato",
+  nr_contrato: "numero_contrato",
+  id_contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
+  tipo: "tipo_contrato",
+  produto: "tipo_contrato",
+  modalidade: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "pmt",
+  vl_parcela: "pmt",
+  vlr_parcela: "pmt",
+  prestacao: "pmt",
   prazo_remanescente: "prazo_remanescente",
-  prazo: "prazo",
+  prazo: "prazo_remanescente",
+  prazo_restante: "prazo_remanescente",
+  saldo_prazo: "prazo_remanescente",
   situacao_contrato: "situacao_contrato",
+  situacao: "situacao_contrato",
+  status_contrato: "situacao_contrato",
+  status: "situacao_contrato",
+  sit_contrato: "situacao_contrato",
 };
 
 // Headers obrigatórios D8 (normalizados - case-insensitive, sem acentos)
@@ -464,29 +490,39 @@ class StreamingImportService {
     }
 
     // Log detalhado dos headers detectados
+    const normalizedHeaders = headers.map(h => normalizeCol(h));
     console.log(`[IMPORT ${run.id}] Headers detectados (${headers.length}):`, headers.join(", "));
+    console.log(`[IMPORT ${run.id}] Headers normalizados:`, normalizedHeaders.join(", "));
     console.log(`[IMPORT ${run.id}] Mapeamento de colunas:`, JSON.stringify(headerMap, null, 2));
 
     // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     // Nota: effectiveLayoutD8 já foi determinado em processD8Stream
     if (run.tipoImport === "d8") {
-      const normalizedHeaders = headers.map(h => normalizeCol(h));
       const requiredHeaders = run.layoutD8 === "pensionista" 
         ? D8_PENSIONISTA_REQUIRED_HEADERS 
         : D8_REQUIRED_HEADERS;
       
+      // Verifica também aliases dos required headers no mapa de colunas
+      const columnMap = run.layoutD8 === "pensionista" ? D8_COLUMN_MAP_PENSIONISTA : D8_COLUMN_MAP_SERVIDOR;
       const missingHeaders = requiredHeaders.filter(req => {
-        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
-        if (req === "pmt") return !normalizedHeaders.includes("pmt") && !normalizedHeaders.includes("valor_parcela");
-        if (req === "numero_contrato") return !normalizedHeaders.includes("numero_contrato") && !normalizedHeaders.includes("n_contrato");
-        if (req === "tipo_contrato") return !normalizedHeaders.includes("tipo_contrato") && !normalizedHeaders.includes("tipo_produto");
-        if (req === "prazo_remanescente") return !normalizedHeaders.includes("prazo_remanescente") && !normalizedHeaders.includes("prazo");
-        return !normalizedHeaders.includes(req);
+        // Verifica se algum header no arquivo mapeia para este campo obrigatório
+        const isMapped = normalizedHeaders.some(h => columnMap[h] === req);
+        return !isMapped;
       });
       
       if (missingHeaders.length > 0) {
         const layoutName = run.layoutD8 === "pensionista" ? "Pensionista" : "Servidor";
-        throw new Error(`Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`);
+        // Log detalhado para diagnóstico
+        console.warn(`[IMPORT ${run.id}] Headers D8 ${layoutName} não encontrados: ${missingHeaders.join(", ")}`);
+        console.warn(`[IMPORT ${run.id}] Headers disponíveis no arquivo: ${normalizedHeaders.join(", ")}`);
+        console.warn(`[IMPORT ${run.id}] Mapa de colunas esperado:`, JSON.stringify(columnMap, null, 2));
+        // Não bloqueia a importação — campos ausentes ficam como null
+        // Apenas campos CRÍTICOS bloqueam (CPF ausente)
+        const criticalMissing = missingHeaders.filter(h => h === "cpf");
+        if (criticalMissing.length > 0) {
+          throw new Error(`Headers críticos D8 ${layoutName} ausentes: ${criticalMissing.join(", ").toUpperCase()}. O CPF é obrigatório para identificação dos clientes.`);
+        }
+        console.warn(`[IMPORT ${run.id}] Aviso: campos não críticos ausentes serão importados como nulo: ${missingHeaders.join(", ")}`);
       }
     }
 
