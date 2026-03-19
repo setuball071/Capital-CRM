@@ -25309,15 +25309,26 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
-  // GET /api/system-updates/:id/reads — quem leu (master only)
+  // GET /api/system-updates/:id/reads — quem leu (master only, tenant-scoped)
   app.get("/api/system-updates/:id/reads", requireAuth, requireMaster, async (req: any, res) => {
     try {
+      const tenantId = req.tenantId!;
       const { id } = req.params;
+      const updateId = parseInt(id);
+
+      // Verify update belongs to this tenant before returning reader data
+      const ownerCheck = await db.execute(sql`
+        SELECT id FROM system_updates WHERE id = ${updateId} AND tenant_id = ${tenantId}
+      `);
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Atualização não encontrada" });
+      }
+
       const result = await db.execute(sql`
         SELECT sur.read_at, u.name AS user_name, u.role AS user_role
         FROM system_update_reads sur
         INNER JOIN users u ON u.id = sur.user_id
-        WHERE sur.update_id = ${parseInt(id)}
+        WHERE sur.update_id = ${updateId}
         ORDER BY sur.read_at ASC
       `);
       res.json(result.rows);

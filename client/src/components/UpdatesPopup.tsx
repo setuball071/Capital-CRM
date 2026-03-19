@@ -114,19 +114,37 @@ export function UpdatesPopup() {
             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_impact}</p>
           </div>
 
-          <Button
-            className="w-full font-semibold"
-            style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
-            onClick={handleConfirm}
-            disabled={readMutation.isPending}
-            data-testid="button-confirm-update"
-          >
-            {readMutation.isPending
-              ? "Confirmando..."
-              : isLast
-                ? "Entendi, pode fechar"
-                : `Entendi — ver próxima (${currentIndex + 2} de ${total})`}
-          </Button>
+          {isLast ? (
+            <Button
+              className="w-full font-semibold"
+              style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
+              onClick={handleConfirm}
+              disabled={readMutation.isPending}
+              data-testid="button-confirm-update"
+            >
+              {readMutation.isPending ? "Confirmando..." : "Entendi, pode fechar"}
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 font-semibold"
+                style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
+                onClick={handleConfirm}
+                disabled={readMutation.isPending}
+                data-testid="button-confirm-update"
+              >
+                {readMutation.isPending ? "Confirmando..." : "Entendi"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleConfirm}
+                disabled={readMutation.isPending}
+                data-testid="button-next-update"
+              >
+                Próxima ({currentIndex + 2}/{total})
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

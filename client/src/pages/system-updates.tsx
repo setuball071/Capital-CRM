@@ -74,13 +74,14 @@ const ROLE_LABELS: Record<string, string> = {
   vendedor: "Vendedor",
 };
 
-function getRoleColor(role: string) {
-  const colors: Record<string, string> = {
+function getRoleColor(role: string): "default" | "secondary" | "destructive" | "outline" {
+  const colors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     todos: "secondary",
     master: "destructive",
     coordenacao: "default",
+    atendimento: "outline",
+    operacional: "outline",
     vendedor: "outline",
-    parceiro: "outline",
   };
   return colors[role] ?? "outline";
 }
@@ -268,7 +269,7 @@ export default function SystemUpdatesPage() {
                       <Badge variant="outline" className="text-xs text-muted-foreground">Inativo</Badge>
                     )}
                     {u.target_roles.map(r => (
-                      <Badge key={r} variant={getRoleColor(r) as any} className="text-xs">
+                      <Badge key={r} variant={getRoleColor(r)} className="text-xs">
                         {ROLE_LABELS[r] ?? r}
                       </Badge>
                     ))}
