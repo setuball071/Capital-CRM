@@ -474,6 +474,13 @@ class FastImportService {
     const columnMap = this.getColumnMap(run.tipoImport, effectiveLayoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
 
+    // Diagnóstico: logar headers e mapeamentos para D8
+    if (run.tipoImport === "d8") {
+      console.log(`[FastImport][D8-DIAG] Run ${run.id} — Raw headers (${headers.length}): ${JSON.stringify(headers)}`);
+      console.log(`[FastImport][D8-DIAG] Normalized: ${JSON.stringify(normalizedHeaders)}`);
+      console.log(`[FastImport][D8-DIAG] HeaderMap: ${JSON.stringify(headerMap)}`);
+    }
+
     // Validar headers para D8 — apenas CPF é bloqueante; demais são avisos
     if (run.tipoImport === "d8") {
       // Verificar se o columnMap conseguiu mapear ao menos o CPF
@@ -545,6 +552,12 @@ class FastImportService {
       headers.forEach((h, i) => {
         row[h] = values[i] || "";
       });
+
+      // Diagnóstico: logar primeira linha de dados para D8
+      if (run.tipoImport === "d8" && rowNum === 1) {
+        console.log(`[FastImport][D8-DIAG] First data row values (${values.length}): ${JSON.stringify(values)}`);
+        console.log(`[FastImport][D8-DIAG] Row object sample: cpf=${row[headerMap["cpf"]]}, matricula=${row[headerMap["matricula"]]}, banco=${row[headerMap["banco"]]}`);
+      }
 
       const stagingRow = this.mapToStagingRow(row, headerMap, run, rowNum);
       if (stagingRow) {
@@ -1500,10 +1513,15 @@ class FastImportService {
         rowNum,
       };
     } else if (tipoImport === "d8") {
+      const cpfVal = safeVarchar(padCpf(getValue("cpf")), 20);
+      const matrRaw = preserveMatricula(getValue("matricula"));
+      // Fallback: se não houver coluna de matrícula no arquivo, gera matrícula
+      // sintética a partir do CPF para que o import prossiga sem erros
+      const matriculaFinal = matrRaw || (cpfVal ? `D8_${cpfVal}` : null);
       return {
         importRunId: run.id,
-        cpf: safeVarchar(padCpf(getValue("cpf")), 20),
-        matricula: safeVarchar(preserveMatricula(getValue("matricula")), 50),
+        cpf: cpfVal,
+        matricula: safeVarchar(matriculaFinal, 50),
         nome: safeVarchar(getValue("nome"), 255),
         natureza: safeVarchar(getValue("natureza"), 100),
         orgao: safeVarchar(getValue("orgao"), 100),
