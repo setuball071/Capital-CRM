@@ -99,14 +99,14 @@ async function cleanupOldImportRunRows(): Promise<number> {
 async function cleanupOldContratos(): Promise<number> {
   let totalDeleted = 0;
   try {
-    console.log("[DataRetention] Starting cleanup of contratos older than 45 days...");
+    console.log("[DataRetention] Starting cleanup of contratos older than 90 days...");
 
     while (true) {
       const result = await db.execute(sql`
         DELETE FROM clientes_contratos
         WHERE id IN (
           SELECT id FROM clientes_contratos
-          WHERE competencia < NOW() - INTERVAL '45 days'
+          WHERE competencia < NOW() - INTERVAL '90 days'
           LIMIT ${BATCH_SIZE}
         )
       `);
