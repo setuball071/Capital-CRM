@@ -18,9 +18,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { 
-  Loader2, Phone, MessageSquare, Mail, User, Building, CreditCard, Search,
+  Loader2, Phone, MessageSquare, Mail, User, Building, Building2, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Target, History
+  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -62,6 +62,18 @@ interface ClientContact {
   isManual: boolean;
 }
 
+interface VinculoItem {
+  id: number;
+  cpf: string;
+  matricula: string;
+  orgao: string | null;
+  convenio: string | null;
+  upag: string | null;
+  rjur: string | null;
+  sit_func: string | null;
+  ativo: boolean;
+}
+
 interface ConsultaData {
   clienteBase: any | null;
   folhaAtual: any | null;
@@ -90,6 +102,8 @@ interface ConsultaData {
     rjur: string | null;
     natureza: string | null;
   } | null;
+  vinculos?: VinculoItem[];
+  tem_multiplos_vinculos?: boolean;
   pessoaId?: number;
   leadId?: number;
 }
@@ -229,6 +243,7 @@ export default function VendasConsulta() {
   
   const [termoBusca, setTermoBusca] = useState("");
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
+  const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
   
@@ -360,12 +375,14 @@ export default function VendasConsulta() {
     },
     onSuccess: (data) => {
       setConsultaData(data);
+      setSelectedVinculoId(null);
       setContratosSelecionados(new Set());
       setTaxasContratos({});
       toast({ title: "Cliente encontrado", description: data.clienteBase?.nome || "Dados carregados" });
     },
     onError: (error: any) => {
       setConsultaData(null);
+      setSelectedVinculoId(null);
       toast({ 
         title: "Cliente não localizado", 
         description: error.message || "Verifique os dados informados ou atualize a Base de Clientes.",
@@ -382,6 +399,68 @@ export default function VendasConsulta() {
       buscarMutation.mutate(cpfFromUrl);
     }
   }, [cpfFromUrl]);
+
+  const trocarVinculoMutation = useMutation({
+    mutationFn: async ({ pessoaId, vinculoId }: { pessoaId: number; vinculoId: number }) => {
+      const res = await apiRequest("POST", "/api/vendas/consulta/trocar-vinculo", { pessoaId, vinculoId });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro ao trocar vínculo");
+      }
+      const data = await res.json();
+      const transformFolha = (folha: any) => {
+        if (!folha) return null;
+        return {
+          ...folha,
+          margem_bruta_5: folha.margemBruta5 ?? folha.margem_bruta_5,
+          margem_saldo_5: folha.margemSaldo5 ?? folha.margem_saldo_5,
+          margem_utilizada_5: folha.margemUtilizada5 ?? folha.margem_utilizada_5,
+          margem_bruta_35: folha.margemBruta35 ?? folha.margem_bruta_35,
+          margem_saldo_35: folha.margemSaldo35 ?? folha.margem_saldo_35,
+          margem_utilizada_35: folha.margemUtilizada35 ?? folha.margem_utilizada_35,
+          margem_bruta_70: folha.margemBruta70 ?? folha.margem_bruta_70,
+          margem_saldo_70: folha.margemSaldo70 ?? folha.margem_saldo_70,
+          margem_utilizada_70: folha.margemUtilizada70 ?? folha.margem_utilizada_70,
+          margem_beneficio_bruta_5: folha.margemBeneficioBruta5 ?? folha.margem_beneficio_bruta_5,
+          margem_beneficio_saldo_5: folha.margemBeneficioSaldo5 ?? folha.margem_beneficio_saldo_5,
+          margem_beneficio_utilizada_5: folha.margemBeneficioUtilizada5 ?? folha.margem_beneficio_utilizada_5,
+          margem_cartao_credito_saldo: folha.margemCartaoCreditoSaldo ?? folha.margem_cartao_credito_saldo,
+          margem_cartao_beneficio_saldo: folha.margemCartaoBeneficioSaldo ?? folha.margem_cartao_beneficio_saldo,
+        };
+      };
+      const transformContrato = (contrato: any) => {
+        if (!contrato) return null;
+        return {
+          ...contrato,
+          valor_parcela: contrato.valorParcela ?? contrato.valor_parcela,
+          parcelas_restantes: contrato.parcelasRestantes ?? contrato.parcelas_restantes,
+          saldo_devedor: contrato.saldoDevedor ?? contrato.saldo_devedor,
+          tipo_contrato: contrato.tipoContrato ?? contrato.tipo_contrato,
+          numero_contrato: contrato.numeroContrato ?? contrato.numero_contrato ?? contrato.contrato,
+        };
+      };
+      return {
+        folhaAtual: transformFolha(data.folhaAtual),
+        contratos: (data.contratos || []).map(transformContrato),
+        vinculo: data.vinculo,
+      };
+    },
+    onSuccess: (data) => {
+      setConsultaData((prev) => prev ? { ...prev, ...data } : prev);
+      setContratosSelecionados(new Set());
+      setTaxasContratos({});
+    },
+    onError: () => {
+      toast({ title: "Erro ao trocar vínculo", variant: "destructive" });
+    },
+  });
+
+  // When selectedVinculoId changes, fetch data for that vínculo
+  useEffect(() => {
+    if (selectedVinculoId && consultaData?.pessoaId) {
+      trocarVinculoMutation.mutate({ pessoaId: consultaData.pessoaId, vinculoId: selectedVinculoId });
+    }
+  }, [selectedVinculoId]);
 
   const createContactMutation = useMutation({
     mutationFn: async (data: { type: string; value: string; label?: string }) => {
@@ -574,7 +653,7 @@ export default function VendasConsulta() {
     setHistoricoModalOpen(true);
     historicoMutation.mutate({
       pessoaId: consultaData.pessoaId,
-      vinculoId: consultaData.vinculo?.id,
+      vinculoId: selectedVinculoId ?? consultaData.vinculo?.id,
     });
   };
 
@@ -772,6 +851,52 @@ export default function VendasConsulta() {
       <div className="flex-1 overflow-auto pb-4">
         <div className="container mx-auto p-4">
           <div className="space-y-4">
+
+            {/* Vínculo selector card - shown only when there are multiple vínculos */}
+            {consultaData.tem_multiplos_vinculos && consultaData.vinculos && consultaData.vinculos.length > 1 && (
+              <Card className="border-amber-500/40 bg-amber-50/30 dark:bg-amber-950/20">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
+                        Este cliente possui múltiplos vínculos. Selecione o vínculo desejado:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {consultaData.vinculos.map((v) => {
+                          const isActive = selectedVinculoId
+                            ? selectedVinculoId === v.id
+                            : v.id === (consultaData.vinculo?.id ?? consultaData.vinculos![0].id);
+                          return (
+                            <Button
+                              key={v.id}
+                              size="sm"
+                              variant={isActive ? "default" : "outline"}
+                              disabled={trocarVinculoMutation.isPending}
+                              onClick={() => {
+                                if (!isActive) setSelectedVinculoId(v.id);
+                              }}
+                              className="flex items-center gap-1"
+                              data-testid={`button-vinculo-${v.id}`}
+                            >
+                              <Building2 className="h-3 w-3" />
+                              <span>{v.orgao || v.convenio || `Vínculo ${v.id}`}</span>
+                              {v.matricula && (
+                                <span className="text-xs opacity-70 ml-1">({v.matricula})</span>
+                              )}
+                            </Button>
+                          );
+                        })}
+                        {trocarVinculoMutation.isPending && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground self-center" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">

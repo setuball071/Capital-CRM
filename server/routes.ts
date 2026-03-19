@@ -14296,12 +14296,93 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           emails: uniqueEmails,
         },
         vinculo: vinculoAtual,
+        vinculos: vinculosFiltrados,
+        tem_multiplos_vinculos: vinculosFiltrados.length > 1,
         pessoaId: cliente.id,
         leadId,
       });
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);
       return res.status(500).json({ message: "Erro ao buscar cliente" });
+    }
+  });
+
+  // POST /api/vendas/consulta/trocar-vinculo - Troca o vínculo selecionado e retorna nova folha/contratos
+  app.post("/api/vendas/consulta/trocar-vinculo", requireAuth, async (req, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const { pessoaId, vinculoId } = req.body;
+
+      if (!pessoaId || !vinculoId) {
+        return res.status(400).json({ message: "pessoaId e vinculoId são obrigatórios" });
+      }
+
+      // Validate pessoa belongs to this tenant
+      const cliente = await storage.getClientePessoaById(Number(pessoaId));
+      if (!cliente) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+
+      // Validate the vínculo exists and belongs to this pessoa
+      const vinculos = await storage.getVinculosByPessoaId(cliente.id);
+      const vinculoSelecionado = vinculos.find((v) => v.id === Number(vinculoId));
+      if (!vinculoSelecionado) {
+        return res.status(404).json({ message: "Vínculo não encontrado" });
+      }
+
+      // Get folha for the selected vínculo
+      let folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoSelecionado.id);
+      if (folhaRegistros.length === 0) {
+        folhaRegistros = await storage.getFolhaMesByPessoaId(cliente.id);
+      }
+      const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+
+      const folhaFormatada = folhaAtual
+        ? {
+            competencia: safeCompetencia(folhaAtual.competencia),
+            margem_bruta_5: folhaAtual.margemBruta5 != null ? parseFloat(String(folhaAtual.margemBruta5)) : null,
+            margem_utilizada_5: folhaAtual.margemUtilizada5 != null ? parseFloat(String(folhaAtual.margemUtilizada5)) : null,
+            margem_saldo_5: folhaAtual.margemSaldo5 != null ? parseFloat(String(folhaAtual.margemSaldo5)) : null,
+            margem_beneficio_bruta_5: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(String(folhaAtual.margemBeneficioBruta5)) : null,
+            margem_beneficio_utilizada_5: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(String(folhaAtual.margemBeneficioUtilizada5)) : null,
+            margem_beneficio_saldo_5: folhaAtual.margemBeneficioSaldo5 != null ? parseFloat(String(folhaAtual.margemBeneficioSaldo5)) : null,
+            margem_bruta_35: folhaAtual.margemBruta35 != null ? parseFloat(String(folhaAtual.margemBruta35)) : null,
+            margem_utilizada_35: folhaAtual.margemUtilizada35 != null ? parseFloat(String(folhaAtual.margemUtilizada35)) : null,
+            margem_saldo_35: folhaAtual.margemSaldo35 != null ? parseFloat(String(folhaAtual.margemSaldo35)) : null,
+            margem_bruta_70: folhaAtual.margemBruta70 != null ? parseFloat(String(folhaAtual.margemBruta70)) : null,
+            margem_utilizada_70: folhaAtual.margemUtilizada70 != null ? parseFloat(String(folhaAtual.margemUtilizada70)) : null,
+            margem_saldo_70: folhaAtual.margemSaldo70 != null ? parseFloat(String(folhaAtual.margemSaldo70)) : null,
+            margem_cartao_credito_saldo: folhaAtual.margemCartaoCreditoSaldo != null ? parseFloat(String(folhaAtual.margemCartaoCreditoSaldo)) : null,
+            margem_cartao_beneficio_saldo: folhaAtual.margemCartaoBeneficioSaldo != null ? parseFloat(String(folhaAtual.margemCartaoBeneficioSaldo)) : null,
+            salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(String(folhaAtual.salarioBruto)) : null,
+            descontos_brutos: folhaAtual.descontosBrutos != null ? parseFloat(String(folhaAtual.descontosBrutos)) : null,
+            salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(String(folhaAtual.salarioLiquido)) : null,
+            creditos: folhaAtual.creditos != null ? parseFloat(String(folhaAtual.creditos)) : null,
+            debitos: folhaAtual.debitos != null ? parseFloat(String(folhaAtual.debitos)) : null,
+            liquido: folhaAtual.liquido != null ? parseFloat(String(folhaAtual.liquido)) : null,
+            sit_func_no_mes: folhaAtual.sitFuncNoMes,
+            base_tag: folhaAtual.baseTag,
+            extras_folha: folhaAtual.extrasFolha,
+          }
+        : null;
+
+      // Get contratos for the selected vínculo
+      let contratos = await storage.getContratosByVinculoId(vinculoSelecionado.id);
+      if (contratos.length === 0) {
+        const todosPessoa = await storage.getContratosByPessoaId(cliente.id);
+        contratos = todosPessoa.filter(
+          (c) => !c.vinculoId || c.vinculoId === vinculoSelecionado.id,
+        );
+      }
+
+      return res.json({
+        folhaAtual: folhaFormatada,
+        contratos,
+        vinculo: vinculoSelecionado,
+      });
+    } catch (error) {
+      console.error("Trocar vínculo consulta error:", error);
+      return res.status(500).json({ message: "Erro ao trocar vínculo" });
     }
   });
 
