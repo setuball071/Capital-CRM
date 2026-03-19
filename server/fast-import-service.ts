@@ -231,28 +231,29 @@ const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
   cod_banco: "banco",
 };
 
-// Headers obrigatórios D8 Servidor (normalizados)
+// Headers obrigatórios D8 Servidor — usar NOMES CANÔNICOS (chaves do headerMap)
+// Nota: "uf" mapeia para canonical "natureza"; "pmt" mapeia para "valor_parcela"
 const D8_REQUIRED_HEADERS = [
   "banco",
   "orgao",
   "matricula",
-  "uf",
+  "natureza",        // arquivo usa "UF" ou "NATUREZA"
   "nome",
   "cpf",
   "tipo_contrato",
-  "pmt",
+  "valor_parcela",   // arquivo usa "PMT" ou "VALOR_PARCELA"
   "prazo_remanescente",
   "situacao_contrato",
   "numero_contrato",
 ];
 
-// Headers obrigatórios D8 Pensionista (normalizados)
+// Headers obrigatórios D8 Pensionista — usar NOMES CANÔNICOS
 const D8_PENSIONISTA_REQUIRED_HEADERS = [
   "orgao",
   "matricula",
   "cpf",
   "tipo_contrato",
-  "pmt",
+  "valor_parcela",   // arquivo usa "PMT" ou "VALOR_PARCELA"
   "prazo_remanescente",
   "numero_contrato",
   "banco",
@@ -452,8 +453,9 @@ class FastImportService {
     let bytesRead = startOffset;
     let pausedForResume = false;
 
-    const headers = await this.readHeaders(filePath);
+    const { headers, delimiter } = await this.readHeaders(filePath);
     const normalizedHeaders = headers.map((h) => normalizeCol(h));
+    console.log(`[FastImport] Delimiter detected: ${JSON.stringify(delimiter)}, headers: ${headers.length}`);
 
     // Auto-detectar layout D8 baseado na presença de m_instituidor
     let effectiveLayoutD8 = run.layoutD8;
@@ -547,7 +549,7 @@ class FastImportService {
       bytesRead += Buffer.byteLength(line, "utf8") + 1;
       rowNum++;
 
-      const values = this.parseCSVLine(line);
+      const values = this.parseCSVLine(line, delimiter);
       const row: Record<string, any> = {};
       headers.forEach((h, i) => {
         row[h] = values[i] || "";
@@ -1658,13 +1660,15 @@ class FastImportService {
     }
   }
 
-  private async readHeaders(filePath: string): Promise<string[]> {
+  private async readHeaders(filePath: string): Promise<{ headers: string[]; delimiter: string }> {
     const stream = createEncodingAwareStream(filePath, { start: 0, end: 20000 });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     let headers: string[] = [];
+    let delimiter = ";";
     for await (const line of rl) {
-      headers = this.parseCSVLine(line);
+      delimiter = this.detectDelimiter(line);
+      headers = this.parseCSVLine(line, delimiter);
       break;
     }
 
@@ -1672,7 +1676,7 @@ class FastImportService {
     if (typeof (stream as any).destroy === "function") {
       (stream as any).destroy();
     }
-    return headers;
+    return { headers, delimiter };
   }
 
   private buildHeaderMap(
@@ -1690,7 +1694,18 @@ class FastImportService {
     return headerMap;
   }
 
-  private parseCSVLine(line: string): string[] {
+  private detectDelimiter(line: string): string {
+    // Conta ocorrências de cada candidato na primeira linha
+    const tab = (line.match(/\t/g) || []).length;
+    const semi = (line.match(/;/g) || []).length;
+    const comma = (line.match(/,/g) || []).length;
+    if (tab >= semi && tab >= comma && tab > 0) return "\t";
+    if (semi >= comma && semi > 0) return ";";
+    return ",";
+  }
+
+  private parseCSVLine(line: string, delimiter?: string): string[] {
+    const delim = delimiter ?? this.detectDelimiter(line);
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
@@ -1708,7 +1723,7 @@ class FastImportService {
         } else {
           inQuotes = false;
         }
-      } else if ((char === "," || char === ";") && !inQuotes) {
+      } else if (char === delim && !inQuotes) {
         result.push(current.trim());
         current = "";
       } else {
