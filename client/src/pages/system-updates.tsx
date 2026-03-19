@@ -463,7 +463,7 @@ export default function SystemUpdatesPage() {
               disabled={isPending}
               data-testid="button-save-update"
             >
-              {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
+              {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Publicando...</> : "Publicar"}
             </Button>
           </DialogFooter>
         </DialogContent>
