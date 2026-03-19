@@ -1,0 +1,97 @@
+PROMPT PARA O AGENTE REPLIT — Central de Atualizações
+
+Construir a funcionalidade de Central de Atualizações no sistema Capital Go.
+FASE A — BANCO DE DADOS
+Adicionar ao shared/schema.ts e criar migration migrations/add_system_updates.sql:
+system_updates
+id SERIAL PK
+tenant_id INTEGER FK tenants(id)
+title VARCHAR(255) NOT NULL
+raw_input TEXT NOT NULL — texto bruto colado pelo master (output do agente)
+content_what TEXT NOT NULL — "O que mudou" (gerado pela IA)
+content_how TEXT NOT NULL — "Como funciona" (gerado pela IA)
+content_impact TEXT NOT NULL — "Impacto no seu dia a dia" (gerado pela IA)
+target_roles TEXT[] NOT NULL — ex: ["vendedor", "operacional", "todos"]
+is_active BOOLEAN DEFAULT TRUE
+published_at TIMESTAMP DEFAULT NOW()
+created_by INTEGER FK users(id)
+created_at TIMESTAMP DEFAULT NOW()
+system_update_reads
+id SERIAL PK
+update_id INTEGER FK system_updates(id)
+user_id INTEGER FK users(id)
+read_at TIMESTAMP DEFAULT NOW()
+UNIQUE(update_id, user_id)
+
+FASE B — ROTAS DA API
+GET  /api/system-updates/pending     — retorna atualizações não lidas pelo usuário logado (filtra por role)
+POST /api/system-updates/:id/read    — registra confirmação de leitura
+GET  /api/system-updates             — lista todas (master only)
+POST /api/system-updates             — criar nova atualização (master only)
+PUT  /api/system-updates/:id         — editar (master only)
+DELETE /api/system-updates/:id       — remover (master only)
+POST /api/system-updates/generate    — recebe raw_input, chama Claude API, retorna os 3 campos gerados
+Rota /api/system-updates/generate:
+
+Recebe { raw_input: string }
+Chama a API da Anthropic (claude-haiku — mais barato) com o prompt:
+
+Você é um comunicador interno de uma empresa de crédito consignado chamada Capital Go.
+Com base no texto técnico abaixo (output de um sistema de desenvolvimento), 
+reescreva em linguagem simples e direta para os colaboradores da empresa.
+Retorne APENAS um JSON válido com exatamente estas 3 chaves:
+{
+  "content_what": "O que foi atualizado (2-3 frases simples)",
+  "content_how": "Como funciona agora (passo a passo simples, máx 4 itens)",
+  "content_impact": "Como isso impacta seu dia a dia (1-2 frases diretas)"
+}
+Texto técnico: {raw_input}
+
+Retorna o JSON parseado para o frontend
+
+
+FASE C — POP-UP (componente global)
+Criar client/src/components/UpdatesPopup.tsx:
+
+Ao montar: chama GET /api/system-updates/pending
+Se retornar atualizações: exibe modal bloqueante (sem fechar com ESC ou clique fora)
+Se tiver mais de uma: exibe uma por vez com indicador "1 de 3", botão "Próxima"
+Layout do pop-up:
+
+Header: logo Capital Go + "📢 Novidade no sistema"
+Badge com data de publicação
+Seção "O que mudou" — ícone 🔄
+Seção "Como funciona" — ícone ⚙️
+Seção "Impacto no seu dia a dia" — ícone 👤
+Botão roxo #6C2BD9: "Entendi, pode fechar" — chama POST /read e fecha (ou vai para próxima)
+Sem botão X, sem fechar clicando fora
+
+
+
+Adicionar <UpdatesPopup /> no layout principal em App.tsx, dentro do componente autenticado, para rodar em todas as páginas após login.
+
+FASE D — PÁGINA DA CENTRAL (master only)
+Criar client/src/pages/system-updates.tsx na rota /admin/atualizacoes:
+Lista de atualizações:
+
+Tabela: título, data, roles alvo, quantos leram / total, status ativo/inativo
+Botão "Nova Atualização"
+Botão "Ver quem leu" por atualização — abre modal com lista de usuários + data de confirmação
+
+Modal "Nova Atualização":
+
+Campo: Título (text)
+Campo: Destinatários (multi-select: Todos / Vendedor / Operacional / Coordenação / Financeiro)
+Campo grande: Cole aqui o resumo do que foi feito (textarea — raw_input)
+Botão "✨ Gerar comunicado com IA" — chama /generate, mostra loading
+Após retorno da IA: exibe os 3 campos gerados em cards editáveis (master pode ajustar antes de publicar)
+Botão "Publicar" — salva e ativa
+
+Adicionar no sidebar em Administração: "Central de Atualizações" — ícone Bell, master only, rota /admin/atualizacoes.
+
+VERIFICAÇÃO FINAL:
+
+Master cria uma atualização colando texto, gera com IA, publica
+Outro usuário faz login e vê o pop-up bloqueante
+Usuário confirma leitura e pop-up fecha
+Master vê na lista que o usuário confirmou a leitura
