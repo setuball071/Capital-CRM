@@ -1949,25 +1949,13 @@ export class DbStorage implements IStorage {
   }
 
   async getContratosByPessoaId(pessoaId: number): Promise<ClienteContrato[]> {
-    // Suporta dois tipos de contrato:
-    // 1. Contratos com vínculo folha (vinculo_id NOT NULL): filtra pela competência mais recente da folha
-    // 2. Contratos D8 sem vínculo (vinculo_id IS NULL): filtra pela competência mais recente do D8 para essa pessoa
-    const rows = await db.execute(sql`
-      SELECT * FROM clientes_contratos
-      WHERE pessoa_id = ${pessoaId}
-      AND (
-        (vinculo_id IS NOT NULL AND competencia = (
-          SELECT MAX(f.competencia) FROM clientes_folha_mes f WHERE f.vinculo_id = clientes_contratos.vinculo_id
-        ))
-        OR
-        (vinculo_id IS NULL AND competencia = (
-          SELECT MAX(c2.competencia) FROM clientes_contratos c2
-          WHERE c2.pessoa_id = ${pessoaId} AND c2.vinculo_id IS NULL
-        ))
-      )
-      ORDER BY competencia DESC
-    `);
-    return rows.rows as any[];
+    return await db.select()
+      .from(clientesContratos)
+      .where(and(
+        eq(clientesContratos.pessoaId, pessoaId),
+        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_folha_mes WHERE vinculo_id = ${clientesContratos.vinculoId})`
+      ))
+      .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
 
   async getContratosByVinculoId(vinculoId: number): Promise<ClienteContrato[]> {

@@ -347,15 +347,12 @@ export default function BasesClientes() {
     if (e.target.files && e.target.files.length > 0) {
       // Se múltiplos arquivos, adicionar à fila
       if (e.target.files.length > 1) {
-        const needsCompetencia = fastImportTipo !== "d8" && fastImportTipo !== "contatos";
-        if (!fastImportConvenio || (needsCompetencia && !fastImportCompetencia) || (fastImportTipo === "estadual" && !fastImportUf)) {
+        if (!fastImportConvenio || !fastImportCompetencia || (fastImportTipo === "estadual" && !fastImportUf)) {
           toast({
             title: "Campos obrigatórios",
             description: fastImportTipo === "estadual" && !fastImportUf
               ? "Selecione a UF antes de adicionar arquivos à fila."
-              : needsCompetencia
-              ? "Preencha convênio e competência antes de adicionar arquivos."
-              : "Preencha o convênio antes de adicionar arquivos.",
+              : "Preencha convênio e competência antes de adicionar arquivos.",
             variant: "destructive",
           });
           return;
@@ -379,13 +376,10 @@ export default function BasesClientes() {
 
   // Adicionar arquivo único à fila
   const addToQueue = () => {
-    const needsCompetencia = fastImportTipo !== "d8" && fastImportTipo !== "contatos";
-    if (!fastImportFile || !fastImportConvenio || (needsCompetencia && !fastImportCompetencia)) {
+    if (!fastImportFile || !fastImportConvenio || !fastImportCompetencia) {
       toast({
         title: "Campos obrigatórios",
-        description: needsCompetencia
-          ? "Preencha todos os campos antes de adicionar à fila."
-          : "Preencha o convênio antes de adicionar à fila.",
+        description: "Preencha todos os campos antes de adicionar à fila.",
         variant: "destructive",
       });
       return;
@@ -431,11 +425,8 @@ export default function BasesClientes() {
         body: formData,
         credentials: "include",
       })
-        .then(async res => {
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.message || "Erro ao iniciar importação");
-          }
+        .then(res => {
+          if (!res.ok) throw new Error("Erro ao iniciar importação");
           return res.json();
         })
         .then(async (data) => {
@@ -570,13 +561,10 @@ export default function BasesClientes() {
     }
     
     // Caso contrário, importação única (comportamento original)
-    const needsCompetencia = fastImportTipo !== "d8" && fastImportTipo !== "contatos";
-    if (!fastImportFile || !fastImportConvenio || (needsCompetencia && !fastImportCompetencia)) {
+    if (!fastImportFile || !fastImportConvenio || !fastImportCompetencia) {
       toast({
         title: "Campos obrigatórios",
-        description: needsCompetencia
-          ? "Preencha todos os campos obrigatórios."
-          : "Preencha o convênio e selecione o arquivo.",
+        description: "Preencha todos os campos obrigatórios.",
         variant: "destructive",
       });
       return;
@@ -2001,9 +1989,7 @@ export default function BasesClientes() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="fast-competencia">
-                    Competência {fastImportTipo !== "d8" && fastImportTipo !== "contatos" ? "*" : <span className="text-muted-foreground text-xs">(opcional para D8/Contatos)</span>}
-                  </Label>
+                  <Label htmlFor="fast-competencia">Competência *</Label>
                   <Input
                     id="fast-competencia"
                     type="month"

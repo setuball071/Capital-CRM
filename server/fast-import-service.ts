@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as readline from "readline";
 import * as path from "path";
-import * as iconv from "iconv-lite";
 import { db } from "./storage";
 import {
   importRuns,
@@ -27,57 +26,6 @@ import {
   normalizeBrDecimal,
   COLUMN_MAP,
 } from "./import-service";
-
-/**
- * Detecta o encoding de um arquivo CSV (UTF-8 ou Windows-1252/Latin1)
- */
-function detectFileEncoding(filePath: string): 'utf8' | 'win1252' {
-  const fd = fs.openSync(filePath, 'r');
-  const buffer = Buffer.alloc(4096);
-  const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
-  fs.closeSync(fd);
-  const sample = buffer.slice(0, bytesRead);
-  let hasInvalidUtf8 = false;
-  let i = 0;
-  while (i < bytesRead) {
-    const byte = sample[i];
-    if (byte < 0x80) {
-      i++;
-    } else if ((byte >= 0x80 && byte <= 0x9F) || (byte >= 0xA0 && byte <= 0xFF && sample[i + 1] === undefined)) {
-      hasInvalidUtf8 = true;
-      break;
-    } else if ((byte & 0xE0) === 0xC0) {
-      if (i + 1 >= bytesRead || (sample[i + 1] & 0xC0) !== 0x80) { hasInvalidUtf8 = true; break; }
-      i += 2;
-    } else if ((byte & 0xF0) === 0xE0) {
-      if (i + 2 >= bytesRead || (sample[i + 1] & 0xC0) !== 0x80 || (sample[i + 2] & 0xC0) !== 0x80) { hasInvalidUtf8 = true; break; }
-      i += 3;
-    } else if ((byte & 0xF8) === 0xF0) {
-      if (i + 3 >= bytesRead || (sample[i + 1] & 0xC0) !== 0x80 || (sample[i + 2] & 0xC0) !== 0x80 || (sample[i + 3] & 0xC0) !== 0x80) { hasInvalidUtf8 = true; break; }
-      i += 4;
-    } else {
-      hasInvalidUtf8 = true;
-      break;
-    }
-  }
-  const encoding = hasInvalidUtf8 ? 'win1252' : 'utf8';
-  console.log(`[FastImport][Encoding] ${path.basename(filePath)}: ${encoding}`);
-  return encoding;
-}
-
-/**
- * Cria um stream de leitura encoding-aware (UTF-8 ou Windows-1252)
- */
-function createEncodingAwareStream(filePath: string, options?: { start?: number; end?: number }): NodeJS.ReadableStream {
-  const encoding = detectFileEncoding(filePath);
-  const streamOptions = { ...options };
-  if (encoding === 'win1252') {
-    const rawStream = fs.createReadStream(filePath, streamOptions);
-    return rawStream.pipe(iconv.decodeStream('win1252'));
-  } else {
-    return fs.createReadStream(filePath, { ...streamOptions, encoding: 'utf8' });
-  }
-}
 
 // Reduced batch size to avoid Neon HTTP payload limit (~16MB)
 // Each folha row has ~30 fields, so 100 rows keeps payload under limit
@@ -129,133 +77,73 @@ export interface FastImportResult {
   report?: FastImportReport;
 }
 
-// Mapa D8 Servidor (11 colunas + aliases comuns de exportações bancárias)
+// Mapa D8 Servidor (11 colunas)
 // Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
-  nr_cpf: "cpf",
-  num_cpf: "cpf",
   matricula: "matricula",
-  mat: "matricula",
-  matric: "matricula",
-  nr_matricula: "matricula",
-  num_matricula: "matricula",
-  matricula_funcional: "matricula",
   nome: "nome",
-  nome_servidor: "nome",
-  nome_do_servidor: "nome",
   banco: "banco",
-  banco_codigo: "banco",
-  cod_banco: "banco",
   orgao: "orgao",
-  orgao_pagador: "orgao",
-  cod_orgao: "orgao",
-  upag: "orgao",
   uf: "natureza",
   natureza: "natureza",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
-  num_contrato: "numero_contrato",
-  nr_contrato: "numero_contrato",
-  contrato: "numero_contrato",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
-  tipo: "tipo_contrato",
-  contrato_tipo: "tipo_contrato",
-  produto: "tipo_contrato",
-  modalidade: "tipo_contrato",
   valor_parcela: "valor_parcela",
   pmt: "valor_parcela",
-  valor_pmt: "valor_parcela",
-  parcela: "valor_parcela",
-  vl_parcela: "valor_parcela",
-  prestacao: "valor_parcela",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
-  prazo_restante: "prazo_remanescente",
-  saldo_prazo: "prazo_remanescente",
   situacao_contrato: "situacao_contrato",
-  situacao: "situacao_contrato",
-  sit_contrato: "situacao_contrato",
-  status_contrato: "situacao_contrato",
-  status: "situacao_contrato",
 };
 
-// Mapa D8 Pensionista (14 colunas específicas + aliases)
+// Mapa D8 Pensionista (14 colunas específicas)
 // Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
   orgao: "orgao",
-  orgao_pagador: "orgao",
-  cod_orgao: "orgao",
-  upag: "orgao",
   m_instituidor: "m_instituidor",
-  matricula_instituidor: "m_instituidor",
   matricula: "matricula",
-  mat: "matricula",
-  matric: "matricula",
-  nr_matricula: "matricula",
-  num_matricula: "matricula",
-  matricula_funcional: "matricula",
   uf: "natureza",
   natureza: "natureza",
   nome: "nome",
-  nome_servidor: "nome",
-  nome_do_servidor: "nome",
   cpf: "cpf",
-  nr_cpf: "cpf",
-  num_cpf: "cpf",
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
-  tipo: "tipo_contrato",
-  contrato_tipo: "tipo_contrato",
-  produto: "tipo_contrato",
-  modalidade: "tipo_contrato",
   pmt: "valor_parcela",
   valor_parcela: "valor_parcela",
-  valor_pmt: "valor_parcela",
-  parcela: "valor_parcela",
-  vl_parcela: "valor_parcela",
-  prestacao: "valor_parcela",
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
-  prazo_restante: "prazo_remanescente",
-  saldo_prazo: "prazo_remanescente",
   ids: "ids",
   obs: "obs",
   regime_juridico: "regime_juridico",
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
-  num_contrato: "numero_contrato",
-  nr_contrato: "numero_contrato",
-  contrato: "numero_contrato",
   banco: "banco",
-  banco_codigo: "banco",
-  cod_banco: "banco",
 };
 
-// Headers obrigatórios D8 Servidor — usar NOMES CANÔNICOS (chaves do headerMap)
-// Nota: "uf" mapeia para canonical "natureza"; "pmt" mapeia para "valor_parcela"
+// Headers obrigatórios D8 Servidor (normalizados)
 const D8_REQUIRED_HEADERS = [
   "banco",
   "orgao",
   "matricula",
-  "natureza",        // arquivo usa "UF" ou "NATUREZA"
+  "uf",
   "nome",
   "cpf",
   "tipo_contrato",
-  "valor_parcela",   // arquivo usa "PMT" ou "VALOR_PARCELA"
+  "pmt",
   "prazo_remanescente",
   "situacao_contrato",
   "numero_contrato",
 ];
 
-// Headers obrigatórios D8 Pensionista — usar NOMES CANÔNICOS
+// Headers obrigatórios D8 Pensionista (normalizados)
 const D8_PENSIONISTA_REQUIRED_HEADERS = [
   "orgao",
   "matricula",
   "cpf",
   "tipo_contrato",
-  "valor_parcela",   // arquivo usa "PMT" ou "VALOR_PARCELA"
+  "pmt",
   "prazo_remanescente",
   "numero_contrato",
   "banco",
@@ -455,9 +343,8 @@ class FastImportService {
     let bytesRead = startOffset;
     let pausedForResume = false;
 
-    const { headers, delimiter } = await this.readHeaders(filePath);
+    const headers = await this.readHeaders(filePath);
     const normalizedHeaders = headers.map((h) => normalizeCol(h));
-    console.log(`[FastImport] Delimiter detected: ${JSON.stringify(delimiter)}, headers: ${headers.length}`);
 
     // Auto-detectar layout D8 baseado na presença de m_instituidor
     let effectiveLayoutD8 = run.layoutD8;
@@ -478,60 +365,53 @@ class FastImportService {
     const columnMap = this.getColumnMap(run.tipoImport, effectiveLayoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
 
-    // Diagnóstico: logar headers e mapeamentos para D8
+    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
     if (run.tipoImport === "d8") {
-      console.log(`[FastImport][D8-DIAG] Run ${run.id} — Raw headers (${headers.length}): ${JSON.stringify(headers)}`);
-      console.log(`[FastImport][D8-DIAG] Normalized: ${JSON.stringify(normalizedHeaders)}`);
-      console.log(`[FastImport][D8-DIAG] HeaderMap: ${JSON.stringify(headerMap)}`);
-    }
-
-    // Validar headers para D8 — apenas CPF é bloqueante; demais são avisos
-    if (run.tipoImport === "d8") {
-      // Verificar se o columnMap conseguiu mapear ao menos o CPF
-      const hasCpf = Object.values(headerMap).length > 0 &&
-        Object.keys(headerMap).includes("cpf");
-
-      // Fallback: verificar nos normalizedHeaders com aliases
-      const cpfPresent = hasCpf ||
-        normalizedHeaders.includes("cpf") ||
-        normalizedHeaders.includes("nr_cpf") ||
-        normalizedHeaders.includes("num_cpf");
-
-      if (!cpfPresent) {
-        throw new Error(
-          `Arquivo D8 inválido: coluna CPF não encontrada. Verifique o arquivo e tente novamente.`,
-        );
-      }
-
-      // Verificar headers opcionais e logar avisos (não bloqueia o import)
-      const optionalHeaders =
+      const requiredHeaders =
         effectiveLayoutD8 === "pensionista"
           ? D8_PENSIONISTA_REQUIRED_HEADERS
           : D8_REQUIRED_HEADERS;
 
-      const missingOptional = optionalHeaders.filter((req) => {
-        if (req === "cpf") return false; // já validado acima
-        // Verifica via columnMap (aliases já resolvidos)
-        if (Object.keys(headerMap).includes(req)) return false;
-        // Fallback: verifica diretamente nos normalizedHeaders
-        return !normalizedHeaders.some((h) => {
-          const mapped = (effectiveLayoutD8 === "pensionista" ? D8_COLUMN_MAP_PENSIONISTA : D8_COLUMN_MAP_SERVIDOR)[h];
-          return mapped === req;
-        });
+      const missingHeaders = requiredHeaders.filter((req) => {
+        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
+        if (req === "pmt")
+          return (
+            !normalizedHeaders.includes("pmt") &&
+            !normalizedHeaders.includes("valor_parcela")
+          );
+        if (req === "numero_contrato")
+          return (
+            !normalizedHeaders.includes("numero_contrato") &&
+            !normalizedHeaders.includes("n_contrato")
+          );
+        if (req === "tipo_contrato")
+          return (
+            !normalizedHeaders.includes("tipo_contrato") &&
+            !normalizedHeaders.includes("tipo_produto")
+          );
+        if (req === "prazo_remanescente")
+          return (
+            !normalizedHeaders.includes("prazo_remanescente") &&
+            !normalizedHeaders.includes("prazo")
+          );
+        return !normalizedHeaders.includes(req);
       });
 
-      if (missingOptional.length > 0) {
+      if (missingHeaders.length > 0) {
         const layoutName =
           effectiveLayoutD8 === "pensionista" ? "Pensionista" : "Servidor";
-        console.warn(
-          `[FastImport] D8 ${layoutName} — colunas opcionais ausentes (import prossegue): ${missingOptional.join(", ").toUpperCase()}`,
+        throw new Error(
+          `Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`,
         );
       }
     }
 
     const batchBuffer: any[] = [];
 
-    const fileStream = createEncodingAwareStream(filePath, { start: startOffset });
+    const fileStream = fs.createReadStream(filePath, {
+      start: startOffset,
+      encoding: "utf8",
+    });
 
     const rl = readline.createInterface({
       input: fileStream,
@@ -551,17 +431,11 @@ class FastImportService {
       bytesRead += Buffer.byteLength(line, "utf8") + 1;
       rowNum++;
 
-      const values = this.parseCSVLine(line, delimiter);
+      const values = this.parseCSVLine(line);
       const row: Record<string, any> = {};
       headers.forEach((h, i) => {
         row[h] = values[i] || "";
       });
-
-      // Diagnóstico: logar primeira linha de dados para D8
-      if (run.tipoImport === "d8" && rowNum === 1) {
-        console.log(`[FastImport][D8-DIAG] First data row values (${values.length}): ${JSON.stringify(values)}`);
-        console.log(`[FastImport][D8-DIAG] Row object sample: cpf=${row[headerMap["cpf"]]}, matricula=${row[headerMap["matricula"]]}, banco=${row[headerMap["banco"]]}`);
-      }
 
       const stagingRow = this.mapToStagingRow(row, headerMap, run, rowNum);
       if (stagingRow) {
@@ -1517,15 +1391,10 @@ class FastImportService {
         rowNum,
       };
     } else if (tipoImport === "d8") {
-      const cpfVal = safeVarchar(padCpf(getValue("cpf")), 20);
-      const matrRaw = preserveMatricula(getValue("matricula"));
-      // Fallback: se não houver coluna de matrícula no arquivo, gera matrícula
-      // sintética a partir do CPF para que o import prossiga sem erros
-      const matriculaFinal = matrRaw || (cpfVal ? `D8_${cpfVal}` : null);
       return {
         importRunId: run.id,
-        cpf: cpfVal,
-        matricula: safeVarchar(matriculaFinal, 50),
+        cpf: safeVarchar(padCpf(getValue("cpf")), 20),
+        matricula: safeVarchar(preserveMatricula(getValue("matricula")), 50),
         nome: safeVarchar(getValue("nome"), 255),
         natureza: safeVarchar(getValue("natureza"), 100),
         orgao: safeVarchar(getValue("orgao"), 100),
@@ -1662,23 +1531,23 @@ class FastImportService {
     }
   }
 
-  private async readHeaders(filePath: string): Promise<{ headers: string[]; delimiter: string }> {
-    const stream = createEncodingAwareStream(filePath, { start: 0, end: 20000 });
+  private async readHeaders(filePath: string): Promise<string[]> {
+    const stream = fs.createReadStream(filePath, {
+      start: 0,
+      end: 20000,
+      encoding: "utf8",
+    });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     let headers: string[] = [];
-    let delimiter = ";";
     for await (const line of rl) {
-      delimiter = this.detectDelimiter(line);
-      headers = this.parseCSVLine(line, delimiter);
+      headers = this.parseCSVLine(line);
       break;
     }
 
     rl.close();
-    if (typeof (stream as any).destroy === "function") {
-      (stream as any).destroy();
-    }
-    return { headers, delimiter };
+    stream.destroy();
+    return headers;
   }
 
   private buildHeaderMap(
@@ -1689,27 +1558,14 @@ class FastImportService {
     for (const h of headers) {
       const normalized = normalizeCol(h);
       const mapped = columnMap[normalized];
-      // Primeiro match vence: se o canonical já foi mapeado, não sobrescreve
-      // Isso garante que ORGAO tenha prioridade sobre UPAG quando ambos aparecem
-      if (mapped && !headerMap[mapped]) {
+      if (mapped) {
         headerMap[mapped] = h;
       }
     }
     return headerMap;
   }
 
-  private detectDelimiter(line: string): string {
-    // Conta ocorrências de cada candidato na primeira linha
-    const tab = (line.match(/\t/g) || []).length;
-    const semi = (line.match(/;/g) || []).length;
-    const comma = (line.match(/,/g) || []).length;
-    if (tab >= semi && tab >= comma && tab > 0) return "\t";
-    if (semi >= comma && semi > 0) return ";";
-    return ",";
-  }
-
-  private parseCSVLine(line: string, delimiter?: string): string[] {
-    const delim = delimiter ?? this.detectDelimiter(line);
+  private parseCSVLine(line: string): string[] {
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
@@ -1727,7 +1583,7 @@ class FastImportService {
         } else {
           inQuotes = false;
         }
-      } else if (char === delim && !inQuotes) {
+      } else if ((char === "," || char === ";") && !inQuotes) {
         result.push(current.trim());
         current = "";
       } else {
