@@ -137,6 +137,7 @@ const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   num_cpf: "cpf",
   matricula: "matricula",
   mat: "matricula",
+  matric: "matricula",
   nr_matricula: "matricula",
   num_matricula: "matricula",
   matricula_funcional: "matricula",
@@ -191,6 +192,7 @@ const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
   matricula_instituidor: "m_instituidor",
   matricula: "matricula",
   mat: "matricula",
+  matric: "matricula",
   nr_matricula: "matricula",
   num_matricula: "matricula",
   matricula_funcional: "matricula",
@@ -1687,7 +1689,9 @@ class FastImportService {
     for (const h of headers) {
       const normalized = normalizeCol(h);
       const mapped = columnMap[normalized];
-      if (mapped) {
+      // Primeiro match vence: se o canonical já foi mapeado, não sobrescreve
+      // Isso garante que ORGAO tenha prioridade sobre UPAG quando ambos aparecem
+      if (mapped && !headerMap[mapped]) {
         headerMap[mapped] = h;
       }
     }
