@@ -23069,7 +23069,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SELECT * FROM notifications 
         WHERE user_id = ${user.id}
         ORDER BY created_at DESC
-        LIMIT 200
       `);
 
       res.json(result.rows);
