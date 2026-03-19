@@ -14317,13 +14317,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "pessoaId e vinculoId são obrigatórios" });
       }
 
-      // Validate pessoa belongs to this tenant
+      // Validate pessoa belongs to this tenant (IDOR protection)
       const cliente = await storage.getClientePessoaById(Number(pessoaId));
-      if (!cliente) {
+      if (!cliente || cliente.tenantId !== tenantId) {
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
 
-      // Validate the vínculo exists and belongs to this pessoa
+      // Validate the vínculo exists and belongs to this pessoa (within tenant)
       const vinculos = await storage.getVinculosByPessoaId(cliente.id);
       const vinculoSelecionado = vinculos.find((v) => v.id === Number(vinculoId));
       if (!vinculoSelecionado) {

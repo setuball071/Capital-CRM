@@ -837,7 +837,7 @@ export default function VendasConsulta() {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => setConsultaData(null)}
+                onClick={() => { setConsultaData(null); setSelectedVinculoId(null); }}
                 data-testid="button-nova-busca"
               >
                 <Search className="h-4 w-4 mr-2" />
@@ -854,45 +854,48 @@ export default function VendasConsulta() {
 
             {/* Vínculo selector card - shown only when there are multiple vínculos */}
             {consultaData.tem_multiplos_vinculos && consultaData.vinculos && consultaData.vinculos.length > 1 && (
-              <Card className="border-amber-500/40 bg-amber-50/30 dark:bg-amber-950/20">
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
-                        Este cliente possui múltiplos vínculos. Selecione o vínculo desejado:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {consultaData.vinculos.map((v) => {
-                          const isActive = selectedVinculoId
-                            ? selectedVinculoId === v.id
-                            : v.id === (consultaData.vinculo?.id ?? consultaData.vinculos![0].id);
-                          return (
-                            <Button
-                              key={v.id}
-                              size="sm"
-                              variant={isActive ? "default" : "outline"}
-                              disabled={trocarVinculoMutation.isPending}
-                              onClick={() => {
-                                if (!isActive) setSelectedVinculoId(v.id);
-                              }}
-                              className="flex items-center gap-1"
-                              data-testid={`button-vinculo-${v.id}`}
-                            >
-                              <Building2 className="h-3 w-3" />
-                              <span>{v.orgao || v.convenio || `Vínculo ${v.id}`}</span>
-                              {v.matricula && (
-                                <span className="text-xs opacity-70 ml-1">({v.matricula})</span>
-                              )}
-                            </Button>
-                          );
-                        })}
-                        {trocarVinculoMutation.isPending && (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground self-center" />
-                        )}
-                      </div>
-                    </div>
+              <Card className="border-amber-500/50 bg-amber-50/10">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Building2 className="w-5 h-5 text-amber-500" />
+                    Este CPF possui {consultaData.vinculos.length} vínculos/órgãos
+                    {trocarVinculoMutation.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Selecione o vínculo para ver os dados de margem correspondentes
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {consultaData.vinculos.map((v) => {
+                      const activeId = selectedVinculoId ?? consultaData.vinculo?.id ?? consultaData.vinculos![0].id;
+                      const isActive = activeId === v.id;
+                      return (
+                        <Button
+                          key={v.id}
+                          variant={isActive ? "default" : "outline"}
+                          size="sm"
+                          disabled={trocarVinculoMutation.isPending}
+                          onClick={() => { if (!isActive) setSelectedVinculoId(v.id); }}
+                          className="flex flex-col items-start h-auto py-2 px-3 text-left"
+                          data-testid={`button-vinculo-${v.id}`}
+                        >
+                          <span className="font-medium">{mapNomenclatura("ORGAO", v.orgao)}</span>
+                          <span className="text-xs opacity-80">
+                            Mat: {v.matricula} | {v.sit_func || "SEM INFO"}
+                          </span>
+                        </Button>
+                      );
+                    })}
                   </div>
+                  {!selectedVinculoId && (
+                    <p className="text-sm text-amber-600 mt-3 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      Os dados de margem mostrados são do vínculo mais recente. Selecione um vínculo específico para detalhes.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}
