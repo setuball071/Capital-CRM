@@ -22890,20 +22890,36 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const user = req.user;
         if (!tenantId || !user)
           return res.status(401).json({ message: "Não autenticado" });
-        if (
-          !hasRole(user, [
-            "master",
-            "coordenacao",
-            "operacional",
-            "atendimento",
-          ])
-        ) {
+
+        const isAdmin = hasRole(user, [
+          "master",
+          "coordenacao",
+          "operacional",
+          "atendimento",
+        ]);
+
+        const { id } = req.params;
+
+        // Busca o registro para verificar ownership
+        const existingCheck = await db.execute(sql`
+          SELECT solicitado_por_id FROM solicitacoes_boleto
+          WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+        `);
+        if (existingCheck.rows.length === 0) {
+          return res.status(404).json({ message: "Solicitação não encontrada" });
+        }
+        const solicitadoPorId = (existingCheck.rows[0] as any).solicitado_por_id;
+
+        const isOwner = user.id === solicitadoPorId;
+        const isVendedor = hasRole(user, ["vendedor"]);
+        const canCancelOnly = !isAdmin && (isVendedor || isOwner);
+
+        if (!isAdmin && !isOwner && !isVendedor) {
           return res
             .status(403)
             .json({ message: "Sem permissão para atualizar status" });
         }
 
-        const { id } = req.params;
         const { status, observacaoOperacional, boletoAnexo, boletoAnexoNome } =
           req.body;
 
@@ -22918,6 +22934,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         ];
         if (!statusValidos.includes(status)) {
           return res.status(400).json({ message: "Status inválido" });
+        }
+
+        // vendedor / dono da solicitação só pode cancelar
+        if (canCancelOnly && status !== "cancelado") {
+          return res
+            .status(403)
+            .json({ message: "Você só pode cancelar esta solicitação" });
         }
 
         let validatedAnexo: string | null = null;
@@ -23046,7 +23069,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SELECT * FROM notifications 
         WHERE user_id = ${user.id}
         ORDER BY created_at DESC
-        LIMIT 50
+        LIMIT 200
       `);
 
       res.json(result.rows);

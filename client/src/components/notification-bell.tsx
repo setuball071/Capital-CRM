@@ -130,7 +130,7 @@ export function NotificationBell() {
           )}
         </div>
         <Separator />
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="max-h-[70vh]">
           {isLoading && notifications.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <span className="text-sm text-muted-foreground" data-testid="text-loading">Carregando...</span>

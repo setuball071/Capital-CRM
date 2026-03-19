@@ -6,6 +6,7 @@ import {
   Plus, Search, Loader2, CheckCircle, Clock, AlertCircle,
   XCircle, FileText, RefreshCw, ChevronDown, Eye, Pencil, Trash2, DollarSign, Upload, Download, Paperclip, X
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,9 +112,24 @@ function formatData(iso: string) {
   try { return format(new Date(iso), "dd/MM/yyyy HH:mm", { locale: ptBR }); } catch { return iso; }
 }
 
+const ADMIN_ROLES = ["master", "coordenacao", "operacional", "atendimento"];
+
 // ── Componente principal ──────────────────────────────────────
 export default function SolicitacoesBoleto() {
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Verifica se o usuário atual tem permissão de admin (pode alterar qualquer status)
+  const currentUserIsAdmin = ADMIN_ROLES.includes(user?.role ?? "");
+  // Retorna true se o usuário pode apenas cancelar esta solicitação específica
+  function canCancelOnlyFor(s: SolicitacaoBoleto): boolean {
+    if (currentUserIsAdmin) return false;
+    return user?.role === "vendedor" || user?.id === s.solicitado_por_id;
+  }
+  // Retorna true se o usuário pode ver o botão de editar status
+  function canEditStatus(s: SolicitacaoBoleto): boolean {
+    return currentUserIsAdmin || canCancelOnlyFor(s);
+  }
 
   // Estado da UI
   const [busca, setBusca] = useState("");
@@ -242,7 +258,12 @@ export default function SolicitacoesBoleto() {
 
   function abrirModalStatus(s: SolicitacaoBoleto) {
     setModalStatus(s);
-    setNovoStatus(s.status);
+    // Se o usuário só pode cancelar, pré-seleciona "cancelado"
+    if (!currentUserIsAdmin && (user?.role === "vendedor" || user?.id === s.solicitado_por_id)) {
+      setNovoStatus("cancelado");
+    } else {
+      setNovoStatus(s.status);
+    }
     setObsOperacional(s.observacao_operacional || "");
     setBoletoFile(null);
   }
@@ -430,14 +451,16 @@ export default function SolicitacoesBoleto() {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => abrirModalStatus(s)}
-                          title="Atualizar status"
-                          className="text-blue-600"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        {canEditStatus(s) && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => abrirModalStatus(s)}
+                            title={canCancelOnlyFor(s) ? "Cancelar solicitação" : "Atualizar status"}
+                            className={canCancelOnlyFor(s) ? "text-red-600" : "text-blue-600"}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost" size="sm"
                           onClick={() => handleExcluir(s.id, s.nome_cliente)}
@@ -674,13 +697,22 @@ export default function SolicitacoesBoleto() {
       <Dialog open={!!modalStatus} onOpenChange={() => setModalStatus(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Atualizar Status — #{modalStatus?.id}</DialogTitle>
+            <DialogTitle>
+              {modalStatus && canCancelOnlyFor(modalStatus)
+                ? `Cancelar Solicitação — #${modalStatus.id}`
+                : `Atualizar Status — #${modalStatus?.id}`}
+            </DialogTitle>
           </DialogHeader>
           {modalStatus && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">
                 <span className="font-medium">{modalStatus.nome_cliente}</span> · {modalStatus.banco}
               </div>
+              {canCancelOnlyFor(modalStatus) ? (
+                <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                  Você pode apenas cancelar esta solicitação. Selecione "Cancelado" para prosseguir.
+                </div>
+              ) : null}
               <div>
                 <Label>Novo Status</Label>
                 <Select value={novoStatus} onValueChange={setNovoStatus}>
@@ -688,7 +720,10 @@ export default function SolicitacoesBoleto() {
                     <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_OPERACIONAL.map(s => (
+                    {(canCancelOnlyFor(modalStatus)
+                      ? STATUS_OPERACIONAL.filter(s => s.value === "cancelado")
+                      : STATUS_OPERACIONAL
+                    ).map(s => (
                       <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                     ))}
                   </SelectContent>
