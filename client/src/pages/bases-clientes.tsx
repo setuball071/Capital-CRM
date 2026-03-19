@@ -343,6 +343,15 @@ export default function BasesClientes() {
     };
   }, []);
 
+  // Keep session alive during fast import (pings /api/auth/me every 5 min)
+  useEffect(() => {
+    if (!isPolling) return;
+    const keepAlive = setInterval(() => {
+      fetch("/api/auth/me", { credentials: "include" }).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(keepAlive);
+  }, [isPolling]);
+
   const handleFastImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       // Se múltiplos arquivos, adicionar à fila
