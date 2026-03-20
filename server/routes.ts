@@ -24669,21 +24669,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const file = req.file;
       if (!file) return res.status(400).json({ message: "Arquivo de imagem é obrigatório" });
 
-      const fsModule = await import("fs");
-      const pathModule = await import("path");
-
-      const uploadsDir = pathModule.join(process.cwd(), "uploads", "creatives");
-      if (!fsModule.existsSync(uploadsDir)) {
-        fsModule.mkdirSync(uploadsDir, { recursive: true });
-      }
-
-      const ext = mimeToExt[file.mimetype] || ".png";
-      const filename = `creative-${req.tenantId}-${Date.now()}${ext}`;
-      const filepath = pathModule.join(uploadsDir, filename);
-
-      fsModule.writeFileSync(filepath, file.buffer);
-
-      const imageUrl = `/uploads/creatives/${filename}`;
+      const mime = file.mimetype || "image/png";
+      const imageUrl = `data:${mime};base64,${file.buffer.toString("base64")}`;
       res.json({ imageUrl });
     } catch (error) {
       console.error("POST /api/creatives/upload-image error:", error);
