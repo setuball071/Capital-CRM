@@ -488,16 +488,18 @@ class FastImportService {
         );
       }
 
-      // Soft-check for remaining "expected" headers — log only
+      // Soft-check for remaining "expected" headers — log only.
+      // requiredHeaders contains canonical target field names (e.g. "pmt", "numero_contrato").
+      // We check whether any header in the file maps to that canonical field via columnMap.
       const requiredHeaders =
         effectiveLayoutD8 === "pensionista"
           ? D8_PENSIONISTA_REQUIRED_HEADERS
           : D8_REQUIRED_HEADERS;
 
-      const softMissing = requiredHeaders.filter((req) => {
-        if (req === "cpf") return false; // already hard-checked above
-        // Check any alias in the column map that resolves to this target field
-        return !normalizedHeaders.some((h) => columnMap[h] === req || h === req);
+      const softMissing = requiredHeaders.filter((canonicalField) => {
+        if (canonicalField === "cpf") return false; // already hard-checked above
+        // A file header covers this field if columnMap[header] === canonicalField
+        return !normalizedHeaders.some((h) => columnMap[h] === canonicalField);
       });
 
       if (softMissing.length > 0) {
@@ -511,10 +513,7 @@ class FastImportService {
 
     const batchBuffer: any[] = [];
 
-    const fileStream = fs.createReadStream(filePath, {
-      start: startOffset,
-      encoding: "utf8",
-    });
+    const fileStream = createEncodingAwareStream(filePath, { start: startOffset });
 
     const rl = readline.createInterface({
       input: fileStream,
