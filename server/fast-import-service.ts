@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as readline from "readline";
 import * as path from "path";
+import * as iconv from "iconv-lite";
 import { db } from "./storage";
 import {
   importRuns,
@@ -81,44 +82,92 @@ export interface FastImportResult {
 // Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_SERVIDOR: Record<string, string> = {
   cpf: "cpf",
+  // matricula aliases
   matricula: "matricula",
+  mat: "matricula",
+  nr_matricula: "matricula",
+  num_matricula: "matricula",
+  // nome
   nome: "nome",
+  // banco
   banco: "banco",
+  // orgao
   orgao: "orgao",
+  // natureza (UF field in D8 = natureza do servidor)
   uf: "natureza",
   natureza: "natureza",
+  // numero_contrato aliases
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
+  num_contrato: "numero_contrato",
+  contrato: "numero_contrato",
+  // tipo_contrato aliases
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
+  tipo: "tipo_contrato",
+  contrato_tipo: "tipo_contrato",
+  produto: "tipo_contrato",
+  // valor_parcela aliases
   valor_parcela: "valor_parcela",
   pmt: "valor_parcela",
+  // prazo aliases
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
+  // situacao_contrato aliases
   situacao_contrato: "situacao_contrato",
+  situacao: "situacao_contrato",
+  sit_contrato: "situacao_contrato",
+  status_contrato: "situacao_contrato",
+  status: "situacao_contrato",
 };
 
 // Mapa D8 Pensionista (14 colunas específicas)
 // Nota: "uf" no D8 representa a natureza do servidor, não a UF geográfica
 const D8_COLUMN_MAP_PENSIONISTA: Record<string, string> = {
+  // orgao
   orgao: "orgao",
+  // m_instituidor (specific to pensionista)
   m_instituidor: "m_instituidor",
+  // matricula aliases
   matricula: "matricula",
+  mat: "matricula",
+  nr_matricula: "matricula",
+  num_matricula: "matricula",
+  // natureza
   uf: "natureza",
   natureza: "natureza",
+  // nome
   nome: "nome",
+  // cpf
   cpf: "cpf",
+  // tipo_contrato aliases
   tipo_contrato: "tipo_contrato",
   tipo_produto: "tipo_contrato",
+  tipo: "tipo_contrato",
+  contrato_tipo: "tipo_contrato",
+  produto: "tipo_contrato",
+  // valor_parcela aliases
   pmt: "valor_parcela",
   valor_parcela: "valor_parcela",
+  // prazo aliases
   prazo_remanescente: "prazo_remanescente",
   prazo: "prazo_remanescente",
+  // situacao_contrato aliases
+  situacao_contrato: "situacao_contrato",
+  situacao: "situacao_contrato",
+  sit_contrato: "situacao_contrato",
+  status_contrato: "situacao_contrato",
+  status: "situacao_contrato",
+  // extra fields
   ids: "ids",
   obs: "obs",
   regime_juridico: "regime_juridico",
+  // numero_contrato aliases
   numero_contrato: "numero_contrato",
   n_contrato: "numero_contrato",
+  num_contrato: "numero_contrato",
+  contrato: "numero_contrato",
+  // banco
   banco: "banco",
 };
 
@@ -208,6 +257,67 @@ const CONTATOS_COLUMN_MAP: Record<string, string> = {
   cc: "conta",
   num_conta: "conta",
 };
+
+/**
+ * Detecta se o arquivo é Windows-1252 / Latin1 ou UTF-8.
+ * Retorna 'win1252' se bytes inválidos em UTF-8 forem encontrados, 'utf8' caso contrário.
+ */
+function detectFileEncoding(filePath: string): "utf8" | "win1252" {
+  const fd = fs.openSync(filePath, "r");
+  const buffer = Buffer.alloc(4096);
+  const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
+  fs.closeSync(fd);
+  const sample = buffer.slice(0, bytesRead);
+  let i = 0;
+  while (i < bytesRead) {
+    const byte = sample[i];
+    if (byte < 0x80) {
+      i++;
+    } else if (byte >= 0x80 && byte <= 0x9f) {
+      // Windows-1252 control range — invalid in UTF-8
+      return "win1252";
+    } else if ((byte & 0xe0) === 0xc0) {
+      if (i + 1 >= bytesRead || (sample[i + 1] & 0xc0) !== 0x80) return "win1252";
+      i += 2;
+    } else if ((byte & 0xf0) === 0xe0) {
+      if (
+        i + 2 >= bytesRead ||
+        (sample[i + 1] & 0xc0) !== 0x80 ||
+        (sample[i + 2] & 0xc0) !== 0x80
+      )
+        return "win1252";
+      i += 3;
+    } else if ((byte & 0xf8) === 0xf0) {
+      if (
+        i + 3 >= bytesRead ||
+        (sample[i + 1] & 0xc0) !== 0x80 ||
+        (sample[i + 2] & 0xc0) !== 0x80 ||
+        (sample[i + 3] & 0xc0) !== 0x80
+      )
+        return "win1252";
+      i += 4;
+    } else {
+      return "win1252";
+    }
+  }
+  return "utf8";
+}
+
+/**
+ * Cria um ReadableStream com conversão automática de Windows-1252 → UTF-8 se necessário.
+ */
+function createEncodingAwareStream(
+  filePath: string,
+  options?: { start?: number; end?: number },
+): NodeJS.ReadableStream {
+  const encoding = detectFileEncoding(filePath);
+  if (encoding === "win1252") {
+    console.log(`[FastImport] Encoding detected: win1252 — converting to UTF-8: ${path.basename(filePath)}`);
+    const raw = fs.createReadStream(filePath, options);
+    return raw.pipe(iconv.decodeStream("win1252"));
+  }
+  return fs.createReadStream(filePath, { ...options, encoding: "utf8" });
+}
 
 class FastImportService {
   async startFastImport(
@@ -365,43 +475,36 @@ class FastImportService {
     const columnMap = this.getColumnMap(run.tipoImport, effectiveLayoutD8);
     const headerMap = this.buildHeaderMap(headers, columnMap);
 
-    // Validar headers obrigatórios para D8 (diferentes para servidor vs pensionista)
+    // Validar headers D8: apenas CPF é hard-required.
+    // Demais campos ausentes geram aviso no log mas não bloqueiam a importação —
+    // as linhas sem esses valores simplesmente ficarão com null naquela coluna.
     if (run.tipoImport === "d8") {
+      // columnMap already computed above (this.getColumnMap(run.tipoImport, effectiveLayoutD8))
+      // Check CPF: any alias that maps to "cpf" must be present
+      const hasCpf = normalizedHeaders.some((h) => columnMap[h] === "cpf" || h === "cpf");
+      if (!hasCpf) {
+        throw new Error(
+          `Header obrigatório CPF ausente no arquivo D8. A importação não pode prosseguir sem CPF.`,
+        );
+      }
+
+      // Soft-check for remaining "expected" headers — log only
       const requiredHeaders =
         effectiveLayoutD8 === "pensionista"
           ? D8_PENSIONISTA_REQUIRED_HEADERS
           : D8_REQUIRED_HEADERS;
 
-      const missingHeaders = requiredHeaders.filter((req) => {
-        // Aceita variações: pmt ou valor_parcela, n_contrato ou numero_contrato
-        if (req === "pmt")
-          return (
-            !normalizedHeaders.includes("pmt") &&
-            !normalizedHeaders.includes("valor_parcela")
-          );
-        if (req === "numero_contrato")
-          return (
-            !normalizedHeaders.includes("numero_contrato") &&
-            !normalizedHeaders.includes("n_contrato")
-          );
-        if (req === "tipo_contrato")
-          return (
-            !normalizedHeaders.includes("tipo_contrato") &&
-            !normalizedHeaders.includes("tipo_produto")
-          );
-        if (req === "prazo_remanescente")
-          return (
-            !normalizedHeaders.includes("prazo_remanescente") &&
-            !normalizedHeaders.includes("prazo")
-          );
-        return !normalizedHeaders.includes(req);
+      const softMissing = requiredHeaders.filter((req) => {
+        if (req === "cpf") return false; // already hard-checked above
+        // Check any alias in the column map that resolves to this target field
+        return !normalizedHeaders.some((h) => columnMap[h] === req || h === req);
       });
 
-      if (missingHeaders.length > 0) {
+      if (softMissing.length > 0) {
         const layoutName =
           effectiveLayoutD8 === "pensionista" ? "Pensionista" : "Servidor";
-        throw new Error(
-          `Headers obrigatórios D8 ${layoutName} ausentes: ${missingHeaders.join(", ").toUpperCase()}`,
+        console.warn(
+          `[FastImport] D8 ${layoutName} run ${run.id}: headers ausentes (serão null): ${softMissing.join(", ").toUpperCase()}`,
         );
       }
     }
@@ -1532,11 +1635,7 @@ class FastImportService {
   }
 
   private async readHeaders(filePath: string): Promise<string[]> {
-    const stream = fs.createReadStream(filePath, {
-      start: 0,
-      end: 20000,
-      encoding: "utf8",
-    });
+    const stream = createEncodingAwareStream(filePath, { start: 0, end: 20000 });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     let headers: string[] = [];
@@ -1546,7 +1645,9 @@ class FastImportService {
     }
 
     rl.close();
-    stream.destroy();
+    if ("destroy" in stream && typeof (stream as any).destroy === "function") {
+      (stream as any).destroy();
+    }
     return headers;
   }
 
