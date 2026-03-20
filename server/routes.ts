@@ -22981,25 +22981,31 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const { id } = req.params;
 
-        // Busca o registro para verificar ownership
+        // Busca o registro para verificar ownership e status atual
         const existingCheck = await db.execute(sql`
-          SELECT solicitado_por_id FROM solicitacoes_boleto
+          SELECT solicitado_por_id, status FROM solicitacoes_boleto
           WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
         `);
         if (existingCheck.rows.length === 0) {
           return res.status(404).json({ message: "Solicitação não encontrada" });
         }
         const solicitadoPorId = (existingCheck.rows[0] as any).solicitado_por_id;
+        const statusAtual = (existingCheck.rows[0] as any).status as string;
 
         const isOwner = user.id === solicitadoPorId;
         const isVendedor = hasRole(user, ["vendedor"]);
-        const canCancelOnly = !isAdmin && (isVendedor || isOwner);
+        const isCorretor = !isAdmin && (isVendedor || isOwner);
 
         if (!isAdmin && !isOwner && !isVendedor) {
           return res
             .status(403)
             .json({ message: "Sem permissão para atualizar status" });
         }
+
+        // Status em que o corretor tem livre alteração (solicitação está "na mão dele")
+        const STATUS_CORRETOR_LIVRE = ["pendente", "pendenciado"];
+        // Corretor só pode cancelar quando a solicitação já está no fluxo administrativo
+        const canCancelOnly = isCorretor && !STATUS_CORRETOR_LIVRE.includes(statusAtual);
 
         const { status, observacaoOperacional, boletoAnexo, boletoAnexoNome } =
           req.body;

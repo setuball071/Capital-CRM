@@ -86,6 +86,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 };
 
 const STATUS_OPERACIONAL = [
+  { value: "pendente",           label: "Pendente" },
   { value: "em_andamento",       label: "Em Andamento" },
   { value: "solicitado_banco",   label: "Solicitado ao Banco" },
   { value: "aguardando_retorno", label: "Aguardando Retorno" },
@@ -121,14 +122,24 @@ export default function SolicitacoesBoleto() {
 
   // Verifica se o usuário atual tem permissão de admin (pode alterar qualquer status)
   const currentUserIsAdmin = ADMIN_ROLES.includes(user?.role ?? "");
+  // Status em que o corretor tem livre alteração (solicitação está "na mão dele")
+  const STATUS_CORRETOR_LIVRE = ["pendente", "pendenciado"];
+
   // Retorna true se o usuário pode apenas cancelar esta solicitação específica
   function canCancelOnlyFor(s: SolicitacaoBoleto): boolean {
     if (currentUserIsAdmin) return false;
+    const isCorretor = user?.role === "vendedor" || user?.id === s.solicitado_por_id;
+    if (!isCorretor) return false;
+    // Se está em status de fluxo administrativo, corretor só pode cancelar
+    return !STATUS_CORRETOR_LIVRE.includes(s.status);
+  }
+  // Retorna true se o usuário é corretor desta solicitação (owner ou vendedor)
+  function isCorretorOf(s: SolicitacaoBoleto): boolean {
     return user?.role === "vendedor" || user?.id === s.solicitado_por_id;
   }
   // Retorna true se o usuário pode ver o botão de editar status
   function canEditStatus(s: SolicitacaoBoleto): boolean {
-    return currentUserIsAdmin || canCancelOnlyFor(s);
+    return currentUserIsAdmin || isCorretorOf(s);
   }
 
   // Estado da UI
