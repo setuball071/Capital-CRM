@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, Building2, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle
+  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -1067,6 +1067,25 @@ export default function VendasConsulta() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* ── Banner: Parcelas Fora de Folha ── */}
+              {(() => {
+                const excQtd = Number(consultaData.folhaAtual?.exc_qtd ?? 0);
+                const excSoma = Number(consultaData.folhaAtual?.exc_soma ?? 0);
+                if (excQtd <= 0) return null;
+                return (
+                  <div
+                    className="flex items-start gap-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-4 py-3"
+                    data-testid="alert-exc-fora-folha"
+                  >
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                      Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora:{" "}
+                      {formatCurrency(excSoma)}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <Card>
                 <CardHeader className="pb-3">

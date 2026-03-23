@@ -755,7 +755,7 @@ export default function ConsultaCliente() {
             const excQtd = Number(folhaAtual?.exc_qtd ?? 0);
             const excSoma = Number(folhaAtual?.exc_soma ?? 0);
             const margemReal = Number(folhaAtual?.margem ?? 0);
-            const showExcAlert = excQtd > 0 || excSoma > 0;
+            const showExcAlert = excQtd > 0;
             
             return (
             <div className="space-y-6">
@@ -967,16 +967,17 @@ export default function ConsultaCliente() {
                           DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
                           ═══════════════════════════════════════════════════════════════════════════ */}
                       {showExcAlert && (
-                        <Alert 
-                          variant="destructive" 
-                          className="border-2 border-red-500 bg-red-50 dark:bg-red-950 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900 transition-colors" 
+                        <Alert
+                          className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-pointer"
                           data-testid="alert-exc-fora-folha"
                           onClick={() => setShowExcModal(true)}
                         >
-                          <AlertTriangle className="h-5 w-5" />
-                          <AlertTitle className="text-lg font-bold">Cliente com desconto fora de folha</AlertTitle>
-                          <AlertDescription className="flex gap-4 mt-2">
-                            <span className="text-sm">Clique para ver detalhes</span>
+                          <AlertTriangle className="h-5 w-5 text-amber-600" />
+                          <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
+                            Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora: {formatCurrency(excSoma)}
+                          </AlertTitle>
+                          <AlertDescription className="text-amber-700 dark:text-amber-500 text-sm mt-1">
+                            Clique para ver detalhes
                           </AlertDescription>
                         </Alert>
                       )}
