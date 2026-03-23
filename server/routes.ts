@@ -14156,6 +14156,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             sit_func_no_mes: folhaAtual.sitFuncNoMes,
             base_tag: folhaAtual.baseTag,
             extras_folha: folhaAtual.extrasFolha,
+            exc_qtd: folhaAtual.excQtd ?? null,
+            exc_soma:
+              folhaAtual.excSoma != null
+                ? parseFloat(String(folhaAtual.excSoma))
+                : null,
           }
         : null;
 
