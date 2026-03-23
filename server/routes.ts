@@ -5821,6 +5821,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             sitFuncNoMes: pessoaData.sitFunc || null,
             baseTag,
             importRunId: importRunId || null, // Rastreabilidade obrigatória
+            excQtd: folhaData.excQtd ?? null,
+            excSoma: folhaData.excSoma ?? null,
             // Extras para pensionista (instituidor)
             extrasFolha: folhaData.instituidor
               ? {
@@ -6606,6 +6608,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
                 sitFuncNoMes: pessoaData.sitFunc || null,
                 baseTag,
                 importRunId: importRunRecord.id, // Rastreabilidade obrigatória
+                excQtd: folhaData.excQtd ?? null,
+                excSoma: folhaData.excSoma ?? null,
                 // Extras para pensionista (instituidor)
                 extrasFolha: folhaData.instituidor
                   ? {

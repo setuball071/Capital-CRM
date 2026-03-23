@@ -944,7 +944,8 @@ class FastImportService {
         margem_bruta_70, margem_utilizada_70, margem_saldo_70,
         margem_cartao_credito_saldo, margem_cartao_beneficio_saldo,
         creditos, debitos, liquido, salario_bruto, descontos_brutos, salario_liquido,
-        sit_func_no_mes, base_tag, import_run_id
+        sit_func_no_mes, base_tag, import_run_id,
+        exc_qtd, exc_soma
       )
       SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
         p.id,
@@ -972,7 +973,9 @@ class FastImportService {
         s.liquido::numeric,
         s.sit_func,
         ${baseTag},
-        ${run.id}
+        ${run.id},
+        s.exc_qtd::integer,
+        s.exc_soma::numeric
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
       JOIN clientes_vinculo v ON v.cpf = s.cpf 
@@ -1003,7 +1006,9 @@ class FastImportService {
         descontos_brutos = COALESCE(EXCLUDED.descontos_brutos, clientes_folha_mes.descontos_brutos),
         salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
         base_tag = ${baseTag},
-        import_run_id = ${run.id}
+        import_run_id = ${run.id},
+        exc_qtd = COALESCE(EXCLUDED.exc_qtd, clientes_folha_mes.exc_qtd),
+        exc_soma = COALESCE(EXCLUDED.exc_soma, clientes_folha_mes.exc_soma)
     `);
 
     console.log(`[FastImport] Folha upserted: ${folhaResult.rowCount || 0}`);

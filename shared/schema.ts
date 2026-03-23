@@ -883,6 +883,9 @@ export const clientesFolhaMes = pgTable(
     baseTag: varchar("base_tag", { length: 100 }),
     importRunId: integer("import_run_id"), // Link ao import que criou/atualizou - para exclusão em cascata
     extrasFolha: jsonb("extras_folha"),
+    // Parcelas fora de folha (EXC QTD / EXC SOMA)
+    excQtd: integer("exc_qtd"),
+    excSoma: decimal("exc_soma", { precision: 12, scale: 2 }),
   },
   (table) => ({
     // Chave única: (vinculo_id, competencia) - uma folha por vínculo por mês
