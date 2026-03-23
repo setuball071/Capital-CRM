@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { RefreshCw, Settings, User, Megaphone } from "lucide-react";
+import { RefreshCw, Settings, User, Megaphone, X, ZoomIn } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +22,13 @@ interface SystemUpdate {
   content_impact: string;
   published_at: string;
   target_roles: string[];
+  image_urls?: string[];
 }
 
 export function UpdatesPopup() {
   const { user } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const { data: pending = [], isLoading } = useQuery<SystemUpdate[]>({
     queryKey: ["/api/system-updates/pending"],
@@ -54,99 +56,153 @@ export function UpdatesPopup() {
 
   const total = pending.length;
   const isLast = currentIndex === total - 1;
+  const images = (current.image_urls ?? []).filter(Boolean);
 
   function handleConfirm() {
     readMutation.mutate(current.id);
   }
 
   return (
-    <Dialog open modal>
-      <DialogContent
-        className="max-w-lg [&>button:last-child]:hidden"
-        onInteractOutside={e => e.preventDefault()}
-        onEscapeKeyDown={e => e.preventDefault()}
-      >
-        <DialogHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
-                <Megaphone className="h-4 w-4 text-purple-700" />
+    <>
+      <Dialog open modal>
+        <DialogContent
+          className="max-w-lg [&>button:last-child]:hidden"
+          onInteractOutside={e => e.preventDefault()}
+          onEscapeKeyDown={e => e.preventDefault()}
+        >
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
+                  <Megaphone className="h-4 w-4 text-purple-700" />
+                </div>
+                <DialogTitle className="text-base font-semibold">Novidade no sistema</DialogTitle>
               </div>
-              <DialogTitle className="text-base font-semibold">Novidade no sistema</DialogTitle>
+              {total > 1 && (
+                <span className="text-xs text-muted-foreground font-medium shrink-0">
+                  {currentIndex + 1} de {total}
+                </span>
+              )}
             </div>
-            {total > 1 && (
-              <span className="text-xs text-muted-foreground font-medium shrink-0">
-                {currentIndex + 1} de {total}
-              </span>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-semibold text-sm mb-1">{current.title}</h3>
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                {format(new Date(current.published_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </Badge>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
+                <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
+                O que mudou
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_what}</p>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
+                <Settings className="h-3.5 w-3.5 text-amber-600" />
+                Como funciona
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_how}</p>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
+                <User className="h-3.5 w-3.5 text-green-600" />
+                Impacto no seu dia a dia
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_impact}</p>
+            </div>
+
+            {/* Image gallery */}
+            {images.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground">Imagens</p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {images.map((src, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="relative shrink-0 rounded-md overflow-hidden border border-border group focus:outline-none"
+                      onClick={() => setLightboxSrc(src)}
+                      data-testid={`button-popup-image-${idx}`}
+                    >
+                      <img
+                        src={src}
+                        alt={`Imagem ${idx + 1}`}
+                        className="h-28 w-auto max-w-[200px] object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ZoomIn className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-        </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm mb-1">{current.title}</h3>
-            <Badge variant="outline" className="text-xs text-muted-foreground">
-              {format(new Date(current.published_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-            </Badge>
-          </div>
-
-          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-              <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
-              O que mudou
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_what}</p>
-          </div>
-
-          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-              <Settings className="h-3.5 w-3.5 text-amber-600" />
-              Como funciona
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_how}</p>
-          </div>
-
-          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-              <User className="h-3.5 w-3.5 text-green-600" />
-              Impacto no seu dia a dia
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_impact}</p>
-          </div>
-
-          {isLast ? (
-            <Button
-              className="w-full font-semibold"
-              style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
-              onClick={handleConfirm}
-              disabled={readMutation.isPending}
-              data-testid="button-confirm-update"
-            >
-              {readMutation.isPending ? "Confirmando..." : "Entendi, pode fechar"}
-            </Button>
-          ) : (
-            <div className="flex gap-2">
+            {isLast ? (
               <Button
-                className="flex-1 font-semibold"
+                className="w-full font-semibold"
                 style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
                 onClick={handleConfirm}
                 disabled={readMutation.isPending}
                 data-testid="button-confirm-update"
               >
-                {readMutation.isPending ? "Confirmando..." : "Entendi"}
+                {readMutation.isPending ? "Confirmando..." : "Entendi, pode fechar"}
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleConfirm}
-                disabled={readMutation.isPending}
-                data-testid="button-next-update"
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 font-semibold"
+                  style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
+                  onClick={handleConfirm}
+                  disabled={readMutation.isPending}
+                  data-testid="button-confirm-update"
+                >
+                  {readMutation.isPending ? "Confirmando..." : "Entendi"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleConfirm}
+                  disabled={readMutation.isPending}
+                  data-testid="button-next-update"
+                >
+                  Próxima ({currentIndex + 2}/{total})
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <Dialog open onOpenChange={open => !open && setLightboxSrc(null)}>
+          <DialogContent className="max-w-4xl p-2 [&>button:last-child]:hidden">
+            <div className="relative">
+              <button
+                type="button"
+                className="absolute top-2 right-2 z-10 h-8 w-8 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors"
+                onClick={() => setLightboxSrc(null)}
+                data-testid="button-lightbox-close"
               >
-                Próxima ({currentIndex + 2}/{total})
-              </Button>
+                <X className="h-4 w-4 text-white" />
+              </button>
+              <img
+                src={lightboxSrc}
+                alt="Visualização ampliada"
+                className="w-full h-auto max-h-[80vh] object-contain rounded-md"
+                data-testid="img-lightbox"
+              />
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }

@@ -25264,16 +25264,19 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.post("/api/system-updates", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const tenantId = req.tenantId!;
-      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive } = req.body;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls } = req.body;
 
       if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles) || targetRoles.length === 0) {
         return res.status(400).json({ message: "Campos obrigatórios: title, rawInput, contentWhat, contentHow, contentImpact, targetRoles" });
       }
 
-      const pgArrayLiteral = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
+      const rolesPgArray = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
+      const imgArr: string[] = Array.isArray(imageUrls) ? imageUrls.slice(0, 5) : [];
+      const imgPgArray = imgArr.length === 0 ? '{}' : '{' + imgArr.map((s: string) => `"${s}"`).join(',') + '}';
+
       const result = await db.execute(sql`
-        INSERT INTO system_updates (tenant_id, title, raw_input, content_what, content_how, content_impact, target_roles, is_active, created_by)
-        VALUES (${tenantId}, ${title}, ${rawInput}, ${contentWhat}, ${contentHow}, ${contentImpact}, ${pgArrayLiteral}::text[], ${isActive !== false}, ${req.user!.id})
+        INSERT INTO system_updates (tenant_id, title, raw_input, content_what, content_how, content_impact, target_roles, image_urls, is_active, created_by)
+        VALUES (${tenantId}, ${title}, ${rawInput}, ${contentWhat}, ${contentHow}, ${contentImpact}, ${rolesPgArray}::text[], ${imgPgArray}::text[], ${isActive !== false}, ${req.user!.id})
         RETURNING *
       `);
       res.status(201).json(result.rows[0]);
@@ -25288,11 +25291,15 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const tenantId = req.tenantId!;
       const { id } = req.params;
-      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive } = req.body;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls } = req.body;
 
       if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles)) {
         return res.status(400).json({ message: "Campos obrigatórios faltando" });
       }
+
+      const rolesPgArray = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
+      const imgArr: string[] = Array.isArray(imageUrls) ? imageUrls.slice(0, 5) : [];
+      const imgPgArray = imgArr.length === 0 ? '{}' : '{' + imgArr.map((s: string) => `"${s}"`).join(',') + '}';
 
       const result = await db.execute(sql`
         UPDATE system_updates SET
@@ -25301,7 +25308,8 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           content_what = ${contentWhat},
           content_how = ${contentHow},
           content_impact = ${contentImpact},
-          target_roles = ${'{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}'}::text[],
+          target_roles = ${rolesPgArray}::text[],
+          image_urls = ${imgPgArray}::text[],
           is_active = ${isActive !== false}
         WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
         RETURNING *

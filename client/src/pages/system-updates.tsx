@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Pencil, ChevronDown, ChevronUp, Users, Eye, Wand2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, ChevronUp, Eye, Wand2, Loader2, Upload, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ interface SystemUpdate {
   content_how: string;
   content_impact: string;
   target_roles: string[];
+  image_urls: string[];
   is_active: boolean;
   published_at: string;
   created_by_name: string | null;
@@ -93,8 +94,12 @@ const EMPTY_FORM = {
   contentHow: "",
   contentImpact: "",
   targetRoles: ["todos"] as string[],
+  imageUrls: [] as string[],
   isActive: true,
 };
+
+const MAX_IMAGES = 5;
+const MAX_IMG_BYTES = 3 * 1024 * 1024;
 
 export default function SystemUpdatesPage() {
   const { toast } = useToast();
@@ -104,8 +109,53 @@ export default function SystemUpdatesPage() {
   const [readsSheet, setReadsSheet] = useState<SystemUpdate | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
+
+  const processImageFiles = useCallback((files: FileList | File[]) => {
+    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (arr.length === 0) return;
+    setForm(prev => {
+      const slots = MAX_IMAGES - prev.imageUrls.length;
+      if (slots <= 0) {
+        toast({ title: `Máximo de ${MAX_IMAGES} imagens por atualização`, variant: "destructive" });
+        return prev;
+      }
+      const toProcess = arr.slice(0, slots);
+      toProcess.forEach(file => {
+        if (file.size > MAX_IMG_BYTES) {
+          toast({ title: `"${file.name}" excede 3MB e foi ignorado`, variant: "destructive" });
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string;
+          if (!dataUrl) return;
+          setForm(p => {
+            if (p.imageUrls.length >= MAX_IMAGES) return p;
+            return { ...p, imageUrls: [...p.imageUrls, dataUrl] };
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+      return prev;
+    });
+  }, [toast]);
+
+  useEffect(() => {
+    if (!openDialog) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.files;
+      if (items && items.length > 0) {
+        e.preventDefault();
+        processImageFiles(items);
+      }
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [openDialog, processImageFiles]);
 
   const { data: updates = [], isLoading } = useQuery<SystemUpdate[]>({
     queryKey: ["/api/system-updates"],
@@ -168,6 +218,7 @@ export default function SystemUpdatesPage() {
       contentHow: u.content_how,
       contentImpact: u.content_impact,
       targetRoles: u.target_roles,
+      imageUrls: u.image_urls ?? [],
       isActive: u.is_active,
     });
     setOpenDialog(true);
@@ -418,6 +469,80 @@ export default function SystemUpdatesPage() {
                 rows={2}
                 data-testid="textarea-update-impact"
               />
+            </div>
+
+            {/* Image upload section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Imagens <span className="text-muted-foreground font-normal">(opcional — até {MAX_IMAGES}, máx 3MB cada)</span></Label>
+                {form.imageUrls.length > 0 && (
+                  <span className="text-xs text-muted-foreground">{form.imageUrls.length}/{MAX_IMAGES}</span>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  if (e.target.files) processImageFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+
+              {/* Drop zone */}
+              {form.imageUrls.length < MAX_IMAGES && (
+                <div
+                  className={`relative flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-5 transition-colors cursor-pointer ${
+                    isDragOver
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-muted/20 hover:border-primary/50"
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    processImageFiles(e.dataTransfer.files);
+                  }}
+                  data-testid="drop-zone-images"
+                >
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Clique, arraste ou cole (Ctrl+V) uma imagem
+                    </p>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">PNG, JPG, WebP — máx 3MB</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Thumbnails */}
+              {form.imageUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {form.imageUrls.map((src, idx) => (
+                    <div key={idx} className="relative group" data-testid={`thumb-image-${idx}`}>
+                      <img
+                        src={src}
+                        alt={`Imagem ${idx + 1}`}
+                        className="h-20 w-20 rounded-md object-cover border border-border"
+                      />
+                      <button
+                        type="button"
+                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setForm(p => ({ ...p, imageUrls: p.imageUrls.filter((_, i) => i !== idx) }))}
+                        data-testid={`button-remove-image-${idx}`}
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

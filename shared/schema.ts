@@ -3553,6 +3553,7 @@ export const systemUpdates = pgTable("system_updates", {
   contentHow: text("content_how").notNull(),
   contentImpact: text("content_impact").notNull(),
   targetRoles: text("target_roles").array().notNull().default([]),
+  imageUrls: text("image_urls").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   publishedAt: timestamp("published_at").notNull().defaultNow(),
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
