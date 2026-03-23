@@ -79,6 +79,21 @@ export async function addToPortfolio(
     return { added: false, renewed: true };
   }
 
+  // First-vendor-wins: if another vendor already has an active lock for this CPF+product, skip
+  const otherActive = await db.execute(sql`
+    SELECT id FROM client_portfolio
+    WHERE tenant_id = ${tenantId}
+      AND cpf = ${cpfClean}
+      AND product_type = ${productType}
+      AND vendor_id != ${vendorId}
+      AND status = 'ATIVO'
+      AND expires_at > NOW()
+    LIMIT 1
+  `);
+  if (otherActive.rows.length > 0) {
+    return { added: false, renewed: false };
+  }
+
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
 

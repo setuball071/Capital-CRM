@@ -14,7 +14,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
@@ -308,6 +307,11 @@ export default function VendasPipeline() {
   const [observacao, setObservacao] = useState("");
   const [motivo, setMotivo] = useState("");
   const [activeTab, setActiveTab] = useState<"carteira" | "pipeline">("pipeline");
+  const [portfolioVendorFilter, setPortfolioVendorFilter] = useState<string>("");
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferringEntry, setTransferringEntry] = useState<PortfolioEntry | null>(null);
+  const [transferToVendorId, setTransferToVendorId] = useState<string>("");
+  const [transferReason, setTransferReason] = useState<string>("");
 
   interface PortfolioEntry {
     id: number;
@@ -315,16 +319,42 @@ export default function VendasPipeline() {
     nome_cliente?: string | null;
     product_type: string;
     contract_id?: number | null;
-    seller_id: number;
-    seller_name?: string | null;
+    vendor_id: number;
+    vendor_name?: string | null;
     status: string;
     expires_at: string;
     created_at: string;
   }
 
+  const portfolioApiUrl = portfolioVendorFilter
+    ? `/api/portfolio?vendorId=${portfolioVendorFilter}`
+    : "/api/portfolio";
+
   const { data: portfolioEntries = [], isLoading: portfolioLoading } = useQuery<PortfolioEntry[]>({
-    queryKey: ["/api/portfolio"],
+    queryKey: ["/api/portfolio", portfolioVendorFilter],
+    queryFn: async () => {
+      const res = await fetch(portfolioApiUrl, { credentials: "include" });
+      if (!res.ok) throw new Error("Erro ao carregar carteira");
+      return res.json();
+    },
     enabled: activeTab === "carteira" && !viewUserId,
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: async (data: { portfolioId: number; toVendorId: number; reason: string }) => {
+      return apiRequest("POST", "/api/portfolio/transfer", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolio"] });
+      toast({ title: "Cliente transferido com sucesso" });
+      setTransferDialogOpen(false);
+      setTransferringEntry(null);
+      setTransferToVendorId("");
+      setTransferReason("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao transferir", description: err.message, variant: "destructive" });
+    },
   });
   const [retornoEm, setRetornoEm] = useState("");
   const [contactId, setContactId] = useState<string>("");
@@ -671,16 +701,38 @@ export default function VendasPipeline() {
     REFINANCIAMENTO: "Refinanciamento",
   };
 
-  const getStatusBadgeVariant = (status: string) => {
+  type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+  const getStatusBadgeVariant = (status: string): BadgeVariant => {
     if (status === "ATIVO") return "default";
     if (status === "EXPIRADO") return "secondary";
     if (status === "TRANSFERIDO") return "outline";
     return "secondary";
   };
 
+  const maskCpf = (cpf: string) => {
+    const digits = cpf.replace(/\D/g, "");
+    if (digits.length !== 11) return cpf;
+    return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
+  };
+
+  const PRODUCT_BADGE_CLASS: Record<string, string> = {
+    CARTAO: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800",
+    CONSIGNADO: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
+    NOVO: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
+    PORTABILIDADE: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800",
+    REFINANCIAMENTO: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800",
+  };
+
   const daysUntilExpiry = (expiresAt: string) => {
     const diff = new Date(expiresAt).getTime() - Date.now();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const getDaysBadgeClass = (days: number) => {
+    if (days > 30) return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
+    if (days > 0) return "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
+    return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
   };
 
   return (
@@ -786,7 +838,22 @@ export default function VendasPipeline() {
       </div>
 
       {!isGestorMode && !viewUserId && activeTab === "carteira" && (
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {canViewOthers && teamMembers && teamMembers.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select value={portfolioVendorFilter || "__all__"} onValueChange={(v) => setPortfolioVendorFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="w-56" data-testid="select-portfolio-vendor">
+                  <SelectValue placeholder="Todos os vendedores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os vendedores</SelectItem>
+                  {teamMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {portfolioLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -794,7 +861,7 @@ export default function VendasPipeline() {
           ) : portfolioEntries.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
               <Wallet className="h-10 w-10 opacity-40" />
-              <p className="text-sm">Nenhum cliente em sua carteira ainda.</p>
+              <p className="text-sm">Nenhum cliente em carteira ativa.</p>
               <p className="text-xs">Clientes são adicionados automaticamente ao confirmar contratos.</p>
             </div>
           ) : (
@@ -806,29 +873,57 @@ export default function VendasPipeline() {
                     <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-sm font-semibold truncate">
-                          {entry.nome_cliente || entry.cpf}
+                          {entry.nome_cliente || maskCpf(entry.cpf)}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">{entry.cpf}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-cpf-${entry.id}`}>
+                          {maskCpf(entry.cpf)}
+                        </p>
+                        {canViewOthers && entry.vendor_name && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{entry.vendor_name}</p>
+                        )}
                       </div>
-                      <Badge variant={getStatusBadgeVariant(entry.status) as any}>
-                        {entry.status}
+                      <Badge variant={getStatusBadgeVariant(entry.status)}>
+                        {entry.status === "ATIVO" ? "Ativo" : entry.status === "EXPIRADO" ? "Expirado" : "Transferido"}
                       </Badge>
                     </CardHeader>
-                    <CardContent className="pt-0 space-y-1">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                        <span>{PRODUCT_LABELS[entry.product_type] || entry.product_type}</span>
+                    <CardContent className="pt-0 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={PRODUCT_BADGE_CLASS[entry.product_type] || ""}
+                          data-testid={`badge-product-${entry.id}`}
+                        >
+                          {PRODUCT_LABELS[entry.product_type] || entry.product_type}
+                        </Badge>
+                        {entry.status === "ATIVO" && (
+                          <Badge
+                            variant="outline"
+                            className={getDaysBadgeClass(days)}
+                            data-testid={`badge-days-${entry.id}`}
+                          >
+                            {days > 0 ? `${days} dia${days !== 1 ? "s" : ""}` : "Expira hoje"}
+                          </Badge>
+                        )}
+                        {entry.status !== "ATIVO" && (
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(entry.expires_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5 shrink-0" />
-                        <span>
-                          {entry.status === "ATIVO"
-                            ? days > 0
-                              ? `Expira em ${days} dia${days !== 1 ? "s" : ""}`
-                              : "Expira hoje"
-                            : `Expirou em ${new Date(entry.expires_at).toLocaleDateString("pt-BR")}`}
-                        </span>
-                      </div>
+                      {(user?.isMaster || user?.role === "master") && entry.status === "ATIVO" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          data-testid={`button-transfer-${entry.id}`}
+                          onClick={() => {
+                            setTransferringEntry(entry);
+                            setTransferDialogOpen(true);
+                          }}
+                        >
+                          Transferir
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -837,6 +932,64 @@ export default function VendasPipeline() {
           )}
         </div>
       )}
+
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir Cliente</DialogTitle>
+          </DialogHeader>
+          {transferringEntry && (
+            <div className="space-y-4 py-2">
+              <div className="text-sm">
+                <span className="font-medium">{transferringEntry.nome_cliente || maskCpf(transferringEntry.cpf)}</span>
+                <span className="text-muted-foreground ml-2">— {PRODUCT_LABELS[transferringEntry.product_type] || transferringEntry.product_type}</span>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="transfer-vendor">Vendedor destino</Label>
+                <Select value={transferToVendorId} onValueChange={setTransferToVendorId}>
+                  <SelectTrigger id="transfer-vendor" data-testid="select-transfer-vendor">
+                    <SelectValue placeholder="Selecione um vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(teamMembers || [])
+                      .filter((m) => m.id !== transferringEntry.vendor_id)
+                      .map((m) => (
+                        <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="transfer-reason">Motivo (opcional)</Label>
+                <Textarea
+                  id="transfer-reason"
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  placeholder="Informe o motivo da transferência..."
+                  data-testid="textarea-transfer-reason"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!transferToVendorId || transferMutation.isPending}
+              onClick={() => {
+                if (!transferringEntry || !transferToVendorId) return;
+                transferMutation.mutate({
+                  portfolioId: transferringEntry.id,
+                  toVendorId: Number(transferToVendorId),
+                  reason: transferReason,
+                });
+              }}
+              data-testid="button-confirm-transfer"
+            >
+              {transferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar Transferência"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {(isGestorMode || viewUserId || activeTab === "pipeline") && (
       <div className="flex-1 overflow-x-auto p-4">

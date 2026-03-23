@@ -13851,6 +13851,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 AND cpf = ANY(${uniqueCpfs}::text[])
                 AND status = 'ATIVO'
                 AND expires_at > NOW()
+                AND vendor_id != ${userId}
             `);
             blockedCpfs = new Set(blockedResult.rows.map((r: any) => r.cpf));
           } catch (portfolioCheckErr) {
@@ -25605,12 +25606,14 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         const filterVendorId = vendorId ? Number(vendorId) : null;
         let result;
         if (filterVendorId) {
+          // Strict: filterVendorId must belong to coordinator's team
           result = await db.execute(sql`
             SELECT cp.*, u.name as vendor_name
             FROM client_portfolio cp
             JOIN users u ON u.id = cp.vendor_id
             WHERE cp.tenant_id = ${tenantId}
-              AND (cp.vendor_id = ${filterVendorId} OR u.manager_id = ${user.id})
+              AND cp.vendor_id = ${filterVendorId}
+              AND u.manager_id = ${user.id}
             ORDER BY cp.expires_at ASC
           `);
         } else {
@@ -25619,7 +25622,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             FROM client_portfolio cp
             JOIN users u ON u.id = cp.vendor_id
             WHERE cp.tenant_id = ${tenantId}
-              AND (cp.vendor_id = ${user.id} OR u.manager_id = ${user.id})
+              AND u.manager_id = ${user.id}
             ORDER BY cp.expires_at ASC
           `);
         }
@@ -25656,7 +25659,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       if (!portfolioId || !toVendorId) {
         return res.status(400).json({ message: "portfolioId e toVendorId são obrigatórios" });
       }
+      const toVendorIdNum = Number(toVendorId);
+      if (!Number.isInteger(toVendorIdNum) || toVendorIdNum <= 0) {
+        return res.status(400).json({ message: "toVendorId inválido" });
+      }
 
+      // Verify portfolio entry exists and belongs to tenant
       const portfolioRows = await db.execute(sql`
         SELECT * FROM client_portfolio WHERE id = ${portfolioId} AND tenant_id = ${tenantId} LIMIT 1
       `);
@@ -25665,15 +25673,30 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       }
       const portfolio = portfolioRows.rows[0] as any;
 
+      // Prevent self-transfer
+      if (portfolio.vendor_id === toVendorIdNum) {
+        return res.status(400).json({ message: "Vendedor de destino é o mesmo que o atual" });
+      }
+
+      // Verify target vendor exists and belongs to same tenant
+      const targetVendorRows = await db.execute(sql`
+        SELECT id FROM users
+        WHERE id = ${toVendorIdNum} AND tenant_id = ${tenantId}
+        LIMIT 1
+      `);
+      if (targetVendorRows.rows.length === 0) {
+        return res.status(400).json({ message: "Vendedor de destino não encontrado neste ambiente" });
+      }
+
       await db.execute(sql`
         INSERT INTO portfolio_transfers
           (tenant_id, portfolio_id, from_vendor_id, to_vendor_id, transferred_by, reason, transferred_at)
         VALUES
-          (${tenantId}, ${portfolioId}, ${portfolio.vendor_id}, ${Number(toVendorId)}, ${user.id}, ${reason || null}, NOW())
+          (${tenantId}, ${portfolioId}, ${portfolio.vendor_id}, ${toVendorIdNum}, ${user.id}, ${reason || null}, NOW())
       `);
 
       await db.execute(sql`
-        UPDATE client_portfolio SET vendor_id = ${Number(toVendorId)} WHERE id = ${portfolioId}
+        UPDATE client_portfolio SET vendor_id = ${toVendorIdNum} WHERE id = ${portfolioId}
       `);
 
       res.json({ message: "Cliente transferido com sucesso" });
