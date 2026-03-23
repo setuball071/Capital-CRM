@@ -947,6 +947,23 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
+              {/* ── Banner: Parcelas Fora de Folha ── */}
+              {showExcAlert && (
+                <Alert
+                  className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-pointer"
+                  data-testid="alert-exc-fora-folha"
+                  onClick={() => setShowExcModal(true)}
+                >
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
+                    Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora: {formatCurrency(excSoma)}
+                  </AlertTitle>
+                  <AlertDescription className="text-amber-700 dark:text-amber-500 text-sm mt-1">
+                    Clique para ver detalhes
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -963,25 +980,6 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {folhaAtual ? (
                     <div className="space-y-6">
-                      {/* ═══════════════════════════════════════════════════════════════════════════
-                          DESCONTO FORA DE FOLHA (EXC) - Alerta Visual
-                          ═══════════════════════════════════════════════════════════════════════════ */}
-                      {showExcAlert && (
-                        <Alert
-                          className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-pointer"
-                          data-testid="alert-exc-fora-folha"
-                          onClick={() => setShowExcModal(true)}
-                        >
-                          <AlertTriangle className="h-5 w-5 text-amber-600" />
-                          <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
-                            Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora: {formatCurrency(excSoma)}
-                          </AlertTitle>
-                          <AlertDescription className="text-amber-700 dark:text-amber-500 text-sm mt-1">
-                            Clique para ver detalhes
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      
                       {/* Modal de detalhes EXC */}
                       <Dialog open={showExcModal} onOpenChange={setShowExcModal}>
                         <DialogContent className="sm:max-w-md" data-testid="modal-exc-detalhes">
