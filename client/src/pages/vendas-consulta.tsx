@@ -4,6 +4,7 @@ import { useSearch } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1021,7 +1022,26 @@ export default function VendasConsulta() {
                   </div>
                 </CardContent>
               </Card>
-              
+
+              {/* ── Banner: Parcelas Fora de Folha ── */}
+              {(() => {
+                const excQtd = Number(consultaData.folhaAtual?.exc_qtd ?? 0);
+                const excSoma = Number(consultaData.folhaAtual?.exc_soma ?? 0);
+                if (excQtd <= 0) return null;
+                return (
+                  <Alert
+                    className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30"
+                    data-testid="alert-exc-fora-folha"
+                  >
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
+                      Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora:{" "}
+                      {formatCurrency(excSoma)}
+                    </AlertTitle>
+                  </Alert>
+                );
+              })()}
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -1067,25 +1087,6 @@ export default function VendasConsulta() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* ── Banner: Parcelas Fora de Folha ── */}
-              {(() => {
-                const excQtd = Number(consultaData.folhaAtual?.exc_qtd ?? 0);
-                const excSoma = Number(consultaData.folhaAtual?.exc_soma ?? 0);
-                if (excQtd <= 0) return null;
-                return (
-                  <div
-                    className="flex items-start gap-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-4 py-3"
-                    data-testid="alert-exc-fora-folha"
-                  >
-                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
-                      Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora:{" "}
-                      {formatCurrency(excSoma)}
-                    </p>
-                  </div>
-                );
-              })()}
 
               <Card>
                 <CardHeader className="pb-3">
