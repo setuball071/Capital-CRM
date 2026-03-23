@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Pencil, ChevronDown, ChevronUp, Eye, Wand2, Loader2, Upload, X, ImageIcon } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, ChevronUp, Eye, Wand2, Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -100,6 +100,7 @@ const EMPTY_FORM = {
 
 const MAX_IMAGES = 5;
 const MAX_IMG_BYTES = 3 * 1024 * 1024;
+const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
 
 export default function SystemUpdatesPage() {
   const { toast } = useToast();
@@ -115,7 +116,7 @@ export default function SystemUpdatesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const processImageFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
+    const arr = Array.from(files).filter(f => ALLOWED_MIME.includes(f.type));
     if (arr.length === 0) return;
     setForm(prev => {
       const slots = MAX_IMAGES - prev.imageUrls.length;
