@@ -28,8 +28,6 @@ import {
   COLUMN_MAP,
 } from "./import-service";
 
-// Reduced batch size to avoid Neon HTTP payload limit (~16MB)
-// Each folha row has ~30 fields, so 100 rows keeps payload under limit
 function safeVarchar(
   value: string | null | undefined,
   maxLen: number,
