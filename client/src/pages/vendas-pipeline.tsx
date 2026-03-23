@@ -100,7 +100,6 @@ const MARKER_COLORS: Record<LeadMarker, string> = {
 };
 
 const KANBAN_COLUMNS: LeadMarker[] = [
-  "NOVO",
   "EM_ATENDIMENTO", 
   "INTERESSADO",
   "AGUARDANDO_RETORNO",
