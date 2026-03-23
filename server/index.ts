@@ -159,6 +159,20 @@ app.use((req, res, next) => {
       const { startAppointmentReminder } = await import("./appointment-reminder");
       startAppointmentReminder();
       log("Appointment reminder background runner started");
+
+      // Portfolio cleanup: mark expired entries as EXPIRADO every 24h
+      const { updateExpiredPortfolios } = await import("./portfolio");
+      const runPortfolioCleanup = async () => {
+        try {
+          const count = await updateExpiredPortfolios();
+          if (count > 0) log(`Portfolio cleanup: ${count} entradas marcadas como EXPIRADO`);
+        } catch (err) {
+          console.error("Portfolio cleanup error (non-fatal):", err);
+        }
+      };
+      runPortfolioCleanup();
+      setInterval(runPortfolioCleanup, 24 * 60 * 60 * 1000);
+      log("Portfolio expiry cleanup runner started");
     } catch (initErr) {
       console.error("Error during post-startup initialization:", initErr);
     }

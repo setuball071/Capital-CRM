@@ -3579,3 +3579,74 @@ export const systemUpdateReads = pgTable("system_update_reads", {
 }));
 
 export type SystemUpdateRead = typeof systemUpdateReads.$inferSelect;
+
+// ===== CARTEIRA DE CLIENTES =====
+
+export const PORTFOLIO_PRODUCT_TYPES = [
+  "CARTAO",
+  "CONSIGNADO",
+  "NOVO",
+  "PORTABILIDADE",
+  "REFINANCIAMENTO",
+] as const;
+export type PortfolioProductType = (typeof PORTFOLIO_PRODUCT_TYPES)[number];
+
+export const portfolioRules = pgTable("portfolio_rules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  productType: varchar("product_type", { length: 50 }).notNull(),
+  durationMonths: integer("duration_months").notNull().default(6),
+  updatedBy: integer("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPortfolioRuleSchema = createInsertSchema(portfolioRules).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PortfolioRule = typeof portfolioRules.$inferSelect;
+export type InsertPortfolioRule = z.infer<typeof insertPortfolioRuleSchema>;
+
+export const clientPortfolio = pgTable("client_portfolio", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  cpf: varchar("cpf", { length: 14 }).notNull(),
+  clientName: varchar("client_name", { length: 255 }),
+  vendorId: integer("vendor_id").references(() => users.id).notNull(),
+  productType: varchar("product_type", { length: 50 }).notNull(),
+  origin: varchar("origin", { length: 20 }).notNull(),
+  originId: integer("origin_id"),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("ATIVO"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertClientPortfolioSchema = createInsertSchema(clientPortfolio).omit({
+  id: true,
+  createdAt: true,
+  startedAt: true,
+});
+
+export type ClientPortfolio = typeof clientPortfolio.$inferSelect;
+export type InsertClientPortfolio = z.infer<typeof insertClientPortfolioSchema>;
+
+export const portfolioTransfers = pgTable("portfolio_transfers", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  portfolioId: integer("portfolio_id").references(() => clientPortfolio.id).notNull(),
+  fromVendorId: integer("from_vendor_id").references(() => users.id).notNull(),
+  toVendorId: integer("to_vendor_id").references(() => users.id).notNull(),
+  transferredBy: integer("transferred_by").references(() => users.id).notNull(),
+  reason: text("reason"),
+  transferredAt: timestamp("transferred_at").notNull().defaultNow(),
+});
+
+export const insertPortfolioTransferSchema = createInsertSchema(portfolioTransfers).omit({
+  id: true,
+  transferredAt: true,
+});
+
+export type PortfolioTransfer = typeof portfolioTransfers.$inferSelect;
+export type InsertPortfolioTransfer = z.infer<typeof insertPortfolioTransferSchema>;

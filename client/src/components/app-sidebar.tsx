@@ -190,6 +190,7 @@ export function AppSidebar() {
         { title: "Funcionários", url: "/funcionarios", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
         { title: "Central de Atualizações", url: "/admin/atualizacoes", icon: Bell, masterOnly: true },
+        { title: "Regras de Carteira", url: "/admin/carteira-regras", icon: ShieldCheck, masterOnly: true },
       ],
     },
     {

@@ -14,10 +14,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
-  ArrowRight, Check, Copy, ArrowLeft, Trash2
+  ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck
 } from "lucide-react";
 import {
   AlertDialog,
@@ -306,6 +307,25 @@ export default function VendasPipeline() {
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
   const [observacao, setObservacao] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [activeTab, setActiveTab] = useState<"carteira" | "pipeline">("pipeline");
+
+  interface PortfolioEntry {
+    id: number;
+    cpf: string;
+    nome_cliente?: string | null;
+    product_type: string;
+    contract_id?: number | null;
+    seller_id: number;
+    seller_name?: string | null;
+    status: string;
+    expires_at: string;
+    created_at: string;
+  }
+
+  const { data: portfolioEntries = [], isLoading: portfolioLoading } = useQuery<PortfolioEntry[]>({
+    queryKey: ["/api/portfolio"],
+    enabled: activeTab === "carteira" && !viewUserId,
+  });
   const [retornoEm, setRetornoEm] = useState("");
   const [contactId, setContactId] = useState<string>("");
   const [margemValor, setMargemValor] = useState<string>("");
@@ -643,10 +663,30 @@ export default function VendasPipeline() {
     );
   }
 
+  const PRODUCT_LABELS: Record<string, string> = {
+    CARTAO: "Cartão",
+    CONSIGNADO: "Consignado",
+    NOVO: "Novo Empréstimo",
+    PORTABILIDADE: "Portabilidade",
+    REFINANCIAMENTO: "Refinanciamento",
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    if (status === "ATIVO") return "default";
+    if (status === "EXPIRADO") return "secondary";
+    if (status === "TRANSFERIDO") return "outline";
+    return "secondary";
+  };
+
+  const daysUntilExpiry = (expiresAt: string) => {
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b bg-background shrink-0">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="p-4 pb-0 border-b bg-background shrink-0">
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-3">
           <div className="flex items-center gap-3">
             {isGestorMode && (
               <Button
@@ -716,8 +756,89 @@ export default function VendasPipeline() {
             </Button>
           </div>
         </div>
+        {!isGestorMode && !viewUserId && (
+          <div className="flex gap-0 -mb-px mt-2">
+            <button
+              onClick={() => setActiveTab("carteira")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+                activeTab === "carteira"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="tab-carteira"
+            >
+              <Wallet className="h-4 w-4" />
+              Minha Carteira
+            </button>
+            <button
+              onClick={() => setActiveTab("pipeline")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+                activeTab === "pipeline"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="tab-pipeline"
+            >
+              Pipeline
+            </button>
+          </div>
+        )}
       </div>
 
+      {!isGestorMode && !viewUserId && activeTab === "carteira" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          {portfolioLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : portfolioEntries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <Wallet className="h-10 w-10 opacity-40" />
+              <p className="text-sm">Nenhum cliente em sua carteira ainda.</p>
+              <p className="text-xs">Clientes são adicionados automaticamente ao confirmar contratos.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {portfolioEntries.map((entry) => {
+                const days = daysUntilExpiry(entry.expires_at);
+                return (
+                  <Card key={entry.id} data-testid={`card-portfolio-${entry.id}`}>
+                    <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-sm font-semibold truncate">
+                          {entry.nome_cliente || entry.cpf}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">{entry.cpf}</p>
+                      </div>
+                      <Badge variant={getStatusBadgeVariant(entry.status) as any}>
+                        {entry.status}
+                      </Badge>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                        <span>{PRODUCT_LABELS[entry.product_type] || entry.product_type}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          {entry.status === "ATIVO"
+                            ? days > 0
+                              ? `Expira em ${days} dia${days !== 1 ? "s" : ""}`
+                              : "Expira hoje"
+                            : `Expirou em ${new Date(entry.expires_at).toLocaleDateString("pt-BR")}`}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(isGestorMode || viewUserId || activeTab === "pipeline") && (
       <div className="flex-1 overflow-x-auto p-4">
         <div className="flex gap-4 min-w-max h-full">
           {KANBAN_COLUMNS.map((marker) => (
@@ -751,6 +872,7 @@ export default function VendasPipeline() {
           )}
         </div>
       </div>
+      )}
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">

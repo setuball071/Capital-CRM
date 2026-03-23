@@ -328,6 +328,23 @@ export default function VendasConsulta() {
       if (!termoNormalizado) {
         throw new Error("CPF ou Matrícula inválido");
       }
+      // If the term is 11 digits (CPF), check portfolio block before proceeding
+      if (termoNormalizado.length === 11) {
+        try {
+          const checkRes = await apiRequest("GET", `/api/portfolio/check/${termoNormalizado}`);
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.blocked) {
+              throw new Error(checkData.message || "Este cliente está vinculado a outro vendedor.");
+            }
+          }
+        } catch (portfolioErr: any) {
+          if (portfolioErr.message && (portfolioErr.message.includes("vinculado") || portfolioErr.message.includes("carteira"))) {
+            throw portfolioErr;
+          }
+          // Non-blocking: ignore network errors in portfolio check
+        }
+      }
       const res = await apiRequest("POST", "/api/vendas/consulta/buscar", { termo: termoNormalizado });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));

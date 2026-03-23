@@ -112,6 +112,12 @@ import * as os from "os";
 import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
+import {
+  addToPortfolio,
+  checkPortfolioBlock,
+  updateExpiredPortfolios,
+  mapTipoContratoToProductType,
+} from "./portfolio";
 
 // Configure multer for file uploads using memory storage (for smaller files)
 const upload = multer({
@@ -13823,9 +13829,40 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           createdBy: userId,
         });
 
+        // Pre-scan all CPFs from CSV and check portfolio blocks
+        const allCpfsRaw = (parsed.data as Record<string, string>[])
+          .map((row) => {
+            const cpfRaw = Object.entries(row).find(([h]) => {
+              const norm = h.toLowerCase().trim().replace(/[_\s]+/g, "");
+              return norm === "cpf";
+            })?.[1];
+            if (!cpfRaw) return null;
+            return cpfRaw.trim().replace(/\D/g, "").padStart(11, "0");
+          })
+          .filter(Boolean) as string[];
+
+        let blockedCpfs = new Set<string>();
+        if (allCpfsRaw.length > 0) {
+          try {
+            const uniqueCpfs = [...new Set(allCpfsRaw)];
+            const blockedResult = await db.execute(sql`
+              SELECT DISTINCT cpf FROM client_portfolio
+              WHERE tenant_id = ${tenantId}
+                AND cpf = ANY(${uniqueCpfs}::text[])
+                AND status = 'ATIVO'
+                AND expires_at > NOW()
+            `);
+            blockedCpfs = new Set(blockedResult.rows.map((r: any) => r.cpf));
+          } catch (portfolioCheckErr) {
+            console.error("[PORTFOLIO] bulk CPF check error (non-fatal):", portfolioCheckErr);
+          }
+        }
+
         let imported = 0;
         let updated = 0;
         let ignored = 0;
+        let removedByPortfolio = 0;
+        const removedCpfsList: string[] = [];
 
         for (const row of parsed.data as Record<string, string>[]) {
           const mapped: Record<string, string> = {};
@@ -13842,6 +13879,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
 
           const cpfClean = mapped.cpf ? mapped.cpf.replace(/\D/g, '').padStart(11, '0') : null;
+
+          // Skip CPFs already in active portfolios of another vendor
+          if (cpfClean && blockedCpfs.has(cpfClean)) {
+            removedByPortfolio++;
+            if (!removedCpfsList.includes(cpfClean)) removedCpfsList.push(cpfClean);
+            continue;
+          }
 
           let baseClienteId: number | null = null;
           if (cpfClean) {
@@ -13924,7 +13968,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.json({
           message: "Importação concluída",
           campanha: { id: newCampaign.id, nome: nomeCampanha },
-          resumo: { imported, updated, ignored, total: parsed.data.length },
+          resumo: { imported, updated, ignored, total: parsed.data.length, removedByPortfolio, removedCpfs: removedCpfsList.slice(0, 50) },
           colunasDetectadas: Object.values(headerMapping),
         });
       } catch (error) {
@@ -22044,6 +22088,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         let totalValorGeral = 0;
         let totalValorCartao = 0;
         let mesRef = "";
+        const portfolioCountByVendor = new Map<number, number>();
 
         const [importacao] = await db
           .insert(producoesImportacoes)
@@ -22133,6 +22178,49 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               importadoPor: req.user?.id,
             });
             inseridos++;
+          }
+
+          // Carteira de Clientes: add/renew portfolio entry for this vendor
+          if (c.vendedorId && c.cpfCliente) {
+            try {
+              const productType = mapTipoContratoToProductType(c.tipoContrato, c.isCartao);
+              await addToPortfolio(
+                tenantId,
+                c.cpfCliente,
+                c.nomeCliente || null,
+                Number(c.vendedorId),
+                productType,
+                "IMPORTACAO",
+                importacao.id,
+              );
+              const prev = portfolioCountByVendor.get(Number(c.vendedorId)) || 0;
+              portfolioCountByVendor.set(Number(c.vendedorId), prev + 1);
+            } catch (portfolioErr) {
+              console.error("[PORTFOLIO] addToPortfolio error (non-fatal):", portfolioErr);
+            }
+          }
+        }
+
+        // Send portfolio notifications per vendor
+        for (const [vId, count] of portfolioCountByVendor.entries()) {
+          try {
+            const mesFormatado = mesRef
+              ? (() => {
+                  const d = new Date(mesRef);
+                  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+                  const y = d.getUTCFullYear();
+                  return `${m}/${y}`;
+                })()
+              : "importação recente";
+            await createNotification({
+              userId: vId,
+              title: "Carteira atualizada",
+              message: `Sua carteira foi atualizada com a competência ${mesFormatado}. ${count} cliente(s) adicionado(s) ou renovado(s).`,
+              type: "portfolio",
+              actionUrl: "/vendas/pipeline",
+            });
+          } catch (notifErr) {
+            console.error("[PORTFOLIO] Notification error (non-fatal):", notifErr);
           }
         }
 
@@ -25426,6 +25514,199 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     } catch (err: any) {
       console.error("[SystemUpdates] Erro ao buscar leituras:", err);
       res.status(500).json({ message: "Erro ao buscar leituras" });
+    }
+  });
+
+  // ===== CARTEIRA DE CLIENTES =====
+
+  // GET /api/portfolio/rules — listar regras de prazo
+  app.get("/api/portfolio/rules", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const result = await db.execute(sql`
+        SELECT id, product_type, duration_months, updated_at
+        FROM portfolio_rules
+        WHERE tenant_id = ${tenantId}
+        ORDER BY product_type
+      `);
+      if (result.rows.length === 0) {
+        const defaults = [
+          { product_type: "CARTAO", duration_months: 3 },
+          { product_type: "CONSIGNADO", duration_months: 6 },
+          { product_type: "NOVO", duration_months: 6 },
+          { product_type: "PORTABILIDADE", duration_months: 6 },
+          { product_type: "REFINANCIAMENTO", duration_months: 6 },
+        ];
+        return res.json(defaults);
+      }
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao listar regras de carteira" });
+    }
+  });
+
+  // PUT /api/portfolio/rules/:productType — editar prazo por produto (master only)
+  app.put("/api/portfolio/rules/:productType", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!user.isMaster && user.role !== "master") {
+        return res.status(403).json({ message: "Acesso restrito ao administrador master" });
+      }
+      const productType = req.params.productType.toUpperCase();
+      const { durationMonths } = req.body;
+      if (!durationMonths || isNaN(Number(durationMonths)) || Number(durationMonths) < 1) {
+        return res.status(400).json({ message: "Prazo inválido" });
+      }
+      await db.execute(sql`
+        INSERT INTO portfolio_rules (tenant_id, product_type, duration_months, updated_by, updated_at)
+        VALUES (${tenantId}, ${productType}, ${Number(durationMonths)}, ${user.id}, NOW())
+        ON CONFLICT (tenant_id, product_type)
+        DO UPDATE SET duration_months = ${Number(durationMonths)}, updated_by = ${user.id}, updated_at = NOW()
+      `);
+      res.json({ message: "Regra atualizada com sucesso" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao atualizar regra de carteira" });
+    }
+  });
+
+  // GET /api/portfolio/check/:cpf — verifica bloqueio de CPF
+  app.get("/api/portfolio/check/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      const cpf = req.params.cpf;
+      const result = await checkPortfolioBlock(tenantId, cpf, user.id, user.role);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao verificar carteira" });
+    }
+  });
+
+  // GET /api/portfolio — carteira do usuário logado (role-gated)
+  app.get("/api/portfolio", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      const { vendorId, status: statusFilter, product } = req.query as Record<string, string>;
+
+      if (user.role === "vendedor") {
+        const result = await db.execute(sql`
+          SELECT cp.*, u.name as vendor_name
+          FROM client_portfolio cp
+          JOIN users u ON u.id = cp.vendor_id
+          WHERE cp.tenant_id = ${tenantId}
+            AND cp.vendor_id = ${user.id}
+            AND cp.status = 'ATIVO'
+          ORDER BY cp.expires_at ASC
+        `);
+        return res.json(result.rows);
+      } else if (user.role === "coordenacao") {
+        const filterVendorId = vendorId ? Number(vendorId) : null;
+        let result;
+        if (filterVendorId) {
+          result = await db.execute(sql`
+            SELECT cp.*, u.name as vendor_name
+            FROM client_portfolio cp
+            JOIN users u ON u.id = cp.vendor_id
+            WHERE cp.tenant_id = ${tenantId}
+              AND (cp.vendor_id = ${filterVendorId} OR u.manager_id = ${user.id})
+            ORDER BY cp.expires_at ASC
+          `);
+        } else {
+          result = await db.execute(sql`
+            SELECT cp.*, u.name as vendor_name
+            FROM client_portfolio cp
+            JOIN users u ON u.id = cp.vendor_id
+            WHERE cp.tenant_id = ${tenantId}
+              AND (cp.vendor_id = ${user.id} OR u.manager_id = ${user.id})
+            ORDER BY cp.expires_at ASC
+          `);
+        }
+        return res.json(result.rows);
+      } else {
+        // master — all with optional filters
+        const result = await db.execute(sql`
+          SELECT cp.*, u.name as vendor_name
+          FROM client_portfolio cp
+          JOIN users u ON u.id = cp.vendor_id
+          WHERE cp.tenant_id = ${tenantId}
+            ${vendorId ? sql`AND cp.vendor_id = ${Number(vendorId)}` : sql``}
+            ${statusFilter ? sql`AND cp.status = ${statusFilter.toUpperCase()}` : sql``}
+            ${product ? sql`AND cp.product_type = ${product.toUpperCase()}` : sql``}
+          ORDER BY cp.expires_at ASC
+        `);
+        return res.json(result.rows);
+      }
+    } catch (err: any) {
+      console.error("[PORTFOLIO] GET /api/portfolio error:", err);
+      res.status(500).json({ message: "Erro ao listar carteira" });
+    }
+  });
+
+  // POST /api/portfolio/transfer — transferir cliente (master only)
+  app.post("/api/portfolio/transfer", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!user.isMaster && user.role !== "master") {
+        return res.status(403).json({ message: "Acesso restrito ao administrador master" });
+      }
+      const { portfolioId, toVendorId, reason } = req.body;
+      if (!portfolioId || !toVendorId) {
+        return res.status(400).json({ message: "portfolioId e toVendorId são obrigatórios" });
+      }
+
+      const portfolioRows = await db.execute(sql`
+        SELECT * FROM client_portfolio WHERE id = ${portfolioId} AND tenant_id = ${tenantId} LIMIT 1
+      `);
+      if (portfolioRows.rows.length === 0) {
+        return res.status(404).json({ message: "Entrada de carteira não encontrada" });
+      }
+      const portfolio = portfolioRows.rows[0] as any;
+
+      await db.execute(sql`
+        INSERT INTO portfolio_transfers
+          (tenant_id, portfolio_id, from_vendor_id, to_vendor_id, transferred_by, reason, transferred_at)
+        VALUES
+          (${tenantId}, ${portfolioId}, ${portfolio.vendor_id}, ${Number(toVendorId)}, ${user.id}, ${reason || null}, NOW())
+      `);
+
+      await db.execute(sql`
+        UPDATE client_portfolio SET vendor_id = ${Number(toVendorId)} WHERE id = ${portfolioId}
+      `);
+
+      res.json({ message: "Cliente transferido com sucesso" });
+    } catch (err: any) {
+      console.error("[PORTFOLIO] transfer error:", err);
+      res.status(500).json({ message: "Erro ao transferir cliente" });
+    }
+  });
+
+  // GET /api/portfolio/transfers/:portfolioId — histórico de transferências
+  app.get("/api/portfolio/transfers/:portfolioId", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!["master", "coordenacao"].includes(user.role) && !user.isMaster) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const portfolioId = Number(req.params.portfolioId);
+      const result = await db.execute(sql`
+        SELECT pt.*,
+          uf.name as from_vendor_name,
+          ut.name as to_vendor_name,
+          ub.name as transferred_by_name
+        FROM portfolio_transfers pt
+        JOIN users uf ON uf.id = pt.from_vendor_id
+        JOIN users ut ON ut.id = pt.to_vendor_id
+        JOIN users ub ON ub.id = pt.transferred_by
+        WHERE pt.portfolio_id = ${portfolioId} AND pt.tenant_id = ${tenantId}
+        ORDER BY pt.transferred_at DESC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao listar transferências" });
     }
   });
 

@@ -11,6 +11,7 @@ import {
   financialDebits,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { addToPortfolio } from "./portfolio";
 
 export function registerContractRoutes(app: Express, requireAuth: Function) {
 
@@ -400,6 +401,31 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         notes: notes || null,
         performedBy: user.id,
       });
+
+      // Carteira de Clientes: when proposal is marked PAGO, add to portfolio
+      if (status === "PAGO" && current.clientCpf && (updated.vendorId || current.createdBy)) {
+        try {
+          const productTypeMap: Record<string, any> = {
+            CARTAO: "CARTAO",
+            NOVO: "NOVO",
+            PORTABILIDADE: "PORTABILIDADE",
+            REFINANCIAMENTO: "REFINANCIAMENTO",
+          };
+          const productType = (updated.product && productTypeMap[updated.product]) || "CONSIGNADO";
+          const vendorIdForPortfolio = updated.vendorId || current.createdBy;
+          await addToPortfolio(
+            tenantId,
+            current.clientCpf,
+            current.clientName || null,
+            vendorIdForPortfolio,
+            productType,
+            "CONTRATO",
+            id,
+          );
+        } catch (portfolioErr) {
+          console.error("[PORTFOLIO] addToPortfolio (contracts) error (non-fatal):", portfolioErr);
+        }
+      }
 
       return res.json(updated);
     } catch (e: any) {

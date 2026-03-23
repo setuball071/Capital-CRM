@@ -68,6 +68,7 @@ import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import SystemUpdatesPage from "@/pages/system-updates";
+import PortfolioRulesPage from "@/pages/portfolio-rules";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
@@ -491,6 +492,9 @@ function Router() {
               </Route>
               <Route path="/admin/branding">
                 {() => <MasterRoute component={AdminBrandingPage} />}
+              </Route>
+              <Route path="/admin/carteira-regras">
+                {() => <MasterOnlyRoute component={PortfolioRulesPage} />}
               </Route>
               <Route path="/simulador-portabilidade">
                 {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}
