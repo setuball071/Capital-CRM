@@ -1,0 +1,159 @@
+PROMPT PARA O AGENTE REPLIT — Carteira de Clientes
+
+Construir o módulo de Carteira de Clientes no sistema Capital Go.
+FASE A — BANCO DE DADOS
+Criar via SQL direto (psql "$DATABASE_URL"), 3 tabelas novas:
+sqlCREATE TABLE IF NOT EXISTS portfolio_rules (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  product_type VARCHAR(50) NOT NULL, -- CARTAO, CONSIGNADO, NOVO, PORTABILIDADE, REFINANCIAMENTO
+  duration_months INTEGER NOT NULL DEFAULT 6,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, product_type)
+);
+
+CREATE TABLE IF NOT EXISTS client_portfolio (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  cpf VARCHAR(14) NOT NULL,
+  client_name VARCHAR(255),
+  vendor_id INTEGER NOT NULL REFERENCES users(id),
+  product_type VARCHAR(50) NOT NULL,
+  origin VARCHAR(20) NOT NULL, -- IMPORTACAO ou CONTRATO
+  origin_id INTEGER,
+  started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMP NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'ATIVO', -- ATIVO ou EXPIRADO
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_transfers (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  portfolio_id INTEGER NOT NULL REFERENCES client_portfolio(id),
+  from_vendor_id INTEGER NOT NULL REFERENCES users(id),
+  to_vendor_id INTEGER NOT NULL REFERENCES users(id),
+  transferred_by INTEGER NOT NULL REFERENCES users(id),
+  reason TEXT,
+  transferred_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_portfolio_cpf ON client_portfolio(tenant_id, cpf);
+CREATE INDEX IF NOT EXISTS idx_portfolio_vendor ON client_portfolio(tenant_id, vendor_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_status ON client_portfolio(tenant_id, status);
+Adicionar as 3 tabelas também ao shared/schema.ts com tipos e insertSchemas.
+Inserir regras padrão ao criar tenant (ou se não existirem):
+sqlINSERT INTO portfolio_rules (tenant_id, product_type, duration_months)
+VALUES 
+  (1, 'CARTAO', 3),
+  (1, 'CONSIGNADO', 6),
+  (1, 'NOVO', 6),
+  (1, 'PORTABILIDADE', 6),
+  (1, 'REFINANCIAMENTO', 6)
+ON CONFLICT (tenant_id, product_type) DO NOTHING;
+```
+
+---
+
+**FASE B — LÓGICA DE CARTEIRA**
+
+Criar `server/portfolio.ts` com as funções core:
+
+**`addToPortfolio(tenantId, cpf, clientName, vendorId, productType, origin, originId)`**
+- Busca prazo em `portfolio_rules` para o produto
+- Verifica se já existe entrada ativa para esse CPF + vendedor + produto
+- Se existe: recalcula `expires_at` — mantém o mais longo entre o atual e o novo
+- Se não existe: insere novo registro
+- Atualiza `status = 'ATIVO'` se estava expirado
+
+**`checkPortfolioBlock(tenantId, cpf, currentVendorId)`**
+- Retorna `{ blocked: boolean, message?: string }`
+- Busca entradas em `client_portfolio` onde `status = 'ATIVO'` e `expires_at > NOW()` e `cpf = ?` e `vendor_id != currentVendorId`
+- Se encontrar: `{ blocked: true, message: "Esse cliente já possui vínculo ativo com outro vendedor. Favor alinhar com o supervisor." }`
+- Se não encontrar: `{ blocked: false }`
+- Coordenação e master: retorna `blocked: false` sempre (não bloqueados)
+
+**`updateExpiredPortfolios(tenantId)`**
+- Atualiza `status = 'EXPIRADO'` onde `expires_at < NOW()` e `status = 'ATIVO'`
+- Rodar esta função diariamente via job simples (setInterval de 24h no server)
+
+**Integração com importação de produção existente:**
+- No endpoint `POST /api/gestao-comercial/importar/confirmar`, após inserir cada contrato pago:
+  - Chamar `addToPortfolio(...)` com os dados do contrato
+  - Mapear `tipoContrato` para os product_types do sistema
+
+**Integração com módulo de contratos:**
+- No endpoint de atualização de status de proposta, quando `status = 'PAGO'`:
+  - Chamar `addToPortfolio(...)` automaticamente
+
+---
+
+**FASE C — ROTAS DA API**
+```
+GET  /api/portfolio                          — carteira do usuário logado (vendedor: só a sua; coordenacao: equipe; master: todos)
+GET  /api/portfolio/check/:cpf               — verifica bloqueio de CPF
+POST /api/portfolio/transfer                 — transferir cliente (master only)
+GET  /api/portfolio/transfers/:portfolioId   — histórico de transferências (master/coordenacao)
+GET  /api/portfolio/rules                    — listar regras de prazo
+PUT  /api/portfolio/rules/:productType       — editar prazo por produto (master only)
+Regras de visibilidade na GET /api/portfolio:
+
+vendedor: retorna apenas status = 'ATIVO' onde vendor_id = currentUser.id
+coordenacao: retorna ativos e expirados da equipe (usuarios onde managerId = currentUser.id)
+master: retorna todos com filtros opcionais (?vendorId=, ?status=, ?product=)
+
+Bloqueio na importação de base (POST /api/vendas/importar-higienizados):
+
+Antes de inserir leads: varrer todos os CPFs do CSV
+Para cada CPF: verificar client_portfolio (ativo, de outro vendedor)
+Remover CPFs bloqueados da campanha
+Incluir no retorno: { imported: X, removed: Y, removedCpfs: [...] }
+Exibir na UI pós-importação: "X clientes removidos por já estarem em carteira ativa de outro vendedor."
+
+
+FASE D — UI
+1. Aba "Minha Carteira" no Pipeline
+No arquivo da página de Pipeline (vendas-pipeline.tsx ou similar):
+
+Adicionar aba "Minha Carteira" como primeira aba à esquerda
+Conteúdo: lista de cards dos clientes ativos da carteira do corretor
+Card contém: nome do cliente, CPF mascarado (ex: 071.***.***-96), produto (badge colorido), dias restantes de bloqueio
+Badge verde com "X dias restantes" quando > 30 dias
+Badge amarelo quando entre 1-30 dias
+Coordenação e master: dropdown para filtrar por vendedor da equipe
+Master: campo de busca por vendedor + botão "Transferir" em cada card
+
+2. Bloqueio na Consulta Individual
+No arquivo vendas-consulta.tsx (ou vendas-atendimento.tsx):
+
+Ao digitar/submeter CPF: chamar GET /api/portfolio/check/:cpf antes de prosseguir
+Se blocked: true: exibir alerta vermelho com a mensagem, travar completamente o avanço
+Se blocked: false: seguir fluxo normal
+
+3. Configuração de Prazos (master — Administração)
+Criar página simples portfolio-rules.tsx na rota /admin/carteira-regras:
+
+Tabela com os produtos e campo editável de prazo em meses
+Botão salvar por linha
+Adicionar no sidebar em Administração: "Regras de Carteira" — ícone ShieldCheck, master only
+
+4. Notificação pós-importação
+Quando importação de produção for concluída:
+
+Para cada vendor_id que teve clientes adicionados/renovados:
+
+Criar notificação interna (usar sistema de notificações existente):
+Título: "Carteira atualizada"
+Mensagem: "Sua carteira foi atualizada com a competência [mês/ano]. X cliente(s) adicionado(s) ou renovado(s)."
+
+
+
+
+VERIFICAÇÃO FINAL:
+
+Importar produção → cliente aparece na aba "Minha Carteira" do corretor
+Outro vendedor tenta consultar o mesmo CPF → bloqueado com mensagem
+Importar base com CPF em carteira ativa → CPF removido automaticamente da campanha
+Master consegue transferir cliente de um vendedor para outro
+Master edita prazo de Cartão de 3 para 4 meses → próximas entradas usam 4 meses
