@@ -40,12 +40,13 @@ function safeVarchar(
   return str.length > maxLen ? str.substring(0, maxLen) : str;
 }
 
-const BATCH_INSERT_SIZE = 100;
+const BATCH_INSERT_SIZE = 500;
 const MAX_LINHAS_POR_EXECUCAO = 500_000;
 const MERGE_BATCH_SIZE = 1000;
-// Sub-batch for SQL inserts to avoid "value too large to transmit"
-// Reduced from 100 to 50 to handle larger row sizes
-const SQL_INSERT_CHUNK = 50;
+// Sub-batch for SQL inserts to avoid Neon HTTP payload limit (~16MB)
+// staging_folha has ~36 fields; 200 rows ≈ 144KB — safely under limit
+// 200 rows = 500 round trips for 100k lines (vs 2000 at chunk=50)
+const SQL_INSERT_CHUNK = 200;
 
 export interface FastImportOptions {
   tipoImport: "folha" | "d8" | "contatos" | "estadual";
