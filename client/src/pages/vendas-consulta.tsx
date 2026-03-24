@@ -881,12 +881,9 @@ export default function VendasConsulta() {
             {/* Portfolio lock info banner - shown to master/coordenação when client is in another vendor's portfolio */}
             {portfolioInfo && (
               <Alert className="border-amber-500/50 bg-amber-50/10" data-testid="alert-portfolio-info">
-                <AlertTitle className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-2">
-                  Este cliente está na carteira de {portfolioInfo.vendorName}
+                <AlertTitle className="text-amber-700 dark:text-amber-400 font-semibold">
+                  Na carteira de {portfolioInfo.vendorName} — expira em {new Date(portfolioInfo.expiresAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                 </AlertTitle>
-                <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
-                  Bloqueio expira em {new Date(portfolioInfo.expiresAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}.
-                </p>
               </Alert>
             )}
 
