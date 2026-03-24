@@ -22129,7 +22129,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
           const pt1000Val = parseFloat(String(c.pt1000 || 0)) || 0;
           const pontosGeral = pt1000Val * (valorBase / 1000);
-          const pontosCartao = c.isCartao ? Math.min(pontosGeral, 100) : 0;
+          const pontosCartao = c.isCartao ? pontosGeral : 0;
 
           const contratoData = {
             nomeCliente: c.nomeCliente,
