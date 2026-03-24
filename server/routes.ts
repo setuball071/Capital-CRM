@@ -20745,6 +20745,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
+          AND pt_1000 > 0
         GROUP BY TO_DATE(data_pagamento, 'DD/MM/YYYY')
         ORDER BY dia ASC
       `);
@@ -20774,6 +20775,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
+          AND pt_1000 > 0
       `);
 
       const vendTotaisResult = await db.execute(sql`
@@ -20891,9 +20893,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allVendedoresRanking = await db.execute(sql`
         SELECT u.id as user_id,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()}), 0)::numeric as prod_geral,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
@@ -21034,6 +21036,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND tenant_id = ${tenantId}
             AND mes_referencia = ${mesRef}
             AND confirmado = true
+            AND pt_1000 > 0
         `);
 
         const vendResult = await db.execute(sql`
@@ -21206,6 +21209,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND tenant_id = ${tenantId}
             AND mes_referencia = ${mesRef}
             AND confirmado = true
+            AND pt_1000 > 0
         `);
 
         const vendResult = await db.execute(sql`
@@ -21436,6 +21440,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           WHERE vendedor_id = ${vendedorId}
             AND tenant_id = ${tenantId}
             AND confirmado = true
+            AND pt_1000 > 0
             AND created_at >= ${dateFrom.toISOString()}
             AND created_at <= ${dateTo.toISOString()}
         `);
@@ -21552,6 +21557,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
+          AND pt_1000 > 0
       `);
 
         // Sum points from producoes_contratos for level calculation
@@ -21890,9 +21896,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
           if (isPago && dataPagamentoRaw) {
             totalPagoValido++;
-            totalValorGeral += valorBase;
-            if (isCartao) {
-              totalValorCartao += valorBase;
+            if (pt1000 > 0) {
+              totalValorGeral += valorBase;
+              if (isCartao) {
+                totalValorCartao += valorBase;
+              }
             }
           } else {
             totalIgnorados++;
@@ -24186,6 +24194,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND tenant_id = ${tenantId}
             AND mes_referencia = ${mesRef}
             AND confirmado = true
+            AND pt_1000 > 0
         `);
 
         const vendResult = await db.execute(sql`
