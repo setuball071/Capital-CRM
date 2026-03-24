@@ -244,6 +244,7 @@ export default function VendasConsulta() {
   
   const [termoBusca, setTermoBusca] = useState("");
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
+  const [portfolioInfo, setPortfolioInfo] = useState<{ vendorName: string; expiresAt: string } | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
@@ -329,6 +330,7 @@ export default function VendasConsulta() {
         throw new Error("CPF ou Matrícula inválido");
       }
       // If the term is 11 digits (CPF), check portfolio block before proceeding
+      let capturedPortfolioInfo: { vendorName: string; expiresAt: string } | null = null;
       if (termoNormalizado.length === 11) {
         try {
           const checkRes = await apiRequest("GET", `/api/portfolio/check/${termoNormalizado}`);
@@ -336,6 +338,9 @@ export default function VendasConsulta() {
             const checkData = await checkRes.json();
             if (checkData.blocked) {
               throw new Error(checkData.message || "Este cliente está vinculado a outro vendedor.");
+            }
+            if (checkData.portfolioInfo) {
+              capturedPortfolioInfo = checkData.portfolioInfo;
             }
           }
         } catch (portfolioErr: any) {
@@ -389,10 +394,12 @@ export default function VendasConsulta() {
         ...data,
         folhaAtual: transformFolha(data.folhaAtual),
         contratos: (data.contratos || []).map(transformContrato),
+        _portfolioInfo: capturedPortfolioInfo,
       };
     },
     onSuccess: (data) => {
       setConsultaData(data);
+      setPortfolioInfo(data._portfolioInfo ?? null);
       setSelectedVinculoId(null);
       setContratosSelecionados(new Set());
       setTaxasContratos({});
@@ -400,6 +407,7 @@ export default function VendasConsulta() {
     },
     onError: (error: any) => {
       setConsultaData(null);
+      setPortfolioInfo(null);
       setSelectedVinculoId(null);
       toast({ 
         title: "Cliente não localizado", 
@@ -855,7 +863,7 @@ export default function VendasConsulta() {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => { setConsultaData(null); setSelectedVinculoId(null); }}
+                onClick={() => { setConsultaData(null); setPortfolioInfo(null); setSelectedVinculoId(null); }}
                 data-testid="button-nova-busca"
               >
                 <Search className="h-4 w-4 mr-2" />
@@ -869,6 +877,18 @@ export default function VendasConsulta() {
       <div className="flex-1 overflow-auto pb-4">
         <div className="container mx-auto p-4">
           <div className="space-y-4">
+
+            {/* Portfolio lock info banner - shown to master/coordenação when client is in another vendor's portfolio */}
+            {portfolioInfo && (
+              <Alert className="border-amber-500/50 bg-amber-50/10" data-testid="alert-portfolio-info">
+                <AlertTitle className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-2">
+                  Este cliente está na carteira de {portfolioInfo.vendorName}
+                </AlertTitle>
+                <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
+                  Bloqueio expira em {new Date(portfolioInfo.expiresAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}.
+                </p>
+              </Alert>
+            )}
 
             {/* Vínculo selector card - shown only when there are multiple vínculos */}
             {consultaData.tem_multiplos_vinculos && consultaData.vinculos && consultaData.vinculos.length > 1 && (

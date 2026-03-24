@@ -111,12 +111,35 @@ export async function checkPortfolioBlock(
   cpf: string,
   currentVendorId: number,
   userRole?: string,
-): Promise<{ blocked: boolean; message?: string }> {
+): Promise<{ blocked: boolean; message?: string; portfolioInfo?: { vendorName: string; expiresAt: string } }> {
+  const cpfClean = cpf.replace(/\D/g, "").padStart(11, "0");
+
   if (userRole === "coordenacao" || userRole === "master") {
+    const infoResult = await db.execute(sql`
+      SELECT u.name as vendor_name, cp.expires_at
+      FROM client_portfolio cp
+      JOIN users u ON u.id = cp.vendor_id
+      WHERE cp.tenant_id = ${tenantId}
+        AND cp.cpf = ${cpfClean}
+        AND cp.status = 'ATIVO'
+        AND cp.expires_at > NOW()
+      ORDER BY cp.expires_at DESC
+      LIMIT 1
+    `);
+
+    if (infoResult.rows.length > 0) {
+      const row = infoResult.rows[0] as { vendor_name: string; expires_at: string };
+      return {
+        blocked: false,
+        portfolioInfo: {
+          vendorName: row.vendor_name,
+          expiresAt: row.expires_at,
+        },
+      };
+    }
+
     return { blocked: false };
   }
-
-  const cpfClean = cpf.replace(/\D/g, "").padStart(11, "0");
 
   const result = await db.execute(sql`
     SELECT cp.id, u.name as vendor_name
