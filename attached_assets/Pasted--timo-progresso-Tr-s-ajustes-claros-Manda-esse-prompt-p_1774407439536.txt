@@ -1,0 +1,34 @@
+Ótimo progresso! Três ajustes claros. Manda esse prompt pro Replit:
+
+No arquivo public/editor-pdf.html, faça estas 3 correções:
+1. Cor automática do texto — na função selectBlock, onde cria o input de cor, substitua:
+jsvalue="${block.color}"
+Por uma versão que detecta a cor real do texto. Substitua a linha inteira do input color por:
+jscrow.innerHTML = `<input type="color" id="oc" value="${block.color && block.color !== '#000000' ? block.color : '#000000'}" ...>
+E antes de criar o campo de cor, adicione detecção automática assim — substitua toda a criação do crow por:
+jsconst detectedColor = block.color || '#000000';
+const crow = document.createElement('div');
+crow.style.cssText = 'display:flex;align-items:center;gap:8px';
+crow.innerHTML = `<input type="color" id="oc" value="${detectedColor}" style="width:32px;height:28px;border-radius:5px;border:1px solid var(--bd);background:var(--s2);cursor:pointer;padding:1px">
+  <span style="color:var(--tx3);font-size:11px">Cor detectada automaticamente</span>`;
+2. Preview em tempo real — na função applyCorr, após updateCorrList(), adicione:
+js// Preview visual no overlay
+const ov2 = document.querySelector(`.ov[data-bid="${block.id}"][data-pg="${page}"]`);
+if (ov2) {
+  ov2.style.background = 'rgba(62,207,142,0.15)';
+  ov2.style.borderColor = 'var(--ok)';
+  ov2.title = newText;
+  // Mostra badge com novo texto
+  ov2.setAttribute('data-preview', newText);
+  const preview = document.createElement('span');
+  preview.style.cssText = 'position:absolute;bottom:100%;left:0;background:#1b2035;color:#dde2f5;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:99;border:1px solid #2a3150';
+  preview.textContent = '✓ ' + newText;
+  ov2.innerHTML = '';
+  ov2.appendChild(preview);
+}
+3. Nome do arquivo ao salvar — no início da função openFile, após pdfBytes = ..., salve o nome original:
+jswindow.originalFileName = file.name.replace(/\.pdf$/i, '');
+E na função savePDF, substitua:
+jsdoc.save('corrigido.pdf');
+Por:
+jsdoc.save((window.originalFileName || 'documento') + ' - Arquivo correto.pdf');

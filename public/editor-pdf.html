@@ -250,6 +250,7 @@ async function openFile(file) {
   try {
     const buf = await file.arrayBuffer();
     pdfBytes = buf.slice(0);
+    window.originalFileName = file.name.replace(/\.pdf$/i, '');
     pdfJsDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
     pages = [];
     corrections = [];
@@ -432,10 +433,11 @@ function selectBlock(block, page, ovEl) {
   // Color override
   const gc = document.createElement('div'); gc.className = 'fl';
   gc.innerHTML = `<label>Cor do texto (opcional)</label>`;
+  const detectedColor = block.color || '#000000';
   const crow = document.createElement('div');
   crow.style.cssText = 'display:flex;align-items:center;gap:8px';
-  crow.innerHTML = `<input type="color" id="oc" value="${block.color}" style="width:32px;height:28px;border-radius:5px;border:1px solid var(--bd);background:var(--s2);cursor:pointer;padding:1px">
-    <span style="color:var(--tx3);font-size:11px">Deixe preto para manter original</span>`;
+  crow.innerHTML = `<input type="color" id="oc" value="${detectedColor}" style="width:32px;height:28px;border-radius:5px;border:1px solid var(--bd);background:var(--s2);cursor:pointer;padding:1px">
+    <span style="color:var(--tx3);font-size:11px">Cor detectada automaticamente</span>`;
   gc.appendChild(crow); ea.appendChild(gc);
 
   // Apply btn
@@ -477,6 +479,21 @@ function applyCorr(block, page, newText, color) {
   if (ov) ov.classList.add('done');
 
   updateCorrList();
+
+  // Preview visual no overlay
+  const ov2 = document.querySelector(`.ov[data-bid="${block.id}"][data-pg="${page}"]`);
+  if (ov2) {
+    ov2.style.background = 'rgba(62,207,142,0.15)';
+    ov2.style.borderColor = 'var(--ok)';
+    ov2.title = newText;
+    ov2.setAttribute('data-preview', newText);
+    const preview = document.createElement('span');
+    preview.style.cssText = 'position:absolute;bottom:100%;left:0;background:#1b2035;color:#dde2f5;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:99;border:1px solid #2a3150';
+    preview.textContent = '✓ ' + newText;
+    ov2.innerHTML = '';
+    ov2.appendChild(preview);
+  }
+
   toast(`✓ Correção salva · ${corrections.length} total`);
 }
 
@@ -631,7 +648,7 @@ async function savePDF() {
       doc.addImage(jpeg, 'JPEG', 0, 0, p.w_pt, p.h_pt);
     }
 
-    doc.save('corrigido.pdf');
+    doc.save((window.originalFileName || 'documento') + ' - Arquivo correto.pdf');
     toast(`✓ PDF salvo com ${corrections.length} correção(ões)!`);
   } catch(e) {
     console.error(e);
