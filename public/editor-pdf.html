@@ -250,7 +250,7 @@ async function openFile(file) {
   load(true, 'Lendo PDF...');
   try {
     const buf = await file.arrayBuffer();
-    pdfBytes = new Uint8Array(buf);
+    pdfBytes = buf.slice(0);
     pdfJsDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
     pages = [];
     corrections = [];
@@ -580,7 +580,7 @@ async function savePDF() {
 
   load(true, `Aplicando ${corrections.length} correção(ões)...`);
   try {
-    const pdfOut = await PDFDocument.load(pdfBytes);
+    const pdfOut = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, throwOnInvalidObject: false });
     const pdfPages = pdfOut.getPages();
 
     // Group corrections by page
