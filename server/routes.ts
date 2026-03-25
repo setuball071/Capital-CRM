@@ -14082,6 +14082,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         });
       }
 
+      // Portfolio block check — applies to all search types (CPF and matrícula)
+      const portfolioCheck = await checkPortfolioBlock(
+        tenantId,
+        cliente.cpf || "",
+        req.user!.id,
+        req.user!.role,
+      );
+      if (portfolioCheck.blocked) {
+        return res.status(403).json({ message: portfolioCheck.message });
+      }
+
       // Get vínculos (shared across tenants)
       const vinculos = await storage.getVinculosByPessoaId(cliente.id);
 
@@ -14354,6 +14365,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         tem_multiplos_vinculos: vinculosFiltrados.length > 1,
         pessoaId: cliente.id,
         leadId,
+        portfolioInfo: portfolioCheck.portfolioInfo ?? null,
       });
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);

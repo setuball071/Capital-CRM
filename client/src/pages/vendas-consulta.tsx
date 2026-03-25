@@ -353,9 +353,14 @@ export default function VendasConsulta() {
       const res = await apiRequest("POST", "/api/vendas/consulta/buscar", { termo: termoNormalizado });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Cliente não encontrado");
+        throw new Error(errorData.message || errorData.error || "Cliente não encontrado");
       }
       const data = await res.json();
+
+      // Use portfolioInfo from backend response (covers matrícula searches where pre-check is skipped)
+      if (!capturedPortfolioInfo && data.portfolioInfo) {
+        capturedPortfolioInfo = data.portfolioInfo;
+      }
       
       const transformFolha = (folha: any) => {
         if (!folha) return null;
