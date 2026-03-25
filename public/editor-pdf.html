@@ -306,7 +306,7 @@ async function openFile(file) {
           color: (() => {
             if (item.color && Array.isArray(item.color)) {
               const [r, g, b] = item.color;
-              const toHex = v => Math.round(v * 255).toString(16).padStart(2,'0');
+              const toHex = v => Math.round(v).toString(16).padStart(2,'0');
               return '#' + toHex(r) + toHex(g) + toHex(b);
             }
             return '#000000';
@@ -440,7 +440,7 @@ function selectBlock(block, page, ovEl) {
   // Color override
   const gc = document.createElement('div'); gc.className = 'fl';
   gc.innerHTML = `<label>Cor do texto (opcional)</label>`;
-  const detectedColor = block.color || '#000000';
+  const detectedColor = existing ? (existing.color || '#000000') : (block.color || '#000000');
   const crow = document.createElement('div');
   crow.style.cssText = 'display:flex;align-items:center;gap:8px';
   crow.innerHTML = `<input type="color" id="oc" value="${detectedColor}" style="width:32px;height:28px;border-radius:5px;border:1px solid var(--bd);background:var(--s2);cursor:pointer;padding:1px">
