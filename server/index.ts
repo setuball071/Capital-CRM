@@ -25,6 +25,7 @@ app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 import nodePath from "path";
 app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
+app.use(express.static(nodePath.join(process.cwd(), "public")));
 
 app.use((req, res, next) => {
   const start = Date.now();
