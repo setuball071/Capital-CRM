@@ -886,7 +886,7 @@ export default function VendasPipeline() {
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Vendedor</th>
                     )}
                     {user?.role === "vendedor" && (
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Sem fechar negócio</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Dias sem novo negócio</th>
                     )}
                     {isManagerRole && (
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Prazo restante</th>

@@ -25630,11 +25630,14 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            -- data_pagamento (DD/MM/YYYY) is the actual paid deal date in producoes_contratos
+            SELECT pc.cpf_cliente AS cpf,
+              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
               AND pc.status = 'PAGO'
               AND pc.cpf_cliente IS NOT NULL
+              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
             GROUP BY pc.cpf_cliente
           ),
           conv AS (
@@ -25673,11 +25676,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            SELECT pc.cpf_cliente AS cpf,
+              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
               AND pc.status = 'PAGO'
               AND pc.cpf_cliente IS NOT NULL
+              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
             GROUP BY pc.cpf_cliente
           ),
           conv AS (
@@ -25716,11 +25721,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            SELECT pc.cpf_cliente AS cpf,
+              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
               AND pc.status = 'PAGO'
               AND pc.cpf_cliente IS NOT NULL
+              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
             GROUP BY pc.cpf_cliente
           ),
           conv AS (
