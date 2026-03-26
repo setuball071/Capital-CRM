@@ -696,8 +696,7 @@ async function savePDF() {
       return;
     }
 
-    // 2. Pre-embed standard fonts — string names match c.font values exactly,
-    //    avoiding StandardFonts enum lookup issues. Sequential loop isolates failures.
+    // 2. Pre-embed standard fonts — string names match c.font values exactly
     const STANDARD_FONT_NAMES = [
       'Helvetica', 'Helvetica-Bold',
       'Times-Roman', 'Times-Bold', 'Times-Italic',
@@ -707,13 +706,29 @@ async function savePDF() {
     for (const name of STANDARD_FONT_NAMES) {
       fonts[name] = await pdfLibDoc.embedFont(name);
     }
-    // Fallback for any unexpected c.font value
     const fallbackFont = fonts['Helvetica'];
 
-    // 3. Apply each correction at the vector level
+    // 3. Sample background colours from the original rendered pages (scale 1)
+    //    so the cover rectangle matches the actual document background exactly.
+    //    Pages are rendered once each, cached for multiple corrections on same page.
+    const bgPageCache = new Map(); // pageNum → {canvas, ctx}
+    async function getBgCanvas(pageNum) {
+      if (!bgPageCache.has(pageNum)) {
+        const pg = await pdfJsDoc.getPage(pageNum);
+        const vp = pg.getViewport({ scale: 1 });
+        const cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height;
+        const ctx = cv.getContext('2d');
+        await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+        bgPageCache.set(pageNum, { cv, ctx, w: vp.width, h: vp.height });
+      }
+      return bgPageCache.get(pageNum);
+    }
+
+    // 4. Apply each correction at the vector level
     for (const c of corrections) {
       const pdfPage = pdfLibDoc.getPage(c.page - 1); // pdf-lib is 0-indexed
-      const { height: pageH } = pdfPage.getSize();
+      const { height: pageH, width: pageW } = pdfPage.getSize();
 
       // bbox = [x0, y_top_from_top, x1, y_baseline_from_top] in PDF points
       const bx0      = c.bbox[0];
@@ -723,16 +738,30 @@ async function savePDF() {
       const bh       = byBottom - byTop;
       const bw       = bx1 - bx0;
 
-      // Convert to pdf-lib bottom-up coordinate system
+      // Convert to pdf-lib bottom-up coordinates
       const pdfY_bottom = pageH - byBottom; // Y of baseline from page bottom
 
-      // Cover original text with white rectangle (+2pt margin on all sides)
+      // Sample background colour from the original page render.
+      // Sample just above the text bbox to avoid picking up ink from the text itself.
+      let bgR = 1, bgG = 1, bgB = 1;
+      try {
+        const { ctx: bgCtx, w: bw2, h: bh2 } = await getBgCanvas(c.page);
+        const sx = bw2 / pageW;
+        const sy = bh2 / pageH;
+        // Sample 3 pixels in a row just above the bbox top, use the lightest one
+        const sampleY = Math.max(0, Math.min(Math.floor((byTop - 1) * sy), bh2 - 1));
+        const sampleX = Math.max(0, Math.min(Math.floor((bx0 + bw / 2) * sx), bw2 - 1));
+        const d = bgCtx.getImageData(sampleX, sampleY, 1, 1).data;
+        bgR = d[0] / 255; bgG = d[1] / 255; bgB = d[2] / 255;
+      } catch(e) { /* fall back to white */ }
+
+      // Cover original text — exact bbox bounds (no margin) so table borders are not disturbed
       pdfPage.drawRectangle({
-        x: bx0 - 2,
-        y: pdfY_bottom - 2,
-        width: bw + 4,
-        height: bh + 4,
-        color: rgb(1, 1, 1),
+        x: bx0,
+        y: pdfY_bottom,
+        width: bw,
+        height: bh,
+        color: rgb(bgR, bgG, bgB),
         borderWidth: 0,
       });
 
@@ -743,12 +772,11 @@ async function savePDF() {
         const cg = parseInt(hexC.slice(3,5), 16) / 255;
         const cb = parseInt(hexC.slice(5,7), 16) / 255;
 
-        // Resolve font — c.font is always one of STANDARD_FONT_NAMES; fallback to Helvetica
         const font = fonts[c.font] || fallbackFont;
 
         pdfPage.drawText(c.new, {
           x: bx0,
-          y: pdfY_bottom + bh * 0.15, // slight baseline lift
+          y: pdfY_bottom + bh * 0.15,
           size: c.size,
           font,
           color: rgb(cr, cg, cb),
