@@ -361,6 +361,19 @@ async function openFile(file) {
   }
 }
 
+// ── FONT SPEC MAP (shared by previewPage + savePDF) ───────────────────────
+// Maps c.font keys (same as pdf-lib StandardFonts keys used in savePDF)
+// to browser-compatible canvas font specs so preview mirrors save output.
+const FONT_SPEC = {
+  'Helvetica':      { family: 'Helvetica, Arial, sans-serif',          weight: '400', style: 'normal' },
+  'Helvetica-Bold': { family: 'Helvetica, Arial, sans-serif',          weight: '700', style: 'normal' },
+  'Times-Roman':    { family: '"Times New Roman", Times, serif',        weight: '400', style: 'normal' },
+  'Times-Bold':     { family: '"Times New Roman", Times, serif',        weight: '700', style: 'normal' },
+  'Times-Italic':   { family: '"Times New Roman", Times, serif',        weight: '400', style: 'italic' },
+  'Courier':        { family: '"Courier New", Courier, monospace',      weight: '400', style: 'normal' },
+  'Courier-Bold':   { family: '"Courier New", Courier, monospace',      weight: '700', style: 'normal' },
+};
+
 // ── PAGE PREVIEW ──────────────────────────────────────────────────────────
 async function previewPage(pageNum) {
   const idx = pages.findIndex(p => p.num === pageNum);
@@ -376,7 +389,9 @@ async function previewPage(pageNum) {
     const ctx = cv.getContext('2d');
     await pdfJsPage.render({ canvasContext: ctx, viewport: vp }).promise;
 
-    // Apply all corrections for this page with canvas 2D drawing
+    // Apply corrections using same rules as savePDF:
+    //   - white cover (matches pdf-lib rgb(1,1,1))
+    //   - font derived from c.font key (matches savePDF font embedding)
     const corrs = corrections.filter(c => c.page === pageNum);
     for (const c of corrs) {
       const rx0 = c.bbox[0] * scale;
@@ -384,25 +399,18 @@ async function previewPage(pageNum) {
       const rw  = (c.bbox[2] - c.bbox[0]) * scale;
       const rh  = (c.bbox[3] - c.bbox[1]) * scale;
 
-      // Sample background color so cover blends naturally
-      let bgR = 255, bgG = 255, bgB = 255;
-      try {
-        const px = ctx.getImageData(Math.max(0, Math.floor(rx0)), Math.max(0, Math.floor(ry0)), 1, 1).data;
-        bgR = px[0]; bgG = px[1]; bgB = px[2];
-      } catch(e) {}
-
-      ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
+      // White cover — matches savePDF's rgb(1, 1, 1) strategy
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(rx0 - 2, ry0 - 2, rw + 4, rh + 4);
 
       if (!c.delete && c.new && c.new.trim()) {
         const hexC = c.color || '#000000';
         ctx.fillStyle = hexC;
         const fsize = c.size * scale;
-        const fw = c.bold ? '700' : '400';
-        const ff = c.font.includes('Times') ? 'Times New Roman'
-                 : c.font.includes('Courier') ? 'Courier New'
-                 : 'Arial';
-        ctx.font = `${fw} ${fsize}px ${ff}`;
+        // Derive font spec from c.font key — same mapping contract as savePDF
+        const spec = FONT_SPEC[c.font] || FONT_SPEC['Helvetica'];
+        ctx.font = `${spec.style} ${spec.weight} ${fsize}px ${spec.family}`;
+        // Baseline offset matches savePDF's pdfY_bottom + bh*0.15 (from bottom of bbox)
         ctx.fillText(c.new, rx0, ry0 + rh * 0.85);
       }
     }
