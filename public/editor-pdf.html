@@ -249,9 +249,9 @@ async function openFile(file) {
   load(true, 'Lendo PDF...');
   try {
     const buf = await file.arrayBuffer();
-    pdfBytes = buf.slice(0);
+    pdfBytes = buf.slice(0);  // reserved exclusively for pdf-lib save step
     window.originalFileName = file.name.replace(/\.pdf$/i, '');
-    pdfJsDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+    pdfJsDoc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;  // separate copy for PDF.js
     pages = [];
     corrections = [];
 
