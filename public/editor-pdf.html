@@ -7,8 +7,8 @@
 
 <!-- PDF.js para renderizar -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- jsPDF para gerar PDF a partir dos canvas -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- pdf-lib para salvar PDF vetorial -->
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
 <style>
 :root {
@@ -617,70 +617,99 @@ function chZoom(d) {
   renderAll(); // re-render at new zoom
 }
 
-// ── SAVE PDF ──────────────────────────────────────────────────────────────
+// ── SAVE PDF (vetorial via pdf-lib) ───────────────────────────────────────
 async function savePDF() {
   if (!pages.length) { toast('Nenhum PDF aberto'); return; }
-  load(true, 'Gerando PDF...');
+  if (!corrections.length) { toast('Nenhuma correção para salvar'); return; }
+  load(true, 'Gerando PDF vetorial...');
   try {
-    const { jsPDF } = window.jspdf;
-    const first = pages[0];
-    const orient = first.w_pt > first.h_pt ? 'l' : 'p';
-    const doc = new jsPDF({ orientation: orient, unit: 'pt', format: [first.w_pt, first.h_pt] });
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
 
-    for (let i = 0; i < pages.length; i++) {
-      const p = pages[i];
-      if (i > 0) doc.addPage([p.w_pt, p.h_pt], p.w_pt > p.h_pt ? 'l' : 'p');
-
-      const pdfJsPage = await pdfJsDoc.getPage(p.num);
-      const scale = 3;
-      const vp = pdfJsPage.getViewport({ scale });
-      const cv = document.createElement('canvas');
-      cv.width = vp.width; cv.height = vp.height;
-      const octx = cv.getContext('2d');
-      await pdfJsPage.render({ canvasContext: octx, viewport: vp }).promise;
-
-      const sx = vp.width / p.w_pt;
-      const sy = vp.height / p.h_pt;
-
-      const corrs = corrections.filter(c => c.page === p.num);
-      for (const c of corrs) {
-        const rx0 = c.bbox[0] * sx;
-        const ry0 = c.bbox[1] * sy;
-        const rw  = (c.bbox[2] - c.bbox[0]) * sx;
-        const rh  = (c.bbox[3] - c.bbox[1]) * sy;
-
-        let bgR = 255, bgG = 255, bgB = 255;
-        try {
-          const px = octx.getImageData(Math.max(0,Math.floor(rx0)), Math.max(0,Math.floor(ry0)), 1, 1).data;
-          bgR = px[0]; bgG = px[1]; bgB = px[2];
-        } catch(e) {}
-
-        octx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
-        octx.fillRect(rx0 - 2, ry0 - 2, rw + 4, rh + 4);
-
-        if (!c.delete && c.new) {
-          const hexC = (c.color && c.color !== '#000000') ? c.color : '#000000';
-          const cr = parseInt(hexC.slice(1,3),16);
-          const cg = parseInt(hexC.slice(3,5),16);
-          const cb = parseInt(hexC.slice(5,7),16);
-          const fsize = c.size * sx;
-          const fw = c.bold ? '700' : '400';
-          const ff = c.font.includes('Times') ? 'Times New Roman' : c.font.includes('Courier') ? 'Courier New' : 'Arial';
-          octx.font = `${fw} ${fsize}px ${ff}`;
-          octx.fillStyle = `rgb(${cr},${cg},${cb})`;
-          octx.fillText(c.new, rx0, ry0 + fsize * 0.85);
-        }
-      }
-
-      const jpeg = cv.toDataURL('image/jpeg', 0.95);
-      doc.addImage(jpeg, 'JPEG', 0, 0, p.w_pt, p.h_pt);
+    // 1. Load original PDF bytes with pdf-lib
+    let pdfLibDoc;
+    try {
+      pdfLibDoc = await PDFDocument.load(pdfBytes, {
+        ignoreEncryption: true,
+        throwOnInvalidObject: false,
+      });
+    } catch(e) {
+      toast('Este PDF não pode ser editado diretamente. Tente outro arquivo.');
+      load(false);
+      return;
     }
 
-    doc.save((window.originalFileName || 'documento') + ' - Arquivo correto.pdf');
-    toast(`✓ PDF salvo com ${corrections.length} correção(ões)!`);
+    // 2. Pre-embed all standard fonts needed
+    const fonts = {
+      'Helvetica':       await pdfLibDoc.embedFont(StandardFonts.Helvetica),
+      'Helvetica-Bold':  await pdfLibDoc.embedFont(StandardFonts.HelveticaBold),
+      'Times-Roman':     await pdfLibDoc.embedFont(StandardFonts.TimesRoman),
+      'Times-Bold':      await pdfLibDoc.embedFont(StandardFonts.TimesBold),
+      'Times-Italic':    await pdfLibDoc.embedFont(StandardFonts.TimesRomanItalic),
+      'Courier':         await pdfLibDoc.embedFont(StandardFonts.Courier),
+      'Courier-Bold':    await pdfLibDoc.embedFont(StandardFonts.CourierBold),
+    };
+
+    // 3. Apply each correction at the vector level
+    for (const c of corrections) {
+      const pdfPage = pdfLibDoc.getPage(c.page - 1); // pdf-lib is 0-indexed
+      const { height: pageH } = pdfPage.getSize();
+
+      // bbox = [x0, y_top_from_top, x1, y_baseline_from_top] in PDF points
+      const bx0      = c.bbox[0];
+      const bx1      = c.bbox[2];
+      const byTop    = c.bbox[1]; // top of character body (from page top)
+      const byBottom = c.bbox[3]; // baseline (from page top)
+      const bh       = byBottom - byTop;
+      const bw       = bx1 - bx0;
+
+      // Convert to pdf-lib bottom-up coordinate system
+      const pdfY_bottom = pageH - byBottom; // Y of baseline from page bottom
+
+      // Cover original text with white rectangle (+2pt margin on all sides)
+      pdfPage.drawRectangle({
+        x: bx0 - 2,
+        y: pdfY_bottom - 2,
+        width: bw + 4,
+        height: bh + 4,
+        color: rgb(1, 1, 1),
+        borderWidth: 0,
+      });
+
+      // Draw replacement text (skip if deletion or empty)
+      if (!c.delete && c.new && c.new.trim()) {
+        const hexC = c.color || '#000000';
+        const cr = parseInt(hexC.slice(1,3), 16) / 255;
+        const cg = parseInt(hexC.slice(3,5), 16) / 255;
+        const cb = parseInt(hexC.slice(5,7), 16) / 255;
+
+        // Pick best matching standard font
+        let fontKey = c.font || 'Helvetica';
+        if (!fonts[fontKey]) fontKey = 'Helvetica';
+        const font = fonts[fontKey];
+
+        pdfPage.drawText(c.new, {
+          x: bx0,
+          y: pdfY_bottom + bh * 0.15, // slight baseline lift
+          size: c.size,
+          font,
+          color: rgb(cr, cg, cb),
+        });
+      }
+    }
+
+    // 4. Serialize and trigger download
+    const bytes = await pdfLibDoc.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (window.originalFileName || 'documento') + ' - Arquivo correto.pdf';
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    toast(`✓ PDF vetorial salvo com ${corrections.length} correção(ões)!`);
   } catch(e) {
     console.error(e);
-    toast('Erro: ' + e.message);
+    toast('Erro ao salvar: ' + e.message);
   } finally {
     load(false);
   }
