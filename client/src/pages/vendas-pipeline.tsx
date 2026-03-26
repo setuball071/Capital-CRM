@@ -17,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
-  ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck
+  ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck,
+  Users, BarChart2, MapPin, Landmark, Briefcase
 } from "lucide-react";
 import {
   AlertDialog,
@@ -346,6 +347,20 @@ export default function VendasPipeline() {
       return res.json();
     },
     enabled: activeTab === "carteira" && !viewUserId,
+  });
+
+  interface PortfolioStats {
+    total: number;
+    por_produto: Record<string, number>;
+    por_convenio: Record<string, number>;
+    por_banco: Record<string, number>;
+    por_uf: Record<string, number>;
+    por_orgao: Record<string, number>;
+  }
+
+  const { data: portfolioStats } = useQuery<PortfolioStats>({
+    queryKey: ["/api/portfolio/stats"],
+    enabled: isManagerRole && activeTab === "carteira" && !viewUserId,
   });
 
   const transferMutation = useMutation({
@@ -846,9 +861,9 @@ export default function VendasPipeline() {
       </div>
 
       {!isGestorMode && !viewUserId && activeTab === "carteira" && (
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-4 p-4 overflow-hidden">
           {canViewOthers && teamMembers && teamMembers.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Select value={portfolioVendorFilter || "__all__"} onValueChange={(v) => setPortfolioVendorFilter(v === "__all__" ? "" : v)}>
                 <SelectTrigger className="w-56" data-testid="select-portfolio-vendor">
                   <SelectValue placeholder="Todos os vendedores" />
@@ -862,26 +877,121 @@ export default function VendasPipeline() {
               </Select>
             </div>
           )}
+
+          {isManagerRole && portfolioStats && (
+            <div className="shrink-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="panel-portfolio-stats">
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" />
+                  Total Ativo
+                </div>
+                <span className="text-2xl font-bold leading-none">{portfolioStats.total}</span>
+              </div>
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  Por Produto
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {Object.entries(portfolioStats.por_produto).map(([pt, cnt]) => (
+                    <div key={pt} className="flex items-center justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground truncate">{PRODUCT_LABELS[pt] || pt}</span>
+                      <span className="font-medium tabular-nums">{cnt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Briefcase className="h-3.5 w-3.5" />
+                  Top Convênios
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {Object.entries(portfolioStats.por_convenio).slice(0, 4).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
+                      <span className="font-medium tabular-nums">{v}</span>
+                    </div>
+                  ))}
+                  {Object.keys(portfolioStats.por_convenio).length === 0 && (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Landmark className="h-3.5 w-3.5" />
+                  Top Bancos
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {Object.entries(portfolioStats.por_banco).slice(0, 4).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
+                      <span className="font-medium tabular-nums">{v}</span>
+                    </div>
+                  ))}
+                  {Object.keys(portfolioStats.por_banco).length === 0 && (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Building className="h-3.5 w-3.5" />
+                  Top Órgãos
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {Object.entries(portfolioStats.por_orgao).slice(0, 4).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
+                      <span className="font-medium tabular-nums">{v}</span>
+                    </div>
+                  ))}
+                  {Object.keys(portfolioStats.por_orgao).length === 0 && (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Top UFs
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {Object.entries(portfolioStats.por_uf).slice(0, 4).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground truncate">{k}</span>
+                      <span className="font-medium tabular-nums">{v}</span>
+                    </div>
+                  ))}
+                  {Object.keys(portfolioStats.por_uf).length === 0 && (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {portfolioLoading ? (
-            <div className="flex items-center justify-center py-10">
+            <div className="flex-1 flex items-center justify-center min-h-0">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : portfolioEntries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+            <div className="flex-1 flex flex-col items-center justify-center min-h-0 text-muted-foreground gap-3">
               <Wallet className="h-10 w-10 opacity-40" />
-              <p className="text-sm">Nenhum cliente em carteira ativa.</p>
+              <p className="text-sm">Nenhum cliente em carteira.</p>
               <p className="text-xs">Clientes são adicionados automaticamente ao confirmar contratos.</p>
             </div>
           ) : (
-            <div className="rounded-md border overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-md border" data-testid="table-portfolio-wrapper">
               <table className="w-full text-sm" data-testid="table-portfolio">
-                <thead>
-                  <tr className="bg-muted/50 border-b">
+                <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+                  <tr className="border-b">
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nome</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">CPF</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Convênio</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Telefone</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Produto</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
                     {canViewOthers && (
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Vendedor</th>
                     )}
@@ -901,11 +1011,14 @@ export default function VendasPipeline() {
                     const clientName = entry.client_name || entry.nome_cliente;
                     const daysRemaining = entry.days_remaining ?? daysUntilExpiry(entry.expires_at);
                     const daysWithoutDeal = entry.days_without_deal;
+                    const isExpired = entry.status === "EXPIRADO";
+                    const isVendedor = user?.role === "vendedor";
                     return (
                       <tr
                         key={entry.id}
-                        className={`border-b last:border-0 hover-elevate ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
+                        className={`border-b last:border-0 hover-elevate ${isExpired ? "opacity-60" : ""} ${idx % 2 === 0 ? "" : "bg-muted/20"} ${isVendedor ? "cursor-pointer" : ""}`}
                         data-testid={`row-portfolio-${entry.id}`}
+                        onClick={isVendedor ? () => navigate(`/vendas/consulta?cpf=${entry.cpf}`) : undefined}
                       >
                         <td className="px-4 py-3 font-medium max-w-[200px] truncate" title={clientName || "—"}>
                           {clientName || <span className="text-muted-foreground">—</span>}
@@ -916,10 +1029,6 @@ export default function VendasPipeline() {
                         <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate" title={entry.convenio || "—"}>
                           {entry.convenio || <span>—</span>}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {/* TODO: mapear campo telefone_cliente em producoes_contratos na importação */}
-                          {entry.telefone || <span>—</span>}
-                        </td>
                         <td className="px-4 py-3">
                           <Badge
                             variant="outline"
@@ -929,12 +1038,20 @@ export default function VendasPipeline() {
                             {PRODUCT_LABELS[entry.product_type] || entry.product_type}
                           </Badge>
                         </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={isExpired ? "secondary" : "default"}
+                            data-testid={`badge-status-${entry.id}`}
+                          >
+                            {isExpired ? "Expirado" : "Ativo"}
+                          </Badge>
+                        </td>
                         {canViewOthers && (
                           <td className="px-4 py-3 text-muted-foreground text-xs">
                             {entry.vendor_name || "—"}
                           </td>
                         )}
-                        {user?.role === "vendedor" && (
+                        {isVendedor && (
                           <td className="px-4 py-3 text-muted-foreground text-xs" data-testid={`text-days-deal-${entry.id}`}>
                             {daysWithoutDeal != null
                               ? `${daysWithoutDeal} dia${daysWithoutDeal !== 1 ? "s" : ""} sem novo negócio`
@@ -943,15 +1060,19 @@ export default function VendasPipeline() {
                         )}
                         {isManagerRole && (
                           <td className="px-4 py-3" data-testid={`badge-days-${entry.id}`}>
-                            <Badge
-                              variant={daysRemaining > 30 ? "default" : daysRemaining > 0 ? "secondary" : "destructive"}
-                            >
-                              {daysRemaining > 0
-                                ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
-                                : daysRemaining === 0
-                                  ? "Expira hoje"
-                                  : `${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) !== 1 ? "s" : ""} vencido`}
-                            </Badge>
+                            {isExpired ? (
+                              <Badge variant="secondary">Expirado</Badge>
+                            ) : (
+                              <Badge
+                                variant={daysRemaining > 30 ? "default" : daysRemaining > 0 ? "secondary" : "destructive"}
+                              >
+                                {daysRemaining > 0
+                                  ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
+                                  : daysRemaining === 0
+                                    ? "Expira hoje"
+                                    : `${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) !== 1 ? "s" : ""} vencido`}
+                              </Badge>
+                            )}
                           </td>
                         )}
                         {(user?.isMaster || user?.role === "master") && (
@@ -961,7 +1082,8 @@ export default function VendasPipeline() {
                                 size="sm"
                                 variant="outline"
                                 data-testid={`button-transfer-${entry.id}`}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setTransferringEntry(entry);
                                   setTransferDialogOpen(true);
                                 }}

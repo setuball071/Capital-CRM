@@ -25605,6 +25605,91 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // GET /api/portfolio/stats — estatísticas da carteira (master/coordenacao only)
+  app.get("/api/portfolio/stats", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!user.isMaster && user.role !== "master" && user.role !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+
+      const totalR = await db.execute(sql`
+        SELECT COUNT(*) AS total FROM client_portfolio
+        WHERE tenant_id = ${tenantId} AND status = 'ATIVO'
+      `);
+      const produtoR = await db.execute(sql`
+        SELECT product_type, COUNT(*) AS cnt
+        FROM client_portfolio
+        WHERE tenant_id = ${tenantId} AND status = 'ATIVO'
+        GROUP BY product_type ORDER BY cnt DESC
+      `);
+      const convenioR = await db.execute(sql`
+        SELECT pc.convenio, COUNT(DISTINCT cp.cpf) AS cnt
+        FROM client_portfolio cp
+        JOIN (
+          SELECT DISTINCT ON (cpf_cliente) cpf_cliente, convenio
+          FROM producoes_contratos
+          WHERE tenant_id = ${tenantId} AND convenio IS NOT NULL AND convenio != ''
+          ORDER BY cpf_cliente, id DESC
+        ) pc ON pc.cpf_cliente = cp.cpf
+        WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
+        GROUP BY pc.convenio ORDER BY cnt DESC LIMIT 5
+      `);
+      const bancoR = await db.execute(sql`
+        SELECT pc.banco, COUNT(DISTINCT cp.cpf) AS cnt
+        FROM client_portfolio cp
+        JOIN (
+          SELECT DISTINCT ON (cpf_cliente) cpf_cliente, banco
+          FROM producoes_contratos
+          WHERE tenant_id = ${tenantId} AND banco IS NOT NULL AND banco != ''
+          ORDER BY cpf_cliente, id DESC
+        ) pc ON pc.cpf_cliente = cp.cpf
+        WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
+        GROUP BY pc.banco ORDER BY cnt DESC LIMIT 5
+      `);
+      const ufR = await db.execute(sql`
+        SELECT cl.uf, COUNT(DISTINCT cp.cpf) AS cnt
+        FROM client_portfolio cp
+        JOIN (
+          SELECT DISTINCT ON (cpf) cpf, uf
+          FROM clientes_pessoa
+          WHERE uf IS NOT NULL AND uf != ''
+          ORDER BY cpf, id DESC
+        ) cl ON cl.cpf = cp.cpf
+        WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
+        GROUP BY cl.uf ORDER BY cnt DESC LIMIT 5
+      `);
+      const orgaoR = await db.execute(sql`
+        SELECT cl.orgaodesc, COUNT(DISTINCT cp.cpf) AS cnt
+        FROM client_portfolio cp
+        JOIN (
+          SELECT DISTINCT ON (cpf) cpf, orgaodesc
+          FROM clientes_pessoa
+          WHERE orgaodesc IS NOT NULL AND orgaodesc != ''
+          ORDER BY cpf, id DESC
+        ) cl ON cl.cpf = cp.cpf
+        WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
+        GROUP BY cl.orgaodesc ORDER BY cnt DESC LIMIT 5
+      `);
+
+      const toMap = (rows: any[], keyField: string) =>
+        Object.fromEntries(rows.map((r: any) => [r[keyField], Number(r.cnt)]));
+
+      res.json({
+        total: Number((totalR.rows[0] as any)?.total ?? 0),
+        por_produto: toMap(produtoR.rows as any[], "product_type"),
+        por_convenio: toMap(convenioR.rows as any[], "convenio"),
+        por_banco: toMap(bancoR.rows as any[], "banco"),
+        por_uf: toMap(ufR.rows as any[], "uf"),
+        por_orgao: toMap(orgaoR.rows as any[], "orgaodesc"),
+      });
+    } catch (err: any) {
+      console.error("[PORTFOLIO] stats error:", err);
+      res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
   // GET /api/portfolio — carteira do usuário logado (role-gated)
   // Returns one entry per CPF (the one with MAX(expires_at)), with enriched fields:
   //   convenio, telefone (null—not in producoes_contratos yet), last_deal_at,
@@ -25626,7 +25711,6 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             JOIN users u ON u.id = cp.vendor_id
             WHERE cp.tenant_id = ${tenantId}
               AND cp.vendor_id = ${user.id}
-              AND cp.status = 'ATIVO'
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
