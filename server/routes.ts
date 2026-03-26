@@ -25606,6 +25606,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // GET /api/portfolio — carteira do usuário logado (role-gated)
+  // Returns one entry per CPF (the one with MAX(expires_at)), with enriched fields:
+  //   convenio, telefone (null—not in producoes_contratos yet), last_deal_at,
+  //   days_without_deal (vendedor view), days_remaining (master/coord view)
   app.get("/api/portfolio", requireAuth, async (req: any, res) => {
     try {
       const user = req.user!;
@@ -25614,51 +25617,126 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       if (user.role === "vendedor") {
         const result = await db.execute(sql`
-          SELECT cp.*, u.name as vendor_name
-          FROM client_portfolio cp
-          JOIN users u ON u.id = cp.vendor_id
-          WHERE cp.tenant_id = ${tenantId}
-            AND cp.vendor_id = ${user.id}
-            AND cp.status = 'ATIVO'
-          ORDER BY cp.expires_at ASC
+          WITH latest_per_cpf AS (
+            SELECT DISTINCT ON (cp.cpf)
+              cp.id, cp.cpf, cp.client_name, cp.vendor_id, cp.product_type,
+              cp.status, cp.expires_at, cp.started_at, cp.created_at,
+              u.name AS vendor_name
+            FROM client_portfolio cp
+            JOIN users u ON u.id = cp.vendor_id
+            WHERE cp.tenant_id = ${tenantId}
+              AND cp.vendor_id = ${user.id}
+              AND cp.status = 'ATIVO'
+            ORDER BY cp.cpf, cp.expires_at DESC
+          ),
+          last_deal AS (
+            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
+            FROM client_portfolio cp2
+            WHERE cp2.tenant_id = ${tenantId}
+              AND cp2.vendor_id = ${user.id}
+            GROUP BY cp2.cpf
+          ),
+          conv AS (
+            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
+            ORDER BY pc.cpf_cliente, pc.id DESC
+          )
+          SELECT
+            lpc.*,
+            conv.convenio,
+            NULL::text AS telefone,
+            ld.last_deal_at,
+            EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
+            EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
+          FROM latest_per_cpf lpc
+          LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);
       } else if (user.role === "coordenacao") {
         const filterVendorId = vendorId ? Number(vendorId) : null;
-        let result;
-        if (filterVendorId) {
-          // Strict: filterVendorId must belong to coordinator's team
-          result = await db.execute(sql`
-            SELECT cp.*, u.name as vendor_name
+        const result = await db.execute(sql`
+          WITH latest_per_cpf AS (
+            SELECT DISTINCT ON (cp.cpf)
+              cp.id, cp.cpf, cp.client_name, cp.vendor_id, cp.product_type,
+              cp.status, cp.expires_at, cp.started_at, cp.created_at,
+              u.name AS vendor_name
             FROM client_portfolio cp
             JOIN users u ON u.id = cp.vendor_id
             WHERE cp.tenant_id = ${tenantId}
-              AND cp.vendor_id = ${filterVendorId}
+              AND cp.status = 'ATIVO'
               AND u.manager_id = ${user.id}
-            ORDER BY cp.expires_at ASC
-          `);
-        } else {
-          result = await db.execute(sql`
-            SELECT cp.*, u.name as vendor_name
-            FROM client_portfolio cp
-            JOIN users u ON u.id = cp.vendor_id
-            WHERE cp.tenant_id = ${tenantId}
-              AND u.manager_id = ${user.id}
-            ORDER BY cp.expires_at ASC
-          `);
-        }
+              ${filterVendorId ? sql`AND cp.vendor_id = ${filterVendorId}` : sql``}
+            ORDER BY cp.cpf, cp.expires_at DESC
+          ),
+          last_deal AS (
+            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
+            FROM client_portfolio cp2
+            JOIN users u2 ON u2.id = cp2.vendor_id
+            WHERE cp2.tenant_id = ${tenantId}
+              AND u2.manager_id = ${user.id}
+            GROUP BY cp2.cpf
+          ),
+          conv AS (
+            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
+            ORDER BY pc.cpf_cliente, pc.id DESC
+          )
+          SELECT
+            lpc.*,
+            conv.convenio,
+            NULL::text AS telefone,
+            ld.last_deal_at,
+            EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
+            EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
+          FROM latest_per_cpf lpc
+          LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          ORDER BY lpc.expires_at ASC
+        `);
         return res.json(result.rows);
       } else {
-        // master — all with optional filters
+        // master — all with optional filters, grouped by CPF
         const result = await db.execute(sql`
-          SELECT cp.*, u.name as vendor_name
-          FROM client_portfolio cp
-          JOIN users u ON u.id = cp.vendor_id
-          WHERE cp.tenant_id = ${tenantId}
-            ${vendorId ? sql`AND cp.vendor_id = ${Number(vendorId)}` : sql``}
-            ${statusFilter ? sql`AND cp.status = ${statusFilter.toUpperCase()}` : sql``}
-            ${product ? sql`AND cp.product_type = ${product.toUpperCase()}` : sql``}
-          ORDER BY cp.expires_at ASC
+          WITH latest_per_cpf AS (
+            SELECT DISTINCT ON (cp.cpf)
+              cp.id, cp.cpf, cp.client_name, cp.vendor_id, cp.product_type,
+              cp.status, cp.expires_at, cp.started_at, cp.created_at,
+              u.name AS vendor_name
+            FROM client_portfolio cp
+            JOIN users u ON u.id = cp.vendor_id
+            WHERE cp.tenant_id = ${tenantId}
+              ${statusFilter ? sql`AND cp.status = ${statusFilter.toUpperCase()}` : sql`AND cp.status = 'ATIVO'`}
+              ${vendorId ? sql`AND cp.vendor_id = ${Number(vendorId)}` : sql``}
+              ${product ? sql`AND cp.product_type = ${product.toUpperCase()}` : sql``}
+            ORDER BY cp.cpf, cp.expires_at DESC
+          ),
+          last_deal AS (
+            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
+            FROM client_portfolio cp2
+            WHERE cp2.tenant_id = ${tenantId}
+            GROUP BY cp2.cpf
+          ),
+          conv AS (
+            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
+            ORDER BY pc.cpf_cliente, pc.id DESC
+          )
+          SELECT
+            lpc.*,
+            conv.convenio,
+            NULL::text AS telefone,
+            ld.last_deal_at,
+            EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
+            EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
+          FROM latest_per_cpf lpc
+          LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);
       }

@@ -315,6 +315,7 @@ export default function VendasPipeline() {
   interface PortfolioEntry {
     id: number;
     cpf: string;
+    client_name?: string | null;
     nome_cliente?: string | null;
     product_type: string;
     contract_id?: number | null;
@@ -322,7 +323,13 @@ export default function VendasPipeline() {
     vendor_name?: string | null;
     status: string;
     expires_at: string;
+    started_at?: string | null;
     created_at: string;
+    convenio?: string | null;
+    telefone?: string | null;
+    last_deal_at?: string | null;
+    days_without_deal?: number | null;
+    days_remaining?: number | null;
   }
 
   const portfolioApiUrl = portfolioVendorFilter
@@ -864,69 +871,108 @@ export default function VendasPipeline() {
               <p className="text-xs">Clientes são adicionados automaticamente ao confirmar contratos.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {portfolioEntries.map((entry) => {
-                const days = daysUntilExpiry(entry.expires_at);
-                return (
-                  <Card key={entry.id} data-testid={`card-portfolio-${entry.id}`}>
-                    <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="text-sm font-semibold truncate">
-                          {entry.nome_cliente || maskCpf(entry.cpf)}
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-cpf-${entry.id}`}>
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-sm" data-testid="table-portfolio">
+                <thead>
+                  <tr className="bg-muted/50 border-b">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nome</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">CPF</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Convênio</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Telefone</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Produto</th>
+                    {canViewOthers && (
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Vendedor</th>
+                    )}
+                    {user?.role === "vendedor" && (
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Sem fechar negócio</th>
+                    )}
+                    {canViewOthers && (
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Prazo restante</th>
+                    )}
+                    {(user?.isMaster || user?.role === "master") && (
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground"></th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {portfolioEntries.map((entry, idx) => {
+                    const clientName = entry.client_name || entry.nome_cliente;
+                    const daysRemaining = entry.days_remaining ?? daysUntilExpiry(entry.expires_at);
+                    const daysWithoutDeal = entry.days_without_deal;
+                    return (
+                      <tr
+                        key={entry.id}
+                        className={`border-b last:border-0 hover-elevate ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
+                        data-testid={`row-portfolio-${entry.id}`}
+                      >
+                        <td className="px-4 py-3 font-medium max-w-[200px] truncate" title={clientName || "—"}>
+                          {clientName || <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`text-cpf-${entry.id}`}>
                           {maskCpf(entry.cpf)}
-                        </p>
-                        {canViewOthers && entry.vendor_name && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{entry.vendor_name}</p>
-                        )}
-                      </div>
-                      <Badge variant={getStatusBadgeVariant(entry.status)}>
-                        {entry.status === "ATIVO" ? "Ativo" : entry.status === "EXPIRADO" ? "Expirado" : "Transferido"}
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge
-                          variant="outline"
-                          className={PRODUCT_BADGE_CLASS[entry.product_type] || ""}
-                          data-testid={`badge-product-${entry.id}`}
-                        >
-                          {PRODUCT_LABELS[entry.product_type] || entry.product_type}
-                        </Badge>
-                        {entry.status === "ATIVO" && (
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate" title={entry.convenio || "—"}>
+                          {entry.convenio || <span>—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {/* TODO: mapear campo telefone_cliente em producoes_contratos na importação */}
+                          {entry.telefone || <span>—</span>}
+                        </td>
+                        <td className="px-4 py-3">
                           <Badge
                             variant="outline"
-                            className={getDaysBadgeClass(days)}
-                            data-testid={`badge-days-${entry.id}`}
+                            className={PRODUCT_BADGE_CLASS[entry.product_type] || ""}
+                            data-testid={`badge-product-${entry.id}`}
                           >
-                            {days > 0 ? `${days} dia${days !== 1 ? "s" : ""}` : "Expira hoje"}
+                            {PRODUCT_LABELS[entry.product_type] || entry.product_type}
                           </Badge>
+                        </td>
+                        {canViewOthers && (
+                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                            {entry.vendor_name || "—"}
+                          </td>
                         )}
-                        {entry.status !== "ATIVO" && (
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(entry.expires_at).toLocaleDateString("pt-BR")}
-                          </span>
+                        {user?.role === "vendedor" && (
+                          <td className="px-4 py-3 text-muted-foreground text-xs" data-testid={`text-days-deal-${entry.id}`}>
+                            {daysWithoutDeal != null
+                              ? `${daysWithoutDeal} dia${daysWithoutDeal !== 1 ? "s" : ""}`
+                              : <span>—</span>}
+                          </td>
                         )}
-                      </div>
-                      {(user?.isMaster || user?.role === "master") && entry.status === "ATIVO" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full"
-                          data-testid={`button-transfer-${entry.id}`}
-                          onClick={() => {
-                            setTransferringEntry(entry);
-                            setTransferDialogOpen(true);
-                          }}
-                        >
-                          Transferir
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        {canViewOthers && (
+                          <td className="px-4 py-3" data-testid={`badge-days-${entry.id}`}>
+                            <Badge
+                              variant="outline"
+                              className={getDaysBadgeClass(daysRemaining)}
+                            >
+                              {daysRemaining > 0
+                                ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
+                                : "Expira hoje"}
+                            </Badge>
+                          </td>
+                        )}
+                        {(user?.isMaster || user?.role === "master") && (
+                          <td className="px-4 py-3">
+                            {entry.status === "ATIVO" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`button-transfer-${entry.id}`}
+                                onClick={() => {
+                                  setTransferringEntry(entry);
+                                  setTransferDialogOpen(true);
+                                }}
+                              >
+                                Transferir
+                              </Button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -940,7 +986,7 @@ export default function VendasPipeline() {
           {transferringEntry && (
             <div className="space-y-4 py-2">
               <div className="text-sm">
-                <span className="font-medium">{transferringEntry.nome_cliente || maskCpf(transferringEntry.cpf)}</span>
+                <span className="font-medium">{transferringEntry.client_name || transferringEntry.nome_cliente || maskCpf(transferringEntry.cpf)}</span>
                 <span className="text-muted-foreground ml-2">— {PRODUCT_LABELS[transferringEntry.product_type] || transferringEntry.product_type}</span>
               </div>
               <div className="space-y-2">
