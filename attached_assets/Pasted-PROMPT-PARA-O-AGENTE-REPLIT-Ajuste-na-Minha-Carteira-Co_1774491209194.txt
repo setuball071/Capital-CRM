@@ -1,0 +1,38 @@
+PROMPT PARA O AGENTE REPLIT — Ajuste na Minha Carteira
+Corrigir a aba "Minha Carteira" no Pipeline. Vários problemas a resolver:
+PROBLEMA 1 — CPF duplicado
+Hoje o mesmo CPF aparece múltiplas vezes (um card por produto). Precisa agrupar por CPF, mantendo apenas o registro com expires_at mais longo. Um cliente = um card.
+PROBLEMA 2 — Layout
+Trocar o grid de cards por uma lista/tabela limpa com as colunas:
+
+Nome do cliente
+CPF mascarado (ex: 071.***.***-96)
+Convênio
+Telefone
+Dias sem fechar negócio (só para vendedor)
+Dias restantes de bloqueio (só para master/coordenação)
+Badge de produto (o do prazo mais longo)
+
+PROBLEMA 3 — Contagem de dias
+Para vendedor: exibir "X dias sem novo negócio" — calculado como NOW() - MAX(commission_paid_at ou started_at) do último contrato pago desse CPF na client_portfolio. Não mostrar contagem de bloqueio.
+Para coordenacao e master: exibir "X dias restantes" (prazo de bloqueio) — calculado como expires_at - NOW(). Verde se > 30 dias, amarelo se 1-30 dias.
+PROBLEMA 4 — Telefone
+Na importação de produção (producoes_contratos), já existe o campo de telefone/corretor. Verificar se existe campo de telefone do cliente na tabela producoes_contratos ou clientes_folha_mes. Se existir, usar. Se não existir, exibir "-" por enquanto e informar qual campo precisa ser mapeado na importação.
+PROBLEMA 5 — Agrupamento no backend
+Na rota GET /api/portfolio, quando role for vendedor:
+
+Agrupar por CPF
+Retornar apenas o registro com expires_at mais longo por CPF
+Incluir no retorno: client_name, cpf, convenio (buscar de producoes_contratos ou clientes_folha_mes pelo CPF), telefone (se disponível), last_deal_at (data do último negócio fechado — MAX(started_at) agrupado por CPF), days_without_deal (dias desde last_deal_at)
+
+NÃO alterar:
+
+Lógica de bloqueio de CPF
+Regras de carteira
+Qualquer outra tela
+
+Verificação:
+
+Corretor vê lista limpa, um cliente por linha, sem duplicatas
+Corretor vê "X dias sem novo negócio" e não vê contagem de bloqueio
+Master/coordenação veem contagem de bloqueio em dias restantes
