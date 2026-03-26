@@ -1,0 +1,61 @@
+PROMPT PARA O AGENTE REPLIT — Ajustes na Minha Carteira
+4 ajustes na aba "Minha Carteira" do Pipeline.
+AJUSTE 1 — Regra de carteira corrigida
+No server/portfolio.ts, corrigir a lógica:
+
+Cliente nunca sai da client_portfolio automaticamente
+O que muda com o tempo é apenas o campo status: ATIVO → EXPIRADO
+Status EXPIRADO significa que o bloqueio para outros vendedores expirou, mas o cliente continua vinculado ao corretor na carteira
+A remoção do vínculo só acontece via transferência manual por master
+Corrigir updateExpiredPortfolios() para apenas atualizar status = 'EXPIRADO' sem deletar registros
+
+AJUSTE 2 — Scroll e layout do master
+Na aba "Minha Carteira" para roles master e coordenacao:
+
+Adicionar overflow-y: auto com altura máxima na tabela para permitir scroll
+A tabela deve ocupar a altura disponível da tela sem ultrapassar
+
+AJUSTE 3 — Estatísticas no master
+Criar painel de estatísticas acima da tabela, visível apenas para master e coordenacao.
+Nova rota necessária:
+GET /api/portfolio/stats
+Retorna:
+json{
+  "total": 150,
+  "por_produto": { "CARTAO": 80, "CONSIGNADO": 40, "NOVO": 20, ... },
+  "por_convenio": { "SIAPE": 100, "INSS": 30, ... },
+  "por_banco": { "BMG": 60, "PAN": 40, ... },
+  "por_uf": { "SP": 50, "RJ": 30, ... },
+  "por_orgao": { "PMDF": 20, "ICMBio": 10, ... }
+}
+Para montar os stats:
+
+total, por_produto, por_convenio, por_banco — vêm da tabela client_portfolio + producoes_contratos (join por CPF + tenant_id)
+por_uf — buscar UF de clientes_folha_mes ou clientes_vinculo pelo CPF (verificar qual tabela tem o campo de UF/estado)
+por_orgao — buscar campo orgao de clientes_folha_mes ou clientes_vinculo pelo CPF
+
+UI do painel de estatísticas:
+
+Cards no topo: Total de Clientes, Por Produto (breakdown inline), Por Convênio (top 5), Por Banco (top 5), Por Órgão (top 5), Por UF (top 5)
+Layout horizontal em grid, compacto
+Usar cores da Capital Go (#6C2BD9, #1E88E5)
+
+AJUSTE 4 — Corretor clica no cliente
+Na view do vendedor na aba "Minha Carteira":
+
+Cada linha da lista deve ser clicável
+Ao clicar: navegar para /vendas/consulta?cpf=XXX com o CPF do cliente preenchido automaticamente
+A tela de consulta já deve disparar a busca automaticamente quando recebe o CPF via query param
+Verificar se /vendas/consulta já suporta ?cpf= como query param. Se não suportar, adicionar useEffect que lê o param e dispara a busca automaticamente
+
+NÃO alterar:
+
+Lógica de bloqueio de CPF na consulta
+Regras de prazo
+Tela do corretor além do clique
+
+Verificação:
+
+Master vê estatísticas no topo + tabela com scroll
+Corretor clica num cliente e abre a consulta com CPF preenchido
+Clientes com status EXPIRADO continuam na carteira, apenas sem bloquear outros vendedores
