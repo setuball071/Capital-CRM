@@ -261,6 +261,15 @@ function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDrag
   );
 }
 
+interface PortfolioStats {
+  total: number;
+  por_produto: Record<string, number>;
+  por_convenio: Record<string, number>;
+  por_banco: Record<string, number>;
+  por_uf: Record<string, number>;
+  por_orgao: Record<string, number>;
+}
+
 export default function VendasPipeline() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -349,18 +358,9 @@ export default function VendasPipeline() {
     enabled: activeTab === "carteira" && !viewUserId,
   });
 
-  interface PortfolioStats {
-    total: number;
-    por_produto: Record<string, number>;
-    por_convenio: Record<string, number>;
-    por_banco: Record<string, number>;
-    por_uf: Record<string, number>;
-    por_orgao: Record<string, number>;
-  }
-
   const { data: portfolioStats } = useQuery<PortfolioStats>({
     queryKey: ["/api/portfolio/stats"],
-    enabled: isManagerRole && activeTab === "carteira" && !viewUserId,
+    enabled: !!isManagerRole && activeTab === "carteira" && !viewUserId,
   });
 
   const transferMutation = useMutation({
@@ -907,7 +907,7 @@ export default function VendasPipeline() {
                   Top Convênios
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_convenio).slice(0, 4).map(([k, v]) => (
+                  {Object.entries(portfolioStats.por_convenio).slice(0, 5).map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-1 text-xs">
                       <span className="text-muted-foreground truncate" title={k}>{k}</span>
                       <span className="font-medium tabular-nums">{v}</span>
@@ -924,7 +924,7 @@ export default function VendasPipeline() {
                   Top Bancos
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_banco).slice(0, 4).map(([k, v]) => (
+                  {Object.entries(portfolioStats.por_banco).slice(0, 5).map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-1 text-xs">
                       <span className="text-muted-foreground truncate" title={k}>{k}</span>
                       <span className="font-medium tabular-nums">{v}</span>
@@ -941,7 +941,7 @@ export default function VendasPipeline() {
                   Top Órgãos
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_orgao).slice(0, 4).map(([k, v]) => (
+                  {Object.entries(portfolioStats.por_orgao).slice(0, 5).map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-1 text-xs">
                       <span className="text-muted-foreground truncate" title={k}>{k}</span>
                       <span className="font-medium tabular-nums">{v}</span>
@@ -958,7 +958,7 @@ export default function VendasPipeline() {
                   Top UFs
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_uf).slice(0, 4).map(([k, v]) => (
+                  {Object.entries(portfolioStats.por_uf).slice(0, 5).map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-1 text-xs">
                       <span className="text-muted-foreground truncate">{k}</span>
                       <span className="font-medium tabular-nums">{v}</span>
@@ -990,6 +990,7 @@ export default function VendasPipeline() {
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nome</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">CPF</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Convênio</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Telefone</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Produto</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
                     {canViewOthers && (
@@ -1028,6 +1029,9 @@ export default function VendasPipeline() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate" title={entry.convenio || "—"}>
                           {entry.convenio || <span>—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.telefone || <span>—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
