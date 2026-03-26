@@ -696,16 +696,19 @@ async function savePDF() {
       return;
     }
 
-    // 2. Pre-embed all standard fonts needed
-    const fonts = {
-      'Helvetica':       await pdfLibDoc.embedFont(StandardFonts.Helvetica),
-      'Helvetica-Bold':  await pdfLibDoc.embedFont(StandardFonts.HelveticaBold),
-      'Times-Roman':     await pdfLibDoc.embedFont(StandardFonts.TimesRoman),
-      'Times-Bold':      await pdfLibDoc.embedFont(StandardFonts.TimesBold),
-      'Times-Italic':    await pdfLibDoc.embedFont(StandardFonts.TimesItalic),
-      'Courier':         await pdfLibDoc.embedFont(StandardFonts.Courier),
-      'Courier-Bold':    await pdfLibDoc.embedFont(StandardFonts.CourierBold),
-    };
+    // 2. Pre-embed standard fonts — string names match c.font values exactly,
+    //    avoiding StandardFonts enum lookup issues. Sequential loop isolates failures.
+    const STANDARD_FONT_NAMES = [
+      'Helvetica', 'Helvetica-Bold',
+      'Times-Roman', 'Times-Bold', 'Times-Italic',
+      'Courier', 'Courier-Bold',
+    ];
+    const fonts = Object.create(null);
+    for (const name of STANDARD_FONT_NAMES) {
+      fonts[name] = await pdfLibDoc.embedFont(name);
+    }
+    // Fallback for any unexpected c.font value
+    const fallbackFont = fonts['Helvetica'];
 
     // 3. Apply each correction at the vector level
     for (const c of corrections) {
@@ -740,10 +743,8 @@ async function savePDF() {
         const cg = parseInt(hexC.slice(3,5), 16) / 255;
         const cb = parseInt(hexC.slice(5,7), 16) / 255;
 
-        // Pick best matching standard font
-        let fontKey = c.font || 'Helvetica';
-        if (!fonts[fontKey]) fontKey = 'Helvetica';
-        const font = fonts[fontKey];
+        // Resolve font — c.font is always one of STANDARD_FONT_NAMES; fallback to Helvetica
+        const font = fonts[c.font] || fallbackFont;
 
         pdfPage.drawText(c.new, {
           x: bx0,
