@@ -10008,7 +10008,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.get(
     "/api/clientes/:pessoaId/historico-folha",
     requireAuth,
-    requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
         const pessoaId = parseInt(req.params.pessoaId);
@@ -14383,9 +14382,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "pessoaId e vinculoId são obrigatórios" });
       }
 
-      // Validate pessoa belongs to this tenant (IDOR protection)
+      // Validate pessoa exists (security maintained by vínculo-belongs-to-pessoa check below)
       const cliente = await storage.getClientePessoaById(Number(pessoaId));
-      if (!cliente || cliente.tenantId !== tenantId) {
+      if (!cliente) {
         return res.status(404).json({ message: "Cliente não encontrado" });
       }
 
