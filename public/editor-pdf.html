@@ -620,7 +620,6 @@ function chZoom(d) {
 // ── SAVE PDF (vetorial via pdf-lib) ───────────────────────────────────────
 async function savePDF() {
   if (!pages.length) { toast('Nenhum PDF aberto'); return; }
-  if (!corrections.length) { toast('Nenhuma correção para salvar'); return; }
   load(true, 'Gerando PDF vetorial...');
   try {
     const { PDFDocument, StandardFonts, rgb } = PDFLib;
