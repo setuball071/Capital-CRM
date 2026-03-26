@@ -25651,24 +25651,16 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const ufR = await db.execute(sql`
         SELECT cl.uf, COUNT(DISTINCT cp.cpf) AS cnt
         FROM client_portfolio cp
-        JOIN (
-          SELECT DISTINCT ON (cpf) cpf, uf
-          FROM clientes_pessoa
-          WHERE uf IS NOT NULL AND uf != ''
-          ORDER BY cpf, id DESC
-        ) cl ON cl.cpf = cp.cpf
+        JOIN clientes_pessoa cl ON cl.cpf = cp.cpf
+          AND cl.uf IS NOT NULL AND cl.uf != ''
         WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
         GROUP BY cl.uf ORDER BY cnt DESC LIMIT 5
       `);
       const orgaoR = await db.execute(sql`
         SELECT cl.orgaodesc, COUNT(DISTINCT cp.cpf) AS cnt
         FROM client_portfolio cp
-        JOIN (
-          SELECT DISTINCT ON (cpf) cpf, orgaodesc
-          FROM clientes_pessoa
-          WHERE orgaodesc IS NOT NULL AND orgaodesc != ''
-          ORDER BY cpf, id DESC
-        ) cl ON cl.cpf = cp.cpf
+        JOIN clientes_pessoa cl ON cl.cpf = cp.cpf
+          AND cl.orgaodesc IS NOT NULL AND cl.orgaodesc != ''
         WHERE cp.tenant_id = ${tenantId} AND cp.status = 'ATIVO'
         GROUP BY cl.orgaodesc ORDER BY cnt DESC LIMIT 5
       `);
