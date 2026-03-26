@@ -25630,11 +25630,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
-            FROM client_portfolio cp2
-            WHERE cp2.tenant_id = ${tenantId}
-              AND cp2.vendor_id = ${user.id}
-            GROUP BY cp2.cpf
+            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.status = 'PAGO'
+              AND pc.cpf_cliente IS NOT NULL
+            GROUP BY pc.cpf_cliente
           ),
           conv AS (
             SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
@@ -25672,12 +25673,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
-            FROM client_portfolio cp2
-            JOIN users u2 ON u2.id = cp2.vendor_id
-            WHERE cp2.tenant_id = ${tenantId}
-              AND u2.manager_id = ${user.id}
-            GROUP BY cp2.cpf
+            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.status = 'PAGO'
+              AND pc.cpf_cliente IS NOT NULL
+            GROUP BY pc.cpf_cliente
           ),
           conv AS (
             SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
@@ -25715,10 +25716,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT cp2.cpf, MAX(cp2.started_at) AS last_deal_at
-            FROM client_portfolio cp2
-            WHERE cp2.tenant_id = ${tenantId}
-            GROUP BY cp2.cpf
+            SELECT pc.cpf_cliente AS cpf, MAX(pc.created_at) AS last_deal_at
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.status = 'PAGO'
+              AND pc.cpf_cliente IS NOT NULL
+            GROUP BY pc.cpf_cliente
           ),
           conv AS (
             SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio

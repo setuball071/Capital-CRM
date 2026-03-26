@@ -273,6 +273,8 @@ export default function VendasPipeline() {
   
   // Check if user can view other pipelines
   const canViewOthers = user && ["master", "atendimento", "coordenacao"].includes(user.role);
+  // Only master/coordenacao see the "prazo restante" column (not atendimento)
+  const isManagerRole = user && (user.isMaster || user.role === "master" || user.role === "coordenacao");
 
   // Fetch team members for filter dropdown
   const { data: teamMembers } = useQuery<{ id: number; name: string }[]>({
@@ -886,7 +888,7 @@ export default function VendasPipeline() {
                     {user?.role === "vendedor" && (
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Sem fechar negócio</th>
                     )}
-                    {canViewOthers && (
+                    {isManagerRole && (
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Prazo restante</th>
                     )}
                     {(user?.isMaster || user?.role === "master") && (
@@ -939,7 +941,7 @@ export default function VendasPipeline() {
                               : <span>—</span>}
                           </td>
                         )}
-                        {canViewOthers && (
+                        {isManagerRole && (
                           <td className="px-4 py-3" data-testid={`badge-days-${entry.id}`}>
                             <Badge
                               variant="outline"
@@ -947,7 +949,9 @@ export default function VendasPipeline() {
                             >
                               {daysRemaining > 0
                                 ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
-                                : "Expira hoje"}
+                                : daysRemaining === 0
+                                  ? "Expira hoje"
+                                  : `${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) !== 1 ? "s" : ""} vencido`}
                             </Badge>
                           </td>
                         )}
