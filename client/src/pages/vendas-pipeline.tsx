@@ -937,15 +937,14 @@ export default function VendasPipeline() {
                         {user?.role === "vendedor" && (
                           <td className="px-4 py-3 text-muted-foreground text-xs" data-testid={`text-days-deal-${entry.id}`}>
                             {daysWithoutDeal != null
-                              ? `${daysWithoutDeal} dia${daysWithoutDeal !== 1 ? "s" : ""}`
+                              ? `${daysWithoutDeal} dia${daysWithoutDeal !== 1 ? "s" : ""} sem novo negócio`
                               : <span>—</span>}
                           </td>
                         )}
                         {isManagerRole && (
                           <td className="px-4 py-3" data-testid={`badge-days-${entry.id}`}>
                             <Badge
-                              variant="outline"
-                              className={getDaysBadgeClass(daysRemaining)}
+                              variant={daysRemaining > 30 ? "default" : daysRemaining > 0 ? "secondary" : "destructive"}
                             >
                               {daysRemaining > 0
                                 ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
