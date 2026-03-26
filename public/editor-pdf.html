@@ -361,6 +361,67 @@ async function openFile(file) {
   }
 }
 
+// ── PAGE PREVIEW ──────────────────────────────────────────────────────────
+async function previewPage(pageNum) {
+  const idx = pages.findIndex(p => p.num === pageNum);
+  if (idx < 0 || !pdfJsDoc) return;
+  const p = pages[idx];
+
+  try {
+    const pdfJsPage = await pdfJsDoc.getPage(pageNum);
+    const scale = 3;
+    const vp = pdfJsPage.getViewport({ scale });
+    const cv = document.createElement('canvas');
+    cv.width = vp.width; cv.height = vp.height;
+    const ctx = cv.getContext('2d');
+    await pdfJsPage.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    // Apply all corrections for this page with canvas 2D drawing
+    const corrs = corrections.filter(c => c.page === pageNum);
+    for (const c of corrs) {
+      const rx0 = c.bbox[0] * scale;
+      const ry0 = c.bbox[1] * scale;
+      const rw  = (c.bbox[2] - c.bbox[0]) * scale;
+      const rh  = (c.bbox[3] - c.bbox[1]) * scale;
+
+      // Sample background color so cover blends naturally
+      let bgR = 255, bgG = 255, bgB = 255;
+      try {
+        const px = ctx.getImageData(Math.max(0, Math.floor(rx0)), Math.max(0, Math.floor(ry0)), 1, 1).data;
+        bgR = px[0]; bgG = px[1]; bgB = px[2];
+      } catch(e) {}
+
+      ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
+      ctx.fillRect(rx0 - 2, ry0 - 2, rw + 4, rh + 4);
+
+      if (!c.delete && c.new && c.new.trim()) {
+        const hexC = c.color || '#000000';
+        ctx.fillStyle = hexC;
+        const fsize = c.size * scale;
+        const fw = c.bold ? '700' : '400';
+        const ff = c.font.includes('Times') ? 'Times New Roman'
+                 : c.font.includes('Courier') ? 'Courier New'
+                 : 'Arial';
+        ctx.font = `${fw} ${fsize}px ${ff}`;
+        ctx.fillText(c.new, rx0, ry0 + rh * 0.85);
+      }
+    }
+
+    const newImg = cv.toDataURL('image/jpeg', 0.92);
+    p.img = newImg;
+
+    // Update main page image in viewer
+    const pageImgEl = document.querySelector(`#p${pageNum} img`);
+    if (pageImgEl) pageImgEl.src = newImg;
+
+    // Update sidebar thumbnail
+    const thumbImgEl = document.querySelector(`.thumb[data-pg="${pageNum}"] img`);
+    if (thumbImgEl) thumbImgEl.src = newImg;
+  } catch(e) {
+    console.warn('previewPage error:', e);
+  }
+}
+
 // ── RENDER ────────────────────────────────────────────────────────────────
 function renderAll() {
   const pc = document.getElementById('pc');
@@ -507,20 +568,7 @@ function applyCorr(block, page, newText, color) {
   if (ov) ov.classList.add('done');
 
   updateCorrList();
-
-  // Preview visual no overlay
-  const ov2 = document.querySelector(`.ov[data-bid="${block.id}"][data-pg="${page}"]`);
-  if (ov2) {
-    ov2.style.background = 'rgba(62,207,142,0.15)';
-    ov2.style.borderColor = 'var(--ok)';
-    ov2.title = newText;
-    ov2.setAttribute('data-preview', newText);
-    const preview = document.createElement('span');
-    preview.style.cssText = 'position:absolute;bottom:100%;left:0;background:#1b2035;color:#dde2f5;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:99;border:1px solid #2a3150';
-    preview.textContent = '✓ ' + newText;
-    ov2.innerHTML = '';
-    ov2.appendChild(preview);
-  }
+  previewPage(page);
 
   toast(`✓ Correção salva · ${corrections.length} total`);
 }
@@ -530,6 +578,7 @@ function removeCorr(bid, page) {
   const ov = document.querySelector(`.ov[data-bid="${bid}"][data-pg="${page}"]`);
   if (ov) { ov.classList.remove('done','sel'); }
   updateCorrList();
+  previewPage(page);
   document.getElementById('ea').innerHTML = '<div class="empty">Clique em qualquer texto<br>do PDF para editar.</div>';
   toast('Correção removida');
 }
@@ -537,9 +586,11 @@ function removeCorr(bid, page) {
 function clearAll() {
   if (!corrections.length) return;
   if (!confirm(`Remover as ${corrections.length} correção(ões)?`)) return;
+  const affectedPages = [...new Set(corrections.map(c => c.page))];
   corrections = [];
   document.querySelectorAll('.ov.done').forEach(e => e.classList.remove('done'));
   updateCorrList();
+  affectedPages.forEach(pg => previewPage(pg));
   toast('Tudo limpo');
 }
 
