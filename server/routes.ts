@@ -22960,14 +22960,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const user = req.user;
         if (!tenantId || !user)
           return res.status(401).json({ message: "Não autenticado" });
-        if (
-          !hasRole(user, [
-            "master",
-            "coordenacao",
-            "operacional",
-            "atendimento",
-          ])
-        ) {
+        const isAdminForStats = hasRole(user, [
+          "master",
+          "coordenacao",
+          "operacional",
+          "atendimento",
+          "vendedor",
+        ]);
+        if (!isAdminForStats) {
           return res.status(403).json({ message: "Sem permissão" });
         }
 
@@ -23158,6 +23158,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             typeof boletoAnexoNome === "string"
               ? boletoAnexoNome.substring(0, 255)
               : "boleto";
+        }
+
+        if (boletoAnexos !== undefined && boletoAnexos !== null && !Array.isArray(boletoAnexos)) {
+          return res.status(400).json({ message: "Campo boletoAnexos deve ser um array." });
         }
 
         let validatedAnexosJson: string | null = null;
