@@ -2983,6 +2983,7 @@ export const solicitacoesBoleto = pgTable("solicitacoes_boleto", {
   observacaoOperacional: text("observacao_operacional"),
   boletoAnexo: text("boleto_anexo"),
   boletoAnexoNome: varchar("boleto_anexo_nome", { length: 255 }),
+  boletoAnexos: text("boleto_anexos"),
   solicitadoPorId: integer("solicitado_por_id").references(() => users.id, {
     onDelete: "set null",
   }),

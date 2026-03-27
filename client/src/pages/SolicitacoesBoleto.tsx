@@ -45,6 +45,7 @@ interface SolicitacaoBoleto {
   observacao_operacional: string | null;
   boleto_anexo: string | null;
   boleto_anexo_nome: string | null;
+  boleto_anexos: string | null;
   solicitado_por_id: number;
   solicitado_por_nome: string;
   atendido_por_nome: string | null;
@@ -113,7 +114,7 @@ function formatData(iso: string) {
   try { return format(new Date(iso), "dd/MM/yyyy HH:mm", { locale: ptBR }); } catch { return iso; }
 }
 
-const ADMIN_ROLES = ["master", "coordenacao", "operacional", "atendimento"];
+const ADMIN_ROLES = ["master", "coordenacao", "operacional", "atendimento", "vendedor"];
 
 // ── Componente principal ──────────────────────────────────────
 export default function SolicitacoesBoleto() {
@@ -164,7 +165,7 @@ export default function SolicitacoesBoleto() {
   // Form atualizar status
   const [novoStatus, setNovoStatus] = useState("");
   const [obsOperacional, setObsOperacional] = useState("");
-  const [boletoFile, setBoletoFile] = useState<{ base64: string; nome: string } | null>(null);
+  const [boletoFiles, setBoletoFiles] = useState<{ base64: string; nome: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Queries ──────────────────────────────────────────────────
@@ -194,8 +195,8 @@ export default function SolicitacoesBoleto() {
   });
 
   const atualizarStatusMutation = useMutation({
-    mutationFn: ({ id, status, observacaoOperacional, boletoAnexo, boletoAnexoNome }: any) =>
-      apiRequest("PATCH", `/api/solicitacoes-boleto/${id}/status`, { status, observacaoOperacional, boletoAnexo, boletoAnexoNome }).then(r => r.json()),
+    mutationFn: ({ id, status, observacaoOperacional, boletoAnexos }: any) =>
+      apiRequest("PATCH", `/api/solicitacoes-boleto/${id}/status`, { status, observacaoOperacional, boletoAnexos }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto"] });
       queryClient.invalidateQueries({ queryKey: ["/api/solicitacoes-boleto/stats"] });
@@ -203,7 +204,7 @@ export default function SolicitacoesBoleto() {
       setModalStatus(null);
       setNovoStatus("");
       setObsOperacional("");
-      setBoletoFile(null);
+      setBoletoFiles([]);
     },
     onError: (err: any) => {
       toast({ title: "Erro", description: err.message || "Erro ao atualizar status", variant: "destructive" });
@@ -262,35 +263,37 @@ export default function SolicitacoesBoleto() {
       id: modalStatus.id,
       status: novoStatus,
       observacaoOperacional: obsOperacional || null,
-      boletoAnexo: boletoFile?.base64 || null,
-      boletoAnexoNome: boletoFile?.nome || null,
+      boletoAnexos: boletoFiles.length > 0 ? boletoFiles : null,
     });
   }
 
   function abrirModalStatus(s: SolicitacaoBoleto) {
     setModalStatus(s);
-    // Se o usuário só pode cancelar, pré-seleciona "cancelado"
-    if (!currentUserIsAdmin && (user?.role === "vendedor" || user?.id === s.solicitado_por_id)) {
-      setNovoStatus("cancelado");
-    } else {
-      setNovoStatus(s.status);
-    }
+    setNovoStatus(s.status);
     setObsOperacional(s.observacao_operacional || "");
-    setBoletoFile(null);
+    setBoletoFiles([]);
   }
 
   function handleBoletoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Arquivo muito grande", description: "O tamanho máximo é 5MB", variant: "destructive" });
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const oversized = files.find(f => f.size > 5 * 1024 * 1024);
+    if (oversized) {
+      toast({ title: "Arquivo muito grande", description: `"${oversized.name}" excede 5MB`, variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBoletoFile({ base64: reader.result as string, nome: file.name });
-    };
-    reader.readAsDataURL(file);
+    const promises = files.map(file =>
+      new Promise<{ base64: string; nome: string }>(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ base64: reader.result as string, nome: file.name });
+        reader.readAsDataURL(file);
+      })
+    );
+    Promise.all(promises).then(results => {
+      setBoletoFiles(prev => [...prev, ...results]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    });
   }
 
   function downloadBoleto(base64: string, nome: string) {
@@ -466,8 +469,8 @@ export default function SolicitacoesBoleto() {
                           <Button
                             variant="ghost" size="sm"
                             onClick={() => abrirModalStatus(s)}
-                            title={canCancelOnlyFor(s) ? "Cancelar solicitação" : "Atualizar status"}
-                            className={canCancelOnlyFor(s) ? "text-red-600" : "text-blue-600"}
+                            title="Atualizar status"
+                            className="text-blue-600"
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -671,35 +674,51 @@ export default function SolicitacoesBoleto() {
                   <p>{modalDetalhe.observacao_operacional}</p>
                 </div>
               )}
-              {modalDetalhe.boleto_anexo && (
-                <div className="bg-green-50 rounded-lg p-3 text-sm">
-                  <span className="text-green-700 block mb-2 font-medium">Boleto Anexado</span>
-                  <div className="flex items-center gap-2">
-                    <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
-                    <span className="text-sm truncate flex-1">{modalDetalhe.boleto_anexo_nome || "boleto"}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => downloadBoleto(modalDetalhe.boleto_anexo!, modalDetalhe.boleto_anexo_nome || "boleto")}
-                      data-testid="button-download-boleto"
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      Baixar
-                    </Button>
-                    {modalDetalhe.boleto_anexo.startsWith("data:image") && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => window.open(modalDetalhe.boleto_anexo!, "_blank")}
-                        data-testid="button-view-boleto"
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Ver
-                      </Button>
-                    )}
+              {(() => {
+                const multiAnexos: { base64: string; nome: string }[] = (() => {
+                  try { return modalDetalhe.boleto_anexos ? JSON.parse(modalDetalhe.boleto_anexos) : []; } catch { return []; }
+                })();
+                const legacyAnexo = !multiAnexos.length && modalDetalhe.boleto_anexo
+                  ? [{ base64: modalDetalhe.boleto_anexo, nome: modalDetalhe.boleto_anexo_nome || "boleto" }]
+                  : [];
+                const allAnexos = multiAnexos.length ? multiAnexos : legacyAnexo;
+                if (!allAnexos.length) return null;
+                return (
+                  <div className="bg-green-50 rounded-lg p-3 text-sm">
+                    <span className="text-green-700 block mb-2 font-medium">
+                      {allAnexos.length === 1 ? "Documento Anexado" : `Documentos Anexados (${allAnexos.length})`}
+                    </span>
+                    <div className="space-y-2">
+                      {allAnexos.map((anexo, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
+                          <span className="text-sm truncate flex-1">{anexo.nome}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => downloadBoleto(anexo.base64, anexo.nome)}
+                            data-testid={`button-download-boleto-${i}`}
+                          >
+                            <Download className="w-4 h-4 mr-1" />
+                            Baixar
+                          </Button>
+                          {anexo.base64.startsWith("data:image") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(anexo.base64, "_blank")}
+                              data-testid={`button-view-boleto-${i}`}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Ver
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </DialogContent>
@@ -708,22 +727,13 @@ export default function SolicitacoesBoleto() {
       <Dialog open={!!modalStatus} onOpenChange={() => setModalStatus(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {modalStatus && canCancelOnlyFor(modalStatus)
-                ? `Cancelar Solicitação — #${modalStatus.id}`
-                : `Atualizar Status — #${modalStatus?.id}`}
-            </DialogTitle>
+            <DialogTitle>Atualizar Status — #{modalStatus?.id}</DialogTitle>
           </DialogHeader>
           {modalStatus && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">
                 <span className="font-medium">{modalStatus.nome_cliente}</span> · {modalStatus.banco}
               </div>
-              {canCancelOnlyFor(modalStatus) ? (
-                <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-                  Você pode apenas cancelar esta solicitação. Selecione "Cancelado" para prosseguir.
-                </div>
-              ) : null}
               <div>
                 <Label>Novo Status</Label>
                 <Select value={novoStatus} onValueChange={setNovoStatus}>
@@ -731,10 +741,7 @@ export default function SolicitacoesBoleto() {
                     <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(canCancelOnlyFor(modalStatus)
-                      ? STATUS_OPERACIONAL.filter(s => s.value === "cancelado")
-                      : STATUS_OPERACIONAL
-                    ).map(s => (
+                    {STATUS_OPERACIONAL.map(s => (
                       <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -751,39 +758,52 @@ export default function SolicitacoesBoleto() {
                 />
               </div>
               <div>
-                <Label>Anexar Documento (opcional)
-</Label>
-                <div className="mt-1">
+                <Label>Anexar Documentos (opcional)</Label>
+                <div className="mt-1 space-y-1">
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
+                    multiple
                     onChange={handleBoletoFileChange}
                     className="hidden"
                     data-testid="input-boleto-file"
                   />
-                  {boletoFile ? (
-                    <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
+                  {boletoFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
                       <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate flex-1">{boletoFile.nome}</span>
-                      <Button size="icon" variant="ghost" onClick={() => { setBoletoFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} data-testid="button-remove-boleto-file">
+                      <span className="text-sm truncate flex-1">{f.nome}</span>
+                      <Button
+                        size="icon" variant="ghost"
+                        onClick={() => setBoletoFiles(prev => prev.filter((_, j) => j !== i))}
+                        data-testid={`button-remove-boleto-file-${i}`}
+                      >
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
-                  ) : modalStatus?.boleto_anexo ? (
-                    <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
-                      <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
-                      <span className="text-sm truncate flex-1 text-green-700">{modalStatus.boleto_anexo_nome || "boleto_anexo"}</span>
-                      <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} data-testid="button-replace-boleto">
-                        <Upload className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full" data-testid="button-upload-boleto">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Selecionar arquivo (PDF ou Imagem)
-                    </Button>
-                  )}
+                  ))}
+                  {boletoFiles.length === 0 && (() => {
+                    const existingCount = (() => {
+                      try { return modalStatus.boleto_anexos ? JSON.parse(modalStatus.boleto_anexos).length : 0; } catch { return 0; }
+                    })();
+                    const legacyCount = modalStatus.boleto_anexo ? 1 : 0;
+                    const total = existingCount || legacyCount;
+                    return total > 0 ? (
+                      <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50 text-sm text-muted-foreground">
+                        <Paperclip className="w-4 h-4 shrink-0" />
+                        <span className="flex-1">{total} anexo{total > 1 ? "s" : ""} já salvo{total > 1 ? "s" : ""}</span>
+                      </div>
+                    ) : null;
+                  })()}
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full"
+                    data-testid="button-upload-boleto"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {boletoFiles.length > 0 ? "Adicionar mais arquivos" : "Selecionar arquivos (PDF ou Imagem)"}
+                  </Button>
                 </div>
               </div>
             </div>

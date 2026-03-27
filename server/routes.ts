@@ -22922,6 +22922,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         "coordenacao",
         "operacional",
         "atendimento",
+        "vendedor",
       ]);
 
       let query = `
@@ -23094,11 +23095,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           "coordenacao",
           "operacional",
           "atendimento",
+          "vendedor",
         ]);
 
         const { id } = req.params;
 
-        // Busca o registro para verificar ownership e status atual
+        // Busca o registro para verificar ownership
         const existingCheck = await db.execute(sql`
           SELECT solicitado_por_id, status FROM solicitacoes_boleto
           WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
@@ -23107,24 +23109,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(404).json({ message: "Solicitação não encontrada" });
         }
         const solicitadoPorId = (existingCheck.rows[0] as any).solicitado_por_id;
-        const statusAtual = (existingCheck.rows[0] as any).status as string;
 
         const isOwner = user.id === solicitadoPorId;
-        const isVendedor = hasRole(user, ["vendedor"]);
-        const isCorretor = !isAdmin && (isVendedor || isOwner);
 
-        if (!isAdmin && !isOwner && !isVendedor) {
+        if (!isAdmin && !isOwner) {
           return res
             .status(403)
             .json({ message: "Sem permissão para atualizar status" });
         }
 
-        // Status em que o corretor tem livre alteração (solicitação está "na mão dele")
-        const STATUS_CORRETOR_LIVRE = ["pendente", "pendenciado"];
-        // Corretor só pode cancelar quando a solicitação já está no fluxo administrativo
-        const canCancelOnly = isCorretor && !STATUS_CORRETOR_LIVRE.includes(statusAtual);
-
-        const { status, observacaoOperacional, boletoAnexo, boletoAnexoNome } =
+        const { status, observacaoOperacional, boletoAnexo, boletoAnexoNome, boletoAnexos } =
           req.body;
 
         const statusValidos = [
@@ -23140,42 +23134,52 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Status inválido" });
         }
 
-        // vendedor / dono da solicitação só pode cancelar
-        if (canCancelOnly && status !== "cancelado") {
-          return res
-            .status(403)
-            .json({ message: "Você só pode cancelar esta solicitação" });
-        }
+        const allowedPrefixes = [
+          "data:application/pdf;base64,",
+          "data:image/jpeg;base64,",
+          "data:image/jpg;base64,",
+          "data:image/png;base64,",
+        ];
+        const maxSizeBytes = 5 * 1024 * 1024 * 1.37;
 
         let validatedAnexo: string | null = null;
         let validatedAnexoNome: string | null = null;
         if (boletoAnexo) {
-          const allowedPrefixes = [
-            "data:application/pdf;base64,",
-            "data:image/jpeg;base64,",
-            "data:image/jpg;base64,",
-            "data:image/png;base64,",
-          ];
-          const isValidDataUrl = allowedPrefixes.some((p) =>
-            boletoAnexo.startsWith(p),
-          );
-          if (!isValidDataUrl) {
+          if (!allowedPrefixes.some((p) => boletoAnexo.startsWith(p))) {
             return res.status(400).json({
-              message:
-                "Formato de arquivo inválido. Apenas PDF, JPG e PNG são aceitos.",
+              message: "Formato de arquivo inválido. Apenas PDF, JPG e PNG são aceitos.",
             });
           }
-          const maxSize = 5 * 1024 * 1024 * 1.37;
-          if (boletoAnexo.length > maxSize) {
-            return res.status(400).json({
-              message: "Arquivo muito grande. O tamanho máximo é 5MB.",
-            });
+          if (boletoAnexo.length > maxSizeBytes) {
+            return res.status(400).json({ message: "Arquivo muito grande. O tamanho máximo é 5MB." });
           }
           validatedAnexo = boletoAnexo;
           validatedAnexoNome =
             typeof boletoAnexoNome === "string"
               ? boletoAnexoNome.substring(0, 255)
               : "boleto";
+        }
+
+        let validatedAnexosJson: string | null = null;
+        if (Array.isArray(boletoAnexos) && boletoAnexos.length > 0) {
+          for (const item of boletoAnexos) {
+            if (!item.base64 || !allowedPrefixes.some((p: string) => item.base64.startsWith(p))) {
+              return res.status(400).json({
+                message: "Formato de arquivo inválido. Apenas PDF, JPG e PNG são aceitos.",
+              });
+            }
+            if (item.base64.length > maxSizeBytes) {
+              return res.status(400).json({
+                message: `Arquivo "${item.nome || "anexo"}" muito grande. O tamanho máximo é 5MB.`,
+              });
+            }
+          }
+          validatedAnexosJson = JSON.stringify(
+            boletoAnexos.map((item: any) => ({
+              base64: item.base64,
+              nome: typeof item.nome === "string" ? item.nome.substring(0, 255) : "anexo",
+            }))
+          );
         }
 
         const result = await db.execute(sql`
@@ -23185,6 +23189,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           observacao_operacional = ${observacaoOperacional || null},
           boleto_anexo = COALESCE(${validatedAnexo}, boleto_anexo),
           boleto_anexo_nome = COALESCE(${validatedAnexoNome}, boleto_anexo_nome),
+          boleto_anexos = COALESCE(${validatedAnexosJson}, boleto_anexos),
           atendido_por_id = ${user.id},
           updated_at = NOW()
         WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
