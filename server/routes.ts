@@ -25733,7 +25733,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           SELECT
             lpc.*,
             conv.convenio,
-            NULL::text AS telefone,
+            NULL::text AS telefone, -- telefone: producoes_contratos has no phone column; future enhancement would join via clientes_telefones
             ld.last_deal_at,
             EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
             EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
