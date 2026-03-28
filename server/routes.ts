@@ -21880,8 +21880,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             0;
 
           const phoneKey = Object.keys(row).find((k) =>
-            /^(telefone|telefone_cliente|celular|fone|tel)$/i.test(k.trim()),
+            /telefone|celular|fone|tel/i.test(k.trim()),
           );
+          if (totalImportado === 1) {
+            console.log("[IMPORT] Keys da primeira linha:", Object.keys(row));
+            console.log("[IMPORT] Telefone key encontrado:", phoneKey ?? "(nenhum)");
+          }
           const telefoneCliente = phoneKey
             ? String(row[phoneKey] || "").trim().slice(0, 30) || null
             : null;
