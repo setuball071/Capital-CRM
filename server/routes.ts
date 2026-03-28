@@ -22150,6 +22150,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const pontosGeral = pt1000Val * (valorBase / 1000);
           const pontosCartao = c.isCartao ? pontosGeral : 0;
 
+          const telefoneRaw = c.telefoneCliente || c.telefone || c.celular || c.fone || c.tel || null;
           const contratoData = {
             nomeCliente: c.nomeCliente,
             cpfCliente: c.cpfCliente,
@@ -22177,6 +22178,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             pt1000: String(pt1000Val),
             pontosGeral: String(Math.round(pontosGeral * 100) / 100),
             pontosCartao: String(Math.round(pontosCartao * 100) / 100),
+            telefoneCliente: telefoneRaw ? String(telefoneRaw).trim().slice(0, 30) || null : null,
           };
 
           if (existing.length > 0) {
@@ -25729,17 +25731,49 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL AND pc.convenio != ''
             ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          banco_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.banco
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.banco IS NOT NULL AND pc.banco != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          tel_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.telefone_cliente
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.telefone_cliente IS NOT NULL AND pc.telefone_cliente != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          deals_count AS (
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              COUNT(pc.id)::int AS total_deals
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           )
           SELECT
             lpc.*,
             conv.convenio,
-            NULL::text AS telefone, -- telefone: producoes_contratos has no phone column; future enhancement would join via clientes_telefones
+            tel_cte.telefone_cliente AS telefone,
+            banco_cte.banco,
+            COALESCE(dc.total_deals, 0)::int AS total_deals,
+            (COALESCE(dc.total_deals, 0) > 1) AS is_recorrente,
             ld.last_deal_at,
             EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
             EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
           FROM latest_per_cpf lpc
           LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
           LEFT JOIN conv ON conv.cpf_norm = lpc.cpf
+          LEFT JOIN banco_cte ON banco_cte.cpf_norm = lpc.cpf
+          LEFT JOIN tel_cte ON tel_cte.cpf_norm = lpc.cpf
+          LEFT JOIN deals_count dc ON dc.cpf = lpc.cpf
           ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);

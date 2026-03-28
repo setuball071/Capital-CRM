@@ -2853,6 +2853,7 @@ export const producoesContratos = pgTable(
     pontosCartao: decimal("pontos_cartao", { precision: 14, scale: 2 }).default(
       "0",
     ),
+    telefoneCliente: varchar("telefone_cliente", { length: 30 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [

@@ -18,7 +18,7 @@ import {
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
   ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck,
-  Users, BarChart2, MapPin, Landmark, Briefcase, LayoutDashboard, TrendingDown, AlertCircle
+  Users, BarChart2, MapPin, Landmark, Briefcase, LayoutDashboard, TrendingDown, AlertCircle, RefreshCw
 } from "lucide-react";
 import {
   AlertDialog,
@@ -339,6 +339,9 @@ export default function VendasPipeline() {
     created_at: string;
     convenio?: string | null;
     telefone?: string | null;
+    banco?: string | null;
+    total_deals?: number | null;
+    is_recorrente?: boolean | null;
     last_deal_at?: string | null;
     days_without_deal?: number | null;
     days_remaining?: number | null;
@@ -1033,8 +1036,16 @@ export default function VendasPipeline() {
                         data-testid={`row-portfolio-${entry.id}`}
                         onClick={isVendedor ? () => navigate(`/vendas/consulta?cpf=${entry.cpf}`) : undefined}
                       >
-                        <td className="px-4 py-3 font-medium max-w-[200px] truncate" title={clientName || "—"}>
-                          {clientName || <span className="text-muted-foreground">—</span>}
+                        <td className="px-4 py-3 font-medium max-w-[220px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate" title={clientName || "—"}>{clientName || <span className="text-muted-foreground">—</span>}</span>
+                            {entry.is_recorrente && (
+                              <Badge variant="outline" className="text-[10px] shrink-0 px-1 py-0 h-auto text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 flex items-center gap-0.5" data-testid={`badge-recorrente-${entry.id}`}>
+                                <RefreshCw className="h-2.5 w-2.5" />
+                                Recorrente
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`text-cpf-${entry.id}`}>
                           {maskCpf(entry.cpf)}
@@ -1131,6 +1142,25 @@ export default function VendasPipeline() {
         }
         const maxProduto = Math.max(...Object.values(porProduto), 1);
 
+        const porBancoMap: Record<string, number> = {};
+        for (const e of portfolioEntries) {
+          if (e.banco) porBancoMap[e.banco] = (porBancoMap[e.banco] || 0) + 1;
+        }
+        const porBanco = Object.entries(porBancoMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const maxBanco = Math.max(...porBanco.map(([, v]) => v), 1);
+
+        const porConvenioMap: Record<string, number> = {};
+        for (const e of portfolioEntries) {
+          if (e.convenio) porConvenioMap[e.convenio] = (porConvenioMap[e.convenio] || 0) + 1;
+        }
+        const porConvenio = Object.entries(porConvenioMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const maxConvenio = Math.max(...porConvenio.map(([, v]) => v), 1);
+
+        const recorrentes = portfolioEntries
+          .filter(e => e.is_recorrente)
+          .sort((a, b) => (b.total_deals ?? 0) - (a.total_deals ?? 0))
+          .slice(0, 5);
+
         const top10 = [...portfolioEntries]
           .filter(e => e.days_without_deal != null)
           .sort((a, b) => (b.days_without_deal ?? 0) - (a.days_without_deal ?? 0))
@@ -1142,14 +1172,22 @@ export default function VendasPipeline() {
           return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
         };
 
+        const atencaoDayColor = (days: number | null | undefined) => {
+          if (days == null) return "";
+          if (days > 60) return "text-destructive";
+          if (days >= 30) return "text-amber-600 dark:text-amber-400";
+          return "";
+        };
+
         return (
-          <div className="flex-1 overflow-y-auto p-4 space-y-6" data-testid="panel-dashboard-carteira">
+          <div className="flex-1 overflow-y-auto p-4 space-y-5" data-testid="panel-dashboard-carteira">
             {portfolioLoading ? (
               <div className="flex items-center justify-center min-h-[200px]">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <>
+                {/* KPI Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1181,12 +1219,99 @@ export default function VendasPipeline() {
                   </div>
                 </div>
 
+                {/* Clientes Recorrentes */}
+                {recorrentes.length > 0 && (
+                  <div className="rounded-md border bg-card p-4 space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                      Clientes Recorrentes
+                      <Badge variant="outline" className="ml-1 text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 text-xs">
+                        {portfolioEntries.filter(e => e.is_recorrente).length}
+                      </Badge>
+                    </h3>
+                    <div className="space-y-1">
+                      {recorrentes.map((entry) => {
+                        const nome = entry.client_name || entry.nome_cliente;
+                        return (
+                          <div
+                            key={entry.id}
+                            className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md hover-elevate cursor-pointer text-xs"
+                            onClick={() => navigate(`/vendas/consulta?cpf=${entry.cpf}`)}
+                            data-testid={`row-dash-recorrente-${entry.id}`}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-medium truncate">{nome || maskCpfDash(entry.cpf)}</span>
+                              <span className="text-muted-foreground font-mono">{maskCpfDash(entry.cpf)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="outline" className="text-xs text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500">
+                                {PRODUCT_LABELS[entry.product_type] || entry.product_type}
+                              </Badge>
+                              <span className="font-medium tabular-nums whitespace-nowrap text-violet-600 dark:text-violet-400">
+                                {entry.total_deals} contratos
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Por Banco + Por Convênio */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-md border bg-card p-4 space-y-3">
                     <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                      <BarChart2 className="h-4 w-4 text-muted-foreground" />
-                      Por Produto
+                      <Landmark className="h-4 w-4 text-muted-foreground" />
+                      Por Banco (top 5)
                     </h3>
+                    {porBanco.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum dado de banco disponível.</p>
+                    ) : (
+                      porBanco.map(([banco, cnt]) => (
+                        <div key={banco} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate" title={banco}>{banco}</span>
+                            <span className="font-medium tabular-nums">{cnt}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${(cnt / maxBanco) * 100}%`, background: "#1E88E5" }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="rounded-md border bg-card p-4 space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                      <Briefcase className="h-4 w-4 text-muted-foreground" />
+                      Por Convênio (top 5)
+                    </h3>
+                    {porConvenio.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum dado de convênio disponível.</p>
+                    ) : (
+                      porConvenio.map(([convenio, cnt]) => (
+                        <div key={convenio} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate" title={convenio}>{convenio}</span>
+                            <span className="font-medium tabular-nums">{cnt}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${(cnt / maxConvenio) * 100}%`, background: "#6C2BD9" }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Por Produto */}
+                <div className="rounded-md border bg-card p-4 space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                    <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                    Por Produto
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
                     {Object.entries(porProduto).sort((a, b) => b[1] - a[1]).map(([pt, cnt]) => (
                       <div key={pt} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
@@ -1205,43 +1330,45 @@ export default function VendasPipeline() {
                       <p className="text-xs text-muted-foreground">Nenhum cliente em carteira.</p>
                     )}
                   </div>
+                </div>
 
-                  <div className="rounded-md border bg-card p-4 space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                      Atenção — sem negócio há mais tempo
-                    </h3>
-                    {top10.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Nenhum cliente com data de último negócio registrada.</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {top10.map((entry) => {
-                          const nome = entry.client_name || entry.nome_cliente;
-                          return (
-                            <div
-                              key={entry.id}
-                              className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md hover-elevate cursor-pointer text-xs"
-                              onClick={() => navigate(`/vendas/consulta?cpf=${entry.cpf}`)}
-                              data-testid={`row-dash-atencao-${entry.id}`}
-                            >
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-medium truncate">{nome || maskCpfDash(entry.cpf)}</span>
-                                <span className="text-muted-foreground font-mono">{maskCpfDash(entry.cpf)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge variant="outline" className="text-xs">
-                                  {PRODUCT_LABELS[entry.product_type] || entry.product_type}
-                                </Badge>
-                                <span className="font-medium text-destructive tabular-nums whitespace-nowrap">
-                                  {entry.days_without_deal}d
-                                </span>
-                              </div>
+                {/* Atenção — top 10 sem negócio */}
+                <div className="rounded-md border bg-card p-4 space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    Atenção — sem negócio há mais tempo
+                  </h3>
+                  {top10.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhum cliente com data de último negócio registrada.</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {top10.map((entry) => {
+                        const nome = entry.client_name || entry.nome_cliente;
+                        const dayColor = atencaoDayColor(entry.days_without_deal);
+                        return (
+                          <div
+                            key={entry.id}
+                            className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md hover-elevate cursor-pointer text-xs"
+                            onClick={() => navigate(`/vendas/consulta?cpf=${entry.cpf}`)}
+                            data-testid={`row-dash-atencao-${entry.id}`}
+                          >
+                            <div className={`flex flex-col min-w-0 ${dayColor}`}>
+                              <span className="font-medium truncate">{nome || maskCpfDash(entry.cpf)}</span>
+                              <span className="font-mono opacity-70">{maskCpfDash(entry.cpf)}</span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="outline" className="text-xs">
+                                {PRODUCT_LABELS[entry.product_type] || entry.product_type}
+                              </Badge>
+                              <span className={`font-medium tabular-nums whitespace-nowrap ${dayColor || "text-muted-foreground"}`}>
+                                {entry.days_without_deal}d
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </>
             )}
