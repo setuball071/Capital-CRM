@@ -1136,14 +1136,6 @@ export default function VendasPipeline() {
           .sort((a, b) => (b.days_without_deal ?? 0) - (a.days_without_deal ?? 0))
           .slice(0, 10);
 
-        const PRODUCT_LABELS_DASH: Record<string, string> = {
-          CARTAO: "Cartão",
-          CONSIGNADO: "Consignado",
-          NOVO: "Novo Empréstimo",
-          PORTABILIDADE: "Portabilidade",
-          REFINANCIAMENTO: "Refinanciamento",
-        };
-
         const maskCpfDash = (cpf: string) => {
           const d = cpf.replace(/\D/g, "");
           if (d.length !== 11) return cpf;
@@ -1198,7 +1190,7 @@ export default function VendasPipeline() {
                     {Object.entries(porProduto).sort((a, b) => b[1] - a[1]).map(([pt, cnt]) => (
                       <div key={pt} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">{PRODUCT_LABELS_DASH[pt] || pt}</span>
+                          <span className="text-muted-foreground">{PRODUCT_LABELS[pt] || pt}</span>
                           <span className="font-medium tabular-nums">{cnt}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -1238,7 +1230,7 @@ export default function VendasPipeline() {
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <Badge variant="outline" className="text-xs">
-                                  {PRODUCT_LABELS_DASH[entry.product_type] || entry.product_type}
+                                  {PRODUCT_LABELS[entry.product_type] || entry.product_type}
                                 </Badge>
                                 <span className="font-medium text-destructive tabular-nums whitespace-nowrap">
                                   {entry.days_without_deal}d

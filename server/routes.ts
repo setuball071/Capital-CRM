@@ -25559,13 +25559,15 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         WHERE tenant_id = ${tenantId}
         ORDER BY product_type
       `);
+      interface PortfolioRuleRow { id: number; product_type: string; duration_months: number; updated_at: string | null; }
       const ALL_PRODUCT_TYPES = ["CARTAO", "CONSIGNADO", "NOVO", "PORTABILIDADE", "REFINANCIAMENTO"];
       const defaultDuration: Record<string, number> = {
         CARTAO: 3, CONSIGNADO: 6, NOVO: 6, PORTABILIDADE: 6, REFINANCIAMENTO: 6,
       };
+      const typedRows = result.rows as PortfolioRuleRow[];
       const merged = ALL_PRODUCT_TYPES.map(pt => {
-        const found = result.rows.find((r: any) => r.product_type === pt);
-        return found ?? { product_type: pt, duration_months: defaultDuration[pt], id: null, updated_at: null };
+        const found = typedRows.find(r => r.product_type === pt);
+        return found ?? { product_type: pt, duration_months: defaultDuration[pt], id: null as number | null, updated_at: null as string | null };
       });
       res.json(merged);
     } catch (err: any) {
