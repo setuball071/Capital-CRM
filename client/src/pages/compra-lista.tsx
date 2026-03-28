@@ -481,7 +481,7 @@ export default function CompraLista() {
       <div>
         <h1 className="text-3xl font-bold" data-testid="text-page-title">Filtros de Base</h1>
         <p className="text-muted-foreground">
-          Filtre a base de clientes e gere pedidos de exportação
+          Filtre a base de clientes e gere exportações de dados
         </p>
       </div>
 
@@ -1133,7 +1133,7 @@ export default function CompraLista() {
                 Meus Filtros
               </CardTitle>
               <CardDescription>
-                Histórico de filtros e pedidos de exportação
+                Histórico de filtros aplicados e exportações geradas
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1145,7 +1145,7 @@ export default function CompraLista() {
                 <div className="text-center py-8 text-muted-foreground">
                   <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Nenhum filtro realizado ainda.</p>
-                  <p className="text-sm">Use os filtros na aba "Novo Filtro" para criar seu primeiro pedido.</p>
+                  <p className="text-sm">Use os filtros na aba "Novo Filtro" para criar seu primeiro filtro.</p>
                 </div>
               ) : (
                 <Table>
