@@ -1141,21 +1141,17 @@ export default function VendasPipeline() {
         for (const e of portfolioEntries) {
           porProduto[e.product_type] = (porProduto[e.product_type] || 0) + 1;
         }
-        const maxProduto = Math.max(...Object.values(porProduto), 1);
-
         const porBancoMap: Record<string, number> = {};
         for (const e of portfolioEntries) {
           if (e.banco) porBancoMap[e.banco] = (porBancoMap[e.banco] || 0) + 1;
         }
         const porBanco = Object.entries(porBancoMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const maxBanco = Math.max(...porBanco.map(([, v]) => v), 1);
 
         const porConvenioMap: Record<string, number> = {};
         for (const e of portfolioEntries) {
           if (e.convenio) porConvenioMap[e.convenio] = (porConvenioMap[e.convenio] || 0) + 1;
         }
         const porConvenio = Object.entries(porConvenioMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const maxConvenio = Math.max(...porConvenio.map(([, v]) => v), 1);
 
         const recorrentes = portfolioEntries
           .filter(e => e.is_recorrente)
