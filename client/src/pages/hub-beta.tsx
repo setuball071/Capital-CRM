@@ -109,7 +109,7 @@ const ALL_MODULES: HubModule[] = [
     subItems: [
       { id: "base-dashboard", title: "Dashboard Base", description: "Visão geral da base", icon: LayoutDashboard, route: "/base-dashboard" },
       { id: "consulta-cliente", title: "Consulta de Cliente", description: "Busca na base própria", icon: UserSearch, route: "/consulta-cliente" },
-      { id: "compra-lista", title: "Compra de Lista", description: "Solicitar listas de clientes", icon: ShoppingCart, route: "/compra-lista" },
+      { id: "compra-lista", title: "Filtros de Base", description: "Filtrar base e solicitar exportações", icon: ShoppingCart, route: "/compra-lista" },
       { id: "dividir-csv", title: "Dividir CSV", description: "Fatiar arquivos grandes", icon: Scissors, route: "/dividir-csv" },
       { id: "split-txt", title: "Split TXT/CSV", description: "Separar por coluna", icon: FileText, route: "/split-txt-csv" },
       { id: "nomenclaturas", title: "Nomenclaturas", description: "Padronização de campos", icon: ClipboardCheck, route: "/nomenclaturas" },

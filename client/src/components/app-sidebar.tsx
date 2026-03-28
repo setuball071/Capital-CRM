@@ -173,7 +173,7 @@ export function AppSidebar() {
         { title: "Dashboard", url: "/base-dashboard", icon: BarChart3, module: "modulo_base_clientes", subItem: "consulta" },
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes", subItem: "importacao" },
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
-        { title: "Compra de Lista", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },
+        { title: "Filtros de Base", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },
         { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes", subItem: "consulta" },
       ],
     },

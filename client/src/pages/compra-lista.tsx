@@ -13,6 +13,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Search, ShoppingCart, Users, Filter, Clock, CheckCircle, XCircle, AlertCircle, Download, Info, Megaphone } from "lucide-react";
@@ -210,6 +211,7 @@ export default function CompraLista() {
   const [selectedPacote, setSelectedPacote] = useState<PacotePreco | null>(null);
   const [tiposContratoFiltrados, setTiposContratoFiltrados] = useState<string[]>([]);
   const [isLoadingTipos, setIsLoadingTipos] = useState(false);
+  const [selectedPedido, setSelectedPedido] = useState<PedidoLista | null>(null);
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
@@ -477,9 +479,9 @@ export default function CompraLista() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">Compra de Lista</h1>
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">Filtros de Base</h1>
         <p className="text-muted-foreground">
-          Filtre clientes e gere pedidos de exportação de listas
+          Filtre a base de clientes e gere pedidos de exportação
         </p>
       </div>
 
@@ -487,11 +489,11 @@ export default function CompraLista() {
         <TabsList>
           <TabsTrigger value="nova" data-testid="tab-nova">
             <Filter className="w-4 h-4 mr-2" />
-            Nova Lista
+            Novo Filtro
           </TabsTrigger>
           <TabsTrigger value="pedidos" data-testid="tab-pedidos">
             <ShoppingCart className="w-4 h-4 mr-2" />
-            Meus Pedidos
+            Meus Filtros
           </TabsTrigger>
         </TabsList>
 
@@ -1128,10 +1130,10 @@ export default function CompraLista() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
-                Meus Pedidos
+                Meus Filtros
               </CardTitle>
               <CardDescription>
-                Histórico de pedidos de exportação de listas
+                Histórico de filtros e pedidos de exportação
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1142,8 +1144,8 @@ export default function CompraLista() {
               ) : pedidos.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum pedido realizado ainda.</p>
-                  <p className="text-sm">Use os filtros na aba "Nova Lista" para criar seu primeiro pedido.</p>
+                  <p>Nenhum filtro realizado ainda.</p>
+                  <p className="text-sm">Use os filtros na aba "Novo Filtro" para criar seu primeiro pedido.</p>
                 </div>
               ) : (
                 <Table>
@@ -1160,10 +1162,22 @@ export default function CompraLista() {
                   </TableHeader>
                   <TableBody>
                     {pedidos.map((pedido) => (
-                      <TableRow key={pedido.id} data-testid={`row-pedido-${pedido.id}`}>
+                      <TableRow
+                        key={pedido.id}
+                        data-testid={`row-pedido-${pedido.id}`}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedPedido(pedido)}
+                      >
                         <TableCell className="font-mono">#{pedido.id}</TableCell>
-                        <TableCell className="max-w-[300px] truncate">
-                          {formatFiltros(pedido.filtrosUsados)}
+                        <TableCell className="max-w-[300px]">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="block truncate">{formatFiltros(pedido.filtrosUsados)}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-[400px] whitespace-normal break-words">
+                              {formatFiltros(pedido.filtrosUsados)}
+                            </TooltipContent>
+                          </Tooltip>
                         </TableCell>
                         <TableCell>{pedido.quantidadeRegistros?.toLocaleString("pt-BR") || 0}</TableCell>
                         <TableCell>
@@ -1176,7 +1190,7 @@ export default function CompraLista() {
                         <TableCell>
                           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           {(pedido.status === "processado" || pedido.status === "concluido") && pedido.arquivoGeradoEm ? (
                             <Button
                               size="sm"
@@ -1291,6 +1305,63 @@ export default function CompraLista() {
             </Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      {/* Details modal */}
+      <Dialog open={!!selectedPedido} onOpenChange={(open) => { if (!open) setSelectedPedido(null); }}>
+        {selectedPedido && (
+          <DialogContent className="max-w-lg" data-testid="dialog-filtro-detalhes">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Filtro #{selectedPedido.id}</DialogTitle>
+              <DialogDescription>
+                Criado em {format(new Date(selectedPedido.criadoEm), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros Aplicados</p>
+                <p className="text-sm leading-relaxed break-words" data-testid="text-filtros-completos">
+                  {formatFiltros(selectedPedido.filtrosUsados)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Registros</p>
+                  <p className="text-sm font-medium">
+                    {selectedPedido.quantidadeRegistros?.toLocaleString("pt-BR") || 0}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valor Estimado</p>
+                  <p className="text-sm font-medium">
+                    {selectedPedido.custoEstimado
+                      ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(selectedPedido.custoEstimado))
+                      : "-"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</p>
+                  <div>{getStatusBadge(selectedPedido.status)}</div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex-wrap gap-2">
+              {(selectedPedido.status === "processado" || selectedPedido.status === "concluido") && selectedPedido.arquivoGeradoEm && (
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(`/api/pedidos-lista/${selectedPedido.id}/download`, "_blank")}
+                  data-testid={`button-modal-download-${selectedPedido.id}`}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Baixar
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setSelectedPedido(null)} data-testid="button-modal-fechar">
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   );
