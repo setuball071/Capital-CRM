@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1260,76 +1261,132 @@ export default function VendasPipeline() {
                   )}
                 </div>
 
-                {/* Por Banco + Por Convênio */}
+                {/* Por Produto — Donut Chart */}
+                {(() => {
+                  const PRODUCT_COLORS: Record<string, string> = {
+                    CARTAO: "#6C2BD9",
+                    CONSIGNADO: "#1E88E5",
+                    NOVO: "#10B981",
+                    PORTABILIDADE: "#F59E0B",
+                    REFINANCIAMENTO: "#EF4444",
+                  };
+                  const donutData = Object.entries(porProduto)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([pt, cnt]) => ({
+                      name: PRODUCT_LABELS[pt] || pt,
+                      value: cnt,
+                      color: PRODUCT_COLORS[pt] || "#94A3B8",
+                      key: pt,
+                    }));
+                  return (
+                    <div className="rounded-md border bg-card p-4">
+                      <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+                        <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                        Por Produto
+                      </h3>
+                      {donutData.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Nenhum cliente em carteira.</p>
+                      ) : (
+                        <div className="flex items-center gap-6">
+                          <div className="flex-shrink-0" style={{ width: 160, height: 160 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={donutData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={45}
+                                  outerRadius={72}
+                                  dataKey="value"
+                                  paddingAngle={2}
+                                >
+                                  {donutData.map((entry) => (
+                                    <Cell key={entry.key} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip
+                                  formatter={(value: number, name: string) => [value, name]}
+                                  contentStyle={{ fontSize: 12, borderRadius: 6 }}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex flex-col gap-2 flex-1 min-w-0">
+                            {donutData.map((entry) => (
+                              <div key={entry.key} className="flex items-center gap-2 text-xs">
+                                <span className="flex-shrink-0 h-2.5 w-2.5 rounded-full" style={{ background: entry.color }} />
+                                <span className="text-muted-foreground truncate flex-1">{entry.name}</span>
+                                <span className="font-semibold tabular-nums">{entry.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Por Banco + Por Convênio — Bar Charts */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-md border bg-card p-4 space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                  <div className="rounded-md border bg-card p-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
                       <Landmark className="h-4 w-4 text-muted-foreground" />
                       Por Banco (top 5)
                     </h3>
                     {porBanco.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Nenhum dado de banco disponível.</p>
                     ) : (
-                      porBanco.map(([banco, cnt]) => (
-                        <div key={banco} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground truncate" title={banco}>{banco}</span>
-                            <span className="font-medium tabular-nums">{cnt}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${(cnt / maxBanco) * 100}%`, background: "#1E88E5" }} />
-                          </div>
-                        </div>
-                      ))
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart
+                          data={porBanco.map(([banco, cnt]) => ({ name: banco, value: cnt }))}
+                          margin={{ top: 4, right: 4, left: -20, bottom: 40 }}
+                        >
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fontSize: 10 }}
+                            angle={-20}
+                            textAnchor="end"
+                            interval={0}
+                          />
+                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip
+                            formatter={(value: number) => [value, "Clientes"]}
+                            contentStyle={{ fontSize: 12, borderRadius: 6 }}
+                          />
+                          <Bar dataKey="value" fill="#1E88E5" radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     )}
                   </div>
 
-                  <div className="rounded-md border bg-card p-4 space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                  <div className="rounded-md border bg-card p-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
                       <Briefcase className="h-4 w-4 text-muted-foreground" />
                       Por Convênio (top 5)
                     </h3>
                     {porConvenio.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Nenhum dado de convênio disponível.</p>
                     ) : (
-                      porConvenio.map(([convenio, cnt]) => (
-                        <div key={convenio} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground truncate" title={convenio}>{convenio}</span>
-                            <span className="font-medium tabular-nums">{cnt}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${(cnt / maxConvenio) * 100}%`, background: "#6C2BD9" }} />
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Por Produto */}
-                <div className="rounded-md border bg-card p-4 space-y-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                    <BarChart2 className="h-4 w-4 text-muted-foreground" />
-                    Por Produto
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-                    {Object.entries(porProduto).sort((a, b) => b[1] - a[1]).map(([pt, cnt]) => (
-                      <div key={pt} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">{PRODUCT_LABELS[pt] || pt}</span>
-                          <span className="font-medium tabular-nums">{cnt}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${(cnt / maxProduto) * 100}%`, background: "#6C2BD9" }}
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart
+                          data={porConvenio.map(([convenio, cnt]) => ({ name: convenio, value: cnt }))}
+                          margin={{ top: 4, right: 4, left: -20, bottom: 40 }}
+                        >
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fontSize: 10 }}
+                            angle={-20}
+                            textAnchor="end"
+                            interval={0}
                           />
-                        </div>
-                      </div>
-                    ))}
-                    {Object.keys(porProduto).length === 0 && (
-                      <p className="text-xs text-muted-foreground">Nenhum cliente em carteira.</p>
+                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip
+                            formatter={(value: number) => [value, "Clientes"]}
+                            contentStyle={{ fontSize: 12, borderRadius: 6 }}
+                          />
+                          <Bar dataKey="value" fill="#6C2BD9" radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     )}
                   </div>
                 </div>
