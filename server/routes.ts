@@ -21879,6 +21879,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             parseFloat(pt1000Raw.replace(/[^\d.,]/g, "").replace(",", ".")) ||
             0;
 
+          const phoneKey = Object.keys(row).find((k) =>
+            /^(telefone|telefone_cliente|celular|fone|tel)$/i.test(k.trim()),
+          );
+          const telefoneCliente = phoneKey
+            ? String(row[phoneKey] || "").trim().slice(0, 30) || null
+            : null;
+
           const contrato = {
             contratoId,
             nomeCliente: String(row.NomeCliente || "").trim(),
@@ -21901,6 +21908,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             isCartao,
             mesReferencia,
             pt1000,
+            telefoneCliente,
           };
 
           contratos.push(contrato);
