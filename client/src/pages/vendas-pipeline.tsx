@@ -1220,15 +1220,17 @@ export default function VendasPipeline() {
                 </div>
 
                 {/* Clientes Recorrentes */}
-                {recorrentes.length > 0 && (
-                  <div className="rounded-md border bg-card p-4 space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                      Clientes Recorrentes
-                      <Badge variant="outline" className="ml-1 text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 text-xs">
-                        {portfolioEntries.filter(e => e.is_recorrente).length}
-                      </Badge>
-                    </h3>
+                <div className="rounded-md border bg-card p-4 space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                    <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                    Clientes Recorrentes
+                    <Badge variant="outline" className="ml-1 text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 text-xs">
+                      {portfolioEntries.filter(e => e.is_recorrente).length}
+                    </Badge>
+                  </h3>
+                  {recorrentes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhum cliente com mais de um contrato registrado.</p>
+                  ) : (
                     <div className="space-y-1">
                       {recorrentes.map((entry) => {
                         const nome = entry.client_name || entry.nome_cliente;
@@ -1255,8 +1257,8 @@ export default function VendasPipeline() {
                         );
                       })}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Por Banco + Por Convênio */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
