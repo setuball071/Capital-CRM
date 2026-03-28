@@ -25806,31 +25806,64 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT pc.cpf_cliente AS cpf,
-              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              MAX(pc.created_at) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
-              AND pc.status = 'PAGO'
-              AND pc.cpf_cliente IS NOT NULL
-              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
-            GROUP BY pc.cpf_cliente
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           ),
           conv AS (
-            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.convenio
             FROM producoes_contratos pc
-            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
-            ORDER BY pc.cpf_cliente, pc.id DESC
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL AND pc.convenio != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          banco_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.banco
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.banco IS NOT NULL AND pc.banco != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          tel_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.telefone_cliente
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.telefone_cliente IS NOT NULL AND pc.telefone_cliente != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          deals_count AS (
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              COUNT(pc.id)::int AS total_deals
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           )
           SELECT
             lpc.*,
             conv.convenio,
-            NULL::text AS telefone,
+            tel_cte.telefone_cliente AS telefone,
+            banco_cte.banco,
+            COALESCE(dc.total_deals, 0)::int AS total_deals,
+            (COALESCE(dc.total_deals, 0) > 1) AS is_recorrente,
             ld.last_deal_at,
             EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
             EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
           FROM latest_per_cpf lpc
           LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
-          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_norm = lpc.cpf
+          LEFT JOIN banco_cte ON banco_cte.cpf_norm = lpc.cpf
+          LEFT JOIN tel_cte ON tel_cte.cpf_norm = lpc.cpf
+          LEFT JOIN deals_count dc ON dc.cpf = lpc.cpf
           ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);
@@ -25851,31 +25884,64 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            SELECT pc.cpf_cliente AS cpf,
-              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              MAX(pc.created_at) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
-              AND pc.status = 'PAGO'
-              AND pc.cpf_cliente IS NOT NULL
-              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
-            GROUP BY pc.cpf_cliente
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           ),
           conv AS (
-            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.convenio
             FROM producoes_contratos pc
-            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
-            ORDER BY pc.cpf_cliente, pc.id DESC
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL AND pc.convenio != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          banco_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.banco
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId} AND pc.banco IS NOT NULL AND pc.banco != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          tel_cte AS (
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.telefone_cliente
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.telefone_cliente IS NOT NULL AND pc.telefone_cliente != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
+          ),
+          deals_count AS (
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              COUNT(pc.id)::int AS total_deals
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id = ${tenantId}
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           )
           SELECT
             lpc.*,
             conv.convenio,
-            NULL::text AS telefone,
+            tel_cte.telefone_cliente AS telefone,
+            banco_cte.banco,
+            COALESCE(dc.total_deals, 0)::int AS total_deals,
+            (COALESCE(dc.total_deals, 0) > 1) AS is_recorrente,
             ld.last_deal_at,
             EXTRACT(DAY FROM NOW() - ld.last_deal_at)::int AS days_without_deal,
             EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
           FROM latest_per_cpf lpc
           LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
-          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_norm = lpc.cpf
+          LEFT JOIN banco_cte ON banco_cte.cpf_norm = lpc.cpf
+          LEFT JOIN tel_cte ON tel_cte.cpf_norm = lpc.cpf
+          LEFT JOIN deals_count dc ON dc.cpf = lpc.cpf
           ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);
