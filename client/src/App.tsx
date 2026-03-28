@@ -62,8 +62,6 @@ import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
 import CriadorCriativosPage from "@/pages/criador-criativos";
-import NotaPromissoriaPage from "@/pages/nota-promissoria";
-import EditorPdfPage from "@/pages/editor-pdf";
 import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
@@ -532,12 +530,6 @@ function Router() {
               </Route>
               <Route path="/vendas/etiquetas">
                 {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" />}
-              </Route>
-              <Route path="/nota-promissoria">
-                {() => <RoleRoute component={NotaPromissoriaPage} allowedRoles={["master", "coordenacao"]} />}
-              </Route>
-              <Route path="/operacional/editor-pdf">
-                {() => <ProtectedRoute component={EditorPdfPage} />}
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}
