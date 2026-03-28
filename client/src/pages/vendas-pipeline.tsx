@@ -18,7 +18,7 @@ import {
   Loader2, Phone, MessageSquare, User, Building, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
   ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck,
-  Users, BarChart2, MapPin, Landmark, Briefcase
+  Users, BarChart2, MapPin, Landmark, Briefcase, LayoutDashboard, TrendingDown, AlertCircle
 } from "lucide-react";
 import {
   AlertDialog,
@@ -317,7 +317,7 @@ export default function VendasPipeline() {
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
   const [observacao, setObservacao] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [activeTab, setActiveTab] = useState<"carteira" | "pipeline">("pipeline");
+  const [activeTab, setActiveTab] = useState<"carteira" | "dashboard" | "pipeline">("pipeline");
   const [portfolioVendorFilter, setPortfolioVendorFilter] = useState<string>("");
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferringEntry, setTransferringEntry] = useState<PortfolioEntry | null>(null);
@@ -355,7 +355,7 @@ export default function VendasPipeline() {
       if (!res.ok) throw new Error("Erro ao carregar carteira");
       return res.json();
     },
-    enabled: activeTab === "carteira" && !viewUserId,
+    enabled: (activeTab === "carteira" || activeTab === "dashboard") && !viewUserId,
   });
 
   const { data: portfolioStats } = useQuery<PortfolioStats>({
@@ -846,6 +846,18 @@ export default function VendasPipeline() {
               Minha Carteira
             </button>
             <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+                activeTab === "dashboard"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="tab-dashboard"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Dashboard
+            </button>
+            <button
               onClick={() => setActiveTab("pipeline")}
               className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
                 activeTab === "pipeline"
@@ -1106,6 +1118,144 @@ export default function VendasPipeline() {
           )}
         </div>
       )}
+
+      {!isGestorMode && !viewUserId && activeTab === "dashboard" && (() => {
+        const total = portfolioEntries.length;
+        const ativos = portfolioEntries.filter(e => e.status === "ATIVO").length;
+        const sem30 = portfolioEntries.filter(e => e.days_without_deal != null && e.days_without_deal >= 30).length;
+        const sem60 = portfolioEntries.filter(e => e.days_without_deal != null && e.days_without_deal >= 60).length;
+
+        const porProduto: Record<string, number> = {};
+        for (const e of portfolioEntries) {
+          porProduto[e.product_type] = (porProduto[e.product_type] || 0) + 1;
+        }
+        const maxProduto = Math.max(...Object.values(porProduto), 1);
+
+        const top10 = [...portfolioEntries]
+          .filter(e => e.days_without_deal != null)
+          .sort((a, b) => (b.days_without_deal ?? 0) - (a.days_without_deal ?? 0))
+          .slice(0, 10);
+
+        const PRODUCT_LABELS_DASH: Record<string, string> = {
+          CARTAO: "Cartão",
+          CONSIGNADO: "Consignado",
+          NOVO: "Novo Empréstimo",
+          PORTABILIDADE: "Portabilidade",
+          REFINANCIAMENTO: "Refinanciamento",
+        };
+
+        const maskCpfDash = (cpf: string) => {
+          const d = cpf.replace(/\D/g, "");
+          if (d.length !== 11) return cpf;
+          return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
+        };
+
+        return (
+          <div className="flex-1 overflow-y-auto p-4 space-y-6" data-testid="panel-dashboard-carteira">
+            {portfolioLoading ? (
+              <div className="flex items-center justify-center min-h-[200px]">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      Total de clientes
+                    </div>
+                    <span className="text-3xl font-bold leading-none" style={{ color: "#6C2BD9" }} data-testid="text-dash-total">{total}</span>
+                  </div>
+                  <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Ativos
+                    </div>
+                    <span className="text-3xl font-bold leading-none" style={{ color: "#1E88E5" }} data-testid="text-dash-ativos">{ativos}</span>
+                  </div>
+                  <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <TrendingDown className="h-3.5 w-3.5" />
+                      Sem negócio 30+ dias
+                    </div>
+                    <span className="text-3xl font-bold leading-none text-amber-600 dark:text-amber-400" data-testid="text-dash-sem30">{sem30}</span>
+                  </div>
+                  <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Sem negócio 60+ dias
+                    </div>
+                    <span className="text-3xl font-bold leading-none text-destructive" data-testid="text-dash-sem60">{sem60}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-md border bg-card p-4 space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                      <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                      Por Produto
+                    </h3>
+                    {Object.entries(porProduto).sort((a, b) => b[1] - a[1]).map(([pt, cnt]) => (
+                      <div key={pt} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{PRODUCT_LABELS_DASH[pt] || pt}</span>
+                          <span className="font-medium tabular-nums">{cnt}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${(cnt / maxProduto) * 100}%`, background: "#6C2BD9" }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {Object.keys(porProduto).length === 0 && (
+                      <p className="text-xs text-muted-foreground">Nenhum cliente em carteira.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-md border bg-card p-4 space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      Atenção — sem negócio há mais tempo
+                    </h3>
+                    {top10.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum cliente com data de último negócio registrada.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {top10.map((entry) => {
+                          const nome = entry.client_name || entry.nome_cliente;
+                          return (
+                            <div
+                              key={entry.id}
+                              className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md hover-elevate cursor-pointer text-xs"
+                              onClick={() => navigate(`/vendas/consulta?cpf=${entry.cpf}`)}
+                              data-testid={`row-dash-atencao-${entry.id}`}
+                            >
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium truncate">{nome || maskCpfDash(entry.cpf)}</span>
+                                <span className="text-muted-foreground font-mono">{maskCpfDash(entry.cpf)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Badge variant="outline" className="text-xs">
+                                  {PRODUCT_LABELS_DASH[entry.product_type] || entry.product_type}
+                                </Badge>
+                                <span className="font-medium text-destructive tabular-nums whitespace-nowrap">
+                                  {entry.days_without_deal}d
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
         <DialogContent>

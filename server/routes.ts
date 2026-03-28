@@ -25559,17 +25559,15 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         WHERE tenant_id = ${tenantId}
         ORDER BY product_type
       `);
-      if (result.rows.length === 0) {
-        const defaults = [
-          { product_type: "CARTAO", duration_months: 3 },
-          { product_type: "CONSIGNADO", duration_months: 6 },
-          { product_type: "NOVO", duration_months: 6 },
-          { product_type: "PORTABILIDADE", duration_months: 6 },
-          { product_type: "REFINANCIAMENTO", duration_months: 6 },
-        ];
-        return res.json(defaults);
-      }
-      res.json(result.rows);
+      const ALL_PRODUCT_TYPES = ["CARTAO", "CONSIGNADO", "NOVO", "PORTABILIDADE", "REFINANCIAMENTO"];
+      const defaultDuration: Record<string, number> = {
+        CARTAO: 3, CONSIGNADO: 6, NOVO: 6, PORTABILIDADE: 6, REFINANCIAMENTO: 6,
+      };
+      const merged = ALL_PRODUCT_TYPES.map(pt => {
+        const found = result.rows.find((r: any) => r.product_type === pt);
+        return found ?? { product_type: pt, duration_months: defaultDuration[pt], id: null, updated_at: null };
+      });
+      res.json(merged);
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao listar regras de carteira" });
     }
@@ -25714,21 +25712,21 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
-            -- data_pagamento (DD/MM/YYYY) is the actual paid deal date in producoes_contratos
-            SELECT pc.cpf_cliente AS cpf,
-              MAX(TO_DATE(NULLIF(pc.data_pagamento, ''), 'DD/MM/YYYY')::timestamp) AS last_deal_at
+            SELECT
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf,
+              MAX(pc.created_at) AS last_deal_at
             FROM producoes_contratos pc
             WHERE pc.tenant_id = ${tenantId}
-              AND pc.status = 'PAGO'
-              AND pc.cpf_cliente IS NOT NULL
-              AND pc.data_pagamento IS NOT NULL AND pc.data_pagamento != ''
-            GROUP BY pc.cpf_cliente
+              AND pc.cpf_cliente IS NOT NULL AND pc.cpf_cliente != ''
+            GROUP BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g')
           ),
           conv AS (
-            SELECT DISTINCT ON (pc.cpf_cliente) pc.cpf_cliente, pc.convenio
+            SELECT DISTINCT ON (REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'))
+              REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') AS cpf_norm,
+              pc.convenio
             FROM producoes_contratos pc
-            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL
-            ORDER BY pc.cpf_cliente, pc.id DESC
+            WHERE pc.tenant_id = ${tenantId} AND pc.convenio IS NOT NULL AND pc.convenio != ''
+            ORDER BY REGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g'), pc.id DESC
           )
           SELECT
             lpc.*,
@@ -25739,7 +25737,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             EXTRACT(DAY FROM lpc.expires_at - NOW())::int AS days_remaining
           FROM latest_per_cpf lpc
           LEFT JOIN last_deal ld ON ld.cpf = lpc.cpf
-          LEFT JOIN conv ON conv.cpf_cliente = lpc.cpf
+          LEFT JOIN conv ON conv.cpf_norm = lpc.cpf
           ORDER BY lpc.expires_at ASC
         `);
         return res.json(result.rows);
