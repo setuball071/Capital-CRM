@@ -1,0 +1,51 @@
+PROMPT PARA O AGENTE REPLIT — Dashboard do Corretor + Fixes Carteira
+FIX 1 — Convênio e telefone não puxando
+Na rota GET /api/portfolio para role vendedor, os campos convenio e telefone estão retornando nulos. O problema é o JOIN com producoes_contratos — o CPF está em formatos diferentes (com/sem formatação).
+Corrigir normalizando o CPF em ambos os lados do JOIN:
+sqlREGEXP_REPLACE(pc.cpf_cliente, '[^0-9]', '', 'g') = REGEXP_REPLACE(lpc.cpf, '[^0-9]', '', 'g')
+Para telefone: a coluna na producoes_contratos se chama telefone_cliente. Trazer o valor mais recente por CPF.
+Para convenio: trazer da producoes_contratos, coluna convenio, valor mais recente por CPF.
+FIX 2 — Dias sem negócio não calculando
+Na mesma rota, o days_without_deal está retornando nulo. Corrigir usando created_at da producoes_contratos em vez de data_pagamento:
+sqlMAX(pc.created_at) AS last_deal_at,
+EXTRACT(DAY FROM NOW() - MAX(pc.created_at))::integer AS days_without_deal
+FIX 3 — Cliente recorrente
+Na mesma rota, adicionar ao retorno de cada cliente:
+sqlCOUNT(pc.id) AS total_deals
+Se total_deals > 1 → is_recorrente: true
+Na lista "Minha Carteira" do corretor, adicionar badge 🔄 "Recorrente" ao lado do nome quando is_recorrente = true.
+FIX 4 — Dashboard do corretor
+Na aba "Dashboard" do Pipeline (vendas-pipeline.tsx), enriquecer com os dados já disponíveis em portfolioEntries:
+Cards no topo (4 cards):
+
+Total de clientes na carteira
+Clientes ativos
+Sem negócio 30+ dias
+Sem negócio 60+ dias
+
+Seção "Clientes Recorrentes":
+
+Contagem de clientes com is_recorrente = true
+Mini lista dos top 5 recorrentes (nome, CPF mascarado, produto, total de contratos)
+Badge roxo "Recorrente" por cliente
+
+Seção "Por Banco" (top 5):
+
+Lista com nome do banco + contagem + barra proporcional
+
+Seção "Por Convênio" (top 5):
+
+Lista com nome do convênio + contagem + barra proporcional
+
+Seção "Por Produto":
+
+Lista com produto + contagem + barra proporcional
+
+Seção "Atenção — sem negócio há mais tempo" (top 10):
+
+Nome, CPF mascarado, produto, dias sem negócio
+Linha clicável → /vendas/consulta?cpf=XXX
+Destaque vermelho quando > 60 dias, amarelo quando 30-60 dias
+
+NÃO incluir valores financeiros/produção — isso fica na área de Gestão Comercial.
+NÃO alterar view do master, lógica de bloqueio ou qualquer outro módulo.
