@@ -284,13 +284,13 @@ export default function CompraLista() {
       // Se houve corte automático, mostrar mensagem informativa
       if (data.pedido?.corteFoiAplicado && data.pedido?.quantidadeOriginal) {
         toast({
-          title: "Pedido criado com corte automático",
+          title: "Filtro criado com corte automático",
           description: `Serão exportados ${data.pedido.quantidade.toLocaleString('pt-BR')} de ${data.pedido.quantidadeOriginal.toLocaleString('pt-BR')} registros disponíveis.`,
         });
       } else {
         toast({
-          title: "Pedido criado",
-          description: data.message || "Seu pedido de lista foi criado com sucesso.",
+          title: "Filtro criado",
+          description: data.message || "Seu filtro foi criado e a exportação está sendo processada.",
         });
       }
       setSimulacao(null);
@@ -300,8 +300,8 @@ export default function CompraLista() {
     },
     onError: (error: any) => {
       toast({
-        title: "Erro ao criar pedido",
-        description: error.message || "Ocorreu um erro ao criar o pedido.",
+        title: "Erro ao criar filtro",
+        description: error.message || "Ocorreu um erro ao criar o filtro.",
         variant: "destructive",
       });
     },
@@ -340,15 +340,15 @@ export default function CompraLista() {
     },
     onSuccess: (data) => {
       toast({
-        title: "Pedido cancelado",
-        description: data.message || "O pedido foi cancelado com sucesso.",
+        title: "Filtro cancelado",
+        description: data.message || "O filtro foi cancelado com sucesso.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/pedidos-lista"] });
     },
     onError: (error: any) => {
       toast({
         title: "Erro ao cancelar",
-        description: error.message || "Ocorreu um erro ao cancelar o pedido.",
+        description: error.message || "Ocorreu um erro ao cancelar o filtro.",
         variant: "destructive",
       });
     },
@@ -1113,7 +1113,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Pedido ({simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
+                            Gerar Filtro ({simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
                           </>
                         )}
                       </Button>
