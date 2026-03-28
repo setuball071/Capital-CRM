@@ -1,0 +1,35 @@
+PROMPT PARA O AGENTE REPLIT — 3 fixes Minha Carteira
+FIX 1 — Dados faltando na view do corretor
+Na rota GET /api/portfolio quando role = vendedor, os campos convenio, telefone e days_without_deal estão retornando vazios/nulos.
+Investigar e corrigir o join com producoes_contratos para trazer:
+
+convenio — campo convenio da tabela producoes_contratos (join por CPF + tenant_id, pegar o mais recente)
+telefone — campo telefoneCliente ou similar da tabela producoes_contratos (verificar nome exato da coluna)
+last_deal_at — MAX(created_at) de producoes_contratos agrupado por CPF
+days_without_deal — EXTRACT(DAY FROM NOW() - last_deal_at) — se last_deal_at for null, retornar null
+
+FIX 2 — Nova aba "Dashboard" no Pipeline para o corretor
+No vendas-pipeline.tsx, adicionar uma terceira aba chamada "Dashboard" entre "Minha Carteira" e "Pipeline".
+Conteúdo da aba Dashboard (apenas para o corretor logado, dados da própria carteira):
+Cards no topo:
+
+Total de clientes na carteira
+Clientes ativos (status ATIVO)
+Clientes sem negócio há mais de 30 dias
+Clientes sem negócio há mais de 60 dias
+
+Breakdown por produto (mini gráfico de barras ou lista com contagem):
+
+Cartão / Consignado / Novo Empréstimo / Portabilidade / Refinanciamento
+
+Lista "Atenção — sem negócio há mais tempo" (top 10 clientes com maior days_without_deal):
+
+Nome, CPF mascarado, produto, dias sem negócio
+Linha clicável → abre /vendas/consulta?cpf=XXX
+
+Usar cores Capital Go (#6C2BD9, #1E88E5). Dados vêm do GET /api/portfolio já existente — não criar nova rota.
+FIX 3 — Bug nas Regras de Carteira
+Na tela portfolio-rules.tsx e na rota PUT /api/portfolio/rules/:productType, ao salvar uma regra está apagando as demais.
+Causa provável: o endpoint está fazendo DELETE + INSERT em vez de UPDATE. Corrigir para usar UPDATE portfolio_rules SET duration_months = ? WHERE tenant_id = ? AND product_type = ? — atualizando apenas o registro específico sem tocar nos outros.
+Verificar também se a tela está exibindo apenas 1 produto em vez dos 5 (CARTAO, CONSIGNADO, NOVO, PORTABILIDADE, REFINANCIAMENTO). Se sim, corrigir a query de listagem para retornar todos os produtos do tenant, inserindo os que faltam com valores padrão se não existirem.
+NÃO alterar view do master, lógica de bloqueio de CPF ou qualquer outro módulo.
