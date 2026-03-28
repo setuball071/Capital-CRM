@@ -265,7 +265,7 @@ export default function CompraLista() {
     onError: (error: any) => {
       toast({
         title: "Erro na simulação",
-        description: error.message || "Ocorreu um erro ao simular o pedido.",
+        description: error.message || "Ocorreu um erro ao simular o filtro.",
         variant: "destructive",
       });
       setIsSimulating(false);
