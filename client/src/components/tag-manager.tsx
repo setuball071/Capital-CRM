@@ -298,7 +298,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm font-medium">Tags</p>
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setModo("criar")}>
-                  <Plus className="h-3 w-3" />Nova
+                  <Plus className="h-3 w-3" />Nova tag
                 </Button>
               </div>
 
