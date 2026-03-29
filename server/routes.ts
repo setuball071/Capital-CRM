@@ -10696,6 +10696,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         "Margem 35%",
         "Margem Cartao Credito 5%",
         "Margem Cartao Beneficio 5%",
+        "Data de Nascimento",
       ];
       const headerWritten = writeStream.write(headers.join(";") + "\n");
       if (!headerWritten) {
@@ -10788,6 +10789,16 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               clientesWithoutFolha++;
             }
 
+            const dataNasc = cliente.dataNascimento
+              ? (() => {
+                  const d = new Date(cliente.dataNascimento as string | Date);
+                  if (isNaN(d.getTime())) return "";
+                  const dd = String(d.getUTCDate()).padStart(2, "0");
+                  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+                  const yyyy = d.getUTCFullYear();
+                  return `${dd}/${mm}/${yyyy}`;
+                })()
+              : "";
             const row = [
               cliente.cpf || "",
               cliente.matricula || "",
@@ -10799,6 +10810,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               folhaAtual?.margemSaldo35 ?? "",
               folhaAtual?.margemSaldo5 ?? "",
               folhaAtual?.margemBeneficioSaldo5 ?? "",
+              dataNasc,
             ];
 
             const csvRow = row
