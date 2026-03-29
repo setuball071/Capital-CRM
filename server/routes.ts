@@ -26175,6 +26175,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const summary: Record<string, number> = {};
       for (const r of rows) { summary[r.operation_type] = (summary[r.operation_type] || 0) + 1; }
       console.log(`[SimulacaoRapida] resultados por tipo:`, summary);
+      console.log(`[SimulacaoRapida] linhas encontradas:`, rows.map(r => ({ operation_type: r.operation_type, coefficient: r.coefficient })));
 
       const findBest = (opType: string) => {
         const filtered = rows.filter(r => r.operation_type === opType);
