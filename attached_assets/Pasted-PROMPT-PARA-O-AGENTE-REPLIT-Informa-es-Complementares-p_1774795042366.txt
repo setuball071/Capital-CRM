@@ -1,0 +1,62 @@
+PROMPT PARA O AGENTE REPLIT — Informações Complementares por CPF
+
+Contexto: Precisamos de um sistema simples onde a Manoela importa um CSV com CPF + texto de observação, e esse texto aparece como um popup de informações na tela de consulta do cliente (Vendas e Base de Clientes).
+
+PARTE A — BANCO DE DADOS
+Criar via psql "$DATABASE_URL":
+sqlCREATE TABLE IF NOT EXISTS client_observations (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  cpf VARCHAR(14) NOT NULL,
+  observation TEXT NOT NULL,
+  imported_by INTEGER REFERENCES users(id),
+  imported_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, cpf)
+);
+CREATE INDEX IF NOT EXISTS idx_client_obs_cpf ON client_observations(tenant_id, cpf);
+```
+
+Adicionar ao `shared/schema.ts` com tipo e insertSchema.
+
+---
+
+**PARTE B — ROTAS DA API**
+```
+GET  /api/client-observations/:cpf     — buscar observação por CPF (todos autenticados)
+POST /api/client-observations/import   — importar CSV (master/coordenacao/financeiro)
+Rota de importação:
+
+Recebe arquivo CSV via multer
+Formato esperado do CSV: duas colunas — cpf e observacao
+Para cada linha: normalizar CPF (remover pontos/traços), fazer UPSERT — se CPF já existe atualiza o texto, se não existe insere
+Retornar: { imported: X, updated: Y, errors: Z }
+
+
+PARTE C — TELA DE IMPORTAÇÃO
+Criar página simples client/src/pages/importar-observacoes.tsx na rota /admin/importar-observacoes:
+
+Título: "Importação de Observações de Clientes"
+Descrição: "Importe um CSV com CPF e observação para complementar as informações dos clientes."
+Área de upload de arquivo CSV
+Botão "Importar"
+Após importar: exibir resultado — "X registros importados, Y atualizados"
+Link para download de modelo CSV com cabeçalho cpf,observacao e uma linha de exemplo
+
+Adicionar no sidebar em Administração: "Obs. Clientes" — ícone FileText, roles master, financeiro, coordenacao.
+Adicionar rota no App.tsx.
+
+PARTE D — BOTÃO ℹ NAS TELAS DE CONSULTA
+Nas telas vendas-consulta.tsx e consulta-cliente.tsx:
+
+Ao carregar os dados do cliente, chamar GET /api/client-observations/:cpf automaticamente
+Se retornar observação: exibir ícone Info (Lucide) discreto ao lado do nome do cliente no cabeçalho — cor #6C2BD9, tamanho h-5 w-5
+Ao clicar no ícone: abrir Dialog com:
+
+Título: "Informações Complementares"
+Conteúdo: texto da observação em formato livre (respeitar quebras de linha)
+Botão "Fechar"
+
+
+Se não tiver observação: ícone não aparece
+
+NÃO alterar nenhuma outra lógica das telas de consulta.
