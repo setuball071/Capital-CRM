@@ -71,7 +71,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
       setTelefoneEscolhido("");
       setTelefoneManual("");
     },
-    onError: () => toast({ title: "Erro ao aplicar etiqueta", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao aplicar tag", variant: "destructive" }),
   });
 
   const removerMutation = useMutation({
@@ -80,7 +80,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", leadId, "tags"] });
     },
-    onError: () => toast({ title: "Erro ao remover etiqueta", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao remover tag", variant: "destructive" }),
   });
 
   const criarMutation = useMutation({
@@ -94,10 +94,10 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
       setTagParaAplicar(tag);
       setNovaTag({ nome: "", cor: "#6366f1" });
       setModo("aplicar");
-      toast({ title: "Etiqueta criada! Agora escolha o telefone." });
+      toast({ title: "Tag criada! Agora escolha o telefone." });
     },
     onError: async (e: any) => {
-      const msg = e?.message?.includes("409") ? "Você já tem uma etiqueta com este nome" : "Erro ao criar etiqueta";
+      const msg = e?.message?.includes("409") ? "Você já tem uma tag com este nome" : "Erro ao criar tag";
       toast({ title: msg, variant: "destructive" });
     },
   });
@@ -110,7 +110,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", leadId, "tags"] });
       setEditandoTag(null);
       setModo("listar");
-      toast({ title: "Etiqueta atualizada!" });
+      toast({ title: "Tag atualizada!" });
     },
     onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
   });
@@ -121,7 +121,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-tags"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", leadId, "tags"] });
     },
-    onError: () => toast({ title: "Erro ao excluir etiqueta", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao excluir tag", variant: "destructive" }),
   });
 
   const handleAplicar = () => {
@@ -176,7 +176,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
           {modo === "criar" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Nova etiqueta</p>
+                <p className="text-sm font-medium">Nova tag</p>
                 <Button variant="ghost" size="sm" onClick={() => setModo("listar")} className="h-6 px-2 text-xs">Voltar</Button>
               </div>
               <Input
@@ -201,12 +201,12 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Preview:</span>
                 <Badge style={{ backgroundColor: novaTag.cor, color: "#fff", border: "none" }} className="text-xs">
-                  {novaTag.nome || "Etiqueta"}
+                  {novaTag.nome || "Tag"}
                 </Badge>
               </div>
               <Button size="sm" className="w-full" onClick={() => criarMutation.mutate()} disabled={criarMutation.isPending}>
                 {criarMutation.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                Criar etiqueta
+                Criar tag
               </Button>
             </div>
           )}
@@ -222,7 +222,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tagParaAplicar.cor }} />
                 <span className="text-sm font-medium">{tagParaAplicar.nome}</span>
               </div>
-              <p className="text-xs text-muted-foreground">Escolha o telefone vinculado a esta etiqueta:</p>
+              <p className="text-xs text-muted-foreground">Escolha o telefone vinculado a esta tag:</p>
               {telefones.length > 0 && (
                 <Select value={telefoneEscolhido} onValueChange={setTelefoneEscolhido}>
                   <SelectTrigger className="h-8 text-sm">
@@ -252,7 +252,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
                 disabled={aplicarMutation.isPending}
               >
                 {aplicarMutation.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                Aplicar etiqueta
+                Aplicar tag
               </Button>
             </div>
           )}
@@ -261,7 +261,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
           {modo === "editar" && editandoTag && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Editar etiqueta</p>
+                <p className="text-sm font-medium">Editar tag</p>
                 <Button variant="ghost" size="sm" onClick={() => setModo("listar")} className="h-6 px-2 text-xs">Voltar</Button>
               </div>
               <Input
@@ -296,7 +296,7 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
           {modo === "listar" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-sm font-medium">Etiquetas</p>
+                <p className="text-sm font-medium">Tags</p>
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setModo("criar")}>
                   <Plus className="h-3 w-3" />Nova
                 </Button>
@@ -352,9 +352,9 @@ export function TagManager({ leadId, telefones = [] }: TagManagerProps) {
 
               {todasTags.length === 0 && (
                 <div className="text-center py-4">
-                  <p className="text-xs text-muted-foreground mb-2">Nenhuma etiqueta criada ainda</p>
+                  <p className="text-xs text-muted-foreground mb-2">Nenhuma tag criada ainda</p>
                   <Button variant="outline" size="sm" className="text-xs" onClick={() => setModo("criar")}>
-                    Criar primeira etiqueta
+                    Criar primeira tag
                   </Button>
                 </div>
               )}

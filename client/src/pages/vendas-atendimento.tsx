@@ -1386,7 +1386,7 @@ export default function VendasAtendimento() {
 
                   {leadTagPhones.length > 0 && (
                     <>
-                      <p className="text-xs text-muted-foreground font-medium">Etiquetas</p>
+                      <p className="text-xs text-muted-foreground font-medium">Tags</p>
                       {leadTagPhones.map((tagPhone) => (
                         <div 
                           key={`tag-tel-${tagPhone.assignmentId}`} 

@@ -81,7 +81,7 @@ const ALL_MODULES: HubModule[] = [
       { id: "atendimento", title: "Lista Manual", description: "Leads para atendimento direto", icon: Users, route: "/vendas/atendimento" },
       { id: "pipeline", title: "Pipeline", description: "Funil de oportunidades", icon: Kanban, route: "/vendas/pipeline" },
       { id: "consulta", title: "Consulta por CPF", description: "Busca individual de cliente", icon: UserSearch, route: "/vendas/consulta" },
-      { id: "etiquetas", title: "Etiquetas", description: "Tags de organização", icon: Tag, route: "/vendas/etiquetas" },
+      { id: "etiquetas", title: "Tags", description: "Tags de organização", icon: Tag, route: "/vendas/etiquetas" },
       { id: "agenda", title: "Agenda", description: "Compromissos e agendamentos", icon: Calendar, route: "/vendas/agenda" },
       { id: "gestao-pipeline", title: "Gestão Pipeline", description: "Visão do gestor", icon: BarChart3, route: "/vendas/gestao-pipeline" },
       { id: "importar", title: "Importar Higienizados", description: "Upload de leads enriquecidos", icon: Upload, route: "/vendas/importar-higienizados" },

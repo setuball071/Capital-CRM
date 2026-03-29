@@ -86,10 +86,10 @@ export default function VendasEtiquetas() {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-tags"] });
       setModalCriar(false);
       setForm({ nome: "", cor: "#6366f1" });
-      toast({ title: "Etiqueta criada!" });
+      toast({ title: "Tag criada!" });
     },
     onError: async (e: any) => {
-      const msg = e?.message?.includes("409") ? "Você já tem uma etiqueta com este nome" : "Erro ao criar etiqueta";
+      const msg = e?.message?.includes("409") ? "Você já tem uma tag com este nome" : "Erro ao criar tag";
       toast({ title: msg, variant: "destructive" });
     },
   });
@@ -103,9 +103,9 @@ export default function VendasEtiquetas() {
         setTagSelecionada(prev => prev ? { ...prev, nome: form.nome, cor: form.cor } : null);
       }
       setModalEditar(null);
-      toast({ title: "Etiqueta atualizada!" });
+      toast({ title: "Tag atualizada!" });
     },
-    onError: () => toast({ title: "Erro ao atualizar etiqueta", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao atualizar tag", variant: "destructive" }),
   });
 
   const excluirMutation = useMutation({
@@ -113,9 +113,9 @@ export default function VendasEtiquetas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-tags"] });
       if (tagSelecionada) setTagSelecionada(null);
-      toast({ title: "Etiqueta excluída!" });
+      toast({ title: "Tag excluída!" });
     },
-    onError: () => toast({ title: "Erro ao excluir etiqueta", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao excluir tag", variant: "destructive" }),
   });
 
   const handleCriar = () => {
@@ -161,7 +161,7 @@ export default function VendasEtiquetas() {
 
   // Agrupar tags por vendedor (para gestor)
   const tagsPorVendedor = tags.reduce((acc, tag) => {
-    const key = tag.vendedorNome || "Minhas etiquetas";
+    const key = tag.vendedorNome || "Minhas tags";
     if (!acc[key]) acc[key] = [];
     acc[key].push(tag);
     return acc;
@@ -174,13 +174,13 @@ export default function VendasEtiquetas() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Tag className="h-7 w-7" />
-            Etiquetas
+            Tags
           </h1>
-          <p className="text-muted-foreground">Organize seus leads com etiquetas personalizadas</p>
+          <p className="text-muted-foreground">Organize seus leads com tags personalizadas</p>
         </div>
         <Button onClick={() => { setForm({ nome: "", cor: "#6366f1" }); setModalCriar(true); }}>
           <Plus className="h-4 w-4 mr-2" />
-          Nova Etiqueta
+          Nova Tag
         </Button>
       </div>
 
@@ -193,9 +193,9 @@ export default function VendasEtiquetas() {
             <Card className="border-2 border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-10">
                 <Tag className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-muted-foreground text-sm text-center">Nenhuma etiqueta ainda</p>
+                <p className="text-muted-foreground text-sm text-center">Nenhuma tag ainda</p>
                 <Button variant="outline" size="sm" className="mt-3" onClick={() => { setForm({ nome: "", cor: "#6366f1" }); setModalCriar(true); }}>
-                  Criar primeira etiqueta
+                  Criar primeira tag
                 </Button>
               </CardContent>
             </Card>
@@ -245,7 +245,7 @@ export default function VendasEtiquetas() {
             <Card className="border-2 border-dashed h-full">
               <CardContent className="flex flex-col items-center justify-center h-full py-16">
                 <Users className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">Selecione uma etiqueta para ver os clientes</p>
+                <p className="text-muted-foreground">Selecione uma tag para ver os clientes</p>
               </CardContent>
             </Card>
           ) : (
@@ -282,7 +282,7 @@ export default function VendasEtiquetas() {
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                 ) : clientesFiltrados.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground text-sm">
-                    {clientes.length === 0 ? "Nenhum cliente nesta etiqueta ainda" : "Nenhum resultado para a busca"}
+                    {clientes.length === 0 ? "Nenhum cliente nesta tag ainda" : "Nenhum resultado para a busca"}
                   </div>
                 ) : (
                   <Table>
@@ -328,13 +328,13 @@ export default function VendasEtiquetas() {
       <Dialog open={modalCriar} onOpenChange={setModalCriar}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nova Etiqueta</DialogTitle>
+            <DialogTitle>Nova Tag</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <Input
               value={form.nome}
               onChange={e => setForm({ ...form, nome: e.target.value })}
-              placeholder="Nome da etiqueta..."
+              placeholder="Nome da tag..."
               maxLength={50}
               autoFocus
               onKeyDown={e => e.key === "Enter" && handleCriar()}
@@ -355,7 +355,7 @@ export default function VendasEtiquetas() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Preview:</span>
               <Badge style={{ backgroundColor: form.cor, color: "#fff", border: "none" }}>
-                {form.nome || "Etiqueta"}
+                {form.nome || "Tag"}
               </Badge>
             </div>
           </div>
@@ -373,7 +373,7 @@ export default function VendasEtiquetas() {
       <Dialog open={!!modalEditar} onOpenChange={v => !v && setModalEditar(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Editar Etiqueta</DialogTitle>
+            <DialogTitle>Editar Tag</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <Input
@@ -398,7 +398,7 @@ export default function VendasEtiquetas() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Preview:</span>
               <Badge style={{ backgroundColor: form.cor, color: "#fff", border: "none" }}>
-                {form.nome || "Etiqueta"}
+                {form.nome || "Tag"}
               </Badge>
             </div>
           </div>
