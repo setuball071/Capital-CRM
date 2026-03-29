@@ -94,6 +94,20 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function RoleGuardRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!user) return <Redirect to="/login" />;
+  if (!user.isMaster && !allowedRoles.includes(user.role)) return <Redirect to="/" />;
+  return <Component />;
+}
+
 function MasterOnlyRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
 
@@ -542,7 +556,7 @@ function Router() {
                 {() => <MasterOnlyRoute component={SystemUpdatesPage} />}
               </Route>
               <Route path="/admin/importar-observacoes">
-                {() => <ProtectedRoute component={ImportarObservacoesPage} />}
+                {() => <RoleGuardRoute component={ImportarObservacoesPage} allowedRoles={["master", "coordenacao", "financeiro"]} />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

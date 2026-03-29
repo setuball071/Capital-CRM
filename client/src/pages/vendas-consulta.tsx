@@ -825,6 +825,17 @@ export default function VendasConsulta() {
                     toast={toast}
                     formatOnCopy={formatProperName}
                   />
+                  {clienteObsData && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setShowObsDialog(true)}
+                      data-testid="button-obs-info"
+                      title="Ver informações complementares"
+                    >
+                      <Info className="h-5 w-5" style={{ color: "#6C2BD9" }} />
+                    </Button>
+                  )}
                 </h1>
                 <Badge variant="secondary" data-testid="badge-modo">Consulta</Badge>
               </div>
@@ -961,7 +972,7 @@ export default function VendasConsulta() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
-                        <Info className="h-4 w-4" />
+                        <Info className="h-4 w-4" style={{ color: "#6C2BD9" }} />
                         Informações Complementares
                       </DialogTitle>
                     </DialogHeader>
@@ -969,6 +980,11 @@ export default function VendasConsulta() {
                     <p className="text-xs text-muted-foreground mt-2">
                       Importado em: {new Date(clienteObsData.imported_at).toLocaleDateString("pt-BR")}
                     </p>
+                    <div className="flex justify-end mt-4">
+                      <Button variant="outline" onClick={() => setShowObsDialog(false)}>
+                        Fechar
+                      </Button>
+                    </div>
                   </DialogContent>
                 </Dialog>
               )}
@@ -978,17 +994,6 @@ export default function VendasConsulta() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <User className="h-4 w-4" />
                     Dados do Cliente
-                    {clienteObsData && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setShowObsDialog(true)}
-                        data-testid="button-obs-info"
-                        title="Ver informações complementares"
-                      >
-                        <Info className="h-4 w-4 text-blue-500" />
-                      </Button>
-                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

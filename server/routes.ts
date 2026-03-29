@@ -26117,25 +26117,18 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         if (cpf.length < 11) { errors++; continue; }
 
         try {
-          const existing = await db.execute(sql`
-            SELECT id FROM client_observations
-            WHERE tenant_id = ${tenantId}
-              AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
-            LIMIT 1
+          const upsertResult = await db.execute(sql`
+            INSERT INTO client_observations (tenant_id, cpf, observation, imported_by, imported_at)
+            VALUES (${tenantId}, ${cpf}, ${obs}, ${userId}, NOW())
+            ON CONFLICT (tenant_id, cpf) DO UPDATE SET
+              observation = EXCLUDED.observation,
+              imported_at = NOW(),
+              imported_by = EXCLUDED.imported_by
+            RETURNING (xmax <> 0) AS was_updated
           `);
-          if (existing.rows.length > 0) {
-            await db.execute(sql`
-              UPDATE client_observations
-              SET observation = ${obs}, imported_at = NOW(), imported_by = ${userId}
-              WHERE tenant_id = ${tenantId}
-                AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
-            `);
+          if (upsertResult.rows[0]?.was_updated) {
             updated++;
           } else {
-            await db.execute(sql`
-              INSERT INTO client_observations (tenant_id, cpf, observation, imported_by, imported_at)
-              VALUES (${tenantId}, ${cpf}, ${obs}, ${userId}, NOW())
-            `);
             imported++;
           }
         } catch {

@@ -832,7 +832,7 @@ export default function ConsultaCliente() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
-                        <Info className="h-4 w-4" />
+                        <Info className="h-4 w-4" style={{ color: "#6C2BD9" }} />
                         Informações Complementares
                       </DialogTitle>
                     </DialogHeader>
@@ -840,6 +840,11 @@ export default function ConsultaCliente() {
                     <p className="text-xs text-muted-foreground mt-2">
                       Importado em: {new Date(clienteObsData.imported_at).toLocaleDateString("pt-BR")}
                     </p>
+                    <div className="flex justify-end mt-4">
+                      <Button variant="outline" onClick={() => setShowObsDialog(false)}>
+                        Fechar
+                      </Button>
+                    </div>
                   </DialogContent>
                 </Dialog>
               )}
@@ -849,25 +854,25 @@ export default function ConsultaCliente() {
                   <CardTitle className="flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Dados do Cliente
-                    {clienteObsData && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setShowObsDialog(true)}
-                        data-testid="button-obs-info"
-                        title="Ver informações complementares"
-                      >
-                        <Info className="h-4 w-4 text-blue-500" />
-                      </Button>
-                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="space-y-1 group">
                       <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium" data-testid="text-nome">
+                      <p className="font-medium flex items-center gap-1" data-testid="text-nome">
                         <CopyableField value={clienteDetalhado.pessoa.nome} label="Nome" onCopy={handleCopy} formatOnCopy={formatProperName} />
+                        {clienteObsData && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setShowObsDialog(true)}
+                            data-testid="button-obs-info"
+                            title="Ver informações complementares"
+                          >
+                            <Info className="h-5 w-5" style={{ color: "#6C2BD9" }} />
+                          </Button>
+                        )}
                       </p>
                     </div>
                     <div className="space-y-1 group">
