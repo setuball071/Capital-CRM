@@ -1142,6 +1142,14 @@ class StreamingImportService {
       margemCartaoBeneficioSaldo: normalizeNum(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
     };
 
+    // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
+    const saldo70streaming = folhaData.margemSaldo70 != null ? Number(folhaData.margemSaldo70) : null;
+    if (saldo70streaming != null && saldo70streaming >= 0) {
+      if (folhaData.margemSaldo35 != null) folhaData.margemSaldo35 = String(Math.min(Number(folhaData.margemSaldo35), saldo70streaming));
+      if (folhaData.margemSaldo5 != null) folhaData.margemSaldo5 = String(Math.min(Number(folhaData.margemSaldo5), saldo70streaming));
+      if (folhaData.margemBeneficioSaldo5 != null) folhaData.margemBeneficioSaldo5 = String(Math.min(Number(folhaData.margemBeneficioSaldo5), saldo70streaming));
+    }
+
     if (isUpdate) {
       console.log(`[FOLHA-UPSERT] ATUALIZAÇÃO pessoa=${pessoaId}, competência=${competencia.toISOString().slice(0,10)}, id=${existing[0].id}`);
       console.log(`[FOLHA-UPSERT] Valores: salarioBruto=${folhaData.salarioBruto}, salarioLiquido=${folhaData.salarioLiquido}, margemSaldo35=${folhaData.margemSaldo35}`);
