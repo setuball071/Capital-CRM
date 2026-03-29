@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { SimulacaoRapida } from "@/components/SimulacaoRapida";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -1199,6 +1200,15 @@ export default function ConsultaCliente() {
                   )}
                 </CardContent>
               </Card>
+
+              {folhaAtual && (
+                <SimulacaoRapida
+                  convenio={vinculoAtual?.convenio || clienteDetalhado.pessoa.convenio}
+                  saldo35={folhaAtual.margem_saldo_35}
+                  saldo5beneficio={folhaAtual.margem_beneficio_saldo_5}
+                  saldo5cartao={folhaAtual.margem_saldo_5}
+                />
+              )}
 
               <Card>
                 <CardHeader>

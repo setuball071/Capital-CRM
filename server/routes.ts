@@ -26142,6 +26142,52 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // ===== SIMULAÇÃO RÁPIDA DE MARGEM =====
+  app.get("/api/simulation/best-coefficients", requireAuth, async (req: any, res) => {
+    try {
+      const convenio = (req.query.convenio as string || "").trim();
+      if (!convenio) {
+        return res.status(400).json({ message: "Convênio obrigatório" });
+      }
+      const convenioPattern = `%${convenio}%`;
+      const result = await db.execute(sql`
+        SELECT
+          ct.operation_type,
+          ct.coefficient::float AS coefficient,
+          ct.table_name,
+          ct.term_months
+        FROM coefficient_tables ct
+        JOIN agreements a ON ct.agreement_id = a.id
+        WHERE ct.is_active = true
+          AND a.is_active = true
+          AND a.name ILIKE ${convenioPattern}
+        ORDER BY ct.operation_type, ct.coefficient ASC
+      `);
+
+      const rows = result.rows as Array<{
+        operation_type: string;
+        coefficient: number;
+        table_name: string;
+        term_months: number;
+      }>;
+
+      const findBest = (opType: string) => {
+        const filtered = rows.filter(r => r.operation_type === opType);
+        if (filtered.length === 0) return null;
+        const best = filtered[0]; // already sorted ASC
+        return { coeficiente: best.coefficient, tabela: best.table_name, prazo: best.term_months };
+      };
+
+      res.json({
+        consignado: findBest("consignado"),
+        cartao_beneficio: findBest("benefit_card"),
+        cartao_credito: findBest("credit_card"),
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar coeficientes" });
+    }
+  });
+
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
 

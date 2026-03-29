@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { TagManager } from "@/components/tag-manager";
+import { SimulacaoRapida } from "@/components/SimulacaoRapida";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
@@ -1326,6 +1327,15 @@ export default function VendasConsulta() {
                   )}
                 </CardContent>
               </Card>
+
+              {consultaData.folhaAtual && (
+                <SimulacaoRapida
+                  convenio={consultaData.vinculo?.convenio || consultaData.clienteBase?.orgao}
+                  saldo35={consultaData.folhaAtual.margem_saldo_35}
+                  saldo5beneficio={consultaData.folhaAtual.margem_beneficio_saldo_5}
+                  saldo5cartao={consultaData.folhaAtual.margem_saldo_5}
+                />
+              )}
 
               <Card>
                 <CardHeader className="pb-3">
