@@ -5795,7 +5795,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
           // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
           const _saldo70a = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
-          const _cap70a = (v: any) => (_saldo70a != null && _saldo70a >= 0 && v != null ? Math.min(Number(v), _saldo70a) : v);
+          const _cap70a = (v: number | string | null | undefined): number | null | undefined =>
+            _saldo70a != null && _saldo70a >= 0 && v != null ? Math.min(Number(v), _saldo70a) : v as number | null | undefined;
           // Upsert folha com merge de extrasFolha para preservar instituidor
           await storage.upsertClienteFolhaMes({
             pessoaId: pessoa.id,
@@ -6584,7 +6585,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
               // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
               const _saldo70b = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
-              const _cap70b = (v: any) => (_saldo70b != null && _saldo70b >= 0 && v != null ? Math.min(Number(v), _saldo70b) : v);
+              const _cap70b = (v: number | string | null | undefined): number | null | undefined =>
+                _saldo70b != null && _saldo70b >= 0 && v != null ? Math.min(Number(v), _saldo70b) : v as number | null | undefined;
               // Upsert folha com merge de extrasFolha para preservar instituidor
               await storage.upsertClienteFolhaMes({
                 pessoaId: pessoa.id,

@@ -1143,11 +1143,13 @@ class StreamingImportService {
     };
 
     // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
-    const saldo70streaming = folhaData.margemSaldo70 != null ? Number(folhaData.margemSaldo70) : null;
-    if (saldo70streaming != null && saldo70streaming >= 0) {
-      if (folhaData.margemSaldo35 != null) folhaData.margemSaldo35 = String(Math.min(Number(folhaData.margemSaldo35), saldo70streaming));
-      if (folhaData.margemSaldo5 != null) folhaData.margemSaldo5 = String(Math.min(Number(folhaData.margemSaldo5), saldo70streaming));
-      if (folhaData.margemBeneficioSaldo5 != null) folhaData.margemBeneficioSaldo5 = String(Math.min(Number(folhaData.margemBeneficioSaldo5), saldo70streaming));
+    const saldo70streaming = folhaData.margemSaldo70 != null ? parseFloat(String(folhaData.margemSaldo70)) : null;
+    if (saldo70streaming != null && !isNaN(saldo70streaming) && saldo70streaming >= 0) {
+      const capTo70 = (v: string | number | null | undefined): string | null | undefined =>
+        v != null ? String(Math.min(parseFloat(String(v)), saldo70streaming)) : v;
+      folhaData.margemSaldo35 = capTo70(folhaData.margemSaldo35) as typeof folhaData.margemSaldo35;
+      folhaData.margemSaldo5 = capTo70(folhaData.margemSaldo5) as typeof folhaData.margemSaldo5;
+      folhaData.margemBeneficioSaldo5 = capTo70(folhaData.margemBeneficioSaldo5) as typeof folhaData.margemBeneficioSaldo5;
     }
 
     if (isUpdate) {
