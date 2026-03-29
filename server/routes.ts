@@ -5793,10 +5793,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
           const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
-          // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
+          // Regra do teto de 70%: null = sem margem = zera as parciais; negativo = sem cap; >= 0 = aplica LEAST
           const _saldo70a = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
+          const _effectiveCap70a = _saldo70a == null ? 0 : _saldo70a;
           const _cap70a = (v: number | string | null | undefined): number | null | undefined =>
-            _saldo70a != null && _saldo70a >= 0 && v != null ? Math.min(Number(v), _saldo70a) : v as number | null | undefined;
+            (_saldo70a == null || _saldo70a >= 0) && v != null ? Math.min(Number(v), _effectiveCap70a) : v as number | null | undefined;
           // Upsert folha com merge de extrasFolha para preservar instituidor
           await storage.upsertClienteFolhaMes({
             pessoaId: pessoa.id,
@@ -6583,10 +6584,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
               const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
-              // Regra do teto de 70%: margens parciais não podem ultrapassar margem_saldo_70
+              // Regra do teto de 70%: null = sem margem = zera as parciais; negativo = sem cap; >= 0 = aplica LEAST
               const _saldo70b = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
+              const _effectiveCap70b = _saldo70b == null ? 0 : _saldo70b;
               const _cap70b = (v: number | string | null | undefined): number | null | undefined =>
-                _saldo70b != null && _saldo70b >= 0 && v != null ? Math.min(Number(v), _saldo70b) : v as number | null | undefined;
+                (_saldo70b == null || _saldo70b >= 0) && v != null ? Math.min(Number(v), _effectiveCap70b) : v as number | null | undefined;
               // Upsert folha com merge de extrasFolha para preservar instituidor
               await storage.upsertClienteFolhaMes({
                 pessoaId: pessoa.id,
