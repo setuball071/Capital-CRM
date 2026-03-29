@@ -1,0 +1,92 @@
+PROMPT PARA O AGENTE REPLIT — Simulação Rápida de Margem
+
+Contexto: Na tela de consulta do cliente (Vendas e Base de Clientes), já são exibidos os cards de margem (70%, 35%, 5% e Benefício 5%). Queremos adicionar abaixo desses cards uma seção de simulação rápida mostrando o valor estimado que o cliente pode liberar em cada tipo de margem, usando o melhor coeficiente cadastrado no sistema.
+
+FÓRMULA:
+Valor Liberado = Saldo Disponível ÷ Coeficiente
+Onde:
+
+Saldo Disponível = campo saldo de cada margem (já disponível na tela)
+Melhor Coeficiente = menor coeficiente cadastrado em coefficient_tables para aquele convênio + tipo de operação (menor coeficiente = maior valor liberado = melhor para o cliente)
+
+
+PARTE A — NOVA ROTA DA API
+GET /api/simulation/best-coefficients?convenio=SIAPE
+Busca na tabela coefficient_tables os melhores coeficientes (menores valores) para o convênio informado, agrupados por tipo de operação:
+json{
+  "consignado": { "coeficiente": 0.0189, "tabela": "BMG SIAPE 96x", "prazo": 96 },
+  "cartao_beneficio": { "coeficiente": 0.0210, "tabela": "PAN BENEFÍCIO", "prazo": 84 },
+  "cartao_credito": { "coeficiente": 0.0225, "tabela": "DIGIO CARTÃO", "prazo": 72 }
+}
+Mapeamento de tipos na tabela coefficient_tables:
+
+Investigar quais valores existem na coluna tipo ou product_type da tabela
+Mapear para os 3 tipos acima conforme os valores encontrados
+Se não encontrar coeficiente para algum tipo, retornar null para aquele tipo
+
+
+PARTE B — COMPONENTE DE SIMULAÇÃO
+Criar componente SimulacaoRapida em client/src/components/SimulacaoRapida.tsx:
+Props:
+ts{
+  convenio: string,
+  saldo35: number | null,      // saldo da margem 35%
+  saldo5beneficio: number | null,  // saldo da margem 5% benefício
+  saldo5cartao: number | null,     // saldo da margem 5% cartão
+}
+Layout: seção colapsável com título "⚡ Simulação Rápida" — aberta por padrão.
+3 cards lado a lado:
+Card 1 — Consignado (Margem 35%)
+
+Ícone: Calculator
+Cor: #1E88E5
+Se saldo35 > 0 e coeficiente disponível:
+
+Valor estimado: saldo35 ÷ coeficiente formatado em R$
+Subtext: "Melhor tabela: [nome] — [prazo]x"
+
+
+Se saldo35 <= 0: "Margem indisponível"
+Se sem coeficiente: "Sem tabela cadastrada"
+
+Card 2 — Cartão Benefício (Margem 5% Benefício)
+
+Ícone: CreditCard
+Cor: #10B981
+Mesma lógica com saldo5beneficio
+
+Card 3 — Cartão de Crédito (Margem 5% Cartão)
+
+Ícone: CreditCard
+Cor: #6C2BD9
+Mesma lógica com saldo5cartao
+
+Loading state: skeleton nos 3 cards enquanto busca coeficientes.
+Disclaimer abaixo dos cards:
+
+"Simulação estimada com base no melhor coeficiente disponível. Valores sujeitos a aprovação."
+
+
+PARTE C — INTEGRAR NAS TELAS
+Nas telas vendas-consulta.tsx e consulta-cliente.tsx:
+
+Importar SimulacaoRapida
+Posicionar o componente logo abaixo do card de "Situação de Folha" (cards de margem), antes da seção de Contratos
+Passar as props:
+
+convenio: convênio do cliente (já disponível nos dados)
+saldo35: saldo da margem 35%
+saldo5beneficio: saldo da margem benefício 5%
+saldo5cartao: saldo da margem cartão 5%
+
+
+Só renderizar o componente quando os dados do cliente estiverem carregados e o convênio estiver disponível
+
+NÃO alterar nenhuma outra lógica das telas.
+
+VERIFICAÇÃO:
+
+Buscar cliente com convênio SIAPE que tenha saldo positivo nas margens
+Confirmar que os 3 cards aparecem com valores calculados
+Confirmar que a tabela usada é exibida corretamente
+Testar cliente sem saldo — deve mostrar "Margem indisponível"
