@@ -25589,6 +25589,28 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // PUT /api/portfolio/rules/simulation-coefs — salvar coeficientes padrão da simulação rápida (master only)
+  app.put("/api/portfolio/rules/simulation-coefs", requireAuth, async (req: any, res) => {
+    try {
+      if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+      const tenantId = req.tenantId!;
+      const { consignado, cartao_credito, cartao_beneficio } = req.body;
+      const toDecimal = (v: any) => (v != null && v !== "" ? parseFloat(v) : null);
+      await db.execute(sql`
+        UPDATE portfolio_rules
+        SET
+          default_coef_consignado = ${toDecimal(consignado)},
+          default_coef_cartao_credito = ${toDecimal(cartao_credito)},
+          default_coef_cartao_beneficio = ${toDecimal(cartao_beneficio)},
+          updated_at = NOW()
+        WHERE tenant_id = ${tenantId}
+      `);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao salvar coeficientes" });
+    }
+  });
+
   // PUT /api/portfolio/rules/:productType — editar prazo por produto (master only)
   app.put("/api/portfolio/rules/:productType", requireAuth, async (req: any, res) => {
     try {
@@ -26165,27 +26187,6 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao buscar coeficientes" });
-    }
-  });
-
-  app.put("/api/portfolio/rules/simulation-coefs", requireAuth, async (req: any, res) => {
-    try {
-      if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
-      const tenantId = req.tenantId!;
-      const { consignado, cartao_credito, cartao_beneficio } = req.body;
-      const toDecimal = (v: any) => (v != null && v !== "" ? parseFloat(v) : null);
-      await db.execute(sql`
-        UPDATE portfolio_rules
-        SET
-          default_coef_consignado = ${toDecimal(consignado)},
-          default_coef_cartao_credito = ${toDecimal(cartao_credito)},
-          default_coef_cartao_beneficio = ${toDecimal(cartao_beneficio)},
-          updated_at = NOW()
-        WHERE tenant_id = ${tenantId}
-      `);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: "Erro ao salvar coeficientes" });
     }
   });
 
