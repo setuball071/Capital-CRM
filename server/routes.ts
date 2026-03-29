@@ -26150,6 +26150,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         return res.status(400).json({ message: "Convênio obrigatório" });
       }
       const convenioPattern = `%${convenio}%`;
+      console.log(`[SimulacaoRapida] convenio="${convenio}" | pattern="${convenioPattern}"`);
       const result = await db.execute(sql`
         SELECT
           ct.operation_type,
@@ -26171,6 +26172,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         term_months: number;
       }>;
 
+      const summary: Record<string, number> = {};
+      for (const r of rows) { summary[r.operation_type] = (summary[r.operation_type] || 0) + 1; }
+      console.log(`[SimulacaoRapida] resultados por tipo:`, summary);
+
       const findBest = (opType: string) => {
         const filtered = rows.filter(r => r.operation_type === opType);
         if (filtered.length === 0) return null;
@@ -26178,11 +26183,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         return { coeficiente: best.coefficient, tabela: best.table_name, prazo: best.term_months };
       };
 
-      res.json({
+      const response = {
         consignado: findBest("consignado"),
         cartao_beneficio: findBest("benefit_card"),
         cartao_credito: findBest("credit_card"),
-      });
+      };
+      console.log(`[SimulacaoRapida] resposta:`, JSON.stringify(response));
+      res.json(response);
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao buscar coeficientes" });
     }

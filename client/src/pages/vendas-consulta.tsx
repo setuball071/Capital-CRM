@@ -1330,7 +1330,7 @@ export default function VendasConsulta() {
 
               {consultaData.folhaAtual && (
                 <SimulacaoRapida
-                  convenio={consultaData.vinculo?.convenio || consultaData.clienteBase?.orgao}
+                  convenio={consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio}
                   saldo35={consultaData.folhaAtual.margem_saldo_35}
                   saldo5beneficio={consultaData.folhaAtual.margem_beneficio_saldo_5}
                   saldo5cartao={consultaData.folhaAtual.margem_saldo_5}
