@@ -31,7 +31,8 @@ import {
   Lock,
   Landmark,
   Copy,
-  Check
+  Check,
+  Info
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
@@ -385,6 +386,7 @@ export default function ConsultaCliente() {
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
   const [selectedHistoricoCompetencia, setSelectedHistoricoCompetencia] = useState<FolhaHistoricoCompleto | null>(null);
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+  const [showObsDialog, setShowObsDialog] = useState(false);
   
   // Função para calcular Saldo Devedor usando Tabela Price
   const calcularSaldoDevedorPrice = (valorParcela: number | null, taxaPercent: number, parcelasRestantes: number | null): number | null => {
@@ -504,6 +506,21 @@ export default function ConsultaCliente() {
     retry: false,
   });
   
+  const clienteObsCpf = clienteDetalhado?.pessoa?.cpf?.replace(/[^0-9]/g, "") || "";
+
+  const { data: clienteObsData } = useQuery<{ observation: string; imported_at: string } | null>({
+    queryKey: ["/api/client-observations", clienteObsCpf],
+    enabled: !!clienteObsCpf,
+    retry: false,
+    queryFn: async () => {
+      if (!clienteObsCpf) return null;
+      const res = await fetch(`/api/client-observations/${clienteObsCpf}`, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
   // Auto-sincronizar o vínculo selecionado com o retornado pelo backend
   useEffect(() => {
     if (clienteDetalhado?.vinculo_selecionado && !selectedVinculoId) {
@@ -810,11 +827,39 @@ export default function ConsultaCliente() {
                 </Card>
               )}
 
+              {clienteObsData && (
+                <Dialog open={showObsDialog} onOpenChange={setShowObsDialog}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        Informações Complementares
+                      </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm whitespace-pre-wrap">{clienteObsData.observation}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Importado em: {new Date(clienteObsData.imported_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </DialogContent>
+                </Dialog>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Dados do Cliente
+                    {clienteObsData && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setShowObsDialog(true)}
+                        data-testid="button-obs-info"
+                        title="Ver informações complementares"
+                      >
+                        <Info className="h-4 w-4 text-blue-500" />
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

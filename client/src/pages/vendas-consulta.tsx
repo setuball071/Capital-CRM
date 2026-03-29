@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, Building2, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle
+  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle, Info
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -269,6 +269,22 @@ export default function VendasConsulta() {
   });
   const [agendamentoData, setAgendamentoData] = useState("");
   const [agendamentoNota, setAgendamentoNota] = useState("");
+  const [showObsDialog, setShowObsDialog] = useState(false);
+
+  const clienteCpf = consultaData?.clienteBase?.cpf?.replace(/[^0-9]/g, "") || "";
+
+  const { data: clienteObsData } = useQuery<{ observation: string; imported_at: string } | null>({
+    queryKey: ["/api/client-observations", clienteCpf],
+    enabled: !!clienteCpf,
+    retry: false,
+    queryFn: async () => {
+      if (!clienteCpf) return null;
+      const res = await fetch(`/api/client-observations/${clienteCpf}`, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
 
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -940,11 +956,39 @@ export default function VendasConsulta() {
               </Card>
             )}
 
+              {clienteObsData && (
+                <Dialog open={showObsDialog} onOpenChange={setShowObsDialog}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        Informações Complementares
+                      </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm whitespace-pre-wrap">{clienteObsData.observation}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Importado em: {new Date(clienteObsData.imported_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </DialogContent>
+                </Dialog>
+              )}
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <User className="h-4 w-4" />
                     Dados do Cliente
+                    {clienteObsData && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setShowObsDialog(true)}
+                        data-testid="button-obs-info"
+                        title="Ver informações complementares"
+                      >
+                        <Info className="h-4 w-4 text-blue-500" />
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

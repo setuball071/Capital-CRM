@@ -68,6 +68,7 @@ import ContratosDetalhePage from "@/pages/contratos-detalhe";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
+import ImportarObservacoesPage from "@/pages/importar-observacoes";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
@@ -539,6 +540,9 @@ function Router() {
               </Route>
               <Route path="/admin/atualizacoes">
                 {() => <MasterOnlyRoute component={SystemUpdatesPage} />}
+              </Route>
+              <Route path="/admin/importar-observacoes">
+                {() => <ProtectedRoute component={ImportarObservacoesPage} />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

@@ -3634,6 +3634,23 @@ export const insertClientPortfolioSchema = createInsertSchema(clientPortfolio).o
 export type ClientPortfolio = typeof clientPortfolio.$inferSelect;
 export type InsertClientPortfolio = z.infer<typeof insertClientPortfolioSchema>;
 
+export const clientObservations = pgTable("client_observations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  cpf: varchar("cpf", { length: 14 }).notNull(),
+  observation: text("observation").notNull(),
+  importedBy: integer("imported_by").references(() => users.id),
+  importedAt: timestamp("imported_at").notNull().defaultNow(),
+});
+
+export const insertClientObservationSchema = createInsertSchema(clientObservations).omit({
+  id: true,
+  importedAt: true,
+});
+
+export type ClientObservation = typeof clientObservations.$inferSelect;
+export type InsertClientObservation = z.infer<typeof insertClientObservationSchema>;
+
 export const portfolioTransfers = pgTable("portfolio_transfers", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),

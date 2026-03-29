@@ -26038,6 +26038,117 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // ===== OBSERVAÇÕES COMPLEMENTARES POR CPF =====
+
+  app.get("/api/client-observations/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const cpf = req.params.cpf.replace(/[^0-9]/g, "");
+      if (!cpf) return res.status(400).json({ message: "CPF inválido" });
+      const result = await db.execute(sql`
+        SELECT id, cpf, observation, imported_at
+        FROM client_observations
+        WHERE tenant_id = ${tenantId}
+          AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+        LIMIT 1
+      `);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Sem observação" });
+      }
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar observação" });
+    }
+  });
+
+  app.post("/api/client-observations/import", requireAuth, upload.single("file"), async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "Arquivo CSV não enviado" });
+      }
+
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+      const content = req.file.buffer.toString("utf-8");
+      const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+      if (lines.length === 0) {
+        return res.status(400).json({ message: "Arquivo vazio" });
+      }
+
+      // Detect header row
+      const header = lines[0].toLowerCase().split(",").map(h => h.trim().replace(/"/g, ""));
+      const cpfIdx = header.findIndex(h => h === "cpf");
+      const obsIdx = header.findIndex(h => h === "observacao" || h === "observação");
+
+      if (cpfIdx === -1 || obsIdx === -1) {
+        return res.status(400).json({ message: "CSV deve ter colunas 'cpf' e 'observacao'" });
+      }
+
+      let imported = 0;
+      let updated = 0;
+      let errors = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+
+        // Simple CSV split respecting quoted fields
+        const cols: string[] = [];
+        let inQuote = false;
+        let cur = "";
+        for (const ch of line) {
+          if (ch === '"') { inQuote = !inQuote; }
+          else if (ch === "," && !inQuote) { cols.push(cur.trim()); cur = ""; }
+          else { cur += ch; }
+        }
+        cols.push(cur.trim());
+
+        const rawCpf = (cols[cpfIdx] || "").replace(/"/g, "").trim();
+        const obs = (cols[obsIdx] || "").replace(/"/g, "").trim();
+        if (!rawCpf || !obs) { errors++; continue; }
+
+        const cpf = rawCpf.replace(/[^0-9]/g, "");
+        if (cpf.length < 11) { errors++; continue; }
+
+        try {
+          const existing = await db.execute(sql`
+            SELECT id FROM client_observations
+            WHERE tenant_id = ${tenantId}
+              AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+            LIMIT 1
+          `);
+          if (existing.rows.length > 0) {
+            await db.execute(sql`
+              UPDATE client_observations
+              SET observation = ${obs}, imported_at = NOW(), imported_by = ${userId}
+              WHERE tenant_id = ${tenantId}
+                AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+            `);
+            updated++;
+          } else {
+            await db.execute(sql`
+              INSERT INTO client_observations (tenant_id, cpf, observation, imported_by, imported_at)
+              VALUES (${tenantId}, ${cpf}, ${obs}, ${userId}, NOW())
+            `);
+            imported++;
+          }
+        } catch {
+          errors++;
+        }
+      }
+
+      res.json({ imported, updated, errors });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao importar observações" });
+    }
+  });
+
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
 
