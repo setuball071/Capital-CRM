@@ -26161,7 +26161,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         WHERE ct.is_active = true
           AND a.is_active = true
           AND a.name ILIKE ${convenioPattern}
-        ORDER BY ct.operation_type, ct.coefficient ASC
+        ORDER BY ct.operation_type, ct.coefficient ASC, ct.id ASC
       `);
 
       const rows = result.rows as Array<{
