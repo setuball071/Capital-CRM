@@ -1,0 +1,125 @@
+PROMPT PARA O AGENTE REPLIT — Reformulação completa da Simulação Rápida (versão final)
+CONTEXTO: Reformular completamente o componente de Simulação Rápida. Ignorar implementações anteriores e construir do zero seguindo exatamente esta especificação.
+
+PARTE A — BANCO DE DADOS
+Adicionar campos na tabela portfolio_rules via migration SQL:
+sqlALTER TABLE portfolio_rules ADD COLUMN IF NOT EXISTS default_coef_consignado DECIMAL(8,6);
+ALTER TABLE portfolio_rules ADD COLUMN IF NOT EXISTS default_coef_cartao_credito DECIMAL(8,6);
+ALTER TABLE portfolio_rules ADD COLUMN IF NOT EXISTS default_coef_cartao_beneficio DECIMAL(8,6);
+Executar via psql "$DATABASE_URL" -f migrations/simulation-coefs.sql.
+Atualizar shared/schema.ts adicionando os 3 campos ao model portfolio_rules.
+
+PARTE B — ROTA DA API
+Substituir completamente a rota GET /api/simulation/best-coefficients:
+
+Buscar em portfolio_rules onde tenant_id = req.tenantId
+Retornar apenas os coeficientes padrão definidos pelo master:
+
+json{
+  "consignado": 0.021,
+  "cartao_credito": 0.025,
+  "cartao_beneficio": 0.024
+}
+```
+
+- Se campo for null: retornar null para aquele tipo
+- Não buscar nada em `coefficient_tables` — remover esse join completamente
+- Rota pública para todos autenticados (`requireAuth`)
+
+---
+
+**PARTE C — CONFIGURAÇÃO PELO MASTER**
+
+Na página `portfolio-rules.tsx` (Administração → Regras de Carteira), adicionar abaixo da tabela de prazos existente uma nova seção **"Coeficientes Padrão da Simulação"**:
+
+3 campos lado a lado:
+- **Consignado** (Margem 35%) — input numérico com 6 casas decimais
+- **Cartão de Crédito** (Margem 5%) — input numérico com 6 casas decimais
+- **Cartão Benefício** (Margem 5% Benefício) — input numérico com 6 casas decimais
+
+Botão único **"Salvar Coeficientes"** que salva os 3 de uma vez.
+
+Nova rota necessária:
+```
+PUT /api/portfolio/rules/simulation-coefs
+Body: { consignado, cartao_credito, cartao_beneficio }
+Atualiza os 3 campos em portfolio_rules para o tenant. Master only.
+
+PARTE D — COMPONENTE SimulacaoRapida.tsx
+Reescrever completamente o componente.
+Props:
+ts{
+  saldo35: number | null,
+  saldo5cartao: number | null,
+  saldo5beneficio: number | null,
+  convenio: string
+}
+```
+
+**Busca de dados:**
+- `useQuery` em `GET /api/simulation/best-coefficients` — sem parâmetro de convênio
+- Loading: skeleton nos 3 cards
+- Erro ou sem dados: cards com input em branco
+
+**Layout da seção:**
+- Título: ⚡ "Simulação Rápida" (ícone Zap do Lucide) — seção colapsável, aberta por padrão
+- 3 cards lado a lado em grid 3 colunas, compactos (`p-4`)
+
+**Layout de cada card:**
+```
+┌─────────────────────────────┐
+│ [ícone] Margem X% — Tipo    │
+├─────────────────────────────┤
+│ Valor Liberado              │
+│ R$ 21.287,00  (destaque)    │
+├─────────────────────────────┤
+│ Parcela     [R$ 402,42  ]   │
+│ Coeficiente [0,021000   ]   │
+└─────────────────────────────┘
+Ordem dos cards:
+
+Consignado — Margem 35% — cor #1E88E5 — saldo35
+Cartão de Crédito — Margem 5% — cor #6C2BD9 — saldo5cartao
+Cartão Benefício — Margem 5% Benefício — cor #10B981 — saldo5beneficio
+
+Lógica de cada card:
+
+Estado local: parcela (inicial = saldo da margem) e coef (inicial = coeficiente padrão da API)
+Valor Liberado = parcela ÷ coef — recalcula em tempo real ao editar qualquer campo
+Se parcela <= 0: mostrar "Margem indisponível" sem inputs
+Se coef null da API: input de coeficiente em branco, corretor digita manualmente
+Inputs numéricos com step="0.000001"
+Sem nome de tabela, sem prazo — apenas parcela e coeficiente
+
+Disclaimer abaixo dos 3 cards:
+
+"Simulação estimada com base no coeficiente padrão configurado. Valores sujeitos a aprovação."
+
+
+PARTE E — INTEGRAÇÃO NAS TELAS
+Nas telas vendas-consulta.tsx e consulta-cliente.tsx:
+Substituir o <SimulacaoRapida> existente passando as props corretas:
+Para vendas-consulta.tsx:
+tsx<SimulacaoRapida
+  saldo35={consultaData?.folhaAtual?.saldo_35 ?? null}
+  saldo5cartao={consultaData?.folhaAtual?.saldo_5 ?? null}
+  saldo5beneficio={consultaData?.folhaAtual?.saldo_beneficio_5 ?? null}
+  convenio={consultaData?.vinculos?.[0]?.convenio ?? ""}
+/>
+Para consulta-cliente.tsx:
+tsx<SimulacaoRapida
+  saldo35={folhaAtual?.saldo_35 ?? null}
+  saldo5cartao={folhaAtual?.saldo_5 ?? null}
+  saldo5beneficio={folhaAtual?.saldo_beneficio_5 ?? null}
+  convenio={vinculoAtual?.convenio ?? ""}
+/>
+Verificar os nomes exatos dos campos de saldo no objeto folhaAtual antes de implementar — podem ser saldo35, saldo_35, saldo35Pct ou similar. Usar os nomes corretos conforme o código existente.
+NÃO alterar nenhuma outra lógica das telas de consulta.
+
+VERIFICAÇÃO:
+
+Master acessa Regras de Carteira, define coeficientes e salva
+Corretor abre consulta de cliente SIAPE com saldo positivo
+3 cards aparecem na ordem correta com coeficientes preenchidos
+Editar parcela ou coeficiente recalcula valor liberado na hora
+Cliente sem saldo mostra "Margem indisponível"

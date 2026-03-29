@@ -6,87 +6,83 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface BestCoeficiente {
-  coeficiente: number;
-  tabela: string;
-  prazo: number;
-}
-
-interface BestCoeficientesResponse {
-  consignado: BestCoeficiente | null;
-  cartao_beneficio: BestCoeficiente | null;
-  cartao_credito: BestCoeficiente | null;
+interface SimCoeficientesResponse {
+  consignado: number | null;
+  cartao_credito: number | null;
+  cartao_beneficio: number | null;
 }
 
 interface SimulacaoRapidaProps {
-  convenio: string | null | undefined;
+  convenio?: string | null;
   saldo35: number | null | undefined;
-  saldo5beneficio: number | null | undefined;
   saldo5cartao: number | null | undefined;
+  saldo5beneficio: number | null | undefined;
 }
 
 function formatCurrency(value: number | null | undefined) {
   if (value == null || isNaN(value) || !isFinite(value)) return "—";
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
 interface SimCardProps {
-  label: string;
-  produto: string;
-  accentColor: string;
+  title: string;
   icon: React.ReactNode;
+  accentColor: string;
   saldo: number | null | undefined;
-  coef: BestCoeficiente | null | undefined;
+  coefDefault: number | null | undefined;
   isLoading: boolean;
   testId: string;
 }
 
-function SimCard({ label, produto, accentColor, icon, saldo, coef, isLoading, testId }: SimCardProps) {
+function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, testId }: SimCardProps) {
+  const saldoNum = saldo ?? 0;
+  const temMargem = saldoNum > 0;
+
+  const [parcelaInput, setParcelaInput] = useState<string>("");
   const [coefInput, setCoefInput] = useState<string>("");
 
   useEffect(() => {
-    if (coef?.coeficiente != null) {
-      setCoefInput(coef.coeficiente.toFixed(6));
+    if (temMargem) {
+      setParcelaInput(saldoNum.toFixed(2));
+    } else {
+      setParcelaInput("");
+    }
+  }, [saldoNum, temMargem]);
+
+  useEffect(() => {
+    if (coefDefault != null) {
+      setCoefInput(coefDefault.toFixed(6));
     } else {
       setCoefInput("");
     }
-  }, [coef]);
+  }, [coefDefault]);
 
-  const saldoNum = saldo ?? 0;
-  const temMargem = saldoNum > 0;
-  const coefNum = parseFloat(coefInput.replace(",", "."));
-  const valorLiberado = temMargem && coefNum > 0 ? saldoNum / coefNum : null;
+  const parcela = parseFloat(parcelaInput.replace(",", "."));
+  const coef = parseFloat(coefInput.replace(",", "."));
+  const valorLiberado = !isNaN(parcela) && parcela > 0 && !isNaN(coef) && coef > 0
+    ? parcela / coef
+    : null;
 
   return (
     <Card className="bg-muted/50" data-testid={testId}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <div style={{ color: accentColor }}>{icon}</div>
-          <div>
-            <p className="text-xs text-muted-foreground leading-tight">{label}</p>
-            <p className="text-sm font-semibold leading-tight">{produto}</p>
-          </div>
+          <p className="text-sm font-semibold leading-tight">{title}</p>
         </div>
 
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-6 w-1/2" />
           </div>
         ) : !temMargem ? (
-          <div className="py-2">
-            <p className="text-sm text-muted-foreground italic">Margem indisponível</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Saldo: <span className="font-medium text-foreground">{formatCurrency(saldoNum)}</span>
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground italic py-2">Margem indisponível</p>
         ) : (
           <div className="space-y-3">
             <div>
+              <p className="text-xs text-muted-foreground">Valor Liberado</p>
               <p
                 className="text-2xl font-bold leading-tight"
                 style={{ color: accentColor }}
@@ -94,35 +90,35 @@ function SimCard({ label, produto, accentColor, icon, saldo, coef, isLoading, te
               >
                 {valorLiberado != null ? formatCurrency(valorLiberado) : "—"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">Liberando com este coef.</p>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Coeficiente</label>
-              <input
-                type="number"
-                step="0.000001"
-                min="0.000001"
-                value={coefInput}
-                onChange={(e) => setCoefInput(e.target.value)}
-                placeholder={coef == null ? "Digite o coeficiente" : ""}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
-                data-testid={`${testId}-coef-input`}
-              />
-              {coef == null && (
-                <p className="text-xs text-muted-foreground italic">Sem tabela cadastrada</p>
-              )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground font-medium">Parcela</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={parcelaInput}
+                  onChange={(e) => setParcelaInput(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  data-testid={`${testId}-parcela-input`}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground font-medium">Coeficiente</label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  min="0.000001"
+                  value={coefInput}
+                  onChange={(e) => setCoefInput(e.target.value)}
+                  placeholder={coefDefault == null ? "Digite..." : ""}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  data-testid={`${testId}-coef-input`}
+                />
+              </div>
             </div>
-
-            {coef != null && (
-              <p className="text-xs text-muted-foreground truncate" title={coef.tabela}>
-                Tabela: {coef.tabela} — {coef.prazo}x
-              </p>
-            )}
-
-            <p className="text-xs text-muted-foreground border-t pt-2">
-              Saldo: <span className="font-medium text-foreground">{formatCurrency(saldoNum)}</span>
-            </p>
           </div>
         )}
       </CardContent>
@@ -130,24 +126,13 @@ function SimCard({ label, produto, accentColor, icon, saldo, coef, isLoading, te
   );
 }
 
-export function SimulacaoRapida({ convenio, saldo35, saldo5beneficio, saldo5cartao }: SimulacaoRapidaProps) {
+export function SimulacaoRapida({ convenio, saldo35, saldo5cartao, saldo5beneficio }: SimulacaoRapidaProps) {
   const [isOpen, setIsOpen] = useState(true);
 
-  const convenioClean = (convenio ?? "").trim();
-  const enabled = convenioClean.length > 0;
-
-  const { data, isLoading } = useQuery<BestCoeficientesResponse>({
-    queryKey: ["/api/simulation/best-coefficients", convenioClean],
-    queryFn: async () => {
-      const res = await fetch(`/api/simulation/best-coefficients?convenio=${encodeURIComponent(convenioClean)}`);
-      if (!res.ok) throw new Error("Erro ao buscar coeficientes");
-      return res.json();
-    },
-    enabled,
+  const { data, isLoading } = useQuery<SimCoeficientesResponse>({
+    queryKey: ["/api/simulation/best-coefficients"],
     staleTime: 1000 * 60 * 5,
   });
-
-  if (!enabled) return null;
 
   return (
     <Card data-testid="card-simulacao-rapida">
@@ -161,8 +146,8 @@ export function SimulacaoRapida({ convenio, saldo35, saldo5beneficio, saldo5cart
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-amber-500" />
               <span className="text-sm font-semibold">Simulação Rápida</span>
-              {convenioClean && (
-                <span className="text-xs text-muted-foreground font-normal">— {convenioClean}</span>
+              {convenio && (
+                <span className="text-xs text-muted-foreground font-normal">— {convenio}</span>
               )}
             </div>
             {isOpen ? (
@@ -177,39 +162,36 @@ export function SimulacaoRapida({ convenio, saldo35, saldo5beneficio, saldo5cart
           <CardContent className="pt-0 pb-4 px-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <SimCard
-                label="Margem 35%"
-                produto="Consignado"
+                title="Margem 35% — Consignado"
                 icon={<TrendingUp className="h-4 w-4" />}
                 accentColor="#1E88E5"
                 saldo={saldo35}
-                coef={data?.consignado}
+                coefDefault={data?.consignado}
                 isLoading={isLoading}
                 testId="card-sim-consignado"
               />
               <SimCard
-                label="Margem 5% Benefício"
-                produto="Cartão Benefício"
-                icon={<Gift className="h-4 w-4" />}
-                accentColor="#10B981"
-                saldo={saldo5beneficio}
-                coef={data?.cartao_beneficio}
-                isLoading={isLoading}
-                testId="card-sim-cartao-beneficio"
-              />
-              <SimCard
-                label="Margem 5%"
-                produto="Cartão de Crédito"
+                title="Margem 5% — Cartão de Crédito"
                 icon={<CreditCard className="h-4 w-4" />}
                 accentColor="#6C2BD9"
                 saldo={saldo5cartao}
-                coef={data?.cartao_credito}
+                coefDefault={data?.cartao_credito}
                 isLoading={isLoading}
                 testId="card-sim-cartao-credito"
+              />
+              <SimCard
+                title="Margem 5% Benefício — Cartão Benefício"
+                icon={<Gift className="h-4 w-4" />}
+                accentColor="#10B981"
+                saldo={saldo5beneficio}
+                coefDefault={data?.cartao_beneficio}
+                isLoading={isLoading}
+                testId="card-sim-cartao-beneficio"
               />
             </div>
 
             <p className="text-xs text-muted-foreground mt-3 text-center">
-              Simulação estimada com base no melhor coeficiente disponível. Valores sujeitos a aprovação.
+              Simulação estimada com base no coeficiente padrão configurado. Valores sujeitos a aprovação.
             </p>
           </CardContent>
         </CollapsibleContent>

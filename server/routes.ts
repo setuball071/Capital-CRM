@@ -26145,54 +26145,47 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ===== SIMULAÇÃO RÁPIDA DE MARGEM =====
   app.get("/api/simulation/best-coefficients", requireAuth, async (req: any, res) => {
     try {
-      const convenio = (req.query.convenio as string || "").trim();
-      if (!convenio) {
-        return res.status(400).json({ message: "Convênio obrigatório" });
-      }
-      const convenioPattern = `%${convenio}%`;
-      console.log(`[SimulacaoRapida] convenio="${convenio}" | pattern="${convenioPattern}"`);
+      const tenantId = req.tenantId!;
       const result = await db.execute(sql`
-        SELECT
-          ct.operation_type,
-          ct.coefficient::float AS coefficient,
-          ct.table_name,
-          ct.term_months
-        FROM coefficient_tables ct
-        JOIN agreements a ON ct.agreement_id = a.id
-        WHERE ct.is_active = true
-          AND a.is_active = true
-          AND a.name ILIKE ${convenioPattern}
-        ORDER BY ct.operation_type, ct.coefficient ASC, ct.id ASC
+        SELECT default_coef_consignado, default_coef_cartao_credito, default_coef_cartao_beneficio
+        FROM portfolio_rules
+        WHERE tenant_id = ${tenantId}
+        LIMIT 1
       `);
-
-      const rows = result.rows as Array<{
-        operation_type: string;
-        coefficient: number;
-        table_name: string;
-        term_months: number;
-      }>;
-
-      const summary: Record<string, number> = {};
-      for (const r of rows) { summary[r.operation_type] = (summary[r.operation_type] || 0) + 1; }
-      console.log(`[SimulacaoRapida] resultados por tipo:`, summary);
-      console.log(`[SimulacaoRapida] linhas encontradas:`, rows.map(r => ({ operation_type: r.operation_type, coefficient: r.coefficient })));
-
-      const findBest = (opType: string) => {
-        const filtered = rows.filter(r => r.operation_type === opType);
-        if (filtered.length === 0) return null;
-        const best = filtered[0]; // already sorted ASC
-        return { coeficiente: best.coefficient, tabela: best.table_name, prazo: best.term_months };
-      };
-
-      const response = {
-        consignado: findBest("consignado"),
-        cartao_beneficio: findBest("benefit_card"),
-        cartao_credito: findBest("credit_card"),
-      };
-      console.log(`[SimulacaoRapida] resposta:`, JSON.stringify(response));
-      res.json(response);
+      const row = result.rows[0] as {
+        default_coef_consignado: string | null;
+        default_coef_cartao_credito: string | null;
+        default_coef_cartao_beneficio: string | null;
+      } | undefined;
+      const toNum = (v: string | null | undefined) => (v != null ? parseFloat(v) : null);
+      res.json({
+        consignado: toNum(row?.default_coef_consignado),
+        cartao_credito: toNum(row?.default_coef_cartao_credito),
+        cartao_beneficio: toNum(row?.default_coef_cartao_beneficio),
+      });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao buscar coeficientes" });
+    }
+  });
+
+  app.put("/api/portfolio/rules/simulation-coefs", requireAuth, async (req: any, res) => {
+    try {
+      if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+      const tenantId = req.tenantId!;
+      const { consignado, cartao_credito, cartao_beneficio } = req.body;
+      const toDecimal = (v: any) => (v != null && v !== "" ? parseFloat(v) : null);
+      await db.execute(sql`
+        UPDATE portfolio_rules
+        SET
+          default_coef_consignado = ${toDecimal(consignado)},
+          default_coef_cartao_credito = ${toDecimal(cartao_credito)},
+          default_coef_cartao_beneficio = ${toDecimal(cartao_beneficio)},
+          updated_at = NOW()
+        WHERE tenant_id = ${tenantId}
+      `);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao salvar coeficientes" });
     }
   });
 

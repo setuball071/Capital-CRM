@@ -3600,6 +3600,9 @@ export const portfolioRules = pgTable("portfolio_rules", {
   durationMonths: integer("duration_months").notNull().default(6),
   updatedBy: integer("updated_by").references(() => users.id),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  defaultCoefConsignado: decimal("default_coef_consignado", { precision: 8, scale: 6 }),
+  defaultCoefCartaoCredito: decimal("default_coef_cartao_credito", { precision: 8, scale: 6 }),
+  defaultCoefCartaoBeneficio: decimal("default_coef_cartao_beneficio", { precision: 8, scale: 6 }),
 });
 
 export const insertPortfolioRuleSchema = createInsertSchema(portfolioRules).omit({
