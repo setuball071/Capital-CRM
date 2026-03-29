@@ -190,7 +190,7 @@ export function AppSidebar() {
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
         { title: "Central de Atualizações", url: "/admin/atualizacoes", icon: Bell, masterOnly: true },
         { title: "Regras de Carteira", url: "/admin/carteira-regras", icon: ShieldCheck, masterOnly: true },
-        { title: "Observações por CPF", url: "/admin/importar-observacoes", icon: FileText, rolesAllowed: ["master", "coordenacao", "financeiro"] },
+        { title: "Obs. Clientes por CPF", url: "/admin/importar-observacoes", icon: FileText, rolesAllowed: ["master", "coordenacao", "financeiro"] },
       ],
     },
     {
