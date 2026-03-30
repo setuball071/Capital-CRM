@@ -26132,15 +26132,31 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       const tenantId = req.tenantId!;
       const userId = req.user!.id;
-      const content = req.file.buffer.toString("utf-8");
+
+      // Try UTF-8 first, fall back to Latin-1 (Windows-1252) common in Brazilian Excel exports
+      let content: string;
+      try {
+        content = req.file.buffer.toString("utf-8");
+        // Heuristic: if replacement char appears, likely wrong encoding
+        if (content.includes("\uFFFD")) throw new Error("bad utf8");
+      } catch {
+        content = req.file.buffer.toString("latin1");
+      }
+      // Strip UTF-8 BOM if present
+      content = content.replace(/^\uFEFF/, "");
+
       const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
       if (lines.length === 0) {
         return res.status(400).json({ message: "Arquivo vazio" });
       }
 
+      // Auto-detect delimiter: semicolon (Brazilian Excel) or comma
+      const firstLine = lines[0];
+      const delimiter = (firstLine.split(";").length >= firstLine.split(",").length) ? ";" : ",";
+
       // Detect header row
-      const header = lines[0].toLowerCase().split(",").map(h => h.trim().replace(/"/g, ""));
+      const header = firstLine.toLowerCase().split(delimiter).map(h => h.trim().replace(/"/g, "").replace(/\uFEFF/g, ""));
       const cpfIdx = header.findIndex(h => h === "cpf");
       const obsIdx = header.findIndex(h => h === "observacao" || h === "observação");
 
@@ -26156,13 +26172,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         const line = lines[i];
         if (!line) continue;
 
-        // Simple CSV split respecting quoted fields
+        // Simple CSV split respecting quoted fields (uses auto-detected delimiter)
         const cols: string[] = [];
         let inQuote = false;
         let cur = "";
         for (const ch of line) {
           if (ch === '"') { inQuote = !inQuote; }
-          else if (ch === "," && !inQuote) { cols.push(cur.trim()); cur = ""; }
+          else if (ch === delimiter && !inQuote) { cols.push(cur.trim()); cur = ""; }
           else { cur += ch; }
         }
         cols.push(cur.trim());
