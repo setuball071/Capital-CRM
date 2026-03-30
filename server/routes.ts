@@ -22962,7 +22962,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         "coordenacao",
         "operacional",
         "atendimento",
-        "vendedor",
       ]);
 
       let query = `
@@ -23005,13 +23004,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           "coordenacao",
           "operacional",
           "atendimento",
-          "vendedor",
         ]);
-        if (!isAdminForStats) {
+        const isVendedorForStats = hasRole(user, ["vendedor"]);
+        if (!isAdminForStats && !isVendedorForStats) {
           return res.status(403).json({ message: "Sem permissão" });
         }
 
         const valorExpr = sql`CAST(NULLIF(REPLACE(REPLACE(valor, '.', ''), ',', '.'), '') AS NUMERIC)`;
+        const userFilter = isAdminForStats
+          ? sql`WHERE tenant_id = ${tenantId}`
+          : sql`WHERE tenant_id = ${tenantId} AND solicitado_por_id = ${user.id}`;
         const result = await db.execute(sql`
         SELECT
           COUNT(*) as total,
@@ -23028,7 +23030,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           COALESCE(SUM(${valorExpr}) FILTER (WHERE status = 'cancelado'), 0) as valor_cancelados,
           COALESCE(SUM(${valorExpr}) FILTER (WHERE status = 'concluido'), 0) as valor_concluidos
         FROM solicitacoes_boleto
-        WHERE tenant_id = ${tenantId}
+        ${userFilter}
       `);
 
         res.json(result.rows[0]);

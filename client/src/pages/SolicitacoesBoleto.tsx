@@ -114,7 +114,7 @@ function formatData(iso: string) {
   try { return format(new Date(iso), "dd/MM/yyyy HH:mm", { locale: ptBR }); } catch { return iso; }
 }
 
-const ADMIN_ROLES = ["master", "coordenacao", "operacional", "atendimento", "vendedor"];
+const ADMIN_ROLES = ["master", "coordenacao", "operacional", "atendimento"];
 
 // ── Componente principal ──────────────────────────────────────
 export default function SolicitacoesBoleto() {
