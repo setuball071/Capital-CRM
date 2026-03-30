@@ -45,6 +45,7 @@ import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import VendasImportarHigienizadosPage from "@/pages/vendas-importar-higienizados";
 import VendasConsultaPage from "@/pages/vendas-consulta";
 import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
+import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import AdminTenantsPage from "@/pages/admin-tenants";
 import AdminBrandingPage from "@/pages/admin-branding";
@@ -531,6 +532,9 @@ function Router() {
               </Route>
               <Route path="/vendas/etiquetas">
                 {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/nota-promissoria">
+                {() => <RoleRoute component={NotaPromissoriaPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}

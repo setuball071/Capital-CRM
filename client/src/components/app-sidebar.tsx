@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -139,6 +139,7 @@ export function AppSidebar() {
         { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
         { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
+        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
         { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
       ],
     },
