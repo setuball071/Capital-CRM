@@ -10793,9 +10793,10 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               clientesWithoutFolha++;
             }
 
-            const dataNasc = cliente.dataNascimento
+            const rawDateNasc = cliente.dataNascimento ?? (cliente as any).data_nascimento;
+            const dataNasc = rawDateNasc
               ? (() => {
-                  const d = new Date(cliente.dataNascimento as string | Date);
+                  const d = new Date(rawDateNasc as string | Date);
                   if (isNaN(d.getTime())) return "";
                   const dd = String(d.getUTCDate()).padStart(2, "0");
                   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
