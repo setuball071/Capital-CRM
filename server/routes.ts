@@ -10793,7 +10793,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               clientesWithoutFolha++;
             }
 
-            const rawDateNasc = cliente.dataNascimento ?? (cliente as any).data_nascimento;
+            const rawDateNasc = cliente.dataNascimento ??
+              (cliente as typeof cliente & { data_nascimento?: string | Date | null }).data_nascimento;
             const dataNasc = rawDateNasc
               ? (() => {
                   const d = new Date(rawDateNasc as string | Date);
