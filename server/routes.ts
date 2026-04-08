@@ -26110,12 +26110,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         FROM client_observations
         WHERE tenant_id = ${tenantId}
           AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
-        LIMIT 1
+        ORDER BY imported_at DESC
       `);
       if (result.rows.length === 0) {
         return res.status(404).json({ message: "Sem observação" });
       }
-      res.json(result.rows[0]);
+      res.json(result.rows);
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao buscar observação" });
     }
@@ -26167,7 +26167,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       }
 
       let imported = 0;
-      let updated = 0;
+      let skipped = 0;
       let errors = 0;
 
       for (let i = 1; i < lines.length; i++) {
@@ -26193,26 +26193,23 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         if (cpf.length < 11) { errors++; continue; }
 
         try {
-          const upsertResult = await db.execute(sql`
+          const insertResult = await db.execute(sql`
             INSERT INTO client_observations (tenant_id, cpf, observation, imported_by, imported_at)
             VALUES (${tenantId}, ${cpf}, ${obs}, ${userId}, NOW())
-            ON CONFLICT (tenant_id, cpf) DO UPDATE SET
-              observation = EXCLUDED.observation,
-              imported_at = NOW(),
-              imported_by = EXCLUDED.imported_by
-            RETURNING (xmax <> 0) AS was_updated
+            ON CONFLICT (tenant_id, cpf, observation) DO NOTHING
+            RETURNING id
           `);
-          if (upsertResult.rows[0]?.was_updated) {
-            updated++;
-          } else {
+          if (insertResult.rows.length > 0) {
             imported++;
+          } else {
+            skipped++;
           }
         } catch {
           errors++;
         }
       }
 
-      res.json({ imported, updated, errors });
+      res.json({ imported, skipped, errors });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao importar observações" });
     }

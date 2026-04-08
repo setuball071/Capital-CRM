@@ -6,7 +6,7 @@ import { FileText, Upload, Download, CheckCircle, AlertCircle, Loader2 } from "l
 
 interface ImportResult {
   imported: number;
-  updated: number;
+  skipped: number;
   errors: number;
 }
 
@@ -44,7 +44,7 @@ export default function ImportarObservacoesPage() {
       }
       const data: ImportResult = await res.json();
       setResult(data);
-      toast({ title: `Importação concluída: ${data.imported} novos, ${data.updated} atualizados` });
+      toast({ title: `Importação concluída: ${data.imported} novos, ${data.skipped} ignorados (já existiam)` });
     } catch (err: any) {
       toast({ title: err.message || "Erro ao importar", variant: "destructive" });
     } finally {
@@ -80,7 +80,7 @@ export default function ImportarObservacoesPage() {
           <CardTitle className="text-base">Upload do arquivo</CardTitle>
           <CardDescription>
             O CSV deve ter duas colunas: <code className="bg-muted px-1 rounded text-xs">cpf</code> e{" "}
-            <code className="bg-muted px-1 rounded text-xs">observacao</code>. Se o CPF já existir, a observação será atualizada.
+            <code className="bg-muted px-1 rounded text-xs">observacao</code>. Cada linha é adicionada como nova observação. Reimportar o mesmo arquivo não cria duplicatas.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -143,8 +143,8 @@ export default function ImportarObservacoesPage() {
                 <p className="text-sm text-muted-foreground">Novos registros</p>
               </div>
               <div className="space-y-1">
-                <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
-                <p className="text-sm text-muted-foreground">Atualizados</p>
+                <p className="text-2xl font-bold text-blue-600">{result.skipped}</p>
+                <p className="text-sm text-muted-foreground">Já existiam (ignorados)</p>
               </div>
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-destructive">{result.errors}</p>

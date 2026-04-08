@@ -274,7 +274,7 @@ export default function VendasConsulta() {
 
   const clienteCpf = consultaData?.clienteBase?.cpf?.replace(/[^0-9]/g, "") || "";
 
-  const { data: clienteObsData } = useQuery<{ observation: string; imported_at: string } | null>({
+  const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteCpf],
     enabled: !!clienteCpf,
     retry: false,
@@ -826,7 +826,7 @@ export default function VendasConsulta() {
                     toast={toast}
                     formatOnCopy={formatProperName}
                   />
-                  {clienteObsData && (
+                  {clienteObsData && clienteObsData.length > 0 && (
                     <Button
                       size="icon"
                       variant="ghost"
@@ -968,20 +968,28 @@ export default function VendasConsulta() {
               </Card>
             )}
 
-              {clienteObsData && (
+              {clienteObsData && clienteObsData.length > 0 && (
                 <Dialog open={showObsDialog} onOpenChange={setShowObsDialog}>
-                  <DialogContent>
+                  <DialogContent className="max-w-lg">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <Info className="h-4 w-4" style={{ color: "#6C2BD9" }} />
                         Informações Complementares
                       </DialogTitle>
                     </DialogHeader>
-                    <p className="text-sm whitespace-pre-wrap">{clienteObsData.observation}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Importado em: {new Date(clienteObsData.imported_at).toLocaleDateString("pt-BR")}
-                    </p>
-                    <div className="flex justify-end mt-4">
+                    <ScrollArea className="max-h-96">
+                      <div className="space-y-3 pr-2">
+                        {clienteObsData.map((obs) => (
+                          <div key={obs.id} className="rounded-md border p-3 space-y-1">
+                            <p className="text-sm whitespace-pre-wrap">{obs.observation}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Importado em: {new Date(obs.imported_at).toLocaleDateString("pt-BR")}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex justify-end mt-2">
                       <Button variant="outline" onClick={() => setShowObsDialog(false)}>
                         Fechar
                       </Button>
