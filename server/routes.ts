@@ -17570,10 +17570,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       let membersQuery;
       if (userRole === "master") {
-        membersQuery = await db
-          .select({ id: users.id, name: users.name })
-          .from(users)
-          .where(eq(users.isActive, true));
+        const tenantId = req.tenantId!;
+        const masterResult = await db.execute(sql`
+          SELECT u.id, u.name
+          FROM users u
+          JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+          WHERE u.is_active = true
+          ORDER BY u.name
+        `);
+        return res.json(masterResult.rows);
       } else {
         membersQuery = await db
           .select({ id: users.id, name: users.name })
@@ -26043,10 +26048,11 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         return res.status(400).json({ message: "Vendedor de destino é o mesmo que o atual" });
       }
 
-      // Verify target vendor exists and belongs to same tenant
+      // Verify target vendor exists and belongs to same tenant (users table has no tenant_id — use user_tenants)
       const targetVendorRows = await db.execute(sql`
-        SELECT id FROM users
-        WHERE id = ${toVendorIdNum} AND tenant_id = ${tenantId}
+        SELECT u.id FROM users u
+        JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
+        WHERE u.id = ${toVendorIdNum} AND u.is_active = true
         LIMIT 1
       `);
       if (targetVendorRows.rows.length === 0) {
