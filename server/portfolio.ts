@@ -141,7 +141,25 @@ export async function checkPortfolioBlock(
     return { blocked: false };
   }
 
-  const result = await db.execute(sql`
+  // First: check if the current vendor already has an active entry for this CPF
+  // (e.g. they received a transfer for one product type but another product is still with someone else)
+  const ownEntryResult = await db.execute(sql`
+    SELECT cp.id FROM client_portfolio cp
+    WHERE cp.tenant_id = ${tenantId}
+      AND cp.cpf = ${cpfClean}
+      AND cp.status = 'ATIVO'
+      AND cp.expires_at > NOW()
+      AND cp.vendor_id = ${currentVendorId}
+    LIMIT 1
+  `);
+
+  // If this vendor has their own active entry, they are not blocked
+  if (ownEntryResult.rows.length > 0) {
+    return { blocked: false };
+  }
+
+  // Second: check if another vendor has an active entry
+  const otherResult = await db.execute(sql`
     SELECT cp.id, u.name as vendor_name
     FROM client_portfolio cp
     JOIN users u ON u.id = cp.vendor_id
@@ -153,7 +171,7 @@ export async function checkPortfolioBlock(
     LIMIT 1
   `);
 
-  if (result.rows.length > 0) {
+  if (otherResult.rows.length > 0) {
     return {
       blocked: true,
       message: "Esse cliente já possui vínculo ativo com outro vendedor. Favor alinhar com o supervisor.",
