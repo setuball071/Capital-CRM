@@ -48,7 +48,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock, Camera, X } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock, Camera, X, Presentation } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfigurarAcessoModal } from "@/components/ConfigurarAcessoModal";
 import { 
@@ -98,6 +98,7 @@ export default function UsersPage() {
   const [permissions, setPermissions] = useState<PermissionState[]>([]);
   const [selectedTenantIds, setSelectedTenantIds] = useState<number[]>([]);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
@@ -478,6 +479,7 @@ export default function UsersPage() {
     setPassword("");
     setRole("vendedor");
     setManagerId("");
+    setIsDemo(false);
     setSelectedTenantIds([]);
     setIsDialogOpen(true);
   };
@@ -489,6 +491,7 @@ export default function UsersPage() {
     setPassword("");
     setRole(user.role as UserRole);
     setManagerId(user.managerId?.toString() || "");
+    setIsDemo(user.isDemo ?? false);
     setSelectedTenantIds([]);
     setIsDialogOpen(true);
   };
@@ -537,6 +540,11 @@ export default function UsersPage() {
 
     if (role === "vendedor" && managerId && managerId !== "none") {
       data.managerId = parseInt(managerId);
+    }
+
+    // Only master can set demo mode, only for vendedor role
+    if (isMaster && editingUser && role === "vendedor") {
+      data.isDemo = isDemo;
     }
 
     if (editingUser) {
@@ -805,6 +813,26 @@ export default function UsersPage() {
                   </Select>
                 </div>
               )}
+              {isMaster && editingUser && role === "vendedor" && (
+                <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/40">
+                  <Checkbox
+                    id="is-demo"
+                    checked={isDemo}
+                    onCheckedChange={(v) => setIsDemo(v === true)}
+                    data-testid="checkbox-is-demo"
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <Label htmlFor="is-demo" className="cursor-pointer flex items-center gap-2">
+                      <Presentation className="w-4 h-4 text-muted-foreground" />
+                      Usuário Demo (apresentações)
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      Dashboard sempre exibirá 70% da meta geral e 90% da meta de cartão
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {canManageAllUsers && role === "vendedor" && (
                 <div className="space-y-2">
                   <Label htmlFor="manager">Coordenador (opcional)</Label>
@@ -1079,9 +1107,17 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell data-testid={`user-email-${user.id}`}>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.role)} data-testid={`user-role-${user.id}`}>
-                        {getRoleLabel(user.role)}
-                      </Badge>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Badge variant={getRoleBadgeVariant(user.role)} data-testid={`user-role-${user.id}`}>
+                          {getRoleLabel(user.role)}
+                        </Badge>
+                        {user.isDemo && (
+                          <Badge variant="outline" className="text-xs gap-1" data-testid={`user-demo-badge-${user.id}`}>
+                            <Presentation className="w-3 h-3" />
+                            Demo
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     {canManageAllUsers && (
                       <TableCell data-testid={`user-manager-${user.id}`}>

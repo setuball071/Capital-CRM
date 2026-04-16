@@ -254,6 +254,7 @@ export const users = pgTable("users", {
   ipsPermitidos: text("ips_permitidos"), // JSON array Ex: ["192.168.1.100", "192.168.1.101"]
   employeeId: integer("employee_id"), // References employees(id) - FK constraint exists in DB
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
+  isDemo: boolean("is_demo").notNull().default(false),
   avatarUrl: text("avatar_url"),
   perfilDisc: varchar("perfil_disc", { length: 20 }),
   perfilDiscData: jsonb("perfil_disc_data"),

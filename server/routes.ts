@@ -385,6 +385,7 @@ const updateUserSchema = z
     role: z.enum(USER_ROLES).optional(),
     managerId: z.number().int().nullable().optional(),
     isActive: z.boolean().optional(),
+    isDemo: z.boolean().optional(),
   })
   .strict(); // Reject extra fields
 
@@ -2977,6 +2978,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             dataToUpdate.role = validatedData.role;
           if (validatedData.managerId !== undefined)
             dataToUpdate.managerId = validatedData.managerId;
+        }
+
+        // Only master can toggle demo mode
+        if (currentUserRole === "master" && validatedData.isDemo !== undefined) {
+          dataToUpdate.isDemo = validatedData.isDemo;
         }
 
         // Hash password if provided
@@ -20973,6 +20979,54 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           posicaoRankingCartao = i + 1;
           break;
         }
+      }
+
+      // ── Demo user: inject synthetic data so dashboard always shows 70% general / 90% card ──
+      if (user.isDemo && metaMensal > 0) {
+        const totalValorDemo = metaMensal * 0.70;
+        const totalCartaoDemo = metaCartao > 0 ? metaCartao * 0.90 : 0;
+        const diasUteisPassados = contratosPorDia.length;
+        const valorPorDia = diasUteisPassados > 0 ? totalValorDemo / diasUteisPassados : 0;
+        const demoContratosPorDia = contratosPorDia.map((item) => ({
+          ...item,
+          valor: Math.round(valorPorDia * 100) / 100,
+          quantidade: 2,
+          preenchimento: Math.round(Math.min(valorPorDia, item.metaDoDia) * 100) / 100,
+          vazio: Math.round(Math.max(0, item.metaDoDia - valorPorDia) * 100) / 100,
+          excedente: Math.round(Math.max(0, valorPorDia - item.metaDoDia) * 100) / 100,
+        }));
+        const demoAllChartData = [...demoContratosPorDia, ...futureDays];
+        const demoPercentualMeta = Math.round((totalValorDemo / metaMensal) * 10000) / 100;
+        const demoSaldoDevedor = Math.max(0, metaMensal - totalValorDemo);
+        const demoMetaDiariaAjustada = diasUteisRestantes > 0 ? demoSaldoDevedor / diasUteisRestantes : 0;
+        const demoMediaAtual = diasUteisAteHoje > 0 ? totalValorDemo / diasUteisAteHoje : 0;
+        const demoProjecao = demoMediaAtual * diasUteisNoMes;
+        return res.json({
+          vendedorNome: user.name,
+          metaMensal,
+          metaCartao,
+          totalValor: Math.round(totalValorDemo * 100) / 100,
+          totalCartao: Math.round(totalCartaoDemo * 100) / 100,
+          totalContratos: diasUteisPassados * 2,
+          percentualMeta: demoPercentualMeta,
+          projecaoMensal: Math.round(demoProjecao * 100) / 100,
+          metaDiariaOriginal: Math.round(metaDiariaOriginal * 100) / 100,
+          metaDiariaAjustada: Math.round(demoMetaDiariaAjustada * 100) / 100,
+          mediaAtual: Math.round(demoMediaAtual * 100) / 100,
+          saldoDevedor: Math.round(demoSaldoDevedor * 100) / 100,
+          diasUteisNoMes,
+          diasUteisAteHoje,
+          diasUteisRestantes,
+          contratosPorDia: demoAllChartData,
+          currentTier: getTierForValue(totalValorDemo),
+          nextTier: getNextTierForValue(totalValorDemo),
+          allTiers: PERFORMANCE_TIERS,
+          mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+          posicaoRankingGeral,
+          posicaoRankingCartao,
+          totalVendedores,
+          isDemo: true,
+        });
       }
 
       return res.json({
