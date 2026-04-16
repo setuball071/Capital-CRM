@@ -20982,8 +20982,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       // ── Demo user: inject synthetic data so dashboard always shows 70% general / 90% card ──
-      if (user.isDemo && metaMensal > 0) {
-        const totalValorDemo = metaMensal * 0.70;
+      if (user.isDemo) {
+        const totalValorDemo = metaMensal > 0 ? metaMensal * 0.70 : 0;
         const totalCartaoDemo = metaCartao > 0 ? metaCartao * 0.90 : 0;
         const diasUteisPassados = contratosPorDia.length;
         const valorPorDia = diasUteisPassados > 0 ? totalValorDemo / diasUteisPassados : 0;
@@ -20996,7 +20996,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           excedente: Math.round(Math.max(0, valorPorDia - item.metaDoDia) * 100) / 100,
         }));
         const demoAllChartData = [...demoContratosPorDia, ...futureDays];
-        const demoPercentualMeta = Math.round((totalValorDemo / metaMensal) * 10000) / 100;
+        const demoPercentualMeta = metaMensal > 0 ? Math.round((totalValorDemo / metaMensal) * 10000) / 100 : 0;
         const demoSaldoDevedor = Math.max(0, metaMensal - totalValorDemo);
         const demoMetaDiariaAjustada = diasUteisRestantes > 0 ? demoSaldoDevedor / diasUteisRestantes : 0;
         const demoMediaAtual = diasUteisAteHoje > 0 ? totalValorDemo / diasUteisAteHoje : 0;
