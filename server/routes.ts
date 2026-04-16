@@ -20791,6 +20791,90 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const diasUteisAteHoje = calcDiasUteis(firstDayOfMonth, hoje);
       const diasUteisRestantes = diasUteisNoMes - diasUteisAteHoje;
 
+      // ── Demo user early-exit: skip all production queries, return synthetic data ──
+      if (user.isDemo) {
+        const demoDiariaOriginal = diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
+        const totalValorDemo = metaMensal > 0 ? metaMensal * 0.70 : 0;
+        const totalCartaoDemo = metaCartao > 0 ? metaCartao * 0.90 : 0;
+        const demoPercentualMeta = metaMensal > 0 ? Math.round((totalValorDemo / metaMensal) * 10000) / 100 : 0;
+        const demoSaldoDevedor = Math.max(0, metaMensal - totalValorDemo);
+        const demoMetaDiariaAjustada = diasUteisRestantes > 0 ? demoSaldoDevedor / diasUteisRestantes : 0;
+        const demoMediaAtual = diasUteisAteHoje > 0 ? totalValorDemo / diasUteisAteHoje : 0;
+        const demoProjecao = demoMediaAtual * diasUteisNoMes;
+        const demoValorPorDia = diasUteisAteHoje > 0 ? totalValorDemo / diasUteisAteHoje : 0;
+
+        const demoContratosPorDia: Array<{
+          dia: string; diaCompleto: string; quantidade: number; valor: number;
+          metaDoDia: number; preenchimento: number; vazio: number; excedente: number;
+        }> = [];
+        const dd = new Date(firstDayOfMonth);
+        while (dd <= hoje) {
+          const dow = dd.getDay();
+          if (dow !== 0 && dow !== 6) {
+            const key = dd.toISOString().split("T")[0];
+            demoContratosPorDia.push({
+              dia: key.substring(8, 10),
+              diaCompleto: key,
+              quantidade: 2,
+              valor: Math.round(demoValorPorDia * 100) / 100,
+              metaDoDia: Math.round(demoDiariaOriginal * 100) / 100,
+              preenchimento: Math.round(Math.min(demoValorPorDia, demoDiariaOriginal) * 100) / 100,
+              vazio: Math.round(Math.max(0, demoDiariaOriginal - demoValorPorDia) * 100) / 100,
+              excedente: Math.round(Math.max(0, demoValorPorDia - demoDiariaOriginal) * 100) / 100,
+            });
+          }
+          dd.setDate(dd.getDate() + 1);
+        }
+
+        const demoFutureDays: typeof demoContratosPorDia = [];
+        const futD = new Date(hoje);
+        futD.setDate(futD.getDate() + 1);
+        while (futD <= lastDayOfMonth) {
+          const dow = futD.getDay();
+          if (dow !== 0 && dow !== 6) {
+            const key = futD.toISOString().split("T")[0];
+            demoFutureDays.push({
+              dia: key.substring(8, 10),
+              diaCompleto: key,
+              quantidade: 0,
+              valor: 0,
+              metaDoDia: Math.round(demoMetaDiariaAjustada * 100) / 100,
+              preenchimento: 0,
+              vazio: Math.round(demoMetaDiariaAjustada * 100) / 100,
+              excedente: 0,
+            });
+          }
+          futD.setDate(futD.getDate() + 1);
+        }
+
+        return res.json({
+          vendedorNome: user.name,
+          metaMensal,
+          metaCartao,
+          totalValor: Math.round(totalValorDemo * 100) / 100,
+          totalCartao: Math.round(totalCartaoDemo * 100) / 100,
+          totalContratos: diasUteisAteHoje * 2,
+          percentualMeta: demoPercentualMeta,
+          projecaoMensal: Math.round(demoProjecao * 100) / 100,
+          metaDiariaOriginal: Math.round(demoDiariaOriginal * 100) / 100,
+          metaDiariaAjustada: Math.round(demoMetaDiariaAjustada * 100) / 100,
+          mediaAtual: Math.round(demoMediaAtual * 100) / 100,
+          saldoDevedor: Math.round(demoSaldoDevedor * 100) / 100,
+          diasUteisNoMes,
+          diasUteisAteHoje,
+          diasUteisRestantes,
+          contratosPorDia: [...demoContratosPorDia, ...demoFutureDays],
+          currentTier: getTierForValue(totalValorDemo),
+          nextTier: getNextTierForValue(totalValorDemo),
+          allTiers: PERFORMANCE_TIERS,
+          mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
+          posicaoRankingGeral: 1,
+          posicaoRankingCartao: 1,
+          totalVendedores: 1,
+          isDemo: true,
+        });
+      }
+
       // Get production data from producoes_contratos (imported paid production) + vendedor_contratos
       const prodContratosResult = await db.execute(sql`
         SELECT 
@@ -20981,53 +21065,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
       }
 
-      // ── Demo user: inject synthetic data so dashboard always shows 70% general / 90% card ──
-      if (user.isDemo) {
-        const totalValorDemo = metaMensal > 0 ? metaMensal * 0.70 : 0;
-        const totalCartaoDemo = metaCartao > 0 ? metaCartao * 0.90 : 0;
-        const diasUteisPassados = contratosPorDia.length;
-        const valorPorDia = diasUteisPassados > 0 ? totalValorDemo / diasUteisPassados : 0;
-        const demoContratosPorDia = contratosPorDia.map((item) => ({
-          ...item,
-          valor: Math.round(valorPorDia * 100) / 100,
-          quantidade: 2,
-          preenchimento: Math.round(Math.min(valorPorDia, item.metaDoDia) * 100) / 100,
-          vazio: Math.round(Math.max(0, item.metaDoDia - valorPorDia) * 100) / 100,
-          excedente: Math.round(Math.max(0, valorPorDia - item.metaDoDia) * 100) / 100,
-        }));
-        const demoAllChartData = [...demoContratosPorDia, ...futureDays];
-        const demoPercentualMeta = metaMensal > 0 ? Math.round((totalValorDemo / metaMensal) * 10000) / 100 : 0;
-        const demoSaldoDevedor = Math.max(0, metaMensal - totalValorDemo);
-        const demoMetaDiariaAjustada = diasUteisRestantes > 0 ? demoSaldoDevedor / diasUteisRestantes : 0;
-        const demoMediaAtual = diasUteisAteHoje > 0 ? totalValorDemo / diasUteisAteHoje : 0;
-        const demoProjecao = demoMediaAtual * diasUteisNoMes;
-        return res.json({
-          vendedorNome: user.name,
-          metaMensal,
-          metaCartao,
-          totalValor: Math.round(totalValorDemo * 100) / 100,
-          totalCartao: Math.round(totalCartaoDemo * 100) / 100,
-          totalContratos: diasUteisPassados * 2,
-          percentualMeta: demoPercentualMeta,
-          projecaoMensal: Math.round(demoProjecao * 100) / 100,
-          metaDiariaOriginal: Math.round(metaDiariaOriginal * 100) / 100,
-          metaDiariaAjustada: Math.round(demoMetaDiariaAjustada * 100) / 100,
-          mediaAtual: Math.round(demoMediaAtual * 100) / 100,
-          saldoDevedor: Math.round(demoSaldoDevedor * 100) / 100,
-          diasUteisNoMes,
-          diasUteisAteHoje,
-          diasUteisRestantes,
-          contratosPorDia: demoAllChartData,
-          currentTier: getTierForValue(totalValorDemo),
-          nextTier: getNextTierForValue(totalValorDemo),
-          allTiers: PERFORMANCE_TIERS,
-          mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
-          posicaoRankingGeral,
-          posicaoRankingCartao,
-          totalVendedores,
-          isDemo: true,
-        });
-      }
 
       return res.json({
         vendedorNome: user.name,
