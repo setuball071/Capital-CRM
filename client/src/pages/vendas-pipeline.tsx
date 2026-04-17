@@ -1945,9 +1945,14 @@ export default function VendasPipeline() {
       <Dialog open={phoneSearchOpen} onOpenChange={setPhoneSearchOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Buscar Cliente por Telefone</DialogTitle>
+            <DialogTitle>Buscar Cliente Existente por Telefone</DialogTitle>
           </DialogHeader>
-          <div className="py-2">
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Antes de cadastrar um novo cliente, busque pelo telefone para evitar
+              duplicidade. Se encontrarmos um match, você poderá abrir o cliente
+              existente e registrar o atendimento sem criar um novo cadastro.
+            </p>
             <PhoneClientSearch
               onSelect={(r) => {
                 const termo = r.cpf || r.matricula;
@@ -1960,6 +1965,10 @@ export default function VendasPipeline() {
                   return;
                 }
                 setPhoneSearchOpen(false);
+                toast({
+                  title: "Cliente existente encontrado",
+                  description: "Abrindo cadastro para evitar duplicidade.",
+                });
                 navigate(`/vendas/consulta?cpf=${termo}`);
               }}
               buttonLabel="Buscar"

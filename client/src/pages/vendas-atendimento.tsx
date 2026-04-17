@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TagManager } from "@/components/tag-manager";
+import { PhoneClientSearch } from "@/components/PhoneClientSearch";
+import { useLocation } from "wouter";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
@@ -224,6 +226,8 @@ export default function VendasAtendimento() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [contatosModalOpen, setContatosModalOpen] = useState(false);
   const [proximoDialogOpen, setProximoDialogOpen] = useState(false);
+  const [phoneSearchOpen, setPhoneSearchOpen] = useState(false);
+  const [, navigate] = useLocation();
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<LeadContact | null>(null);
   const [newContact, setNewContact] = useState({ tipo: "phone", valor: "" });
@@ -730,6 +734,14 @@ export default function VendasAtendimento() {
             </div>
             {/* Botões de ação no topo - igual à tela de Consulta */}
             <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => setPhoneSearchOpen(true)}
+                data-testid="button-buscar-telefone-header"
+              >
+                <Phone className="h-4 w-4 mr-2" />
+                Buscar por Telefone
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setContatosModalOpen(true)}
@@ -1979,6 +1991,43 @@ export default function VendasAtendimento() {
               Cancelar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={phoneSearchOpen} onOpenChange={setPhoneSearchOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Buscar Cliente Existente por Telefone</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Antes de cadastrar um novo cliente, busque pelo telefone para evitar
+              duplicidade. Se houver match, abra o cliente existente em vez de
+              criar um novo cadastro.
+            </p>
+            <PhoneClientSearch
+              onSelect={(r) => {
+                const termo = r.cpf || r.matricula;
+                if (!termo) {
+                  toast({
+                    title: "Cliente sem CPF/Matrícula",
+                    description: "Não foi possível abrir este cliente.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setPhoneSearchOpen(false);
+                toast({
+                  title: "Cliente existente encontrado",
+                  description: "Abrindo cadastro para evitar duplicidade.",
+                });
+                navigate(`/vendas/consulta?cpf=${termo}`);
+              }}
+              buttonLabel="Buscar"
+              inputTestId="input-atendimento-phone-search"
+              buttonTestId="button-atendimento-phone-search"
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
