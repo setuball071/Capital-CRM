@@ -67,11 +67,13 @@ export function PhoneClientSearch({
         onSelect(list[0]);
       }
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setResults(null);
+      const description =
+        err instanceof Error ? err.message : "Não foi possível buscar por telefone.";
       toast({
         title: "Erro",
-        description: err?.message || "Não foi possível buscar por telefone.",
+        description,
         variant: "destructive",
       });
     },
