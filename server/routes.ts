@@ -13360,7 +13360,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         // Backfill clientes_telefones for fast phone search
         try {
-          const tenantIdForPhones = (req as any).tenantId as number | undefined;
+          const tenantIdForPhones =
+            ((req as any).tenantId as number | undefined) ??
+            ((req.user as any)?.tenantId as number | undefined) ??
+            ((req.session as any)?.tenantId as number | undefined);
           if (tenantIdForPhones) {
             const phoneEntries = leads
               .filter((l) => l.cpf)
