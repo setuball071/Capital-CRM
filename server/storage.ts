@@ -236,6 +236,7 @@ export interface IStorage {
   getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
   getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
+  getPessoasByTelefone(telefoneVariants: string[], convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number }): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -1126,6 +1127,70 @@ export class DbStorage implements IStorage {
       .from(clientesPessoa)
       .where(and(...conditions));
     console.log(`[getClientesByCpf] cpf="${cleanCpf}", found=${results.length}`);
+    return results;
+  }
+
+  async getPessoasByTelefone(telefoneVariants: string[], convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
+    const variants = Array.from(new Set(telefoneVariants.map(t => String(t).replace(/\D/g, "")).filter(t => t.length >= 8 && t.length <= 11)));
+    if (variants.length === 0) {
+      return [];
+    }
+
+    // 1) Buscar pessoa_ids em clientes_telefones (rápido, indexado)
+    const inList = sql.join(variants.map(v => sql`${v}`), sql`, `);
+    let pessoaIds: number[] = [];
+    const phoneRows = await db.execute(sql`
+      SELECT DISTINCT pessoa_id FROM clientes_telefones WHERE telefone IN (${inList})
+    `);
+    pessoaIds = (phoneRows.rows as any[]).map(r => Number(r.pessoa_id)).filter(n => Number.isFinite(n));
+
+    // 2) Fallback ao vivo: se nada em clientes_telefones, varrer fontes (índices funcionais)
+    if (pessoaIds.length === 0) {
+      const fallback = await db.execute(sql`
+        WITH cpfs AS (
+          SELECT DISTINCT lpad(regexp_replace(coalesce(cpf,''), '\D', '', 'g'), 11, '0') AS cpf_norm
+          FROM staging_contatos
+          WHERE cpf IS NOT NULL AND cpf != '' AND (
+            regexp_replace(coalesce(telefone_1,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_2,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_3,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_4,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_5,''), '\D', '', 'g') IN (${inList})
+          )
+          UNION
+          SELECT DISTINCT lpad(regexp_replace(coalesce(cpf,''), '\D', '', 'g'), 11, '0')
+          FROM sales_leads
+          WHERE cpf IS NOT NULL AND cpf != '' AND (
+            regexp_replace(coalesce(telefone_1,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_2,''), '\D', '', 'g') IN (${inList}) OR
+            regexp_replace(coalesce(telefone_3,''), '\D', '', 'g') IN (${inList})
+          )
+          UNION
+          SELECT DISTINCT lpad(regexp_replace(coalesce(cpf_cliente,''), '\D', '', 'g'), 11, '0')
+          FROM producoes_contratos
+          WHERE cpf_cliente IS NOT NULL AND cpf_cliente != ''
+            AND regexp_replace(coalesce(telefone_cliente,''), '\D', '', 'g') IN (${inList})
+        )
+        SELECT id FROM clientes_pessoa WHERE cpf IN (SELECT cpf_norm FROM cpfs)
+      `);
+      pessoaIds = (fallback.rows as any[]).map(r => Number(r.id)).filter(n => Number.isFinite(n));
+    }
+
+    if (pessoaIds.length === 0) {
+      console.log(`[getPessoasByTelefone] variants=${JSON.stringify(variants)}, found=0`);
+      return [];
+    }
+
+    // 3) Carregar clientes_pessoa com filtros opcionais
+    const conditions: any[] = [inArray(clientesPessoa.id, pessoaIds)];
+    if (convenio) {
+      conditions.push(ilike(clientesPessoa.convenio, convenio));
+    }
+    if (baseTag) {
+      conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
+    }
+    const results = await db.select().from(clientesPessoa).where(and(...conditions));
+    console.log(`[getPessoasByTelefone] variants=${JSON.stringify(variants)}, pessoaIds=${pessoaIds.length}, found=${results.length}`);
     return results;
   }
 

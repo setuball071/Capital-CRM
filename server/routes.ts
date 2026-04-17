@@ -9624,24 +9624,56 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     requireModuleAccess("modulo_base_clientes"),
     async (req: any, res) => {
       try {
-        const { cpf, matricula, convenio, base } = req.query;
+        const { cpf, matricula, telefone, convenio, base } = req.query;
 
-        if (!cpf && !matricula) {
+        if (!cpf && !matricula && !telefone) {
           return res.status(400).json({
-            message: "Informe CPF ou matrícula para realizar a consulta",
+            message: "Informe CPF, matrícula ou telefone para realizar a consulta",
           });
         }
 
-        let tipoBusca: "cpf" | "matricula";
+        let tipoBusca: "cpf" | "matricula" | "telefone";
         let termo: string;
         let resultados: any[] = [];
         const convenioFiltro = convenio ? String(convenio).trim() : null;
         const baseFiltro = base ? String(base).trim() : null;
         console.log(
-          `[Consulta Cliente] user=${req.user?.id}, tipoBusca=${matricula ? "matricula" : "cpf"}, convenio=${convenioFiltro || "all"}, base=${baseFiltro || "all"}`,
+          `[Consulta Cliente] user=${req.user?.id}, tipoBusca=${telefone ? "telefone" : matricula ? "matricula" : "cpf"}, convenio=${convenioFiltro || "all"}, base=${baseFiltro || "all"}`,
         );
 
-        if (matricula) {
+        if (telefone) {
+          tipoBusca = "telefone";
+          const cleanTel = String(telefone).replace(/\D/g, "");
+          if (cleanTel.length < 8 || cleanTel.length > 11) {
+            return res.status(400).json({
+              message: "Telefone inválido. Informe entre 8 e 11 dígitos.",
+            });
+          }
+          termo = cleanTel;
+          // Variações: com/sem 9 no celular
+          const variants = [cleanTel];
+          if (cleanTel.length === 11 && cleanTel[2] === "9") {
+            variants.push(cleanTel.slice(0, 2) + cleanTel.slice(3));
+          } else if (cleanTel.length === 10) {
+            variants.push(cleanTel.slice(0, 2) + "9" + cleanTel.slice(2));
+          }
+          const clientes = await storage.getPessoasByTelefone(
+            variants,
+            convenioFiltro || undefined,
+            baseFiltro || undefined,
+          );
+          resultados = clientes.map((cliente) => ({
+            pessoa_id: cliente.id,
+            cpf: cliente.cpf,
+            matricula: cliente.matricula,
+            nome: cliente.nome,
+            convenio: cliente.convenio,
+            orgao: cliente.orgaodesc,
+            uf: cliente.uf,
+            municipio: cliente.municipio,
+            sit_func: cliente.sitFunc,
+          }));
+        } else if (matricula) {
           tipoBusca = "matricula";
           termo = String(matricula).trim();
 
@@ -14411,6 +14443,43 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);
       return res.status(500).json({ message: "Erro ao buscar cliente" });
+    }
+  });
+
+  // POST /api/vendas/consulta/buscar-telefone - Busca pessoas por telefone (multi-result)
+  // Retorna lista de candidatos. Bloqueio de carteira é aplicado no buscar normal ao escolher CPF.
+  app.post("/api/vendas/consulta/buscar-telefone", requireAuth, async (req, res) => {
+    try {
+      const { telefone } = req.body || {};
+      if (!telefone || typeof telefone !== "string") {
+        return res.status(400).json({ message: "Informe o telefone" });
+      }
+      const cleanTel = telefone.replace(/\D/g, "");
+      if (cleanTel.length < 8 || cleanTel.length > 11) {
+        return res.status(400).json({ message: "Telefone inválido. Informe entre 8 e 11 dígitos." });
+      }
+      const variants = [cleanTel];
+      if (cleanTel.length === 11 && cleanTel[2] === "9") {
+        variants.push(cleanTel.slice(0, 2) + cleanTel.slice(3));
+      } else if (cleanTel.length === 10) {
+        variants.push(cleanTel.slice(0, 2) + "9" + cleanTel.slice(2));
+      }
+      const clientes = await storage.getPessoasByTelefone(variants);
+      const resultados = clientes.map((c) => ({
+        pessoa_id: c.id,
+        cpf: c.cpf,
+        matricula: c.matricula,
+        nome: c.nome,
+        convenio: c.convenio,
+        orgao: c.orgaodesc,
+        uf: c.uf,
+        municipio: c.municipio,
+        sit_func: c.sitFunc,
+      }));
+      return res.json({ termo: cleanTel, resultados });
+    } catch (error) {
+      console.error("Buscar telefone error:", error);
+      return res.status(500).json({ message: "Erro ao buscar por telefone" });
     }
   });
 

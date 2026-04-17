@@ -52,7 +52,7 @@ interface ConsultaResultado {
 }
 
 interface ConsultaResponse {
-  tipo_busca: "cpf" | "matricula";
+  tipo_busca: "cpf" | "matricula" | "telefone";
   termo: string;
   convenio_filtro: string | null;
   resultados: ConsultaResultado[];
@@ -374,7 +374,7 @@ interface Nomenclatura {
 
 export default function ConsultaCliente() {
   const { toast } = useToast();
-  const [searchType, setSearchType] = useState<"cpf" | "matricula">("cpf");
+  const [searchType, setSearchType] = useState<"cpf" | "matricula" | "telefone">("cpf");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedConvenio, setSelectedConvenio] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -532,13 +532,26 @@ export default function ConsultaCliente() {
 
   const handleSearch = async () => {
     const term = searchTerm.trim();
+    const labelCampo = searchType === "cpf" ? "o CPF" : searchType === "matricula" ? "a matrícula" : "o telefone";
     if (!term) {
       toast({
         title: "Campo obrigatório",
-        description: `Informe ${searchType === "cpf" ? "o CPF" : "a matrícula"} para consultar.`,
+        description: `Informe ${labelCampo} para consultar.`,
         variant: "destructive",
       });
       return;
+    }
+
+    if (searchType === "telefone") {
+      const cleanTel = term.replace(/\D/g, "");
+      if (cleanTel.length < 8 || cleanTel.length > 11) {
+        toast({
+          title: "Telefone inválido",
+          description: "Informe entre 8 e 11 dígitos (DDD + número).",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     // For matricula search, convenio is required (and must not be "__all__")
@@ -561,8 +574,10 @@ export default function ConsultaCliente() {
       const queryParams = new URLSearchParams();
       if (searchType === "cpf") {
         queryParams.set("cpf", term);
-      } else {
+      } else if (searchType === "matricula") {
         queryParams.set("matricula", term);
+      } else {
+        queryParams.set("telefone", term.replace(/\D/g, ""));
       }
       if (convenioValue) {
         queryParams.set("convenio", convenioValue);
@@ -586,7 +601,7 @@ export default function ConsultaCliente() {
         const convenioMsg = data.convenio_filtro ? ` no convênio ${data.convenio_filtro}` : "";
         toast({
           title: "Nenhum cliente encontrado",
-          description: `Não encontramos clientes com ${searchType === "cpf" ? "o CPF" : "a matrícula"} informado${convenioMsg}.`,
+          description: `Não encontramos clientes com ${searchType === "cpf" ? "o CPF" : searchType === "matricula" ? "a matrícula" : "o telefone"} informado${convenioMsg}.`,
         });
       }
     } catch (error: any) {
@@ -647,13 +662,16 @@ export default function ConsultaCliente() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="search-type">Tipo de Busca</Label>
-                <Tabs value={searchType} onValueChange={(v) => setSearchType(v as "cpf" | "matricula")} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs value={searchType} onValueChange={(v) => { setSearchType(v as "cpf" | "matricula" | "telefone"); setSearchTerm(""); }} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="cpf" data-testid="tab-cpf">
-                      Buscar por CPF
+                      CPF
                     </TabsTrigger>
                     <TabsTrigger value="matricula" data-testid="tab-matricula">
-                      Buscar por Matrícula
+                      Matrícula
+                    </TabsTrigger>
+                    <TabsTrigger value="telefone" data-testid="tab-telefone">
+                      Telefone
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -678,12 +696,12 @@ export default function ConsultaCliente() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="search-term">
-                  {searchType === "cpf" ? "CPF" : "Matrícula"}
+                  {searchType === "cpf" ? "CPF" : searchType === "matricula" ? "Matrícula" : "Telefone"}
                 </Label>
                 <div className="flex gap-2">
                   <Input
                     id="search-term"
-                    placeholder={searchType === "cpf" ? "000.000.000-00" : "Digite a matrícula"}
+                    placeholder={searchType === "cpf" ? "000.000.000-00" : searchType === "matricula" ? "Digite a matrícula" : "(11) 99999-9999"}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -1469,7 +1487,7 @@ export default function ConsultaCliente() {
         <Card>
           <CardContent className="text-center py-8 text-muted-foreground">
             <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhum cliente encontrado para {searchType === "cpf" ? "o CPF" : "a matrícula"} informado.</p>
+            <p>Nenhum cliente encontrado para {searchType === "cpf" ? "o CPF" : searchType === "matricula" ? "a matrícula" : "o telefone"} informado.</p>
             <p className="text-sm mt-2">Verifique os dados e tente novamente.</p>
           </CardContent>
         </Card>
