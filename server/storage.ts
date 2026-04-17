@@ -1234,6 +1234,13 @@ export class DbStorage implements IStorage {
           FROM producoes_contratos
           WHERE cpf_cliente IS NOT NULL AND cpf_cliente != ''
             AND ${matchCol("telefone_cliente")}
+          UNION
+          SELECT DISTINCT lpad(regexp_replace(coalesce(cp.cpf,''), '\D', '', 'g'), 11, '0')
+          FROM client_contacts cc
+          JOIN clientes_pessoa cp ON cp.id = cc.client_id
+          WHERE cc.type IN ('phone', 'telefone')
+            AND cc.value IS NOT NULL
+            AND ${matchCol("cc.value")}
           LIMIT 500
         )
         SELECT id FROM clientes_pessoa WHERE cpf IN (SELECT cpf_norm FROM cpfs) LIMIT 500
