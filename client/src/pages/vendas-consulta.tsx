@@ -700,9 +700,12 @@ export default function VendasConsulta() {
       if (!data.resultados || data.resultados.length === 0) {
         toast({ title: "Nenhum cliente encontrado", description: "Não localizamos clientes com esse telefone." });
       } else if (data.resultados.length === 1) {
-        const cpf = data.resultados[0].cpf;
-        if (cpf) {
-          buscarMutation.mutate(cpf);
+        const r = data.resultados[0];
+        const termo = r.cpf || r.matricula;
+        if (termo) {
+          buscarMutation.mutate(termo);
+        } else {
+          toast({ title: "Cliente sem CPF/Matrícula", description: "Não foi possível abrir este cliente.", variant: "destructive" });
         }
       }
     },

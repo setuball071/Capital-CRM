@@ -9650,15 +9650,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             });
           }
           termo = cleanTel;
-          // Variações: com/sem 9 no celular
-          const variants = [cleanTel];
-          if (cleanTel.length === 11 && cleanTel[2] === "9") {
-            variants.push(cleanTel.slice(0, 2) + cleanTel.slice(3));
-          } else if (cleanTel.length === 10) {
-            variants.push(cleanTel.slice(0, 2) + "9" + cleanTel.slice(2));
-          }
           const clientes = await storage.getPessoasByTelefone(
-            variants,
+            cleanTel,
             convenioFiltro || undefined,
             baseFiltro || undefined,
           );
@@ -14458,13 +14451,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (cleanTel.length < 8 || cleanTel.length > 11) {
         return res.status(400).json({ message: "Telefone inválido. Informe entre 8 e 11 dígitos." });
       }
-      const variants = [cleanTel];
-      if (cleanTel.length === 11 && cleanTel[2] === "9") {
-        variants.push(cleanTel.slice(0, 2) + cleanTel.slice(3));
-      } else if (cleanTel.length === 10) {
-        variants.push(cleanTel.slice(0, 2) + "9" + cleanTel.slice(2));
-      }
-      const clientes = await storage.getPessoasByTelefone(variants);
+      const clientes = await storage.getPessoasByTelefone(cleanTel);
       const resultados = clientes.map((c) => ({
         pessoa_id: c.id,
         cpf: c.cpf,

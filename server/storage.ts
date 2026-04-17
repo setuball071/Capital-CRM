@@ -236,7 +236,7 @@ export interface IStorage {
   getClientesByMatricula(matricula: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
   getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
-  getPessoasByTelefone(telefoneVariants: string[], convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
+  getPessoasByTelefone(telefoneInput: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number }): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -1130,48 +1130,112 @@ export class DbStorage implements IStorage {
     return results;
   }
 
-  async getPessoasByTelefone(telefoneVariants: string[], convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
-    const variants = Array.from(new Set(telefoneVariants.map(t => String(t).replace(/\D/g, "")).filter(t => t.length >= 8 && t.length <= 11)));
-    if (variants.length === 0) {
+  async getPessoasByTelefone(telefoneInput: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]> {
+    // Normaliza e gera variantes
+    const clean = String(telefoneInput || "").replace(/\D/g, "");
+    if (clean.length < 8 || clean.length > 11) {
       return [];
     }
 
-    // 1) Buscar pessoa_ids em clientes_telefones (rápido, indexado)
-    const inList = sql.join(variants.map(v => sql`${v}`), sql`, `);
+    // Variantes "completas" (com DDD): 10 ou 11 dígitos.
+    const fullVariants = new Set<string>();
+    if (clean.length === 11) {
+      fullVariants.add(clean);
+      // Sem nono dígito (móvel antigo)
+      if (clean[2] === "9") {
+        fullVariants.add(clean.slice(0, 2) + clean.slice(3));
+      }
+    } else if (clean.length === 10) {
+      fullVariants.add(clean);
+      // Com nono dígito
+      fullVariants.add(clean.slice(0, 2) + "9" + clean.slice(2));
+    }
+
+    // Sufixo (sem DDD): 8 ou 9 dígitos. Para inputs 10/11 dígitos também
+    // derivamos sufixos para casar registros que possam não ter DDD em alguma fonte.
+    const suffixes = new Set<string>();
+    if (clean.length === 8 || clean.length === 9) {
+      suffixes.add(clean);
+      // Móvel sem DDD: tenta com/sem 9 inicial
+      if (clean.length === 9 && clean[0] === "9") {
+        suffixes.add(clean.slice(1));
+      } else if (clean.length === 8) {
+        suffixes.add("9" + clean);
+      }
+    } else {
+      // Para 10/11 dígitos, gera sufixo "sem DDD" (últimos 8 ou 9)
+      const last9 = clean.slice(-9);
+      const last8 = clean.slice(-8);
+      suffixes.add(last8);
+      suffixes.add(last9);
+    }
+
+    // Constrói cláusulas de busca
+    const fullList = Array.from(fullVariants);
+    const suffixList = Array.from(suffixes);
+
     let pessoaIds: number[] = [];
+
+    // 1) Busca rápida em clientes_telefones
+    //    - Match exato pelas variantes completas
+    //    - Match por sufixo (RIGHT) para inputs sem DDD ou registros sem DDD
+    const fullCondClientes = fullList.length > 0
+      ? sql`telefone IN (${sql.join(fullList.map(v => sql`${v}`), sql`, `)})`
+      : sql`FALSE`;
+    const suffixCondClientes = suffixList.length > 0
+      ? sql.join(
+          suffixList.map(s => sql`right(telefone, ${s.length}) = ${s}`),
+          sql` OR `,
+        )
+      : sql`FALSE`;
+
     const phoneRows = await db.execute(sql`
-      SELECT DISTINCT pessoa_id FROM clientes_telefones WHERE telefone IN (${inList})
+      SELECT DISTINCT pessoa_id FROM clientes_telefones
+      WHERE (${fullCondClientes}) OR (${suffixCondClientes})
+      LIMIT 500
     `);
     pessoaIds = (phoneRows.rows as any[]).map(r => Number(r.pessoa_id)).filter(n => Number.isFinite(n));
 
-    // 2) Fallback ao vivo: se nada em clientes_telefones, varrer fontes (índices funcionais)
+    // 2) Fallback ao vivo: varrer fontes brutas (mesmas variantes)
     if (pessoaIds.length === 0) {
+      const fullExpr = (col: string) => fullList.length > 0
+        ? sql`regexp_replace(coalesce(${sql.raw(col)},''), '\D', '', 'g') IN (${sql.join(fullList.map(v => sql`${v}`), sql`, `)})`
+        : sql`FALSE`;
+      const suffixExpr = (col: string) => suffixList.length > 0
+        ? sql.join(
+            suffixList.map(s => sql`right(regexp_replace(coalesce(${sql.raw(col)},''), '\D', '', 'g'), ${s.length}) = ${s}`),
+            sql` OR `,
+          )
+        : sql`FALSE`;
+      const matchCol = (col: string) => sql`((${fullExpr(col)}) OR (${suffixExpr(col)}))`;
+
       const fallback = await db.execute(sql`
         WITH cpfs AS (
           SELECT DISTINCT lpad(regexp_replace(coalesce(cpf,''), '\D', '', 'g'), 11, '0') AS cpf_norm
           FROM staging_contatos
           WHERE cpf IS NOT NULL AND cpf != '' AND (
-            regexp_replace(coalesce(telefone_1,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_2,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_3,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_4,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_5,''), '\D', '', 'g') IN (${inList})
+            ${matchCol("telefone_1")} OR
+            ${matchCol("telefone_2")} OR
+            ${matchCol("telefone_3")} OR
+            ${matchCol("telefone_4")} OR
+            ${matchCol("telefone_5")}
           )
           UNION
           SELECT DISTINCT lpad(regexp_replace(coalesce(cpf,''), '\D', '', 'g'), 11, '0')
           FROM sales_leads
           WHERE cpf IS NOT NULL AND cpf != '' AND (
-            regexp_replace(coalesce(telefone_1,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_2,''), '\D', '', 'g') IN (${inList}) OR
-            regexp_replace(coalesce(telefone_3,''), '\D', '', 'g') IN (${inList})
+            ${matchCol("telefone_1")} OR
+            ${matchCol("telefone_2")} OR
+            ${matchCol("telefone_3")}
           )
           UNION
           SELECT DISTINCT lpad(regexp_replace(coalesce(cpf_cliente,''), '\D', '', 'g'), 11, '0')
           FROM producoes_contratos
           WHERE cpf_cliente IS NOT NULL AND cpf_cliente != ''
-            AND regexp_replace(coalesce(telefone_cliente,''), '\D', '', 'g') IN (${inList})
+            AND ${matchCol("telefone_cliente")}
+          LIMIT 500
         )
-        SELECT id FROM clientes_pessoa WHERE cpf IN (SELECT cpf_norm FROM cpfs)
+        SELECT id FROM clientes_pessoa WHERE cpf IN (SELECT cpf_norm FROM cpfs) LIMIT 500
       `);
       pessoaIds = (fallback.rows as any[]).map(r => Number(r.id)).filter(n => Number.isFinite(n));
     }

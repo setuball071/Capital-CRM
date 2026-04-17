@@ -733,7 +733,11 @@ export default function ConsultaCliente() {
           <CardHeader>
             <CardTitle>Múltiplos Resultados Encontrados</CardTitle>
             <CardDescription>
-              Encontramos {searchResults.length} matrículas para este CPF. Selecione qual deseja visualizar.
+              {searchType === "telefone"
+                ? `Encontramos ${searchResults.length} clientes com este telefone. Selecione qual deseja visualizar.`
+                : searchType === "matricula"
+                ? `Encontramos ${searchResults.length} clientes com esta matrícula. Selecione qual deseja visualizar.`
+                : `Encontramos ${searchResults.length} matrículas para este CPF. Selecione qual deseja visualizar.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
