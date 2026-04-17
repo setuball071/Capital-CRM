@@ -1241,7 +1241,7 @@ export class DbStorage implements IStorage {
     }
 
     if (pessoaIds.length === 0) {
-      console.log(`[getPessoasByTelefone] variants=${JSON.stringify(variants)}, found=0`);
+      console.log(`[getPessoasByTelefone] input="${clean}", full=${JSON.stringify(fullList)}, suffix=${JSON.stringify(suffixList)}, found=0`);
       return [];
     }
 
@@ -1254,7 +1254,7 @@ export class DbStorage implements IStorage {
       conditions.push(eq(clientesPessoa.baseTagUltima, baseTag));
     }
     const results = await db.select().from(clientesPessoa).where(and(...conditions));
-    console.log(`[getPessoasByTelefone] variants=${JSON.stringify(variants)}, pessoaIds=${pessoaIds.length}, found=${results.length}`);
+    console.log(`[getPessoasByTelefone] input="${clean}", pessoaIds=${pessoaIds.length}, found=${results.length}`);
     return results;
   }
 
