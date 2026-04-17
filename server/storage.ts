@@ -2088,7 +2088,7 @@ export class DbStorage implements IStorage {
     const pessoasAfetadas = new Set<number>();
 
     for (const [tenantId, cpfMap] of byTenant.entries()) {
-      const cpfs = Array.from(cpfMap.keys());
+      const cpfs: string[] = Array.from(cpfMap.keys());
       if (cpfs.length === 0) continue;
 
       // Resolve all pessoaIds for these CPFs in this tenant
@@ -2097,14 +2097,12 @@ export class DbStorage implements IStorage {
       for (let i = 0; i < cpfs.length; i += CHUNK) {
         const slice = cpfs.slice(i, i + CHUNK);
         const rows = await db
-          .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
+          .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf, tenantId: clientesPessoa.tenantId })
           .from(clientesPessoa)
-          .where(and(
-            eq(clientesPessoa.tenantId, tenantId),
-            inArray(clientesPessoa.cpf, slice),
-          ));
+          .where(inArray(clientesPessoa.cpf, slice));
         for (const r of rows) {
           if (!r.cpf) continue;
+          if (r.tenantId !== tenantId) continue;
           const arr = cpfToPessoaIds.get(r.cpf) || [];
           arr.push(r.id);
           cpfToPessoaIds.set(r.cpf, arr);
@@ -2133,14 +2131,22 @@ export class DbStorage implements IStorage {
       for (let i = 0; i < rowsToInsert.length; i += INSERT_BATCH) {
         const batch = rowsToInsert.slice(i, i + INSERT_BATCH);
         try {
-          await db.insert(clientesTelefones).values(batch).onConflictDoNothing();
-          telefonesInseridos += batch.length;
+          const inserted = await db
+            .insert(clientesTelefones)
+            .values(batch)
+            .onConflictDoNothing()
+            .returning({ id: clientesTelefones.id });
+          telefonesInseridos += inserted.length;
         } catch (err) {
           console.error("[addPessoaTelefonesByCpfBatch] Bulk insert failed, falling back to per-row:", err);
           for (const row of batch) {
             try {
-              await db.insert(clientesTelefones).values(row).onConflictDoNothing();
-              telefonesInseridos++;
+              const inserted = await db
+                .insert(clientesTelefones)
+                .values(row)
+                .onConflictDoNothing()
+                .returning({ id: clientesTelefones.id });
+              telefonesInseridos += inserted.length;
             } catch {
               // skip
             }
