@@ -13358,6 +13358,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         // Insert leads in bulk
         const inserted = await storage.createSalesLeadsBulk(leads);
 
+        // Backfill clientes_telefones for fast phone search
+        try {
+          const tenantIdForPhones = (req as any).tenantId as number | undefined;
+          if (tenantIdForPhones) {
+            const phoneEntries = leads
+              .filter((l) => l.cpf)
+              .map((l) => ({
+                tenantId: tenantIdForPhones,
+                cpf: l.cpf as string,
+                telefones: [l.telefone1, l.telefone2, l.telefone3],
+              }));
+            if (phoneEntries.length > 0) {
+              await storage.addPessoaTelefonesByCpfBatch(phoneEntries);
+            }
+          }
+        } catch (phoneErr) {
+          console.error("[CAMPANHA-IMPORT] Falha ao popular clientes_telefones:", phoneErr);
+        }
+
         // Update campaign counters
         await storage.updateSalesCampaign(campaignId, {
           totalLeads: (campanha.totalLeads || 0) + inserted,
@@ -14020,6 +14039,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               )
             `);
             imported++;
+
+            // Backfill clientes_telefones for fast phone search
+            try {
+              if (mapped.telefone1 || mapped.telefone2 || mapped.telefone3) {
+                await storage.addPessoaTelefonesByCpfBatch([{
+                  tenantId,
+                  cpf: cpfClean,
+                  telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3],
+                }]);
+              }
+            } catch (phoneErr) {
+              console.error(`[HIGIENIZADOS] Falha ao popular clientes_telefones (CPF ${cpfClean}):`, phoneErr);
+            }
           } catch (insertError) {
             console.error(`Erro ao inserir lead CPF ${cpfClean}:`, insertError);
             ignored++;
@@ -22400,6 +22432,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               importadoPor: req.user?.id,
             });
             inseridos++;
+          }
+
+          // Backfill clientes_telefones for fast phone search
+          if (c.cpfCliente && telefoneRaw) {
+            try {
+              await storage.addPessoaTelefonesByCpfBatch([{
+                tenantId,
+                cpf: String(c.cpfCliente),
+                telefones: [String(telefoneRaw)],
+              }]);
+            } catch (phoneErr) {
+              console.error(`[PRODUCAO-IMPORT] Falha ao popular clientes_telefones (CPF ${c.cpfCliente}):`, phoneErr);
+            }
           }
 
           // Carteira de Clientes: add/renew portfolio entry for this vendor

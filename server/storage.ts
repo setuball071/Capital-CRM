@@ -237,6 +237,7 @@ export interface IStorage {
   getClientePessoaById(id: number): Promise<ClientePessoa | undefined>;
   getClientesByCpf(cpf: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
   getPessoasByTelefone(telefoneInput: string, convenio?: string, baseTag?: string): Promise<ClientePessoa[]>;
+  addPessoaTelefonesByCpfBatch(entries: Array<{ tenantId: number; cpf: string; telefones: Array<string | null | undefined> }>): Promise<{ telefonesInseridos: number; pessoasAfetadas: number }>;
   createClientePessoa(data: InsertClientePessoa): Promise<ClientePessoa>;
   updateClientePessoa(id: number, data: Partial<InsertClientePessoa>): Promise<ClientePessoa | undefined>;
   searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number }): Promise<{ clientes: ClientePessoa[]; total: number }>;
@@ -2045,6 +2046,110 @@ export class DbStorage implements IStorage {
     }
 
     return { pessoasAtualizadas, telefonesInseridos };
+  }
+
+  async addPessoaTelefonesByCpfBatch(
+    entries: Array<{ tenantId: number; cpf: string; telefones: Array<string | null | undefined> }>,
+  ): Promise<{ telefonesInseridos: number; pessoasAfetadas: number }> {
+    if (!entries || entries.length === 0) {
+      return { telefonesInseridos: 0, pessoasAfetadas: 0 };
+    }
+
+    // Group by tenant and normalize CPFs + telefones
+    const byTenant = new Map<number, Map<string, Set<string>>>();
+    for (const entry of entries) {
+      if (!entry || !entry.cpf) continue;
+      const cpfNorm = String(entry.cpf).replace(/\D/g, "").padStart(11, "0");
+      if (cpfNorm.length !== 11) continue;
+
+      const phoneSet = new Set<string>();
+      for (const raw of entry.telefones || []) {
+        if (!raw) continue;
+        const tel = String(raw).replace(/\D/g, "");
+        if (tel.length < 8 || tel.length > 11) continue;
+        phoneSet.add(tel);
+      }
+      if (phoneSet.size === 0) continue;
+
+      let tenantMap = byTenant.get(entry.tenantId);
+      if (!tenantMap) {
+        tenantMap = new Map();
+        byTenant.set(entry.tenantId, tenantMap);
+      }
+      const existing = tenantMap.get(cpfNorm);
+      if (existing) {
+        for (const p of phoneSet) existing.add(p);
+      } else {
+        tenantMap.set(cpfNorm, phoneSet);
+      }
+    }
+
+    let telefonesInseridos = 0;
+    const pessoasAfetadas = new Set<number>();
+
+    for (const [tenantId, cpfMap] of byTenant.entries()) {
+      const cpfs = Array.from(cpfMap.keys());
+      if (cpfs.length === 0) continue;
+
+      // Resolve all pessoaIds for these CPFs in this tenant
+      const CHUNK = 1000;
+      const cpfToPessoaIds = new Map<string, number[]>();
+      for (let i = 0; i < cpfs.length; i += CHUNK) {
+        const slice = cpfs.slice(i, i + CHUNK);
+        const rows = await db
+          .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
+          .from(clientesPessoa)
+          .where(and(
+            eq(clientesPessoa.tenantId, tenantId),
+            inArray(clientesPessoa.cpf, slice),
+          ));
+        for (const r of rows) {
+          if (!r.cpf) continue;
+          const arr = cpfToPessoaIds.get(r.cpf) || [];
+          arr.push(r.id);
+          cpfToPessoaIds.set(r.cpf, arr);
+        }
+      }
+
+      // Collect all rows then bulk-insert in batches
+      const rowsToInsert: { pessoaId: number; telefone: string; tipo: string; principal: boolean }[] = [];
+      for (const [cpf, phones] of cpfMap.entries()) {
+        const pessoaIds = cpfToPessoaIds.get(cpf);
+        if (!pessoaIds || pessoaIds.length === 0) continue;
+        for (const pessoaId of pessoaIds) {
+          pessoasAfetadas.add(pessoaId);
+          for (const telefone of phones) {
+            rowsToInsert.push({
+              pessoaId,
+              telefone,
+              tipo: telefone.length === 11 ? "celular" : "fixo",
+              principal: false,
+            });
+          }
+        }
+      }
+
+      const INSERT_BATCH = 1000;
+      for (let i = 0; i < rowsToInsert.length; i += INSERT_BATCH) {
+        const batch = rowsToInsert.slice(i, i + INSERT_BATCH);
+        try {
+          await db.insert(clientesTelefones).values(batch).onConflictDoNothing();
+          telefonesInseridos += batch.length;
+        } catch (err) {
+          console.error("[addPessoaTelefonesByCpfBatch] Bulk insert failed, falling back to per-row:", err);
+          for (const row of batch) {
+            try {
+              await db.insert(clientesTelefones).values(row).onConflictDoNothing();
+              telefonesInseridos++;
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    }
+
+    return { telefonesInseridos, pessoasAfetadas: pessoasAfetadas.size };
   }
 
   // Clientes Telefones
