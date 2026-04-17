@@ -25,6 +25,7 @@ import {
   Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle, Info
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
 type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
@@ -245,17 +246,6 @@ export default function VendasConsulta() {
   
   const [termoBusca, setTermoBusca] = useState("");
   const [searchMode, setSearchMode] = useState<"padrao" | "telefone">("padrao");
-  const [phoneResults, setPhoneResults] = useState<Array<{
-    pessoa_id: number;
-    cpf: string | null;
-    matricula: string | null;
-    nome: string | null;
-    convenio: string | null;
-    orgao: string | null;
-    uf: string | null;
-    municipio: string | null;
-    sit_func: string | null;
-  }> | null>(null);
   const [consultaData, setConsultaData] = useState<ConsultaData | null>(null);
   const [portfolioInfo, setPortfolioInfo] = useState<{ vendorName: string; expiresAt: string } | null>(null);
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
@@ -682,54 +672,16 @@ export default function VendasConsulta() {
     },
   });
 
-  const buscarTelefoneMutation = useMutation({
-    mutationFn: async (telefone: string) => {
-      const cleanTel = telefone.replace(/\D/g, "");
-      if (cleanTel.length < 8 || cleanTel.length > 11) {
-        throw new Error("Telefone inválido. Informe entre 8 e 11 dígitos.");
-      }
-      const res = await apiRequest("POST", "/api/vendas/consulta/buscar-telefone", { telefone: cleanTel });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Erro ao buscar por telefone");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setPhoneResults(data.resultados || []);
-      if (!data.resultados || data.resultados.length === 0) {
-        toast({ title: "Nenhum cliente encontrado", description: "Não localizamos clientes com esse telefone." });
-      } else if (data.resultados.length === 1) {
-        const r = data.resultados[0];
-        const termo = r.cpf || r.matricula;
-        if (termo) {
-          buscarMutation.mutate(termo);
-        } else {
-          toast({ title: "Cliente sem CPF/Matrícula", description: "Não foi possível abrir este cliente.", variant: "destructive" });
-        }
-      }
-    },
-    onError: (error: any) => {
-      setPhoneResults(null);
-      toast({ title: "Erro", description: error.message || "Não foi possível buscar por telefone.", variant: "destructive" });
-    },
-  });
-
   const handleBuscar = () => {
     if (!termoBusca.trim()) {
       toast({
         title: "Atenção",
-        description: searchMode === "telefone" ? "Digite o telefone" : "Digite CPF ou Matrícula",
+        description: "Digite CPF ou Matrícula",
         variant: "destructive",
       });
       return;
     }
-    setPhoneResults(null);
-    if (searchMode === "telefone") {
-      buscarTelefoneMutation.mutate(termoBusca.trim());
-    } else {
-      buscarMutation.mutate(termoBusca.trim());
-    }
+    buscarMutation.mutate(termoBusca.trim());
   };
 
   const handleSelectPhoneResult = (cpf: string | null, matricula: string | null) => {
@@ -845,63 +797,40 @@ export default function VendasConsulta() {
               Busque por CPF, Matrícula ou Telefone para consultar dados completos, contratos e margens disponíveis.
             </p>
             <div className="w-full max-w-md space-y-4">
-              <Tabs value={searchMode} onValueChange={(v) => { setSearchMode(v as "padrao" | "telefone"); setTermoBusca(""); setPhoneResults(null); }} className="w-full">
+              <Tabs value={searchMode} onValueChange={(v) => { setSearchMode(v as "padrao" | "telefone"); setTermoBusca(""); }} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="padrao" data-testid="tab-cpf-matricula">CPF / Matrícula</TabsTrigger>
                   <TabsTrigger value="telefone" data-testid="tab-busca-telefone">Telefone</TabsTrigger>
                 </TabsList>
               </Tabs>
-              <div className="flex gap-2">
-                <Input
-                  placeholder={searchMode === "telefone" ? "(11) 99999-9999" : "Digite CPF ou Matrícula..."}
-                  value={termoBusca}
-                  onChange={(e) => setTermoBusca(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-                  data-testid="input-termo-busca"
-                  className="flex-1"
+              {searchMode === "padrao" ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Digite CPF ou Matrícula..."
+                    value={termoBusca}
+                    onChange={(e) => setTermoBusca(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+                    data-testid="input-termo-busca"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleBuscar}
+                    disabled={buscarMutation.isPending}
+                    data-testid="button-buscar"
+                  >
+                    {buscarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                    Consultar
+                  </Button>
+                </div>
+              ) : (
+                <PhoneClientSearch
+                  onSelect={(r) => handleSelectPhoneResult(r.cpf, r.matricula)}
+                  buttonLabel="Consultar"
+                  inputTestId="input-termo-busca"
+                  buttonTestId="button-buscar"
                 />
-                <Button 
-                  onClick={handleBuscar} 
-                  disabled={buscarMutation.isPending || buscarTelefoneMutation.isPending}
-                  data-testid="button-buscar"
-                >
-                  {(buscarMutation.isPending || buscarTelefoneMutation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-                  Consultar
-                </Button>
-              </div>
+              )}
             </div>
-
-            {phoneResults && phoneResults.length > 1 && (
-              <div className="w-full max-w-2xl mt-8 space-y-2">
-                <div className="text-sm text-muted-foreground text-center mb-2">
-                  {phoneResults.length} clientes encontrados com este telefone. Selecione um para abrir:
-                </div>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {phoneResults.map((r) => (
-                    <Card
-                      key={r.pessoa_id}
-                      className="hover-elevate active-elevate-2 cursor-pointer"
-                      onClick={() => handleSelectPhoneResult(r.cpf, r.matricula)}
-                      data-testid={`phone-result-${r.pessoa_id}`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate">{r.nome || "(sem nome)"}</div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              CPF: {r.cpf || "-"} {r.matricula ? ` · Matrícula: ${r.matricula}` : ""}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {[r.convenio, r.orgao, r.uf, r.municipio].filter(Boolean).join(" · ") || "-"}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

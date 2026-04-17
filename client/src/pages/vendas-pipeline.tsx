@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -305,6 +306,7 @@ export default function VendasPipeline() {
   const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [phoneSearchOpen, setPhoneSearchOpen] = useState(false);
   const [draggedLead, setDraggedLead] = useState<PipelineLead | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSecondary, setShowSecondary] = useState(false);
@@ -825,6 +827,14 @@ export default function VendasPipeline() {
                 </Button>
               )}
             </div>
+            <Button
+              variant="outline"
+              onClick={() => setPhoneSearchOpen(true)}
+              data-testid="button-open-phone-search"
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Buscar por Telefone
+            </Button>
             <Button
               variant={showSecondary ? "secondary" : "outline"}
               onClick={() => setShowSecondary(!showSecondary)}
@@ -1929,6 +1939,34 @@ export default function VendasPipeline() {
               Confirmar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={phoneSearchOpen} onOpenChange={setPhoneSearchOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Buscar Cliente por Telefone</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <PhoneClientSearch
+              onSelect={(r) => {
+                const termo = r.cpf || r.matricula;
+                if (!termo) {
+                  toast({
+                    title: "Cliente sem CPF/Matrícula",
+                    description: "Não foi possível abrir este cliente.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setPhoneSearchOpen(false);
+                navigate(`/vendas/consulta?cpf=${termo}`);
+              }}
+              buttonLabel="Buscar"
+              inputTestId="input-pipeline-phone-search"
+              buttonTestId="button-pipeline-phone-search"
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>
