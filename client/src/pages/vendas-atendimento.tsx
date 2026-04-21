@@ -423,6 +423,7 @@ export default function VendasAtendimento() {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads", atendimentoAtual?.lead?.id, "interactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/queue/next"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
     },
     onError: () => {
       toast({ title: "Erro ao registrar interação", variant: "destructive" });
@@ -560,6 +561,7 @@ export default function VendasAtendimento() {
         propostaValorEstimado: null,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
       setProximoDialogOpen(false);
       proximoMutation.mutate(atendimentoAtual?.campanha?.id);
     } catch {

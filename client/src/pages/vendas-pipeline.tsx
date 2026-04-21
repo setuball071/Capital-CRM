@@ -117,6 +117,7 @@ const KANBAN_COLUMNS_SECONDARY: LeadMarker[] = [
   "SEM_INTERESSE",
   "RETORNAR_DEPOIS",
   "TRANSFERIR",
+  "RECUSADO",
 ];
 
 function formatPhone(phone: string | null | undefined): string {
