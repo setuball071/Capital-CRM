@@ -6176,6 +6176,132 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // POST /api/bases/enriquecer-cpf - Upload Excel com CPFs, retorna dados enriquecidos
+  app.post(
+    "/api/bases/enriquecer-cpf",
+    requireAuth,
+    requireModuleAccess("modulo_base_clientes"),
+    upload.single("arquivo"),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ message: "Arquivo obrigatório" });
+        }
+
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        // Collect CPFs from first column (skip header if it's a string)
+        const cpfs: string[] = [];
+        for (const row of rows) {
+          const cell = row[0];
+          if (!cell) continue;
+          const cleaned = String(cell).replace(/\D/g, "").padStart(11, "0");
+          if (cleaned.length === 11 && !/^0+$/.test(cleaned)) {
+            cpfs.push(cleaned);
+          }
+        }
+
+        if (cpfs.length === 0) {
+          return res.status(400).json({ message: "Nenhum CPF válido encontrado na primeira coluna" });
+        }
+
+        if (cpfs.length > 50000) {
+          return res.status(400).json({ message: "Limite de 50.000 CPFs por arquivo" });
+        }
+
+        // Batch lookup in clientes_pessoa
+        const { inArray } = await import("drizzle-orm");
+        const results = await db
+          .select({
+            cpf: clientesPessoa.cpf,
+            nome: clientesPessoa.nome,
+            dataNascimento: clientesPessoa.dataNascimento,
+            telefonesBase: clientesPessoa.telefonesBase,
+            margemEmprestimoAtual: clientesPessoa.margemEmprestimoAtual,
+            margemCartaoAtual: clientesPessoa.margemCartaoAtual,
+            margem5Atual: clientesPessoa.margem5Atual,
+            convenio: clientesPessoa.convenio,
+            orgaodesc: clientesPessoa.orgaodesc,
+            uf: clientesPessoa.uf,
+            municipio: clientesPessoa.municipio,
+            situacaoFuncional: clientesPessoa.situacaoFuncionalAtual,
+            salarioBruto: clientesPessoa.salarioBrutoAtual,
+          })
+          .from(clientesPessoa)
+          .where(inArray(clientesPessoa.cpf, cpfs));
+
+        const byСpf = new Map(results.map((r) => [r.cpf, r]));
+
+        // Build output Excel
+        const ExcelJS = await import("exceljs");
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet("Resultado");
+
+        ws.columns = [
+          { header: "CPF", key: "cpf", width: 16 },
+          { header: "Nome", key: "nome", width: 40 },
+          { header: "Data Nascimento", key: "dataNascimento", width: 18 },
+          { header: "Telefone 1", key: "tel1", width: 16 },
+          { header: "Telefone 2", key: "tel2", width: 16 },
+          { header: "Telefone 3", key: "tel3", width: 16 },
+          { header: "Margem Empréstimo", key: "margemEmprestimo", width: 20 },
+          { header: "Margem Cartão", key: "margemCartao", width: 18 },
+          { header: "Margem 5%", key: "margem5", width: 15 },
+          { header: "Convênio", key: "convenio", width: 20 },
+          { header: "Órgão", key: "orgao", width: 25 },
+          { header: "UF", key: "uf", width: 8 },
+          { header: "Município", key: "municipio", width: 20 },
+          { header: "Situação Funcional", key: "situacao", width: 22 },
+          { header: "Salário Bruto", key: "salarioBruto", width: 16 },
+          { header: "Encontrado", key: "encontrado", width: 12 },
+        ];
+
+        // Style header
+        ws.getRow(1).font = { bold: true };
+        ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF6C2BD9" } };
+        ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+        for (const cpf of cpfs) {
+          const p = byСpf.get(cpf);
+          if (!p) {
+            ws.addRow({ cpf, encontrado: "Não" });
+            continue;
+          }
+          const tels: string[] = Array.isArray(p.telefonesBase) ? (p.telefonesBase as string[]) : [];
+          ws.addRow({
+            cpf: p.cpf,
+            nome: p.nome || "",
+            dataNascimento: p.dataNascimento ? new Date(p.dataNascimento).toLocaleDateString("pt-BR") : "",
+            tel1: tels[0] || "",
+            tel2: tels[1] || "",
+            tel3: tels[2] || "",
+            margemEmprestimo: p.margemEmprestimoAtual ? parseFloat(String(p.margemEmprestimoAtual)) : "",
+            margemCartao: p.margemCartaoAtual ? parseFloat(String(p.margemCartaoAtual)) : "",
+            margem5: p.margem5Atual ? parseFloat(String(p.margem5Atual)) : "",
+            convenio: p.convenio || "",
+            orgao: p.orgaodesc || "",
+            uf: p.uf || "",
+            municipio: p.municipio || "",
+            situacao: p.situacaoFuncional || "",
+            salarioBruto: p.salarioBruto ? parseFloat(String(p.salarioBruto)) : "",
+            encontrado: "Sim",
+          });
+        }
+
+        const buffer = await wb.xlsx.writeBuffer();
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="enriquecido_${Date.now()}.xlsx"`);
+        return res.send(Buffer.from(buffer));
+      } catch (error) {
+        console.error("Enriquecer CPF error:", error);
+        return res.status(500).json({ message: "Erro ao processar arquivo" });
+      }
+    }
+  );
+
   // POST importar base - Master only - Background processing for large files
   app.post(
     "/api/bases/import",
