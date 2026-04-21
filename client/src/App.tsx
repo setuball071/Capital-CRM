@@ -331,9 +331,7 @@ function Router() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-1">
               {[
-                { key: "tabelas", label: "Tabelas", Icon: BarChart3 },
                 { key: "criativos", label: "Criativos", Icon: Smartphone },
-                { key: "processos", label: "Processos", Icon: Settings },
                 { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap },
               ].map((s) => (
                 <button
