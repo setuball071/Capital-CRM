@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { TabelasSimulator } from "@/components/tabelas-simulator";
 import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  BarChart3,
   Smartphone,
-  Settings,
   GraduationCap,
   FileText,
   Video,
@@ -37,9 +34,7 @@ import {
 import type { Material } from "@shared/schema";
 
 const CATEGORIES = [
-  { key: "tabelas", label: "Tabelas", icon: BarChart3, color: "#6C2BD9" },
   { key: "criativos", label: "Criativos", icon: Smartphone, color: "#E91E63" },
-  { key: "processos", label: "Processos", icon: Settings, color: "#1E88E5" },
   { key: "tutoriais", label: "Tutoriais", icon: GraduationCap, color: "#00C853" },
 ] as const;
 
@@ -239,9 +234,7 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
         )}
 
         <div className="flex-1 overflow-auto p-6">
-          {categoria === "tabelas" ? (
-            <TabelasSimulator />
-          ) : categoria === "criativos" ? (
+          {categoria === "criativos" ? (
             <CriativosGallery />
           ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
