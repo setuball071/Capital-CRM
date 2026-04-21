@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
-import { TabelasSimulator } from "@/components/tabelas-simulator";
 import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,9 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  BarChart3,
   Smartphone,
-  Settings,
   GraduationCap,
   FileText,
   Video,
@@ -44,9 +41,7 @@ import {
 import type { Material } from "@shared/schema";
 
 const CATEGORIES = [
-  { key: "tabelas", label: "Tabelas", icon: BarChart3, color: "#6C2BD9" },
   { key: "criativos", label: "Criativos", icon: Smartphone, color: "#E91E63" },
-  { key: "processos", label: "Processos", icon: Settings, color: "#1E88E5" },
   { key: "tutoriais", label: "Tutoriais", icon: GraduationCap, color: "#00C853" },
 ] as const;
 
@@ -73,7 +68,7 @@ export default function MaterialApoioPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
-    category: "tabelas",
+    category: "criativos",
     type: "pdf",
     url: "",
     description: "",
@@ -177,9 +172,7 @@ export default function MaterialApoioPage() {
         })}
       </div>
 
-      {activeCategory === "tabelas" ? (
-        <TabelasSimulator />
-      ) : activeCategory === "criativos" ? (
+      {activeCategory === "criativos" ? (
         <div className="space-y-4">
           {user?.isMaster && (
             <div className="flex justify-end">
