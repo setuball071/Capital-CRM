@@ -185,6 +185,8 @@ export default function SimuladorPortabilidadePage() {
   const [pdfClientName, setPdfClientName] = useState("");
   const [pdfClientCpf, setPdfClientCpf] = useState("");
   const [pdfClientConvenio, setPdfClientConvenio] = useState("");
+  const [pdfConsultorNome, setPdfConsultorNome] = useState(user?.name || "");
+  const [pdfConsultorTel, setPdfConsultorTel] = useState("");
 
   const lOrgaoRef = useRef<HTMLSelectElement>(null);
   const lPrazoRef = useRef<HTMLInputElement>(null);
@@ -272,9 +274,8 @@ export default function SimuladorPortabilidadePage() {
     if (!cronograma) return;
     const { fluxo, s, meses, parcMedia, taxaImpl } = cronograma;
     const corretor = {
-      nome: user?.name || "Corretor",
-      email: user?.email || "",
-      tel: "",
+      nome: pdfConsultorNome.trim() || user?.name || "Consultor",
+      tel: pdfConsultorTel.trim(),
     };
     const clienteNome = escHtml(pdfClientName.trim());
     const clienteCpf = pdfClientCpf.trim() ? escHtml(maskCpf(pdfClientCpf)) : "";
@@ -336,10 +337,9 @@ export default function SimuladorPortabilidadePage() {
     </div>
   </div>
   <div class="corretor-bar">
-    <div class="avatar">${corretor.nome.charAt(0).toUpperCase()}</div>
     <div class="corretor-info">
       <div class="corretor-nome">${corretor.nome}</div>
-      <div class="corretor-contato">${corretor.email}${corretor.tel ? " &middot; " + corretor.tel : ""}</div>
+      ${corretor.tel ? `<div class="corretor-contato">${corretor.tel}</div>` : ""}
     </div>
   </div>
   ${hasCliente ? `<div class="cliente-bar">
@@ -377,7 +377,7 @@ export default function SimuladorPortabilidadePage() {
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
     setShowPdfDialog(false);
-  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio]);
+  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -683,8 +683,28 @@ export default function SimuladorPortabilidadePage() {
         {showPdfDialog && (
           <div className="pdf-overlay" onClick={() => setShowPdfDialog(false)} data-testid="pdf-dialog-overlay">
             <div className="pdf-dialog" onClick={(e) => e.stopPropagation()} data-testid="pdf-dialog">
-              <div className="pdf-dialog-title">Dados do Cliente para o PDF</div>
-              <div className="pdf-dialog-sub">Preencha os dados do cliente (opcional). Eles serão incluídos na proposta.</div>
+              <div className="pdf-dialog-title">Dados para o PDF</div>
+              <div className="pdf-dialog-sub">Preencha os dados do consultor e do cliente (opcionais).</div>
+              <div className="fg">
+                <label>Seu Nome (Consultor)</label>
+                <input
+                  type="text"
+                  value={pdfConsultorNome}
+                  onChange={(e) => setPdfConsultorNome(e.target.value)}
+                  placeholder="Ex: Maria Oliveira"
+                  data-testid="input-pdf-consultor-nome"
+                />
+              </div>
+              <div className="fg">
+                <label>Seu Telefone (Consultor)</label>
+                <input
+                  type="text"
+                  value={pdfConsultorTel}
+                  onChange={(e) => setPdfConsultorTel(e.target.value)}
+                  placeholder="Ex: (11) 99999-9999"
+                  data-testid="input-pdf-consultor-tel"
+                />
+              </div>
               <div className="fg">
                 <label>Nome do Cliente</label>
                 <input
