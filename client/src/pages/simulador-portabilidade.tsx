@@ -187,6 +187,7 @@ export default function SimuladorPortabilidadePage() {
   const [pdfClientConvenio, setPdfClientConvenio] = useState("");
   const [pdfConsultorNome, setPdfConsultorNome] = useState(user?.name || "");
   const [pdfConsultorTel, setPdfConsultorTel] = useState("");
+  const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState("Consultor");
 
   const lOrgaoRef = useRef<HTMLSelectElement>(null);
   const lPrazoRef = useRef<HTMLInputElement>(null);
@@ -342,7 +343,7 @@ export default function SimuladorPortabilidadePage() {
   <div class="info-bar">
     <div class="consultor-side">
       <div class="consultor-info">
-        <div class="consultor-label">Consultor</div>
+        <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
         <div class="consultor-nome">${corretor.nome}</div>
         ${corretor.tel ? `<div class="consultor-tel">${corretor.tel}</div>` : ""}
       </div>
@@ -383,7 +384,7 @@ export default function SimuladorPortabilidadePage() {
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
     setShowPdfDialog(false);
-  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel]);
+  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -692,13 +693,23 @@ export default function SimuladorPortabilidadePage() {
               <div className="pdf-dialog-title">Dados para o PDF</div>
               <div className="pdf-dialog-sub">Preencha os dados do consultor e do cliente (opcionais).</div>
               <div className="fg">
-                <label>Seu Nome (Consultor)</label>
+                <label>Seu Nome</label>
                 <input
                   type="text"
                   value={pdfConsultorNome}
                   onChange={(e) => setPdfConsultorNome(e.target.value)}
                   placeholder="Ex: Maria Oliveira"
                   data-testid="input-pdf-consultor-nome"
+                />
+              </div>
+              <div className="fg">
+                <label>Seu Título / Cargo</label>
+                <input
+                  type="text"
+                  value={pdfConsultorTitulo}
+                  onChange={(e) => setPdfConsultorTitulo(e.target.value)}
+                  placeholder="Ex: Consultora Financeira"
+                  data-testid="input-pdf-consultor-titulo"
                 />
               </div>
               <div className="fg">
