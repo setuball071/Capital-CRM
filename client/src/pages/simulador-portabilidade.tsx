@@ -363,7 +363,7 @@ export default function SimuladorPortabilidadePage() {
     </div>
     <div class="section-label">Cronograma de Amortização — ${meses} meses</div>
     <table>
-      <thead><tr><th>Mês</th><th>Parcela</th><th>Prazos Pagos</th><th>Amortização Total</th><th style="text-align:right">Total no Mês</th></tr></thead>
+      <thead><tr><th style="width:6%">Mês</th><th style="width:18%">Parcela na Folha</th><th style="width:24%">Prazos Pagos</th><th style="width:28%">Valores de Parcelas Amortizada</th><th style="width:24%;text-align:right">Total no Mês</th></tr></thead>
       <tbody>${fluxo
         .map(
           (l, i) =>
