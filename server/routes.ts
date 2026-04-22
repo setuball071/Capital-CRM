@@ -102,7 +102,7 @@ import {
   companies,
   insertCompanySchema,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray, not, like } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -14463,9 +14463,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       const termoLimpo = termo.trim().replace(/\D/g, "");
+      // Also try zero-padded version (some imports pad to 11 digits)
+      const termoPadded = termoLimpo.padStart(11, "0");
 
-      // First try to find by CPF
+      // First try exact match
       let cliente = await storage.getClientePessoaByCpf(termoLimpo);
+
+      // Try padded version if different
+      if (!cliente && termoPadded !== termoLimpo) {
+        cliente = await storage.getClientePessoaByCpf(termoPadded);
+      }
+
+      // Fallback: LIKE search (handles formatting differences)
+      if (!cliente && termoLimpo.length >= 8) {
+        const [likeResult] = await db
+          .select()
+          .from(clientesPessoa)
+          .where(like(clientesPessoa.cpf, `%${termoLimpo}%`))
+          .limit(1);
+        if (likeResult) cliente = likeResult;
+      }
 
       // If not found by CPF, try to find by matrícula through vínculos
       if (!cliente) {
@@ -14486,9 +14503,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       if (!cliente) {
+        // Check if CPF exists as a lead in any campaign (helps user understand the situation)
+        const leadComCpf = await db
+          .select({ id: salesLeads.id, nome: salesLeads.nome, campaignId: salesLeads.campaignId })
+          .from(salesLeads)
+          .where(eq(salesLeads.cpf, termoLimpo))
+          .limit(1);
+
+        if (leadComCpf.length > 0) {
+          return res.status(404).json({
+            message: `CPF encontrado como lead (${leadComCpf[0].nome}) mas ainda não importado na Base de Clientes. Importe a base para acessar os dados completos.`,
+          });
+        }
+
         return res.status(404).json({
           message:
-            "Cliente não localizado. Verifique os dados informados ou atualize a Base de Clientes.",
+            "Cliente não localizado. Verifique os dados informados ou importe a Base de Clientes.",
         });
       }
 
