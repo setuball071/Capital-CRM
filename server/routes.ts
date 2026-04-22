@@ -102,7 +102,7 @@ import {
   companies,
   insertCompanySchema,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray, not, like } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -14474,14 +14474,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         cliente = await storage.getClientePessoaByCpf(termoPadded);
       }
 
-      // Fallback: LIKE search (handles formatting differences)
+      // Fallback: SQL LIKE search (handles formatting differences)
       if (!cliente && termoLimpo.length >= 8) {
-        const [likeResult] = await db
-          .select()
-          .from(clientesPessoa)
-          .where(like(clientesPessoa.cpf, `%${termoLimpo}%`))
-          .limit(1);
-        if (likeResult) cliente = likeResult;
+        const likeResults = await db.execute(
+          sql`SELECT * FROM clientes_pessoa WHERE cpf LIKE ${"%" + termoLimpo + "%"} LIMIT 1`
+        );
+        if (likeResults.rows.length > 0) {
+          cliente = likeResults.rows[0] as any;
+        }
       }
 
       // If not found by CPF, try to find by matrícula through vínculos
@@ -14527,18 +14527,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // the block is skipped — they own this lead (e.g. imported via Minha Carteira)
       let skipPortfolioBlock = false;
       if (cliente.cpf) {
-        const ownAssignment = await db
-          .select({ id: salesLeadAssignments.id })
-          .from(salesLeadAssignments)
-          .innerJoin(salesLeads, eq(salesLeads.id, salesLeadAssignments.leadId))
-          .where(
-            and(
-              eq(salesLeadAssignments.userId, req.user!.id),
-              eq(salesLeads.cpf, cliente.cpf),
-            ),
-          )
-          .limit(1);
-        if (ownAssignment.length > 0) skipPortfolioBlock = true;
+        const ownAssignment = await db.execute(sql`
+          SELECT sla.id FROM sales_lead_assignments sla
+          INNER JOIN sales_leads sl ON sl.id = sla.lead_id
+          WHERE sla.user_id = ${req.user!.id}
+            AND sl.cpf = ${cliente.cpf}
+          LIMIT 1
+        `);
+        if (ownAssignment.rows.length > 0) skipPortfolioBlock = true;
       }
 
       if (!skipPortfolioBlock) {
