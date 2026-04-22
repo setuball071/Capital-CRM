@@ -1847,6 +1847,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "etiquetas", label: "Etiquetas" },
     { key: "agenda", label: "Agenda" },
     { key: "gestao_pipeline", label: "Gestão Pipeline" },
+    { key: "minha_carteira", label: "Minha Carteira" },
   ],
 } as const;
 
