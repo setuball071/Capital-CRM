@@ -299,33 +299,38 @@ export default function SimuladorPortabilidadePage() {
     .header-right{text-align:right}
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
-    .corretor-bar{display:flex;align-items:center;gap:14px;padding:14px 40px;background:linear-gradient(90deg,#6C2BD9,#1E88E5);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .avatar{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;border:2px solid rgba(255,255,255,0.35)}
-    .corretor-info{flex:1}
-    .corretor-nome{font-size:14px;font-weight:700;letter-spacing:-0.2px}
-    .corretor-contato{font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px}
-    .corpo{padding:20px 40px 0}
-    .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:20px}
-    .resumo-item{padding:14px 16px;background:#f8fafc;border-right:1px solid #e2e8f0}
+    .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-side{display:flex;align-items:center;gap:12px;padding:16px 40px;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-icon{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid rgba(255,255,255,0.3)}
+    .consultor-icon svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .consultor-info{}
+    .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.65);font-weight:700;margin-bottom:3px}
+    .consultor-nome{font-size:13px;font-weight:800;color:#fff;letter-spacing:-0.2px}
+    .consultor-tel{font-size:10px;color:rgba(255,255,255,0.82);margin-top:2px;display:flex;align-items:center;gap:4px}
+    .cliente-side{display:flex;align-items:center;gap:0;padding:0 0 0 32px;flex:1;background:#fafbff}
+    .cli-item{display:flex;flex-direction:column;gap:3px;padding:14px 24px 14px 0;border-right:1px solid #e8ecf5}
+    .cli-item:last-child{border-right:none}
+    .cli-label{font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+    .cli-val{font-size:13px;font-weight:700;color:#1a1a2e}
+    .corpo{padding:24px 40px 0}
+    .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+    .resumo-item{padding:16px 18px;background:#fff;border-right:1px solid #e2e8f0}
     .resumo-item:last-child{border-right:none}
-    .resumo-item label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:5px;font-weight:600}
-    .resumo-item .val{font-size:15px;font-weight:800;color:#1a1a2e}
+    .resumo-item:first-child{background:linear-gradient(135deg,#f5f0ff,#fff);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .resumo-item label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:6px;font-weight:700}
+    .resumo-item .val{font-size:16px;font-weight:800;color:#1a1a2e}
     .resumo-item:first-child .val{color:#6C2BD9}
-    .section-label{font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #6C2BD9;display:inline-block}
-    table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0}
-    thead th{background:#1a1a2e;color:#fff;padding:10px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    tbody td{padding:7px 12px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
+    .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid #6C2BD9;display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
+    table{width:100%;border-collapse:separate;border-spacing:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+    thead th{background:#1a1a2e;color:#fff;padding:10px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    tbody td{padding:8px 14px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
     tbody tr:nth-child(even) td{background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     tbody tr:last-child td{border-bottom:none}
-    td.mes{color:#94a3b8;font-weight:600;font-size:10px}
-    td.parcela{color:#1a1a2e;font-weight:500}
+    td.mes{color:#94a3b8;font-weight:700;font-size:10px}
+    td.parcela{color:#1a1a2e;font-weight:600}
     td.prazos{color:#94a3b8;font-size:10px}
     td.total{color:#6C2BD9;font-weight:800;font-size:12px}
-    .rodape{margin:18px 40px 24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:1.9;letter-spacing:0.1px}
-    .cliente-bar{display:flex;align-items:center;gap:24px;padding:12px 40px;background:#f0f4ff;border-bottom:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .cliente-bar .cli-item{display:flex;flex-direction:column;gap:2px}
-    .cliente-bar .cli-label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
-    .cliente-bar .cli-val{font-size:12px;font-weight:700;color:#1a1a2e}
+    .rodape{margin:20px 40px 28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:2;letter-spacing:0.1px}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:0}}
   </style>
 </head><body>
@@ -336,17 +341,23 @@ export default function SimuladorPortabilidadePage() {
       <div class="header-date">${hoje}</div>
     </div>
   </div>
-  <div class="corretor-bar">
-    <div class="corretor-info">
-      <div class="corretor-nome">${corretor.nome}</div>
-      ${corretor.tel ? `<div class="corretor-contato">${corretor.tel}</div>` : ""}
+  <div class="info-bar">
+    <div class="consultor-side">
+      <div class="consultor-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <div class="consultor-info">
+        <div class="consultor-label">Consultor</div>
+        <div class="consultor-nome">${corretor.nome}</div>
+        ${corretor.tel ? `<div class="consultor-tel">${corretor.tel}</div>` : ""}
+      </div>
     </div>
+    ${hasCliente ? `<div class="cliente-side">
+      ${clienteNome ? `<div class="cli-item"><div class="cli-label">Cliente</div><div class="cli-val">${clienteNome}</div></div>` : ""}
+      ${clienteCpf ? `<div class="cli-item"><div class="cli-label">CPF</div><div class="cli-val">${clienteCpf}</div></div>` : ""}
+      ${clienteConvenio ? `<div class="cli-item"><div class="cli-label">Convênio</div><div class="cli-val">${clienteConvenio}</div></div>` : ""}
+    </div>` : `<div class="cliente-side"></div>`}
   </div>
-  ${hasCliente ? `<div class="cliente-bar">
-    ${clienteNome ? `<div class="cli-item"><div class="cli-label">Cliente</div><div class="cli-val">${clienteNome}</div></div>` : ""}
-    ${clienteCpf ? `<div class="cli-item"><div class="cli-label">CPF</div><div class="cli-val">${clienteCpf}</div></div>` : ""}
-    ${clienteConvenio ? `<div class="cli-item"><div class="cli-label">Convênio</div><div class="cli-val">${clienteConvenio}</div></div>` : ""}
-  </div>` : ""}
   <div class="corpo">
     <div class="resumo">
       <div class="resumo-item"><label>Valor do Contrato</label><div class="val">${fmtR(s.contrato)}</div></div>
