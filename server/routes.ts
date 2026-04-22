@@ -14537,8 +14537,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (ownAssignment.rows.length > 0) skipPortfolioBlock = true;
       }
 
+      let portfolioCheck: Awaited<ReturnType<typeof checkPortfolioBlock>> = { blocked: false };
       if (!skipPortfolioBlock) {
-        const portfolioCheck = await checkPortfolioBlock(
+        portfolioCheck = await checkPortfolioBlock(
           tenantId,
           cliente.cpf || "",
           req.user!.id,
@@ -14821,7 +14822,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         tem_multiplos_vinculos: vinculosFiltrados.length > 1,
         pessoaId: cliente.id,
         leadId,
-        portfolioInfo: portfolioCheck.portfolioInfo ?? null,
+        portfolioInfo: portfolioCheck?.portfolioInfo ?? null,
       });
     } catch (error) {
       console.error("Buscar cliente consulta error:", error);
