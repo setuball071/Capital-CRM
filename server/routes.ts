@@ -14230,6 +14230,192 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     },
   );
 
+  // ===== MINHA CARTEIRA — auto-importação pelo próprio vendedor =====
+
+  // GET /api/vendas/minha-carteira/historico
+  app.get("/api/vendas/minha-carteira/historico", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const campanhas = await db
+        .select({
+          id: salesCampaigns.id,
+          nome: salesCampaigns.nome,
+          totalLeads: salesCampaigns.totalLeads,
+          leadsDistribuidos: salesCampaigns.leadsDistribuidos,
+          createdAt: salesCampaigns.createdAt,
+        })
+        .from(salesCampaigns)
+        .where(
+          and(
+            eq(salesCampaigns.createdBy, userId),
+            eq(salesCampaigns.origem, "carteira_pessoal"),
+          ),
+        )
+        .orderBy(desc(salesCampaigns.createdAt))
+        .limit(50);
+
+      // For each campaign, get assignment status counts
+      const result = await Promise.all(
+        campanhas.map(async (c) => {
+          const rows = await db
+            .select({ status: salesLeadAssignments.status, count: sql<number>`count(*)::int` })
+            .from(salesLeadAssignments)
+            .where(
+              and(
+                eq(salesLeadAssignments.campaignId, c.id),
+                eq(salesLeadAssignments.userId, userId),
+              ),
+            )
+            .groupBy(salesLeadAssignments.status);
+          const counts: Record<string, number> = {};
+          for (const r of rows) counts[r.status] = r.count;
+          return { ...c, counts };
+        }),
+      );
+
+      return res.json(result);
+    } catch (err) {
+      console.error("Minha carteira historico error:", err);
+      return res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+
+  // POST /api/vendas/minha-carteira/importar
+  app.post(
+    "/api/vendas/minha-carteira/importar",
+    requireAuth,
+    upload.single("arquivo"),
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const userName = req.user!.name || "Vendedor";
+
+        if (!req.file) {
+          return res.status(400).json({ message: "Arquivo obrigatório" });
+        }
+
+        const LIMIT = 5000;
+        const XLSX2 = await import("xlsx");
+        const workbook = XLSX2.read(req.file.buffer, { type: "buffer" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: any[] = XLSX2.utils.sheet_to_json(sheet, { header: 1 });
+
+        // Collect CPFs from first column
+        const cpfs: string[] = [];
+        for (const row of rows) {
+          const cell = row[0];
+          if (!cell) continue;
+          const cleaned = String(cell).replace(/\D/g, "").padStart(11, "0");
+          if (cleaned.length === 11 && !/^0+$/.test(cleaned)) {
+            cpfs.push(cleaned);
+          }
+        }
+
+        if (cpfs.length === 0) {
+          return res.status(400).json({ message: "Nenhum CPF válido encontrado na primeira coluna" });
+        }
+        if (cpfs.length > LIMIT) {
+          return res.status(400).json({ message: `Limite de ${LIMIT} CPFs por importação` });
+        }
+
+        // Deduplicate
+        const uniqueCpfs = [...new Set(cpfs)];
+
+        // Batch lookup in clientes_pessoa
+        const cpfToCliente = new Map<string, { nome: string; tel1: string | null; tel2: string | null; tel3: string | null; baseClienteId: number }>();
+        const CHUNK = 1000;
+        for (let i = 0; i < uniqueCpfs.length; i += CHUNK) {
+          const chunk = uniqueCpfs.slice(i, i + CHUNK);
+          const found = await db
+            .select({
+              id: clientesPessoa.id,
+              cpf: clientesPessoa.cpf,
+              nome: clientesPessoa.nome,
+              telefonesBase: clientesPessoa.telefonesBase,
+            })
+            .from(clientesPessoa)
+            .where(inArray(clientesPessoa.cpf, chunk));
+          for (const c of found) {
+            if (!c.cpf) continue;
+            const tels: string[] = Array.isArray(c.telefonesBase) ? (c.telefonesBase as string[]) : [];
+            cpfToCliente.set(c.cpf, {
+              nome: c.nome || `CPF ${c.cpf}`,
+              tel1: tels[0] || null,
+              tel2: tels[1] || null,
+              tel3: tels[2] || null,
+              baseClienteId: c.id,
+            });
+          }
+        }
+
+        // Create campaign automatically
+        const hoje = new Date().toLocaleDateString("pt-BR");
+        const campanha = await storage.createSalesCampaign({
+          nome: `Carteira — ${userName} — ${hoje}`,
+          origem: "carteira_pessoal",
+          status: "ativa",
+          totalLeads: uniqueCpfs.length,
+          leadsDisponiveis: 0,
+          leadsDistribuidos: uniqueCpfs.length,
+          createdBy: userId,
+          tenantId: req.tenantId || null,
+        });
+
+        // Build leads
+        const leadsToInsert: InsertSalesLead[] = uniqueCpfs.map((cpf) => {
+          const info = cpfToCliente.get(cpf);
+          return {
+            campaignId: campanha.id,
+            cpf,
+            nome: info?.nome || `CPF ${cpf}`,
+            telefone1: info?.tel1 || null,
+            telefone2: info?.tel2 || null,
+            telefone3: info?.tel3 || null,
+            baseClienteId: info?.baseClienteId || null,
+            leadMarker: "NOVO",
+            tenantId: req.tenantId || null,
+          };
+        });
+
+        // Insert leads
+        const insertedCount = await storage.createSalesLeadsBulk(leadsToInsert);
+
+        // Fetch inserted leads to get their IDs for assignment
+        const insertedLeads = await db
+          .select({ id: salesLeads.id })
+          .from(salesLeads)
+          .where(eq(salesLeads.campaignId, campanha.id))
+          .orderBy(salesLeads.id);
+
+        // Create assignments directly for this user
+        let ordemFila = await storage.getMaxOrdemFila(userId, campanha.id);
+        for (const lead of insertedLeads) {
+          ordemFila++;
+          await storage.createSalesLeadAssignment({
+            leadId: lead.id,
+            userId,
+            campaignId: campanha.id,
+            status: "novo",
+            ordemFila,
+          });
+        }
+
+        return res.json({
+          message: "Carteira importada com sucesso",
+          total: cpfs.length,
+          unicos: uniqueCpfs.length,
+          importados: insertedCount,
+          encontradosNaBase: cpfToCliente.size,
+          campaignId: campanha.id,
+          campanhaNome: campanha.nome,
+        });
+      } catch (err) {
+        console.error("Minha carteira import error:", err);
+        return res.status(500).json({ message: "Erro ao importar carteira" });
+      }
+    },
+  );
+
   // ===== ENDPOINTS DO VENDEDOR =====
 
   // GET /api/vendas/atendimento/resumo - Resumo do vendedor

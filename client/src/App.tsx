@@ -71,6 +71,7 @@ import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
 import ImportarObservacoesPage from "@/pages/importar-observacoes";
+import MinhaCarteiraPage from "@/pages/minha-carteira";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
 import HubBetaPage from "@/pages/hub-beta";
@@ -472,6 +473,9 @@ function Router() {
               </Route>
               <Route path="/vendas/atendimento">
                 {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/vendas/minha-carteira">
+                {() => <ModuleRoute component={MinhaCarteiraPage} module="modulo_alpha" />}
               </Route>
               <Route path="/vendas/agenda">
                 {() => <ModuleRoute component={VendasAgendaPage} module="modulo_alpha" />}
