@@ -300,13 +300,11 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{display:flex;align-items:center;gap:12px;padding:16px 40px;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-icon{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid rgba(255,255,255,0.3)}
-    .consultor-icon svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .consultor-side{display:flex;align-items:center;padding:18px 40px;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{}
-    .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.65);font-weight:700;margin-bottom:3px}
-    .consultor-nome{font-size:13px;font-weight:800;color:#fff;letter-spacing:-0.2px}
-    .consultor-tel{font-size:10px;color:rgba(255,255,255,0.82);margin-top:2px;display:flex;align-items:center;gap:4px}
+    .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
+    .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
+    .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
     .cliente-side{display:flex;align-items:center;gap:0;padding:0 0 0 32px;flex:1;background:#fafbff}
     .cli-item{display:flex;flex-direction:column;gap:3px;padding:14px 24px 14px 0;border-right:1px solid #e8ecf5}
     .cli-item:last-child{border-right:none}
@@ -343,9 +341,6 @@ export default function SimuladorPortabilidadePage() {
   </div>
   <div class="info-bar">
     <div class="consultor-side">
-      <div class="consultor-icon">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      </div>
       <div class="consultor-info">
         <div class="consultor-label">Consultor</div>
         <div class="consultor-nome">${corretor.nome}</div>
