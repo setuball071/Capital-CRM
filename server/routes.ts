@@ -14523,14 +14523,34 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       // Portfolio block check — applies to all search types (CPF and matrícula)
-      const portfolioCheck = await checkPortfolioBlock(
-        tenantId,
-        cliente.cpf || "",
-        req.user!.id,
-        req.user!.role,
-      );
-      if (portfolioCheck.blocked) {
-        return res.status(403).json({ message: portfolioCheck.message });
+      // Exception: if the current user has an active assignment for a lead with this CPF,
+      // the block is skipped — they own this lead (e.g. imported via Minha Carteira)
+      let skipPortfolioBlock = false;
+      if (cliente.cpf) {
+        const ownAssignment = await db
+          .select({ id: salesLeadAssignments.id })
+          .from(salesLeadAssignments)
+          .innerJoin(salesLeads, eq(salesLeads.id, salesLeadAssignments.leadId))
+          .where(
+            and(
+              eq(salesLeadAssignments.userId, req.user!.id),
+              eq(salesLeads.cpf, cliente.cpf),
+            ),
+          )
+          .limit(1);
+        if (ownAssignment.length > 0) skipPortfolioBlock = true;
+      }
+
+      if (!skipPortfolioBlock) {
+        const portfolioCheck = await checkPortfolioBlock(
+          tenantId,
+          cliente.cpf || "",
+          req.user!.id,
+          req.user!.role,
+        );
+        if (portfolioCheck.blocked) {
+          return res.status(403).json({ message: portfolioCheck.message });
+        }
       }
 
       // Get vínculos (shared across tenants)
