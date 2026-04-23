@@ -188,6 +188,29 @@ export default function SimuladorPortabilidadePage() {
   const [pdfConsultorNome, setPdfConsultorNome] = useState(user?.name || "");
   const [pdfConsultorTel, setPdfConsultorTel] = useState("");
   const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState("Consultor");
+  const [pdfIncluirFoto, setPdfIncluirFoto] = useState(true);
+  const [avatarBase64, setAvatarBase64] = useState<string>("");
+
+  // Carrega avatar do consultor em base64 (para embutir no PDF)
+  useEffect(() => {
+    const url = (user as any)?.avatarUrl;
+    if (!url) { setAvatarBase64(""); return; }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const side = Math.min(img.naturalWidth || 200, img.naturalHeight || 200, 200);
+      canvas.width = side;
+      canvas.height = side;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, side, side);
+        setAvatarBase64(canvas.toDataURL("image/jpeg", 0.85));
+      }
+    };
+    img.onerror = () => setAvatarBase64("");
+    img.src = url;
+  }, [(user as any)?.avatarUrl]);
 
   const lOrgaoRef = useRef<HTMLSelectElement>(null);
   const lPrazoRef = useRef<HTMLInputElement>(null);
@@ -278,6 +301,13 @@ export default function SimuladorPortabilidadePage() {
       nome: pdfConsultorNome.trim() || user?.name || "Consultor",
       tel: pdfConsultorTel.trim(),
     };
+    // Foto do consultor: base64 se disponível e toggle ativo, senão iniciais
+    const consultorIniciais = corretor.nome.split(" ").filter(Boolean).map(n => n[0].toUpperCase()).slice(0, 2).join("");
+    const consultorFotoHtml = pdfIncluirFoto
+      ? (avatarBase64
+          ? `<img src="${avatarBase64}" class="consultor-foto" alt="Foto">`
+          : `<div class="consultor-foto-ini">${consultorIniciais || "?"}</div>`)
+      : "";
     const clienteNome = escHtml(pdfClientName.trim());
     const clienteCpf = pdfClientCpf.trim() ? escHtml(maskCpf(pdfClientCpf)) : "";
     const clienteConvenio = escHtml(pdfClientConvenio.trim());
@@ -302,6 +332,8 @@ export default function SimuladorPortabilidadePage() {
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-side{display:flex;align-items:center;padding:18px 40px;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto{width:54px;height:54px;border-radius:50%;object-fit:cover;border:2.5px solid rgba(255,255,255,0.45);margin-right:16px;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto-ini{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);margin-right:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
@@ -342,6 +374,7 @@ export default function SimuladorPortabilidadePage() {
   </div>
   <div class="info-bar">
     <div class="consultor-side">
+      ${consultorFotoHtml}
       <div class="consultor-info">
         <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
         <div class="consultor-nome">${corretor.nome}</div>
@@ -384,7 +417,7 @@ export default function SimuladorPortabilidadePage() {
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
     setShowPdfDialog(false);
-  }, [cronograma, user, logoBase64, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
+  }, [cronograma, user, logoBase64, avatarBase64, pdfIncluirFoto, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -759,6 +792,46 @@ export default function SimuladorPortabilidadePage() {
                   placeholder="Ex: (11) 99999-9999"
                   data-testid="input-pdf-consultor-tel"
                 />
+              </div>
+              {/* Toggle foto do consultor */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4, padding: "10px 12px", background: "rgba(108,43,217,0.07)", borderRadius: 8, border: "1px solid rgba(108,43,217,0.15)" }}>
+                <div style={{ position: "relative", display: "inline-block", width: 36, height: 20, flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={pdfIncluirFoto}
+                    onChange={e => setPdfIncluirFoto(e.target.checked)}
+                    style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
+                    id="toggle-foto-pdf"
+                  />
+                  <label
+                    htmlFor="toggle-foto-pdf"
+                    style={{
+                      position: "absolute", inset: 0, borderRadius: 20, cursor: "pointer",
+                      background: pdfIncluirFoto ? "#6C2BD9" : "#d1d5db",
+                      transition: "background 0.2s"
+                    }}
+                  >
+                    <span style={{
+                      position: "absolute", top: 3, left: pdfIncluirFoto ? 19 : 3,
+                      width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                      transition: "left 0.2s", display: "block"
+                    }} />
+                  </label>
+                </div>
+                <div style={{ flex: 1, fontSize: 12 }}>
+                  <div style={{ fontWeight: 600 }}>Incluir foto no PDF</div>
+                  <div style={{ color: "#6b7280", fontSize: 11 }}>
+                    {avatarBase64 ? "Sua foto de perfil será exibida no painel do consultor" : "Sem foto: exibirá suas iniciais no painel"}
+                  </div>
+                </div>
+                {/* Preview da foto ou iniciais */}
+                {pdfIncluirFoto && (
+                  avatarBase64
+                    ? <img src={avatarBase64} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", border: "2px solid #6C2BD9" }} alt="Prévia" />
+                    : <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#6C2BD9", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 15, border: "2px solid #6C2BD9" }}>
+                        {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
+                      </div>
+                )}
               </div>
               <div className="fg">
                 <label>Nome do Cliente</label>

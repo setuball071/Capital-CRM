@@ -86,12 +86,15 @@ export function AppSidebar() {
   const isMaster = userRole === "master";
 
   const tenantName = (tenant?.name || "").toLowerCase().trim();
+  // tenantFeatureFlags: controla features por tenant
+  // solicitar_boleto: disponível se o tenant existir (master pode sempre ver)
   const tenantFeatureFlags: Record<string, boolean> = {
-    solicitar_boleto: tenantName.includes("capital"),
+    solicitar_boleto: !!tenant,
   };
 
   const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string }): boolean => {
-    if (item.tenantFeature && !tenantFeatureFlags[item.tenantFeature]) return false;
+    // Master sempre vê tudo, inclusive itens com tenantFeature
+    if (item.tenantFeature && !isMaster && !tenantFeatureFlags[item.tenantFeature]) return false;
     if (item.masterOnly && !isMaster) return false;
     if (item.roleOnly && userRole !== item.roleOnly && !isMaster) return false;
     if (item.rolesAllowed && !item.rolesAllowed.includes(userRole) && !isMaster) return false;
