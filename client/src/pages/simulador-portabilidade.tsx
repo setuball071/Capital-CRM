@@ -237,7 +237,7 @@ export default function SimuladorPortabilidadePage() {
     if (fotoInputRef.current) fotoInputRef.current.value = "";
   };
 
-  // Desenha o preview circular do crop
+  // Desenha o preview do crop (sem corte circular)
   const drawCropPreview = useCallback(() => {
     const canvas = cropCanvasRef.current;
     const img = rawImgRef.current;
@@ -247,14 +247,9 @@ export default function SimuladorPortabilidadePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, size, size);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.clip();
     const scale = Math.max(size / img.width, size / img.height) * cropZoom;
     const dw = img.width * scale; const dh = img.height * scale;
     ctx.drawImage(img, (size - dw) / 2 + cropOffset.x, (size - dh) / 2 + cropOffset.y, dw, dh);
-    ctx.restore();
   }, [cropZoom, cropOffset]);
 
   useEffect(() => { if (cropModalOpen) drawCropPreview(); }, [cropModalOpen, cropZoom, cropOffset, drawCropPreview]);
@@ -262,7 +257,7 @@ export default function SimuladorPortabilidadePage() {
   const confirmCrop = () => {
     const canvas = cropCanvasRef.current;
     if (!canvas) return;
-    setConsultorFotoOverride(canvas.toDataURL("image/jpeg", 0.9));
+    setConsultorFotoOverride(canvas.toDataURL("image/png"));
     setCropModalOpen(false);
   };
 
@@ -392,7 +387,7 @@ export default function SimuladorPortabilidadePage() {
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-side{display:flex;align-items:center;padding:18px 40px;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-foto{width:54px;height:54px;border-radius:50%;object-fit:cover;border:2.5px solid rgba(255,255,255,0.45);margin-right:16px;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto{height:80px;width:auto;max-width:96px;object-fit:contain;margin-right:16px;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);margin-right:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
@@ -861,7 +856,7 @@ export default function SimuladorPortabilidadePage() {
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     {pdfIncluirFoto
                       ? (fotoAtiva
-                          ? <img src={fotoAtiva} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "2.5px solid #6C2BD9", display: "block" }} alt="Foto" />
+                          ? <img src={fotoAtiva} style={{ height: 56, width: "auto", maxWidth: 68, objectFit: "contain", display: "block", borderRadius: 4 }} alt="Foto" />
                           : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#6C2BD9,#1E88E5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid #6C2BD9" }}>
                               {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
                             </div>)
@@ -965,7 +960,7 @@ export default function SimuladorPortabilidadePage() {
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
                 <canvas
                   ref={cropCanvasRef}
-                  style={{ borderRadius: "50%", cursor: cropDragging ? "grabbing" : "grab", border: "3px solid #6C2BD9", userSelect: "none" }}
+                  style={{ borderRadius: 8, cursor: cropDragging ? "grabbing" : "grab", border: "2px solid #e2e8f0", userSelect: "none" }}
                   onMouseDown={handleCropMouseDown}
                   onMouseMove={handleCropMouseMove}
                   onMouseUp={handleCropMouseUp}
