@@ -386,10 +386,10 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{display:flex;align-items:flex-end;padding:0 32px 0 0;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:260px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-foto{height:110px;width:auto;max-width:90px;object-fit:cover;object-position:top center;display:block;flex-shrink:0;margin-right:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-foto-ini{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);margin-right:14px;margin-bottom:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-info{padding:14px 0 14px 0;}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 102px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:88px;object-fit:cover;object-position:top center;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-info{}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
     .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
