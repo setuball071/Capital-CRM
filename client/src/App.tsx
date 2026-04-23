@@ -71,6 +71,7 @@ import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
 import ImportarObservacoesPage from "@/pages/importar-observacoes";
+import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementares";
 import MinhaCarteiraPage from "@/pages/minha-carteira";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
@@ -551,6 +552,9 @@ function Router() {
               </Route>
               <Route path="/admin/importar-observacoes">
                 {() => <RoleRoute component={ImportarObservacoesPage} allowedRoles={["master", "coordenacao", "financeiro"]} />}
+              </Route>
+              <Route path="/importar-dados-complementares">
+                {() => <RoleRoute component={ImportarDadosComplementaresPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

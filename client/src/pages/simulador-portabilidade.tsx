@@ -190,8 +190,19 @@ export default function SimuladorPortabilidadePage() {
   const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState("Consultor");
   const [pdfIncluirFoto, setPdfIncluirFoto] = useState(true);
   const [avatarBase64, setAvatarBase64] = useState<string>("");
+  // Foto escolhida manualmente (sobrepõe avatar do perfil)
+  const [consultorFotoOverride, setConsultorFotoOverride] = useState<string>("");
+  // Crop modal
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropDragging, setCropDragging] = useState(false);
+  const [cropDragStart, setCropDragStart] = useState({ x: 0, y: 0 });
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rawImgRef = useRef<HTMLImageElement | null>(null);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  // Carrega avatar do consultor em base64 (para embutir no PDF)
+  // Carrega avatar do perfil em base64 (fallback se não houver seleção manual)
   useEffect(() => {
     const url = (user as any)?.avatarUrl;
     if (!url) { setAvatarBase64(""); return; }
@@ -200,17 +211,66 @@ export default function SimuladorPortabilidadePage() {
     img.onload = () => {
       const canvas = document.createElement("canvas");
       const side = Math.min(img.naturalWidth || 200, img.naturalHeight || 200, 200);
-      canvas.width = side;
-      canvas.height = side;
+      canvas.width = side; canvas.height = side;
       const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, side, side);
-        setAvatarBase64(canvas.toDataURL("image/jpeg", 0.85));
-      }
+      if (ctx) { ctx.drawImage(img, 0, 0, side, side); setAvatarBase64(canvas.toDataURL("image/jpeg", 0.85)); }
     };
     img.onerror = () => setAvatarBase64("");
     img.src = url;
   }, [(user as any)?.avatarUrl]);
+
+  // Foto final que entra no PDF: override manual > avatar do perfil
+  const fotoAtiva = consultorFotoOverride || avatarBase64;
+
+  // Seleção de foto
+  const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => { rawImgRef.current = img; setCropOffset({ x: 0, y: 0 }); setCropZoom(1); setCropModalOpen(true); };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+    if (fotoInputRef.current) fotoInputRef.current.value = "";
+  };
+
+  // Desenha o preview circular do crop
+  const drawCropPreview = useCallback(() => {
+    const canvas = cropCanvasRef.current;
+    const img = rawImgRef.current;
+    if (!canvas || !img) return;
+    const size = 240;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+    const scale = Math.max(size / img.width, size / img.height) * cropZoom;
+    const dw = img.width * scale; const dh = img.height * scale;
+    ctx.drawImage(img, (size - dw) / 2 + cropOffset.x, (size - dh) / 2 + cropOffset.y, dw, dh);
+    ctx.restore();
+  }, [cropZoom, cropOffset]);
+
+  useEffect(() => { if (cropModalOpen) drawCropPreview(); }, [cropModalOpen, cropZoom, cropOffset, drawCropPreview]);
+
+  const confirmCrop = () => {
+    const canvas = cropCanvasRef.current;
+    if (!canvas) return;
+    setConsultorFotoOverride(canvas.toDataURL("image/jpeg", 0.9));
+    setCropModalOpen(false);
+  };
+
+  const handleCropMouseDown = (e: React.MouseEvent) => { setCropDragging(true); setCropDragStart({ x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y }); };
+  const handleCropMouseMove = (e: React.MouseEvent) => { if (!cropDragging) return; setCropOffset({ x: e.clientX - cropDragStart.x, y: e.clientY - cropDragStart.y }); };
+  const handleCropMouseUp = () => setCropDragging(false);
+  const handleCropTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; setCropDragging(true); setCropDragStart({ x: t.clientX - cropOffset.x, y: t.clientY - cropOffset.y }); };
+  const handleCropTouchMove = (e: React.TouchEvent) => { if (!cropDragging) return; const t = e.touches[0]; setCropOffset({ x: t.clientX - cropDragStart.x, y: t.clientY - cropDragStart.y }); };
 
   const lOrgaoRef = useRef<HTMLSelectElement>(null);
   const lPrazoRef = useRef<HTMLInputElement>(null);
@@ -304,8 +364,8 @@ export default function SimuladorPortabilidadePage() {
     // Foto do consultor: base64 se disponível e toggle ativo, senão iniciais
     const consultorIniciais = corretor.nome.split(" ").filter(Boolean).map(n => n[0].toUpperCase()).slice(0, 2).join("");
     const consultorFotoHtml = pdfIncluirFoto
-      ? (avatarBase64
-          ? `<img src="${avatarBase64}" class="consultor-foto" alt="Foto">`
+      ? (fotoAtiva
+          ? `<img src="${fotoAtiva}" class="consultor-foto" alt="Foto">`
           : `<div class="consultor-foto-ini">${consultorIniciais || "?"}</div>`)
       : "";
     const clienteNome = escHtml(pdfClientName.trim());
@@ -417,7 +477,7 @@ export default function SimuladorPortabilidadePage() {
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
     setShowPdfDialog(false);
-  }, [cronograma, user, logoBase64, avatarBase64, pdfIncluirFoto, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
+  }, [cronograma, user, logoBase64, fotoAtiva, pdfIncluirFoto, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -793,45 +853,56 @@ export default function SimuladorPortabilidadePage() {
                   data-testid="input-pdf-consultor-tel"
                 />
               </div>
-              {/* Toggle foto do consultor */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4, padding: "10px 12px", background: "rgba(108,43,217,0.07)", borderRadius: 8, border: "1px solid rgba(108,43,217,0.15)" }}>
-                <div style={{ position: "relative", display: "inline-block", width: 36, height: 20, flexShrink: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={pdfIncluirFoto}
-                    onChange={e => setPdfIncluirFoto(e.target.checked)}
-                    style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
-                    id="toggle-foto-pdf"
-                  />
-                  <label
-                    htmlFor="toggle-foto-pdf"
-                    style={{
-                      position: "absolute", inset: 0, borderRadius: 20, cursor: "pointer",
-                      background: pdfIncluirFoto ? "#6C2BD9" : "#d1d5db",
-                      transition: "background 0.2s"
-                    }}
-                  >
-                    <span style={{
-                      position: "absolute", top: 3, left: pdfIncluirFoto ? 19 : 3,
-                      width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                      transition: "left 0.2s", display: "block"
-                    }} />
-                  </label>
-                </div>
-                <div style={{ flex: 1, fontSize: 12 }}>
-                  <div style={{ fontWeight: 600 }}>Incluir foto no PDF</div>
-                  <div style={{ color: "#6b7280", fontSize: 11 }}>
-                    {avatarBase64 ? "Sua foto de perfil será exibida no painel do consultor" : "Sem foto: exibirá suas iniciais no painel"}
+              {/* Foto do consultor no PDF */}
+              <div style={{ padding: "12px", background: "rgba(108,43,217,0.06)", borderRadius: 10, border: "1px solid rgba(108,43,217,0.15)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: "#6C2BD9", textTransform: "uppercase", letterSpacing: "0.06em" }}>Foto no PDF</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {/* Preview circular */}
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    {pdfIncluirFoto
+                      ? (fotoAtiva
+                          ? <img src={fotoAtiva} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "2.5px solid #6C2BD9", display: "block" }} alt="Foto" />
+                          : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#6C2BD9,#1E88E5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid #6C2BD9" }}>
+                              {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
+                            </div>)
+                      : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f1f5f9", border: "2px dashed #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🚫</div>
+                    }
+                  </div>
+                  {/* Controles */}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => fotoInputRef.current?.click()}
+                        style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid #6C2BD9", background: "#fff", color: "#6C2BD9", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        {fotoAtiva ? "Trocar foto" : "Escolher foto"}
+                      </button>
+                      {consultorFotoOverride && (
+                        <button
+                          type="button"
+                          onClick={() => setConsultorFotoOverride("")}
+                          style={{ padding: "6px 8px", borderRadius: 7, border: "1.5px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 11, cursor: "pointer" }}
+                          title="Usar foto do perfil"
+                        >↩</button>
+                      )}
+                    </div>
+                    {/* Toggle incluir/ocultar */}
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "#64748b", userSelect: "none" }}>
+                      <div style={{ position: "relative", width: 32, height: 18, flexShrink: 0 }}>
+                        <input type="checkbox" checked={pdfIncluirFoto} onChange={e => setPdfIncluirFoto(e.target.checked)} style={{ opacity: 0, width: 0, height: 0, position: "absolute" }} />
+                        <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirFoto ? "#6C2BD9" : "#cbd5e1", transition: "background .2s", display: "block" }} />
+                        <span style={{ position: "absolute", top: 3, left: pdfIncluirFoto ? 17 : 3, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block" }} />
+                      </div>
+                      Exibir foto no PDF
+                    </label>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                      {fotoAtiva ? (consultorFotoOverride ? "Foto escolhida manualmente" : "Foto do perfil") : "Sem foto: será exibida inicial"}
+                    </div>
                   </div>
                 </div>
-                {/* Preview da foto ou iniciais */}
-                {pdfIncluirFoto && (
-                  avatarBase64
-                    ? <img src={avatarBase64} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", border: "2px solid #6C2BD9" }} alt="Prévia" />
-                    : <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#6C2BD9", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 15, border: "2px solid #6C2BD9" }}>
-                        {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
-                      </div>
-                )}
+                {/* Input hidden para arquivo */}
+                <input ref={fotoInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleFotoSelect} />
               </div>
               <div className="fg">
                 <label>Nome do Cliente</label>
@@ -871,6 +942,64 @@ export default function SimuladorPortabilidadePage() {
                 <button className="btn-sim btn-sim-left" onClick={doExportPDF} data-testid="button-pdf-confirmar">
                   Exportar PDF
                 </button>
+              </div>
+            </div>
+          </div>
+
+        )}
+
+        {/* ── Modal de Crop da Foto (independente do PDF dialog) ── */}
+        {cropModalOpen && (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center" }}
+            onClick={() => setCropModalOpen(false)}
+          >
+            <div
+              style={{ background: "#fff", borderRadius: 16, padding: 24, width: 320, boxShadow: "0 24px 60px rgba(0,0,0,0.4)" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Enquadrar foto</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Arraste para reposicionar e ajuste o zoom.</div>
+
+              {/* Canvas circular */}
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <canvas
+                  ref={cropCanvasRef}
+                  style={{ borderRadius: "50%", cursor: cropDragging ? "grabbing" : "grab", border: "3px solid #6C2BD9", userSelect: "none" }}
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                  onTouchStart={handleCropTouchStart}
+                  onTouchMove={handleCropTouchMove}
+                  onTouchEnd={handleCropMouseUp}
+                />
+              </div>
+
+              {/* Zoom */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                  <span>Zoom</span><span style={{ fontWeight: 600 }}>{Math.round(cropZoom * 100)}%</span>
+                </div>
+                <input
+                  type="range" min={100} max={300} value={Math.round(cropZoom * 100)}
+                  onChange={e => setCropZoom(Number(e.target.value) / 100)}
+                  style={{ width: "100%", accentColor: "#6C2BD9", cursor: "pointer" }}
+                />
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#f8fafc", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                >Cancelar</button>
+                <button
+                  type="button"
+                  onClick={confirmCrop}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#6C2BD9,#1E88E5)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >Usar esta foto</button>
               </div>
             </div>
           </div>
