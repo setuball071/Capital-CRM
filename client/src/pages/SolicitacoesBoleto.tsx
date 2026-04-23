@@ -77,13 +77,13 @@ const TIPOS_BOLETO = [
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pendente:           { label: "Pendente",           color: "bg-yellow-100 text-yellow-800 border-yellow-200",   icon: <Clock className="w-3 h-3" /> },
-  em_andamento:       { label: "Em Andamento",        color: "bg-blue-100 text-blue-800 border-blue-200",         icon: <RefreshCw className="w-3 h-3" /> },
-  solicitado_banco:   { label: "Solicitado ao Banco", color: "bg-purple-100 text-purple-800 border-purple-200",   icon: <FileText className="w-3 h-3" /> },
-  aguardando_retorno: { label: "Aguardando Retorno",  color: "bg-orange-100 text-orange-800 border-orange-200",   icon: <Clock className="w-3 h-3" /> },
-  pendenciado:        { label: "Pendenciado",          color: "bg-red-100 text-red-800 border-red-200",            icon: <AlertCircle className="w-3 h-3" /> },
-  concluido:          { label: "Concluído",            color: "bg-green-100 text-green-800 border-green-200",      icon: <CheckCircle className="w-3 h-3" /> },
-  cancelado:          { label: "Cancelado",            color: "bg-gray-100 text-gray-600 border-gray-200",         icon: <XCircle className="w-3 h-3" /> },
+  pendente:           { label: "Pendente",           color: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700",   icon: <Clock className="w-3 h-3" /> },
+  em_andamento:       { label: "Em Andamento",        color: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",         icon: <RefreshCw className="w-3 h-3" /> },
+  solicitado_banco:   { label: "Solicitado ao Banco", color: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",   icon: <FileText className="w-3 h-3" /> },
+  aguardando_retorno: { label: "Aguardando Retorno",  color: "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",   icon: <Clock className="w-3 h-3" /> },
+  pendenciado:        { label: "Pendenciado",          color: "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700",            icon: <AlertCircle className="w-3 h-3" /> },
+  concluido:          { label: "Concluído",            color: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",      icon: <CheckCircle className="w-3 h-3" /> },
+  cancelado:          { label: "Cancelado",            color: "bg-gray-100 text-muted-foreground border-gray-200 dark:bg-gray-800 dark:text-muted-foreground dark:border-gray-600",         icon: <XCircle className="w-3 h-3" /> },
 };
 
 const STATUS_OPERACIONAL = [
@@ -98,7 +98,7 @@ const STATUS_OPERACIONAL = [
 
 // ── Helper ────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-gray-100 text-gray-600 border-gray-200", icon: null };
+  const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-gray-100 text-muted-foreground border-gray-200", icon: null };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${cfg.color}`}>
       {cfg.icon}{cfg.label}
@@ -318,8 +318,8 @@ export default function SolicitacoesBoleto() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Solicitações de Boleto</h1>
-          <p className="text-sm text-gray-500 mt-1">Gerencie pedidos de boleto para a equipe operacional</p>
+          <h1 className="text-2xl font-bold text-foreground">Solicitações de Boleto</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gerencie pedidos de boleto para a equipe operacional</p>
         </div>
         <Button onClick={() => setModalNova(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="w-4 h-4 mr-2" />
@@ -331,11 +331,11 @@ export default function SolicitacoesBoleto() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4">
-              <div className="text-2xl font-bold text-gray-900">{stats.hoje || "0"}</div>
-              <div className="text-sm font-semibold text-gray-900">
+              <div className="text-2xl font-bold text-foreground">{stats.hoje || "0"}</div>
+              <div className="text-sm font-semibold text-foreground">
                 {Number(stats.valor_hoje || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Solicitações hoje</div>
+              <div className="text-xs text-muted-foreground mt-1">Solicitações hoje</div>
             </CardContent>
           </Card>
           <Card>
@@ -344,7 +344,7 @@ export default function SolicitacoesBoleto() {
               <div className="text-sm font-semibold text-yellow-600">
                 {Number(stats.valor_pendentes || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Pendentes</div>
+              <div className="text-xs text-muted-foreground mt-1">Pendentes</div>
             </CardContent>
           </Card>
           <Card>
@@ -353,7 +353,7 @@ export default function SolicitacoesBoleto() {
               <div className="text-sm font-semibold text-red-600">
                 {Number(stats.valor_cancelados || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Cancelados</div>
+              <div className="text-xs text-muted-foreground mt-1">Cancelados</div>
             </CardContent>
           </Card>
           <Card>
@@ -362,7 +362,7 @@ export default function SolicitacoesBoleto() {
               <div className="text-sm font-semibold text-green-600">
                 {Number(stats.valor_concluidos || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Concluídos</div>
+              <div className="text-xs text-muted-foreground mt-1">Concluídos</div>
             </CardContent>
           </Card>
         </div>
@@ -372,7 +372,7 @@ export default function SolicitacoesBoleto() {
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nome, CPF ou banco..."
                 value={busca}
@@ -399,10 +399,10 @@ export default function SolicitacoesBoleto() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : filtradas.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
+            <div className="text-center py-16 text-muted-foreground">
               <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="font-medium">Nenhuma solicitação encontrada</p>
               <p className="text-sm mt-1">Clique em "Nova Solicitação" para começar</p>
@@ -423,22 +423,22 @@ export default function SolicitacoesBoleto() {
               </TableHeader>
               <TableBody>
                 {filtradas.map(s => (
-                  <TableRow key={s.id} className="hover:bg-gray-50">
+                  <TableRow key={s.id} className="hover:bg-muted/50">
                     <TableCell>
-                      <div className="font-medium text-gray-900">{s.nome_cliente}</div>
-                      <div className="text-xs text-gray-400">{formatCpf(s.cpf_cliente)}</div>
+                      <div className="font-medium text-foreground">{s.nome_cliente}</div>
+                      <div className="text-xs text-muted-foreground">{formatCpf(s.cpf_cliente)}</div>
                     </TableCell>
                     <TableCell className="font-medium">{s.banco}</TableCell>
                     <TableCell>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-muted-foreground">
                         {TIPOS_BOLETO.find(t => t.value === s.tipo_boleto)?.label || s.tipo_boleto}
                       </span>
                     </TableCell>
                     <TableCell>
                       {s.valor ? (
-                        <span className="font-medium text-gray-900">R$ {s.valor}</span>
+                        <span className="font-medium text-foreground">R$ {s.valor}</span>
                       ) : (
-                        <span className="text-gray-400 text-sm">—</span>
+                        <span className="text-muted-foreground text-sm">—</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -448,12 +448,12 @@ export default function SolicitacoesBoleto() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm text-gray-600">{s.solicitado_por_nome || "—"}</div>
+                      <div className="text-sm text-muted-foreground">{s.solicitado_por_nome || "—"}</div>
                       {s.atendido_por_nome && (
-                        <div className="text-xs text-gray-400">Op: {s.atendido_por_nome}</div>
+                        <div className="text-xs text-muted-foreground">Op: {s.atendido_por_nome}</div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-gray-500">
+                    <TableCell className="text-sm text-muted-foreground">
                       {formatData(s.created_at)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -643,33 +643,33 @@ export default function SolicitacoesBoleto() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <StatusBadge status={modalDetalhe.status} />
-                <span className="text-xs text-gray-400">{formatData(modalDetalhe.created_at)}</span>
+                <span className="text-xs text-muted-foreground">{formatData(modalDetalhe.created_at)}</span>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">Banco</span><p className="font-medium">{modalDetalhe.banco}</p></div>
-                <div><span className="text-gray-500">Tipo</span><p className="font-medium">{TIPOS_BOLETO.find(t=>t.value===modalDetalhe.tipo_boleto)?.label || modalDetalhe.tipo_boleto}</p></div>
-                <div><span className="text-gray-500">Valor</span><p className="font-medium">{modalDetalhe.valor ? `R$ ${modalDetalhe.valor}` : "—"}</p></div>
-                <div><span className="text-gray-500">Solicitado por</span><p className="font-medium">{modalDetalhe.solicitado_por_nome || "—"}</p></div>
+                <div><span className="text-muted-foreground">Banco</span><p className="font-medium">{modalDetalhe.banco}</p></div>
+                <div><span className="text-muted-foreground">Tipo</span><p className="font-medium">{TIPOS_BOLETO.find(t=>t.value===modalDetalhe.tipo_boleto)?.label || modalDetalhe.tipo_boleto}</p></div>
+                <div><span className="text-muted-foreground">Valor</span><p className="font-medium">{modalDetalhe.valor ? `R$ ${modalDetalhe.valor}` : "—"}</p></div>
+                <div><span className="text-muted-foreground">Solicitado por</span><p className="font-medium">{modalDetalhe.solicitado_por_nome || "—"}</p></div>
                 {modalDetalhe.ultimos_digitos_cartao && (
-                  <div><span className="text-gray-500">Últimos 4 dígitos</span><p className="font-medium tracking-widest">**** {modalDetalhe.ultimos_digitos_cartao}</p></div>
+                  <div><span className="text-muted-foreground">Últimos 4 dígitos</span><p className="font-medium tracking-widest">**** {modalDetalhe.ultimos_digitos_cartao}</p></div>
                 )}
               </div>
               <hr />
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">Nome do Cliente</span><p className="font-medium">{modalDetalhe.nome_cliente}</p></div>
-                <div><span className="text-gray-500">CPF</span><p className="font-medium">{formatCpf(modalDetalhe.cpf_cliente)}</p></div>
-                {modalDetalhe.data_nascimento && <div><span className="text-gray-500">Nascimento</span><p className="font-medium">{modalDetalhe.data_nascimento}</p></div>}
-                {modalDetalhe.telefone && <div><span className="text-gray-500">Telefone</span><p className="font-medium">{modalDetalhe.telefone}</p></div>}
-                {modalDetalhe.email && <div className="col-span-2"><span className="text-gray-500">E-mail</span><p className="font-medium">{modalDetalhe.email}</p></div>}
+                <div><span className="text-muted-foreground">Nome do Cliente</span><p className="font-medium">{modalDetalhe.nome_cliente}</p></div>
+                <div><span className="text-muted-foreground">CPF</span><p className="font-medium">{formatCpf(modalDetalhe.cpf_cliente)}</p></div>
+                {modalDetalhe.data_nascimento && <div><span className="text-muted-foreground">Nascimento</span><p className="font-medium">{modalDetalhe.data_nascimento}</p></div>}
+                {modalDetalhe.telefone && <div><span className="text-muted-foreground">Telefone</span><p className="font-medium">{modalDetalhe.telefone}</p></div>}
+                {modalDetalhe.email && <div className="col-span-2"><span className="text-muted-foreground">E-mail</span><p className="font-medium">{modalDetalhe.email}</p></div>}
               </div>
               {modalDetalhe.observacao_vendedor && (
-                <div className="bg-gray-50 rounded-lg p-3 text-sm">
-                  <span className="text-gray-500 block mb-1">Obs. do Vendedor</span>
+                <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                  <span className="text-muted-foreground block mb-1">Obs. do Vendedor</span>
                   <p>{modalDetalhe.observacao_vendedor}</p>
                 </div>
               )}
               {modalDetalhe.observacao_operacional && (
-                <div className="bg-blue-50 rounded-lg p-3 text-sm">
+                <div className="bg-blue-500/10 rounded-lg p-3 text-sm">
                   <span className="text-blue-600 block mb-1 font-medium">Retorno do Operacional</span>
                   <p>{modalDetalhe.observacao_operacional}</p>
                 </div>
@@ -684,7 +684,7 @@ export default function SolicitacoesBoleto() {
                 const allAnexos = multiAnexos.length ? multiAnexos : legacyAnexo;
                 if (!allAnexos.length) return null;
                 return (
-                  <div className="bg-green-50 rounded-lg p-3 text-sm">
+                  <div className="bg-green-500/10 rounded-lg p-3 text-sm">
                     <span className="text-green-700 block mb-2 font-medium">
                       {allAnexos.length === 1 ? "Documento Anexado" : `Documentos Anexados (${allAnexos.length})`}
                     </span>
@@ -731,7 +731,7 @@ export default function SolicitacoesBoleto() {
           </DialogHeader>
           {modalStatus && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 <span className="font-medium">{modalStatus.nome_cliente}</span> · {modalStatus.banco}
               </div>
               <div>

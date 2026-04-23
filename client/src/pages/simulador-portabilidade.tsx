@@ -466,6 +466,44 @@ export default function SimuladorPortabilidadePage() {
           .sim-wrap .prazos-wrap { grid-template-columns: 1fr; }
           .sim-wrap .panel { border-right: none; border-bottom: 1px solid #E5E7EB; }
         }
+        /* ── Dark mode ── */
+        .dark .sim-wrap { color: #e5e7eb; }
+        .dark .sim-wrap .panel { background: #1e1e2e; border-right-color: #2d2d3f; }
+        .dark .sim-wrap .main-grid { background: #1e1e2e; }
+        .dark .sim-wrap label { color: #9ca3af; }
+        .dark .sim-wrap input, .dark .sim-wrap select { background: #2d2d3f; border-color: #3d3d55; color: #e5e7eb; }
+        .dark .sim-wrap input:focus, .dark .sim-wrap select:focus { border-color: #6C2BD9; }
+        .dark .sim-wrap input[readonly] { background: #252535; color: #6b7280; }
+        .dark .sim-wrap .results { background: #252535; border-color: #3d3d55; }
+        .dark .sim-wrap .ri .v { color: #a78bfa; }
+        .dark .sim-wrap .panel-right .ri .v { color: #60a5fa; }
+        .dark .sim-wrap .sim-section { background: #181825; border-top-color: #2d2d3f; }
+        .dark .sim-wrap .section-title { color: #9ca3af; }
+        .dark .sim-wrap .pc { background: #1e1e2e; border-color: #3d3d55; }
+        .dark .sim-wrap .pc:hover { border-color: #6C2BD9; }
+        .dark .sim-wrap .pc-meses { color: #e5e7eb; }
+        .dark .sim-wrap .pc-taxa { color: #9ca3af; }
+        .dark .sim-wrap .table-section { background: #1e1e2e; border-top-color: #2d2d3f; }
+        .dark .sim-wrap .table-title { color: #e5e7eb; }
+        .dark .sim-wrap .table-meta { color: #9ca3af; }
+        .dark .sim-wrap table { color: #e5e7eb; }
+        .dark .sim-wrap thead th { background: #252535; color: #9ca3af; border-bottom-color: #3d3d55; }
+        .dark .sim-wrap tbody tr { border-bottom-color: #2d2d3f; }
+        .dark .sim-wrap tbody tr:hover { background: #252535; }
+        .dark .sim-wrap td { color: #d1d5db; }
+        .dark .sim-wrap .tm { color: #6b7280; }
+        .dark .sim-wrap .ta { color: #a78bfa; }
+        .dark .sim-wrap .ta2 { color: #e5e7eb; }
+        .dark .sim-wrap .pdf-dialog { background: #1e1e2e; color: #e5e7eb; }
+        .dark .sim-wrap .pdf-dialog-title { color: #e5e7eb; }
+        .dark .sim-wrap .pdf-dialog-sub { color: #9ca3af; }
+        .dark .sim-wrap .btn-cancel { background: #2d2d3f; border-color: #3d3d55; color: #9ca3af; }
+        .dark .sim-wrap .mode-toggle { border-color: #3d3d55; }
+        .dark .sim-wrap .mode-btn { background: #2d2d3f; color: #9ca3af; }
+        .dark .sim-wrap .mode-btn:first-child { border-right-color: #3d3d55; }
+        .dark .sim-wrap .panel-label { color: #9ca3af; }
+        .dark .sim-wrap .empty-sim { color: #6b7280; }
+        .dark .sim-wrap .prazos-col-label { color: #9ca3af; }
       `}</style>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <div className="sim-wrap">
