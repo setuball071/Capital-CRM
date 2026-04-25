@@ -4,6 +4,42 @@ import { log } from "./vite";
 import { db } from "./storage";
 import { nomenclaturas, userPermissions } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+// Aplica índices de performance na inicialização (IF NOT EXISTS — seguro re-executar)
+async function applyPerformanceIndexes() {
+  const statements = [
+    // clientes_pessoa
+    `CREATE INDEX IF NOT EXISTS idx_pessoa_tenant_id ON clientes_pessoa(tenant_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_pessoa_matricula ON clientes_pessoa(matricula)`,
+    `CREATE INDEX IF NOT EXISTS idx_pessoa_base_tag ON clientes_pessoa(base_tag_ultima)`,
+    // clientes_folha_mes — índice crítico para DISTINCT ON pessoa_id, competencia DESC
+    `CREATE INDEX IF NOT EXISTS idx_folha_pessoa_competencia ON clientes_folha_mes(pessoa_id, competencia DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_folha_base_tag ON clientes_folha_mes(base_tag)`,
+    // clientes_contratos
+    `CREATE INDEX IF NOT EXISTS idx_contratos_banco ON clientes_contratos(banco)`,
+    `CREATE INDEX IF NOT EXISTS idx_contratos_tipo ON clientes_contratos(tipo_contrato)`,
+    `CREATE INDEX IF NOT EXISTS idx_contratos_base_tag ON clientes_contratos(base_tag)`,
+    `CREATE INDEX IF NOT EXISTS idx_contratos_status ON clientes_contratos(status)`,
+    // pg_trgm para ILIKE '%valor%' eficiente
+    `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
+    `CREATE INDEX IF NOT EXISTS idx_pessoa_convenio_trgm ON clientes_pessoa USING gin(convenio gin_trgm_ops)`,
+    `CREATE INDEX IF NOT EXISTS idx_pessoa_orgao_trgm ON clientes_pessoa USING gin(orgaodesc gin_trgm_ops)`,
+    `CREATE INDEX IF NOT EXISTS idx_folha_sitfunc_trgm ON clientes_folha_mes USING gin(sit_func_no_mes gin_trgm_ops)`,
+  ];
+
+  let applied = 0;
+  for (const stmt of statements) {
+    try {
+      await db.execute(sql.raw(stmt));
+      applied++;
+    } catch (e: any) {
+      // pg_trgm pode não estar disponível em alguns ambientes — não bloqueia
+      log(`[perf-index] aviso: ${e?.message?.split('\n')[0]}`);
+    }
+  }
+  log(`[perf-index] ${applied}/${statements.length} índices verificados`);
+}
 
 // Module migration mapping: old module name -> new module name
 const MODULE_MIGRATION_MAP: Record<string, string> = {
@@ -80,6 +116,9 @@ const BANCOS_BRASILEIROS = [
 ];
 
 export async function seedDatabase() {
+  // Aplica índices de performance antes de qualquer coisa
+  await applyPerformanceIndexes();
+
   try {
     const adminEmail = "admin@sistema.com";
     const adminPassword = "Admin@2025";
