@@ -420,14 +420,14 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px rgba(108,43,217,0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{position:relative;z-index:2;margin-left:120px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
     .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
-    .cliente-side{display:flex;align-items:center;gap:0;padding:0 40px;flex:1;background:linear-gradient(100deg,#f3eeff 0%,#f7f8ff 50%,#fff 100%);border-left:4px solid #6C2BD9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .cliente-side{display:flex;align-items:center;gap:0;padding:0 40px;flex:1;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .cli-item{display:flex;flex-direction:column;gap:5px;padding:0 36px 0 0;border-right:1px solid #ddd6f7}
     .cli-item:last-child{border-right:none;padding-right:0}
     .cli-label{font-size:8px;color:#6C2BD9;text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
