@@ -374,6 +374,14 @@ export default function SimuladorPortabilidadePage() {
     [leftState, rightState]
   );
 
+  // Formata telefone para padrão (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
+  const formatarTelefone = (tel: string): string => {
+    const digits = tel.replace(/\D/g, "");
+    if (digits.length === 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+    if (digits.length === 10) return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
+    return tel; // retorna original se não reconhecer o padrão
+  };
+
   const doExportPDF = useCallback(() => {
     if (!cronograma) return;
     const { fluxo, s, meses, parcMedia, taxaImpl } = cronograma;
@@ -415,15 +423,15 @@ export default function SimuladorPortabilidadePage() {
     .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-info{position:relative;z-index:2;margin-left:90px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
+    .consultor-info{position:relative;z-index:2;margin-left:120px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
     .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
-    .cliente-side{display:flex;align-items:center;gap:0;padding:0 0 0 32px;flex:1;background:#fafbff}
-    .cli-item{display:flex;flex-direction:column;gap:3px;padding:14px 24px 14px 0;border-right:1px solid #e8ecf5}
-    .cli-item:last-child{border-right:none}
-    .cli-label{font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:700}
-    .cli-val{font-size:13px;font-weight:700;color:#1a1a2e}
+    .cliente-side{display:flex;align-items:center;gap:0;padding:0 40px;flex:1;background:linear-gradient(100deg,#f3eeff 0%,#f7f8ff 50%,#fff 100%);border-left:4px solid #6C2BD9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .cli-item{display:flex;flex-direction:column;gap:5px;padding:0 36px 0 0;border-right:1px solid #ddd6f7}
+    .cli-item:last-child{border-right:none;padding-right:0}
+    .cli-label{font-size:8px;color:#6C2BD9;text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
+    .cli-val{font-size:17px;font-weight:800;color:#1a1a2e;letter-spacing:-0.3px}
     .corpo{padding:24px 40px 0}
     .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
     .resumo-item{padding:16px 18px;background:#fff;border-right:1px solid #e2e8f0}
@@ -459,7 +467,7 @@ export default function SimuladorPortabilidadePage() {
       <div class="consultor-info">
         <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
         <div class="consultor-nome">${corretor.nome}</div>
-        ${corretor.tel ? `<div class="consultor-tel">${corretor.tel}</div>` : ""}
+        ${corretor.tel ? `<div class="consultor-tel">${formatarTelefone(corretor.tel)}</div>` : ""}
       </div>
     </div>
     ${hasCliente ? `<div class="cliente-side">
