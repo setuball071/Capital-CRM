@@ -27,6 +27,14 @@ interface FluxoLine {
   parcela: number;
 }
 
+interface PriceLine {
+  mes: number;
+  parcela: number;
+  juros: number;
+  amortizacao: number;
+  saldoDevedor: number;
+}
+
 interface CronogramaState {
   fluxo: FluxoLine[];
   s: SimState;
@@ -125,6 +133,23 @@ function gerarFluxo(s: SimState, meses: number): FluxoLine[] {
     });
   }
   return linhas;
+}
+
+// Gera a evolução mês a mês pela Tabela Price (sem antecipação)
+function gerarTabelaPrice(parcela: number, taxaPerc: number, n: number): PriceLine[] {
+  const i = taxaPerc / 100;
+  // Recalcula saldo a partir da parcela e taxa (inverso do coefPrice)
+  const saldo0 = i === 0 ? parcela * n : parcela * (1 - Math.pow(1 + i, -n)) / i;
+  const lines: PriceLine[] = [];
+  let saldo = saldo0;
+  for (let mes = 1; mes <= n; mes++) {
+    const juros = saldo * i;
+    const amort = parcela - juros;
+    const novoSaldo = Math.max(0, saldo - amort);
+    lines.push({ mes, parcela, juros, amortizacao: amort, saldoDevedor: novoSaldo });
+    saldo = novoSaldo;
+  }
+  return lines;
 }
 
 function buildPrazoCards(s: SimState): PrazoCard[] {
@@ -352,6 +377,7 @@ export default function SimuladorPortabilidadePage() {
   const doExportPDF = useCallback(() => {
     if (!cronograma) return;
     const { fluxo, s, meses, parcMedia, taxaImpl } = cronograma;
+    const isPrazoMaximo = fluxo.every(l => l.amortsCols.length === 0);
     const corretor = {
       nome: pdfConsultorNome.trim() || user?.name || "Consultor",
       tel: pdfConsultorTel.trim(),
@@ -445,23 +471,55 @@ export default function SimuladorPortabilidadePage() {
   <div class="corpo">
     <div class="resumo">
       <div class="resumo-item"><label>Valor do Contrato</label><div class="val">${fmtR(s.contrato)}</div></div>
-      <div class="resumo-item"><label>Prazo Estratégia</label><div class="val">${meses} meses</div></div>
-      <div class="resumo-item"><label>Parcela Média</label><div class="val">${fmtR(parcMedia)}</div></div>
-      <div class="resumo-item"><label>Taxa Média a.m.</label><div class="val">${fmtN(taxaImpl, 2)}%</div></div>
+      <div class="resumo-item"><label>${isPrazoMaximo ? "Prazo Total" : "Prazo Estratégia"}</label><div class="val">${meses} meses</div></div>
+      <div class="resumo-item"><label>Parcela Mensal</label><div class="val">${fmtR(parcMedia)}</div></div>
+      <div class="resumo-item"><label>Taxa a.m.</label><div class="val">${fmtN(taxaImpl, 2)}%</div></div>
     </div>
+    ${isPrazoMaximo ? (() => {
+      const priceLines = gerarTabelaPrice(parcMedia, taxaImpl, meses);
+      const totalJuros = priceLines.reduce((a, l) => a + l.juros, 0);
+      const totalAmort = priceLines.reduce((a, l) => a + l.amortizacao, 0);
+      const totalPago2 = priceLines.reduce((a, l) => a + l.parcela, 0);
+      return `
+    <div class="section-label">Evolução do Contrato — Tabela Price — ${meses} meses</div>
+    <table>
+      <thead><tr>
+        <th style="width:6%">Mês</th>
+        <th style="width:22%;text-align:right">Parcela</th>
+        <th style="width:22%;text-align:right">Juros</th>
+        <th style="width:22%;text-align:right">Amortização</th>
+        <th style="width:28%;text-align:right">Saldo Devedor</th>
+      </tr></thead>
+      <tbody>${priceLines.map(l =>
+        `<tr>
+          <td class="mes">${String(l.mes).padStart(2,"0")}</td>
+          <td class="total" style="text-align:right">${fmtR(l.parcela)}</td>
+          <td style="text-align:right;color:#e05252">${fmtR(l.juros)}</td>
+          <td style="text-align:right;color:#2e7d32">${fmtR(l.amortizacao)}</td>
+          <td class="total" style="text-align:right">${fmtR(l.saldoDevedor)}</td>
+        </tr>`).join("")}
+        <tr style="font-weight:700;background:#f8faff;border-top:2px solid #e2e8f0">
+          <td style="font-size:9px;color:#94a3b8">TOTAL</td>
+          <td style="text-align:right">${fmtR(totalPago2)}</td>
+          <td style="text-align:right;color:#e05252">${fmtR(totalJuros)}</td>
+          <td style="text-align:right;color:#2e7d32">${fmtR(totalAmort)}</td>
+          <td style="text-align:right">—</td>
+        </tr>
+      </tbody>
+    </table>`;
+    })() : `
     <div class="section-label">Cronograma de Amortização — ${meses} meses</div>
     <table>
       <thead><tr><th style="width:6%">Mês</th><th style="width:18%">Parcela na Folha</th><th style="width:24%">Prazos Pagos</th><th style="width:28%">Valores de Parcelas Amortizada</th><th style="width:24%;text-align:right">Total no Mês</th></tr></thead>
-      <tbody>${fluxo
-        .map(
-          (l, i) =>
-            `<tr><td class="mes">${String(i + 1).padStart(2, "0")}</td><td class="parcela">${fmtR(l.parcela)}</td><td class="prazos">${l.prazosStr}</td><td>${fmtR(l.amortTotal)}</td><td class="total" style="text-align:right">${fmtR(l.totalMes)}</td></tr>`
-        )
-        .join("")}</tbody>
-    </table>
+      <tbody>${fluxo.map((l, i) =>
+          `<tr><td class="mes">${String(i + 1).padStart(2, "0")}</td><td class="parcela">${fmtR(l.parcela)}</td><td class="prazos">${l.prazosStr}</td><td>${fmtR(l.amortTotal)}</td><td class="total" style="text-align:right">${fmtR(l.totalMes)}</td></tr>`
+        ).join("")}</tbody>
+    </table>`}
   </div>
   <div class="rodape">
-    * Cálculos de amortização de parcela são diários e sofrem alteração.<br>
+    ${isPrazoMaximo
+      ? `* Simulação da evolução do contrato sem antecipação de parcelas (Tabela Price).<br>`
+      : `* Cálculos de amortização de parcela são diários e sofrem alteração.<br>`}
     * Proposta válida até ${amanha}, sujeita a alteração sem aviso prévio.<br>
     * A taxa de juros final e a redução do valor da parcela poderão sofrer oscilações a critério das instituições bancárias.
   </div>
@@ -763,11 +821,17 @@ export default function SimuladorPortabilidadePage() {
           <div className="table-header">
             <div>
               <div className="table-title" data-testid="text-cronograma-titulo">
-                {cronograma ? `Cronograma — ${cronograma.meses} meses` : "Cronograma de Amortização"}
+                {cronograma
+                  ? (cronograma.fluxo.every(l => l.amortsCols.length === 0)
+                      ? `Evolução do Contrato — ${cronograma.meses} meses`
+                      : `Cronograma — ${cronograma.meses} meses`)
+                  : "Cronograma de Amortização"}
               </div>
               {cronograma && (
                 <div className="table-meta" data-testid="text-cronograma-meta">
-                  Contrato: {fmtR(cronograma.s.contrato)} · Parcela Média: {fmtR(cronograma.parcMedia)} · Taxa Média: {fmtN(cronograma.taxaImpl, 2)}% a.m. · Total Pago: {fmtR(cronograma.totalPago)}
+                  {cronograma.fluxo.every(l => l.amortsCols.length === 0)
+                    ? `Contrato: ${fmtR(cronograma.s.contrato)} · Parcela: ${fmtR(cronograma.parcMedia)} · Taxa: ${fmtN(cronograma.taxaImpl, 2)}% a.m. · Sem antecipação (prazo máximo)`
+                    : `Contrato: ${fmtR(cronograma.s.contrato)} · Parcela Média: ${fmtR(cronograma.parcMedia)} · Taxa Média: ${fmtN(cronograma.taxaImpl, 2)}% a.m. · Total Pago: ${fmtR(cronograma.totalPago)}`}
                 </div>
               )}
             </div>
@@ -782,7 +846,37 @@ export default function SimuladorPortabilidadePage() {
               <div className="empty-sim">
                 Calcule um contrato e selecione um prazo acima.
               </div>
+            ) : cronograma.fluxo.every(l => l.amortsCols.length === 0) ? (
+              // PRAZO MÁXIMO — Tabela Price (evolução normal do contrato)
+              (() => {
+                const priceLines = gerarTabelaPrice(cronograma.parcMedia, cronograma.taxaImpl, cronograma.meses);
+                return (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Mês</th>
+                        <th style={{ textAlign: "right" }}>Parcela</th>
+                        <th style={{ textAlign: "right" }}>Juros</th>
+                        <th style={{ textAlign: "right" }}>Amortização</th>
+                        <th style={{ textAlign: "right" }}>Saldo Devedor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceLines.map((l) => (
+                        <tr key={l.mes}>
+                          <td className="tm">{l.mes}</td>
+                          <td className="ta2">{fmtR(l.parcela)}</td>
+                          <td className="ta" style={{ color: "#e05252" }}>{fmtR(l.juros)}</td>
+                          <td className="ta" style={{ color: "#2e7d32" }}>{fmtR(l.amortizacao)}</td>
+                          <td className="ta">{fmtR(l.saldoDevedor)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()
             ) : (
+              // AMORTIZAÇÃO ANTECIPADA — tabela original
               <table>
                 <thead>
                   <tr>
