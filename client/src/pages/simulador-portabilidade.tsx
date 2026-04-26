@@ -412,10 +412,11 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 102px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:88px;object-fit:cover;object-position:top center;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-info{}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto-fade{position:absolute;left:0;top:0;bottom:0;width:180px;background:linear-gradient(to right,transparent 25%,rgba(80,20,190,0.92) 75%);z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:3;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-info{position:relative;z-index:3;margin-left:85px;text-shadow:0 1px 4px rgba(0,0,0,0.3)}
     .consultor-label{font-size:7.5px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);font-weight:700;margin-bottom:6px}
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
     .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
@@ -456,6 +457,7 @@ export default function SimuladorPortabilidadePage() {
   <div class="info-bar">
     <div class="consultor-side">
       ${consultorFotoHtml}
+      ${fotoAtiva && pdfIncluirFoto ? '<div class="consultor-foto-fade"></div>' : ''}
       <div class="consultor-info">
         <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
         <div class="consultor-nome">${corretor.nome}</div>
