@@ -844,7 +844,16 @@ export default function SimuladorPortabilidadePage() {
               )}
             </div>
             {cronograma && (
-              <button className="btn-pdf" onClick={() => setShowPdfDialog(true)} data-testid="button-exportar-pdf">
+              <button className="btn-pdf" onClick={() => {
+                // Pré-preenche convênio com o órgão selecionado (se ainda não foi preenchido manualmente)
+                if (!pdfClientConvenio && cronograma) {
+                  const orgao = cronograma.side === "left"
+                    ? lOrgaoRef.current?.value
+                    : rOrgaoRef.current?.value;
+                  if (orgao) setPdfClientConvenio(orgao);
+                }
+                setShowPdfDialog(true);
+              }} data-testid="button-exportar-pdf">
                 Exportar PDF
               </button>
             )}
@@ -916,7 +925,7 @@ export default function SimuladorPortabilidadePage() {
         </div>
 
         {showPdfDialog && (
-          <div className="pdf-overlay" onClick={() => setShowPdfDialog(false)} data-testid="pdf-dialog-overlay">
+          <div className="pdf-overlay" data-testid="pdf-dialog-overlay">
             <div className="pdf-dialog" onClick={(e) => e.stopPropagation()} data-testid="pdf-dialog">
               <div className="pdf-dialog-title">Dados para o PDF</div>
               <div className="pdf-dialog-sub">Preencha os dados do consultor e do cliente (opcionais).</div>
