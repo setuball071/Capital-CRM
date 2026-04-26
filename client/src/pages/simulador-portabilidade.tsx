@@ -845,8 +845,8 @@ export default function SimuladorPortabilidadePage() {
             </div>
             {cronograma && (
               <button className="btn-pdf" onClick={() => {
-                // Pré-preenche convênio com o órgão selecionado (se ainda não foi preenchido manualmente)
-                if (!pdfClientConvenio && cronograma) {
+                // Sempre sincroniza convênio com o órgão selecionado ao abrir o dialog
+                if (cronograma) {
                   const orgao = cronograma.side === "left"
                     ? lOrgaoRef.current?.value
                     : rOrgaoRef.current?.value;
