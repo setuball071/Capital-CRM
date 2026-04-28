@@ -204,6 +204,80 @@ function RankingTableCompact({ title, icon: Icon, data, type }: {
   );
 }
 
+function CorretorCard({ v }: { v: VendedorRanking }) {
+  const pctGeral = Math.min(v.percentualMeta, 100);
+  const pctCartao = Math.min(v.percentualMetaCartao, 100);
+  const medalha =
+    v.posicao === 1 ? { bg: "bg-yellow-500/10 border-yellow-500/30", text: "text-yellow-600 dark:text-yellow-400", emoji: "🥇" } :
+    v.posicao === 2 ? { bg: "bg-gray-300/10 border-gray-400/30", text: "text-gray-500 dark:text-gray-300", emoji: "🥈" } :
+    v.posicao === 3 ? { bg: "bg-orange-500/10 border-orange-500/30", text: "text-orange-600 dark:text-orange-400", emoji: "🥉" } :
+    null;
+
+  return (
+    <Card className={`flex flex-col ${medalha ? `${medalha.bg} border` : ""}`}>
+      <CardContent className="p-4 flex flex-col gap-3">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="relative shrink-0">
+            <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm ring-1 ring-primary/20">
+              {getInitials(v.nome)}
+            </div>
+            {medalha && (
+              <span className="absolute -top-1 -right-1 text-base leading-none">{medalha.emoji}</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-sm truncate">{v.nome}</div>
+            <div className="text-xs text-muted-foreground">{v.posicao}º lugar · {v.contratos} contrato{v.contratos !== 1 ? "s" : ""}</div>
+          </div>
+        </div>
+
+        {/* Geral */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Geral</span>
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${v.percentualMeta >= 100 ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
+              {v.percentualMeta}%
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-base font-bold tracking-tight">{formatBRL(v.producaoGeral)}</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">meta {formatBRL(v.metaGeral)}</span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${v.percentualMeta >= 100 ? "bg-green-500" : "bg-gradient-to-r from-primary to-chart-2"}`}
+              style={{ width: `${pctGeral}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Cartão */}
+        {v.metaCartao > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-dashed">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-purple-400">Cartão</span>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${v.percentualMetaCartao >= 100 ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-purple-500/10 text-purple-400"}`}>
+                {v.percentualMetaCartao}%
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-base font-bold text-purple-400">{formatBRL(v.producaoCartao)}</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">meta {formatBRL(v.metaCartao)}</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${v.percentualMetaCartao >= 100 ? "bg-green-500" : "bg-gradient-to-r from-purple-600 to-purple-400"}`}
+                style={{ width: `${pctCartao}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function HistoricoProducaoTab() {
   const monthOptions = getMonthOptions();
   const [mes, setMes] = useState(monthOptions[0].value);
@@ -294,6 +368,20 @@ function HistoricoProducaoTab() {
             <RankingTableCompact title="Ranking Geral" icon={Trophy} data={data.rankingGeral} type="geral" />
             <RankingTableCompact title="Ranking Cartão" icon={CreditCard} data={data.rankingCartao} type="cartao" />
           </div>
+
+          {data.rankingGeral.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={16} className="text-muted-foreground" />
+                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Painel Individual</h3>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {data.rankingGeral.map((v) => (
+                  <CorretorCard key={v.userId} v={v} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

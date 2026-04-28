@@ -96,6 +96,56 @@ const STATUS_OPERACIONAL = [
   { value: "cancelado",          label: "Cancelado" },
 ];
 
+// ── Timeline helpers ──────────────────────────────────────────
+interface TimelineEntry { data: string; texto: string; }
+
+function parseTimeline(text: string): TimelineEntry[] {
+  if (!text?.trim()) return [];
+  // Formato novo: entradas separadas por \n---\n, cada uma com [dd/MM/yyyy HH:mm]\ntexto
+  if (text.includes("\n---\n") || /^\[.+?\]/.test(text)) {
+    return text
+      .split("\n---\n")
+      .filter(Boolean)
+      .map(part => {
+        const match = part.match(/^\[(.+?)\]\n?([\s\S]*)$/);
+        if (match) return { data: match[1], texto: match[2].trim() };
+        return { data: "", texto: part.trim() };
+      })
+      .filter(e => e.texto);
+  }
+  // Legado: texto plano — exibe como bloco único
+  return [{ data: "", texto: text.trim() }];
+}
+
+function TimelineRetorno({ texto }: { texto: string }) {
+  const entries = parseTimeline(texto);
+  if (!entries.length) return null;
+  return (
+    <div className="space-y-0">
+      {entries.map((entry, i) => (
+        <div key={i} className="flex gap-3">
+          {/* linha vertical */}
+          <div className="flex flex-col items-center shrink-0" style={{ width: 16 }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200 dark:ring-blue-900 mt-0.5 shrink-0" />
+            {i < entries.length - 1 && (
+              <div className="w-px flex-1 bg-blue-200 dark:bg-blue-800/60 mt-1" />
+            )}
+          </div>
+          {/* conteúdo */}
+          <div className={`flex-1 ${i < entries.length - 1 ? "pb-4" : ""}`}>
+            {entry.data && (
+              <div className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-0.5">
+                {entry.data}
+              </div>
+            )}
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{entry.texto}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Helper ────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-gray-100 text-muted-foreground border-gray-200", icon: null };
@@ -259,10 +309,17 @@ export default function SolicitacoesBoleto() {
 
   function handleAtualizarStatus() {
     if (!novoStatus || !modalStatus) return;
+    // Empilha nova entrada no histórico com timestamp automático
+    let finalObs = modalStatus.observacao_operacional || "";
+    if (obsOperacional.trim()) {
+      const timestamp = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+      const novaEntrada = `[${timestamp}]\n${obsOperacional.trim()}`;
+      finalObs = finalObs ? `${novaEntrada}\n---\n${finalObs}` : novaEntrada;
+    }
     atualizarStatusMutation.mutate({
       id: modalStatus.id,
       status: novoStatus,
-      observacaoOperacional: obsOperacional || null,
+      observacaoOperacional: finalObs || null,
       boletoAnexos: boletoFiles.length > 0 ? boletoFiles : null,
     });
   }
@@ -270,7 +327,7 @@ export default function SolicitacoesBoleto() {
   function abrirModalStatus(s: SolicitacaoBoleto) {
     setModalStatus(s);
     setNovoStatus(s.status);
-    setObsOperacional(s.observacao_operacional || "");
+    setObsOperacional(""); // sempre limpa — novo retorno é só o novo texto
     setBoletoFiles([]);
   }
 
@@ -670,8 +727,16 @@ export default function SolicitacoesBoleto() {
               )}
               {modalDetalhe.observacao_operacional && (
                 <div className="bg-blue-500/10 rounded-lg p-3 text-sm">
-                  <span className="text-blue-600 block mb-1 font-medium">Retorno do Operacional</span>
-                  <p>{modalDetalhe.observacao_operacional}</p>
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold text-xs uppercase tracking-wide">
+                      Histórico Operacional
+                    </span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {parseTimeline(modalDetalhe.observacao_operacional).length} entrada{parseTimeline(modalDetalhe.observacao_operacional).length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <TimelineRetorno texto={modalDetalhe.observacao_operacional} />
                 </div>
               )}
               {(() => {
@@ -747,15 +812,27 @@ export default function SolicitacoesBoleto() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Histórico anterior */}
+              {modalStatus.observacao_operacional && (
+                <div>
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Histórico anterior</Label>
+                  <div className="mt-1.5 bg-muted/40 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <TimelineRetorno texto={modalStatus.observacao_operacional} />
+                  </div>
+                </div>
+              )}
               <div>
-                <Label>Observação / Retorno</Label>
+                <Label>Novo retorno</Label>
                 <Textarea
-                  placeholder="Ex: Pendente selfie do cliente, aguardando retorno do banco..."
+                  placeholder="Digite o retorno desta atualização..."
                   value={obsOperacional}
                   onChange={e => setObsOperacional(e.target.value)}
                   className="mt-1"
                   rows={3}
                 />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  A data e hora serão adicionadas automaticamente ao salvar.
+                </p>
               </div>
               <div>
                 <Label>Anexar Documentos (opcional)</Label>
