@@ -14101,14 +14101,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         console.log(`[HIGIENIZADOS] Step1 ok: ${mappedRows.length} linhas mapeadas, ${uniqueCpfs.length} CPFs únicos`);
 
+        // Helper: format JS string[] as PostgreSQL text array literal "{a,b,c}"
+        // Drizzle passes JS arrays as "record" type — passing as string avoids that bug
+        const toPgTextArray = (arr: string[]) => `{${arr.map(v => `"${v.replace(/"/g, '\\"')}"`).join(',')}}`;
+
         // ── STEP 2: Bulk check portfolio blocks ──
         let blockedCpfs = new Set<string>();
         if (uniqueCpfs.length > 0) {
           try {
+            const cpfArrayStr = toPgTextArray(uniqueCpfs);
             const blockedResult = await db.execute(sql`
               SELECT DISTINCT cpf FROM client_portfolio
               WHERE tenant_id = ${tenantId}
-                AND cpf = ANY(${uniqueCpfs}::text[])
+                AND cpf = ANY(${cpfArrayStr}::text[])
                 AND status = 'ATIVO'
                 AND expires_at > NOW()
                 AND vendor_id != ${userId}
@@ -14124,9 +14129,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         // ── STEP 3: Bulk lookup clientes_pessoa IDs ──
         const pessoaIdByCpf = new Map<string, number>();
         if (uniqueCpfs.length > 0) {
+          const cpfArrayStr = toPgTextArray(uniqueCpfs);
           const pessoaResult = await db.execute(sql`
             SELECT id, cpf FROM clientes_pessoa
-            WHERE cpf = ANY(${uniqueCpfs}::text[])
+            WHERE cpf = ANY(${cpfArrayStr}::text[])
           `);
           for (const r of pessoaResult.rows as any[]) {
             pessoaIdByCpf.set(r.cpf, r.id);
