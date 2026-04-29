@@ -14100,10 +14100,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const removedCpfsList: string[] = [];
 
         // ── STEP 4: Filter rows and prepare lead batch ──
-        interface LeadRow { cpfClean: string | null; mapped: Record<string, string>; baseClienteId: number | null; dadosHigienizados: Record<string, string>; }
+        type LeadRow = { cpfClean: string | null; mapped: Record<string, string>; baseClienteId: number | null; dadosHigienizados: Record<string, string>; };
         const leadRows: LeadRow[] = [];
-        const matriculaUpdates: { cpf: string; matricula: string; pessoaId: number }[] = [];
-        const phoneRows: { tenantId: number; cpf: string | null; telefones: (string | undefined)[] }[] = [];
+        const matriculaUpdates: { matricula: string; pessoaId: number }[] = [];
+        const phoneRows: Array<{ tenantId: number; cpf: string; telefones: Array<string | undefined> }> = [];
 
         for (const { mapped, cpfClean, dadosHigienizados } of mappedRows) {
           if (cpfClean && blockedCpfs.has(cpfClean)) {
@@ -14116,13 +14116,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           if (baseClienteId) {
             updated++;
             if (mapped.matricula) {
-              matriculaUpdates.push({ cpf: cpfClean!, matricula: mapped.matricula, pessoaId: baseClienteId });
+              matriculaUpdates.push({ matricula: mapped.matricula, pessoaId: baseClienteId });
             }
           }
 
           leadRows.push({ cpfClean, mapped, baseClienteId, dadosHigienizados });
 
-          if (mapped.telefone1 || mapped.telefone2 || mapped.telefone3) {
+          // Only add phone rows where cpf is a non-null string (required by addPessoaTelefonesByCpfBatch)
+          if (cpfClean && (mapped.telefone1 || mapped.telefone2 || mapped.telefone3)) {
             phoneRows.push({ tenantId, cpf: cpfClean, telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3] });
           }
         }
@@ -14192,9 +14193,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           resumo: { imported, updated, ignored, total: parsed.data.length, removedByPortfolio, removedCpfs: removedCpfsList.slice(0, 50) },
           colunasDetectadas: Object.values(headerMapping),
         });
-      } catch (error) {
-        console.error("Importar higienizados error:", error);
-        return res.status(500).json({ message: "Erro ao importar lista higienizada" });
+      } catch (error: any) {
+        console.error("Importar higienizados error:", error?.message || error);
+        return res.status(500).json({ message: "Erro ao importar lista higienizada", detail: error?.message });
       }
     }
   );
