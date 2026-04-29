@@ -14040,6 +14040,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           createdBy: userId,
         });
 
+        console.log(`[HIGIENIZADOS] Iniciando import: ${parsed.data.length} linhas, tenant ${tenantId}`);
+
         // ── STEP 1: Map all rows to clean data in memory ──
         const rows = parsed.data as Record<string, string>[];
         interface MappedRow { mapped: Record<string, string>; cpfClean: string | null; dadosHigienizados: Record<string, string>; }
@@ -14063,6 +14065,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const allCpfsRaw = mappedRows.map(r => r.cpfClean).filter(Boolean) as string[];
         const uniqueCpfs = [...new Set(allCpfsRaw)];
 
+        console.log(`[HIGIENIZADOS] Step1 ok: ${mappedRows.length} linhas mapeadas, ${uniqueCpfs.length} CPFs únicos`);
+
         // ── STEP 2: Bulk check portfolio blocks ──
         let blockedCpfs = new Set<string>();
         if (uniqueCpfs.length > 0) {
@@ -14081,6 +14085,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         }
 
+        console.log(`[HIGIENIZADOS] Step2 ok: ${blockedCpfs.size} bloqueados`);
+
         // ── STEP 3: Bulk lookup clientes_pessoa IDs ──
         const pessoaIdByCpf = new Map<string, number>();
         if (uniqueCpfs.length > 0) {
@@ -14092,6 +14098,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             pessoaIdByCpf.set(r.cpf, r.id);
           }
         }
+
+        console.log(`[HIGIENIZADOS] Step3 ok: ${pessoaIdByCpf.size} pessoas na base`);
 
         let imported = 0;
         let updated = 0;
@@ -14127,6 +14135,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             phoneRows.push({ tenantId, cpf: cpfClean, telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3] });
           }
         }
+
+        console.log(`[HIGIENIZADOS] Step4 ok: ${leadRows.length} leads para inserir`);
 
         // ── STEP 5: INSERT sales_leads em lotes de 50 concorrentes ──
         const CONCURRENT = 50;
@@ -14192,8 +14202,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           colunasDetectadas: Object.values(headerMapping),
         });
       } catch (error: any) {
-        console.error("Importar higienizados error:", error?.message || error);
-        return res.status(500).json({ message: "Erro ao importar lista higienizada", detail: error?.message });
+        console.error("[HIGIENIZADOS] ERRO FATAL:", error?.message || error, error?.stack);
+        return res.status(500).json({ message: error?.message || "Erro ao importar lista higienizada" });
       }
     }
   );
