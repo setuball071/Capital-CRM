@@ -210,13 +210,17 @@ export default function SimuladorPortabilidadePage() {
   const [pdfClientName, setPdfClientName] = useState("");
   const [pdfClientCpf, setPdfClientCpf] = useState("");
   const [pdfClientConvenio, setPdfClientConvenio] = useState("");
-  const [pdfConsultorNome, setPdfConsultorNome] = useState(user?.name || "");
-  const [pdfConsultorTel, setPdfConsultorTel] = useState("");
-  const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState("Consultor");
-  const [pdfIncluirFoto, setPdfIncluirFoto] = useState(true);
+  // Dados do consultor — carregados do localStorage para persistir entre sessões
+  const [pdfConsultorNome, setPdfConsultorNome] = useState<string>(() => localStorage.getItem("pdf_consultor_nome") ?? user?.name ?? "");
+  const [pdfConsultorTel, setPdfConsultorTel] = useState<string>(() => localStorage.getItem("pdf_consultor_tel") ?? "");
+  const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState<string>(() => localStorage.getItem("pdf_consultor_titulo") ?? "Consultor");
+  const [pdfIncluirFoto, setPdfIncluirFoto] = useState<boolean>(() => localStorage.getItem("pdf_incluir_foto") !== "false");
+  const [consultorDadosSalvos, setConsultorDadosSalvos] = useState(false);
   const [avatarBase64, setAvatarBase64] = useState<string>("");
-  // Foto escolhida manualmente (sobrepõe avatar do perfil)
-  const [consultorFotoOverride, setConsultorFotoOverride] = useState<string>("");
+  // Foto escolhida manualmente (sobrepõe avatar do perfil) — também persistida
+  const [consultorFotoOverride, setConsultorFotoOverride] = useState<string>(() => {
+    try { return localStorage.getItem("pdf_consultor_foto") ?? ""; } catch { return ""; }
+  });
   // Crop modal
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
@@ -226,6 +230,19 @@ export default function SimuladorPortabilidadePage() {
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
   const rawImgRef = useRef<HTMLImageElement | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Salva dados do consultor no localStorage sempre que mudarem
+  useEffect(() => {
+    localStorage.setItem("pdf_consultor_nome", pdfConsultorNome);
+    localStorage.setItem("pdf_consultor_tel", pdfConsultorTel);
+    localStorage.setItem("pdf_consultor_titulo", pdfConsultorTitulo);
+    localStorage.setItem("pdf_incluir_foto", String(pdfIncluirFoto));
+    try { localStorage.setItem("pdf_consultor_foto", consultorFotoOverride); } catch { /* foto muito grande */ }
+    // Mostra indicador "Salvo" por 2 segundos
+    setConsultorDadosSalvos(true);
+    const t = setTimeout(() => setConsultorDadosSalvos(false), 2000);
+    return () => clearTimeout(t);
+  }, [pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo, pdfIncluirFoto, consultorFotoOverride]);
 
   // Carrega avatar do perfil em base64 (fallback se não houver seleção manual)
   useEffect(() => {
@@ -929,6 +946,18 @@ export default function SimuladorPortabilidadePage() {
             <div className="pdf-dialog" onClick={(e) => e.stopPropagation()} data-testid="pdf-dialog">
               <div className="pdf-dialog-title">Dados para o PDF</div>
               <div className="pdf-dialog-sub">Preencha os dados do consultor e do cliente (opcionais).</div>
+
+              {/* ── Seção Consultor ── */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#6C2BD9" }}>📌 Dados do Consultor</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: "#16a34a",
+                  opacity: consultorDadosSalvos ? 1 : 0,
+                  transition: "opacity 0.4s",
+                  display: "flex", alignItems: "center", gap: 3,
+                }}>✓ Salvo</span>
+              </div>
+
               <div className="fg">
                 <label>Seu Nome</label>
                 <input
@@ -1010,6 +1039,11 @@ export default function SimuladorPortabilidadePage() {
                 {/* Input hidden para arquivo */}
                 <input ref={fotoInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleFotoSelect} />
               </div>
+              {/* ── Seção Cliente ── */}
+              <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0 10px", paddingTop: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b" }}>👤 Dados do Cliente</span>
+              </div>
+
               <div className="fg">
                 <label>Nome do Cliente</label>
                 <input
