@@ -23796,7 +23796,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const result = await db.execute(sql`
         UPDATE solicitacoes_boleto
-        SET 
+        SET
           status = ${status},
           observacao_operacional = ${observacaoOperacional || null},
           boleto_anexo = COALESCE(${validatedAnexo}, boleto_anexo),
@@ -26769,6 +26769,104 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       res.json({ imported, skipped, errors });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao importar observações" });
+    }
+  });
+
+  // DELETE /api/client-observations/limpar - Remove observações por CSV (cpf+observacao) ou todos de um CPF
+  app.post("/api/client-observations/limpar", requireAuth, upload.single("file"), async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "Arquivo CSV não enviado" });
+      }
+
+      const tenantId = req.tenantId!;
+
+      let content: string;
+      try {
+        content = req.file.buffer.toString("utf-8");
+        if (content.includes("�")) throw new Error("bad utf8");
+      } catch {
+        content = req.file.buffer.toString("latin1");
+      }
+      content = content.replace(/^﻿/, "");
+
+      const lines = content.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      if (lines.length === 0) return res.status(400).json({ message: "Arquivo vazio" });
+
+      const firstLine = lines[0];
+      const delimiter = (firstLine.split(";").length >= firstLine.split(",").length) ? ";" : ",";
+      const header = firstLine.toLowerCase().split(delimiter).map((h: string) => h.trim().replace(/"/g, "").replace(/﻿/g, ""));
+      const cpfIdx = header.findIndex((h: string) => h === "cpf");
+
+      if (cpfIdx === -1) return res.status(400).json({ message: "CSV deve ter coluna 'cpf'" });
+
+      const obsIdx = header.findIndex((h: string) => h === "observacao" || h === "observação");
+
+      let removed = 0;
+      let errors = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+
+        const cols: string[] = [];
+        let inQuote = false;
+        let cur = "";
+        for (const ch of line) {
+          if (ch === '"') { inQuote = !inQuote; }
+          else if (ch === delimiter && !inQuote) { cols.push(cur.trim()); cur = ""; }
+          else { cur += ch; }
+        }
+        cols.push(cur.trim());
+
+        const rawCpf = (cols[cpfIdx] || "").replace(/"/g, "").trim();
+        if (!rawCpf) { errors++; continue; }
+        const cpf = rawCpf.replace(/[^0-9]/g, "");
+        if (cpf.length < 11) { errors++; continue; }
+
+        try {
+          if (obsIdx !== -1) {
+            // Remove observação específica
+            const obs = (cols[obsIdx] || "").replace(/"/g, "").trim();
+            if (!obs) {
+              // Sem obs específica → remove todas do CPF
+              const result = await db.execute(sql`
+                DELETE FROM client_observations
+                WHERE tenant_id = ${tenantId}
+                  AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+              `);
+              removed += result.rowCount || 0;
+            } else {
+              const result = await db.execute(sql`
+                DELETE FROM client_observations
+                WHERE tenant_id = ${tenantId}
+                  AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+                  AND observation = ${obs}
+              `);
+              removed += result.rowCount || 0;
+            }
+          } else {
+            // Sem coluna obs → remove todas as observações do CPF
+            const result = await db.execute(sql`
+              DELETE FROM client_observations
+              WHERE tenant_id = ${tenantId}
+                AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
+            `);
+            removed += result.rowCount || 0;
+          }
+        } catch {
+          errors++;
+        }
+      }
+
+      res.json({ removed, errors });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao remover observações" });
     }
   });
 

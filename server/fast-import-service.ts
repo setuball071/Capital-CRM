@@ -1006,8 +1006,8 @@ class FastImportService {
         salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
         base_tag = ${baseTag},
         import_run_id = ${run.id},
-        exc_qtd = COALESCE(EXCLUDED.exc_qtd, clientes_folha_mes.exc_qtd),
-        exc_soma = COALESCE(EXCLUDED.exc_soma, clientes_folha_mes.exc_soma)
+        exc_qtd = EXCLUDED.exc_qtd,
+        exc_soma = EXCLUDED.exc_soma
     `);
 
     console.log(`[FastImport] Folha upserted: ${folhaResult.rowCount || 0}`);

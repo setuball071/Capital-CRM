@@ -1357,14 +1357,14 @@ export class DbStorage implements IStorage {
         if (sitParts.length === 1) {
           folhaWhereFragments.push(sitParts[0]);
         } else if (sitParts.length > 1) {
-          folhaWhereFragments.push(sql`(${sitParts.reduce((a, b) => sql`${a} OR ${b}`)})`);
+          folhaWhereFragments.push(sql`(${sql.join(sitParts, sql` OR `)})`);
         }
       }
       if (baseRefFolha) {
         folhaWhereFragments.push(sql`base_tag = ${baseRefFolha}`);
       }
       const folhaInnerWhere = folhaWhereFragments.length > 0
-        ? sql`WHERE ${folhaWhereFragments.reduce((a, b, i) => i === 0 ? b : sql`${a} AND ${b}`)}`
+        ? sql`WHERE ${sql.join(folhaWhereFragments, sql` AND `)}`
         : sql``;
       
       const folhaJoinSql = needsFolhaJoin ? sql`
@@ -1438,9 +1438,7 @@ export class DbStorage implements IStorage {
         const exclConditions = filtros.bancos_excluir.map(banco =>
           sql`cx.banco ILIKE ${'%' + banco + '%'}`
         );
-        const combinedExcl = exclConditions.reduce((acc, curr, idx) =>
-          idx === 0 ? curr : sql`${acc} OR ${curr}`
-        );
+        const combinedExcl = sql.join(exclConditions, sql` OR `);
         const baseScope = baseRefD8
           ? sql` AND cx.base_tag = ${baseRefD8}`
           : sql``;
@@ -1449,26 +1447,16 @@ export class DbStorage implements IStorage {
 
       // Contrato conditions (parameterized)
       if (filtros.bancos && filtros.bancos.length > 0) {
-        // Múltiplos bancos: usar OR com ILIKE para cada banco (lógica inclusiva)
-        const bancoConditions = filtros.bancos.map(banco => 
+        const bancoConditions = filtros.bancos.map(banco =>
           sql`c.banco ILIKE ${'%' + banco + '%'}`
         );
-        // Juntar com OR: cliente deve ter contrato em PELO MENOS UM dos bancos selecionados
-        const combinedBancos = bancoConditions.reduce((acc, curr, idx) => 
-          idx === 0 ? curr : sql`${acc} OR ${curr}`
-        );
-        whereConditions.push(sql`(${combinedBancos})`);
+        whereConditions.push(sql`(${sql.join(bancoConditions, sql` OR `)})`);
       }
       if (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) {
-        // Múltiplos tipos: usar OR com ILIKE para cada tipo (lógica inclusiva)
-        const tipoConditions = filtros.tipos_contrato.map(tipo => 
+        const tipoConditions = filtros.tipos_contrato.map(tipo =>
           sql`c.tipo_contrato ILIKE ${'%' + tipo + '%'}`
         );
-        // Juntar com OR: cliente deve ter PELO MENOS UM dos tipos selecionados
-        const combinedTipos = tipoConditions.reduce((acc, curr, idx) => 
-          idx === 0 ? curr : sql`${acc} OR ${curr}`
-        );
-        whereConditions.push(sql`(${combinedTipos})`);
+        whereConditions.push(sql`(${sql.join(tipoConditions, sql` OR `)})`);
       }
       if (filtros.parcela_min !== undefined) {
         whereConditions.push(sql`c.valor_parcela >= ${filtros.parcela_min}`);
@@ -1532,12 +1520,10 @@ export class DbStorage implements IStorage {
           EXTRACT(YEAR FROM AGE(NOW(), p.data_nascimento)) <= ${filtros.idade_max}`);
       }
 
-      // Combine WHERE conditions
+      // Combine WHERE conditions usando sql.join para evitar aninhamento profundo
       let whereSql = sql``;
       if (whereConditions.length > 0) {
-        whereSql = sql`WHERE ${whereConditions.reduce((acc, cond, i) => 
-          i === 0 ? cond : sql`${acc} AND ${cond}`
-        )}`;
+        whereSql = sql`WHERE ${sql.join(whereConditions, sql` AND `)}`;
       }
 
       // Build final query with all parameterized parts
