@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -9,13 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Loader2, Upload, Sparkles, CheckCircle2, FileSpreadsheet, ArrowLeft } from "lucide-react";
 
 interface ImportResult {
-  message: string;
-  campanha: { id: number; nome: string };
-  resumo: { imported: number; updated: number; ignored: number; total: number };
-  colunasDetectadas: string[];
+  imported: number;
+  updated: number;
+  ignored: number;
+  removedByPortfolio: number;
+  campaignId: number;
+  nomeCampanha: string;
+  total?: number;
 }
 
 const KNOWN_COLUMNS = [
@@ -53,6 +57,10 @@ export default function VendasImportarHigienizados() {
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [detectedMapping, setDetectedMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobTotal, setJobTotal] = useState(0);
+  const [jobProgress, setJobProgress] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const COLUMN_MAP: Record<string, string> = {
     cpf: "cpf",
@@ -128,6 +136,30 @@ export default function VendasImportarHigienizados() {
     reader.readAsText(selected, 'utf-8');
   };
 
+  // Poll job status while processing
+  useEffect(() => {
+    if (!jobId) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/vendas/import-job/${jobId}`, { credentials: "include" });
+        if (!res.ok) return;
+        const job = await res.json();
+        setJobProgress(job.progress || 0);
+        if (job.status === "done") {
+          clearInterval(pollRef.current!);
+          setJobId(null);
+          setResult({ ...job.result, total: job.total });
+          toast({ title: "Importação concluída!", description: `${job.result.imported} leads importados` });
+        } else if (job.status === "error") {
+          clearInterval(pollRef.current!);
+          setJobId(null);
+          toast({ title: "Erro na importação", description: job.error || "Erro desconhecido", variant: "destructive" });
+        }
+      } catch { /* ignore poll errors */ }
+    }, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [jobId, toast]);
+
   const importMutation = useMutation({
     mutationFn: async () => {
       const formData = new FormData();
@@ -145,19 +177,22 @@ export default function VendasImportarHigienizados() {
         const err = await response.json();
         throw new Error(err.message || "Erro na importação");
       }
-      return response.json() as Promise<ImportResult>;
+      return response.json() as Promise<{ jobId: string; total: number }>;
     },
     onSuccess: (data) => {
-      setResult(data);
-      toast({ title: "Importação concluída", description: `${data.resumo.imported} leads importados` });
+      setJobId(data.jobId);
+      setJobTotal(data.total);
+      setJobProgress(0);
+      toast({ title: "Processando importação…", description: `${data.total.toLocaleString("pt-BR")} linhas sendo importadas em background` });
     },
     onError: (error: Error) => {
       toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
     },
   });
 
+  const isProcessing = importMutation.isPending || !!jobId;
   const mappedCount = useMemo(() => Object.keys(detectedMapping).length, [detectedMapping]);
-  const canSubmit = nomeCampanha.trim() && file && previewData.length > 0 && !importMutation.isPending;
+  const canSubmit = nomeCampanha.trim() && file && previewData.length > 0 && !isProcessing;
 
   if (result) {
     return (
@@ -168,40 +203,31 @@ export default function VendasImportarHigienizados() {
               <CheckCircle2 className="h-8 w-8 text-green-600" />
               <div>
                 <CardTitle data-testid="text-import-success">Importação Concluída</CardTitle>
-                <CardDescription>Campanha "{result.campanha.nome}" criada com sucesso</CardDescription>
+                <CardDescription>Campanha "{result.nomeCampanha}" criada com sucesso</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="text-center p-3 rounded-lg bg-muted">
-                <div className="text-2xl font-bold" data-testid="text-total-lines">{result.resumo.total}</div>
-                <div className="text-sm text-muted-foreground">Total no CSV</div>
-              </div>
+              {result.total && (
+                <div className="text-center p-3 rounded-lg bg-muted">
+                  <div className="text-2xl font-bold" data-testid="text-total-lines">{result.total.toLocaleString("pt-BR")}</div>
+                  <div className="text-sm text-muted-foreground">Total no CSV</div>
+                </div>
+              )}
               <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950">
-                <div className="text-2xl font-bold text-green-600" data-testid="text-imported-count">{result.resumo.imported}</div>
+                <div className="text-2xl font-bold text-green-600" data-testid="text-imported-count">{result.imported.toLocaleString("pt-BR")}</div>
                 <div className="text-sm text-muted-foreground">Importados</div>
               </div>
               <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950">
-                <div className="text-2xl font-bold text-blue-600" data-testid="text-updated-count">{result.resumo.updated}</div>
+                <div className="text-2xl font-bold text-blue-600" data-testid="text-updated-count">{result.updated.toLocaleString("pt-BR")}</div>
                 <div className="text-sm text-muted-foreground">Atualizados</div>
               </div>
               <div className="text-center p-3 rounded-lg bg-muted">
-                <div className="text-2xl font-bold text-muted-foreground" data-testid="text-ignored-count">{result.resumo.ignored}</div>
+                <div className="text-2xl font-bold text-muted-foreground" data-testid="text-ignored-count">{result.ignored.toLocaleString("pt-BR")}</div>
                 <div className="text-sm text-muted-foreground">Ignorados</div>
               </div>
             </div>
-
-            {result.colunasDetectadas.length > 0 && (
-              <div>
-                <Label className="text-sm">Colunas detectadas:</Label>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {result.colunasDetectadas.map((col, i) => (
-                    <Badge key={i} variant="secondary">{COLUMN_LABELS[col] || col}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex gap-3 pt-4">
               <Button onClick={() => navigate("/vendas/campanhas")} data-testid="button-go-to-campaigns">
@@ -356,8 +382,22 @@ export default function VendasImportarHigienizados() {
         </CardContent>
       </Card>
 
+      {/* Progress bar while background job is running */}
+      {jobId && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="pt-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Importando em background… {jobProgress.toLocaleString("pt-BR")} / {jobTotal.toLocaleString("pt-BR")} linhas
+            </div>
+            <Progress value={jobTotal > 0 ? (jobProgress / jobTotal) * 100 : 0} className="h-2" />
+            <p className="text-xs text-muted-foreground">Você pode continuar usando o sistema enquanto a importação é processada.</p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate("/vendas/campanhas")} data-testid="button-cancel">
+        <Button variant="outline" onClick={() => navigate("/vendas/campanhas")} data-testid="button-cancel" disabled={isProcessing}>
           Cancelar
         </Button>
         <Button
@@ -365,10 +405,10 @@ export default function VendasImportarHigienizados() {
           disabled={!canSubmit}
           data-testid="button-confirm-import"
         >
-          {importMutation.isPending ? (
+          {isProcessing ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Importando...
+              Processando...
             </>
           ) : (
             <>

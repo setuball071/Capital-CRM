@@ -13968,6 +13968,22 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   );
 
+  // In-memory job store for async imports
+  const importJobs = new Map<string, {
+    status: "processing" | "done" | "error";
+    progress: number;
+    total: number;
+    result?: { imported: number; updated: number; ignored: number; removedByPortfolio: number; campaignId: number; nomeCampanha: string };
+    error?: string;
+  }>();
+
+  // GET /api/vendas/import-job/:jobId - Poll status of async import
+  app.get("/api/vendas/import-job/:jobId", requireAuth, async (req: any, res) => {
+    const job = importJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ message: "Job não encontrado" });
+    res.json(job);
+  });
+
   // POST /api/vendas/importar-higienizados - Importar lista higienizada e criar campanha
   app.post(
     "/api/vendas/importar-higienizados",
@@ -13984,7 +14000,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Nome da campanha e arquivo CSV são obrigatórios" });
         }
 
-        const fileContent = req.file.buffer.toString("utf-8");
+        // Try UTF-8 first, fall back to Latin-1
+        let fileContent: string;
+        try {
+          fileContent = req.file.buffer.toString("utf-8");
+          if (fileContent.includes("�")) throw new Error("bad utf8");
+        } catch {
+          fileContent = req.file.buffer.toString("latin1");
+        }
+        fileContent = fileContent.replace(/^﻿/, "");
+
         const parsed = Papa.parse(fileContent, {
           header: true,
           skipEmptyLines: true,
@@ -13995,6 +14020,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (!parsed.data || parsed.data.length === 0) {
           return res.status(400).json({ message: "Arquivo CSV vazio ou inválido" });
         }
+
+        // Generate a unique job ID and respond immediately
+        const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        importJobs.set(jobId, { status: "processing", progress: 0, total: parsed.data.length });
+        res.json({ jobId, total: parsed.data.length });
+
+        // Process in background (no await — response already sent)
+        setImmediate(async () => {
+          try {
 
         const COLUMN_MAP: Record<string, string> = {
           cpf: "cpf",
@@ -14168,9 +14202,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             if (r.status === 'fulfilled') imported++;
             else { ignored++; console.error('[HIGIENIZADOS] insert error:', (r as PromiseRejectedResult).reason?.message); }
           }
+          // Update progress
+          importJobs.set(jobId, { ...importJobs.get(jobId)!, progress: Math.min(i + CONCURRENT, leadRows.length) });
         }
 
-        // ── STEP 6: Batch matricula updates (one query per record, but only those that need it) ──
+        // ── STEP 6: Batch matricula updates ──
         for (const { pessoaId, matricula } of matriculaUpdates) {
           await db.execute(sql`
             UPDATE clientes_vinculo
@@ -14195,15 +14231,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           WHERE id = ${newCampaign.id}
         `);
 
-        return res.json({
-          message: "Importação concluída",
-          campanha: { id: newCampaign.id, nome: nomeCampanha },
-          resumo: { imported, updated, ignored, total: parsed.data.length, removedByPortfolio, removedCpfs: removedCpfsList.slice(0, 50) },
-          colunasDetectadas: Object.values(headerMapping),
+        // Mark job as done
+        importJobs.set(jobId, {
+          status: "done",
+          progress: leadRows.length,
+          total: parsed.data.length,
+          result: { imported, updated, ignored, removedByPortfolio, campaignId: newCampaign.id, nomeCampanha },
         });
+        console.log(`[HIGIENIZADOS] Job ${jobId} concluído: ${imported} importados, ${ignored} ignorados`);
+
+        // Clean up job after 10 minutes
+        setTimeout(() => importJobs.delete(jobId), 10 * 60 * 1000);
+
+          } catch (bgErr: any) {
+            console.error("[HIGIENIZADOS] Erro no job background:", bgErr?.message, bgErr?.stack);
+            importJobs.set(jobId, { status: "error", progress: 0, total: parsed.data.length, error: bgErr?.message || "Erro desconhecido" });
+          }
+        }); // end setImmediate
+
       } catch (error: any) {
-        console.error("[HIGIENIZADOS] ERRO FATAL:", error?.message || error, error?.stack);
-        return res.status(500).json({ message: error?.message || "Erro ao importar lista higienizada" });
+        console.error("[HIGIENIZADOS] ERRO ao iniciar job:", error?.message || error);
+        return res.status(500).json({ message: error?.message || "Erro ao iniciar importação" });
       }
     }
   );
