@@ -26683,7 +26683,16 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         LIMIT 100
       `);
 
-      res.json(result.rows);
+      // Count legacy observations (imported before batch tracking)
+      const legacyResult = await db.execute(sql`
+        SELECT COUNT(*) AS count
+        FROM client_observations
+        WHERE tenant_id = ${tenantId}
+          AND batch_id IS NULL
+      `);
+      const legacyCount = parseInt((legacyResult.rows[0] as any)?.count || "0", 10);
+
+      res.json({ batches: result.rows, legacyCount });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao buscar histórico" });
     }
@@ -26710,6 +26719,28 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       res.json({ removed: result.rowCount || 0 });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao excluir lote" });
+    }
+  });
+
+  // DELETE /api/client-observations/imports-legacy - Remove todas as observações sem batch_id
+  // MUST be registered BEFORE /:cpf
+  app.delete("/api/client-observations/imports-legacy", requireAuth, async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) return res.status(403).json({ message: "Acesso negado" });
+
+      const tenantId = req.tenantId!;
+
+      const result = await db.execute(sql`
+        DELETE FROM client_observations
+        WHERE tenant_id = ${tenantId}
+          AND batch_id IS NULL
+      `);
+
+      res.json({ removed: result.rowCount || 0 });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao excluir observações antigas" });
     }
   });
 

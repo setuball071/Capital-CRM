@@ -47,17 +47,21 @@ export default function ImportarObservacoesPage() {
 
   // ─── Histórico ───
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [legacyCount, setLegacyCount] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingLegacy, setDeletingLegacy] = useState(false);
   const [confirmBatch, setConfirmBatch] = useState<ImportBatch | null>(null);
+  const [confirmLegacy, setConfirmLegacy] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
       const res = await fetch("/api/client-observations/imports", { credentials: "include" });
       if (!res.ok) throw new Error();
-      const data: ImportBatch[] = await res.json();
-      setBatches(data);
+      const data: { batches: ImportBatch[]; legacyCount: number } = await res.json();
+      setBatches(data.batches);
+      setLegacyCount(data.legacyCount);
     } catch {
       toast({ title: "Erro ao carregar histórico", variant: "destructive" });
     } finally {
@@ -117,6 +121,28 @@ export default function ImportarObservacoesPage() {
     } finally {
       setDeletingId(null);
       setConfirmBatch(null);
+    }
+  };
+
+  const handleDeleteLegacy = async () => {
+    setDeletingLegacy(true);
+    try {
+      const res = await fetch("/api/client-observations/imports-legacy", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Erro ao excluir");
+      }
+      const data = await res.json();
+      toast({ title: `${data.removed} observação(ões) antigas removida(s)` });
+      setLegacyCount(0);
+    } catch (err: any) {
+      toast({ title: err.message || "Erro ao excluir antigas", variant: "destructive" });
+    } finally {
+      setDeletingLegacy(false);
+      setConfirmLegacy(false);
     }
   };
 
@@ -253,7 +279,7 @@ export default function ImportarObservacoesPage() {
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : batches.length === 0 ? (
+              ) : batches.length === 0 && legacyCount === 0 ? (
                 <div className="text-center py-10 text-muted-foreground">
                   <History className="h-10 w-10 mx-auto mb-2 opacity-30" />
                   <p>Nenhuma importação registrada</p>
@@ -261,6 +287,38 @@ export default function ImportarObservacoesPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {/* Card de observações antigas (sem batch_id) */}
+                  {legacyCount > 0 && (
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-yellow-600 dark:text-yellow-400">
+                          Importações antigas
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Importadas antes do rastreamento por lote
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-semibold tabular-nums">
+                          {legacyCount.toLocaleString("pt-BR")}
+                          <span className="text-xs font-normal text-muted-foreground ml-1">obs.</span>
+                        </span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setConfirmLegacy(true)}
+                          disabled={deletingLegacy}
+                        >
+                          {deletingLegacy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          <span className="ml-1.5">Excluir todas</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   {batches.map((batch) => (
                     <div
                       key={batch.batch_id}
@@ -304,6 +362,28 @@ export default function ImportarObservacoesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ─── Confirm Dialog Legacy ─── */}
+      <AlertDialog open={confirmLegacy} onOpenChange={(open) => { if (!open) setConfirmLegacy(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir todas as importações antigas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai remover <strong>{legacyCount.toLocaleString("pt-BR")} observação(ões)</strong> importadas antes do rastreamento por lote.<br /><br />
+              Esta ação <strong>não pode ser desfeita</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteLegacy}
+            >
+              Sim, excluir todas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Confirm Dialog ─── */}
       <AlertDialog open={!!confirmBatch} onOpenChange={(open) => { if (!open) setConfirmBatch(null); }}>
