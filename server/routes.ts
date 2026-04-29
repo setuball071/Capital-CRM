@@ -14040,22 +14040,33 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           createdBy: userId,
         });
 
-        // Pre-scan all CPFs from CSV and check portfolio blocks
-        const allCpfsRaw = (parsed.data as Record<string, string>[])
-          .map((row) => {
-            const cpfRaw = Object.entries(row).find(([h]) => {
-              const norm = h.toLowerCase().trim().replace(/[_\s]+/g, "");
-              return norm === "cpf";
-            })?.[1];
-            if (!cpfRaw) return null;
-            return cpfRaw.trim().replace(/\D/g, "").padStart(11, "0");
-          })
-          .filter(Boolean) as string[];
+        // ── STEP 1: Map all rows to clean data in memory ──
+        const rows = parsed.data as Record<string, string>[];
+        interface MappedRow { mapped: Record<string, string>; cpfClean: string | null; dadosHigienizados: Record<string, string>; }
+        const mappedRows: MappedRow[] = [];
 
+        for (const row of rows) {
+          const mapped: Record<string, string> = {};
+          for (const [originalHeader, value] of Object.entries(row)) {
+            const field = headerMapping[originalHeader];
+            if (field && value && value.trim()) mapped[field] = value.trim();
+          }
+          if (!mapped.cpf && !mapped.nome) continue;
+          const cpfClean = mapped.cpf ? mapped.cpf.replace(/\D/g, '').padStart(11, '0') : null;
+          const dadosHigienizados: Record<string, string> = {};
+          if (mapped.orgao) dadosHigienizados.orgao = mapped.orgao;
+          if (mapped.sitfunc) dadosHigienizados.sitfunc = mapped.sitfunc;
+          if (mapped.convenioCol) dadosHigienizados.convenio = mapped.convenioCol;
+          mappedRows.push({ mapped, cpfClean, dadosHigienizados });
+        }
+
+        const allCpfsRaw = mappedRows.map(r => r.cpfClean).filter(Boolean) as string[];
+        const uniqueCpfs = [...new Set(allCpfsRaw)];
+
+        // ── STEP 2: Bulk check portfolio blocks ──
         let blockedCpfs = new Set<string>();
-        if (allCpfsRaw.length > 0) {
+        if (uniqueCpfs.length > 0) {
           try {
-            const uniqueCpfs = [...new Set(allCpfsRaw)];
             const blockedResult = await db.execute(sql`
               SELECT DISTINCT cpf FROM client_portfolio
               WHERE tenant_id = ${tenantId}
@@ -14070,122 +14081,107 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         }
 
+        // ── STEP 3: Bulk lookup clientes_pessoa IDs ──
+        const pessoaIdByCpf = new Map<string, number>();
+        if (uniqueCpfs.length > 0) {
+          const pessoaResult = await db.execute(sql`
+            SELECT id, cpf FROM clientes_pessoa
+            WHERE cpf = ANY(${uniqueCpfs}::text[])
+          `);
+          for (const r of pessoaResult.rows as any[]) {
+            pessoaIdByCpf.set(r.cpf, r.id);
+          }
+        }
+
         let imported = 0;
         let updated = 0;
         let ignored = 0;
         let removedByPortfolio = 0;
         const removedCpfsList: string[] = [];
 
-        for (const row of parsed.data as Record<string, string>[]) {
-          const mapped: Record<string, string> = {};
-          for (const [originalHeader, value] of Object.entries(row)) {
-            const field = headerMapping[originalHeader];
-            if (field && value && value.trim()) {
-              mapped[field] = value.trim();
-            }
-          }
+        // ── STEP 4: Filter rows and prepare lead batch ──
+        interface LeadRow { cpfClean: string | null; mapped: Record<string, string>; baseClienteId: number | null; dadosHigienizados: Record<string, string>; }
+        const leadRows: LeadRow[] = [];
+        const matriculaUpdates: { cpf: string; matricula: string; pessoaId: number }[] = [];
+        const phoneRows: { tenantId: number; cpf: string | null; telefones: (string | undefined)[] }[] = [];
 
-          if (!mapped.cpf && !mapped.nome) {
-            ignored++;
-            continue;
-          }
-
-          const cpfClean = mapped.cpf ? mapped.cpf.replace(/\D/g, '').padStart(11, '0') : null;
-
-          // Skip CPFs already in active portfolios of another vendor
+        for (const { mapped, cpfClean, dadosHigienizados } of mappedRows) {
           if (cpfClean && blockedCpfs.has(cpfClean)) {
             removedByPortfolio++;
             if (!removedCpfsList.includes(cpfClean)) removedCpfsList.push(cpfClean);
             continue;
           }
 
-          let baseClienteId: number | null = null;
-          if (cpfClean) {
-            const existingPessoa = await db.execute(
-              sql`SELECT id FROM clientes_pessoa WHERE cpf = ${cpfClean} LIMIT 1`
-            );
-            if (existingPessoa.rows.length > 0) {
-              baseClienteId = existingPessoa.rows[0].id as number;
-
-              if (mapped.matricula) {
-                await db.execute(sql`
-                  UPDATE clientes_vinculo 
-                  SET matricula = ${mapped.matricula}
-                  WHERE pessoa_id = ${baseClienteId}
-                  AND (matricula IS NULL OR matricula = '' OR matricula LIKE 'EST_%')
-                `);
-              }
-
-              if (mapped.margem70 || mapped.margemCartao) {
-                const updateParts: ReturnType<typeof sql>[] = [];
-                if (mapped.margem70) updateParts.push(sql`margem_saldo_70 = ${parseFloat(mapped.margem70)}`);
-                if (mapped.margemCartao) updateParts.push(sql`margem_saldo_5 = ${parseFloat(mapped.margemCartao)}`);
-                if (updateParts.length > 0) {
-                  const latestFolha = await db.execute(sql`
-                    SELECT id FROM clientes_folha_mes 
-                    WHERE pessoa_id = ${baseClienteId} 
-                    ORDER BY competencia DESC LIMIT 1
-                  `);
-                  if (latestFolha.rows.length > 0) {
-                    const folhaId = latestFolha.rows[0].id;
-                    const setClauses = updateParts.reduce((a, b) => sql`${a}, ${b}`);
-                    await db.execute(sql`UPDATE clientes_folha_mes SET ${setClauses} WHERE id = ${folhaId}`);
-                  }
-                }
-              }
-              updated++;
+          const baseClienteId = cpfClean ? (pessoaIdByCpf.get(cpfClean) ?? null) : null;
+          if (baseClienteId) {
+            updated++;
+            if (mapped.matricula) {
+              matriculaUpdates.push({ cpf: cpfClean!, matricula: mapped.matricula, pessoaId: baseClienteId });
             }
           }
 
-          const dadosHigienizados: Record<string, string> = {};
-          if (mapped.orgao) dadosHigienizados.orgao = mapped.orgao;
-          if (mapped.sitfunc) dadosHigienizados.sitfunc = mapped.sitfunc;
-          if (mapped.convenioCol) dadosHigienizados.convenio = mapped.convenioCol;
+          leadRows.push({ cpfClean, mapped, baseClienteId, dadosHigienizados });
 
+          if (mapped.telefone1 || mapped.telefone2 || mapped.telefone3) {
+            phoneRows.push({ tenantId, cpf: cpfClean, telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3] });
+          }
+        }
+
+        // ── STEP 5: Batch INSERT sales_leads using Drizzle bulk insert (chunks of 500) ──
+        const CHUNK = 500;
+        for (let i = 0; i < leadRows.length; i += CHUNK) {
+          const chunk = leadRows.slice(i, i + CHUNK);
+          const values = chunk.map(({ cpfClean, mapped, baseClienteId, dadosHigienizados }) => ({
+            tenantId,
+            campaignId: newCampaign.id,
+            cpf: cpfClean,
+            nome: mapped.nome || 'Sem nome',
+            telefone1: mapped.telefone1 || null,
+            telefone2: mapped.telefone2 || null,
+            telefone3: mapped.telefone3 || null,
+            observacoes: mapped.observacoes || null,
+            baseClienteId,
+            leadMarker: 'NOVO' as const,
+            matricula: mapped.matricula || null,
+            taxaReal: mapped.taxa ? parseFloat(mapped.taxa) : null,
+            valorParcela: mapped.parcela ? parseFloat(mapped.parcela) : null,
+            bancoOferta: mapped.banco || null,
+            dadosHigienizados: Object.keys(dadosHigienizados).length > 0 ? dadosHigienizados : null,
+            higienizadoEm: new Date(),
+          }));
           try {
-            await db.execute(sql`
-              INSERT INTO sales_leads (
-                tenant_id, campaign_id, cpf, nome, 
-                telefone_1, telefone_2, telefone_3,
-                observacoes, base_cliente_id, lead_marker,
-                matricula, taxa_real, valor_parcela, banco_oferta,
-                dados_higienizados, higienizado_em,
-                created_at, updated_at
-              ) VALUES (
-                ${tenantId}, ${newCampaign.id}, ${cpfClean}, ${mapped.nome || 'Sem nome'},
-                ${mapped.telefone1 || null}, ${mapped.telefone2 || null}, ${mapped.telefone3 || null},
-                ${mapped.observacoes || null}, ${baseClienteId}, 'NOVO',
-                ${mapped.matricula || null}, 
-                ${mapped.taxa ? parseFloat(mapped.taxa) : null},
-                ${mapped.parcela ? parseFloat(mapped.parcela) : null},
-                ${mapped.banco || null},
-                ${Object.keys(dadosHigienizados).length > 0 ? JSON.stringify(dadosHigienizados) : null},
-                NOW(),
-                NOW(), NOW()
-              )
-            `);
-            imported++;
-
-            // Backfill clientes_telefones for fast phone search
-            try {
-              if (mapped.telefone1 || mapped.telefone2 || mapped.telefone3) {
-                await storage.addPessoaTelefonesByCpfBatch([{
-                  tenantId,
-                  cpf: cpfClean,
-                  telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3],
-                }]);
-              }
-            } catch (phoneErr) {
-              console.error(`[HIGIENIZADOS] Falha ao popular clientes_telefones (CPF ${cpfClean}):`, phoneErr);
+            await db.insert(salesLeads).values(values);
+            imported += chunk.length;
+          } catch (bulkErr) {
+            console.error(`[HIGIENIZADOS] Bulk insert chunk ${i}-${i + chunk.length} failed, falling back:`, bulkErr);
+            // Fallback: insert one by one for this chunk
+            for (const v of values) {
+              try { await db.insert(salesLeads).values([v]); imported++; } catch { ignored++; }
             }
-          } catch (insertError) {
-            console.error(`Erro ao inserir lead CPF ${cpfClean}:`, insertError);
-            ignored++;
+          }
+        }
+
+        // ── STEP 6: Batch matricula updates (one query per record, but only those that need it) ──
+        for (const { pessoaId, matricula } of matriculaUpdates) {
+          await db.execute(sql`
+            UPDATE clientes_vinculo
+            SET matricula = ${matricula}
+            WHERE pessoa_id = ${pessoaId}
+              AND (matricula IS NULL OR matricula = '' OR matricula LIKE 'EST_%')
+          `);
+        }
+
+        // ── STEP 7: Batch phone inserts ──
+        if (phoneRows.length > 0) {
+          try {
+            await storage.addPessoaTelefonesByCpfBatch(phoneRows);
+          } catch (phoneErr) {
+            console.error("[HIGIENIZADOS] Falha ao popular clientes_telefones:", phoneErr);
           }
         }
 
         await db.execute(sql`
-          UPDATE sales_campaigns 
+          UPDATE sales_campaigns
           SET total_leads = ${imported}, leads_disponiveis = ${imported}
           WHERE id = ${newCampaign.id}
         `);
