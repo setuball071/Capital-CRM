@@ -14033,9 +14033,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const COLUMN_MAP: Record<string, string> = {
           cpf: "cpf",
           nome: "nome",
-          telefone1: "telefone1", telefone: "telefone1", celular: "telefone1", fone1: "telefone1", "telefone 1": "telefone1",
-          telefone2: "telefone2", fone2: "telefone2", "telefone 2": "telefone2",
-          telefone3: "telefone3", fone3: "telefone3", "telefone 3": "telefone3",
+          // Specific numbered phones FIRST (before generic "telefone") so includes() doesn't steal them
+          telefone1: "telefone1", "telefone 1": "telefone1", fone1: "telefone1",
+          telefone2: "telefone2", "telefone 2": "telefone2", fone2: "telefone2",
+          telefone3: "telefone3", "telefone 3": "telefone3", fone3: "telefone3",
+          telefone4: "telefone4", "telefone 4": "telefone4", fone4: "telefone4",
+          telefone5: "telefone5", "telefone 5": "telefone5", fone5: "telefone5",
+          telefone6: "telefone6", "telefone 6": "telefone6", fone6: "telefone6",
+          telefone7: "telefone7", "telefone 7": "telefone7", fone7: "telefone7",
+          telefone8: "telefone8", "telefone 8": "telefone8", fone8: "telefone8",
+          // Generic phone fallback AFTER numbered ones
+          telefone: "telefone1", celular: "telefone1", fone: "telefone1",
           matricula: "matricula",
           margem: "margem70", margem70: "margem70", "margem 70": "margem70", margem_70: "margem70",
           margemcartao: "margemCartao", "margem cartao": "margemCartao", margem_cartao: "margemCartao", "margem cartão": "margemCartao",
@@ -14170,9 +14178,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
           leadRows.push({ cpfClean, mapped, baseClienteId, dadosHigienizados });
 
-          // Only add phone rows where cpf is a non-null string (required by addPessoaTelefonesByCpfBatch)
-          if (cpfClean && (mapped.telefone1 || mapped.telefone2 || mapped.telefone3)) {
-            phoneRows.push({ tenantId, cpf: cpfClean, telefones: [mapped.telefone1, mapped.telefone2, mapped.telefone3] });
+          // Collect all phone fields (telefone1..telefone8)
+          const allPhones = [1,2,3,4,5,6,7,8]
+            .map(i => mapped[`telefone${i}`])
+            .filter((p): p is string => !!p);
+          if (cpfClean && allPhones.length > 0) {
+            phoneRows.push({ tenantId, cpf: cpfClean, telefones: allPhones });
           }
         }
 
