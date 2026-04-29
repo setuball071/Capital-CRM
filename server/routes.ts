@@ -26657,6 +26657,62 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ===== OBSERVAÇÕES COMPLEMENTARES POR CPF =====
 
+  // GET /api/client-observations/imports - Lista histórico de importações (agrupado por batch_id)
+  // MUST be registered BEFORE /:cpf to avoid "imports" being treated as a CPF param
+  app.get("/api/client-observations/imports", requireAuth, async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) return res.status(403).json({ message: "Acesso negado" });
+
+      const tenantId = req.tenantId!;
+
+      const result = await db.execute(sql`
+        SELECT
+          co.batch_id,
+          co.filename,
+          MIN(co.imported_at) AS imported_at,
+          COUNT(*) AS count,
+          u.name AS imported_by_name
+        FROM client_observations co
+        LEFT JOIN users u ON co.imported_by = u.id
+        WHERE co.tenant_id = ${tenantId}
+          AND co.batch_id IS NOT NULL
+        GROUP BY co.batch_id, co.filename, u.name
+        ORDER BY MIN(co.imported_at) DESC
+        LIMIT 100
+      `);
+
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+
+  // DELETE /api/client-observations/imports/:batchId - Remove todas as observações de um lote
+  // MUST be registered BEFORE /:cpf
+  app.delete("/api/client-observations/imports/:batchId", requireAuth, async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) return res.status(403).json({ message: "Acesso negado" });
+
+      const tenantId = req.tenantId!;
+      const { batchId } = req.params;
+      if (!batchId) return res.status(400).json({ message: "batchId obrigatório" });
+
+      const result = await db.execute(sql`
+        DELETE FROM client_observations
+        WHERE tenant_id = ${tenantId}
+          AND batch_id = ${batchId}
+      `);
+
+      res.json({ removed: result.rowCount || 0 });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao excluir lote" });
+    }
+  });
+
   app.get("/api/client-observations/:cpf", requireAuth, async (req: any, res) => {
     try {
       const tenantId = req.tenantId!;
@@ -26871,60 +26927,6 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       res.json({ removed, errors });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao remover observações" });
-    }
-  });
-
-  // GET /api/client-observations/imports - Lista histórico de importações (agrupado por batch_id)
-  app.get("/api/client-observations/imports", requireAuth, async (req: any, res) => {
-    try {
-      const role = req.user?.role as string;
-      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
-      if (!allowed) return res.status(403).json({ message: "Acesso negado" });
-
-      const tenantId = req.tenantId!;
-
-      const result = await db.execute(sql`
-        SELECT
-          co.batch_id,
-          co.filename,
-          MIN(co.imported_at) AS imported_at,
-          COUNT(*) AS count,
-          u.name AS imported_by_name
-        FROM client_observations co
-        LEFT JOIN users u ON co.imported_by = u.id
-        WHERE co.tenant_id = ${tenantId}
-          AND co.batch_id IS NOT NULL
-        GROUP BY co.batch_id, co.filename, u.name
-        ORDER BY MIN(co.imported_at) DESC
-        LIMIT 100
-      `);
-
-      res.json(result.rows);
-    } catch (err: any) {
-      res.status(500).json({ message: "Erro ao buscar histórico" });
-    }
-  });
-
-  // DELETE /api/client-observations/imports/:batchId - Remove todas as observações de um lote
-  app.delete("/api/client-observations/imports/:batchId", requireAuth, async (req: any, res) => {
-    try {
-      const role = req.user?.role as string;
-      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
-      if (!allowed) return res.status(403).json({ message: "Acesso negado" });
-
-      const tenantId = req.tenantId!;
-      const { batchId } = req.params;
-      if (!batchId) return res.status(400).json({ message: "batchId obrigatório" });
-
-      const result = await db.execute(sql`
-        DELETE FROM client_observations
-        WHERE tenant_id = ${tenantId}
-          AND batch_id = ${batchId}
-      `);
-
-      res.json({ removed: result.rowCount || 0 });
-    } catch (err: any) {
-      res.status(500).json({ message: "Erro ao excluir lote" });
     }
   });
 
