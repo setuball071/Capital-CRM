@@ -14128,37 +14128,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           }
         }
 
-        // ── STEP 5: Batch INSERT sales_leads using Drizzle bulk insert (chunks of 500) ──
-        const CHUNK = 500;
-        for (let i = 0; i < leadRows.length; i += CHUNK) {
-          const chunk = leadRows.slice(i, i + CHUNK);
-          const values = chunk.map(({ cpfClean, mapped, baseClienteId, dadosHigienizados }) => ({
-            tenantId,
-            campaignId: newCampaign.id,
-            cpf: cpfClean,
-            nome: mapped.nome || 'Sem nome',
-            telefone1: mapped.telefone1 || null,
-            telefone2: mapped.telefone2 || null,
-            telefone3: mapped.telefone3 || null,
-            observacoes: mapped.observacoes || null,
-            baseClienteId,
-            leadMarker: 'NOVO' as const,
-            matricula: mapped.matricula || null,
-            taxaReal: mapped.taxa ? parseFloat(mapped.taxa) : null,
-            valorParcela: mapped.parcela ? parseFloat(mapped.parcela) : null,
-            bancoOferta: mapped.banco || null,
-            dadosHigienizados: Object.keys(dadosHigienizados).length > 0 ? dadosHigienizados : null,
-            higienizadoEm: new Date(),
+        // ── STEP 5: INSERT sales_leads em lotes de 50 concorrentes ──
+        const CONCURRENT = 50;
+        for (let i = 0; i < leadRows.length; i += CONCURRENT) {
+          const chunk = leadRows.slice(i, i + CONCURRENT);
+          const results = await Promise.allSettled(chunk.map(({ cpfClean, mapped, baseClienteId, dadosHigienizados }) => {
+            const dhJson = Object.keys(dadosHigienizados).length > 0 ? JSON.stringify(dadosHigienizados) : null;
+            return db.execute(sql`
+              INSERT INTO sales_leads (
+                tenant_id, campaign_id, cpf, nome,
+                telefone_1, telefone_2, telefone_3,
+                observacoes, base_cliente_id, lead_marker,
+                matricula, taxa_real, valor_parcela, banco_oferta,
+                dados_higienizados, higienizado_em, created_at, updated_at
+              ) VALUES (
+                ${tenantId}, ${newCampaign.id}, ${cpfClean}, ${mapped.nome || 'Sem nome'},
+                ${mapped.telefone1 || null}, ${mapped.telefone2 || null}, ${mapped.telefone3 || null},
+                ${mapped.observacoes || null}, ${baseClienteId}, 'NOVO',
+                ${mapped.matricula || null},
+                ${mapped.taxa ? parseFloat(mapped.taxa) : null},
+                ${mapped.parcela ? parseFloat(mapped.parcela) : null},
+                ${mapped.banco || null},
+                ${dhJson}::jsonb,
+                NOW(), NOW(), NOW()
+              )
+            `);
           }));
-          try {
-            await db.insert(salesLeads).values(values);
-            imported += chunk.length;
-          } catch (bulkErr) {
-            console.error(`[HIGIENIZADOS] Bulk insert chunk ${i}-${i + chunk.length} failed, falling back:`, bulkErr);
-            // Fallback: insert one by one for this chunk
-            for (const v of values) {
-              try { await db.insert(salesLeads).values([v]); imported++; } catch { ignored++; }
-            }
+          for (const r of results) {
+            if (r.status === 'fulfilled') imported++;
+            else { ignored++; console.error('[HIGIENIZADOS] insert error:', (r as PromiseRejectedResult).reason?.message); }
           }
         }
 
