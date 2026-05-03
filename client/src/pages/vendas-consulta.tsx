@@ -1152,21 +1152,7 @@ export default function VendasConsulta() {
 
               {/* ── Banner: Parcelas Fora de Folha ── */}
               {(() => {
-                const excQtd = Number(consultaData.folhaAtual?.exc_qtd ?? 0);
-                const excSoma = Number(consultaData.folhaAtual?.exc_soma ?? 0);
-                if (excQtd <= 0) return null;
-                return (
-                  <Alert
-                    className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30"
-                    data-testid="alert-exc-fora-folha"
-                  >
-                    <AlertTriangle className="h-5 w-5 text-amber-600" />
-                    <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
-                      Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora:{" "}
-                      {formatCurrency(excSoma)}
-                    </AlertTitle>
-                  </Alert>
-                );
+                return null;
               })()}
 
               <Card>
