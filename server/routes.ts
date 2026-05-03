@@ -27403,6 +27403,38 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // GET /api/siape/dados/:cpf — dados enriquecidos do cliente (cargo, funcao, banco, financeiro)
+  app.get("/api/siape/dados/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const cpf = req.params.cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
+      if (!cpf || cpf.length !== 11) return res.status(400).json({ dados: null });
+      const result = await db.execute(sql`
+        SELECT
+          mes_pagamento,
+          tipo_relacao,
+          json_dados->'servidor'->>'cargo'          AS cargo,
+          json_dados->'servidor'->>'funcao'         AS funcao,
+          json_dados->'servidor'->>'classe'         AS classe,
+          json_dados->'servidor'->>'nivel'          AS nivel,
+          json_dados->'pensao'->>'nome_instituidor' AS nome_instituidor,
+          json_dados->'pensao'->>'data_termino'     AS data_termino,
+          json_dados->'upag'->>'uf'                 AS uf_siape,
+          json_dados->'banco_salario'->>'banco'     AS banco,
+          json_dados->'banco_salario'->>'agencia'   AS agencia,
+          json_dados->'banco_salario'->>'conta'     AS conta,
+          total_bruto, total_descontos, total_liquido
+        FROM contracheques_siape
+        WHERE cpf = ${cpf}
+        ORDER BY mes_pagamento DESC
+        LIMIT 1
+      `);
+      if (!result.rows.length) return res.json({ dados: null });
+      res.json({ dados: result.rows[0] });
+    } catch (err: any) {
+      res.status(500).json({ dados: null, error: err.message });
+    }
+  });
+
   // GET /api/siape/parcelas/:cpf — parcelas consignadas do mês mais recente
   app.get("/api/siape/parcelas/:cpf", requireAuth, async (req: any, res) => {
     try {

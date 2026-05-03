@@ -85,6 +85,24 @@ interface ClienteDetalhadoPessoa {
   extras_pessoa: any;
 }
 
+interface SiapeDados {
+  mes_pagamento: string;
+  tipo_relacao: string;
+  cargo: string | null;
+  funcao: string | null;
+  classe: string | null;
+  nivel: string | null;
+  nome_instituidor: string | null;
+  data_termino: string | null;
+  uf_siape: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  total_bruto: string | null;
+  total_descontos: string | null;
+  total_liquido: string | null;
+}
+
 interface HigienizacaoTelefone {
   telefone: string;
   tipo: string | null;
@@ -512,6 +530,21 @@ export default function ConsultaCliente() {
   
   const clienteObsCpf = clienteDetalhado?.pessoa?.cpf?.replace(/[^0-9]/g, "") || "";
 
+  // Dados enriquecidos do SIAPE (cargo, funcao, banco, financeiro)
+  const { data: siapeEnrichData } = useQuery<{ dados: SiapeDados | null }>({
+    queryKey: ["/api/siape/dados", clienteObsCpf],
+    enabled: !!clienteObsCpf,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      if (!clienteObsCpf) return { dados: null };
+      const res = await fetch(`/api/siape/dados/${clienteObsCpf}`, { credentials: "include" });
+      if (!res.ok) return { dados: null };
+      return res.json();
+    },
+  });
+  const siapeDados = siapeEnrichData?.dados ?? null;
+
   const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteObsCpf],
     enabled: !!clienteObsCpf,
@@ -888,69 +921,42 @@ export default function ConsultaCliente() {
                   <CardTitle className="flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Dados do Cliente
+                    {clienteObsData && clienteObsData.length > 0 && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setShowObsDialog(true)}
+                        data-testid="button-obs-info"
+                        title="Ver informações complementares"
+                      >
+                        <Info className="h-5 w-5" style={{ color: "#6C2BD9" }} />
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-6">
+                  {/* Grade principal */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="space-y-1 group">
-                      <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium flex items-center gap-1" data-testid="text-nome">
-                        <CopyableField value={clienteDetalhado.pessoa.nome} label="Nome" onCopy={handleCopy} formatOnCopy={formatProperName} />
-                        {clienteObsData && clienteObsData.length > 0 && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setShowObsDialog(true)}
-                            data-testid="button-obs-info"
-                            title="Ver informações complementares"
-                          >
-                            <Info className="h-5 w-5" style={{ color: "#6C2BD9" }} />
-                          </Button>
-                        )}
-                      </p>
-                    </div>
-                    <div className="space-y-1 group">
-                      <p className="text-sm text-muted-foreground">CPF</p>
-                      <p className="font-mono" data-testid="text-cpf">
-                        <CopyableField 
-                          value={clienteDetalhado.pessoa.cpf} 
-                          displayValue={formatCPF(clienteDetalhado.pessoa.cpf)} 
-                          label="CPF" 
-                          onCopy={handleCopy}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1 group">
-                      <p className="text-sm text-muted-foreground">Matrícula</p>
-                      <p className="font-mono" data-testid="text-matricula">
-                        <CopyableField value={vinculoAtual?.matricula || clienteDetalhado.pessoa.matricula} label="Matrícula" onCopy={handleCopy} />
-                      </p>
-                    </div>
-                    {/* Matrícula do Instituidor - exibir apenas para pensionistas */}
-                    {(vinculoAtual?.sit_func?.toUpperCase().includes("PENSÃO") || 
-                      vinculoAtual?.sit_func?.toUpperCase().includes("PENSAO") ||
-                      clienteDetalhado.pessoa.sit_func?.toUpperCase().includes("PENSÃO") ||
-                      clienteDetalhado.pessoa.sit_func?.toUpperCase().includes("PENSAO")) && 
-                     vinculoAtual?.extras_vinculo?.instituidor && (
-                      <div className="space-y-1 group">
-                        <p className="text-sm text-muted-foreground">Matrícula Instituidor</p>
-                        <p className="font-mono" data-testid="text-matricula-instituidor">
-                          <CopyableField value={vinculoAtual.extras_vinculo.instituidor} label="Matrícula Instituidor" onCopy={handleCopy} />
-                        </p>
-                      </div>
-                    )}
+
+                    {/* Convênio */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Convênio</p>
                       <Badge variant="outline">{clienteDetalhado.pessoa.convenio || "-"}</Badge>
                     </div>
+
+                    {/* Situação Funcional */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Situação Funcional</p>
                       <Badge variant="secondary">{vinculoAtual?.sit_func || clienteDetalhado.pessoa.sit_func || "-"}</Badge>
                     </div>
+
+                    {/* UF (substituiu Natureza) */}
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Natureza</p>
-                      <p>{clienteDetalhado.pessoa.natureza || "-"}</p>
+                      <p className="text-sm text-muted-foreground">UF</p>
+                      <p>{siapeDados?.uf_siape || clienteDetalhado.pessoa.uf || "-"}</p>
                     </div>
+
+                    {/* Nascimento / Idade */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
@@ -970,6 +976,20 @@ export default function ConsultaCliente() {
                         )}
                       </div>
                     </div>
+
+                    {/* Cargo */}
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Cargo</p>
+                      <p>{siapeDados?.cargo || "-"}</p>
+                    </div>
+
+                    {/* Função */}
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Função</p>
+                      <p>{siapeDados?.funcao || "-"}</p>
+                    </div>
+
+                    {/* UPAG */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">UPAG</p>
                       <p>{mapNomenclatura("UPAG", vinculoAtual?.upag || clienteDetalhado.pessoa.upag)}</p>
@@ -977,6 +997,8 @@ export default function ConsultaCliente() {
                         <p className="text-xs text-muted-foreground">Código: {vinculoAtual?.upag || clienteDetalhado.pessoa.upag}</p>
                       )}
                     </div>
+
+                    {/* Órgão */}
                     <div className="space-y-1 md:col-span-2">
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Building2 className="w-4 h-4" />
@@ -987,47 +1009,96 @@ export default function ConsultaCliente() {
                         <p className="text-xs text-muted-foreground">Código: {vinculoAtual?.orgao || clienteDetalhado.pessoa.orgaocod}</p>
                       )}
                     </div>
+
+                    {/* Regime Jurídico */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Regime Jurídico (REJUR)</p>
                       <p>{vinculoAtual?.rjur || clienteDetalhado.pessoa.rjur || "-"}</p>
                     </div>
-                    
-                    {/* Dados Bancários do cliente (onde recebe salário) */}
-                    <div className="space-y-1 md:col-span-2">
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Landmark className="w-4 h-4" />
-                        Dados Bancários
-                      </p>
-                      {clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.agencia || clienteDetalhado.pessoa.conta ? (
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div className="group">
-                            <span className="text-muted-foreground">Banco: </span>
-                            <CopyableField 
-                              value={clienteDetalhado.pessoa.banco_codigo || clienteDetalhado.pessoa.banco_nome} 
-                              displayValue={clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.banco_codigo || "-"} 
-                              label="Banco" 
-                              onCopy={handleCopy} 
-                            />
-                          </div>
-                          <div className="group">
-                            <span className="text-muted-foreground">Ag: </span>
-                            <CopyableField value={clienteDetalhado.pessoa.agencia} label="Agência" onCopy={handleCopy} />
-                          </div>
-                          <div className="group">
-                            <span className="text-muted-foreground">Conta: </span>
-                            <CopyableField value={clienteDetalhado.pessoa.conta} label="Conta" onCopy={handleCopy} />
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">Dados bancários não informados</p>
-                      )}
-                    </div>
-                    
+
+                    {/* Última Base */}
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Última Base</p>
                       <Badge>{clienteDetalhado.pessoa.base_tag_ultima || "-"}</Badge>
                     </div>
+
+                    {/* Pensão / Aposentado — Nome Instituidor + Data Término */}
+                    {siapeDados && (siapeDados.tipo_relacao === "PENSAO" || siapeDados.tipo_relacao === "APOSENTADO") && (
+                      <>
+                        {siapeDados.nome_instituidor && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Nome Instituidor</p>
+                            <p className="font-medium">{siapeDados.nome_instituidor}</p>
+                          </div>
+                        )}
+                        {siapeDados.data_termino && siapeDados.data_termino !== "***********" && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Data Término Pensão</p>
+                            <p>{siapeDados.data_termino}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
+
+                  {/* Dados Bancários */}
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium flex items-center gap-2 mb-3">
+                      <Landmark className="w-4 h-4" />
+                      Dados Bancários
+                    </p>
+                    {(() => {
+                      const banco = siapeDados?.banco || clienteDetalhado.pessoa.banco_nome || clienteDetalhado.pessoa.banco_codigo;
+                      const agencia = siapeDados?.agencia || clienteDetalhado.pessoa.agencia;
+                      const conta = siapeDados?.conta || clienteDetalhado.pessoa.conta;
+                      if (!banco && !agencia && !conta) {
+                        return <p className="text-muted-foreground text-sm">Dados bancários não informados</p>;
+                      }
+                      return (
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Banco</p>
+                            <CopyableField value={banco} label="Banco" onCopy={handleCopy} />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Agência</p>
+                            <CopyableField value={agencia} label="Agência" onCopy={handleCopy} />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Conta</p>
+                            <CopyableField value={conta} label="Conta" onCopy={handleCopy} />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Financeiro — resumo da folha */}
+                  {(folhaAtual || siapeDados) && (
+                    <div className="border-t pt-4">
+                      <p className="text-sm font-medium mb-3">Financeiro</p>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Total Bruto</p>
+                          <p className="font-semibold text-green-600">
+                            {formatCurrency(folhaAtual?.creditos ?? (siapeDados?.total_bruto ? parseFloat(siapeDados.total_bruto) : null))}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Total Descontos</p>
+                          <p className="font-semibold text-red-600">
+                            {formatCurrency(folhaAtual?.debitos ?? (siapeDados?.total_descontos ? parseFloat(siapeDados.total_descontos) : null))}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Valor Líquido</p>
+                          <p className="font-semibold">
+                            {formatCurrency(folhaAtual?.liquido ?? (siapeDados?.total_liquido ? parseFloat(siapeDados.total_liquido) : null))}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
