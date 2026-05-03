@@ -27419,10 +27419,23 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           json_dados->'pensao'->>'nome_instituidor' AS nome_instituidor,
           json_dados->'pensao'->>'data_termino'     AS data_termino,
           json_dados->'upag'->>'uf'                 AS uf_siape,
-          json_dados->'banco_salario'->>'banco'     AS banco,
-          json_dados->'banco_salario'->>'agencia'   AS agencia,
-          json_dados->'banco_salario'->>'conta'     AS conta,
-          total_bruto, total_descontos, total_liquido
+          json_dados->'banco_salario'->>'banco'        AS banco,
+          json_dados->'banco_salario'->>'agencia'    AS agencia,
+          json_dados->'banco_salario'->>'conta'      AS conta,
+          total_bruto, total_descontos, total_liquido,
+          -- Margens corretas calculadas pelo processar_pdf_siape.py
+          (json_dados->'margens'->>'mg35_bruta')::numeric      AS mg35_bruta,
+          (json_dados->'margens'->>'mg35_utilizado')::numeric  AS mg35_utilizado,
+          (json_dados->'margens'->>'mg35_disponivel')::numeric AS mg35_disponivel,
+          (json_dados->'margens'->>'mg5cc_bruta')::numeric     AS mg5cc_bruta,
+          (json_dados->'margens'->>'mg5cc_utilizado')::numeric AS mg5cc_utilizado,
+          (json_dados->'margens'->>'mg5cc_disponivel')::numeric AS mg5cc_disponivel,
+          (json_dados->'margens'->>'mg5cb_bruta')::numeric     AS mg5cb_bruta,
+          (json_dados->'margens'->>'mg5cb_utilizado')::numeric AS mg5cb_utilizado,
+          (json_dados->'margens'->>'mg5cb_disponivel')::numeric AS mg5cb_disponivel,
+          (json_dados->'margens'->>'mg70_bruta')::numeric      AS mg70_bruta,
+          (json_dados->'margens'->>'mg70_utilizado')::numeric  AS mg70_utilizado,
+          (json_dados->'margens'->>'mg70_disponivel')::numeric AS mg70_disponivel
         FROM contracheques_siape
         WHERE cpf = ${cpf}
         ORDER BY mes_pagamento DESC

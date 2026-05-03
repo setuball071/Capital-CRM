@@ -101,6 +101,19 @@ interface SiapeDados {
   total_bruto: string | null;
   total_descontos: string | null;
   total_liquido: string | null;
+  // Margens corretas do contracheque
+  mg35_bruta: number | null;
+  mg35_utilizado: number | null;
+  mg35_disponivel: number | null;
+  mg5cc_bruta: number | null;
+  mg5cc_utilizado: number | null;
+  mg5cc_disponivel: number | null;
+  mg5cb_bruta: number | null;
+  mg5cb_utilizado: number | null;
+  mg5cb_disponivel: number | null;
+  mg70_bruta: number | null;
+  mg70_utilizado: number | null;
+  mg70_disponivel: number | null;
 }
 
 interface HigienizacaoTelefone {
@@ -1152,86 +1165,102 @@ export default function ConsultaCliente() {
                         </DialogContent>
                       </Dialog>
                       
+                      {/* Indicador de fonte das margens */}
+                      {siapeDados?.mg35_bruta != null && (
+                        <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-md w-fit">
+                          <span className="font-semibold">✓ Margens via contracheque SIAPE</span>
+                          <span className="text-blue-400">({siapeDados.mes_pagamento})</span>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Margem 70% - Compulsória (SIAPE) */}
+                        {/* Margem 70% */}
                         <Card className="bg-muted/50" data-testid="card-margem-70">
                           <CardContent className="p-4">
                             <p className="text-sm font-medium mb-2">Margem 70%</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_bruta_70)}</span>
+                                <span>{formatCurrency(siapeDados?.mg70_bruta ?? folhaAtual.margem_bruta_70)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_utilizada_70)}</span>
+                                <span>{formatCurrency(siapeDados?.mg70_utilizado ?? folhaAtual.margem_utilizada_70)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_70)}</span>
+                                <span className={((siapeDados?.mg70_disponivel ?? folhaAtual.margem_saldo_70) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(siapeDados?.mg70_disponivel ?? folhaAtual.margem_saldo_70)}
+                                </span>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
 
-                        {/* Margem 35% - Consignado */}
+                        {/* Margem 35% */}
                         <Card className="bg-muted/50" data-testid="card-margem-35">
                           <CardContent className="p-4">
                             <p className="text-sm font-medium mb-2">Margem 35%</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_bruta_35)}</span>
+                                <span>{formatCurrency(siapeDados?.mg35_bruta ?? folhaAtual.margem_bruta_35)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_utilizada_35)}</span>
+                                <span>{formatCurrency(siapeDados?.mg35_utilizado ?? folhaAtual.margem_utilizada_35)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_35)}</span>
+                                <span className={((siapeDados?.mg35_disponivel ?? folhaAtual.margem_saldo_35) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(siapeDados?.mg35_disponivel ?? folhaAtual.margem_saldo_35)}
+                                </span>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
 
-                        {/* Margem 5% - Cartão Crédito Consignado */}
+                        {/* Margem 5% — Cartão Crédito */}
                         <Card className="bg-muted/50" data-testid="card-margem-5">
                           <CardContent className="p-4">
                             <p className="text-sm font-medium mb-2">Margem 5%</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_bruta_5)}</span>
+                                <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? folhaAtual.margem_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_utilizada_5)}</span>
+                                <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? folhaAtual.margem_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_saldo_5)}</span>
+                                <span className={((siapeDados?.mg5cc_disponivel ?? folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(siapeDados?.mg5cc_disponivel ?? folhaAtual.margem_saldo_5)}
+                                </span>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
 
-                        {/* Margem Benefício 5% - Cartão Benefício */}
+                        {/* Margem 5% — Cartão Benefício */}
                         <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
                           <CardContent className="p-4">
                             <p className="text-sm font-medium mb-2">Benefício 5%</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_beneficio_bruta_5)}</span>
+                                <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? folhaAtual.margem_beneficio_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? folhaAtual.margem_beneficio_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(folhaAtual.margem_beneficio_saldo_5)}</span>
+                                <span className={((siapeDados?.mg5cb_disponivel ?? folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(siapeDados?.mg5cb_disponivel ?? folhaAtual.margem_beneficio_saldo_5)}
+                                </span>
                               </div>
                             </div>
                           </CardContent>
