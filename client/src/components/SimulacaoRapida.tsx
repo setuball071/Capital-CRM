@@ -127,7 +127,7 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
 }
 
 export function SimulacaoRapida({ convenio, saldo35, saldo5cartao, saldo5beneficio }: SimulacaoRapidaProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const { data, isLoading } = useQuery<SimCoeficientesResponse>({
     queryKey: ["/api/simulation/best-coefficients"],
