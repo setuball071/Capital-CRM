@@ -276,6 +276,36 @@ export default function VendasConsulta() {
 
   const clienteCpf = consultaData?.clienteBase?.cpf?.replace(/[^0-9]/g, "") || "";
 
+  // Dados enriquecidos do SIAPE (cargo, função, UF, banco, financeiro, margens corretas)
+  const { data: siapeEnrichData } = useQuery<{
+    dados: {
+      mes_pagamento: string | null;
+      tipo_relacao: string | null;
+      cargo: string | null;
+      funcao: string | null;
+      nome_instituidor: string | null;
+      data_termino: string | null;
+      uf_siape: string | null;
+      banco: string | null;
+      agencia: string | null;
+      conta: string | null;
+      total_bruto: string | null;
+      total_descontos: string | null;
+      total_liquido: string | null;
+    } | null
+  }>({
+    queryKey: ["/api/siape/dados", clienteCpf],
+    enabled: !!clienteCpf,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      if (!clienteCpf) return { dados: null };
+      const res = await fetch(`/api/siape/dados/${clienteCpf}`, { credentials: "include" });
+      if (!res.ok) return { dados: null };
+      return res.json();
+    },
+  });
+  const siapeDados = siapeEnrichData?.dados ?? null;
+
   const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteCpf],
     enabled: !!clienteCpf,
@@ -1038,40 +1068,6 @@ export default function VendasConsulta() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">CPF</p>
-                      <p className="font-mono" data-testid="text-cpf">
-                        <CopyableField
-                          value={consultaData.clienteBase?.cpf}
-                          displayValue={formatCPF(consultaData.clienteBase?.cpf)}
-                          testId="button-copy-cpf"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Matrícula</p>
-                      <p className="font-mono" data-testid="text-matricula">
-                        <CopyableField
-                          value={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula}
-                          displayValue={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula || "-"}
-                          testId="button-copy-matricula"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Nome</p>
-                      <p className="font-medium" data-testid="text-nome">
-                        <CopyableField
-                          value={consultaData.clienteBase?.nome}
-                          displayValue={consultaData.clienteBase?.nome || "-"}
-                          testId="button-copy-nome"
-                          toast={toast}
-                          formatOnCopy={formatProperName}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
                       <p className="text-muted-foreground flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
                         Nascimento / Idade
@@ -1110,11 +1106,22 @@ export default function VendasConsulta() {
                         {mapNomenclatura("RJUR", consultaData.vinculo?.rjur || consultaData.clienteBase?.rjur || consultaData.clienteBase?.regime_juridico)}
                       </p>
                     </div>
+                    {/* UF — substituiu Natureza */}
                     <div className="space-y-1">
-                      <p className="text-muted-foreground">Natureza</p>
-                      <p data-testid="text-natureza">
-                        {consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
+                      <p className="text-muted-foreground">UF</p>
+                      <p data-testid="text-uf">
+                        {siapeDados?.uf_siape || consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
                       </p>
+                    </div>
+                    {/* Cargo — vem do SIAPE */}
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Cargo</p>
+                      <p data-testid="text-cargo">{siapeDados?.cargo || "-"}</p>
+                    </div>
+                    {/* Função — vem do SIAPE */}
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Função</p>
+                      <p data-testid="text-funcao">{siapeDados?.funcao || "-"}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-muted-foreground">UPAG</p>
