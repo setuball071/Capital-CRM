@@ -27403,6 +27403,29 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // GET /api/siape/parcelas/:cpf — parcelas consignadas do mês mais recente
+  app.get("/api/siape/parcelas/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const cpf = req.params.cpf.replace(/\D/g, "");
+      if (!cpf || cpf.length !== 11) return res.status(400).json({ message: "CPF inválido" });
+
+      const result = await db.execute(sql`
+        SELECT mes_pagamento,
+               json_dados->'parcelas' AS parcelas
+        FROM contracheques_siape
+        WHERE cpf = ${cpf}
+        ORDER BY mes_pagamento DESC
+        LIMIT 1
+      `);
+
+      if (!result.rows.length) return res.json({ parcelas: [], mes: null });
+      const row = result.rows[0] as any;
+      res.json({ parcelas: row.parcelas || [], mes: row.mes_pagamento });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar parcelas", error: err.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
