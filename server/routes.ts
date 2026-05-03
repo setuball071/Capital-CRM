@@ -2,6 +2,246 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 
+// ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
+function _brl(value: any): string {
+  try {
+    const v = Math.abs(parseFloat(value) || 0);
+    const neg = parseFloat(value) < 0;
+    const s = v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, 'X')
+                .replace('.', ',').replace(/X/g, '.');
+    return neg ? `-${s}` : s;
+  } catch { return '0,00'; }
+}
+
+function _cssSiape(): string {
+  return `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #d0d0d0; }
+  .contracheque { width: 794px; min-height: 1123px; margin: 0 auto; background: #fff; padding: 8px 12px 12px 12px; font-size: 7.5pt; color: #111; }
+  .aviso-topo { color: #CC0000; font-weight: bold; font-size: 7pt; text-align: center; margin-bottom: 4px; white-space: nowrap; }
+  .cabecalho { display: flex; align-items: center; border: 1px solid #999; margin-bottom: 1px; padding: 4px 8px; background: #fff; }
+  .cabecalho .logo-col { flex: 0 0 56px; text-align: center; }
+  .cabecalho .logo-col img { width: 50px; height: auto; }
+  .cabecalho .titulo-col { flex: 1; text-align: center; }
+  .titulo-principal { font-size: 10pt; font-weight: bold; color: #000; letter-spacing: 0.3px; }
+  .titulo-orgao { font-size: 8.5pt; font-weight: bold; color: #1F3864; margin-top: 3px; text-transform: uppercase; }
+  .info-grid { display: flex; border-left: 1px solid #999; border-top: 1px solid #999; margin-bottom: 1px; }
+  .info-grid .cell { flex: 1; border-right: 1px solid #999; border-bottom: 1px solid #999; padding: 2px 4px; min-height: 26px; display: flex; flex-direction: column; justify-content: space-between; background: #fff; }
+  .cell .lbl { font-size: 5.8pt; color: #555; text-transform: uppercase; line-height: 1.2; white-space: nowrap; }
+  .cell .val { font-size: 7.5pt; font-weight: bold; color: #1F3864; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell.wide  { flex: 2; } .cell.xwide { flex: 3; } .cell.xxwide { flex: 4; }
+  .tbl-rubricas { width: 100%; border-collapse: collapse; margin-bottom: 1px; font-size: 7pt; }
+  .tbl-rubricas thead tr th { background: #D9D9D9; color: #000; font-size: 7pt; font-weight: bold; padding: 2px 5px; border: 1px solid #999; text-align: left; }
+  .tbl-rubricas tbody tr:nth-child(odd) td { background: #F2F2F2; }
+  .tbl-rubricas tbody tr:nth-child(even) td { background: #FFFFFF; }
+  .tbl-rubricas td { border: 1px solid #BBBBBB; padding: 1px 4px; height: 14px; }
+  .col-tipo { width: 68px; font-weight: bold; } .col-disc { width: auto; } .col-prazo { width: 38px; text-align: center; } .col-valor { width: 76px; text-align: right; }
+  .tipo-rend { color: #C55A11; } .tipo-desc { color: #1F3864; } .disc-rend { color: #843C0C; } .disc-desc { color: #17375E; } .tr-inst { font-style: italic; color: #555; }
+  .rodape-totais { border: 1px solid #999; margin-bottom: 3px; }
+  .rodape-totais .row-label { display: flex; background: #D9D9D9; border-bottom: 1px solid #999; }
+  .rodape-totais .row-label .tc { flex: 1; padding: 2px 4px; font-size: 6pt; color: #000; font-weight: bold; text-align: center; border-right: 1px solid #999; }
+  .rodape-totais .row-label .tc:last-child { border-right: none; }
+  .rodape-totais .row-value { display: flex; }
+  .rodape-totais .row-value .tv { flex: 1; padding: 3px 4px; font-size: 8pt; font-weight: bold; color: #111; text-align: center; border-right: 1px solid #BBBBBB; }
+  .rodape-totais .row-value .tv:last-child { border-right: none; }
+  .tv-liquido { color: #1F3864; font-size: 8.5pt; }
+  .auth-line { font-size: 6.5pt; color: #333; text-align: center; border: 1px solid #999; padding: 3px 6px; margin-bottom: 3px; line-height: 1.6; background: #FAFAFA; }
+  .aviso-nao-oficial { font-size: 6pt; color: #7B0000; text-align: center; border: 1px dashed #CC0000; padding: 3px 6px; margin-bottom: 2px; background: #FFF5F5; line-height: 1.5; }
+  @media print { body { background: #fff; } .contracheque { width: 210mm; margin: 0; padding: 6mm 8mm; box-shadow: none; } }`;
+}
+
+const BRASAO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">' +
+  '<ellipse cx="50" cy="58" rx="44" ry="54" fill="#009C3B"/>' +
+  '<polygon points="50,14 88,58 50,102 12,58" fill="#FFDF00"/>' +
+  '<circle cx="50" cy="58" r="28" fill="#003087"/>' +
+  '<path d="M24,63 Q50,53 76,63" stroke="#fff" stroke-width="6.5" fill="none"/>' +
+  '<polygon points="50,3 52,9 59,9 53,13 55,20 50,16 45,20 47,13 41,9 48,9" fill="#FFDF00"/>' +
+  '<text x="50" y="116" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial" fill="#FFDF00" letter-spacing="1">BRASIL</text>' +
+  '</svg>'
+)}`;
+
+function _htmlTabelaRubricas(rubricas: any[], linhaInstituidor = '', minRows = 20): string {
+  const rend = rubricas.filter(r => (r.tipo || '').toUpperCase() === 'RENDIMENTO');
+  const desc = rubricas.filter(r => (r.tipo || '').toUpperCase() === 'DESCONTO');
+  let rows = '';
+  if (linhaInstituidor) {
+    rows += `<tr class="tr-inst"><td class="col-tipo"></td><td class="col-disc" style="color:#555">${linhaInstituidor}</td><td class="col-prazo"></td><td class="col-valor" style="color:#555">0,00</td></tr>`;
+  }
+  rend.forEach((r, i) => {
+    const tipo = i === 0 ? `<td class="col-tipo tipo-rend">RENDIMENTOS</td>` : `<td class="col-tipo"></td>`;
+    rows += `<tr>${tipo}<td class="col-disc disc-rend">${r.descricao||''}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
+  });
+  desc.forEach((r, i) => {
+    const tipo = i === 0 ? `<td class="col-tipo tipo-desc">DESCONTOS</td>` : `<td class="col-tipo"></td>`;
+    rows += `<tr>${tipo}<td class="col-disc disc-desc">${r.descricao||''}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
+  });
+  const extra = Math.max(0, minRows - rend.length - desc.length - (linhaInstituidor ? 1 : 0));
+  for (let i = 0; i < extra; i++) rows += `<tr><td class="col-tipo"></td><td class="col-disc"></td><td class="col-prazo"></td><td class="col-valor"></td></tr>`;
+  return `<table class="tbl-rubricas"><thead><tr><th class="col-tipo">TIPO</th><th class="col-disc">DISCRIMINAÇÃO</th><th class="col-prazo">PRAZO</th><th class="col-valor">VALOR (R$)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function _htmlRodape(dataEmissao: string): string {
+  return `
+  <div class="auth-line">Autenticação Nº&nbsp;<strong>****.****.****.****.****.****</strong>&nbsp;|&nbsp;Emitido em: ${dataEmissao}</div>
+  <div class="aviso-nao-oficial">⚠ DOCUMENTO MERAMENTE ILUSTRATIVO — As informações são fiéis ao conteúdo do contracheque original, porém este documento NÃO tem validade oficial e NÃO deve ser apresentado como comprovante perante instituições financeiras ou órgãos públicos.</div>`;
+}
+
+function _htmlServidor(data: any): string {
+  const srv = data.servidor || {}; const upag = data.upag || {}; const apos = data.aposentadoria || {};
+  const bs = data.banco_salario || {}; const bo = data.banco_outras || {};
+  const tot = data.totais || {}; const auth = data.autenticacao || {};
+  const authData = auth.data_emissao || new Date().toLocaleDateString('pt-BR');
+  const titulo = `COMPROVANTE DE RENDIMENTOS - FOLHA ${data.tipo_folha || 'NORMAL'}`;
+  return `
+  <div class="aviso-topo">Para esclarecer dúvidas sobre seu pagamento, procure imediatamente sua unidade pagadora.</div>
+  <div class="cabecalho"><div class="logo-col"><img src="${BRASAO_SVG}" width="50" alt="Brasão"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">SIGLA DA UPAG</span><span class="val">${upag.sigla||''}</span></div>
+    <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>
+    <div class="cell wide"><span class="lbl">REGIME JURÍDICO</span><span class="val">${upag.reg_juridico||''}</span></div>
+    <div class="cell xwide"><span class="lbl">SITUAÇÃO FUNCIONAL</span><span class="val">${upag.situacao_funcional||''}</span></div>
+    <div class="cell"><span class="lbl">SIGLA DA UORG</span><span class="val">${upag.sigla_uorg||''}</span></div>
+    <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell xwide"><span class="lbl">NOME DO SERVIDOR</span><span class="val" style="font-size:8.5pt">${srv.nome||''}</span></div>
+    <div class="cell wide"><span class="lbl">MAT. SIAPE</span><span class="val">${srv.matricula||''}</span></div>
+    <div class="cell wide"><span class="lbl">IDENT. ÚNICA</span><span class="val">${srv.ident_unica||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell xwide"><span class="lbl">CARGO / EMPREGO</span><span class="val">${srv.cargo||''}</span></div>
+    <div class="cell"><span class="lbl">CLASSE</span><span class="val">${srv.classe||''}</span></div>
+    <div class="cell"><span class="lbl">REF / NÍVEL</span><span class="val">${srv.nivel||''}</span></div>
+    <div class="cell wide"><span class="lbl">FUNÇÃO</span><span class="val">${srv.funcao||''}</span></div>
+    <div class="cell"><span class="lbl">TIPO DE RELAÇÃO</span><span class="val">${srv.tipo_relacao||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">DEPEND. SF</span><span class="val">${srv.dependente_sf||'00'}</span></div>
+    <div class="cell"><span class="lbl">DEPEND. IR</span><span class="val">${srv.dependente_ir||'00'}</span></div>
+    <div class="cell"><span class="lbl">ATS %</span><span class="val">${srv.ats_pct||'00'}</span></div>
+    <div class="cell wide"><span class="lbl">CPF</span><span class="val">${srv.cpf||''}</span></div>
+    <div class="cell wide"><span class="lbl">MÊS / ANO PAGAMENTO</span><span class="val">${data.mes_pagamento||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">BANCO (SALÁRIO)</span><span class="val">${bs.banco||''}</span></div>
+    <div class="cell wide"><span class="lbl">AGÊNCIA</span><span class="val">${bs.agencia||''}</span></div>
+    <div class="cell xwide"><span class="lbl">CONTA CORRENTE</span><span class="val">${bs.conta||''}</span></div>
+    <div class="cell"><span class="lbl">BANCO (OUTRAS OPER.)</span><span class="val">${bo.banco||''}</span></div>
+    <div class="cell wide"><span class="lbl">AGÊNCIA</span><span class="val">${bo.agencia||''}</span></div>
+    <div class="cell xwide"><span class="lbl">CONTA</span><span class="val">${bo.conta||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell wide"><span class="lbl">FUND. LEGAL APOSENT.</span><span class="val">${apos.fundamento_legal||'***'}</span></div>
+    <div class="cell"><span class="lbl">GRUPO</span><span class="val">${apos.grupo||'***'}</span></div>
+    <div class="cell wide"><span class="lbl">CARGO (APOSENT.)</span><span class="val">${apos.cargo||'***'}</span></div>
+    <div class="cell"><span class="lbl">CLASSE</span><span class="val">${apos.classe||'***'}</span></div>
+    <div class="cell"><span class="lbl">REF / PAD / NÍV</span><span class="val">${apos.ref_pad_niv||'***'}</span></div>
+  </div>
+  ${_htmlTabelaRubricas(data.rubricas||[])}
+  <div class="rodape-totais">
+    <div class="row-label"><div class="tc">BASE TETO</div><div class="tc">BASE IR</div><div class="tc">FGTS</div><div class="tc">BRUTO</div><div class="tc">DESCONTO</div><div class="tc">LÍQUIDO</div></div>
+    <div class="row-value">
+      <div class="tv">${_brl(tot.base_calculo_teto)}</div><div class="tv">${_brl(tot.base_calculo_ir)}</div>
+      <div class="tv">${_brl(tot.deposito_fgts)}</div><div class="tv">${_brl(tot.total_bruto)}</div>
+      <div class="tv">${_brl(tot.total_descontos)}</div><div class="tv tv-liquido">${_brl(tot.total_liquido)}</div>
+    </div>
+  </div>
+  ${_htmlRodape(authData)}`;
+}
+
+function _htmlPensao(data: any): string {
+  const srv = data.servidor || {}; const pen = data.pensao || {}; const upag = data.upag || {};
+  const apos = data.aposentadoria || {}; const bs = data.banco_salario || {}; const bo = data.banco_outras || {};
+  const tot = data.totais || {}; const auth = data.autenticacao || {};
+  const authData = auth.data_emissao || new Date().toLocaleDateString('pt-BR');
+  const titulo = `COMPROVANTE DE RENDIMENTOS DE BENEFICIÁRIO DE PENSÃO - FOLHA ${data.tipo_folha || 'NORMAL'}`;
+  return `
+  <div class="aviso-topo">Para esclarecer dúvidas sobre seu pagamento, procure imediatamente sua unidade pagadora.</div>
+  <div class="cabecalho"><div class="logo-col"><img src="${BRASAO_SVG}" width="50" alt="Brasão"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">SIGLA DA UPAG</span><span class="val">${upag.sigla||''}</span></div>
+    <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>
+    <div class="cell xwide"><span class="lbl">UNIDADE DE LOCALIZAÇÃO</span><span class="val">${upag.sigla_uorg||''}</span></div>
+    <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell xxwide"><span class="lbl">NOME DO BENEFICIÁRIO DE PENSÃO</span><span class="val" style="font-size:8.5pt">${srv.nome||''}</span></div>
+    <div class="cell wide"><span class="lbl">MAT. SIAPE</span><span class="val">${srv.matricula||''}</span></div>
+    <div class="cell wide"><span class="lbl">CPF</span><span class="val">${srv.cpf||''}</span></div>
+    <div class="cell wide"><span class="lbl">MÊS PAGAMENTO</span><span class="val">${data.mes_pagamento||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">BANCO (RECEB. BENEFÍCIO)</span><span class="val">${bs.banco||''}</span></div>
+    <div class="cell wide"><span class="lbl">AGÊNCIA</span><span class="val">${bs.agencia||''}</span></div>
+    <div class="cell xwide"><span class="lbl">CONTA SALÁRIO</span><span class="val">${bs.conta||''}</span></div>
+    <div class="cell"><span class="lbl">BANCO (OUTRAS OPER.)</span><span class="val">${bo.banco||''}</span></div>
+    <div class="cell wide"><span class="lbl">AGÊNCIA</span><span class="val">${bo.agencia||''}</span></div>
+    <div class="cell xwide"><span class="lbl">CONTA</span><span class="val">${bo.conta||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">DEP. IR</span><span class="val">${pen.dep_ir||'00'}</span></div>
+    <div class="cell wide"><span class="lbl">NATUREZA DA PENSÃO</span><span class="val">${pen.natureza||''}</span></div>
+    <div class="cell wide"><span class="lbl">INÍCIO DA PENSÃO</span><span class="val">${pen.data_inicio||'***'}</span></div>
+    <div class="cell wide"><span class="lbl">TÉRMINO DA PENSÃO</span><span class="val">${pen.data_termino||'***********'}</span></div>
+    <div class="cell xwide"><span class="lbl">DISTRIBUIÇÃO DE COTAS</span><span class="val">PENSÃO CIVIL: ${pen.cotas||''} &nbsp; PENSÃO COMPLEMENTAR: *****</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="lbl">% DE REMUNERAÇÃO</span><span class="val">${pen.pct_remuneracao||'100'} %</span></div>
+    <div class="cell xxwide"><span class="lbl">AMPARO LEGAL</span><span class="val">${pen.amparo_legal||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell xxwide"><span class="lbl">NOME DO INSTITUIDOR</span><span class="val" style="font-size:8.5pt">${pen.nome_instituidor||''}</span></div>
+    <div class="cell wide"><span class="lbl">MAT. SIAPE INSTITUIDOR</span><span class="val">${pen.mat_instituidor||''}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell xwide"><span class="lbl">CARGO DO INSTITUIDOR</span><span class="val">${pen.cargo_instituidor||''}</span></div>
+    <div class="cell wide"><span class="lbl">FUNÇÃO</span><span class="val">${pen.funcao_instituidor||'*** **** **'}</span></div>
+    <div class="cell wide"><span class="lbl">QTDE BENEF. TEMPORÁRIA</span><span class="val">${pen.qtde_temp||'**'}</span></div>
+    <div class="cell wide"><span class="lbl">QTDE BENEF. VITALÍCIA</span><span class="val">${pen.qtde_vital||'**'}</span></div>
+  </div>
+  <div class="info-grid">
+    <div class="cell wide"><span class="lbl">FUND. LEGAL APOSENT.</span><span class="val">${apos.fundamento_legal||'***'}</span></div>
+    <div class="cell"><span class="lbl">GRUPO</span><span class="val">${apos.grupo||'***'}</span></div>
+    <div class="cell wide"><span class="lbl">CARGO (APOSENT.)</span><span class="val">${apos.cargo||'***'}</span></div>
+    <div class="cell"><span class="lbl">CLASSE</span><span class="val">${apos.classe||'***'}</span></div>
+    <div class="cell"><span class="lbl">REF / PAD / NÍV</span><span class="val">${apos.ref_pad_niv||'***'}</span></div>
+  </div>
+  ${_htmlTabelaRubricas(data.rubricas||[], 'VALOR LÍQUIDO DO INSTITUIDOR')}
+  <div class="rodape-totais">
+    <div class="row-label"><div class="tc">BASE CÁLC. PENSÃO SEM TETO</div><div class="tc">BASE CÁLC. PENSÃO COM TETO</div><div class="tc">VALOR BASE PENSÃO I.R.</div><div class="tc">BRUTO</div><div class="tc">DESCONTO</div><div class="tc">LÍQUIDO</div></div>
+    <div class="row-value">
+      <div class="tv">${_brl(tot.base_sem_teto)}</div><div class="tv">${_brl(tot.base_com_teto)}</div>
+      <div class="tv">${_brl(tot.valor_base_ir)}</div><div class="tv">${_brl(tot.total_bruto)}</div>
+      <div class="tv">${_brl(tot.total_descontos)}</div><div class="tv tv-liquido">${_brl(tot.total_liquido)}</div>
+    </div>
+  </div>
+  ${_htmlRodape(authData)}`;
+}
+
+function gerarContrachequeHtml(data: any): string {
+  const tipo = (data.tipo_relacao || 'SERVIDOR').toUpperCase();
+  const nome = data.servidor?.nome || '';
+  const corpo = ['PENSAO', 'PENSIONISTA'].includes(tipo)
+    ? _htmlPensao(data)
+    : _htmlServidor(data);
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contracheque SIAPE – ${nome}</title>
+<style>${_cssSiape()}</style>
+</head>
+<body>
+<div class="contracheque">
+${corpo}
+</div>
+</body>
+</html>`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function safeCompetencia(val: any): string | null {
   if (!val) return null;
   if (val instanceof Date) {
@@ -27059,6 +27299,109 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
+
+  // ===== SIAPE — CONTRACHEQUES =====
+
+  // GET /api/siape/contracheque/:cpf — histórico de meses disponíveis para um CPF
+  app.get("/api/siape/contracheque/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const { cpf } = req.params;
+      const cpfLimpo = cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
+      const result = await db.execute(sql`
+        SELECT mes_pagamento, tipo_relacao, orgao_nome,
+               total_bruto, total_descontos, total_liquido, importado_em
+        FROM contracheques_siape
+        WHERE cpf = ${cpfLimpo}
+        ORDER BY mes_pagamento DESC
+        LIMIT 3
+      `);
+      res.json({ meses: result.rows });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar contracheques", error: err.message });
+    }
+  });
+
+  // GET /api/siape/contracheque/:cpf/html?mes=ABR2026 — gera e retorna HTML do contracheque
+  app.get("/api/siape/contracheque/:cpf/html", requireAuth, async (req: any, res) => {
+    try {
+      const { cpf } = req.params;
+      const { mes } = req.query as { mes?: string };
+      const cpfLimpo = cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
+
+      let query;
+      if (mes) {
+        query = await db.execute(sql`
+          SELECT json_dados FROM contracheques_siape
+          WHERE cpf = ${cpfLimpo} AND mes_pagamento = ${mes}
+          LIMIT 1
+        `);
+      } else {
+        query = await db.execute(sql`
+          SELECT json_dados FROM contracheques_siape
+          WHERE cpf = ${cpfLimpo}
+          ORDER BY mes_pagamento DESC
+          LIMIT 1
+        `);
+      }
+
+      if (!query.rows.length) {
+        return res.status(404).send("<h3>Contracheque não disponível para este CPF</h3>");
+      }
+
+      const data = query.rows[0] as any;
+      const jsonDados = typeof data.json_dados === 'string'
+        ? JSON.parse(data.json_dados)
+        : data.json_dados;
+
+      const html = gerarContrachequeHtml(jsonDados);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch (err: any) {
+      res.status(500).send(`<h3>Erro: ${err.message}</h3>`);
+    }
+  });
+
+  // GET /api/siape/historico — lista meses importados (para tela de gerenciamento)
+  app.get("/api/siape/historico", requireAuth, async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) return res.status(403).json({ message: "Sem permissão" });
+
+      const result = await db.execute(sql`
+        SELECT mes_pagamento,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE tipo_relacao = 'SERVIDOR')    AS servidores,
+               COUNT(*) FILTER (WHERE tipo_relacao = 'APOSENTADO')  AS aposentados,
+               COUNT(*) FILTER (WHERE tipo_relacao = 'PENSAO')      AS pensionistas,
+               MAX(importado_em) AS ultima_importacao
+        FROM contracheques_siape
+        GROUP BY mes_pagamento
+        ORDER BY mes_pagamento DESC
+        LIMIT 10
+      `);
+      res.json({ meses: result.rows });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar histórico", error: err.message });
+    }
+  });
+
+  // DELETE /api/siape/historico/:mes — apaga todos os contracheques de um mês
+  app.delete("/api/siape/historico/:mes", requireAuth, async (req: any, res) => {
+    try {
+      const role = req.user?.role as string;
+      const allowed = req.user?.isMaster || ["master", "coordenacao", "financeiro"].includes(role);
+      if (!allowed) return res.status(403).json({ message: "Sem permissão" });
+
+      const { mes } = req.params;
+      const result = await db.execute(sql`
+        DELETE FROM contracheques_siape WHERE mes_pagamento = ${mes}
+      `);
+      res.json({ message: `Mês ${mes} removido`, deletados: (result as any).rowCount ?? 0 });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao deletar", error: err.message });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

@@ -383,6 +383,9 @@ export default function ConsultaCliente() {
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [showExcModal, setShowExcModal] = useState(false);
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [showContrachequeModal, setShowContrachequeModal] = useState(false);
+  const [contrachequeUrl, setContrachequeUrl] = useState<string | null>(null);
+  const [contrachequesMeses, setContrachequesMeses] = useState<any[]>([]);
   const [historicoData, setHistoricoData] = useState<HistoricoFolhaResponse | null>(null);
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
   const [selectedHistoricoCompetencia, setSelectedHistoricoCompetencia] = useState<FolhaHistoricoCompleto | null>(null);
@@ -1028,22 +1031,6 @@ export default function ConsultaCliente() {
                 </CardContent>
               </Card>
 
-              {/* ── Banner: Parcelas Fora de Folha ── */}
-              {showExcAlert && (
-                <Alert
-                  className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-pointer"
-                  data-testid="alert-exc-fora-folha"
-                  onClick={() => setShowExcModal(true)}
-                >
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  <AlertTitle className="text-amber-800 dark:text-amber-400 font-semibold">
-                    Cliente possui {excQtd} desconto{excQtd !== 1 ? "s" : ""} fora de folha — Total fora: {formatCurrency(excSoma)}
-                  </AlertTitle>
-                  <AlertDescription className="text-amber-700 dark:text-amber-500 text-sm mt-1">
-                    Clique para ver detalhes
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <Card>
                 <CardHeader>
@@ -1218,6 +1205,39 @@ export default function ConsultaCliente() {
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Visualizar todas as competências importadas</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        {/* Botão Contracheque SIAPE */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const cpfLimpo = (clienteDetalhado?.pessoa?.cpf || "").replace(/\D/g, "");
+                                if (!cpfLimpo) return;
+                                try {
+                                  const r = await fetch(`/api/siape/contracheque/${cpfLimpo}`);
+                                  const json = await r.json();
+                                  const meses = json.meses || [];
+                                  if (meses.length === 0) {
+                                    toast({ title: "Contracheque não encontrado", description: "Nenhum dado SIAPE importado para este CPF.", variant: "destructive" });
+                                    return;
+                                  }
+                                  setContrachequesMeses(meses);
+                                  setContrachequeUrl(`/api/siape/contracheque/${cpfLimpo}/html?mes=${meses[0].mes_pagamento}`);
+                                  setShowContrachequeModal(true);
+                                } catch {
+                                  toast({ title: "Erro", description: "Não foi possível carregar o contracheque.", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              📄 Contracheque
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Ver contracheque SIAPE do servidor</p>
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -1692,6 +1712,50 @@ export default function ConsultaCliente() {
               <p>Nenhum histórico de folha disponível.</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Contracheque SIAPE ── */}
+      <Dialog open={showContrachequeModal} onOpenChange={setShowContrachequeModal}>
+        <DialogContent className="max-w-[880px] w-full h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 py-3 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              📄 Contracheque SIAPE
+            </DialogTitle>
+            {contrachequesMeses.length > 1 && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {contrachequesMeses.map((m: any) => {
+                  const mes = m.mes_pagamento;
+                  const label = mes.replace(/^([A-Z]+)(\d{4})$/, '$1/$2');
+                  const cpfLimpo = (clienteDetalhado?.pessoa?.cpf || "").replace(/\D/g, "");
+                  const url = `/api/siape/contracheque/${cpfLimpo}/html?mes=${mes}`;
+                  return (
+                    <button
+                      key={mes}
+                      onClick={() => setContrachequeUrl(url)}
+                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                        contrachequeUrl === url
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background border-border hover:bg-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {contrachequeUrl && (
+              <iframe
+                key={contrachequeUrl}
+                src={contrachequeUrl}
+                className="w-full h-full border-0"
+                title="Contracheque SIAPE"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
