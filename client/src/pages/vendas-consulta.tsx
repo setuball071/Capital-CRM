@@ -251,6 +251,8 @@ export default function VendasConsulta() {
   const [selectedVinculoId, setSelectedVinculoId] = useState<number | null>(null);
   const [contratosSelecionados, setContratosSelecionados] = useState<Set<number>>(new Set());
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+  const [taxasSiape, setTaxasSiape] = useState<Record<string, string>>({});
+  const [siapeSelecionados, setSiapeSelecionados] = useState<Set<number>>(new Set());
   
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
@@ -305,6 +307,22 @@ export default function VendasConsulta() {
     },
   });
   const siapeDados = siapeEnrichData?.dados ?? null;
+
+  const { data: siapeParcelasData } = useQuery<{ parcelas: Array<{
+    descricao: string; banco: string; tipo: string; prazo_restante: number; valor: number;
+  }> | null }>({
+    queryKey: ["/api/siape/parcelas", clienteCpf],
+    enabled: !!clienteCpf,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      if (!clienteCpf) return { parcelas: null };
+      const res = await fetch(`/api/siape/parcelas/${clienteCpf}`, { credentials: "include" });
+      if (!res.ok) return { parcelas: null };
+      return res.json();
+    },
+  });
+  const siapeParcelas = siapeParcelasData?.parcelas ?? null;
 
   const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteCpf],
@@ -1373,156 +1391,106 @@ export default function VendasConsulta() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <CreditCard className="h-4 w-4" />
                     Contratos
+                    {siapeParcelas && siapeParcelas.length > 0 && (
+                      <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">SIAPE</Badge>
+                    )}
                   </CardTitle>
                   <CardDescription>
-                    {consultaData.contratos && consultaData.contratos.length > 0
-                      ? `${consultaData.contratos.length} contrato(s) encontrado(s)`
-                      : "Nenhum contrato registrado"}
+                    {siapeParcelas && siapeParcelas.length > 0
+                      ? `${siapeParcelas.length} desconto(s) do contracheque SIAPE`
+                      : consultaData.contratos && consultaData.contratos.length > 0
+                        ? `${consultaData.contratos.length} contrato(s) encontrado(s)`
+                        : "Nenhum contrato registrado"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {consultaData.contratos && consultaData.contratos.length > 0 ? (
+                  {/* ── Tabela SIAPE ─────────────────────────────────────── */}
+                  {siapeParcelas && siapeParcelas.length > 0 ? (
                     <>
                       <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-10">
-                              <Checkbox
-                                checked={contratosSelecionados.size === consultaData.contratos.length && consultaData.contratos.length > 0}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setContratosSelecionados(new Set(consultaData.contratos.map((_, idx) => idx)));
-                                  } else {
-                                    setContratosSelecionados(new Set());
-                                  }
-                                }}
-                                data-testid="checkbox-select-all"
-                              />
-                            </TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Origem do Desconto</TableHead>
-                            <TableHead>Nº Contrato</TableHead>
-                            <TableHead className="text-right">Valor Parcela</TableHead>
-                            <TableHead className="text-right">Parc. Rest.</TableHead>
-                            <TableHead className="text-center w-20">Taxa (%)</TableHead>
-                            <TableHead className="text-right">Saldo Devedor</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {consultaData.contratos.map((contrato, idx) => {
-                            const taxaStr = taxasContratos[idx];
-                            const taxa = taxaStr ? parseFloat(taxaStr) : 0;
-                            const valorParcela = contrato.valor_parcela || contrato.valorParcela;
-                            const parcelasRestantes = contrato.parcelas_restantes || contrato.parcelasRestantes;
-                            const saldoCalculado = taxa > 0 
-                              ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes)
-                              : null;
-                            const saldoExibir = saldoCalculado !== null ? saldoCalculado : (contrato.saldo_devedor || contrato.saldoDevedor);
-                            const isCalculado = saldoCalculado !== null;
-                            return (
-                              <TableRow key={idx} data-testid={`row-contrato-${idx}`} className={contratosSelecionados.has(idx) ? "bg-muted/50" : ""}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={contratosSelecionados.has(idx)}
-                                    onCheckedChange={(checked) => {
-                                      const newSet = new Set(contratosSelecionados);
-                                      if (checked) {
-                                        newSet.add(idx);
-                                      } else {
-                                        newSet.delete(idx);
-                                      }
-                                      setContratosSelecionados(newSet);
-                                    }}
-                                    data-testid={`checkbox-contrato-${idx}`}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="capitalize text-xs">
-                                    {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  <CopyableField
-                                    value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO}
-                                    displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"}
-                                    testId={`button-copy-banco-contrato-${idx}`}
-                                    toast={toast}
-                                  />
-                                </TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  <CopyableField
-                                    value={contrato.numero_contrato || contrato.numeroContrato}
-                                    displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"}
-                                    testId={`button-copy-contrato-${idx}`}
-                                    toast={toast}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-right">{formatCurrency(valorParcela)}</TableCell>
-                                <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
-                                <TableCell>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    placeholder="0.00"
-                                    className="w-16 h-8 text-sm text-center"
-                                    value={taxasContratos[idx] || ""}
-                                    onChange={(e) => setTaxasContratos(prev => ({
-                                      ...prev,
-                                      [idx]: e.target.value
-                                    }))}
-                                    data-testid={`input-taxa-${idx}`}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    {formatCurrency(saldoExibir)}
-                                    {isCalculado && (
-                                      <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">
-                                        calc
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-10">
+                                <Checkbox
+                                  checked={siapeSelecionados.size === siapeParcelas.length}
+                                  onCheckedChange={(checked) => {
+                                    setSiapeSelecionados(checked ? new Set(siapeParcelas.map((_, i) => i)) : new Set());
+                                  }}
+                                />
+                              </TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Banco</TableHead>
+                              <TableHead className="text-right">Valor Parcela</TableHead>
+                              <TableHead className="text-right">Parc. Rest.</TableHead>
+                              <TableHead className="text-center w-20">Taxa (%)</TableHead>
+                              <TableHead className="text-right">Saldo Devedor</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {siapeParcelas.map((p, idx) => {
+                              const taxaStr = taxasSiape[String(idx)];
+                              const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                              const saldo = taxa > 0 ? calcularSaldoDevedorPrice(p.valor, taxa, p.prazo_restante) : null;
+                              return (
+                                <TableRow key={idx} className={siapeSelecionados.has(idx) ? "bg-muted/50" : ""}>
+                                  <TableCell>
+                                    <Checkbox
+                                      checked={siapeSelecionados.has(idx)}
+                                      onCheckedChange={(checked) => {
+                                        const s = new Set(siapeSelecionados);
+                                        checked ? s.add(idx) : s.delete(idx);
+                                        setSiapeSelecionados(s);
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="text-xs whitespace-nowrap">{p.tipo || "-"}</Badge>
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    <CopyableField value={p.banco} displayValue={p.banco || "-"} testId={`copy-banco-siape-${idx}`} toast={toast} />
+                                  </TableCell>
+                                  <TableCell className="text-right">{formatCurrency(p.valor)}</TableCell>
+                                  <TableCell className="text-right">{p.prazo_restante ?? "-"}</TableCell>
+                                  <TableCell>
+                                    <Input
+                                      type="number" step="0.01" min="0" placeholder="0.00"
+                                      className="w-16 h-8 text-sm text-center"
+                                      value={taxaStr || ""}
+                                      onChange={(e) => setTaxasSiape(prev => ({ ...prev, [String(idx)]: e.target.value }))}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {saldo != null ? formatCurrency(saldo) : "-"}
+                                      {saldo != null && <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">calc</Badge>}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
                       </div>
 
-                      {contratosSelecionados.size > 0 && (
+                      {siapeSelecionados.size > 0 && (
                         <div className="mt-4 pt-4 border-t">
                           <div className="flex items-center gap-2 mb-3">
                             <Calculator className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">Resumo dos {contratosSelecionados.size} contrato(s) selecionado(s)</span>
+                            <span className="text-sm font-medium">Resumo dos {siapeSelecionados.size} item(s) selecionado(s)</span>
                           </div>
                           <div className="grid grid-cols-3 gap-4 text-sm">
                             {(() => {
-                              let somaParcelas = 0;
-                              let somaSaldo = 0;
-                              let totalParcelasRestantes = 0;
-                              let contratosComParcelas = 0;
-                              contratosSelecionados.forEach((idx) => {
-                                const contrato = consultaData.contratos[idx];
-                                if (!contrato) return;
-                                const valorParcela = parseCurrency(contrato.valor_parcela || contrato.valorParcela);
-                                const parcelasRestantes = parseInt(String(contrato.parcelas_restantes || contrato.parcelasRestantes || 0)) || 0;
-                                const taxaStr = taxasContratos[idx];
-                                const taxa = taxaStr ? parseFloat(taxaStr) : 0;
-                                const saldoCalculado = taxa > 0 
-                                  ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes)
-                                  : null;
-                                const saldoContrato = saldoCalculado !== null ? saldoCalculado : parseCurrency(contrato.saldo_devedor || contrato.saldoDevedor);
-                                somaParcelas += valorParcela;
-                                somaSaldo += saldoContrato;
-                                if (parcelasRestantes > 0) {
-                                  totalParcelasRestantes += parcelasRestantes;
-                                  contratosComParcelas++;
-                                }
+                              let somaParcelas = 0, somaSaldo = 0, totalPrazo = 0, comPrazo = 0;
+                              siapeSelecionados.forEach((idx) => {
+                                const p = siapeParcelas[idx];
+                                if (!p) return;
+                                const taxa = parseFloat(taxasSiape[String(idx)] || "0") || 0;
+                                const saldo = taxa > 0 ? calcularSaldoDevedorPrice(p.valor, taxa, p.prazo_restante) ?? 0 : 0;
+                                somaParcelas += p.valor || 0;
+                                somaSaldo += saldo;
+                                if (p.prazo_restante > 0) { totalPrazo += p.prazo_restante; comPrazo++; }
                               });
-                              const prazoMedio = contratosComParcelas > 0 ? Math.round(totalParcelasRestantes / contratosComParcelas) : 0;
                               return (
                                 <>
                                   <div className="p-3 bg-muted rounded-lg text-center">
@@ -1535,7 +1503,127 @@ export default function VendasConsulta() {
                                   </div>
                                   <div className="p-3 bg-muted rounded-lg text-center">
                                     <p className="text-muted-foreground text-xs">Prazo Médio</p>
-                                    <p className="font-bold text-lg">{prazoMedio} meses</p>
+                                    <p className="font-bold text-lg">{comPrazo > 0 ? Math.round(totalPrazo / comPrazo) : 0} meses</p>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </>
+
+                  /* ── Fallback tabela antiga ──────────────────────────── */
+                  ) : consultaData.contratos && consultaData.contratos.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-10">
+                                <Checkbox
+                                  checked={contratosSelecionados.size === consultaData.contratos.length && consultaData.contratos.length > 0}
+                                  onCheckedChange={(checked) => {
+                                    setContratosSelecionados(checked ? new Set(consultaData.contratos.map((_, idx) => idx)) : new Set());
+                                  }}
+                                  data-testid="checkbox-select-all"
+                                />
+                              </TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Banco</TableHead>
+                              <TableHead>Nº Contrato</TableHead>
+                              <TableHead className="text-right">Valor Parcela</TableHead>
+                              <TableHead className="text-right">Parc. Rest.</TableHead>
+                              <TableHead className="text-center w-20">Taxa (%)</TableHead>
+                              <TableHead className="text-right">Saldo Devedor</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {consultaData.contratos.map((contrato, idx) => {
+                              const taxaStr = taxasContratos[idx];
+                              const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                              const valorParcela = contrato.valor_parcela || contrato.valorParcela;
+                              const parcelasRestantes = contrato.parcelas_restantes || contrato.parcelasRestantes;
+                              const saldoCalculado = taxa > 0 ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes) : null;
+                              const saldoExibir = saldoCalculado !== null ? saldoCalculado : (contrato.saldo_devedor || contrato.saldoDevedor);
+                              return (
+                                <TableRow key={idx} data-testid={`row-contrato-${idx}`} className={contratosSelecionados.has(idx) ? "bg-muted/50" : ""}>
+                                  <TableCell>
+                                    <Checkbox
+                                      checked={contratosSelecionados.has(idx)}
+                                      onCheckedChange={(checked) => {
+                                        const s = new Set(contratosSelecionados);
+                                        checked ? s.add(idx) : s.delete(idx);
+                                        setContratosSelecionados(s);
+                                      }}
+                                      data-testid={`checkbox-contrato-${idx}`}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="capitalize text-xs">
+                                      {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    <CopyableField value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO} displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"} testId={`button-copy-banco-contrato-${idx}`} toast={toast} />
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    <CopyableField value={contrato.numero_contrato || contrato.numeroContrato} displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"} testId={`button-copy-contrato-${idx}`} toast={toast} />
+                                  </TableCell>
+                                  <TableCell className="text-right">{formatCurrency(valorParcela)}</TableCell>
+                                  <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
+                                  <TableCell>
+                                    <Input type="number" step="0.01" min="0" placeholder="0.00" className="w-16 h-8 text-sm text-center"
+                                      value={taxasContratos[idx] || ""}
+                                      onChange={(e) => setTaxasContratos(prev => ({ ...prev, [idx]: e.target.value }))}
+                                      data-testid={`input-taxa-${idx}`}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {formatCurrency(saldoExibir)}
+                                      {saldoCalculado !== null && <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">calc</Badge>}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {contratosSelecionados.size > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Calculator className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Resumo dos {contratosSelecionados.size} contrato(s) selecionado(s)</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            {(() => {
+                              let somaParcelas = 0, somaSaldo = 0, totalParcelasRestantes = 0, contratosComParcelas = 0;
+                              contratosSelecionados.forEach((idx) => {
+                                const contrato = consultaData.contratos[idx];
+                                if (!contrato) return;
+                                const valorParcela = parseCurrency(contrato.valor_parcela || contrato.valorParcela);
+                                const parcelasRestantes = parseInt(String(contrato.parcelas_restantes || contrato.parcelasRestantes || 0)) || 0;
+                                const taxa = parseFloat(taxasContratos[idx] || "0") || 0;
+                                const saldoCalculado = taxa > 0 ? calcularSaldoDevedorPrice(valorParcela, taxa, parcelasRestantes) : null;
+                                somaParcelas += valorParcela;
+                                somaSaldo += saldoCalculado !== null ? saldoCalculado : parseCurrency(contrato.saldo_devedor || contrato.saldoDevedor);
+                                if (parcelasRestantes > 0) { totalParcelasRestantes += parcelasRestantes; contratosComParcelas++; }
+                              });
+                              return (
+                                <>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Soma Parcelas</p>
+                                    <p className="font-bold text-lg">{formatCurrency(somaParcelas)}</p>
+                                  </div>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Soma Saldo Devedor</p>
+                                    <p className="font-bold text-lg">{formatCurrency(somaSaldo)}</p>
+                                  </div>
+                                  <div className="p-3 bg-muted rounded-lg text-center">
+                                    <p className="text-muted-foreground text-xs">Prazo Médio</p>
+                                    <p className="font-bold text-lg">{contratosComParcelas > 0 ? Math.round(totalParcelasRestantes / contratosComParcelas) : 0} meses</p>
                                   </div>
                                 </>
                               );
