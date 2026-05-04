@@ -22728,17 +22728,31 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const valorBase =
             parseFloat(String(row.ValorBase || "0").replace(",", ".")) || 0;
 
-          const dataPagamentoRaw = String(
-            row.DataStatusBancoCliente || row.DataPagamento || "",
-          ).trim();
-
+          const dataPagamentoRaw = row.DataStatusBancoCliente || row.DataPagamento || "";
           let mesReferencia = "";
-          let dataPagamento = dataPagamentoRaw;
+          let dataPagamento = "";
 
           if (dataPagamentoRaw) {
-            const parts = dataPagamentoRaw.split("/");
-            if (parts.length === 3) {
-              mesReferencia = `${parts[2]}-${parts[1].padStart(2, "0")}`;
+            // Pode vir como Date (xlsx parseia datas automaticamente) ou string DD/MM/YYYY
+            let d: Date | null = null;
+            if (dataPagamentoRaw instanceof Date) {
+              d = dataPagamentoRaw;
+            } else {
+              const s = String(dataPagamentoRaw).trim();
+              const parts = s.split("/");
+              if (parts.length === 3) {
+                // DD/MM/YYYY
+                d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                dataPagamento = s;
+              } else if (!isNaN(Date.parse(s))) {
+                d = new Date(s);
+              }
+            }
+            if (d && !isNaN(d.getTime())) {
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, "0");
+              mesReferencia = `${y}-${m}`;
+              dataPagamento = `${String(d.getDate()).padStart(2, "0")}/${m}/${y}`;
             }
           }
 
@@ -22757,9 +22771,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               String(row.ComissaoRepassePercentual || "0").replace(",", "."),
             ) || 0;
           const pt1000Raw = String(
-            row["pt.1000"] ||
+            row["pt_1000"] ||
+              row["pt.1000"] ||
               row["Pt.1000"] ||
               row["PT.1000"] ||
+              row["PT_1000"] ||
               row.Pt1000 ||
               row.pt1000 ||
               "0",
