@@ -421,6 +421,7 @@ export default function ConsultaCliente() {
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
   const [selectedHistoricoCompetencia, setSelectedHistoricoCompetencia] = useState<FolhaHistoricoCompleto | null>(null);
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
+  const [taxasSiape, setTaxasSiape] = useState<Record<string, string>>({});
   const [showObsDialog, setShowObsDialog] = useState(false);
   
   // Função para calcular Saldo Devedor usando Tabela Price
@@ -557,6 +558,23 @@ export default function ConsultaCliente() {
     },
   });
   const siapeDados = siapeEnrichData?.dados ?? null;
+
+  // Parcelas SIAPE (contratos do contracheque: tipo, banco, valor, prazo)
+  const { data: siapeParcelasData } = useQuery<{ parcelas: Array<{
+    descricao: string; banco: string; tipo: string; prazo_restante: number; valor: number;
+  }> | null }>({
+    queryKey: ["/api/siape/parcelas", clienteObsCpf],
+    enabled: !!clienteObsCpf,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      if (!clienteObsCpf) return { parcelas: null };
+      const res = await fetch(`/api/siape/parcelas/${clienteObsCpf}`, { credentials: "include" });
+      if (!res.ok) return { parcelas: null };
+      return res.json();
+    },
+  });
+  const siapeParcelas = siapeParcelasData?.parcelas ?? null;
 
   const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteObsCpf],
@@ -1118,16 +1136,48 @@ export default function ConsultaCliente() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wallet className="w-5 h-5" />
-                    Situação de Folha
-                  </CardTitle>
-                  <CardDescription>
-                    {folhaAtual 
-                      ? `Competência mais recente: ${formatDate(folhaAtual.competencia)}`
-                      : "Nenhum dado de folha disponível"
-                    }
-                  </CardDescription>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Wallet className="w-5 h-5" />
+                        Situação de Folha
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        {folhaAtual
+                          ? `Competência mais recente: ${formatDate(folhaAtual.competencia)}`
+                          : "Nenhum dado de folha disponível"
+                        }
+                      </CardDescription>
+                    </div>
+                    {/* Botão contracheque — aparece sempre que há dados SIAPE */}
+                    {siapeDados && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={async () => {
+                          const cpfLimpo = (clienteDetalhado?.pessoa?.cpf || "").replace(/\D/g, "");
+                          if (!cpfLimpo) return;
+                          try {
+                            const r = await fetch(`/api/siape/contracheque/${cpfLimpo}`);
+                            const json = await r.json();
+                            const meses = json.meses || [];
+                            if (meses.length === 0) {
+                              toast({ title: "Contracheque não encontrado", description: "Nenhum dado SIAPE importado para este CPF.", variant: "destructive" });
+                              return;
+                            }
+                            setContrachequesMeses(meses);
+                            setContrachequeUrl(`/api/siape/contracheque/${cpfLimpo}/html?mes=${meses[0].mes_pagamento}`);
+                            setShowContrachequeModal(true);
+                          } catch {
+                            toast({ title: "Erro", description: "Não foi possível carregar o contracheque.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        📄 Ver Contracheque SIAPE
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {folhaAtual ? (
@@ -1365,16 +1415,95 @@ export default function ConsultaCliente() {
                   <CardTitle className="flex items-center gap-2">
                     <CreditCard className="w-5 h-5" />
                     Contratos
+                    {siapeParcelas && siapeParcelas.length > 0 && (
+                      <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 ml-1">SIAPE</Badge>
+                    )}
                   </CardTitle>
                   <CardDescription>
-                    {clienteDetalhado.contratos.length > 0 
-                      ? `${clienteDetalhado.contratos.length} contrato(s) encontrado(s)`
-                      : "Nenhum contrato registrado"
+                    {siapeParcelas && siapeParcelas.length > 0
+                      ? `${siapeParcelas.length} desconto(s) do contracheque SIAPE`
+                      : clienteDetalhado.contratos.length > 0
+                        ? `${clienteDetalhado.contratos.length} contrato(s) encontrado(s)`
+                        : "Nenhum contrato registrado"
                     }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {clienteDetalhado.contratos.length > 0 ? (
+                  {/* Tabela SIAPE — prioridade quando existir */}
+                  {siapeParcelas && siapeParcelas.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8"></TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Banco</TableHead>
+                          <TableHead>Valor Parcela</TableHead>
+                          <TableHead>Parc. Rest.</TableHead>
+                          <TableHead className="w-24">Taxa (%)</TableHead>
+                          <TableHead>Saldo Devedor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {siapeParcelas.map((p, idx) => {
+                          const key = `${idx}`;
+                          const taxaStr = taxasSiape[key];
+                          const taxa = taxaStr ? parseFloat(taxaStr) : 0;
+                          const saldo = taxa > 0
+                            ? calcularSaldoDevedorPrice(p.valor, taxa, p.prazo_restante)
+                            : null;
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <input type="checkbox" className="rounded" />
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize whitespace-nowrap">
+                                  {p.tipo || "-"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="group">
+                                <CopyableField value={p.banco} label="Banco" onCopy={handleCopy} />
+                              </TableCell>
+                              <TableCell className="group">
+                                <CopyableField
+                                  value={p.valor?.toString()}
+                                  displayValue={formatCurrency(p.valor)}
+                                  label="Valor da Parcela"
+                                  onCopy={handleCopy}
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">{p.prazo_restante ?? "-"}</TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  className="w-20 h-8 text-sm text-center"
+                                  value={taxaStr || ""}
+                                  onChange={(e) => setTaxasSiape(prev => ({ ...prev, [key]: e.target.value }))}
+                                />
+                              </TableCell>
+                              <TableCell className="group">
+                                <div className="flex items-center gap-1">
+                                  <CopyableField
+                                    value={saldo?.toFixed(2)}
+                                    displayValue={saldo != null ? formatCurrency(saldo) : "-"}
+                                    label="Saldo Devedor"
+                                    onCopy={handleCopy}
+                                  />
+                                  {saldo != null && (
+                                    <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">calc</Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : clienteDetalhado.contratos.length > 0 ? (
+                    /* Fallback — tabela antiga quando não há dados SIAPE */
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1403,10 +1532,10 @@ export default function ConsultaCliente() {
                               <CopyableField value={contrato.numero_contrato} label="Número do Contrato" onCopy={handleCopy} />
                             </TableCell>
                             <TableCell className="group">
-                              <CopyableField 
-                                value={contrato.valor_parcela?.toString()} 
+                              <CopyableField
+                                value={contrato.valor_parcela?.toString()}
                                 displayValue={formatCurrency(contrato.valor_parcela)}
-                                label="Valor da Parcela" 
+                                label="Valor da Parcela"
                                 onCopy={handleCopy}
                               />
                             </TableCell>
@@ -1418,10 +1547,7 @@ export default function ConsultaCliente() {
                                 placeholder="0.00"
                                 className="w-20 h-8 text-sm text-center"
                                 value={taxasContratos[contrato.id] || ""}
-                                onChange={(e) => setTaxasContratos(prev => ({
-                                  ...prev,
-                                  [contrato.id]: e.target.value
-                                }))}
+                                onChange={(e) => setTaxasContratos(prev => ({ ...prev, [contrato.id]: e.target.value }))}
                                 data-testid={`input-taxa-${contrato.id}`}
                               />
                             </TableCell>
@@ -1429,32 +1555,29 @@ export default function ConsultaCliente() {
                               {(() => {
                                 const taxaStr = taxasContratos[contrato.id];
                                 const taxa = taxaStr ? parseFloat(taxaStr) : 0;
-                                const saldoCalculado = taxa > 0 
+                                const saldoCalculado = taxa > 0
                                   ? calcularSaldoDevedorPrice(contrato.valor_parcela, taxa, contrato.parcelas_restantes)
                                   : null;
                                 const saldoExibir = saldoCalculado !== null ? saldoCalculado : contrato.saldo_devedor;
-                                const isCalculado = saldoCalculado !== null;
                                 return (
                                   <div className="flex items-center gap-1">
-                                    <CopyableField 
-                                      value={saldoExibir?.toFixed(2)} 
+                                    <CopyableField
+                                      value={saldoExibir?.toFixed(2)}
                                       displayValue={formatCurrency(saldoExibir)}
-                                      label="Saldo Devedor" 
+                                      label="Saldo Devedor"
                                       onCopy={handleCopy}
                                     />
-                                    {isCalculado && (
-                                      <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">
-                                        calc
-                                      </Badge>
+                                    {saldoCalculado !== null && (
+                                      <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">calc</Badge>
                                     )}
                                   </div>
                                 );
                               })()}
                             </TableCell>
                             <TableCell className="group text-center">
-                              <CopyableField 
-                                value={contrato.parcelas_restantes?.toString()} 
-                                label="Parcelas Restantes" 
+                              <CopyableField
+                                value={contrato.parcelas_restantes?.toString()}
+                                label="Parcelas Restantes"
                                 onCopy={handleCopy}
                               />
                             </TableCell>
