@@ -1193,8 +1193,8 @@ export default function VendasConsulta() {
                       <p className="text-muted-foreground">Banco</p>
                       <p data-testid="text-banco">
                         <CopyableField
-                          value={consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo}
-                          displayValue={consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo || "-"}
+                          value={siapeDados?.banco || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo}
+                          displayValue={siapeDados?.banco || consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || consultaData.clienteBase?.banco_codigo || "-"}
                           testId="button-copy-banco"
                           toast={toast}
                         />
@@ -1204,8 +1204,8 @@ export default function VendasConsulta() {
                       <p className="text-muted-foreground">Agência</p>
                       <p data-testid="text-agencia">
                         <CopyableField
-                          value={consultaData.clienteBase?.agencia}
-                          displayValue={consultaData.clienteBase?.agencia || "-"}
+                          value={siapeDados?.agencia || consultaData.clienteBase?.agencia}
+                          displayValue={siapeDados?.agencia || consultaData.clienteBase?.agencia || "-"}
                           testId="button-copy-agencia"
                           toast={toast}
                         />
@@ -1215,8 +1215,8 @@ export default function VendasConsulta() {
                       <p className="text-muted-foreground">Conta</p>
                       <p data-testid="text-conta">
                         <CopyableField
-                          value={consultaData.clienteBase?.conta}
-                          displayValue={consultaData.clienteBase?.conta || "-"}
+                          value={siapeDados?.conta || consultaData.clienteBase?.conta}
+                          displayValue={siapeDados?.conta || consultaData.clienteBase?.conta || "-"}
                           testId="button-copy-conta"
                           toast={toast}
                         />
@@ -1232,16 +1232,16 @@ export default function VendasConsulta() {
                     <Briefcase className="h-4 w-4" />
                     Situação de Folha
                   </CardTitle>
-                  <CardDescription className="flex items-center gap-3">
+                  <CardDescription className="flex items-center gap-3 flex-wrap">
                     <span>
                       {consultaData.folhaAtual?.competencia
                         ? `Competência: ${formatCompetencia(consultaData.folhaAtual.competencia)}`
                         : "Dados de folha não disponíveis"}
                     </span>
                     {consultaData.folhaAtual && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleOpenHistorico}
                         disabled={historicoMutation.isPending}
                         data-testid="button-historico-folha"
@@ -1253,6 +1253,30 @@ export default function VendasConsulta() {
                           <History className="w-4 h-4 mr-2" />
                         )}
                         Ver Histórico
+                      </Button>
+                    )}
+                    {siapeDados && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!clienteCpf) return;
+                          try {
+                            const r = await fetch(`/api/siape/contracheque/${clienteCpf}`, { credentials: "include" });
+                            const json = await r.json();
+                            const meses = json.meses || [];
+                            if (meses.length === 0) {
+                              toast({ title: "Contracheque não encontrado", description: "Nenhum dado SIAPE importado para este CPF.", variant: "destructive" });
+                              return;
+                            }
+                            const url = `/api/siape/contracheque/${clienteCpf}/html?mes=${meses[0].mes_pagamento}`;
+                            window.open(url, "_blank");
+                          } catch {
+                            toast({ title: "Erro", description: "Não foi possível carregar o contracheque.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        📄 Ver Contracheque
                       </Button>
                     )}
                   </CardDescription>
