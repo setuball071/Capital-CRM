@@ -1314,16 +1314,16 @@ export default function VendasConsulta() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_35)}</span>
+                              <span>{formatCurrency(siapeDados?.mg35_bruta ?? consultaData.folhaAtual.margem_bruta_35)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_35)}</span>
+                              <span>{formatCurrency(siapeDados?.mg35_utilizado ?? consultaData.folhaAtual.margem_utilizada_35)}</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={(consultaData.folhaAtual.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(consultaData.folhaAtual.margem_saldo_35)}
+                              <span className={((siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35)}
                               </span>
                             </div>
                           </div>
@@ -1336,16 +1336,16 @@ export default function VendasConsulta() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_5)}</span>
+                              <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? consultaData.folhaAtual.margem_bruta_5)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_5)}</span>
+                              <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? consultaData.folhaAtual.margem_utilizada_5)}</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={(consultaData.folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(consultaData.folhaAtual.margem_saldo_5)}
+                              <span className={((siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5)}
                               </span>
                             </div>
                           </div>
@@ -1358,16 +1358,16 @@ export default function VendasConsulta() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
+                              <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
+                              <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={(consultaData.folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(consultaData.folhaAtual.margem_beneficio_saldo_5)}
+                              <span className={((siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5)}
                               </span>
                             </div>
                           </div>
