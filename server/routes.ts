@@ -269,12 +269,66 @@ function _htmlPensao(data: any): string {
   ${_htmlRodape(authData)}`;
 }
 
+/**
+ * Normaliza o json_dados para o formato aninhado esperado pelo renderizador HTML.
+ * Compatível com dois formatos:
+ *   - Novo (importar_siape_capital.py ≥ 2026-05): campos aninhados (servidor, upag, totais, rubricas)
+ *   - Antigo (importações manuais / scripts legados): campos planos (nome, rendimentos, descontos, ...)
+ */
+function _normalizarDadosContracheque(data: any): any {
+  // Já está no formato novo?
+  if (data.servidor && data.totais && Array.isArray(data.rubricas)) return data;
+
+  // Formato antigo — montar estrutura aninhada
+  const rendimentos: any[] = (data.rendimentos || []).map((r: any) => ({ ...r, tipo: 'RENDIMENTO' }));
+  const descontos:   any[] = (data.descontos   || []).map((d: any) => ({ ...d, tipo: 'DESCONTO'   }));
+  const rubricas = [...rendimentos, ...descontos];
+
+  return {
+    tipo_relacao:  data.tipo_relacao  || 'SERVIDOR',
+    orgao_nome:    data.orgao         || '',
+    mes_pagamento: data.mes_pagamento || '',
+    tipo_folha:    data.tipo_folha    || 'NORMAL',
+    servidor: {
+      nome:          data.nome          || '',
+      cpf:           data.cpf           || '',
+      matricula:     data.matricula     || '',
+      cargo:         data.cargo         || '',
+      classe:        data.classe        || '',
+      nivel:         data.nivel         || '',
+      funcao:        data.funcao        || '',
+      tipo_relacao:  data.tipo_relacao  || '',
+      dependente_sf: data.dependente_sf || '00',
+      dependente_ir: data.dependente_ir || '00',
+      ats_pct:       data.ats_pct       || '00',
+    },
+    upag:         { sigla: data.sigla_upag || '', uf: data.uf || '', reg_juridico: data.reg_juridico || '', situacao_funcional: data.situacao_funcional || '', sigla_uorg: data.sigla_uorg || '' },
+    aposentadoria: {},
+    banco_salario: { banco: data.banco || '', agencia: data.agencia || '', conta: data.conta || '' },
+    banco_outras:  {},
+    autenticacao:  { data_emissao: data.data_emissao || new Date().toLocaleDateString('pt-BR') },
+    pensao:        {},
+    rubricas,
+    parcelas:      data.parcelas || [],
+    margens:       data.margens  || {},
+    totais: {
+      total_bruto:       data.total_rendimentos || 0,
+      total_descontos:   data.total_descontos   || 0,
+      total_liquido:     data.total_liquido      || 0,
+      base_calculo_teto: data.base_calculo_teto  || 0,
+      base_calculo_ir:   data.base_calculo_ir    || 0,
+      deposito_fgts:     data.deposito_fgts      || 0,
+    },
+  };
+}
+
 function gerarContrachequeHtml(data: any): string {
-  const tipo = (data.tipo_relacao || 'SERVIDOR').toUpperCase();
-  const nome = data.servidor?.nome || '';
+  const normalized = _normalizarDadosContracheque(data);
+  const tipo = (normalized.tipo_relacao || 'SERVIDOR').toUpperCase();
+  const nome = normalized.servidor?.nome || '';
   const corpo = ['PENSAO', 'PENSIONISTA'].includes(tipo)
-    ? _htmlPensao(data)
-    : _htmlServidor(data);
+    ? _htmlPensao(normalized)
+    : _htmlServidor(normalized);
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>

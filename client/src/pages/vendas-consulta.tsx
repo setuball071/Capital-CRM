@@ -294,6 +294,19 @@ export default function VendasConsulta() {
       total_bruto: string | null;
       total_descontos: string | null;
       total_liquido: string | null;
+      // Margens SIAPE (calculadas pelo processar_pdf_siape.py)
+      mg35_bruta: number | null;
+      mg35_utilizado: number | null;
+      mg35_disponivel: number | null;
+      mg5cc_bruta: number | null;
+      mg5cc_utilizado: number | null;
+      mg5cc_disponivel: number | null;
+      mg5cb_bruta: number | null;
+      mg5cb_utilizado: number | null;
+      mg5cb_disponivel: number | null;
+      mg70_bruta: number | null;
+      mg70_utilizado: number | null;
+      mg70_disponivel: number | null;
     } | null
   }>({
     queryKey: ["/api/siape/dados", clienteCpf],
@@ -1323,16 +1336,35 @@ export default function VendasConsulta() {
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
                               {(() => {
-                                const disp35 = siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35 ?? 0;
-                                const disp70 = siapeDados?.mg70_disponivel ?? null;
-                                const limitadoPelo70 = disp70 !== null && disp70 < disp35;
-                                const disponivel = limitadoPelo70 ? disp70 : disp35;
+                                // Regra balizadora 70%:
+                                //   disponivel REAL = MIN(mg35_disponivel, mg70_disponivel)
+                                //   ⚠70% aparece SOMENTE quando o 70% é o gargalo (mg70 < mg35)
+                                // Usamos os dados SIAPE quando ambos os campos estão disponíveis;
+                                // senão cai no valor legado da folha CRM (sem badge 70%).
+                                const hasSiape35 = siapeDados?.mg35_disponivel != null;
+                                const hasSiape70 = siapeDados?.mg70_disponivel != null;
+                                if (hasSiape35 && hasSiape70) {
+                                  const disp35 = Number(siapeDados!.mg35_disponivel);
+                                  const disp70 = Number(siapeDados!.mg70_disponivel);
+                                  // ⚠70% só aparece quando o 70% é MAIS restritivo que o 35%
+                                  const limitadoPelo70 = disp70 < disp35;
+                                  const disponivel = Math.min(disp35, disp70);
+                                  return (
+                                    <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(disponivel)}
+                                      {limitadoPelo70 && (
+                                        <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem compulsória 70%">⚠ 70%</span>
+                                      )}
+                                    </span>
+                                  );
+                                }
+                                // Sem dados SIAPE completos: usa valor legado
+                                const dispLegado = siapeDados?.mg35_disponivel != null
+                                  ? Number(siapeDados!.mg35_disponivel)
+                                  : (consultaData.folhaAtual.margem_saldo_35 ?? 0);
                                 return (
-                                  <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(disponivel)}
-                                    {limitadoPelo70 && (
-                                      <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem 70%">⚠ 70%</span>
-                                    )}
+                                  <span className={dispLegado >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(dispLegado)}
                                   </span>
                                 );
                               })()}
