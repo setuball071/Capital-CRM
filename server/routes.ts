@@ -9020,7 +9020,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           });
         }
 
-        // Processar linha a linha
+        // ── FASE 1: Parse de todas as linhas → Map<cpf, payload> ──────────────
         const report = {
           linhas_lidas: rows.length,
           pessoas_atualizadas: 0,
@@ -9033,73 +9033,140 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           }[],
         };
 
+        // Processamento em BATCH para suportar arquivos grandes (centenas de milhares de linhas).
+        // Evita timeouts causados por 1 round-trip NeonDB por linha.
+        const payloadMap = new Map<string, Record<string, any>>();
+
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          try {
-            // Mapear headers
-            const payload: Record<string, any> = {};
-            let cpf: string | null = null;
+          const rowPayload: Record<string, any> = {};
+          let cpf: string | null = null;
 
-            for (const [originalHeader, value] of Object.entries(row)) {
-              const normalized = normalizeHeader(originalHeader);
-              const mappedField = HEADER_MAP[normalized];
-
-              if (normalized === "cpf") {
-                cpf = String(value || "")
-                  .replace(/\D/g, "")
-                  .padStart(11, "0");
-              } else if (mappedField) {
-                payload[mappedField] = value;
-              }
+          for (const [originalHeader, value] of Object.entries(row)) {
+            const normalized = normalizeHeader(originalHeader);
+            const mappedField = HEADER_MAP[normalized];
+            if (normalized === "cpf") {
+              cpf = String(value || "").replace(/\D/g, "").padStart(11, "0");
+            } else if (mappedField) {
+              rowPayload[mappedField] = value;
             }
+          }
 
-            if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
-              if (report.erros_por_linha.length < 200) {
-                report.erros_por_linha.push({
-                  linha: i + 2,
-                  cpf,
-                  mensagem: "CPF inválido ou ausente",
-                });
-              }
-              continue;
-            }
-
-            // Chamar upsert
-            const result = await storage.upsertDadosComplementaresPorCpf(
-              cpf,
-              tenantId,
-              payload,
-            );
-
-            if (
-              result.pessoasAtualizadas === 0 &&
-              result.telefonesInseridos === 0
-            ) {
-              report.cpfs_nao_encontrados++;
-              if (report.erros_por_linha.length < 200) {
-                report.erros_por_linha.push({
-                  linha: i + 2,
-                  cpf,
-                  mensagem: "CPF não encontrado na base",
-                });
-              }
-            } else {
-              report.pessoas_atualizadas += result.pessoasAtualizadas;
-              report.telefones_inseridos += result.telefonesInseridos;
-            }
-          } catch (err: any) {
+          if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
             if (report.erros_por_linha.length < 200) {
-              report.erros_por_linha.push({
-                linha: i + 2,
-                cpf: null,
-                mensagem: err.message || "Erro desconhecido",
-              });
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
             }
+            continue;
+          }
+          // Se CPF duplicado na planilha, a última linha prevalece
+          payloadMap.set(cpf, rowPayload);
+        }
+
+        // ── FASE 2: Batch SELECT — quais CPFs existem no banco? ───────────────
+        const allCpfs = Array.from(payloadMap.keys());
+        // cpf → lista de pessoa_id (pode ter mais de 1 se duplicata no banco)
+        const cpfToIds = new Map<string, number[]>();
+
+        const LOOKUP_CHUNK = 5000;
+        for (let i = 0; i < allCpfs.length; i += LOOKUP_CHUNK) {
+          const chunk = allCpfs.slice(i, i + LOOKUP_CHUNK);
+          const found = await db
+            .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
+            .from(clientesPessoa)
+            .where(and(
+              eq(clientesPessoa.tenantId, tenantId),
+              inArray(clientesPessoa.cpf, chunk)
+            ));
+          for (const p of found) {
+            if (!p.cpf) continue;
+            if (!cpfToIds.has(p.cpf)) cpfToIds.set(p.cpf, []);
+            cpfToIds.get(p.cpf)!.push(p.id);
           }
         }
 
+        report.cpfs_nao_encontrados = allCpfs.filter(c => !cpfToIds.has(c)).length;
+
+        // Helper: converte data BR (DD/MM/AAAA) ou ISO para AAAA-MM-DD
+        const parseDateIso = (val: any): string | null => {
+          if (!val) return null;
+          const str = String(val).trim();
+          const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (brMatch) {
+            const [, dia, mes, ano] = brMatch;
+            return `${ano}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
+          }
+          const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (isoMatch) return str.substring(0, 10);
+          return null;
+        };
+
+        // ── FASE 3: Bulk UPDATE clientes_pessoa via VALUES table ───────────────
+        type UpdateRow = {
+          id: number;
+          nome: string | null;
+          dataNasc: string | null;
+          bancoCodigo: string | null;
+          agencia: string | null;
+          conta: string | null;
+        };
+
+        const toUpdate: UpdateRow[] = [];
+        for (const [cpf, ids] of Array.from(cpfToIds.entries())) {
+          const p = payloadMap.get(cpf)!;
+          const nomeVal = (p.nome && String(p.nome).trim()) ? String(p.nome).trim() : null;
+          const dataNasc = parseDateIso(p.dataNascimento);
+          const bancoVal = (p.bancoCodigo && String(p.bancoCodigo).trim()) ? String(p.bancoCodigo).trim() : null;
+          const agenciaVal = (p.agencia && String(p.agencia).trim()) ? String(p.agencia).trim() : null;
+          const contaVal = (p.conta && String(p.conta).trim()) ? String(p.conta).trim() : null;
+
+          if (!nomeVal && !dataNasc && !bancoVal && !agenciaVal && !contaVal) continue;
+
+          for (const id of ids) {
+            toUpdate.push({ id, nome: nomeVal, dataNasc, bancoCodigo: bancoVal, agencia: agenciaVal, conta: contaVal });
+          }
+        }
+
+        const UPDATE_CHUNK = 500;
+        for (let i = 0; i < toUpdate.length; i += UPDATE_CHUNK) {
+          const batch = toUpdate.slice(i, i + UPDATE_CHUNK);
+          const valuesList = batch.map(r =>
+            sql`(${r.id}::int, ${r.nome}::text, ${r.dataNasc}::date, ${r.bancoCodigo}::text, ${r.agencia}::text, ${r.conta}::text)`
+          );
+          await db.execute(sql`
+            UPDATE clientes_pessoa AS t SET
+              nome            = CASE WHEN v.nome IS NOT NULL THEN v.nome ELSE t.nome END,
+              data_nascimento = CASE WHEN v.data_nasc IS NOT NULL THEN v.data_nasc ELSE t.data_nascimento END,
+              banco_codigo    = CASE WHEN v.banco_codigo IS NOT NULL THEN v.banco_codigo ELSE t.banco_codigo END,
+              agencia         = CASE WHEN v.agencia IS NOT NULL THEN v.agencia ELSE t.agencia END,
+              conta           = CASE WHEN v.conta IS NOT NULL THEN v.conta ELSE t.conta END,
+              atualizado_em   = NOW()
+            FROM (VALUES ${sql.join(valuesList, sql`, `)})
+              AS v(id, nome, data_nasc, banco_codigo, agencia, conta)
+            WHERE t.id = v.id
+          `);
+          report.pessoas_atualizadas += batch.length;
+        }
+
+        // ── FASE 4: Telefones via batch existente ──────────────────────────────
+        const telefoneBatch: Array<{ tenantId: number; cpf: string; telefones: string[] }> = [];
+        for (const [cpf, p] of Array.from(payloadMap.entries())) {
+          if (!cpfToIds.has(cpf)) continue;
+          const tels = [p.telefone1, p.telefone2, p.telefone3]
+            .filter((t): t is string => !!t && !!String(t).trim())
+            .map(t => String(t).trim());
+          if (tels.length === 0) continue;
+          telefoneBatch.push({ tenantId, cpf, telefones: tels });
+        }
+        if (telefoneBatch.length > 0) {
+          const telResult = await storage.addPessoaTelefonesByCpfBatch(telefoneBatch);
+          report.telefones_inseridos = telResult.telefonesInseridos;
+        }
+
         console.log(
-          `[DadosComplementares] Processado: ${report.linhas_lidas} linhas, ${report.pessoas_atualizadas} atualizados, ${report.telefones_inseridos} telefones, ${report.cpfs_nao_encontrados} não encontrados`,
+          `[DadosComplementares] Processado: ${report.linhas_lidas} linhas, ` +
+          `${payloadMap.size} CPFs únicos, ${cpfToIds.size} encontrados no banco, ` +
+          `${report.pessoas_atualizadas} atualizados, ${report.telefones_inseridos} telefones, ` +
+          `${report.cpfs_nao_encontrados} não encontrados`
         );
 
         return res.json({
