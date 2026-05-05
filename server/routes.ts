@@ -111,6 +111,27 @@ function _getBrasaoSrc(): string {
   return _brasaoCacheSrc;
 }
 
+/**
+ * Decodifica caracteres mojibake que o PyMuPDF grava quando não consegue resolver
+ * a tabela ToUnicode da fonte do PDF (comum em PDFs SIAPE/SIGEPE).
+ * Usado para exibição — mapeia para o caractere acentuado correto.
+ */
+function _decodeMojibake(s: string): string {
+  if (!s) return s;
+  return s
+    .replace(/¿/g, 'Í')   // 0xBF → Í
+    .replace(/¶/g, 'Ã')   // 0xB6 → Ã  (ex: ALIMENTAÇÃO, TITULAÇÃO)
+    .replace(/¸/g, 'Ç')   // 0xB8 → Ç  (ex: SITUAÇÃO)
+    .replace(/ò/g, 'Ú')   // 0xF2 → Ú  (ex: SAÚDE)
+    .replace(/¥/g, 'Ã')   // 0xA5 → Ã  (ex: AUTOGESTÃO)
+    .replace(/ó/g, 'Ó')   // 0xF3 → Ó
+    .replace(/£/g, 'Ã')   // 0xA3 → Ã
+    .replace(/³/g, 'Ó')   // 0xB3 → Ó
+    .replace(/\xbf/g, 'Í')
+    .replace(/\xb6/g, 'Ã')
+    .replace(/\xb8/g, 'Ç');
+}
+
 function _htmlTabelaRubricas(rubricas: any[], linhaInstituidor = '', minRows = 20): string {
   const rend = rubricas.filter(r => (r.tipo || '').toUpperCase() === 'RENDIMENTO');
   const desc = rubricas.filter(r => (r.tipo || '').toUpperCase() === 'DESCONTO');
@@ -120,11 +141,11 @@ function _htmlTabelaRubricas(rubricas: any[], linhaInstituidor = '', minRows = 2
   }
   rend.forEach((r, i) => {
     const tipo = i === 0 ? `<td class="col-tipo tipo-rend">RENDIMENTOS</td>` : `<td class="col-tipo"></td>`;
-    rows += `<tr>${tipo}<td class="col-disc disc-rend">${r.descricao||''}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
+    rows += `<tr>${tipo}<td class="col-disc disc-rend">${_decodeMojibake(r.descricao||'')}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
   });
   desc.forEach((r, i) => {
     const tipo = i === 0 ? `<td class="col-tipo tipo-desc">DESCONTOS</td>` : `<td class="col-tipo"></td>`;
-    rows += `<tr>${tipo}<td class="col-disc disc-desc">${r.descricao||''}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
+    rows += `<tr>${tipo}<td class="col-disc disc-desc">${_decodeMojibake(r.descricao||'')}</td><td class="col-prazo">${r.prazo||''}</td><td class="col-valor">${_brl(r.valor)}</td></tr>`;
   });
   const extra = Math.max(0, minRows - rend.length - desc.length - (linhaInstituidor ? 1 : 0));
   for (let i = 0; i < extra; i++) rows += `<tr><td class="col-tipo"></td><td class="col-disc"></td><td class="col-prazo"></td><td class="col-valor"></td></tr>`;
