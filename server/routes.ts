@@ -1,6 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
+import fs from "fs";
+import path from "path";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -50,16 +52,37 @@ function _cssSiape(): string {
   @media print { body { background: #fff; } .contracheque { width: 210mm; margin: 0; padding: 6mm 8mm; box-shadow: none; } }`;
 }
 
-const BRASAO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">' +
-  '<ellipse cx="50" cy="58" rx="44" ry="54" fill="#009C3B"/>' +
-  '<polygon points="50,14 88,58 50,102 12,58" fill="#FFDF00"/>' +
-  '<circle cx="50" cy="58" r="28" fill="#003087"/>' +
-  '<path d="M24,63 Q50,53 76,63" stroke="#fff" stroke-width="6.5" fill="none"/>' +
-  '<polygon points="50,3 52,9 59,9 53,13 55,20 50,16 45,20 47,13 41,9 48,9" fill="#FFDF00"/>' +
-  '<text x="50" y="116" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial" fill="#FFDF00" letter-spacing="1">BRASIL</text>' +
-  '</svg>'
-)}`;
+// Logo: carrega o brasão real em cache (mesmo comportamento que gerar_contracheque.py)
+let _brasaoCacheSrc = '';
+function _getBrasaoSrc(): string {
+  if (_brasaoCacheSrc) return _brasaoCacheSrc;
+  // Tenta carregar o PNG cacheado pelo script Python (_brasao_cache.png)
+  const localPng = path.join(__dirname, '..', '..', '..', 'Bigdata', '_scripts', '_brasao_cache.png');
+  if (fs.existsSync(localPng)) {
+    try {
+      const data = fs.readFileSync(localPng).toString('base64');
+      _brasaoCacheSrc = `data:image/png;base64,${data}`;
+      return _brasaoCacheSrc;
+    } catch { /* fallback para SVG */ }
+  }
+  // Fallback: SVG simplificado (idêntico ao Python)
+  _brasaoCacheSrc = `data:image/svg+xml;utf8,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">' +
+    '<ellipse cx="50" cy="58" rx="44" ry="54" fill="#009C3B"/>' +
+    '<polygon points="50,14 88,58 50,102 12,58" fill="#FFDF00"/>' +
+    '<circle cx="50" cy="58" r="28" fill="#003087"/>' +
+    '<path d="M24,63 Q50,53 76,63" stroke="#fff" stroke-width="6.5" fill="none"/>' +
+    '<circle cx="36" cy="52" r="2.2" fill="#fff"/>' +
+    '<circle cx="50" cy="46" r="2.2" fill="#fff"/>' +
+    '<circle cx="64" cy="52" r="2.2" fill="#fff"/>' +
+    '<circle cx="43" cy="59" r="1.6" fill="#fff"/>' +
+    '<circle cx="57" cy="59" r="1.6" fill="#fff"/>' +
+    '<polygon points="50,3 52,9 59,9 53,13 55,20 50,16 45,20 47,13 41,9 48,9" fill="#FFDF00"/>' +
+    '<text x="50" y="116" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial" fill="#FFDF00" letter-spacing="1">BRASIL</text>' +
+    '</svg>'
+  )}`;
+  return _brasaoCacheSrc;
+}
 
 function _htmlTabelaRubricas(rubricas: any[], linhaInstituidor = '', minRows = 20): string {
   const rend = rubricas.filter(r => (r.tipo || '').toUpperCase() === 'RENDIMENTO');
@@ -95,7 +118,7 @@ function _htmlServidor(data: any): string {
   const titulo = `COMPROVANTE DE RENDIMENTOS - FOLHA ${data.tipo_folha || 'NORMAL'}`;
   return `
   <div class="aviso-topo">Para esclarecer dúvidas sobre seu pagamento, procure imediatamente sua unidade pagadora.</div>
-  <div class="cabecalho"><div class="logo-col"><img src="${BRASAO_SVG}" width="50" alt="Brasão"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
+  <div class="cabecalho"><div class="logo-col"><img src="${_getBrasaoSrc()}" alt="Brasão da República Federativa do Brasil" width="50"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
   <div class="info-grid">
     <div class="cell"><span class="lbl">SIGLA DA UPAG</span><span class="val">${upag.sigla||''}</span></div>
     <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>
@@ -158,7 +181,7 @@ function _htmlPensao(data: any): string {
   const titulo = `COMPROVANTE DE RENDIMENTOS DE BENEFICIÁRIO DE PENSÃO - FOLHA ${data.tipo_folha || 'NORMAL'}`;
   return `
   <div class="aviso-topo">Para esclarecer dúvidas sobre seu pagamento, procure imediatamente sua unidade pagadora.</div>
-  <div class="cabecalho"><div class="logo-col"><img src="${BRASAO_SVG}" width="50" alt="Brasão"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
+  <div class="cabecalho"><div class="logo-col"><img src="${_getBrasaoSrc()}" alt="Brasão da República Federativa do Brasil" width="50"></div><div class="titulo-col"><div class="titulo-principal">${titulo}</div><div class="titulo-orgao">${data.orgao_nome||''}</div></div></div>
   <div class="info-grid">
     <div class="cell"><span class="lbl">SIGLA DA UPAG</span><span class="val">${upag.sigla||''}</span></div>
     <div class="cell"><span class="lbl">UF</span><span class="val">${upag.uf||''}</span></div>

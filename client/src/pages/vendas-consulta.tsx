@@ -1257,8 +1257,9 @@ export default function VendasConsulta() {
                     )}
                     {siapeDados && (
                       <Button
-                        variant="outline"
+                        variant="default"
                         size="sm"
+                        className="font-semibold shadow-sm px-4 gap-1.5"
                         onClick={async () => {
                           if (!clienteCpf) return;
                           try {
