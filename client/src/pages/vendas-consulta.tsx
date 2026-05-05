@@ -1322,9 +1322,20 @@ export default function VendasConsulta() {
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={((siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35)}
-                              </span>
+                              {(() => {
+                                const disp35 = siapeDados?.mg35_disponivel ?? consultaData.folhaAtual.margem_saldo_35 ?? 0;
+                                const disp70 = siapeDados?.mg70_disponivel ?? null;
+                                const limitadoPelo70 = disp70 !== null && disp70 < disp35;
+                                const disponivel = limitadoPelo70 ? disp70 : disp35;
+                                return (
+                                  <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(disponivel)}
+                                    {limitadoPelo70 && (
+                                      <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem 70%">⚠ 70%</span>
+                                    )}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                         </CardContent>
