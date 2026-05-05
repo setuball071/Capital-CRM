@@ -57,14 +57,15 @@ let _brasaoCacheSrc = '';
 function _getBrasaoSrc(): string {
   if (_brasaoCacheSrc) return _brasaoCacheSrc;
   // Tenta carregar o PNG cacheado pelo script Python (_brasao_cache.png)
-  const localPng = path.join(__dirname, '..', '..', '..', 'Bigdata', '_scripts', '_brasao_cache.png');
-  if (fs.existsSync(localPng)) {
-    try {
+  // Usa process.cwd() para evitar __dirname que não existe em ESM
+  try {
+    const localPng = path.join(process.cwd(), '..', 'Bigdata', '_scripts', '_brasao_cache.png');
+    if (fs.existsSync(localPng)) {
       const data = fs.readFileSync(localPng).toString('base64');
       _brasaoCacheSrc = `data:image/png;base64,${data}`;
       return _brasaoCacheSrc;
-    } catch { /* fallback para SVG */ }
-  }
+    }
+  } catch { /* fallback para SVG */ }
   // Fallback: SVG simplificado (idêntico ao Python)
   _brasaoCacheSrc = `data:image/svg+xml;utf8,${encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">' +
