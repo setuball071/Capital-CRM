@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
+import https from "https";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -54,18 +55,43 @@ function _cssSiape(): string {
 
 // Logo: carrega o brasão real em cache (mesmo comportamento que gerar_contracheque.py)
 let _brasaoCacheSrc = '';
+const _BRASAO_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Coat_of_arms_of_Brazil.svg/250px-Coat_of_arms_of_Brazil.svg.png';
+const _BRASAO_LOCAL = path.join(process.cwd(), '_brasao_cache.png');
+
+// Baixa o brasão em background na primeira vez que o servidor sobe
+function _downloadBrasao(): void {
+  if (fs.existsSync(_BRASAO_LOCAL)) return;
+  const file = fs.createWriteStream(_BRASAO_LOCAL);
+  https.get(_BRASAO_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+    res.pipe(file);
+    file.on('finish', () => {
+      file.close();
+      _brasaoCacheSrc = ''; // limpa cache para recarregar com o PNG
+      console.log('[Brasão] PNG baixado e salvo em:', _BRASAO_LOCAL);
+    });
+  }).on('error', () => {
+    fs.unlink(_BRASAO_LOCAL, () => {});
+    console.warn('[Brasão] Falha ao baixar PNG — usando SVG fallback');
+  });
+}
+_downloadBrasao();
+
 function _getBrasaoSrc(): string {
   if (_brasaoCacheSrc) return _brasaoCacheSrc;
-  // Tenta carregar o PNG cacheado pelo script Python (_brasao_cache.png)
-  // Usa process.cwd() para evitar __dirname que não existe em ESM
-  try {
-    const localPng = path.join(process.cwd(), '..', 'Bigdata', '_scripts', '_brasao_cache.png');
-    if (fs.existsSync(localPng)) {
-      const data = fs.readFileSync(localPng).toString('base64');
-      _brasaoCacheSrc = `data:image/png;base64,${data}`;
-      return _brasaoCacheSrc;
-    }
-  } catch { /* fallback para SVG */ }
+  // Tenta carregar o PNG (local da máquina ou baixado pelo servidor)
+  const caminhos = [
+    _BRASAO_LOCAL,
+    path.join(process.cwd(), '..', 'Bigdata', '_scripts', '_brasao_cache.png'),
+  ];
+  for (const p of caminhos) {
+    try {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p).toString('base64');
+        _brasaoCacheSrc = `data:image/png;base64,${data}`;
+        return _brasaoCacheSrc;
+      }
+    } catch { /* tenta próximo */ }
+  }
   // Fallback: SVG simplificado (idêntico ao Python)
   _brasaoCacheSrc = `data:image/svg+xml;utf8,${encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">' +
