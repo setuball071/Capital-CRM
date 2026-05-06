@@ -1305,16 +1305,16 @@ export default function VendasConsulta() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70)}</span>
+                              <span>{formatCurrency(siapeDados?.mg70_bruta ?? consultaData.folhaAtual.margem_bruta_70)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70)}</span>
+                              <span>{formatCurrency(siapeDados?.mg70_utilizado ?? consultaData.folhaAtual.margem_utilizada_70)}</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={(consultaData.folhaAtual.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(consultaData.folhaAtual.margem_saldo_70)}
+                              <span className={(Number(siapeDados?.mg70_disponivel ?? consultaData.folhaAtual.margem_saldo_70 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(siapeDados?.mg70_disponivel ?? consultaData.folhaAtual.margem_saldo_70)}
                               </span>
                             </div>
                           </div>
