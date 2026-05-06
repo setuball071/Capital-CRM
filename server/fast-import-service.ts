@@ -222,6 +222,10 @@ const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   cargo: "cargo",
   tipo_cargo: "cargo",
   funcao: "funcao",
+  // Data de nascimento (armazenada temporariamente em upag para estadual)
+  data_nascimento: "upag",
+  dt_nascimento: "upag",
+  nascimento: "upag",
   // Localização
   cidade: "municipio",
   municipio: "municipio",
@@ -1096,6 +1100,24 @@ class FastImportService {
 
     console.log(`[FastImport] Estadual pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
+    // Atualizar data_nascimento (armazenada em staging.upag como string DD/MM/YYYY)
+    const nascResult = await db.execute(sql`
+      UPDATE clientes_pessoa p
+      SET data_nascimento = CASE
+          WHEN s.upag ~ E'^\\d{2}/\\d{2}/\\d{4}$'
+            THEN TO_TIMESTAMP(s.upag, 'DD/MM/YYYY')
+          WHEN s.upag ~ E'^\\d{4}-\\d{2}-\\d{2}'
+            THEN TO_TIMESTAMP(s.upag, 'YYYY-MM-DD')
+          ELSE NULL
+        END
+      FROM staging_folha s
+      WHERE p.cpf = s.cpf
+        AND s.import_run_id = ${run.id}
+        AND s.upag IS NOT NULL AND s.upag != ''
+        AND p.data_nascimento IS NULL
+    `);
+    console.log(`[FastImport] Estadual data_nascimento atualizada: ${nascResult.rowCount || 0}`);
+
     // Matrícula: usa a do arquivo se existir; fallback para 'EST_' + cpf (imports antigos)
     const vinculoResult = await db.execute(sql`
       INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, rjur, sit_func, import_run_id, base_tag)
@@ -1615,7 +1637,7 @@ class FastImportService {
         matricula: matriculaReal || safeVarchar(syntheticMatricula, 50),
         nome: safeVarchar(getValue("nome"), 255),
         orgaodesc: safeVarchar(getValue("orgaodesc"), 255),
-        upag: null,
+        upag: safeVarchar(getValue("upag"), 100), // armazena data_nascimento temporariamente
         uf: safeVarchar(getValue("uf"), 100),
         municipio: safeVarchar(getValue("municipio"), 150),
         baseCalc: parseNum(getValue("base_calc")),
