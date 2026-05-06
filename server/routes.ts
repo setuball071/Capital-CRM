@@ -9184,6 +9184,149 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // POST /api/imports/dados-complementares/batch - Recebe lote de linhas como JSON
+  // Usado pelo frontend para enviar chunks de arquivos grandes sem passar pelo limite do proxy.
+  app.post(
+    "/api/imports/dados-complementares/batch",
+    requireAuth,
+    requireMaster,
+    async (req, res) => {
+      try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+        const rows: Record<string, any>[] = req.body?.rows;
+        if (!Array.isArray(rows) || rows.length === 0) {
+          return res.status(400).json({ message: "Corpo inválido: esperado { rows: [...] }" });
+        }
+
+        const HEADER_MAP: Record<string, string> = {
+          cpf: "cpf", nome: "nome",
+          data_nascimento: "dataNascimento", datanascimento: "dataNascimento",
+          banco_codigo: "bancoCodigo", bancocodigo: "bancoCodigo",
+          agencia: "agencia", conta: "conta",
+          telefone_1: "telefone1", telefone1: "telefone1",
+          telefone_2: "telefone2", telefone2: "telefone2",
+          telefone_3: "telefone3", telefone3: "telefone3",
+        };
+        const normalizeHeader = (h: string) =>
+          h.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+           .replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+
+        const report = {
+          linhas_lidas: rows.length,
+          pessoas_atualizadas: 0,
+          telefones_inseridos: 0,
+          cpfs_nao_encontrados: 0,
+          erros_por_linha: [] as { linha: number; cpf: string | null; mensagem: string }[],
+        };
+
+        // FASE 1: parse → Map
+        const payloadMap = new Map<string, Record<string, any>>();
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const p: Record<string, any> = {};
+          let cpf: string | null = null;
+          for (const [h, v] of Object.entries(row)) {
+            const norm = normalizeHeader(h);
+            const field = HEADER_MAP[norm];
+            if (norm === "cpf") {
+              cpf = String(v || "").replace(/\D/g, "").padStart(11, "0");
+            } else if (field) {
+              p[field] = v;
+            }
+          }
+          if (!cpf || cpf.length !== 11 || cpf === "00000000000") {
+            if (report.erros_por_linha.length < 200)
+              report.erros_por_linha.push({ linha: i + 2, cpf, mensagem: "CPF inválido ou ausente" });
+            continue;
+          }
+          payloadMap.set(cpf, p);
+        }
+
+        // FASE 2: batch SELECT
+        const allCpfs = Array.from(payloadMap.keys());
+        const cpfToIds = new Map<string, number[]>();
+        for (let i = 0; i < allCpfs.length; i += 5000) {
+          const chunk = allCpfs.slice(i, i + 5000);
+          const found = await db
+            .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
+            .from(clientesPessoa)
+            .where(and(eq(clientesPessoa.tenantId, tenantId), inArray(clientesPessoa.cpf, chunk)));
+          for (const p of found) {
+            if (!p.cpf) continue;
+            if (!cpfToIds.has(p.cpf)) cpfToIds.set(p.cpf, []);
+            cpfToIds.get(p.cpf)!.push(p.id);
+          }
+        }
+        report.cpfs_nao_encontrados = allCpfs.filter(c => !cpfToIds.has(c)).length;
+
+        // FASE 3: bulk UPDATE via VALUES table
+        const parseDateIso2 = (val: any): string | null => {
+          if (!val) return null;
+          const str = String(val).trim();
+          const br = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (br) return `${br[3]}-${br[2].padStart(2, "0")}-${br[1].padStart(2, "0")}`;
+          const iso = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (iso) return str.substring(0, 10);
+          return null;
+        };
+
+        type URow = { id: number; nome: string|null; dataNasc: string|null; bancoCodigo: string|null; agencia: string|null; conta: string|null };
+        const toUpdate: URow[] = [];
+        for (const [cpf, ids] of Array.from(cpfToIds.entries())) {
+          const p = payloadMap.get(cpf)!;
+          const nomeVal = (p.nome && String(p.nome).trim()) ? String(p.nome).trim() : null;
+          const dataNasc = parseDateIso2(p.dataNascimento);
+          const bancoVal = (p.bancoCodigo && String(p.bancoCodigo).trim()) ? String(p.bancoCodigo).trim() : null;
+          const agenciaVal = (p.agencia && String(p.agencia).trim()) ? String(p.agencia).trim() : null;
+          const contaVal = (p.conta && String(p.conta).trim()) ? String(p.conta).trim() : null;
+          if (!nomeVal && !dataNasc && !bancoVal && !agenciaVal && !contaVal) continue;
+          for (const id of ids)
+            toUpdate.push({ id, nome: nomeVal, dataNasc, bancoCodigo: bancoVal, agencia: agenciaVal, conta: contaVal });
+        }
+        for (let i = 0; i < toUpdate.length; i += 500) {
+          const batch = toUpdate.slice(i, i + 500);
+          const vals = batch.map(r =>
+            sql`(${r.id}::int, ${r.nome}::text, ${r.dataNasc}::date, ${r.bancoCodigo}::text, ${r.agencia}::text, ${r.conta}::text)`
+          );
+          await db.execute(sql`
+            UPDATE clientes_pessoa AS t SET
+              nome            = CASE WHEN v.nome IS NOT NULL THEN v.nome ELSE t.nome END,
+              data_nascimento = CASE WHEN v.data_nasc IS NOT NULL THEN v.data_nasc ELSE t.data_nascimento END,
+              banco_codigo    = CASE WHEN v.banco_codigo IS NOT NULL THEN v.banco_codigo ELSE t.banco_codigo END,
+              agencia         = CASE WHEN v.agencia IS NOT NULL THEN v.agencia ELSE t.agencia END,
+              conta           = CASE WHEN v.conta IS NOT NULL THEN v.conta ELSE t.conta END,
+              atualizado_em   = NOW()
+            FROM (VALUES ${sql.join(vals, sql`, `)})
+              AS v(id, nome, data_nasc, banco_codigo, agencia, conta)
+            WHERE t.id = v.id
+          `);
+          report.pessoas_atualizadas += batch.length;
+        }
+
+        // FASE 4: telefones batch
+        const telBatch: Array<{ tenantId: number; cpf: string; telefones: string[] }> = [];
+        for (const [cpf, p] of Array.from(payloadMap.entries())) {
+          if (!cpfToIds.has(cpf)) continue;
+          const tels = [p.telefone1, p.telefone2, p.telefone3]
+            .filter((t): t is string => !!t && !!String(t).trim())
+            .map(t => String(t).trim());
+          if (tels.length > 0) telBatch.push({ tenantId, cpf, telefones: tels });
+        }
+        if (telBatch.length > 0) {
+          const tr = await storage.addPessoaTelefonesByCpfBatch(telBatch);
+          report.telefones_inseridos = tr.telefonesInseridos;
+        }
+
+        return res.json({ success: true, ...report });
+      } catch (error: any) {
+        console.error("Dados complementares batch error:", error);
+        return res.status(500).json({ message: error.message || "Erro ao processar lote" });
+      }
+    },
+  );
+
   // ==================== FAST IMPORT ROUTES (SQL-based, 10-50x faster) ====================
 
   // POST /api/fast-imports/start - Inicia importação rápida com staging tables
