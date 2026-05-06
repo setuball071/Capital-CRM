@@ -9062,7 +9062,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           payloadMap.set(cpf, rowPayload);
         }
 
-        // ── FASE 2: Batch SELECT — quais CPFs existem no banco? ───────────────
+        // ── FASE 2: Batch SELECT — sem filtro de tenant para master ver todos ──
         const allCpfs = Array.from(payloadMap.keys());
         // cpf → lista de pessoa_id (pode ter mais de 1 se duplicata no banco)
         const cpfToIds = new Map<string, number[]>();
@@ -9073,10 +9073,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           const found = await db
             .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
             .from(clientesPessoa)
-            .where(and(
-              eq(clientesPessoa.tenantId, tenantId),
-              inArray(clientesPessoa.cpf, chunk)
-            ));
+            .where(inArray(clientesPessoa.cpf, chunk));
           for (const p of found) {
             if (!p.cpf) continue;
             if (!cpfToIds.has(p.cpf)) cpfToIds.set(p.cpf, []);
@@ -9244,7 +9241,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           payloadMap.set(cpf, p);
         }
 
-        // FASE 2: batch SELECT
+        // FASE 2: batch SELECT — sem filtro de tenant para master acessar todos os clientes
         const allCpfs = Array.from(payloadMap.keys());
         const cpfToIds = new Map<string, number[]>();
         for (let i = 0; i < allCpfs.length; i += 5000) {
@@ -9252,7 +9249,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           const found = await db
             .select({ id: clientesPessoa.id, cpf: clientesPessoa.cpf })
             .from(clientesPessoa)
-            .where(and(eq(clientesPessoa.tenantId, tenantId), inArray(clientesPessoa.cpf, chunk)));
+            .where(inArray(clientesPessoa.cpf, chunk));
           for (const p of found) {
             if (!p.cpf) continue;
             if (!cpfToIds.has(p.cpf)) cpfToIds.set(p.cpf, []);
