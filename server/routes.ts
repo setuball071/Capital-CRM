@@ -422,6 +422,7 @@ import {
   salesLeadEvents,
   leadInteractions,
   clientesPessoa,
+  clientesTelefones,
   clientesVinculo,
   clientContacts,
   importRuns,
@@ -9302,18 +9303,43 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           report.pessoas_atualizadas += batch.length;
         }
 
-        // FASE 4: telefones batch
-        const telBatch: Array<{ tenantId: number; cpf: string; telefones: string[] }> = [];
+        // FASE 4: telefones — insert direto por pessoa_id (sem filtro de tenant)
+        type TelRow = { pessoaId: number; telefone: string; tipo: string; principal: boolean };
+        const telRowsToInsert: TelRow[] = [];
         for (const [cpf, p] of Array.from(payloadMap.entries())) {
-          if (!cpfToIds.has(cpf)) continue;
+          const ids = cpfToIds.get(cpf);
+          if (!ids || ids.length === 0) continue;
           const tels = [p.telefone1, p.telefone2, p.telefone3]
-            .filter((t): t is string => !!t && !!String(t).trim())
-            .map(t => String(t).trim());
-          if (tels.length > 0) telBatch.push({ tenantId, cpf, telefones: tels });
+            .map(t => String(t ?? "").replace(/\D/g, ""))
+            .filter(t => t.length >= 8 && t.length <= 11);
+          if (tels.length === 0) continue;
+          for (const pessoaId of ids) {
+            for (let idx = 0; idx < tels.length; idx++) {
+              telRowsToInsert.push({
+                pessoaId,
+                telefone: tels[idx],
+                tipo: tels[idx].length === 11 ? "celular" : "fixo",
+                principal: idx === 0,
+              });
+            }
+          }
         }
-        if (telBatch.length > 0) {
-          const tr = await storage.addPessoaTelefonesByCpfBatch(telBatch);
-          report.telefones_inseridos = tr.telefonesInseridos;
+        const TEL_CHUNK = 1000;
+        for (let i = 0; i < telRowsToInsert.length; i += TEL_CHUNK) {
+          const batch = telRowsToInsert.slice(i, i + TEL_CHUNK);
+          try {
+            const inserted = await db.insert(clientesTelefones).values(batch)
+              .onConflictDoNothing().returning({ id: clientesTelefones.id });
+            report.telefones_inseridos += inserted.length;
+          } catch {
+            for (const row of batch) {
+              try {
+                const ins = await db.insert(clientesTelefones).values(row)
+                  .onConflictDoNothing().returning({ id: clientesTelefones.id });
+                report.telefones_inseridos += ins.length;
+              } catch { /* skip */ }
+            }
+          }
         }
 
         return res.json({ success: true, ...report });
