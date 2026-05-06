@@ -199,20 +199,56 @@ const D8_PENSIONISTA_REQUIRED_HEADERS = [
 
 const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   cpf: "cpf",
+  // Nome
   nome_do_servidor: "nome",
   nome: "nome",
+  // Matrícula — Maranhão usa "numero_matricula"
+  matricula: "matricula",
+  numero_matricula: "matricula",
+  num_matricula: "matricula",
+  // Órgão
   orgao_secretaria: "orgaodesc",
   orgao: "orgaodesc",
+  // Situação funcional
   situacaofuncional: "sit_func",
   situacao_funcional: "sit_func",
   sit_func: "sit_func",
-  total_vantagens: "base_calc",
+  situacao: "sit_func",
+  // Regime jurídico / tipo de folha
+  natureza: "rjur",
+  folha: "rjur",
+  regime_juridico: "rjur",
+  // Cargo
+  cargo: "cargo",
+  tipo_cargo: "cargo",
+  funcao: "funcao",
+  // Localização
   cidade: "municipio",
   municipio: "municipio",
   uf: "uf",
-  natureza: "rjur",
-  cargo: "cargo",
-  funcao: "funcao",
+  // Salário base / vantagens
+  total_vantagens: "base_calc",
+  remuneracao: "base_calc",
+  salario: "base_calc",
+  // ── Margens (Maranhão e outros estados) ──────────────────────────
+  // Saldo empréstimo consignado (35%)
+  margem_consignavel: "margem_35_saldo",
+  margem_emprestimo: "margem_35_saldo",
+  saldo_35: "margem_35_saldo",
+  margem_35: "margem_35_saldo",
+  // Saldo cartão de crédito consignado (5%)
+  margem_cartao: "margem_5_saldo",
+  margem_cartao_credito: "margem_5_saldo",
+  saldo_cartao: "margem_5_saldo",
+  margem_5cc: "margem_5_saldo",
+  // Saldo cartão benefício / bens e serviços (5%)
+  margem_bens_servicos: "margem_beneficio_5_saldo",
+  margem_beneficio: "margem_beneficio_5_saldo",
+  margem_cartao_beneficio: "margem_beneficio_5_saldo",
+  saldo_beneficio: "margem_beneficio_5_saldo",
+  margem_5cb: "margem_beneficio_5_saldo",
+  // Competência
+  competencia: "competencia_str",
 };
 
 const CONTATOS_COLUMN_MAP: Record<string, string> = {
@@ -1060,12 +1096,13 @@ class FastImportService {
 
     console.log(`[FastImport] Estadual pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
+    // Matrícula: usa a do arquivo se existir; fallback para 'EST_' + cpf (imports antigos)
     const vinculoResult = await db.execute(sql`
       INSERT INTO clientes_vinculo (tenant_id, cpf, matricula, orgao, convenio, pessoa_id, rjur, sit_func, import_run_id, base_tag)
-      SELECT DISTINCT ON (s.cpf, 'EST_' || s.cpf, COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
+      SELECT DISTINCT ON (s.cpf, COALESCE(NULLIF(s.matricula, ''), 'EST_' || s.cpf), COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'))
         ${tenantId}::integer,
         s.cpf,
-        'EST_' || s.cpf,
+        COALESCE(NULLIF(s.matricula, ''), 'EST_' || s.cpf),
         COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO'),
         ${convenio},
         p.id,
@@ -1080,9 +1117,9 @@ class FastImportService {
       ON CONFLICT (cpf, matricula, orgao) DO UPDATE SET
         tenant_id = COALESCE(clientes_vinculo.tenant_id, EXCLUDED.tenant_id),
         pessoa_id = COALESCE(EXCLUDED.pessoa_id, clientes_vinculo.pessoa_id),
-        rjur = CASE WHEN EXCLUDED.rjur IS NOT NULL AND EXCLUDED.rjur != '' 
+        rjur = CASE WHEN EXCLUDED.rjur IS NOT NULL AND EXCLUDED.rjur != ''
                     THEN EXCLUDED.rjur ELSE clientes_vinculo.rjur END,
-        sit_func = CASE WHEN EXCLUDED.sit_func IS NOT NULL AND EXCLUDED.sit_func != '' 
+        sit_func = CASE WHEN EXCLUDED.sit_func IS NOT NULL AND EXCLUDED.sit_func != ''
                         THEN EXCLUDED.sit_func ELSE clientes_vinculo.sit_func END,
         import_run_id = ${run.id},
         base_tag = ${baseTag},
@@ -1094,26 +1131,50 @@ class FastImportService {
     const folhaResult = await db.execute(sql`
       INSERT INTO clientes_folha_mes (
         pessoa_id, vinculo_id, competencia,
-        salario_bruto, base_tag, import_run_id
+        salario_bruto,
+        margem_saldo_35,   margem_bruta_35,   margem_utilizada_35,
+        margem_saldo_5,    margem_bruta_5,    margem_utilizada_5,
+        margem_beneficio_saldo_5, margem_beneficio_bruta_5, margem_beneficio_utilizada_5,
+        base_tag, import_run_id
       )
       SELECT DISTINCT ON (v.id, ${competencia}::timestamp)
         p.id,
         v.id,
         ${competencia}::timestamp,
-        s.base_calc::numeric,
+        NULLIF(s.base_calc, '')::numeric,
+        -- Margens: arquivo estadual traz só saldo líquido (sem bruta/utilizada)
+        -- Guardamos o saldo direto; bruta = saldo (100% disponível), utilizada = 0
+        NULLIF(s.margem_35_saldo,          '')::numeric,
+        NULLIF(s.margem_35_saldo,          '')::numeric,   -- bruta = saldo (não temos a bruta real)
+        0,                                                  -- utilizada = 0
+        NULLIF(s.margem_5_saldo,           '')::numeric,
+        NULLIF(s.margem_5_saldo,           '')::numeric,
+        0,
+        NULLIF(s.margem_beneficio_5_saldo, '')::numeric,
+        NULLIF(s.margem_beneficio_5_saldo, '')::numeric,
+        0,
         ${baseTag},
         ${run.id}
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
-      JOIN clientes_vinculo v ON v.cpf = s.cpf 
-        AND v.matricula = 'EST_' || s.cpf
+      JOIN clientes_vinculo v ON v.cpf = s.cpf
+        AND v.matricula = COALESCE(NULLIF(s.matricula, ''), 'EST_' || s.cpf)
         AND v.orgao = COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO')
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
       ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
-        salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
-        base_tag = ${baseTag},
-        import_run_id = ${run.id}
+        salario_bruto            = COALESCE(EXCLUDED.salario_bruto,            clientes_folha_mes.salario_bruto),
+        margem_saldo_35          = COALESCE(EXCLUDED.margem_saldo_35,          clientes_folha_mes.margem_saldo_35),
+        margem_bruta_35          = COALESCE(EXCLUDED.margem_bruta_35,          clientes_folha_mes.margem_bruta_35),
+        margem_utilizada_35      = COALESCE(EXCLUDED.margem_utilizada_35,      clientes_folha_mes.margem_utilizada_35),
+        margem_saldo_5           = COALESCE(EXCLUDED.margem_saldo_5,           clientes_folha_mes.margem_saldo_5),
+        margem_bruta_5           = COALESCE(EXCLUDED.margem_bruta_5,           clientes_folha_mes.margem_bruta_5),
+        margem_utilizada_5       = COALESCE(EXCLUDED.margem_utilizada_5,       clientes_folha_mes.margem_utilizada_5),
+        margem_beneficio_saldo_5      = COALESCE(EXCLUDED.margem_beneficio_saldo_5,      clientes_folha_mes.margem_beneficio_saldo_5),
+        margem_beneficio_bruta_5      = COALESCE(EXCLUDED.margem_beneficio_bruta_5,      clientes_folha_mes.margem_beneficio_bruta_5),
+        margem_beneficio_utilizada_5  = COALESCE(EXCLUDED.margem_beneficio_utilizada_5,  clientes_folha_mes.margem_beneficio_utilizada_5),
+        base_tag         = ${baseTag},
+        import_run_id    = ${run.id}
     `);
 
     console.log(`[FastImport] Estadual folha upserted: ${folhaResult.rowCount || 0}`);
@@ -1541,36 +1602,33 @@ class FastImportService {
       };
     } else if (tipoImport === "estadual") {
       const cpfVal = safeVarchar(padCpf(getValue("cpf")), 20);
+      // Usa matrícula real do arquivo se existir; fallback sintético para imports sem matrícula
+      const matriculaReal = safeVarchar(preserveMatricula(getValue("matricula")), 50);
       const syntheticMatricula = cpfVal ? `EST_${cpfVal}` : null;
       const cargo = getValue("cargo") || "";
       const funcao = getValue("funcao") || "";
       const cargoFuncao = [cargo, funcao].filter(Boolean).join(" / ") || null;
 
-      const filterPhone = (val: any): string | null => {
-        const s = safeVarchar(val, 20);
-        if (s && /E\+/i.test(s)) return null;
-        return s;
-      };
-
       return {
         importRunId: run.id,
         cpf: cpfVal,
-        matricula: safeVarchar(syntheticMatricula, 50),
+        matricula: matriculaReal || safeVarchar(syntheticMatricula, 50),
         nome: safeVarchar(getValue("nome"), 255),
         orgaodesc: safeVarchar(getValue("orgaodesc"), 255),
         upag: null,
         uf: safeVarchar(getValue("uf"), 100),
         municipio: safeVarchar(getValue("municipio"), 150),
         baseCalc: parseNum(getValue("base_calc")),
+        // Margens: arquivo estadual traz só saldo; bruta/utilizada ficam null (calculadas no mergeEstadual)
         margem5Bruta: null,
         margem5Utilizada: null,
-        margem5Saldo: null,
+        margem5Saldo: parseNum(getValue("margem_5_saldo")),
         margemBeneficio5Bruta: null,
         margemBeneficio5Utilizada: null,
-        margemBeneficio5Saldo: null,
+        margemBeneficio5Saldo: parseNum(getValue("margem_beneficio_5_saldo")),
         margem35Bruta: null,
         margem35Utilizada: null,
-        margem35Saldo: null,
+        margem35Saldo: parseNum(getValue("margem_35_saldo")),
         margem70Bruta: null,
         margem70Utilizada: null,
         margem70Saldo: null,
