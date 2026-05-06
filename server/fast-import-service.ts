@@ -1068,7 +1068,7 @@ class FastImportService {
       SELECT DISTINCT ON (s.cpf)
         ${tenantId}::integer,
         s.cpf,
-        'EST_' || s.cpf,
+        COALESCE(NULLIF(s.matricula, ''), 'EST_' || s.cpf),
         s.nome,
         s.orgaodesc,
         s.uf,
@@ -1141,17 +1141,17 @@ class FastImportService {
         p.id,
         v.id,
         ${competencia}::timestamp,
-        NULLIF(s.base_calc, '')::numeric,
+        s.base_calc,
         -- Margens: arquivo estadual traz só saldo líquido (sem bruta/utilizada)
         -- Guardamos o saldo direto; bruta = saldo (100% disponível), utilizada = 0
-        NULLIF(s.margem_35_saldo,          '')::numeric,
-        NULLIF(s.margem_35_saldo,          '')::numeric,   -- bruta = saldo (não temos a bruta real)
-        0,                                                  -- utilizada = 0
-        NULLIF(s.margem_5_saldo,           '')::numeric,
-        NULLIF(s.margem_5_saldo,           '')::numeric,
+        s.margem_35_saldo,          -- saldo
+        s.margem_35_saldo,          -- bruta = saldo (não temos a bruta real)
+        0,                          -- utilizada = 0
+        s.margem_5_saldo,
+        s.margem_5_saldo,
         0,
-        NULLIF(s.margem_beneficio_5_saldo, '')::numeric,
-        NULLIF(s.margem_beneficio_5_saldo, '')::numeric,
+        s.margem_beneficio_5_saldo,
+        s.margem_beneficio_5_saldo,
         0,
         ${baseTag},
         ${run.id}
