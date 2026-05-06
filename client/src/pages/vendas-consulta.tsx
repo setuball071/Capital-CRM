@@ -1305,16 +1305,18 @@ export default function VendasConsulta() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(siapeDados?.mg70_bruta ?? consultaData.folhaAtual.margem_bruta_70)}</span>
+                              {/* mg70_bruta: sempre usa folha SIAPE (SIAPE calcula a base correta, excluindo IRRF/PSSS)
+                                  O contracheque usa total_bruto×0.70 que inclui verbas não-consignáveis → valor errado */}
+                              <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70 ?? siapeDados?.mg70_bruta)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(siapeDados?.mg70_utilizado ?? consultaData.folhaAtual.margem_utilizada_70)}</span>
+                              <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70 ?? siapeDados?.mg70_utilizado)}</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Saldo:</span>
-                              <span className={(Number(siapeDados?.mg70_disponivel ?? consultaData.folhaAtual.margem_saldo_70 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(siapeDados?.mg70_disponivel ?? consultaData.folhaAtual.margem_saldo_70)}
+                              <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                {formatCurrency(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel)}
                               </span>
                             </div>
                           </div>
@@ -1339,13 +1341,22 @@ export default function VendasConsulta() {
                                 // Regra balizadora 70%:
                                 //   disponivel REAL = MIN(mg35_disponivel, mg70_disponivel)
                                 //   ⚠70% aparece SOMENTE quando o 70% é o gargalo (mg70 < mg35)
-                                // Usamos os dados SIAPE quando ambos os campos estão disponíveis;
-                                // senão cai no valor legado da folha CRM (sem badge 70%).
+                                //
+                                // FONTE DO mg70:
+                                //   Sempre usa folhaAtual.margem_saldo_70 (do extrato SIAPE oficial que
+                                //   calcula a base correta, excluindo IRRF/PSSS/não-consignáveis).
+                                //   O contracheque SIAPE (mg70_disponivel) usa total_bruto×0.70 → ERRADO.
+                                //
+                                // FONTE DO mg35:
+                                //   Prefere SIAPE contracheque (mais preciso pelas rubricas individuais),
+                                //   cai no legado folhaAtual se não tiver.
                                 const hasSiape35 = siapeDados?.mg35_disponivel != null;
-                                const hasSiape70 = siapeDados?.mg70_disponivel != null;
-                                if (hasSiape35 && hasSiape70) {
+                                const folhaMg70Disp = consultaData.folhaAtual.margem_saldo_70;
+                                const hasFolha70 = folhaMg70Disp != null;
+
+                                if (hasSiape35 && hasFolha70) {
                                   const disp35 = Number(siapeDados!.mg35_disponivel);
-                                  const disp70 = Number(siapeDados!.mg70_disponivel);
+                                  const disp70 = Number(folhaMg70Disp);
                                   // ⚠70% só aparece quando o 70% é MAIS restritivo que o 35%
                                   const limitadoPelo70 = disp70 < disp35;
                                   const disponivel = Math.min(disp35, disp70);
@@ -1358,7 +1369,7 @@ export default function VendasConsulta() {
                                     </span>
                                   );
                                 }
-                                // Sem dados SIAPE completos: usa valor legado
+                                // Sem SIAPE contracheque: usa legado folha para ambos
                                 const dispLegado = siapeDados?.mg35_disponivel != null
                                   ? Number(siapeDados!.mg35_disponivel)
                                   : (consultaData.folhaAtual.margem_saldo_35 ?? 0);
