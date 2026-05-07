@@ -6165,12 +6165,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
           const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
-          // Regra do teto de 70%: null = sem margem = zera as parciais; negativo = sem cap; >= 0 = aplica LEAST
+          // Regra do teto de 70%: importa direto do arquivo; única regra = balizadora quando >= 0
           const _saldo70a = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
           const _cap70a = (v: number | string | null | undefined): number | null | undefined => {
-            if (_saldo70a == null) return 0; // null → forçar zero explicitamente
-            if (_saldo70a >= 0 && v != null) return Math.min(Number(v), _saldo70a);
-            return v as number | null | undefined; // negativo → sem cap
+            if (_saldo70a != null && _saldo70a >= 0 && v != null) return Math.min(Number(v), _saldo70a);
+            return v as number | null | undefined; // sem 70% ou negativo → valor do arquivo
           };
           // Upsert folha com merge de extrasFolha para preservar instituidor
           await storage.upsertClienteFolhaMes({
@@ -7084,12 +7083,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
               const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
-              // Regra do teto de 70%: null = sem margem = zera as parciais; negativo = sem cap; >= 0 = aplica LEAST
+              // Regra do teto de 70%: importa direto do arquivo; única regra = balizadora quando >= 0
               const _saldo70b = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
               const _cap70b = (v: number | string | null | undefined): number | null | undefined => {
-                if (_saldo70b == null) return 0; // null → forçar zero explicitamente
-                if (_saldo70b >= 0 && v != null) return Math.min(Number(v), _saldo70b);
-                return v as number | null | undefined; // negativo → sem cap
+                if (_saldo70b != null && _saldo70b >= 0 && v != null) return Math.min(Number(v), _saldo70b);
+                return v as number | null | undefined; // sem 70% ou negativo → valor do arquivo
               };
               // Upsert folha com merge de extrasFolha para preservar instituidor
               await storage.upsertClienteFolhaMes({
