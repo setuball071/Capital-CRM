@@ -1840,6 +1840,15 @@ export default function BasesClientes() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {importUf === "MA" && (
+                      <a
+                        href="/templates/modelo_importacao_maranhao.csv"
+                        download="modelo_importacao_maranhao.csv"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                      >
+                        📥 Baixar planilha modelo – Governo do Maranhão
+                      </a>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1984,6 +1993,15 @@ export default function BasesClientes() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {fastImportUf === "MA" && (
+                        <a
+                          href="/templates/modelo_importacao_maranhao.csv"
+                          download="modelo_importacao_maranhao.csv"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                        >
+                          📥 Baixar planilha modelo – Governo do Maranhão
+                        </a>
+                      )}
                     </>
                   ) : (
                     <>
