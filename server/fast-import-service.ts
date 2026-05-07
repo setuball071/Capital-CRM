@@ -1090,7 +1090,7 @@ class FastImportService {
     console.log(`[FastImport] Starting SQL-based merge for estadual...`);
 
     const pessoaResult = await db.execute(sql`
-      INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, uf, municipio, convenio, base_tag_ultima, import_run_id)
+      INSERT INTO clientes_pessoa (tenant_id, cpf, matricula, nome, orgaodesc, uf, municipio, data_nascimento, convenio, base_tag_ultima, import_run_id)
       SELECT DISTINCT ON (s.cpf)
         ${tenantId}::integer,
         s.cpf,
@@ -1112,8 +1112,22 @@ class FastImportService {
             ELSE NULL
           END
         ),
-        -- municipio: ignora se for data (campo usado como temp storage para data_admissao)
-        CASE WHEN s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$' THEN NULL ELSE s.municipio END,
+        -- municipio: ignora se for data (campo reutilizado como temp storage para data_admissao)
+        CASE WHEN s.municipio ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$' THEN NULL ELSE s.municipio END,
+        -- data_nascimento: vem de staging.upag (reutilizado como temp storage para estadual)
+        -- Suporta DD/MM/YYYY, D/M/YYYY e YYYY-MM-DD
+        CASE
+          WHEN s.upag ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+            THEN TO_TIMESTAMP(
+              LPAD(SPLIT_PART(s.upag, '/', 1), 2, '0') || '/' ||
+              LPAD(SPLIT_PART(s.upag, '/', 2), 2, '0') || '/' ||
+              SPLIT_PART(s.upag, '/', 3),
+              'DD/MM/YYYY'
+            )
+          WHEN s.upag ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+            THEN TO_TIMESTAMP(s.upag, 'YYYY-MM-DD')
+          ELSE NULL
+        END,
         ${convenio},
         ${baseTag},
         ${run.id}
@@ -1129,6 +1143,9 @@ class FastImportService {
                   THEN EXCLUDED.uf ELSE clientes_pessoa.uf END,
         municipio = CASE WHEN EXCLUDED.municipio IS NOT NULL AND EXCLUDED.municipio != ''
                          THEN EXCLUDED.municipio ELSE clientes_pessoa.municipio END,
+        data_nascimento = CASE WHEN EXCLUDED.data_nascimento IS NOT NULL
+                               THEN EXCLUDED.data_nascimento
+                               ELSE clientes_pessoa.data_nascimento END,
         convenio = ${convenio},
         base_tag_ultima = ${baseTag},
         import_run_id = ${run.id},
@@ -1137,34 +1154,10 @@ class FastImportService {
 
     console.log(`[FastImport] Estadual pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
-    // Atualizar data_nascimento (armazenada em staging.upag como string DD/MM/YYYY ou D/M/YYYY)
-    // Suporta 1 ou 2 dígitos em dia e mês (ex: "5/3/1980" ou "05/03/1980")
-    // Remove a condição IS NULL para que reimports sempre atualizem o valor
-    const nascResult = await db.execute(sql`
-      UPDATE clientes_pessoa p
-      SET data_nascimento = CASE
-          WHEN s.upag ~ E'^\\d{1,2}/\\d{1,2}/\\d{4}$'
-            THEN TO_TIMESTAMP(
-              LPAD(SPLIT_PART(s.upag, '/', 1), 2, '0') || '/' ||
-              LPAD(SPLIT_PART(s.upag, '/', 2), 2, '0') || '/' ||
-              SPLIT_PART(s.upag, '/', 3),
-              'DD/MM/YYYY'
-            )
-          WHEN s.upag ~ E'^\\d{4}-\\d{2}-\\d{2}'
-            THEN TO_TIMESTAMP(s.upag, 'YYYY-MM-DD')
-          ELSE p.data_nascimento
-        END
-      FROM staging_folha s
-      WHERE p.cpf = s.cpf
-        AND s.import_run_id = ${run.id}
-        AND s.upag IS NOT NULL AND s.upag != ''
-        AND s.upag ~ E'^\\d{1,2}/\\d{1,2}/\\d{4}$|^\\d{4}-\\d{2}-\\d{2}'
-    `);
-    console.log(`[FastImport] Estadual data_nascimento atualizada: ${nascResult.rowCount || 0}`);
-
     // Salvar cargo e data_admissao em extras_pessoa (JSONB)
-    // - cargo: vem de staging.instituidor (cargo + funcao combinados)
-    // - data_admissao: vem de staging.municipio quando contém data DD/MM/YYYY
+    // - cargo: vem de staging.instituidor (cargo + funcao combinados no buildStagingRow)
+    // - data_admissao: vem de staging.municipio quando contém data DD/MM/YYYY ou D/M/YYYY
+    // Nota: usa [0-9] em vez de \d para máxima compatibilidade com o regex POSIX do Postgres
     const extrasResult = await db.execute(sql`
       UPDATE clientes_pessoa p
       SET extras_pessoa = jsonb_strip_nulls(
@@ -1172,7 +1165,7 @@ class FastImportService {
         jsonb_build_object(
           'cargo',         NULLIF(s.instituidor, ''),
           'data_admissao', CASE
-            WHEN s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$' THEN s.municipio
+            WHEN s.municipio ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$' THEN s.municipio
             ELSE NULL
           END
         )
@@ -1182,7 +1175,7 @@ class FastImportService {
         AND s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND (s.instituidor IS NOT NULL AND s.instituidor != ''
-             OR s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$')
+             OR s.municipio ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$')
     `);
     console.log(`[FastImport] Estadual extras_pessoa (cargo/admissao) atualizados: ${extrasResult.rowCount || 0}`);
 
