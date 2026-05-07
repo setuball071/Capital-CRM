@@ -1299,12 +1299,17 @@ export default function VendasConsulta() {
                   {consultaData.folhaAtual ? (
                     <>
                     {(() => {
-                      const convenioRaw = consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "";
-                      const isEstadual = convenioRaw.toUpperCase().includes("ESTADUAL");
+                      const convenioRaw = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
+                      // Cada governo estadual tem suas próprias regras — detectar por UF
+                      const isMaranhao = convenioRaw === "ESTADUAL - MA";
+                      // Futuros estados: isGoias = convenioRaw === "ESTADUAL - GO", etc.
 
-                      if (isEstadual) {
-                        // Layout Estadual: 3 cards (35% Consignado / 10% Cartão / 15% Bens e Serviços)
+                      if (isMaranhao) {
+                        // ─── GOVERNO DO MARANHÃO ────────────────────────────────────────
+                        // Margens: 35% Crédito Consignado / 10% Cartão Consignado / 15% Bens e Serviços
+                        // Não possui margem 70% — layout totalmente diferente do SIAPE
                         return (
+                          <>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Card className="bg-muted/50" data-testid="card-margem-35">
                               <CardContent className="p-4">
@@ -1372,6 +1377,14 @@ export default function VendasConsulta() {
                               </CardContent>
                             </Card>
                           </div>
+
+                          <div className="mt-3 pt-3 border-t">
+                            <div className="text-center">
+                              <p className="text-muted-foreground text-sm">Remuneração Base</p>
+                              <p className="font-medium text-green-600">{formatCurrency(consultaData.folhaAtual.salario_bruto)}</p>
+                            </div>
+                          </div>
+                          </>
                         );
                       }
 
