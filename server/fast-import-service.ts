@@ -1075,7 +1075,21 @@ class FastImportService {
         COALESCE(NULLIF(s.matricula, ''), 'EST_' || s.cpf),
         s.nome,
         s.orgaodesc,
-        s.uf,
+        -- UF: usa do arquivo se existir; deriva do rjur (ex: "Governo do Estado do Maranhao" → MA)
+        COALESCE(
+          NULLIF(s.uf, ''),
+          CASE
+            WHEN UPPER(s.rjur) LIKE '%MARANHAO%' OR UPPER(s.rjur) LIKE '%MARANHÃO%' THEN 'MA'
+            WHEN UPPER(s.rjur) LIKE '%SAO PAULO%' OR UPPER(s.rjur) LIKE '%SÃO PAULO%' THEN 'SP'
+            WHEN UPPER(s.rjur) LIKE '%MINAS GERAIS%' THEN 'MG'
+            WHEN UPPER(s.rjur) LIKE '%RIO DE JANEIRO%' THEN 'RJ'
+            WHEN UPPER(s.rjur) LIKE '%BAHIA%' THEN 'BA'
+            WHEN UPPER(s.rjur) LIKE '%PARANA%' OR UPPER(s.rjur) LIKE '%PARANÁ%' THEN 'PR'
+            WHEN UPPER(s.rjur) LIKE '%GOIAS%' OR UPPER(s.rjur) LIKE '%GOIÁS%' THEN 'GO'
+            WHEN UPPER(s.rjur) LIKE '%PERNAMBUCO%' THEN 'PE'
+            ELSE NULL
+          END
+        ),
         s.municipio,
         ${convenio},
         ${baseTag},

@@ -1298,153 +1298,222 @@ export default function VendasConsulta() {
                 <CardContent>
                   {consultaData.folhaAtual ? (
                     <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <Card className="bg-muted/50" data-testid="card-margem-70">
-                        <CardContent className="p-4">
-                          <p className="text-sm font-medium mb-2">Margem 70%</p>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Bruta:</span>
-                              {/* mg70_bruta: sempre usa folha SIAPE (SIAPE calcula a base correta, excluindo IRRF/PSSS)
-                                  O contracheque usa total_bruto×0.70 que inclui verbas não-consignáveis → valor errado */}
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70 ?? siapeDados?.mg70_bruta)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70 ?? siapeDados?.mg70_utilizado)}</span>
-                            </div>
-                            <div className="flex justify-between font-medium">
-                              <span>Saldo:</span>
-                              <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel)}
-                              </span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                    {(() => {
+                      const convenioRaw = consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "";
+                      const isEstadual = convenioRaw.toUpperCase().includes("ESTADUAL");
 
-                      <Card className="bg-muted/50" data-testid="card-margem-35">
-                        <CardContent className="p-4">
-                          <p className="text-sm font-medium mb-2">Margem 35%</p>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(siapeDados?.mg35_bruta ?? consultaData.folhaAtual.margem_bruta_35)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(siapeDados?.mg35_utilizado ?? consultaData.folhaAtual.margem_utilizada_35)}</span>
-                            </div>
-                            <div className="flex justify-between font-medium">
-                              <span>Saldo:</span>
-                              {(() => {
-                                // Regra balizadora 70%:
-                                //   disponivel REAL = MIN(mg35_disponivel, mg70_disponivel)
-                                //   ⚠70% aparece SOMENTE quando o 70% é o gargalo (mg70 < mg35)
-                                //
-                                // FONTE DO mg70:
-                                //   Sempre usa folhaAtual.margem_saldo_70 (do extrato SIAPE oficial que
-                                //   calcula a base correta, excluindo IRRF/PSSS/não-consignáveis).
-                                //   O contracheque SIAPE (mg70_disponivel) usa total_bruto×0.70 → ERRADO.
-                                //
-                                // FONTE DO mg35:
-                                //   Prefere SIAPE contracheque (mais preciso pelas rubricas individuais),
-                                //   cai no legado folhaAtual se não tiver.
-                                const hasSiape35 = siapeDados?.mg35_disponivel != null;
-                                const folhaMg70Disp = consultaData.folhaAtual.margem_saldo_70;
-                                const hasFolha70 = folhaMg70Disp != null;
-
-                                if (hasSiape35 && hasFolha70) {
-                                  const disp35 = Number(siapeDados!.mg35_disponivel);
-                                  const disp70 = Number(folhaMg70Disp);
-                                  // ⚠70% só aparece quando o 70% é MAIS restritivo que o 35%
-                                  const limitadoPelo70 = disp70 < disp35;
-                                  const disponivel = Math.min(disp35, disp70);
-                                  return (
-                                    <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
-                                      {formatCurrency(disponivel)}
-                                      {limitadoPelo70 && (
-                                        <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem compulsória 70%">⚠ 70%</span>
-                                      )}
+                      if (isEstadual) {
+                        // Layout Estadual: 3 cards (35% Consignado / 10% Cartão / 15% Bens e Serviços)
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="bg-muted/50" data-testid="card-margem-35">
+                              <CardContent className="p-4">
+                                <p className="text-sm font-medium mb-2">35% Crédito Consignado</p>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruta:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_35)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Utilizada:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_35)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span>Saldo:</span>
+                                    <span className={(Number(consultaData.folhaAtual.margem_saldo_35 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(consultaData.folhaAtual.margem_saldo_35)}
                                     </span>
-                                  );
-                                }
-                                // Sem SIAPE contracheque: usa legado folha para ambos
-                                const dispLegado = siapeDados?.mg35_disponivel != null
-                                  ? Number(siapeDados!.mg35_disponivel)
-                                  : (consultaData.folhaAtual.margem_saldo_35 ?? 0);
-                                return (
-                                  <span className={dispLegado >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(dispLegado)}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <Card className="bg-muted/50" data-testid="card-margem-5">
+                              <CardContent className="p-4">
+                                <p className="text-sm font-medium mb-2">10% Cartão Consignado</p>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruta:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Utilizada:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span>Saldo:</span>
+                                    <span className={(Number(consultaData.folhaAtual.margem_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(consultaData.folhaAtual.margem_saldo_5)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
+                              <CardContent className="p-4">
+                                <p className="text-sm font-medium mb-2">15% Bens e Serviços</p>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruta:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Utilizada:</span>
+                                    <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span>Saldo:</span>
+                                    <span className={(Number(consultaData.folhaAtual.margem_beneficio_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(consultaData.folhaAtual.margem_beneficio_saldo_5)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        );
+                      }
+
+                      // Layout SIAPE padrão: 4 cards (70% / 35% / 5% Cartão / 5% Benefício)
+                      return (
+                        <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <Card className="bg-muted/50" data-testid="card-margem-70">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Margem 70%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  {/* mg70_bruta: sempre usa folha SIAPE (SIAPE calcula a base correta, excluindo IRRF/PSSS)
+                                      O contracheque usa total_bruto×0.70 que inclui verbas não-consignáveis → valor errado */}
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70 ?? siapeDados?.mg70_bruta)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70 ?? siapeDados?.mg70_utilizado)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel)}
                                   </span>
-                                );
-                              })()}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card className="bg-muted/50" data-testid="card-margem-35">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Margem 35%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  <span>{formatCurrency(siapeDados?.mg35_bruta ?? consultaData.folhaAtual.margem_bruta_35)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(siapeDados?.mg35_utilizado ?? consultaData.folhaAtual.margem_utilizada_35)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  {(() => {
+                                    const hasSiape35 = siapeDados?.mg35_disponivel != null;
+                                    const folhaMg70Disp = consultaData.folhaAtual.margem_saldo_70;
+                                    const hasFolha70 = folhaMg70Disp != null;
+
+                                    if (hasSiape35 && hasFolha70) {
+                                      const disp35 = Number(siapeDados!.mg35_disponivel);
+                                      const disp70 = Number(folhaMg70Disp);
+                                      const limitadoPelo70 = disp70 < disp35;
+                                      const disponivel = Math.min(disp35, disp70);
+                                      return (
+                                        <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
+                                          {formatCurrency(disponivel)}
+                                          {limitadoPelo70 && (
+                                            <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem compulsória 70%">⚠ 70%</span>
+                                          )}
+                                        </span>
+                                      );
+                                    }
+                                    const dispLegado = siapeDados?.mg35_disponivel != null
+                                      ? Number(siapeDados!.mg35_disponivel)
+                                      : (consultaData.folhaAtual.margem_saldo_35 ?? 0);
+                                    return (
+                                      <span className={dispLegado >= 0 ? "text-green-600" : "text-red-600"}>
+                                        {formatCurrency(dispLegado)}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card className="bg-muted/50" data-testid="card-margem-5">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Margem 5%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? consultaData.folhaAtual.margem_bruta_5)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? consultaData.folhaAtual.margem_utilizada_5)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  <span className={((siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5)}
+                                  </span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
+                            <CardContent className="p-4">
+                              <p className="text-sm font-medium mb-2">Benefício 5%</p>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Bruta:</span>
+                                  <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Utilizada:</span>
+                                  <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Saldo:</span>
+                                  <span className={((siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5)}
+                                  </span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div className="text-center">
+                              <p className="text-muted-foreground">Total Créditos</p>
+                              <p className="font-medium text-green-600">{formatCurrency(consultaData.folhaAtual.creditos ?? consultaData.folhaAtual.salario_bruto)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-muted-foreground">Total Débitos</p>
+                              <p className="font-medium text-red-600">{formatCurrency(consultaData.folhaAtual.debitos ?? consultaData.folhaAtual.descontos_brutos)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-muted-foreground">Valor Líquido</p>
+                              <p className="font-medium">{formatCurrency(consultaData.folhaAtual.liquido ?? consultaData.folhaAtual.salario_liquido)}</p>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="bg-muted/50" data-testid="card-margem-5">
-                        <CardContent className="p-4">
-                          <p className="text-sm font-medium mb-2">Margem 5%</p>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? consultaData.folhaAtual.margem_bruta_5)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? consultaData.folhaAtual.margem_utilizada_5)}</span>
-                            </div>
-                            <div className="flex justify-between font-medium">
-                              <span>Saldo:</span>
-                              <span className={((siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5)}
-                              </span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
-                        <CardContent className="p-4">
-                          <p className="text-sm font-medium mb-2">Benefício 5%</p>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Bruta:</span>
-                              <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Utilizada:</span>
-                              <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
-                            </div>
-                            <div className="flex justify-between font-medium">
-                              <span>Saldo:</span>
-                              <span className={((siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5)}
-                              </span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div className="text-center">
-                          <p className="text-muted-foreground">Total Créditos</p>
-                          <p className="font-medium text-green-600">{formatCurrency(consultaData.folhaAtual.creditos ?? consultaData.folhaAtual.salario_bruto)}</p>
                         </div>
-                        <div className="text-center">
-                          <p className="text-muted-foreground">Total Débitos</p>
-                          <p className="font-medium text-red-600">{formatCurrency(consultaData.folhaAtual.debitos ?? consultaData.folhaAtual.descontos_brutos)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-muted-foreground">Valor Líquido</p>
-                          <p className="font-medium">{formatCurrency(consultaData.folhaAtual.liquido ?? consultaData.folhaAtual.salario_liquido)}</p>
-                        </div>
-                      </div>
-                    </div>
+                        </>
+                      );
+                    })()}
 
                     </>
                   ) : (
