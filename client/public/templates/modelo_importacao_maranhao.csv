@@ -1,4 +1,4 @@
-CPF;Matrícula;Nome do Servidor;Data de Nascimento;Data de Admissão;Folha;Órgão/Secretaria;Tipo de Cargo;Situação Funcional;Margem - Consignável;Margem - Cartão;Margem - Adiantamento;Margem - Base de Serviço
+CPF;Matricula;Nome do Servidor;Data de Nascimento;Data de Admissao;Folha;Orgao/Secretaria;Tipo de Cargo;Situacao Funcional;Margem - Consignavel;Margem - Cartao;Margem - Adiantamento;Margem - Base de Servico
 034.567.890-12;123456;MARIA DA SILVA SANTOS;15/08/1978;01/03/2010;Governo do Estado do Maranhao;SECRETARIA DE SAUDE DO ESTADO;TECNICO DE ENFERMAGEM;ATIVO;R$ 1.435,00;R$ 410,00;R$ 0,00;R$ 615,00
 056.789.012-34;234567;JOAO PEDRO OLIVEIRA COSTA;22/03/1985;15/07/2012;Governo do Estado do Maranhao;SECRETARIA DE EDUCACAO DO ESTADO;PROFESSOR;ATIVO;R$ 1.820,00;R$ 520,00;R$ 0,00;R$ 780,00
 078.901.234-56;345678;ANA LUCIA FERREIRA MOURA;07/11/1980;20/01/2008;Governo do Estado do Maranhao;SECRETARIA DE SEGURANCA PUBLICA;AGENTE PENITENCIARIO;INATIVO;R$ 0,00;R$ 0,00;R$ 0,00;R$ 0,00
