@@ -1131,21 +1131,28 @@ class FastImportService {
 
     console.log(`[FastImport] Estadual pessoas upserted: ${pessoaResult.rowCount || 0}`);
 
-    // Atualizar data_nascimento (armazenada em staging.upag como string DD/MM/YYYY)
+    // Atualizar data_nascimento (armazenada em staging.upag como string DD/MM/YYYY ou D/M/YYYY)
+    // Suporta 1 ou 2 dígitos em dia e mês (ex: "5/3/1980" ou "05/03/1980")
+    // Remove a condição IS NULL para que reimports sempre atualizem o valor
     const nascResult = await db.execute(sql`
       UPDATE clientes_pessoa p
       SET data_nascimento = CASE
-          WHEN s.upag ~ E'^\\d{2}/\\d{2}/\\d{4}$'
-            THEN TO_TIMESTAMP(s.upag, 'DD/MM/YYYY')
+          WHEN s.upag ~ E'^\\d{1,2}/\\d{1,2}/\\d{4}$'
+            THEN TO_TIMESTAMP(
+              LPAD(SPLIT_PART(s.upag, '/', 1), 2, '0') || '/' ||
+              LPAD(SPLIT_PART(s.upag, '/', 2), 2, '0') || '/' ||
+              SPLIT_PART(s.upag, '/', 3),
+              'DD/MM/YYYY'
+            )
           WHEN s.upag ~ E'^\\d{4}-\\d{2}-\\d{2}'
             THEN TO_TIMESTAMP(s.upag, 'YYYY-MM-DD')
-          ELSE NULL
+          ELSE p.data_nascimento
         END
       FROM staging_folha s
       WHERE p.cpf = s.cpf
         AND s.import_run_id = ${run.id}
         AND s.upag IS NOT NULL AND s.upag != ''
-        AND p.data_nascimento IS NULL
+        AND s.upag ~ E'^\\d{1,2}/\\d{1,2}/\\d{4}$|^\\d{4}-\\d{2}-\\d{2}'
     `);
     console.log(`[FastImport] Estadual data_nascimento atualizada: ${nascResult.rowCount || 0}`);
 

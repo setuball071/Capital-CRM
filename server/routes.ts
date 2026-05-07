@@ -15477,16 +15477,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
       }
 
+      // Normalizar vinculos: garantir snake_case nos campos críticos (Drizzle retorna camelCase)
+      const normalizarVinculo = (v: any) => ({
+        ...v,
+        sit_func: v.sit_func ?? v.sitFunc ?? null,
+        rjur:     v.rjur     ?? v.rjur     ?? null,
+        upag:     v.upag     ?? v.upag     ?? null,
+        convenio: v.convenio ?? v.convenio ?? null,
+      });
+
+      // Normalizar clienteBase: adicionar aliases snake_case para campos camelCase do Drizzle
+      const clienteBaseNorm = cliente ? {
+        ...cliente,
+        extras_pessoa:    (cliente as any).extrasPessoa    ?? (cliente as any).extras_pessoa    ?? null,
+        data_nascimento:  (cliente as any).dataNascimento  ?? (cliente as any).data_nascimento  ?? null,
+        banco_nome:       (cliente as any).bancoNome       ?? (cliente as any).banco_nome       ?? null,
+        banco_codigo:     (cliente as any).bancoCodigo     ?? (cliente as any).banco_codigo     ?? null,
+        sit_func:         (cliente as any).situacaoFuncionalAtual ?? (cliente as any).sit_func ?? null,
+      } : null;
+
       return res.json({
-        clienteBase: cliente,
+        clienteBase: clienteBaseNorm,
         folhaAtual: folhaFormatada,
         contratos,
         higienizacao: {
           telefones: uniqueTelefones,
           emails: uniqueEmails,
         },
-        vinculo: vinculoAtual,
-        vinculos: vinculosFiltrados,
+        vinculo: vinculoAtual ? normalizarVinculo(vinculoAtual) : null,
+        vinculos: vinculosFiltrados.map(normalizarVinculo),
         tem_multiplos_vinculos: vinculosFiltrados.length > 1,
         pessoaId: cliente.id,
         leadId,

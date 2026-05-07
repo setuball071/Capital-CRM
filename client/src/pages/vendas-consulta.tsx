@@ -1173,7 +1173,12 @@ export default function VendasConsulta() {
                   {(() => {
                     const convenioRaw = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
                     const isMaranhao = convenioRaw === "ESTADUAL - MA";
-                    const extrasPessoa = (consultaData.clienteBase?.extras_pessoa as Record<string, string> | null) ?? {};
+                    // Drizzle retorna camelCase; suportar ambas as formas para segurança
+                    const extrasPessoa = (
+                      (consultaData.clienteBase?.extras_pessoa as Record<string, string> | null) ||
+                      (consultaData.clienteBase?.extrasPessoa as Record<string, string> | null) ||
+                      {}
+                    );
 
                     // Nascimento — funciona para timestamp ISO e string DD/MM/YYYY
                     const renderNascimento = () => {
@@ -1213,9 +1218,26 @@ export default function VendasConsulta() {
                           {/* Situação */}
                           <div className="space-y-1">
                             <p className="text-muted-foreground">Situação Funcional</p>
-                            <Badge variant="secondary" data-testid="text-sit-func">
-                              {consultaData.vinculos?.[0]?.sit_func || consultaData.clienteBase?.sit_func || "-"}
-                            </Badge>
+                            {(() => {
+                              // Drizzle retorna camelCase (sitFunc), mas suportamos snake_case também
+                              const sf = (
+                                consultaData.vinculos?.[0]?.sit_func ||
+                                (consultaData.vinculos?.[0] as any)?.sitFunc ||
+                                consultaData.clienteBase?.sit_func ||
+                                (consultaData.clienteBase as any)?.situacaoFuncionalAtual ||
+                                ""
+                              ).toUpperCase();
+                              const sfAtivo = !sf || sf === "ATIVO" || sf === "ATIVA";
+                              return sfAtivo ? (
+                                <Badge variant="secondary" className="text-green-700 bg-green-50 border border-green-200" data-testid="text-sit-func">
+                                  ✓ {sf || "ATIVO"}
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" data-testid="text-sit-func">
+                                  ✕ {sf}
+                                </Badge>
+                              );
+                            })()}
                           </div>
                           {/* UF — sempre MA para Maranhão */}
                           <div className="space-y-1">
