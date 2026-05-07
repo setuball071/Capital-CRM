@@ -276,6 +276,17 @@ export default function VendasConsulta() {
   const [agendamentoNota, setAgendamentoNota] = useState("");
   const [showObsDialog, setShowObsDialog] = useState(false);
 
+  // ─── Dados Bancários manual (Maranhão) ───────────────────────────────────
+  const [editandoBancario, setEditandoBancario] = useState(false);
+  const [bancarioForm, setBancarioForm] = useState({ banco: "", agencia: "", conta: "" });
+
+  // ─── Contrato manual (Maranhão) ──────────────────────────────────────────
+  const [adicionandoContrato, setAdicionandoContrato] = useState(false);
+  const [contratoForm, setContratoForm] = useState({
+    banco: "", tipo: "consignado", valorParcela: "",
+    parcelasRestantes: "", prazoTotal: "", numeroContrato: "",
+  });
+
   const clienteCpf = consultaData?.clienteBase?.cpf?.replace(/[^0-9]/g, "") || "";
 
   // Dados enriquecidos do SIAPE (cargo, função, UF, banco, financeiro, margens corretas)
@@ -628,6 +639,68 @@ export default function VendasConsulta() {
     onError: () => {
       toast({ title: "Erro ao definir como principal", variant: "destructive" });
     },
+  });
+
+  // ─── Mutation: salvar dados bancários manualmente ────────────────────────
+  const salvarBancarioMutation = useMutation({
+    mutationFn: async ({ pessoaId, ...data }: { pessoaId: number; banco: string; agencia: string; conta: string }) => {
+      const res = await apiRequest("PATCH", `/api/clientes/pessoa/${pessoaId}/banco`, data);
+      if (!res.ok) throw new Error("Erro ao salvar");
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      toast({ title: "Dados bancários salvos!" });
+      setEditandoBancario(false);
+      // Update local state so fields reflect new values immediately
+      setConsultaData((prev) => {
+        if (!prev || !prev.clienteBase) return prev;
+        return {
+          ...prev,
+          clienteBase: {
+            ...prev.clienteBase,
+            banco_nome: vars.banco || prev.clienteBase.banco_nome,
+            agencia: vars.agencia || prev.clienteBase.agencia,
+            conta: vars.conta || prev.clienteBase.conta,
+          },
+        };
+      });
+    },
+    onError: () => toast({ title: "Erro ao salvar dados bancários", variant: "destructive" }),
+  });
+
+  // ─── Mutation: adicionar contrato manual ──────────────────────────────────
+  const adicionarContratoMutation = useMutation({
+    mutationFn: async ({ pessoaId, ...data }: {
+      pessoaId: number; banco: string; tipo: string; valorParcela: string;
+      parcelasRestantes: string; prazoTotal: string; numeroContrato: string;
+    }) => {
+      const res = await apiRequest("POST", `/api/clientes/pessoa/${pessoaId}/contratos`, data);
+      if (!res.ok) throw new Error("Erro ao adicionar");
+      return res.json();
+    },
+    onSuccess: (result) => {
+      toast({ title: "Contrato adicionado!" });
+      setAdicionandoContrato(false);
+      setContratoForm({ banco: "", tipo: "consignado", valorParcela: "", parcelasRestantes: "", prazoTotal: "", numeroContrato: "" });
+      // Append to local contratos list
+      if (result?.contrato) {
+        const c = result.contrato;
+        setConsultaData((prev) => {
+          if (!prev) return prev;
+          const novoContrato = {
+            banco: c.banco,
+            tipo_contrato: c.tipo_contrato,
+            valor_parcela: c.valor_parcela,
+            parcelas_restantes: c.parcelas_restantes,
+            prazo_total: c.prazo_total,
+            numero_contrato: c.numero_contrato,
+            saldo_devedor: null,
+          };
+          return { ...prev, contratos: [...(prev.contratos || []), novoContrato] };
+        });
+      }
+    },
+    onError: () => toast({ title: "Erro ao adicionar contrato", variant: "destructive" }),
   });
 
   const registrarInteracaoMutation = useMutation({
@@ -1240,51 +1313,123 @@ export default function VendasConsulta() {
                 return null;
               })()}
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Landmark className="h-4 w-4" />
-                    Dados Bancários
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Banco</p>
-                      <p data-testid="text-banco">
-                        <CopyableField
-                          value={siapeDados?.banco || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo}
-                          displayValue={siapeDados?.banco || consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || consultaData.clienteBase?.banco_codigo || "-"}
-                          testId="button-copy-banco"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Agência</p>
-                      <p data-testid="text-agencia">
-                        <CopyableField
-                          value={siapeDados?.agencia || consultaData.clienteBase?.agencia}
-                          displayValue={siapeDados?.agencia || consultaData.clienteBase?.agencia || "-"}
-                          testId="button-copy-agencia"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Conta</p>
-                      <p data-testid="text-conta">
-                        <CopyableField
-                          value={siapeDados?.conta || consultaData.clienteBase?.conta}
-                          displayValue={siapeDados?.conta || consultaData.clienteBase?.conta || "-"}
-                          testId="button-copy-conta"
-                          toast={toast}
-                        />
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              {(() => {
+                const convenioRawBanco = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
+                const isMaranhaoBanco = convenioRawBanco === "ESTADUAL - MA";
+                const pessoaIdBanco = consultaData.pessoaId;
+                return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Landmark className="h-4 w-4" />
+                      Dados Bancários
+                      {isMaranhaoBanco && pessoaIdBanco && !editandoBancario && (
+                        <Button
+                          variant="ghost" size="sm"
+                          className="ml-auto h-7 px-2 text-xs gap-1"
+                          onClick={() => {
+                            setBancarioForm({
+                              banco: consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || "",
+                              agencia: consultaData.clienteBase?.agencia || "",
+                              conta: consultaData.clienteBase?.conta || "",
+                            });
+                            setEditandoBancario(true);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" /> Editar
+                        </Button>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isMaranhaoBanco && editandoBancario ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Banco</Label>
+                            <Input
+                              placeholder="Ex: Caixa Econômica Federal"
+                              value={bancarioForm.banco}
+                              onChange={(e) => setBancarioForm(f => ({ ...f, banco: e.target.value }))}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Agência</Label>
+                              <Input
+                                placeholder="Ex: 0001"
+                                value={bancarioForm.agencia}
+                                onChange={(e) => setBancarioForm(f => ({ ...f, agencia: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Conta</Label>
+                              <Input
+                                placeholder="Ex: 12345-6"
+                                value={bancarioForm.conta}
+                                onChange={(e) => setBancarioForm(f => ({ ...f, conta: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            disabled={salvarBancarioMutation.isPending}
+                            onClick={() => {
+                              if (!pessoaIdBanco) return;
+                              salvarBancarioMutation.mutate({ pessoaId: pessoaIdBanco, ...bancarioForm });
+                            }}
+                          >
+                            {salvarBancarioMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
+                            Salvar
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditandoBancario(false)}>
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Banco</p>
+                          <p data-testid="text-banco">
+                            <CopyableField
+                              value={siapeDados?.banco || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo}
+                              displayValue={siapeDados?.banco || consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || consultaData.clienteBase?.banco_codigo || "-"}
+                              testId="button-copy-banco"
+                              toast={toast}
+                            />
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Agência</p>
+                          <p data-testid="text-agencia">
+                            <CopyableField
+                              value={siapeDados?.agencia || consultaData.clienteBase?.agencia}
+                              displayValue={siapeDados?.agencia || consultaData.clienteBase?.agencia || "-"}
+                              testId="button-copy-agencia"
+                              toast={toast}
+                            />
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Conta</p>
+                          <p data-testid="text-conta">
+                            <CopyableField
+                              value={siapeDados?.conta || consultaData.clienteBase?.conta}
+                              displayValue={siapeDados?.conta || consultaData.clienteBase?.conta || "-"}
+                              testId="button-copy-conta"
+                              toast={toast}
+                            />
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                );
+              })()}
 
               <Card>
                 <CardHeader className="pb-3">
@@ -1643,6 +1788,21 @@ export default function VendasConsulta() {
                     {siapeParcelas && siapeParcelas.length > 0 && (
                       <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">SIAPE</Badge>
                     )}
+                    {(() => {
+                      const convenioRawC = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
+                      const isMaranhaoC = convenioRawC === "ESTADUAL - MA";
+                      const pessoaIdC = consultaData.pessoaId;
+                      if (!isMaranhaoC || !pessoaIdC) return null;
+                      return (
+                        <Button
+                          variant="outline" size="sm"
+                          className="ml-auto h-7 px-2 text-xs gap-1"
+                          onClick={() => setAdicionandoContrato(true)}
+                        >
+                          <Plus className="h-3 w-3" /> Adicionar
+                        </Button>
+                      );
+                    })()}
                   </CardTitle>
                   <CardDescription>
                     {siapeParcelas && siapeParcelas.length > 0
@@ -1892,6 +2052,102 @@ export default function VendasConsulta() {
           </div>
         </div>
       </div>
+
+      {/* ── Dialog: Adicionar Contrato Manual (Maranhão) ─────────────────── */}
+      <Dialog open={adicionandoContrato} onOpenChange={(open) => {
+        if (!open) { setAdicionandoContrato(false); setContratoForm({ banco: "", tipo: "consignado", valorParcela: "", parcelasRestantes: "", prazoTotal: "", numeroContrato: "" }); }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Adicionar Contrato
+            </DialogTitle>
+            <DialogDescription>
+              Informe os dados do contrato manualmente
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Banco</Label>
+              <Input
+                placeholder="Ex: Caixa Econômica Federal"
+                value={contratoForm.banco}
+                onChange={(e) => setContratoForm(f => ({ ...f, banco: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Tipo de Contrato</Label>
+              <Select
+                value={contratoForm.tipo}
+                onValueChange={(v) => setContratoForm(f => ({ ...f, tipo: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consignado">Consignado 35%</SelectItem>
+                  <SelectItem value="cartao">Cartão 10%</SelectItem>
+                  <SelectItem value="beneficio">Bens e Serviços 15%</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Valor Parcela</Label>
+                <Input
+                  placeholder="Ex: 250,00"
+                  value={contratoForm.valorParcela}
+                  onChange={(e) => setContratoForm(f => ({ ...f, valorParcela: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Parc. Restantes</Label>
+                <Input
+                  type="number" min="0"
+                  placeholder="Ex: 60"
+                  value={contratoForm.parcelasRestantes}
+                  onChange={(e) => setContratoForm(f => ({ ...f, parcelasRestantes: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Prazo Total</Label>
+                <Input
+                  type="number" min="0"
+                  placeholder="Ex: 84"
+                  value={contratoForm.prazoTotal}
+                  onChange={(e) => setContratoForm(f => ({ ...f, prazoTotal: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Nº Contrato</Label>
+                <Input
+                  placeholder="Ex: 00123456 (opcional)"
+                  value={contratoForm.numeroContrato}
+                  onChange={(e) => setContratoForm(f => ({ ...f, numeroContrato: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setAdicionandoContrato(false)}>Cancelar</Button>
+            <Button
+              disabled={adicionarContratoMutation.isPending}
+              onClick={() => {
+                const pessoaId = consultaData?.pessoaId;
+                if (!pessoaId) return;
+                adicionarContratoMutation.mutate({ pessoaId, ...contratoForm });
+              }}
+            >
+              {adicionarContratoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+              Salvar Contrato
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Painel de Contato */}
       <Dialog open={contatosModalOpen} onOpenChange={setContatosModalOpen}>

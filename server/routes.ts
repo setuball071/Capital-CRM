@@ -15822,6 +15822,83 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     },
   );
 
+  // PATCH /api/clientes/pessoa/:pessoaId/banco - Atualizar dados bancários manualmente (Maranhão)
+  app.patch("/api/clientes/pessoa/:pessoaId/banco", requireAuth, async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      if (isNaN(pessoaId)) return res.status(400).json({ message: "ID inválido" });
+
+      const { banco, agencia, conta } = req.body;
+      if (!banco && !agencia && !conta) {
+        return res.status(400).json({ message: "Informe ao menos um campo bancário" });
+      }
+
+      const bancoVal   = banco   ? String(banco).trim()   : null;
+      const agenciaVal = agencia ? String(agencia).trim() : null;
+      const contaVal   = conta   ? String(conta).trim()   : null;
+
+      await db.execute(sql`
+        UPDATE clientes_pessoa
+        SET
+          banco_nome = ${bancoVal},
+          agencia    = ${agenciaVal},
+          conta      = ${contaVal}
+        WHERE id = ${pessoaId}
+      `);
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Patch banco error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar dados bancários" });
+    }
+  });
+
+  // POST /api/clientes/pessoa/:pessoaId/contratos - Adicionar contrato manual (Maranhão)
+  app.post("/api/clientes/pessoa/:pessoaId/contratos", requireAuth, async (req, res) => {
+    try {
+      const pessoaId = parseInt(req.params.pessoaId);
+      if (isNaN(pessoaId)) return res.status(400).json({ message: "ID inválido" });
+
+      const { banco, tipo, valorParcela, parcelasRestantes, prazoTotal, numeroContrato } = req.body;
+
+      // Generate a unique contract number if not provided
+      const numContrato = (numeroContrato || "").trim() ||
+        `MANUAL-${Date.now()}-${pessoaId}`;
+
+      const parsedValorParcela = valorParcela
+        ? parseFloat(String(valorParcela).replace(",", ".")) || null
+        : null;
+      const parsedParcelasRestantes = parcelasRestantes
+        ? parseInt(String(parcelasRestantes)) || null
+        : null;
+      const parsedPrazoTotal = prazoTotal
+        ? parseInt(String(prazoTotal)) || null
+        : null;
+
+      const result = await db.execute(sql`
+        INSERT INTO clientes_contratos
+          (pessoa_id, banco, tipo_contrato, valor_parcela, parcelas_restantes, prazo_total, numero_contrato, status)
+        VALUES
+          (${pessoaId}, ${banco || null}, ${tipo || null},
+           ${parsedValorParcela}, ${parsedParcelasRestantes}, ${parsedPrazoTotal},
+           ${numContrato}, 'ATIVO')
+        ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
+          banco             = EXCLUDED.banco,
+          tipo_contrato     = EXCLUDED.tipo_contrato,
+          valor_parcela     = EXCLUDED.valor_parcela,
+          parcelas_restantes = EXCLUDED.parcelas_restantes,
+          prazo_total       = EXCLUDED.prazo_total
+        RETURNING id, banco, tipo_contrato, valor_parcela, parcelas_restantes, prazo_total, numero_contrato, status
+      `);
+
+      const row = (result as any).rows?.[0] ?? null;
+      return res.json({ success: true, contrato: row });
+    } catch (error) {
+      console.error("Add contrato manual error:", error);
+      return res.status(500).json({ message: "Erro ao adicionar contrato" });
+    }
+  });
+
   // POST /api/vendas/atendimento/proximo - Pegar próximo lead
   app.post("/api/vendas/atendimento/proximo", requireAuth, async (req, res) => {
     try {
