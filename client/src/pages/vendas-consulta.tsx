@@ -1306,10 +1306,51 @@ export default function VendasConsulta() {
 
                       if (isMaranhao) {
                         // ─── GOVERNO DO MARANHÃO ────────────────────────────────────────
-                        // Margens: 35% Crédito Consignado / 10% Cartão Consignado / 15% Bens e Serviços
-                        // Não possui margem 70% — layout totalmente diferente do SIAPE
+                        const extrasPessoa = consultaData.clienteBase?.extras_pessoa as Record<string, string> | null ?? {};
+                        const sitFunc = (consultaData.vinculos?.[0]?.sit_func || consultaData.clienteBase?.sit_func || "").toUpperCase();
+                        const isAtivo = !sitFunc || sitFunc === "ATIVO" || sitFunc === "ATIVA";
+                        const orgao = consultaData.clienteBase?.orgaodesc;
+                        const cargo = extrasPessoa?.cargo;
+                        const dataAdmissao = extrasPessoa?.data_admissao;
+
                         return (
                           <>
+                          {/* Bloco de dados funcionais — Maranhão */}
+                          <div className="mb-4 p-3 rounded-md border bg-muted/30 space-y-2">
+                            {/* Situação — destaque vermelho se INATIVO */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground w-28 shrink-0">Situação:</span>
+                              {isAtivo ? (
+                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 bg-green-50 border border-green-200 rounded px-2 py-0.5">
+                                  ✓ {sitFunc || "ATIVO"}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-sm font-bold text-white bg-red-600 rounded px-2 py-0.5 animate-pulse">
+                                  ✕ {sitFunc || "INATIVO"}
+                                </span>
+                              )}
+                            </div>
+                            {orgao && (
+                              <div className="flex items-start gap-2">
+                                <span className="text-sm text-muted-foreground w-28 shrink-0">Órgão:</span>
+                                <span className="text-sm font-medium">{orgao}</span>
+                              </div>
+                            )}
+                            {cargo && (
+                              <div className="flex items-start gap-2">
+                                <span className="text-sm text-muted-foreground w-28 shrink-0">Tipo de Cargo:</span>
+                                <span className="text-sm font-medium">{cargo}</span>
+                              </div>
+                            )}
+                            {dataAdmissao && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground w-28 shrink-0">Admissão:</span>
+                                <span className="text-sm font-medium">{dataAdmissao}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Cards de margem — Maranhão */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Card className="bg-muted/50" data-testid="card-margem-35">
                               <CardContent className="p-4">

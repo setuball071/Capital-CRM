@@ -228,6 +228,13 @@ const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   data_nascimento: "upag",
   dt_nascimento: "upag",
   nascimento: "upag",
+  // Data de admissão (armazenada temporariamente em municipio para estadual)
+  // "Data de Admissão" → normalizeCol → "data_de_admissao"
+  // ATENÇÃO: municipio é reutilizado pois MA não envia município no arquivo
+  data_de_admissao: "municipio",
+  data_admissao: "municipio",
+  dt_admissao: "municipio",
+  admissao: "municipio",
   // Localização (opcional — nem todos os estados enviam)
   cidade: "municipio",
   municipio: "municipio",
@@ -1099,7 +1106,8 @@ class FastImportService {
             ELSE NULL
           END
         ),
-        s.municipio,
+        -- municipio: ignora se for data (campo usado como temp storage para data_admissao)
+        CASE WHEN s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$' THEN NULL ELSE s.municipio END,
         ${convenio},
         ${baseTag},
         ${run.id}
@@ -1107,13 +1115,13 @@ class FastImportService {
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
       ON CONFLICT (cpf) DO UPDATE SET
-        nome = CASE WHEN EXCLUDED.nome IS NOT NULL AND EXCLUDED.nome != '' 
+        nome = CASE WHEN EXCLUDED.nome IS NOT NULL AND EXCLUDED.nome != ''
                     THEN EXCLUDED.nome ELSE clientes_pessoa.nome END,
-        orgaodesc = CASE WHEN EXCLUDED.orgaodesc IS NOT NULL AND EXCLUDED.orgaodesc != '' 
+        orgaodesc = CASE WHEN EXCLUDED.orgaodesc IS NOT NULL AND EXCLUDED.orgaodesc != ''
                          THEN EXCLUDED.orgaodesc ELSE clientes_pessoa.orgaodesc END,
-        uf = CASE WHEN EXCLUDED.uf IS NOT NULL AND EXCLUDED.uf != '' 
+        uf = CASE WHEN EXCLUDED.uf IS NOT NULL AND EXCLUDED.uf != ''
                   THEN EXCLUDED.uf ELSE clientes_pessoa.uf END,
-        municipio = CASE WHEN EXCLUDED.municipio IS NOT NULL AND EXCLUDED.municipio != '' 
+        municipio = CASE WHEN EXCLUDED.municipio IS NOT NULL AND EXCLUDED.municipio != ''
                          THEN EXCLUDED.municipio ELSE clientes_pessoa.municipio END,
         convenio = ${convenio},
         base_tag_ultima = ${baseTag},
@@ -1140,6 +1148,30 @@ class FastImportService {
         AND p.data_nascimento IS NULL
     `);
     console.log(`[FastImport] Estadual data_nascimento atualizada: ${nascResult.rowCount || 0}`);
+
+    // Salvar cargo e data_admissao em extras_pessoa (JSONB)
+    // - cargo: vem de staging.instituidor (cargo + funcao combinados)
+    // - data_admissao: vem de staging.municipio quando contém data DD/MM/YYYY
+    const extrasResult = await db.execute(sql`
+      UPDATE clientes_pessoa p
+      SET extras_pessoa = jsonb_strip_nulls(
+        COALESCE(extras_pessoa, '{}') ||
+        jsonb_build_object(
+          'cargo',         NULLIF(s.instituidor, ''),
+          'data_admissao', CASE
+            WHEN s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$' THEN s.municipio
+            ELSE NULL
+          END
+        )
+      )
+      FROM staging_folha s
+      WHERE p.cpf = s.cpf
+        AND s.import_run_id = ${run.id}
+        AND s.cpf IS NOT NULL AND s.cpf != ''
+        AND (s.instituidor IS NOT NULL AND s.instituidor != ''
+             OR s.municipio ~ E'^\\d{2}/\\d{2}/\\d{4}$')
+    `);
+    console.log(`[FastImport] Estadual extras_pessoa (cargo/admissao) atualizados: ${extrasResult.rowCount || 0}`);
 
     // Matrícula: usa a do arquivo se existir; fallback para 'EST_' + cpf (imports antigos)
     const vinculoResult = await db.execute(sql`
