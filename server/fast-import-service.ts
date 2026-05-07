@@ -223,34 +223,43 @@ const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   tipo_cargo: "cargo",
   funcao: "funcao",
   // Data de nascimento (armazenada temporariamente em upag para estadual)
+  // "Data de Nascimento" → normalizeCol → "data_de_nascimento"
+  data_de_nascimento: "upag",
   data_nascimento: "upag",
   dt_nascimento: "upag",
   nascimento: "upag",
-  // Localização
+  // Localização (opcional — nem todos os estados enviam)
   cidade: "municipio",
   municipio: "municipio",
   uf: "uf",
-  // Salário base / vantagens
+  // Salário base / vantagens (opcional — nem todos os estados enviam)
   total_vantagens: "base_calc",
   remuneracao: "base_calc",
   salario: "base_calc",
-  // ── Margens (Maranhão e outros estados) ──────────────────────────
-  // Saldo empréstimo consignado (35%)
+  // ── Margens ──────────────────────────────────────────────────────
+  // 35% Crédito Consignado
+  // "Margem - Consignável" → normalizeCol → "margem_consignavel"
   margem_consignavel: "margem_35_saldo",
   margem_emprestimo: "margem_35_saldo",
   saldo_35: "margem_35_saldo",
   margem_35: "margem_35_saldo",
-  // Saldo cartão de crédito consignado (5%)
+  // 10% Cartão Consignado
+  // "Margem - Cartão" → normalizeCol → "margem_cartao"
   margem_cartao: "margem_5_saldo",
   margem_cartao_credito: "margem_5_saldo",
   saldo_cartao: "margem_5_saldo",
   margem_5cc: "margem_5_saldo",
-  // Saldo cartão benefício / bens e serviços (5%)
+  // 15% Bens e Serviços / Base de Serviço
+  // "Margem - Base de Serviço" → normalizeCol → "margem_base_de_servico"
+  margem_base_de_servico: "margem_beneficio_5_saldo",
+  margem_base_servico: "margem_beneficio_5_saldo",
   margem_bens_servicos: "margem_beneficio_5_saldo",
   margem_beneficio: "margem_beneficio_5_saldo",
   margem_cartao_beneficio: "margem_beneficio_5_saldo",
   saldo_beneficio: "margem_beneficio_5_saldo",
   margem_5cb: "margem_beneficio_5_saldo",
+  // Adiantamento — não mapeado: coluna ignorada automaticamente pelo sistema
+  // margem_adiantamento → sem mapeamento = ignorada na leitura do CSV
   // Competência
   competencia: "competencia_str",
 };
