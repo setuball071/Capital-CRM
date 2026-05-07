@@ -1471,6 +1471,21 @@ export default function BasesClientes() {
                     Modelo Dados Complementares
                   </Button>
                 </div>
+
+                <Separator className="my-2" />
+                <h3 className="text-sm font-semibold text-primary">Modelos Governo Estadual</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href="/templates/modelo_importacao_maranhao.csv"
+                    download="modelo_importacao_maranhao.csv"
+                    className="col-span-2"
+                  >
+                    <Button variant="outline" size="sm" className="justify-start w-full">
+                      <Download className="w-4 h-4 mr-2" />
+                      Modelo Governo do Maranhão (MA)
+                    </Button>
+                  </a>
+                </div>
               </div>
               <DialogFooter className="mt-4">
                 <Button onClick={handleDownloadModelo} data-testid="button-download-modelo">
