@@ -1014,19 +1014,19 @@ class FastImportService {
         ${competencia}::timestamp,
         s.margem_5_bruta::numeric,
         s.margem_5_utilizada::numeric,
-        -- Importa direto do arquivo; única regra: se vier 70% balizadora >= 0, limita o saldo a ela
-        CASE WHEN s.margem_70_saldo IS NOT NULL AND s.margem_70_saldo::numeric >= 0
-             THEN LEAST(COALESCE(s.margem_5_saldo::numeric, 0), s.margem_70_saldo::numeric)
+        -- Importa direto do arquivo; regras 70% balizadora: NULL → zera margem, >= 0 → limita, negativo → passa direto
+        CASE WHEN s.margem_70_saldo IS NULL THEN 0
+             WHEN s.margem_70_saldo::numeric >= 0 THEN LEAST(s.margem_5_saldo::numeric, s.margem_70_saldo::numeric)
              ELSE s.margem_5_saldo::numeric END,
         s.margem_beneficio_5_bruta::numeric,
         s.margem_beneficio_5_utilizada::numeric,
-        CASE WHEN s.margem_70_saldo IS NOT NULL AND s.margem_70_saldo::numeric >= 0
-             THEN LEAST(COALESCE(s.margem_beneficio_5_saldo::numeric, 0), s.margem_70_saldo::numeric)
+        CASE WHEN s.margem_70_saldo IS NULL THEN 0
+             WHEN s.margem_70_saldo::numeric >= 0 THEN LEAST(s.margem_beneficio_5_saldo::numeric, s.margem_70_saldo::numeric)
              ELSE s.margem_beneficio_5_saldo::numeric END,
         s.margem_35_bruta::numeric,
         s.margem_35_utilizada::numeric,
-        CASE WHEN s.margem_70_saldo IS NOT NULL AND s.margem_70_saldo::numeric >= 0
-             THEN LEAST(COALESCE(s.margem_35_saldo::numeric, 0), s.margem_70_saldo::numeric)
+        CASE WHEN s.margem_70_saldo IS NULL THEN 0
+             WHEN s.margem_70_saldo::numeric >= 0 THEN LEAST(s.margem_35_saldo::numeric, s.margem_70_saldo::numeric)
              ELSE s.margem_35_saldo::numeric END,
         s.margem_70_bruta::numeric,
         s.margem_70_utilizada::numeric,
@@ -1055,18 +1055,18 @@ class FastImportService {
       ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
         margem_bruta_5 = COALESCE(EXCLUDED.margem_bruta_5, clientes_folha_mes.margem_bruta_5),
         margem_utilizada_5 = COALESCE(EXCLUDED.margem_utilizada_5, clientes_folha_mes.margem_utilizada_5),
-        margem_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NOT NULL AND EXCLUDED.margem_saldo_70 >= 0
-                              THEN LEAST(COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5), EXCLUDED.margem_saldo_70)
+        margem_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
+                              WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5), EXCLUDED.margem_saldo_70)
                               ELSE COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5) END,
         margem_beneficio_bruta_5 = COALESCE(EXCLUDED.margem_beneficio_bruta_5, clientes_folha_mes.margem_beneficio_bruta_5),
         margem_beneficio_utilizada_5 = COALESCE(EXCLUDED.margem_beneficio_utilizada_5, clientes_folha_mes.margem_beneficio_utilizada_5),
-        margem_beneficio_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NOT NULL AND EXCLUDED.margem_saldo_70 >= 0
-                                        THEN LEAST(COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5), EXCLUDED.margem_saldo_70)
+        margem_beneficio_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
+                                        WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5), EXCLUDED.margem_saldo_70)
                                         ELSE COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5) END,
         margem_bruta_35 = COALESCE(EXCLUDED.margem_bruta_35, clientes_folha_mes.margem_bruta_35),
         margem_utilizada_35 = COALESCE(EXCLUDED.margem_utilizada_35, clientes_folha_mes.margem_utilizada_35),
-        margem_saldo_35 = CASE WHEN EXCLUDED.margem_saldo_70 IS NOT NULL AND EXCLUDED.margem_saldo_70 >= 0
-                               THEN LEAST(COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35), EXCLUDED.margem_saldo_70)
+        margem_saldo_35 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
+                               WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35), EXCLUDED.margem_saldo_70)
                                ELSE COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35) END,
         margem_bruta_70 = COALESCE(EXCLUDED.margem_bruta_70, clientes_folha_mes.margem_bruta_70),
         margem_utilizada_70 = COALESCE(EXCLUDED.margem_utilizada_70, clientes_folha_mes.margem_utilizada_70),
