@@ -1097,94 +1097,141 @@ export default function VendasConsulta() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Nascimento / Idade
-                      </p>
-                      <div className="flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
-                        {(() => {
-                          const dataNasc = consultaData.clienteBase?.data_nascimento || consultaData.clienteBase?.dataNascimento;
-                          if (!dataNasc) return <span>-</span>;
-                          const dataFormatada = new Date(dataNasc).toLocaleDateString("pt-BR");
-                          const hoje = new Date();
-                          const nascimento = new Date(dataNasc);
-                          let idade = hoje.getFullYear() - nascimento.getFullYear();
-                          const mesAtual = hoje.getMonth();
-                          const mesNasc = nascimento.getMonth();
-                          if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
-                            idade--;
-                          }
-                          return (
-                            <>
-                              <span>{dataFormatada}</span>
-                              <Badge variant="secondary">{idade} anos</Badge>
-                            </>
-                          );
-                        })()}
+                  {(() => {
+                    const convenioRaw = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
+                    const isMaranhao = convenioRaw === "ESTADUAL - MA";
+                    const extrasPessoa = (consultaData.clienteBase?.extras_pessoa as Record<string, string> | null) ?? {};
+
+                    // Nascimento — funciona para timestamp ISO e string DD/MM/YYYY
+                    const renderNascimento = () => {
+                      const raw = consultaData.clienteBase?.data_nascimento || consultaData.clienteBase?.dataNascimento;
+                      if (!raw) return <span>-</span>;
+                      // Se vier como string DD/MM/YYYY (estadual via extras ou campo texto)
+                      let dataFormatada: string;
+                      let idade: number;
+                      const matchBR = String(raw).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                      if (matchBR) {
+                        const [, d, m, y] = matchBR;
+                        dataFormatada = `${d}/${m}/${y}`;
+                        const hoje = new Date();
+                        idade = hoje.getFullYear() - Number(y);
+                        if (hoje.getMonth() + 1 < Number(m) || (hoje.getMonth() + 1 === Number(m) && hoje.getDate() < Number(d))) idade--;
+                      } else {
+                        const dt = new Date(raw);
+                        dataFormatada = dt.toLocaleDateString("pt-BR");
+                        const hoje = new Date();
+                        idade = hoje.getFullYear() - dt.getFullYear();
+                        if (hoje.getMonth() < dt.getMonth() || (hoje.getMonth() === dt.getMonth() && hoje.getDate() < dt.getDate())) idade--;
+                      }
+                      return <><span>{dataFormatada}</span><Badge variant="secondary">{idade} anos</Badge></>;
+                    };
+
+                    if (isMaranhao) {
+                      // ─── Layout Maranhão ────────────────────────────────────
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
+                          {/* Nascimento */}
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground flex items-center gap-1"><Calendar className="w-4 h-4" />Nascimento / Idade</p>
+                            <div className="flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
+                              {renderNascimento()}
+                            </div>
+                          </div>
+                          {/* Situação */}
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">Situação Funcional</p>
+                            <Badge variant="secondary" data-testid="text-sit-func">
+                              {consultaData.vinculos?.[0]?.sit_func || consultaData.clienteBase?.sit_func || "-"}
+                            </Badge>
+                          </div>
+                          {/* UF — sempre MA para Maranhão */}
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">UF</p>
+                            <p data-testid="text-uf" className="font-medium">{consultaData.clienteBase?.uf || "MA"}</p>
+                          </div>
+                          {/* Tipo de Cargo — vem do extras_pessoa.cargo (importação estadual) */}
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">Tipo de Cargo</p>
+                            <p data-testid="text-cargo">{extrasPessoa?.cargo || "-"}</p>
+                          </div>
+                          {/* Órgão */}
+                          <div className="space-y-1 md:col-span-2">
+                            <p className="text-muted-foreground flex items-center gap-1"><Building className="w-4 h-4" />Órgão</p>
+                            <p data-testid="text-orgao">{consultaData.clienteBase?.orgaodesc || consultaData.vinculos?.[0]?.orgao || "-"}</p>
+                          </div>
+                          {/* Última Base */}
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground flex items-center gap-1"><Database className="w-4 h-4" />Última Base</p>
+                            <Badge variant="secondary" data-testid="text-ultima-base">
+                              {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // ─── Layout SIAPE / padrão ───────────────────────────────
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground flex items-center gap-1"><Calendar className="w-4 h-4" />Nascimento / Idade</p>
+                          <div className="flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
+                            {renderNascimento()}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Situação Funcional</p>
+                          <Badge variant="secondary" data-testid="text-sit-func">
+                            {mapNomenclatura("SIT_FUNC", consultaData.vinculo?.sitFunc || consultaData.clienteBase?.sit_func || consultaData.clienteBase?.sitFunc)}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Regime Jurídico (REJUR)</p>
+                          <p data-testid="text-rjur">
+                            {mapNomenclatura("RJUR", consultaData.vinculo?.rjur || consultaData.clienteBase?.rjur || consultaData.clienteBase?.regime_juridico)}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">UF</p>
+                          <p data-testid="text-uf">
+                            {siapeDados?.uf_siape || consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Cargo</p>
+                          <p data-testid="text-cargo">{siapeDados?.cargo || "-"}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Função</p>
+                          <p data-testid="text-funcao">{siapeDados?.funcao || "-"}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">UPAG</p>
+                          <p data-testid="text-upag">
+                            {mapNomenclatura("UPAG", consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod)}
+                          </p>
+                          {(consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod) && (
+                            <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <p className="text-muted-foreground flex items-center gap-1"><Building className="w-4 h-4" />Órgão</p>
+                          <p data-testid="text-orgao">
+                            {mapNomenclatura("ORGAO", consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod)}
+                          </p>
+                          {(consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod) && (
+                            <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground flex items-center gap-1"><Database className="w-4 h-4" />Última Base</p>
+                          <Badge variant="secondary" data-testid="text-ultima-base">
+                            {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
+                          </Badge>
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Situação Funcional</p>
-                      <Badge variant="secondary" data-testid="text-sit-func">
-                        {mapNomenclatura("SIT_FUNC", consultaData.vinculo?.sitFunc || consultaData.clienteBase?.sit_func || consultaData.clienteBase?.sitFunc)}
-                      </Badge>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Regime Jurídico (REJUR)</p>
-                      <p data-testid="text-rjur">
-                        {mapNomenclatura("RJUR", consultaData.vinculo?.rjur || consultaData.clienteBase?.rjur || consultaData.clienteBase?.regime_juridico)}
-                      </p>
-                    </div>
-                    {/* UF — substituiu Natureza */}
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">UF</p>
-                      <p data-testid="text-uf">
-                        {siapeDados?.uf_siape || consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
-                      </p>
-                    </div>
-                    {/* Cargo — vem do SIAPE */}
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Cargo</p>
-                      <p data-testid="text-cargo">{siapeDados?.cargo || "-"}</p>
-                    </div>
-                    {/* Função — vem do SIAPE */}
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Função</p>
-                      <p data-testid="text-funcao">{siapeDados?.funcao || "-"}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">UPAG</p>
-                      <p data-testid="text-upag">
-                        {mapNomenclatura("UPAG", consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod)}
-                      </p>
-                      {(consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod) && (
-                        <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <p className="text-muted-foreground flex items-center gap-1">
-                        <Building className="w-4 h-4" />
-                        Órgão
-                      </p>
-                      <p data-testid="text-orgao">
-                        {mapNomenclatura("ORGAO", consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod)}
-                      </p>
-                      {(consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod) && (
-                        <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground flex items-center gap-1">
-                        <Database className="w-4 h-4" />
-                        Última Base
-                      </p>
-                      <Badge variant="secondary" data-testid="text-ultima-base">
-                        {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
-                      </Badge>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
