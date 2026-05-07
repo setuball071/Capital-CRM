@@ -206,8 +206,10 @@ const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   matricula: "matricula",
   numero_matricula: "matricula",
   num_matricula: "matricula",
-  // Órgão
+  // Órgão — "Orgao/Secretaria" → normalizeCol → "orgao_secretaria"
   orgao_secretaria: "orgaodesc",
+  orgao_secretaria_estado: "orgaodesc",
+  secretaria: "orgaodesc",
   orgao: "orgaodesc",
   // Situação funcional
   situacaofuncional: "sit_func",
@@ -219,9 +221,13 @@ const FAST_ESTADUAL_COLUMN_MAP: Record<string, string> = {
   folha: "rjur",
   regime_juridico: "rjur",
   // Cargo
+  // "Tipo de Cargo" → normalizeCol → "tipo_de_cargo" (com o "de" no meio)
   cargo: "cargo",
   tipo_cargo: "cargo",
+  tipo_de_cargo: "cargo",   // CSV real do Maranhão: "Tipo de Cargo"
+  tipo_do_cargo: "cargo",
   funcao: "funcao",
+  tipo_de_funcao: "funcao",
   // Data de nascimento (armazenada temporariamente em upag para estadual)
   // "Data de Nascimento" → normalizeCol → "data_de_nascimento"
   data_de_nascimento: "upag",
