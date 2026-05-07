@@ -1304,195 +1304,88 @@ export default function BasesClientes() {
                 Ver modelo de planilha
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Modelo de Planilha para Importação</DialogTitle>
+                <DialogTitle>Modelos de Planilha para Importação</DialogTitle>
                 <DialogDescription>
-                  Sua planilha precisa conter uma linha de cabeçalho com os nomes exatos das colunas abaixo.
-                  Nem todas são obrigatórias, mas quanto mais campos você preencher, mais completa será a consulta.
+                  Baixe o modelo correspondente ao tipo de importação que deseja realizar.
                 </DialogDescription>
               </DialogHeader>
-              <ScrollArea className="h-[500px] pr-4">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Identificação (obrigatórios)</h3>
-                    <p className="text-xs text-muted-foreground mb-2">Estes campos são obrigatórios para cada linha</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.identificacaoObrigatorios.map((col) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-primary/20 px-1.5 py-0.5 rounded text-xs font-mono font-bold">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2 italic">O convênio é informado na tela de importação, não precisa estar na planilha.</p>
+              <div className="space-y-5 py-2">
+
+                {/* SIAPE / Federal */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-primary">SIAPE / Federal</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = "/api/import/templates/folha"}
+                      data-testid="button-download-modelo-folha"
+                      className="justify-start"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Folha Servidor
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = "/api/import/templates/folha-pensionista"}
+                      data-testid="button-download-modelo-folha-pensionista"
+                      className="justify-start"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Folha Pensionista
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = "/api/import/templates/d8-servidor"}
+                      data-testid="button-download-modelo-d8-servidor"
+                      className="justify-start"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Contratos (D8) Servidor
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = "/api/import/templates/d8-pensionista"}
+                      data-testid="button-download-modelo-d8-pensionista"
+                      className="justify-start"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Contratos (D8) Pensionista
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = "/api/import/templates/contatos"}
+                      data-testid="button-download-modelo-contatos"
+                      className="justify-start col-span-2"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Dados Complementares (Contatos/Endereço)
+                    </Button>
                   </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Identificação (opcionais)</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.identificacaoOpcionais.map((col) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Rendimentos</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.rendimentos.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 70%</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MODELO_COLUNAS.margens70.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 35%</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MODELO_COLUNAS.margens35.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Margens 5% (Cartão Crédito Consignado)</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MODELO_COLUNAS.margens5.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Margens Benefício 5% (Cartão Benefício)</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MODELO_COLUNAS.margensBeneficio5.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-semibold text-primary mb-2">Exclusões e Outros</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MODELO_COLUNAS.exclusoes.map((col: { nome: string; descricao: string }) => (
-                        <div key={col.nome} className="flex items-start gap-2 text-sm">
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{col.nome}</code>
-                          <span className="text-muted-foreground text-xs">{col.descricao}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </ScrollArea>
-              <Separator className="my-4" />
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-primary">Modelos para Importação Massiva (Streaming)</h3>
-                <p className="text-xs text-muted-foreground">
-                  Para bases com milhões de registros, use os modelos específicos abaixo. Siga a ordem: 1) Folha → 2) D8 → 3) Contatos
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/import/templates/folha"}
-                    data-testid="button-download-modelo-folha"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Modelo Folha
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/import/templates/folha-pensionista"}
-                    data-testid="button-download-modelo-folha-pensionista"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Modelo Folha Pensionista
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/import/templates/d8-servidor"}
-                    data-testid="button-download-modelo-d8-servidor"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Modelo D8 Servidor
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/import/templates/d8-pensionista"}
-                    data-testid="button-download-modelo-d8-pensionista"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Modelo D8 Pensionista
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/api/import/templates/contatos"}
-                    data-testid="button-download-modelo-contatos"
-                    className="justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Modelo Dados Complementares
-                  </Button>
                 </div>
 
-                <Separator className="my-2" />
-                <h3 className="text-sm font-semibold text-primary">Modelos Governo Estadual</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href="/templates/modelo_importacao_maranhao.csv"
-                    download="modelo_importacao_maranhao.csv"
-                    className="col-span-2"
-                  >
-                    <Button variant="outline" size="sm" className="justify-start w-full">
-                      <Download className="w-4 h-4 mr-2" />
-                      Modelo Governo do Maranhão (MA)
-                    </Button>
-                  </a>
+                <Separator />
+
+                {/* Governo Estadual */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-primary">Governo Estadual</h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    <a href="/templates/modelo_importacao_maranhao.csv" download="modelo_importacao_maranhao.csv">
+                      <Button variant="outline" size="sm" className="justify-start w-full">
+                        <Download className="w-4 h-4 mr-2" />
+                        Governo do Maranhão (MA)
+                      </Button>
+                    </a>
+                  </div>
                 </div>
+
               </div>
-              <DialogFooter className="mt-4">
-                <Button onClick={handleDownloadModelo} data-testid="button-download-modelo">
-                  <Download className="w-4 h-4 mr-2" />
-                  Baixar modelo geral Excel
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
           
