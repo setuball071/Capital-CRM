@@ -1687,14 +1687,18 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctBancosClientes(): Promise<string[]> {
-    // Busca bancos distintos diretamente da tabela de contratos
-    const result = await db.select({ banco: clientesContratos.banco })
-      .from(clientesContratos)
-      .where(isNotNull(clientesContratos.banco));
-    
-    // Extrai valores únicos e ordena alfabeticamente
-    const uniqueBancos = [...new Set(result.map(r => r.banco).filter(Boolean))] as string[];
-    return uniqueBancos.sort((a, b) => a.localeCompare(b, "pt-BR"));
+    // SELECT DISTINCT no SQL (não puxar 2M linhas para deduplicar em memória)
+    // Exclui valores corrompidos (notação científica tipo "01101E+11", "1E+17")
+    const result = await db.execute(sql`
+      SELECT DISTINCT UPPER(TRIM(banco)) AS banco
+      FROM clientes_contratos
+      WHERE banco IS NOT NULL
+        AND TRIM(banco) != ''
+        AND LENGTH(TRIM(banco)) >= 3
+        AND banco !~ '^[0-9][0-9E+. ]*$'
+      ORDER BY banco
+    `);
+    return result.rows.map((r: any) => r.banco as string).filter(Boolean);
   }
 
   async getDistinctTiposContratoClientes(): Promise<string[]> {
