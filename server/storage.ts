@@ -1453,8 +1453,13 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`(${sql.join(bancoConditions, sql` OR `)})`);
       }
       if (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) {
+        // Resolve nomes de nomenclatura → códigos (se a nomenclatura existir)
+        // Também aceita código direto (retrocompatibilidade)
         const tipoConditions = filtros.tipos_contrato.map(tipo =>
-          sql`c.tipo_contrato ILIKE ${'%' + tipo + '%'}`
+          sql`(c.tipo_contrato = ANY(
+            SELECT n.codigo FROM nomenclaturas n
+            WHERE n.categoria = 'TIPO_CONTRATO' AND n.nome = ${tipo} AND n.ativo = true
+          ) OR c.tipo_contrato ILIKE ${'%' + tipo + '%'})`
         );
         whereConditions.push(sql`(${sql.join(tipoConditions, sql` OR `)})`);
       }
@@ -1693,18 +1698,30 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctTiposContratoClientes(): Promise<string[]> {
-    const result = await db.select({ tipoContrato: clientesContratos.tipoContrato }).from(clientesContratos);
-    const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
-    return uniqueTipos.sort() as string[];
+    // Retorna os NOMES distintos de nomenclaturas para TIPO_CONTRATO
+    // (categorias legíveis, ex: "EMPRESTIMO CONSIGNADO", "AMORT CARTAO CREDITO")
+    const result = await db.execute(sql`
+      SELECT DISTINCT COALESCE(n.nome, c.tipo_contrato) AS nome
+      FROM clientes_contratos c
+      LEFT JOIN nomenclaturas n ON n.categoria = 'TIPO_CONTRATO' AND n.codigo = c.tipo_contrato AND n.ativo = true
+      WHERE c.tipo_contrato IS NOT NULL
+      ORDER BY nome
+    `);
+    const nomes = [...new Set(result.rows.map((r: any) => r.nome as string).filter(Boolean))];
+    return nomes.sort() as string[];
   }
 
   async getDistinctTiposContratoByBanco(banco: string): Promise<string[]> {
-    // Usar ILIKE para busca case-insensitive
-    const result = await db.select({ tipoContrato: clientesContratos.tipoContrato })
-      .from(clientesContratos)
-      .where(ilike(clientesContratos.banco, banco));
-    const uniqueTipos = [...new Set(result.map(r => r.tipoContrato).filter(Boolean))];
-    return uniqueTipos.sort() as string[];
+    // Retorna nomes de nomenclaturas para contratos de um banco específico
+    const result = await db.execute(sql`
+      SELECT DISTINCT COALESCE(n.nome, c.tipo_contrato) AS nome
+      FROM clientes_contratos c
+      LEFT JOIN nomenclaturas n ON n.categoria = 'TIPO_CONTRATO' AND n.codigo = c.tipo_contrato AND n.ativo = true
+      WHERE c.tipo_contrato IS NOT NULL AND c.banco ILIKE ${'%' + banco + '%'}
+      ORDER BY nome
+    `);
+    const nomes = [...new Set(result.rows.map((r: any) => r.nome as string).filter(Boolean))];
+    return nomes.sort() as string[];
   }
 
   // Clientes Folha Mês

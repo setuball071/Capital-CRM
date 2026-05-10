@@ -10329,6 +10329,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           WHERE tenant_id = ${tenantId}
             AND sit_func IS NOT NULL
             AND TRIM(sit_func) != ''
+            AND LENGTH(TRIM(sit_func)) >= 4
+            AND sit_func !~ '^[0-9]+(\.[0-9]+)?$'
           ORDER BY sit_func
         `);
         const valores = result.rows.map((r: any) => r.sit_func as string);
