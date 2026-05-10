@@ -1142,6 +1142,19 @@ class StreamingImportService {
       margemCartaoBeneficioSaldo: normalizeNum(this.extractValue(row, headerMap, "margem_cartao_beneficio_saldo")),
     };
 
+    // Regra 70% balizadora: NULL→zera, >=0→LEAST, negativo→passa direto
+    const saldo70streaming = folhaData.margemSaldo70 != null ? parseFloat(String(folhaData.margemSaldo70)) : null;
+    if (saldo70streaming == null) {
+      folhaData.margemSaldo35 = "0" as typeof folhaData.margemSaldo35;
+      folhaData.margemSaldo5 = "0" as typeof folhaData.margemSaldo5;
+      folhaData.margemBeneficioSaldo5 = "0" as typeof folhaData.margemBeneficioSaldo5;
+    } else if (!isNaN(saldo70streaming) && saldo70streaming >= 0) {
+      const capTo70 = (v: string | number | null | undefined): string | null | undefined =>
+        v != null ? String(Math.min(parseFloat(String(v)), saldo70streaming)) : v;
+      folhaData.margemSaldo35 = capTo70(folhaData.margemSaldo35) as typeof folhaData.margemSaldo35;
+      folhaData.margemSaldo5 = capTo70(folhaData.margemSaldo5) as typeof folhaData.margemSaldo5;
+      folhaData.margemBeneficioSaldo5 = capTo70(folhaData.margemBeneficioSaldo5) as typeof folhaData.margemBeneficioSaldo5;
+    }
 
     if (isUpdate) {
       console.log(`[FOLHA-UPSERT] ATUALIZAÇÃO pessoa=${pessoaId}, competência=${competencia.toISOString().slice(0,10)}, id=${existing[0].id}`);

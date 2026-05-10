@@ -6165,6 +6165,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
           const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
+          // Regra 70% balizadora: NULL→zera, >=0→LEAST, negativo→passa direto
+          const _saldo70a = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
+          const _cap70a = (v: number | string | null | undefined): number | null | undefined => {
+            if (_saldo70a == null) return 0;
+            if (_saldo70a >= 0 && v != null) return Math.min(Number(v), _saldo70a);
+            return v as number | null | undefined;
+          };
           // Upsert folha com merge de extrasFolha para preservar instituidor
           await storage.upsertClienteFolhaMes({
             pessoaId: pessoa.id,
@@ -6173,15 +6180,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             // Margem 5%
             margemBruta5: folhaData.margem5Bruta,
             margemUtilizada5: folhaData.margem5Utilizada,
-            margemSaldo5: folhaData.margem5Saldo,
+            margemSaldo5: _cap70a(folhaData.margem5Saldo),
             // Margem Benefício 5%
             margemBeneficioBruta5: folhaData.margemBeneficio5Bruta,
             margemBeneficioUtilizada5: folhaData.margemBeneficio5Utilizada,
-            margemBeneficioSaldo5: folhaData.margemBeneficio5Saldo,
+            margemBeneficioSaldo5: _cap70a(folhaData.margemBeneficio5Saldo),
             // Margem 35%
             margemBruta35: folhaData.margem35Bruta,
             margemUtilizada35: folhaData.margem35Utilizada,
-            margemSaldo35: folhaData.margem35Saldo,
+            margemSaldo35: _cap70a(folhaData.margem35Saldo),
             // Margem 70%
             margemBruta70: folhaData.margem70Bruta,
             margemUtilizada70: folhaData.margem70Utilizada,
@@ -7077,6 +7084,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
               const vinculoId = (vinculoResult.rows as any[])?.[0]?.id || null;
 
+              // Regra 70% balizadora: NULL→zera, >=0→LEAST, negativo→passa direto
+              const _saldo70b = folhaData.margem70Saldo != null ? Number(folhaData.margem70Saldo) : null;
+              const _cap70b = (v: number | string | null | undefined): number | null | undefined => {
+                if (_saldo70b == null) return 0;
+                if (_saldo70b >= 0 && v != null) return Math.min(Number(v), _saldo70b);
+                return v as number | null | undefined;
+              };
               // Upsert folha com merge de extrasFolha para preservar instituidor
               await storage.upsertClienteFolhaMes({
                 pessoaId: pessoa.id,
@@ -7085,15 +7099,15 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
                 // Margem 5%
                 margemBruta5: folhaData.margem5Bruta,
                 margemUtilizada5: folhaData.margem5Utilizada,
-                margemSaldo5: folhaData.margem5Saldo,
+                margemSaldo5: _cap70b(folhaData.margem5Saldo),
                 // Margem Benefício 5%
                 margemBeneficioBruta5: folhaData.margemBeneficio5Bruta,
                 margemBeneficioUtilizada5: folhaData.margemBeneficio5Utilizada,
-                margemBeneficioSaldo5: folhaData.margemBeneficio5Saldo,
+                margemBeneficioSaldo5: _cap70b(folhaData.margemBeneficio5Saldo),
                 // Margem 35%
                 margemBruta35: folhaData.margem35Bruta,
                 margemUtilizada35: folhaData.margem35Utilizada,
-                margemSaldo35: folhaData.margem35Saldo,
+                margemSaldo35: _cap70b(folhaData.margem35Saldo),
                 // Margem 70%
                 margemBruta70: folhaData.margem70Bruta,
                 margemUtilizada70: folhaData.margem70Utilizada,
