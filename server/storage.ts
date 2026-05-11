@@ -1549,15 +1549,33 @@ export class DbStorage implements IStorage {
 
       // Get count - skip only if explicitly requested (for export chunking)
       let total = 0;
-      
+
       if (!skipCount) {
-        const countQuery = sql`
-          SELECT COUNT(DISTINCT p.id) as total
-          FROM clientes_pessoa p
-          ${folhaJoinSql}
-          ${contratoJoinSql}
-          ${whereSql}
-        `;
+        let countQuery;
+        if (needsContratoJoin && !needsFolhaJoin) {
+          // Contrato-only join: count FROM contratos side (10x faster than FROM pessoa side)
+          // Include base_tag filter in WHERE (was previously in the JOIN clause)
+          const countWhereConditions = baseRefD8
+            ? [sql`c.base_tag = ${baseRefD8}`, ...whereConditions]
+            : [...whereConditions];
+          const countWhereSql = countWhereConditions.length > 0
+            ? sql`WHERE ${sql.join(countWhereConditions, sql` AND `)}`
+            : sql``;
+          countQuery = sql`
+            SELECT COUNT(DISTINCT c.pessoa_id) as total
+            FROM clientes_contratos c
+            JOIN clientes_pessoa p ON p.id = c.pessoa_id
+            ${countWhereSql}
+          `;
+        } else {
+          countQuery = sql`
+            SELECT COUNT(DISTINCT p.id) as total
+            FROM clientes_pessoa p
+            ${folhaJoinSql}
+            ${contratoJoinSql}
+            ${whereSql}
+          `;
+        }
         const countResult = await db.execute(countQuery);
         total = Number(countResult.rows[0]?.total || 0);
       }
