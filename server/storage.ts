@@ -1576,8 +1576,12 @@ export class DbStorage implements IStorage {
             ${whereSql}
           `;
         }
-        const countResult = await db.execute(countQuery);
-        total = Number(countResult.rows[0]?.total || 0);
+        // Race count query against a 15s timeout to avoid 502/524 on complex filters
+        const countWithTimeout = Promise.race([
+          db.execute(countQuery).then(r => Number(r.rows[0]?.total ?? 0)),
+          new Promise<number>(resolve => setTimeout(() => resolve(-1), 15000)),
+        ]);
+        total = await countWithTimeout;
       }
       
       // If countOnly, return just the count without loading data
