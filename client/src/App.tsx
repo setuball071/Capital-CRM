@@ -26,7 +26,6 @@ import SplitTxtCsvPage from "@/pages/split-txt-csv";
 import DividirCsvPage from "@/pages/dividir-csv";
 import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
-import FiltrarClientesPage from "@/pages/filtrar-clientes";
 import BaseDashboardPage from "@/pages/base-dashboard";
 import EnriquecerBasePage from "@/pages/enriquecer-base";
 import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
@@ -419,9 +418,6 @@ function Router() {
               </Route>
               <Route path="/compra-lista">
                 {() => <ModuleRoute component={CompraListaPage} module="modulo_base_clientes" />}
-              </Route>
-              <Route path="/filtrar-clientes">
-                {() => <ModuleRoute component={FiltrarClientesPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/consulta-cliente">
                 {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" />}
