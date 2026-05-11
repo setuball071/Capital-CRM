@@ -1627,9 +1627,13 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctConveniosClientes(): Promise<string[]> {
-    const result = await db.select({ convenio: clientesPessoa.convenio }).from(clientesPessoa);
-    const uniqueConvenios = [...new Set(result.map(r => r.convenio).filter(Boolean))];
-    return uniqueConvenios.sort() as string[];
+    const result = await db.execute(sql`
+      SELECT DISTINCT TRIM(convenio) AS convenio
+      FROM clientes_pessoa
+      WHERE convenio IS NOT NULL AND TRIM(convenio) != ''
+      ORDER BY convenio
+    `);
+    return result.rows.map((r: any) => r.convenio as string).filter(Boolean);
   }
 
   async getDistinctOrgaosClientes(): Promise<string[]> {
@@ -1681,9 +1685,13 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctUfsClientes(): Promise<string[]> {
-    const result = await db.select({ uf: clientesPessoa.uf }).from(clientesPessoa);
-    const uniqueUfs = [...new Set(result.map(r => r.uf).filter(Boolean))];
-    return uniqueUfs.sort() as string[];
+    const result = await db.execute(sql`
+      SELECT DISTINCT TRIM(uf) AS uf
+      FROM clientes_pessoa
+      WHERE uf IS NOT NULL AND TRIM(uf) != ''
+      ORDER BY uf
+    `);
+    return result.rows.map((r: any) => r.uf as string).filter(Boolean);
   }
 
   async getDistinctBancosClientes(): Promise<string[]> {
