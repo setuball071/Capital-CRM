@@ -1367,14 +1367,33 @@ export class DbStorage implements IStorage {
         ? sql`WHERE ${sql.join(folhaWhereFragments, sql` AND `)}`
         : sql``;
       
-      const folhaJoinSql = needsFolhaJoin ? sql`
-        INNER JOIN (
-          SELECT DISTINCT ON (pessoa_id) *
-          FROM clientes_folha_mes
-          ${folhaInnerWhere}
-          ORDER BY pessoa_id, competencia DESC
-        ) folha ON folha.pessoa_id = p.id
-      ` : sql``;
+      // Sem base_ref: usa view materializada (1.3M rows pré-deduplicados, muito mais rápido)
+      // Com base_ref: DISTINCT ON filtrado por base_tag (rápido por índice)
+      const folhaJoinSql = needsFolhaJoin ? (
+        baseRefFolha
+          ? sql`INNER JOIN (
+              SELECT DISTINCT ON (pessoa_id) *
+              FROM clientes_folha_mes
+              ${folhaInnerWhere}
+              ORDER BY pessoa_id, competencia DESC
+            ) folha ON folha.pessoa_id = p.id`
+          : sql`INNER JOIN clientes_folha_ultima folha ON folha.pessoa_id = p.id`
+      ) : sql``;
+
+      // Quando usa a view materializada, sit_func precisa ir no WHERE externo
+      if (filtros.sit_func && !baseRefFolha) {
+        const sitFuncArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
+        const sitParts: ReturnType<typeof sql>[] = [];
+        for (const val of sitFuncArr) {
+          if (val === '__VAZIO__') {
+            sitParts.push(sql`(folha.sit_func_no_mes IS NULL OR TRIM(folha.sit_func_no_mes) = '')`);
+          } else {
+            sitParts.push(sql`folha.sit_func_no_mes ILIKE ${'%' + val + '%'}`);
+          }
+        }
+        if (sitParts.length === 1) whereConditions.push(sitParts[0]);
+        else if (sitParts.length > 1) whereConditions.push(sql`(${sql.join(sitParts, sql` OR `)})`);
+      }
       
       const contratoJoinSql = needsContratoJoin ? (
         baseRefD8
@@ -1558,8 +1577,10 @@ export class DbStorage implements IStorage {
           ${contratoJoinSql}
           ${whereSql}
         `;
-        const countResult = await db.execute(countQuery);
-        total = Number(countResult.rows[0]?.total || 0);
+        total = await Promise.race([
+          db.execute(countQuery).then(r => Number(r.rows[0]?.total || 0)),
+          new Promise<number>(resolve => setTimeout(() => resolve(-1), 45000)),
+        ]);
       }
       
       // If countOnly, return just the count without loading data
