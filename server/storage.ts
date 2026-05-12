@@ -1367,15 +1367,19 @@ export class DbStorage implements IStorage {
         ? sql`WHERE ${sql.join(folhaWhereFragments, sql` AND `)}`
         : sql``;
       
-      const folhaJoinSql = needsFolhaJoin ? sql`
-        INNER JOIN (
-          SELECT DISTINCT ON (pessoa_id) *
-          FROM clientes_folha_mes
-          ${folhaInnerWhere}
-          ORDER BY pessoa_id, competencia DESC
-        ) folha ON folha.pessoa_id = p.id
-      ` : sql``;
-      
+      // When no base_ref: use clientes_folha_ultima (materialized view, 1.3M rows, pre-deduped DISTINCT ON)
+      // When base_ref: use DISTINCT ON subquery filtered by base_tag (fast via index)
+      const folhaJoinSql = needsFolhaJoin ? (
+        baseRefFolha
+          ? sql`INNER JOIN (
+              SELECT DISTINCT ON (pessoa_id) *
+              FROM clientes_folha_mes
+              ${folhaInnerWhere}
+              ORDER BY pessoa_id, competencia DESC
+            ) folha ON folha.pessoa_id = p.id`
+          : sql`INNER JOIN clientes_folha_ultima folha ON folha.pessoa_id = p.id`
+      ) : sql``;
+
       const contratoJoinSql = needsContratoJoin ? (
         baseRefD8
           ? sql`INNER JOIN clientes_contratos c ON c.pessoa_id = p.id AND c.base_tag = ${baseRefD8}`
@@ -1395,8 +1399,21 @@ export class DbStorage implements IStorage {
       if (filtros.uf) {
         whereConditions.push(sql`p.uf = ${filtros.uf}`);
       }
-      // sit_func já é filtrado dentro do subquery de folha para melhor performance
-      // Não precisa repetir aqui
+      // sit_func: quando usando view materializada (sem base_ref), adicionar ao WHERE externo
+      // Quando usando subquery DISTINCT ON (com base_ref), já está filtrado internamente
+      if (filtros.sit_func && !baseRefFolha) {
+        const sitFuncArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
+        const sitConditions: ReturnType<typeof eq>[] = [];
+        for (const val of sitFuncArr) {
+          if (val === '__VAZIO__') {
+            sitConditions.push(sql`(folha.sit_func_no_mes IS NULL OR TRIM(folha.sit_func_no_mes) = '')` as any);
+          } else {
+            sitConditions.push(ilike(sql`folha.sit_func_no_mes` as any, `%${val}%`) as any);
+          }
+        }
+        if (sitConditions.length === 1) whereConditions.push(sitConditions[0]);
+        else if (sitConditions.length > 1) whereConditions.push(or(...sitConditions)! as any);
+      }
 
       // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
       // Obs: O schema atual usa margem_saldo_5, não margem_saldo_30
@@ -1556,7 +1573,9 @@ export class DbStorage implements IStorage {
         if (needsFolhaJoin) {
           // CTE approach: start from folha (filtered by sit_func/margem via GIN index),
           // then intersect with contratos if needed, then apply pessoa conditions.
-          // 10-30x faster than JOIN from clientes_pessoa on large datasets.
+          // When no base_ref: use clientes_folha_ultima (materialized view, 1.3M rows, pre-deduped)
+          // When base_ref set: use clientes_folha_mes filtered by base_tag (fast via index)
+          const folhaCountTable = baseRefFolha ? sql`clientes_folha_mes` : sql`clientes_folha_ultima`;
           const folhaCteWhereParts: ReturnType<typeof sql>[] = [];
           if (baseRefFolha) folhaCteWhereParts.push(sql`base_tag = ${baseRefFolha}`);
           if (filtros.sit_func) {
@@ -1616,7 +1635,7 @@ export class DbStorage implements IStorage {
             const contratoCteWhere = sql`AND ${sql.join(contratoCteWhereParts, sql` AND `)}`;
             countQuery = sql`
               WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM clientes_folha_mes ${folhaCteWhere}
+                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
               ),
               contrato_match AS (
                 SELECT DISTINCT c.pessoa_id FROM clientes_contratos c
@@ -1629,7 +1648,7 @@ export class DbStorage implements IStorage {
           } else if (needsContratoJoin) {
             countQuery = sql`
               WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM clientes_folha_mes ${folhaCteWhere}
+                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
               )
               SELECT COUNT(DISTINCT c.pessoa_id) as total FROM clientes_contratos c
               JOIN folha_match fm ON fm.pessoa_id = c.pessoa_id
@@ -1638,7 +1657,7 @@ export class DbStorage implements IStorage {
           } else {
             countQuery = sql`
               WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM clientes_folha_mes ${folhaCteWhere}
+                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
               )
               SELECT COUNT(*) as total FROM folha_match fm
               JOIN clientes_pessoa p ON p.id = fm.pessoa_id ${pessoaCteWhere}
