@@ -754,14 +754,6 @@ class FastImportService {
         `[FastImport] Merge complete: ${realCounts.successRows} OK, ${realCounts.errorRows} errors`,
       );
 
-      // Refresh materialized view after import so filter queries stay fast
-      try {
-        await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY clientes_folha_ultima`);
-        console.log(`[FastImport] clientes_folha_ultima refreshed`);
-      } catch (e) {
-        console.warn(`[FastImport] Warning: could not refresh clientes_folha_ultima:`, e);
-      }
-
       return {
         success: true,
         importRunId: run.id,
