@@ -1942,8 +1942,19 @@ export default function ConsultaCliente() {
       <Dialog open={showContrachequeModal} onOpenChange={setShowContrachequeModal}>
         <DialogContent className="max-w-[880px] w-full h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-4 py-3 border-b shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              📄 Contracheque SIAPE
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span>📄 Contracheque SIAPE</span>
+              {contrachequeUrl && (
+                <button
+                  onClick={() => {
+                    const win = window.open(contrachequeUrl, '_blank');
+                    if (win) win.onload = () => { win.focus(); win.print(); };
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  🖨️ Imprimir / Salvar PDF
+                </button>
+              )}
             </DialogTitle>
             {contrachequesMeses.length > 1 && (
               <div className="flex gap-2 mt-2 flex-wrap">
