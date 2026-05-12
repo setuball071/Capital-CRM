@@ -1367,19 +1367,15 @@ export class DbStorage implements IStorage {
         ? sql`WHERE ${sql.join(folhaWhereFragments, sql` AND `)}`
         : sql``;
       
-      // When no base_ref: use clientes_folha_ultima (materialized view, 1.3M rows, pre-deduped DISTINCT ON)
-      // When base_ref: use DISTINCT ON subquery filtered by base_tag (fast via index)
-      const folhaJoinSql = needsFolhaJoin ? (
-        baseRefFolha
-          ? sql`INNER JOIN (
-              SELECT DISTINCT ON (pessoa_id) *
-              FROM clientes_folha_mes
-              ${folhaInnerWhere}
-              ORDER BY pessoa_id, competencia DESC
-            ) folha ON folha.pessoa_id = p.id`
-          : sql`INNER JOIN clientes_folha_ultima folha ON folha.pessoa_id = p.id`
-      ) : sql``;
-
+      const folhaJoinSql = needsFolhaJoin ? sql`
+        INNER JOIN (
+          SELECT DISTINCT ON (pessoa_id) *
+          FROM clientes_folha_mes
+          ${folhaInnerWhere}
+          ORDER BY pessoa_id, competencia DESC
+        ) folha ON folha.pessoa_id = p.id
+      ` : sql``;
+      
       const contratoJoinSql = needsContratoJoin ? (
         baseRefD8
           ? sql`INNER JOIN clientes_contratos c ON c.pessoa_id = p.id AND c.base_tag = ${baseRefD8}`
@@ -1399,21 +1395,8 @@ export class DbStorage implements IStorage {
       if (filtros.uf) {
         whereConditions.push(sql`p.uf = ${filtros.uf}`);
       }
-      // sit_func: quando usando view materializada (sem base_ref), adicionar ao WHERE externo
-      // Quando usando subquery DISTINCT ON (com base_ref), já está filtrado internamente
-      if (filtros.sit_func && !baseRefFolha) {
-        const sitFuncArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
-        const sitConditions: ReturnType<typeof eq>[] = [];
-        for (const val of sitFuncArr) {
-          if (val === '__VAZIO__') {
-            sitConditions.push(sql`(folha.sit_func_no_mes IS NULL OR TRIM(folha.sit_func_no_mes) = '')` as any);
-          } else {
-            sitConditions.push(ilike(sql`folha.sit_func_no_mes` as any, `%${val}%`) as any);
-          }
-        }
-        if (sitConditions.length === 1) whereConditions.push(sitConditions[0]);
-        else if (sitConditions.length > 1) whereConditions.push(or(...sitConditions)! as any);
-      }
+      // sit_func já é filtrado dentro do subquery de folha para melhor performance
+      // Não precisa repetir aqui
 
       // Margem 5% conditions (era margem_30 na UI, mas é margem_saldo_5 no banco)
       // Obs: O schema atual usa margem_saldo_5, não margem_saldo_30
@@ -1566,136 +1549,17 @@ export class DbStorage implements IStorage {
 
       // Get count - skip only if explicitly requested (for export chunking)
       let total = 0;
-
+      
       if (!skipCount) {
-        let countQuery;
-
-        if (needsFolhaJoin) {
-          // CTE approach: start from folha (filtered by sit_func/margem via GIN index),
-          // then intersect with contratos if needed, then apply pessoa conditions.
-          // When no base_ref: use clientes_folha_ultima (materialized view, 1.3M rows, pre-deduped)
-          // When base_ref set: use clientes_folha_mes filtered by base_tag (fast via index)
-          const folhaCountTable = baseRefFolha ? sql`clientes_folha_mes` : sql`clientes_folha_ultima`;
-          const folhaCteWhereParts: ReturnType<typeof sql>[] = [];
-          if (baseRefFolha) folhaCteWhereParts.push(sql`base_tag = ${baseRefFolha}`);
-          if (filtros.sit_func) {
-            const sitArr = Array.isArray(filtros.sit_func) ? filtros.sit_func : [filtros.sit_func];
-            const parts = sitArr.map(v => v === '__VAZIO__'
-              ? sql`(sit_func_no_mes IS NULL OR TRIM(sit_func_no_mes) = '')`
-              : sql`sit_func_no_mes ILIKE ${'%' + v + '%'}`
-            );
-            folhaCteWhereParts.push(parts.length === 1 ? parts[0] : sql`(${sql.join(parts, sql` OR `)})`);
-          }
-          if (filtros.margem_35_min !== undefined) folhaCteWhereParts.push(sql`margem_saldo_35 >= ${filtros.margem_35_min}`);
-          if (filtros.margem_35_max !== undefined) folhaCteWhereParts.push(sql`margem_saldo_35 <= ${filtros.margem_35_max}`);
-          if (filtros.margem_70_min !== undefined) folhaCteWhereParts.push(sql`margem_saldo_70 >= ${filtros.margem_70_min}`);
-          if (filtros.margem_70_max !== undefined) folhaCteWhereParts.push(sql`margem_saldo_70 <= ${filtros.margem_70_max}`);
-          if (filtros.margem_cartao_credito_min !== undefined) folhaCteWhereParts.push(sql`margem_saldo_5 >= ${filtros.margem_cartao_credito_min}`);
-          if (filtros.margem_cartao_credito_max !== undefined) folhaCteWhereParts.push(sql`margem_saldo_5 <= ${filtros.margem_cartao_credito_max}`);
-          if (filtros.margem_cartao_beneficio_min !== undefined) folhaCteWhereParts.push(sql`margem_beneficio_saldo_5 >= ${filtros.margem_cartao_beneficio_min}`);
-          if (filtros.margem_cartao_beneficio_max !== undefined) folhaCteWhereParts.push(sql`margem_beneficio_saldo_5 <= ${filtros.margem_cartao_beneficio_max}`);
-          const folhaCteWhere = folhaCteWhereParts.length > 0
-            ? sql`WHERE ${sql.join(folhaCteWhereParts, sql` AND `)}`
-            : sql``;
-
-          // Build contrato CTE if needed
-          const contratoCteWhereParts: ReturnType<typeof sql>[] = [];
-          if (baseRefD8) contratoCteWhereParts.push(sql`c.base_tag = ${baseRefD8}`);
-          if (filtros.bancos?.length) {
-            contratoCteWhereParts.push(sql`(${sql.join(filtros.bancos.map(b => sql`c.banco ILIKE ${'%' + b + '%'}`), sql` OR `)})`);
-          }
-          if (filtros.tipos_contrato?.length) {
-            const tipoConditions = filtros.tipos_contrato.map(tipo =>
-              sql`(c.tipo_contrato = ANY(SELECT n.codigo FROM nomenclaturas n WHERE n.categoria = 'TIPO_CONTRATO' AND n.nome = ${tipo} AND n.ativo = true) OR c.tipo_contrato ILIKE ${'%' + tipo + '%'})`
-            );
-            contratoCteWhereParts.push(sql`(${sql.join(tipoConditions, sql` OR `)})`);
-          }
-          if (filtros.parcela_min !== undefined) contratoCteWhereParts.push(sql`c.valor_parcela >= ${filtros.parcela_min}`);
-          if (filtros.parcela_max !== undefined) contratoCteWhereParts.push(sql`c.valor_parcela <= ${filtros.parcela_max}`);
-          if (filtros.parcelas_restantes_min !== undefined) contratoCteWhereParts.push(sql`c.parcelas_restantes >= ${filtros.parcelas_restantes_min}`);
-          if (filtros.parcelas_restantes_max !== undefined) contratoCteWhereParts.push(sql`c.parcelas_restantes <= ${filtros.parcelas_restantes_max}`);
-
-          // Pessoa conditions for final WHERE
-          const pessoaCteWhereParts: ReturnType<typeof sql>[] = [];
-          if (filtros.convenio) pessoaCteWhereParts.push(sql`p.convenio ILIKE ${'%' + filtros.convenio + '%'}`);
-          if (filtros.orgao) pessoaCteWhereParts.push(sql`p.orgaodesc ILIKE ${'%' + filtros.orgao + '%'}`);
-          if (filtros.uf) pessoaCteWhereParts.push(sql`p.uf = ${filtros.uf}`);
-          if (filtros.idade_min !== undefined) pessoaCteWhereParts.push(sql`p.data_nascimento IS NOT NULL AND EXTRACT(YEAR FROM AGE(NOW(), p.data_nascimento)) >= ${filtros.idade_min}`);
-          if (filtros.idade_max !== undefined) pessoaCteWhereParts.push(sql`p.data_nascimento IS NOT NULL AND EXTRACT(YEAR FROM AGE(NOW(), p.data_nascimento)) <= ${filtros.idade_max}`);
-          if (filtros.bancos_excluir?.length) {
-            const exclConds = filtros.bancos_excluir.map(b => sql`cx.banco ILIKE ${'%' + b + '%'}`);
-            const baseScope = baseRefD8 ? sql` AND cx.base_tag = ${baseRefD8}` : sql``;
-            pessoaCteWhereParts.push(sql`NOT EXISTS (SELECT 1 FROM clientes_contratos cx WHERE cx.pessoa_id = p.id AND (${sql.join(exclConds, sql` OR `)})${baseScope})`);
-          }
-          const pessoaCteWhere = pessoaCteWhereParts.length > 0
-            ? sql`WHERE ${sql.join(pessoaCteWhereParts, sql` AND `)}`
-            : sql``;
-
-          if (needsContratoJoin && contratoCteWhereParts.length > 0) {
-            // Inverted CTE: start from contratos (most selective ~192k) then join folha
-            const contratoCteWhere = sql`WHERE ${sql.join(contratoCteWhereParts, sql` AND `)}`;
-            const folhaJoinWhere = folhaCteWhereParts.length > 0
-              ? sql`AND ${sql.join(folhaCteWhereParts, sql` AND `)}` : sql``;
-            countQuery = sql`
-              WITH contrato_match AS (
-                SELECT DISTINCT c.pessoa_id FROM clientes_contratos c
-                ${contratoCteWhere}
-              ),
-              folha_match AS (
-                SELECT DISTINCT f.pessoa_id FROM ${folhaCountTable} f
-                JOIN contrato_match cm ON cm.pessoa_id = f.pessoa_id
-                WHERE TRUE ${folhaJoinWhere}
-              )
-              SELECT COUNT(*) as total FROM folha_match fm
-              JOIN clientes_pessoa p ON p.id = fm.pessoa_id ${pessoaCteWhere}
-            `;
-          } else if (needsContratoJoin) {
-            countQuery = sql`
-              WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
-              )
-              SELECT COUNT(DISTINCT c.pessoa_id) as total FROM clientes_contratos c
-              JOIN folha_match fm ON fm.pessoa_id = c.pessoa_id
-              JOIN clientes_pessoa p ON p.id = c.pessoa_id ${pessoaCteWhere}
-            `;
-          } else {
-            countQuery = sql`
-              WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
-              )
-              SELECT COUNT(*) as total FROM folha_match fm
-              JOIN clientes_pessoa p ON p.id = fm.pessoa_id ${pessoaCteWhere}
-            `;
-          }
-        } else if (needsContratoJoin) {
-          // Contrato-only: count FROM contratos side (fast with indexes)
-          const countWhereConditions = baseRefD8
-            ? [sql`c.base_tag = ${baseRefD8}`, ...whereConditions]
-            : [...whereConditions];
-          const countWhereSql = countWhereConditions.length > 0
-            ? sql`WHERE ${sql.join(countWhereConditions, sql` AND `)}`
-            : sql``;
-          countQuery = sql`
-            SELECT COUNT(DISTINCT c.pessoa_id) as total
-            FROM clientes_contratos c
-            JOIN clientes_pessoa p ON p.id = c.pessoa_id
-            ${countWhereSql}
-          `;
-        } else {
-          countQuery = sql`
-            SELECT COUNT(DISTINCT p.id) as total
-            FROM clientes_pessoa p
-            ${folhaJoinSql}
-            ${contratoJoinSql}
-            ${whereSql}
-          `;
-        }
-        // Safety timeout: if query still slow, return -1 rather than 502
-        const countWithTimeout = Promise.race([
-          db.execute(countQuery).then(r => Number(r.rows[0]?.total ?? 0)),
-          new Promise<number>(resolve => setTimeout(() => resolve(-1), 45000)),
-        ]);
-        total = await countWithTimeout;
+        const countQuery = sql`
+          SELECT COUNT(DISTINCT p.id) as total
+          FROM clientes_pessoa p
+          ${folhaJoinSql}
+          ${contratoJoinSql}
+          ${whereSql}
+        `;
+        const countResult = await db.execute(countQuery);
+        total = Number(countResult.rows[0]?.total || 0);
       }
       
       // If countOnly, return just the count without loading data
@@ -1763,13 +1627,9 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctConveniosClientes(): Promise<string[]> {
-    const result = await db.execute(sql`
-      SELECT DISTINCT TRIM(convenio) AS convenio
-      FROM clientes_pessoa
-      WHERE convenio IS NOT NULL AND TRIM(convenio) != ''
-      ORDER BY convenio
-    `);
-    return result.rows.map((r: any) => r.convenio as string).filter(Boolean);
+    const result = await db.select({ convenio: clientesPessoa.convenio }).from(clientesPessoa);
+    const uniqueConvenios = [...new Set(result.map(r => r.convenio).filter(Boolean))];
+    return uniqueConvenios.sort() as string[];
   }
 
   async getDistinctOrgaosClientes(): Promise<string[]> {
@@ -1821,28 +1681,20 @@ export class DbStorage implements IStorage {
   }
 
   async getDistinctUfsClientes(): Promise<string[]> {
-    const result = await db.execute(sql`
-      SELECT DISTINCT TRIM(uf) AS uf
-      FROM clientes_pessoa
-      WHERE uf IS NOT NULL AND TRIM(uf) != ''
-      ORDER BY uf
-    `);
-    return result.rows.map((r: any) => r.uf as string).filter(Boolean);
+    const result = await db.select({ uf: clientesPessoa.uf }).from(clientesPessoa);
+    const uniqueUfs = [...new Set(result.map(r => r.uf).filter(Boolean))];
+    return uniqueUfs.sort() as string[];
   }
 
   async getDistinctBancosClientes(): Promise<string[]> {
-    // SELECT DISTINCT no SQL (não puxar 2M linhas para deduplicar em memória)
-    // Exclui valores corrompidos (notação científica tipo "01101E+11", "1E+17")
-    const result = await db.execute(sql`
-      SELECT DISTINCT UPPER(TRIM(banco)) AS banco
-      FROM clientes_contratos
-      WHERE banco IS NOT NULL
-        AND TRIM(banco) != ''
-        AND LENGTH(TRIM(banco)) >= 3
-        AND banco !~ '^[0-9][0-9E+. ]*$'
-      ORDER BY banco
-    `);
-    return result.rows.map((r: any) => r.banco as string).filter(Boolean);
+    // Busca bancos distintos diretamente da tabela de contratos
+    const result = await db.select({ banco: clientesContratos.banco })
+      .from(clientesContratos)
+      .where(isNotNull(clientesContratos.banco));
+    
+    // Extrai valores únicos e ordena alfabeticamente
+    const uniqueBancos = [...new Set(result.map(r => r.banco).filter(Boolean))] as string[];
+    return uniqueBancos.sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
 
   async getDistinctTiposContratoClientes(): Promise<string[]> {

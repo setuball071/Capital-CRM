@@ -952,16 +952,7 @@ export default function CompraLista() {
                   Resultado da Simulação
                 </CardTitle>
                 <CardDescription>
-                  Encontrados{" "}
-                  <strong>
-                    {simulacao.total === -1 ? "muitos" : simulacao.total.toLocaleString("pt-BR")}
-                  </strong>{" "}
-                  registros com os filtros selecionados
-                  {simulacao.total === -1 && (
-                    <span className="block text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      Contagem exata indisponível para filtros complexos sem base de referência. Selecione uma base ou afine os filtros para ver o total.
-                    </span>
-                  )}
+                  Encontrados <strong>{simulacao.total.toLocaleString("pt-BR")}</strong> registros com os filtros selecionados
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -970,12 +961,6 @@ export default function CompraLista() {
                     <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>Nenhum cliente encontrado com os filtros selecionados.</p>
                     <p className="text-sm">Tente ajustar os filtros.</p>
-                  </div>
-                ) : simulacao.total === -1 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50 text-amber-500" />
-                    <p className="font-medium">Muitos registros encontrados</p>
-                    <p className="text-sm mt-1">Selecione uma <strong>Base de Referência</strong> ou adicione mais filtros para calcular o total e o preço.</p>
                   </div>
                 ) : (
                   <>
@@ -1128,7 +1113,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Filtro ({simulacao.total === -1 ? "muitos" : simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
+                            Gerar Filtro ({simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
                           </>
                         )}
                       </Button>
