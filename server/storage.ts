@@ -1632,18 +1632,22 @@ export class DbStorage implements IStorage {
             : sql``;
 
           if (needsContratoJoin && contratoCteWhereParts.length > 0) {
-            const contratoCteWhere = sql`AND ${sql.join(contratoCteWhereParts, sql` AND `)}`;
+            // Inverted CTE: start from contratos (most selective ~192k) then join folha
+            const contratoCteWhere = sql`WHERE ${sql.join(contratoCteWhereParts, sql` AND `)}`;
+            const folhaJoinWhere = folhaCteWhereParts.length > 0
+              ? sql`AND ${sql.join(folhaCteWhereParts, sql` AND `)}` : sql``;
             countQuery = sql`
-              WITH folha_match AS (
-                SELECT DISTINCT pessoa_id FROM ${folhaCountTable} ${folhaCteWhere}
-              ),
-              contrato_match AS (
+              WITH contrato_match AS (
                 SELECT DISTINCT c.pessoa_id FROM clientes_contratos c
-                JOIN folha_match fm ON fm.pessoa_id = c.pessoa_id
-                WHERE TRUE ${contratoCteWhere}
+                ${contratoCteWhere}
+              ),
+              folha_match AS (
+                SELECT DISTINCT f.pessoa_id FROM ${folhaCountTable} f
+                JOIN contrato_match cm ON cm.pessoa_id = f.pessoa_id
+                WHERE TRUE ${folhaJoinWhere}
               )
-              SELECT COUNT(*) as total FROM contrato_match cm
-              JOIN clientes_pessoa p ON p.id = cm.pessoa_id ${pessoaCteWhere}
+              SELECT COUNT(*) as total FROM folha_match fm
+              JOIN clientes_pessoa p ON p.id = fm.pessoa_id ${pessoaCteWhere}
             `;
           } else if (needsContratoJoin) {
             countQuery = sql`
@@ -1689,7 +1693,7 @@ export class DbStorage implements IStorage {
         // Safety timeout: if query still slow, return -1 rather than 502
         const countWithTimeout = Promise.race([
           db.execute(countQuery).then(r => Number(r.rows[0]?.total ?? 0)),
-          new Promise<number>(resolve => setTimeout(() => resolve(-1), 25000)),
+          new Promise<number>(resolve => setTimeout(() => resolve(-1), 45000)),
         ]);
         total = await countWithTimeout;
       }
