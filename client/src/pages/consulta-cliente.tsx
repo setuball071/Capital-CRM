@@ -1434,7 +1434,7 @@ export default function ConsultaCliente() {
                     // Usa siapeDados se disponível (mesma lógica da exibição de margens)
                     const utilizada35Raw = siapeDados?.mg35_utilizado
                       ? parseFloat(siapeDados.mg35_utilizado)
-                      : (folhaAtual?.margemUtilizada35 ?? 0);
+                      : (folhaAtual?.margem_utilizada_35 ?? 0);
                     const utilizada35 = Number(utilizada35Raw) || 0;
                     if (utilizada35 <= 10) return null;
                     // Soma dos contratos conhecidos: siapeParcelas (contracheque) ou D8
