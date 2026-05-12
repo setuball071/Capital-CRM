@@ -1429,6 +1429,33 @@ export default function ConsultaCliente() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {/* Alerta: desconto na margem sem contrato identificado */}
+                  {(() => {
+                    const utilizada35 = folhaAtual?.margem_utilizada_35 ?? 0;
+                    if (!utilizada35 || utilizada35 <= 10) return null;
+                    // Se temos dados do contracheque SIAPE, ele já está completo — sem alerta
+                    if (siapeParcelas && siapeParcelas.length > 0) return null;
+                    // Soma dos contratos da base D8
+                    const somaContratos = clienteDetalhado.contratos.reduce(
+                      (acc: number, c: any) => acc + (Number(c.valor_parcela) || 0), 0
+                    );
+                    const discrepancia = utilizada35 - somaContratos;
+                    if (discrepancia <= 10) return null;
+                    return (
+                      <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        <span className="mt-0.5 text-base">⚠️</span>
+                        <div>
+                          <span className="font-semibold">Desconto não identificado na margem 35%</span>
+                          <span className="ml-1">
+                            — A folha aponta <strong>R$ {utilizada35.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> utilizada,
+                            mas só encontramos <strong>R$ {somaContratos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> em contratos.
+                            Diferença de <strong>R$ {discrepancia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>.
+                            Verifique o contracheque.
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {/* Tabela SIAPE — prioridade quando existir */}
                   {siapeParcelas && siapeParcelas.length > 0 ? (
                     <Table>
