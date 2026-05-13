@@ -1167,30 +1167,6 @@ export default function ConsultaCliente() {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                    {/* Toggle fonte de margens — sempre visível */}
-                    <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
-                      <button
-                        onClick={() => setFonteOverride("D8")}
-                        className={`px-2 py-1 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                      >
-                        D8
-                      </button>
-                      <button
-                        onClick={() => siapeDados && setFonteOverride("CONTRACHEQUE")}
-                        disabled={!siapeDados}
-                        title={siapeDados ? "Usar margens do contracheque" : "Sem contracheque importado"}
-                        className={`px-2 py-1 transition-colors border-l border-border ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : !siapeDados ? "opacity-40 cursor-not-allowed text-muted-foreground" : "hover:bg-muted text-muted-foreground"}`}
-                      >
-                        Contracheque
-                      </button>
-                      {fonteOverride && (
-                        <button
-                          onClick={() => setFonteOverride(null)}
-                          className="px-1.5 py-1 hover:bg-muted text-muted-foreground border-l border-border"
-                          title="Voltar ao padrão"
-                        >✕</button>
-                      )}
-                    </div>
                     {/* Botão contracheque — aparece sempre que há dados SIAPE */}
                     {siapeDados && (
                       <Button
@@ -1221,6 +1197,35 @@ export default function ConsultaCliente() {
                     </div>
                   </div>
                 </CardHeader>
+                {/* ── Seletor de fonte de margens ── */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 24px 12px" }}>
+                  <span style={{ fontSize: 11, color: "#888" }}>Fonte das margens:</span>
+                  {(["D8", "CONTRACHEQUE"] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFonteOverride(fonteAtiva === f && fonteOverride ? null : f)}
+                      disabled={f === "CONTRACHEQUE" && !siapeDados}
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 10px",
+                        borderRadius: 4,
+                        border: "1px solid",
+                        cursor: f === "CONTRACHEQUE" && !siapeDados ? "not-allowed" : "pointer",
+                        opacity: f === "CONTRACHEQUE" && !siapeDados ? 0.4 : 1,
+                        background: fonteAtiva === f ? "#7c3aed" : "transparent",
+                        color: fonteAtiva === f ? "#fff" : "inherit",
+                        fontWeight: fonteAtiva === f ? 600 : 400,
+                      }}
+                    >
+                      {f === "D8" ? "D8" : "Contracheque"}
+                    </button>
+                  ))}
+                  {fonteOverride && (
+                    <button onClick={() => setFonteOverride(null)} style={{ fontSize: 11, cursor: "pointer", color: "#888" }}>
+                      ✕ padrão
+                    </button>
+                  )}
+                </div>
                 <CardContent>
                   {folhaAtual ? (
                     <div className="space-y-6">
