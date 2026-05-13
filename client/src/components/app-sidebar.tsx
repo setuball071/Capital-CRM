@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -133,6 +133,7 @@ export function AppSidebar() {
       items: [
         { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
         { title: "Simulador de Amortização", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
+        { title: "Calculadora Renda Fixa", url: "/calculadora-renda-fixa", icon: TrendingUp, module: "modulo_simulador" },
       ],
     },
     {
