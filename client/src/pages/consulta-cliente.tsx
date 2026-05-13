@@ -1167,6 +1167,30 @@ export default function ConsultaCliente() {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
+                    {/* Toggle fonte de margens — sempre visível */}
+                    <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
+                      <button
+                        onClick={() => setFonteOverride("D8")}
+                        className={`px-2 py-1 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                      >
+                        D8
+                      </button>
+                      <button
+                        onClick={() => siapeDados && setFonteOverride("CONTRACHEQUE")}
+                        disabled={!siapeDados}
+                        title={siapeDados ? "Usar margens do contracheque" : "Sem contracheque importado"}
+                        className={`px-2 py-1 transition-colors border-l border-border ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : !siapeDados ? "opacity-40 cursor-not-allowed text-muted-foreground" : "hover:bg-muted text-muted-foreground"}`}
+                      >
+                        Contracheque
+                      </button>
+                      {fonteOverride && (
+                        <button
+                          onClick={() => setFonteOverride(null)}
+                          className="px-1.5 py-1 hover:bg-muted text-muted-foreground border-l border-border"
+                          title="Voltar ao padrão"
+                        >✕</button>
+                      )}
+                    </div>
                     {/* Botão contracheque — aparece sempre que há dados SIAPE */}
                     {siapeDados && (
                       <Button
