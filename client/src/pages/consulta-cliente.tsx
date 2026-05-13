@@ -1167,30 +1167,6 @@ export default function ConsultaCliente() {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                    {/* Toggle de fonte — visível quando há dados SIAPE disponíveis */}
-                    {siapeDados && (
-                      <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
-                        <button
-                          onClick={() => setFonteOverride("D8")}
-                          className={`px-2 py-1 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                        >
-                          D8
-                        </button>
-                        <button
-                          onClick={() => setFonteOverride("CONTRACHEQUE")}
-                          className={`px-2 py-1 transition-colors ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                        >
-                          Contracheque
-                        </button>
-                        {fonteOverride && (
-                          <button
-                            onClick={() => setFonteOverride(null)}
-                            className="px-1.5 py-1 hover:bg-muted text-muted-foreground"
-                            title="Voltar ao padrão"
-                          >✕</button>
-                        )}
-                      </div>
-                    )}
                     {/* Botão contracheque — aparece sempre que há dados SIAPE */}
                     {siapeDados && (
                       <Button
@@ -1401,12 +1377,37 @@ export default function ConsultaCliente() {
                         </div>
                       </div>
 
-                      <div className="flex justify-center pt-2">
+                      <div className="flex flex-wrap justify-center items-center gap-2 pt-2">
+                        {/* Toggle fonte de margens — sempre visível */}
+                        <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
+                          <button
+                            onClick={() => setFonteOverride("D8")}
+                            className={`px-3 py-1.5 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                          >
+                            D8
+                          </button>
+                          <button
+                            onClick={() => setFonteOverride(siapeDados ? "CONTRACHEQUE" : null)}
+                            disabled={!siapeDados}
+                            title={siapeDados ? "Usar margens do contracheque" : "Contracheque não disponível para este cliente"}
+                            className={`px-3 py-1.5 transition-colors ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : !siapeDados ? "opacity-40 cursor-not-allowed text-muted-foreground" : "hover:bg-muted text-muted-foreground"}`}
+                          >
+                            Contracheque
+                          </button>
+                          {fonteOverride && (
+                            <button
+                              onClick={() => setFonteOverride(null)}
+                              className="px-1.5 py-1.5 hover:bg-muted text-muted-foreground border-l border-border"
+                              title="Voltar ao padrão"
+                            >✕</button>
+                          )}
+                        </div>
+
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={handleOpenHistorico}
                               disabled={isLoadingHistorico}
                               data-testid="button-historico-folha"
@@ -1416,7 +1417,7 @@ export default function ConsultaCliente() {
                               ) : (
                                 <Calendar className="w-4 h-4 mr-2" />
                               )}
-                              Ver Histórico Completo
+                              Ver Histórico
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
