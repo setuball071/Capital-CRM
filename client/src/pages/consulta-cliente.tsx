@@ -1167,8 +1167,8 @@ export default function ConsultaCliente() {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                    {/* Toggle de fonte — só master */}
-                    {isMaster && siapeDados && (
+                    {/* Toggle de fonte — visível quando há dados SIAPE disponíveis */}
+                    {siapeDados && (
                       <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
                         <button
                           onClick={() => setFonteOverride("D8")}
