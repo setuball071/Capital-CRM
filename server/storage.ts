@@ -1287,16 +1287,24 @@ export class DbStorage implements IStorage {
 
   async searchClientesPessoa(filtros: FiltrosPedidoLista, options?: { limit?: number; offset?: number; skipCount?: boolean; countOnly?: boolean }): Promise<{ clientes: ClientePessoa[]; total: number }> {
     const { limit, offset, skipCount, countOnly } = options || {};
+    // Fonte de margens: D8 (padrão) ou CONTRACHEQUE
+    const fonteContrachq = filtros.fonte_margem === "CONTRACHEQUE";
+
     // Check if we need folha or contrato joins
-    // sit_func também requer join com folha pois os dados estão em sit_func_no_mes
-    const needsFolhaJoin = !!(
+    const needsMargem = !!(
       filtros.margem_30_min !== undefined || filtros.margem_30_max !== undefined ||
       filtros.margem_35_min !== undefined || filtros.margem_35_max !== undefined ||
       filtros.margem_70_min !== undefined || filtros.margem_70_max !== undefined ||
       filtros.margem_cartao_credito_min !== undefined || filtros.margem_cartao_credito_max !== undefined ||
-      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined ||
-      (filtros.sit_func && (Array.isArray(filtros.sit_func) ? filtros.sit_func.length > 0 : true))
+      filtros.margem_cartao_beneficio_min !== undefined || filtros.margem_cartao_beneficio_max !== undefined
     );
+    // sit_func requer join com folha apenas no modo D8 (no contracheque usa p.sit_func)
+    const needsSitFuncJoin = !fonteContrachq && !!(
+      filtros.sit_func && (Array.isArray(filtros.sit_func) ? filtros.sit_func.length > 0 : true)
+    );
+    const needsFolhaJoin = !fonteContrachq && (needsMargem || needsSitFuncJoin);
+    // No modo CONTRACHEQUE, join separado com contracheques_siape para filtrar margens
+    const needsContrachequeJoin = fonteContrachq && needsMargem;
     
     const needsContratoJoin = !!(
       (filtros.bancos && filtros.bancos.length > 0) || (filtros.tipos_contrato && filtros.tipos_contrato.length > 0) || filtros.parcela_min !== undefined || filtros.parcela_max !== undefined || filtros.parcelas_restantes_min !== undefined || filtros.parcelas_restantes_max !== undefined
@@ -1336,7 +1344,7 @@ export class DbStorage implements IStorage {
     }
 
     // If we need joins, count filter, or idade filter, use parameterized SQL query for safety
-    if (needsFolhaJoin || needsContratoJoin || needsContratoCountFilter || needsIdadeFilter) {
+    if (needsFolhaJoin || needsContrachequeJoin || needsContratoJoin || needsContratoCountFilter || needsIdadeFilter) {
       // Build parameterized query using Drizzle's sql tagged template
       // Usar DISTINCT ON é muito mais eficiente que LATERAL join para buscar última folha
       // OTIMIZAÇÃO: Quando sit_func é usado, filtramos DENTRO do subquery para melhor performance
@@ -1369,6 +1377,7 @@ export class DbStorage implements IStorage {
       
       // Sem base_ref: usa view materializada (1.3M rows pré-deduplicados, muito mais rápido)
       // Com base_ref: DISTINCT ON filtrado por base_tag (rápido por índice)
+      // No modo CONTRACHEQUE: join com contracheques_siape (última competência por CPF)
       const folhaJoinSql = needsFolhaJoin ? (
         baseRefFolha
           ? sql`INNER JOIN (
@@ -1378,7 +1387,17 @@ export class DbStorage implements IStorage {
               ORDER BY pessoa_id, competencia DESC
             ) folha ON folha.pessoa_id = p.id`
           : sql`INNER JOIN clientes_folha_ultima folha ON folha.pessoa_id = p.id`
-      ) : sql``;
+      ) : needsContrachequeJoin ? sql`INNER JOIN (
+          SELECT DISTINCT ON (cpf)
+            cpf,
+            (json_dados->'margens'->>'mg35_disponivel')::numeric  AS margem_saldo_35,
+            (json_dados->'margens'->>'mg70_disponivel')::numeric  AS margem_saldo_70,
+            (json_dados->'margens'->>'mg5cc_disponivel')::numeric AS margem_saldo_5,
+            (json_dados->'margens'->>'mg5cb_disponivel')::numeric AS margem_beneficio_saldo_5
+          FROM contracheques_siape
+          ORDER BY cpf, mes_pagamento DESC
+        ) folha ON folha.cpf = p.cpf`
+      : sql``;
 
       // Quando usa a view materializada, sit_func precisa ir no WHERE externo
       if (filtros.sit_func && !baseRefFolha) {
@@ -1551,15 +1570,16 @@ export class DbStorage implements IStorage {
       }
 
       // Build final query with all parameterized parts
-      // Include folha fields for frontend display when folha join is used
-      const selectFields = needsFolhaJoin 
-        ? sql`p.*, 
+      // Include folha/contracheque fields for frontend display when join is used
+      const sitFuncAliasField = needsFolhaJoin ? sql`folha.sit_func_no_mes` : sql`NULL::text`;
+      const selectFields = (needsFolhaJoin || needsContrachequeJoin)
+        ? sql`p.*,
               folha.margem_saldo_5 as margem_cartao_credito_5,
               folha.margem_beneficio_saldo_5 as margem_cartao_beneficio_5,
               folha.margem_saldo_35 as margem_35,
               folha.margem_saldo_70 as margem_70,
-              folha.sit_func_no_mes as sit_func_folha`
-        : sql`p.*, 
+              ${sitFuncAliasField} as sit_func_folha`
+        : sql`p.*,
               NULL::numeric as margem_cartao_credito_5,
               NULL::numeric as margem_cartao_beneficio_5,
               NULL::numeric as margem_35,

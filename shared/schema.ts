@@ -1205,6 +1205,8 @@ export const filtrosPedidoListaSchema = z.object({
   // Filtro de quantidade de contratos
   qtd_contratos_min: z.number().optional(),
   qtd_contratos_max: z.number().optional(),
+  // Fonte de referência para margens (D8 ou CONTRACHEQUE)
+  fonte_margem: z.enum(["D8", "CONTRACHEQUE"]).optional(),
 });
 
 export type FiltrosPedidoLista = z.infer<typeof filtrosPedidoListaSchema>;

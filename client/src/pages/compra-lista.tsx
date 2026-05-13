@@ -61,6 +61,8 @@ interface Filtros {
   // Filtro de quantidade de contratos
   qtd_contratos_min?: number;
   qtd_contratos_max?: number;
+  // Fonte de referência para margens
+  fonte_margem?: "D8" | "CONTRACHEQUE";
 }
 
 interface OrgaoComCodigo {
@@ -212,6 +214,17 @@ export default function CompraLista() {
   const [tiposContratoFiltrados, setTiposContratoFiltrados] = useState<string[]>([]);
   const [isLoadingTipos, setIsLoadingTipos] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState<PedidoLista | null>(null);
+
+  // Configuração global de fonte de margens (D8 ou CONTRACHEQUE)
+  const { data: configDados } = useQuery<{ fonte_margem: "D8" | "CONTRACHEQUE" }>({
+    queryKey: ["/api/admin/configuracoes-dados"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/configuracoes-dados", { credentials: "include" });
+      if (!res.ok) return { fonte_margem: "D8" };
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   const { data: filtrosDisponiveis } = useQuery<FiltrosDisponiveis>({
     queryKey: ["/api/clientes/filtros"],
@@ -366,18 +379,24 @@ export default function CompraLista() {
     criarCampanhaMutation.mutate({
       nome: campanhaName,
       descricao: campanhaDescricao || undefined,
-      filtros,
+      filtros: filtrosComFonte(),
       limiteLeads: campanhaLimiteLeads,
     });
   };
 
+  // Monta filtros enriquecidos com a fonte de margem configurada
+  const filtrosComFonte = (): Filtros => ({
+    ...filtros,
+    fonte_margem: configDados?.fonte_margem ?? "D8",
+  });
+
   const handleSimular = () => {
     setIsSimulating(true);
-    simularMutation.mutate(filtros);
+    simularMutation.mutate(filtrosComFonte());
   };
 
   const handleCriarPedido = () => {
-    criarPedidoMutation.mutate({ filtros, pacoteSelecionado: selectedPacote });
+    criarPedidoMutation.mutate({ filtros: filtrosComFonte(), pacoteSelecionado: selectedPacote });
   };
   
   const getPacoteAtivo = () => {
