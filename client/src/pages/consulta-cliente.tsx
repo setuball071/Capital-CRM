@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -405,6 +406,22 @@ interface Nomenclatura {
 
 export default function ConsultaCliente() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isMaster = user?.isMaster === true;
+
+  // Fonte de referência para margens: configuração global + override local do master
+  const { data: configDados } = useQuery<{ fonte_margem: "D8" | "CONTRACHEQUE" }>({
+    queryKey: ["/api/admin/configuracoes-dados"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/configuracoes-dados", { credentials: "include" });
+      if (!res.ok) return { fonte_margem: "D8" };
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const [fonteOverride, setFonteOverride] = useState<"D8" | "CONTRACHEQUE" | null>(null);
+  const fonteAtiva: "D8" | "CONTRACHEQUE" = fonteOverride ?? configDados?.fonte_margem ?? "D8";
+
   const [searchType, setSearchType] = useState<"cpf" | "matricula" | "telefone">("cpf");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedConvenio, setSelectedConvenio] = useState("");
@@ -1149,12 +1166,36 @@ export default function ConsultaCliente() {
                         }
                       </CardDescription>
                     </div>
+                    <div className="flex items-center gap-2 ml-auto">
+                    {/* Toggle de fonte — só master */}
+                    {isMaster && siapeDados && (
+                      <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
+                        <button
+                          onClick={() => setFonteOverride("D8")}
+                          className={`px-2 py-1 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                        >
+                          D8
+                        </button>
+                        <button
+                          onClick={() => setFonteOverride("CONTRACHEQUE")}
+                          className={`px-2 py-1 transition-colors ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                        >
+                          Contracheque
+                        </button>
+                        {fonteOverride && (
+                          <button
+                            onClick={() => setFonteOverride(null)}
+                            className="px-1.5 py-1 hover:bg-muted text-muted-foreground"
+                            title="Voltar ao padrão"
+                          >✕</button>
+                        )}
+                      </div>
+                    )}
                     {/* Botão contracheque — aparece sempre que há dados SIAPE */}
                     {siapeDados && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="ml-auto"
                         onClick={async () => {
                           const cpfLimpo = (clienteDetalhado?.pessoa?.cpf || "").replace(/\D/g, "");
                           if (!cpfLimpo) return;
@@ -1177,6 +1218,7 @@ export default function ConsultaCliente() {
                         📄 Ver Contracheque SIAPE
                       </Button>
                     )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1223,6 +1265,22 @@ export default function ConsultaCliente() {
                         </div>
                       )}
 
+                      {/* Helper: seleciona valor conforme fonte ativa */}
+                      {(() => {
+                        const usaContrachq = fonteAtiva === "CONTRACHEQUE" && !!siapeDados;
+                        const mg70_bruta    = usaContrachq ? siapeDados!.mg70_bruta    : folhaAtual.margem_bruta_70;
+                        const mg70_util     = usaContrachq ? siapeDados!.mg70_utilizado : folhaAtual.margem_utilizada_70;
+                        const mg70_saldo    = usaContrachq ? siapeDados!.mg70_disponivel : folhaAtual.margem_saldo_70;
+                        const mg35_bruta    = usaContrachq ? siapeDados!.mg35_bruta    : folhaAtual.margem_bruta_35;
+                        const mg35_util     = usaContrachq ? siapeDados!.mg35_utilizado : folhaAtual.margem_utilizada_35;
+                        const mg35_saldo    = usaContrachq ? siapeDados!.mg35_disponivel : folhaAtual.margem_saldo_35;
+                        const mg5cc_bruta   = usaContrachq ? siapeDados!.mg5cc_bruta   : folhaAtual.margem_bruta_5;
+                        const mg5cc_util    = usaContrachq ? siapeDados!.mg5cc_utilizado : folhaAtual.margem_utilizada_5;
+                        const mg5cc_saldo   = usaContrachq ? siapeDados!.mg5cc_disponivel : folhaAtual.margem_saldo_5;
+                        const mg5cb_bruta   = usaContrachq ? siapeDados!.mg5cb_bruta   : folhaAtual.margem_beneficio_bruta_5;
+                        const mg5cb_util    = usaContrachq ? siapeDados!.mg5cb_utilizado : folhaAtual.margem_beneficio_utilizada_5;
+                        const mg5cb_saldo   = usaContrachq ? siapeDados!.mg5cb_disponivel : folhaAtual.margem_beneficio_saldo_5;
+                        return (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* Margem 70% */}
                         <Card className="bg-muted/50" data-testid="card-margem-70">
@@ -1231,16 +1289,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(siapeDados?.mg70_bruta ?? folhaAtual.margem_bruta_70)}</span>
+                                <span>{formatCurrency(mg70_bruta)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(siapeDados?.mg70_utilizado ?? folhaAtual.margem_utilizada_70)}</span>
+                                <span>{formatCurrency(mg70_util)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={((siapeDados?.mg70_disponivel ?? folhaAtual.margem_saldo_70) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(siapeDados?.mg70_disponivel ?? folhaAtual.margem_saldo_70)}
+                                <span className={(mg70_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(mg70_saldo)}
                                 </span>
                               </div>
                             </div>
@@ -1254,16 +1312,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(siapeDados?.mg35_bruta ?? folhaAtual.margem_bruta_35)}</span>
+                                <span>{formatCurrency(mg35_bruta)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(siapeDados?.mg35_utilizado ?? folhaAtual.margem_utilizada_35)}</span>
+                                <span>{formatCurrency(mg35_util)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={((siapeDados?.mg35_disponivel ?? folhaAtual.margem_saldo_35) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(siapeDados?.mg35_disponivel ?? folhaAtual.margem_saldo_35)}
+                                <span className={(mg35_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(mg35_saldo)}
                                 </span>
                               </div>
                             </div>
@@ -1277,16 +1335,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? folhaAtual.margem_bruta_5)}</span>
+                                <span>{formatCurrency(mg5cc_bruta)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? folhaAtual.margem_utilizada_5)}</span>
+                                <span>{formatCurrency(mg5cc_util)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={((siapeDados?.mg5cc_disponivel ?? folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(siapeDados?.mg5cc_disponivel ?? folhaAtual.margem_saldo_5)}
+                                <span className={(mg5cc_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(mg5cc_saldo)}
                                 </span>
                               </div>
                             </div>
@@ -1300,22 +1358,23 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? folhaAtual.margem_beneficio_bruta_5)}</span>
+                                <span>{formatCurrency(mg5cb_bruta)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                <span>{formatCurrency(mg5cb_util)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={((siapeDados?.mg5cb_disponivel ?? folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(siapeDados?.mg5cb_disponivel ?? folhaAtual.margem_beneficio_saldo_5)}
+                                <span className={(mg5cb_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(mg5cb_saldo)}
                                 </span>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
                       </div>
+                        ); })()}
 
 
                       <Separator />

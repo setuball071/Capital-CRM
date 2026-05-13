@@ -10902,6 +10902,41 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // ===== CONFIGURAÇÕES DE DADOS (FONTE DE MARGEM) =====
+
+  // GET /api/admin/configuracoes-dados — retorna fonte_margem do tenant
+  app.get("/api/admin/configuracoes-dados", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const [tenantData] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      const theme = (tenantData?.themeJson as Record<string, any>) || {};
+      return res.json({ fonte_margem: theme.fonte_margem || "D8" });
+    } catch (error) {
+      console.error("Get configuracoes-dados error:", error);
+      return res.status(500).json({ message: "Erro ao buscar configurações" });
+    }
+  });
+
+  // PUT /api/admin/configuracoes-dados — salva fonte_margem (master only)
+  app.put("/api/admin/configuracoes-dados", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const { fonte_margem } = req.body;
+      if (!["D8", "CONTRACHEQUE"].includes(fonte_margem)) {
+        return res.status(400).json({ message: "Valor inválido. Use 'D8' ou 'CONTRACHEQUE'" });
+      }
+      const [currentTenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      const existingTheme = (currentTenant?.themeJson as Record<string, any>) || {};
+      await db.update(tenants)
+        .set({ themeJson: { ...existingTheme, fonte_margem } })
+        .where(eq(tenants.id, tenantId));
+      return res.json({ fonte_margem, message: "Configuração salva com sucesso" });
+    } catch (error) {
+      console.error("Put configuracoes-dados error:", error);
+      return res.status(500).json({ message: "Erro ao salvar configurações" });
+    }
+  });
+
   // ===== PRICING SETTINGS ENDPOINTS (MODELO DE PACOTES) =====
 
   // GET pricing settings - Master only - Retorna tabela de pacotes

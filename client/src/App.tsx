@@ -48,6 +48,7 @@ import VendasConsultaPage from "@/pages/vendas-consulta";
 import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
 import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import ConfigPromptsPage from "@/pages/config-prompts";
+import ConfigDadosPage from "@/pages/config-dados";
 import AdminTenantsPage from "@/pages/admin-tenants";
 import AdminBrandingPage from "@/pages/admin-branding";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
@@ -499,6 +500,9 @@ function Router() {
               </Route>
               <Route path="/admin/branding">
                 {() => <MasterRoute component={AdminBrandingPage} />}
+              </Route>
+              <Route path="/admin/configuracoes-dados">
+                {() => <MasterRoute component={ConfigDadosPage} />}
               </Route>
               <Route path="/admin/carteira-regras">
                 {() => <MasterOnlyRoute component={PortfolioRulesPage} />}

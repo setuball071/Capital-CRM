@@ -193,6 +193,7 @@ export function AppSidebar() {
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, module: "modulo_config_usuarios", subItem: "ambientes" },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },
         { title: "Config. Preços", url: "/config-precos", icon: DollarSign, module: "modulo_config_usuarios", subItem: "precos" },
+        { title: "Config. Dados", url: "/admin/configuracoes-dados", icon: Database, masterOnly: true },
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Funcionários", url: "/funcionarios", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Config. Prompts IA", url: "/config-prompts", icon: Settings2, module: "modulo_academia", subItem: "dashboard" },
