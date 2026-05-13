@@ -407,7 +407,7 @@ interface Nomenclatura {
 export default function ConsultaCliente() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isMaster = user?.isMaster === true;
+  const isMaster = !!user?.isMaster;
 
   // Fonte de referência para margens: configuração global + override local do master
   const { data: configDados } = useQuery<{ fonte_margem: "D8" | "CONTRACHEQUE" }>({
@@ -1259,10 +1259,17 @@ export default function ConsultaCliente() {
                       
                       {/* Indicador de fonte das margens */}
                       {siapeDados?.mg35_bruta != null && (
-                        <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-md w-fit">
-                          <span className="font-semibold">✓ Margens via contracheque SIAPE</span>
-                          <span className="text-blue-400">({siapeDados.mes_pagamento})</span>
-                        </div>
+                        fonteAtiva === "CONTRACHEQUE" ? (
+                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-md w-fit">
+                            <span className="font-semibold">✓ Margens via Contracheque SIAPE</span>
+                            <span className="text-blue-400">({siapeDados.mes_pagamento})</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-md w-fit">
+                            <span className="font-semibold">✓ Margens via D8</span>
+                            <span className="opacity-60">(contracheque disponível)</span>
+                          </div>
+                        )
                       )}
 
                       {/* Helper: seleciona valor conforme fonte ativa */}
