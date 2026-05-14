@@ -1158,6 +1158,9 @@ export default function ConsultaCliente() {
                       <CardTitle className="flex items-center gap-2">
                         <Wallet className="w-5 h-5" />
                         Situação de Folha
+                        <span style={{fontSize:10,background:"#7c3aed",color:"#fff",padding:"1px 6px",borderRadius:4,cursor:"pointer"}} onClick={() => setFonteOverride(fonteAtiva === "D8" ? (siapeDados ? "CONTRACHEQUE" : null) : "D8")}>
+                          {fonteAtiva === "D8" ? "D8 ▾" : "Contracheque ▾"}
+                        </span>
                       </CardTitle>
                       <CardDescription className="mt-1">
                         {folhaAtual
