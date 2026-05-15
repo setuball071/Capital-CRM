@@ -1294,7 +1294,7 @@ export default function ConsultaCliente() {
                             </div>
                           </CardContent>
                         </Card>
-                      </div>}
+                      </div>
 
 
                       <Separator />
