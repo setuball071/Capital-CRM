@@ -425,7 +425,6 @@ export default function ConsultaCliente() {
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
   const [selectedHistoricoCompetencia, setSelectedHistoricoCompetencia] = useState<FolhaHistoricoCompleto | null>(null);
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
-  const [taxasSiape, setTaxasSiape] = useState<Record<string, string>>({});
   const [showObsDialog, setShowObsDialog] = useState(false);
   
   // Função para calcular Saldo Devedor usando Tabela Price
@@ -562,23 +561,6 @@ export default function ConsultaCliente() {
     },
   });
   const siapeDados = siapeEnrichData?.dados ?? null;
-
-  // Parcelas SIAPE (contratos do contracheque: tipo, banco, valor, prazo)
-  const { data: siapeParcelasData } = useQuery<{ parcelas: Array<{
-    descricao: string; banco: string; tipo: string; prazo_restante: number; valor: number;
-  }> | null }>({
-    queryKey: ["/api/siape/parcelas", clienteObsCpf],
-    enabled: !!clienteObsCpf,
-    retry: false,
-    staleTime: 1000 * 60 * 5,
-    queryFn: async () => {
-      if (!clienteObsCpf) return { parcelas: null };
-      const res = await fetch(`/api/siape/parcelas/${clienteObsCpf}`, { credentials: "include" });
-      if (!res.ok) return { parcelas: null };
-      return res.json();
-    },
-  });
-  const siapeParcelas = siapeParcelasData?.parcelas ?? null;
 
   const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
     queryKey: ["/api/client-observations", clienteObsCpf],
@@ -1412,16 +1394,11 @@ export default function ConsultaCliente() {
                   <CardTitle className="flex items-center gap-2">
                     <CreditCard className="w-5 h-5" />
                     Contratos
-                    {siapeParcelas && siapeParcelas.length > 0 && (
-                      <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 ml-1">SIAPE</Badge>
-                    )}
                   </CardTitle>
                   <CardDescription>
-                    {siapeParcelas && siapeParcelas.length > 0
-                      ? `${siapeParcelas.length} desconto(s) do contracheque SIAPE`
-                      : clienteDetalhado.contratos.length > 0
-                        ? `${clienteDetalhado.contratos.length} contrato(s) encontrado(s)`
-                        : "Nenhum contrato registrado"
+                    {clienteDetalhado.contratos.length > 0
+                      ? `${clienteDetalhado.contratos.length} contrato(s) encontrado(s)`
+                      : "Nenhum contrato registrado"
                     }
                   </CardDescription>
                 </CardHeader>
@@ -1434,10 +1411,8 @@ export default function ConsultaCliente() {
                       : (folhaAtual?.margem_utilizada_35 ?? 0);
                     const utilizada35 = Number(utilizada35Raw) || 0;
                     if (utilizada35 <= 10) return null;
-                    // Soma dos contratos conhecidos: siapeParcelas (contracheque) ou D8
-                    const somaConhecida = siapeParcelas && siapeParcelas.length > 0
-                      ? siapeParcelas.reduce((acc: number, p: any) => acc + (Number(p.valor) || 0), 0)
-                      : clienteDetalhado.contratos.reduce((acc: number, c: any) => acc + (Number(c.valor_parcela) || 0), 0);
+                    // Soma dos contratos D8
+                    const somaConhecida = clienteDetalhado.contratos.reduce((acc: number, c: any) => acc + (Number(c.valor_parcela) || 0), 0);
                     const discrepancia = utilizada35 - somaConhecida;
                     if (discrepancia <= 10) return null;
                     return (
@@ -1455,81 +1430,8 @@ export default function ConsultaCliente() {
                       </div>
                     );
                   })()}
-                  {/* Tabela SIAPE — prioridade quando existir */}
-                  {siapeParcelas && siapeParcelas.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8"></TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Banco</TableHead>
-                          <TableHead>Valor Parcela</TableHead>
-                          <TableHead>Parc. Rest.</TableHead>
-                          <TableHead className="w-24">Taxa (%)</TableHead>
-                          <TableHead>Saldo Devedor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {siapeParcelas.map((p, idx) => {
-                          const key = `${idx}`;
-                          const taxaStr = taxasSiape[key];
-                          const taxa = taxaStr ? parseFloat(taxaStr) : 0;
-                          const saldo = taxa > 0
-                            ? calcularSaldoDevedorPrice(p.valor, taxa, p.prazo_restante)
-                            : null;
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>
-                                <input type="checkbox" className="rounded" />
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="capitalize whitespace-nowrap">
-                                  {p.tipo || "-"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="group">
-                                <CopyableField value={p.banco} label="Banco" onCopy={handleCopy} />
-                              </TableCell>
-                              <TableCell className="group">
-                                <CopyableField
-                                  value={p.valor?.toString()}
-                                  displayValue={formatCurrency(p.valor)}
-                                  label="Valor da Parcela"
-                                  onCopy={handleCopy}
-                                />
-                              </TableCell>
-                              <TableCell className="text-center">{p.prazo_restante ?? "-"}</TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  className="w-20 h-8 text-sm text-center"
-                                  value={taxaStr || ""}
-                                  onChange={(e) => setTaxasSiape(prev => ({ ...prev, [key]: e.target.value }))}
-                                />
-                              </TableCell>
-                              <TableCell className="group">
-                                <div className="flex items-center gap-1">
-                                  <CopyableField
-                                    value={saldo?.toFixed(2)}
-                                    displayValue={saldo != null ? formatCurrency(saldo) : "-"}
-                                    label="Saldo Devedor"
-                                    onCopy={handleCopy}
-                                  />
-                                  {saldo != null && (
-                                    <Badge variant="outline" className="text-xs ml-1 text-blue-600 border-blue-300">calc</Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  ) : clienteDetalhado.contratos.length > 0 ? (
-                    /* Fallback — tabela antiga quando não há dados SIAPE */
+                  {/* Tabela D8 — fonte principal de contratos */}
+                  {clienteDetalhado.contratos.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
