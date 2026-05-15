@@ -1090,27 +1090,27 @@ export default function ConsultaCliente() {
                     })()}
                   </div>
 
-                  {/* Financeiro — resumo da folha */}
-                  {(folhaAtual || siapeDados) && (
+                  {/* Financeiro — resumo da folha D8 */}
+                  {folhaAtual && (
                     <div className="border-t pt-4">
                       <p className="text-sm font-medium mb-3">Financeiro</p>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground">Total Bruto</p>
                           <p className="font-semibold text-green-600">
-                            {formatCurrency(folhaAtual?.creditos ?? (siapeDados?.total_bruto ? parseFloat(siapeDados.total_bruto) : null))}
+                            {formatCurrency(folhaAtual.creditos)}
                           </p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground">Total Descontos</p>
                           <p className="font-semibold text-red-600">
-                            {formatCurrency(folhaAtual?.debitos ?? (siapeDados?.total_descontos ? parseFloat(siapeDados.total_descontos) : null))}
+                            {formatCurrency(folhaAtual.debitos)}
                           </p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground">Valor Líquido</p>
                           <p className="font-semibold">
-                            {formatCurrency(folhaAtual?.liquido ?? (siapeDados?.total_liquido ? parseFloat(siapeDados.total_liquido) : null))}
+                            {formatCurrency(folhaAtual.liquido)}
                           </p>
                         </div>
                       </div>
@@ -1405,10 +1405,8 @@ export default function ConsultaCliente() {
                 <CardContent>
                   {/* Alerta: desconto na margem sem contrato identificado */}
                   {(() => {
-                    // Usa siapeDados se disponível (mesma lógica da exibição de margens)
-                    const utilizada35Raw = siapeDados?.mg35_utilizado
-                      ? parseFloat(siapeDados.mg35_utilizado)
-                      : (folhaAtual?.margem_utilizada_35 ?? 0);
+                    // Usa margem utilizada do D8
+                    const utilizada35Raw = folhaAtual?.margem_utilizada_35 ?? 0;
                     const utilizada35 = Number(utilizada35Raw) || 0;
                     if (utilizada35 <= 10) return null;
                     // Soma dos contratos D8
