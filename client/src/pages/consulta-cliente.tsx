@@ -409,19 +409,6 @@ export default function ConsultaCliente() {
   const { user } = useAuth();
   const isMaster = !!user?.isMaster;
 
-  // Fonte de referência para margens: configuração global + override local do master
-  const { data: configDados } = useQuery<{ fonte_margem: "D8" | "CONTRACHEQUE" }>({
-    queryKey: ["/api/admin/configuracoes-dados"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/configuracoes-dados", { credentials: "include" });
-      if (!res.ok) return { fonte_margem: "D8" };
-      return res.json();
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  const [fonteOverride, setFonteOverride] = useState<"D8" | "CONTRACHEQUE" | null>(null);
-  const fonteAtiva: "D8" | "CONTRACHEQUE" = fonteOverride ?? configDados?.fonte_margem ?? "D8";
-
   const [searchType, setSearchType] = useState<"cpf" | "matricula" | "telefone">("cpf");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedConvenio, setSelectedConvenio] = useState("");
@@ -1158,9 +1145,6 @@ export default function ConsultaCliente() {
                       <CardTitle className="flex items-center gap-2">
                         <Wallet className="w-5 h-5" />
                         Situação de Folha
-                        <span style={{fontSize:10,background:"#7c3aed",color:"#fff",padding:"1px 6px",borderRadius:4,cursor:"pointer"}} onClick={() => setFonteOverride(fonteAtiva === "D8" ? (siapeDados ? "CONTRACHEQUE" : null) : "D8")}>
-                          {fonteAtiva === "D8" ? "D8 ▾" : "Contracheque ▾"}
-                        </span>
                       </CardTitle>
                       <CardDescription className="mt-1">
                         {folhaAtual
@@ -1200,35 +1184,6 @@ export default function ConsultaCliente() {
                     </div>
                   </div>
                 </CardHeader>
-                {/* ── Seletor de fonte de margens ── */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 24px 12px" }}>
-                  <span style={{ fontSize: 11, color: "#888" }}>Fonte das margens:</span>
-                  {(["D8", "CONTRACHEQUE"] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFonteOverride(fonteAtiva === f && fonteOverride ? null : f)}
-                      disabled={f === "CONTRACHEQUE" && !siapeDados}
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 10px",
-                        borderRadius: 4,
-                        border: "1px solid",
-                        cursor: f === "CONTRACHEQUE" && !siapeDados ? "not-allowed" : "pointer",
-                        opacity: f === "CONTRACHEQUE" && !siapeDados ? 0.4 : 1,
-                        background: fonteAtiva === f ? "#7c3aed" : "transparent",
-                        color: fonteAtiva === f ? "#fff" : "inherit",
-                        fontWeight: fonteAtiva === f ? 600 : 400,
-                      }}
-                    >
-                      {f === "D8" ? "D8" : "Contracheque"}
-                    </button>
-                  ))}
-                  {fonteOverride && (
-                    <button onClick={() => setFonteOverride(null)} style={{ fontSize: 11, cursor: "pointer", color: "#888" }}>
-                      ✕ padrão
-                    </button>
-                  )}
-                </div>
                 <CardContent>
                   {folhaAtual ? (
                     <div className="space-y-6">
@@ -1265,37 +1220,6 @@ export default function ConsultaCliente() {
                         </DialogContent>
                       </Dialog>
                       
-                      {/* Indicador de fonte das margens */}
-                      {siapeDados?.mg35_bruta != null && (
-                        fonteAtiva === "CONTRACHEQUE" ? (
-                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-md w-fit">
-                            <span className="font-semibold">✓ Margens via Contracheque SIAPE</span>
-                            <span className="text-blue-400">({siapeDados.mes_pagamento})</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-md w-fit">
-                            <span className="font-semibold">✓ Margens via D8</span>
-                            <span className="opacity-60">(contracheque disponível)</span>
-                          </div>
-                        )
-                      )}
-
-                      {/* Helper: seleciona valor conforme fonte ativa */}
-                      {(() => {
-                        const usaContrachq = fonteAtiva === "CONTRACHEQUE" && !!siapeDados;
-                        const mg70_bruta    = usaContrachq ? siapeDados!.mg70_bruta    : folhaAtual.margem_bruta_70;
-                        const mg70_util     = usaContrachq ? siapeDados!.mg70_utilizado : folhaAtual.margem_utilizada_70;
-                        const mg70_saldo    = usaContrachq ? siapeDados!.mg70_disponivel : folhaAtual.margem_saldo_70;
-                        const mg35_bruta    = usaContrachq ? siapeDados!.mg35_bruta    : folhaAtual.margem_bruta_35;
-                        const mg35_util     = usaContrachq ? siapeDados!.mg35_utilizado : folhaAtual.margem_utilizada_35;
-                        const mg35_saldo    = usaContrachq ? siapeDados!.mg35_disponivel : folhaAtual.margem_saldo_35;
-                        const mg5cc_bruta   = usaContrachq ? siapeDados!.mg5cc_bruta   : folhaAtual.margem_bruta_5;
-                        const mg5cc_util    = usaContrachq ? siapeDados!.mg5cc_utilizado : folhaAtual.margem_utilizada_5;
-                        const mg5cc_saldo   = usaContrachq ? siapeDados!.mg5cc_disponivel : folhaAtual.margem_saldo_5;
-                        const mg5cb_bruta   = usaContrachq ? siapeDados!.mg5cb_bruta   : folhaAtual.margem_beneficio_bruta_5;
-                        const mg5cb_util    = usaContrachq ? siapeDados!.mg5cb_utilizado : folhaAtual.margem_beneficio_utilizada_5;
-                        const mg5cb_saldo   = usaContrachq ? siapeDados!.mg5cb_disponivel : folhaAtual.margem_beneficio_saldo_5;
-                        return (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* Margem 70% */}
                         <Card className="bg-muted/50" data-testid="card-margem-70">
@@ -1304,16 +1228,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(mg70_bruta)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_70)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(mg70_util)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_70)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(mg70_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(mg70_saldo)}
+                                <span className={(folhaAtual.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(folhaAtual.margem_saldo_70)}
                                 </span>
                               </div>
                             </div>
@@ -1327,16 +1251,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(mg35_bruta)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_35)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(mg35_util)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_35)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(mg35_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(mg35_saldo)}
+                                <span className={(folhaAtual.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(folhaAtual.margem_saldo_35)}
                                 </span>
                               </div>
                             </div>
@@ -1350,16 +1274,16 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(mg5cc_bruta)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(mg5cc_util)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(mg5cc_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(mg5cc_saldo)}
+                                <span className={(folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(folhaAtual.margem_saldo_5)}
                                 </span>
                               </div>
                             </div>
@@ -1373,23 +1297,22 @@ export default function ConsultaCliente() {
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(mg5cb_bruta)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_beneficio_bruta_5)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(mg5cb_util)}</span>
+                                <span>{formatCurrency(folhaAtual.margem_beneficio_utilizada_5)}</span>
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(mg5cb_saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(mg5cb_saldo)}
+                                <span className={(folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(folhaAtual.margem_beneficio_saldo_5)}
                                 </span>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
-                      </div>
-                        ); })()}
+                      </div>}
 
 
                       <Separator />
@@ -1410,31 +1333,6 @@ export default function ConsultaCliente() {
                       </div>
 
                       <div className="flex flex-wrap justify-center items-center gap-2 pt-2">
-                        {/* Toggle fonte de margens — sempre visível */}
-                        <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
-                          <button
-                            onClick={() => setFonteOverride("D8")}
-                            className={`px-3 py-1.5 transition-colors ${fonteAtiva === "D8" ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                          >
-                            D8
-                          </button>
-                          <button
-                            onClick={() => setFonteOverride(siapeDados ? "CONTRACHEQUE" : null)}
-                            disabled={!siapeDados}
-                            title={siapeDados ? "Usar margens do contracheque" : "Contracheque não disponível para este cliente"}
-                            className={`px-3 py-1.5 transition-colors ${fonteAtiva === "CONTRACHEQUE" ? "bg-primary text-primary-foreground font-medium" : !siapeDados ? "opacity-40 cursor-not-allowed text-muted-foreground" : "hover:bg-muted text-muted-foreground"}`}
-                          >
-                            Contracheque
-                          </button>
-                          {fonteOverride && (
-                            <button
-                              onClick={() => setFonteOverride(null)}
-                              className="px-1.5 py-1.5 hover:bg-muted text-muted-foreground border-l border-border"
-                              title="Voltar ao padrão"
-                            >✕</button>
-                          )}
-                        </div>
-
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
