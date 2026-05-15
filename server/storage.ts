@@ -2227,7 +2227,7 @@ export class DbStorage implements IStorage {
       .from(clientesContratos)
       .where(and(
         eq(clientesContratos.pessoaId, pessoaId),
-        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_folha_mes WHERE vinculo_id = ${clientesContratos.vinculoId})`
+        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_contratos WHERE pessoa_id = ${pessoaId})`
       ))
       .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
@@ -2237,7 +2237,7 @@ export class DbStorage implements IStorage {
       .from(clientesContratos)
       .where(and(
         eq(clientesContratos.vinculoId, vinculoId),
-        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_folha_mes WHERE vinculo_id = ${clientesContratos.vinculoId})`
+        sql`${clientesContratos.competencia} = (SELECT MAX(competencia) FROM clientes_contratos WHERE vinculo_id = ${vinculoId})`
       ))
       .orderBy(sql`${clientesContratos.competencia} DESC`);
   }
