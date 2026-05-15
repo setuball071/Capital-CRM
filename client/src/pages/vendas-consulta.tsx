@@ -1653,18 +1653,17 @@ export default function VendasConsulta() {
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Bruta:</span>
-                                  {/* mg70_bruta: sempre usa folha SIAPE (SIAPE calcula a base correta, excluindo IRRF/PSSS)
-                                      O contracheque usa total_bruto×0.70 que inclui verbas não-consignáveis → valor errado */}
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70 ?? siapeDados?.mg70_bruta)}</span>
+                                  {/* Margens: fonte única = D8 (extrato de consignação SIAPE) */}
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70 ?? siapeDados?.mg70_utilizado)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70)}</span>
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Saldo:</span>
-                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_70 ?? siapeDados?.mg70_disponivel)}
+                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_70)}
                                   </span>
                                 </div>
                               </div>
@@ -1677,42 +1676,17 @@ export default function VendasConsulta() {
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(siapeDados?.mg35_bruta ?? consultaData.folhaAtual.margem_bruta_35)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_35)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(siapeDados?.mg35_utilizado ?? consultaData.folhaAtual.margem_utilizada_35)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_35)}</span>
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Saldo:</span>
-                                  {(() => {
-                                    const hasSiape35 = siapeDados?.mg35_disponivel != null;
-                                    const folhaMg70Disp = consultaData.folhaAtual.margem_saldo_70;
-                                    const hasFolha70 = folhaMg70Disp != null;
-
-                                    if (hasSiape35 && hasFolha70) {
-                                      const disp35 = Number(siapeDados!.mg35_disponivel);
-                                      const disp70 = Number(folhaMg70Disp);
-                                      const limitadoPelo70 = disp70 < disp35;
-                                      const disponivel = Math.min(disp35, disp70);
-                                      return (
-                                        <span className={disponivel >= 0 ? "text-green-600" : "text-red-600"}>
-                                          {formatCurrency(disponivel)}
-                                          {limitadoPelo70 && (
-                                            <span className="ml-1 text-xs text-amber-500 font-normal" title="Limitado pela margem compulsória 70%">⚠ 70%</span>
-                                          )}
-                                        </span>
-                                      );
-                                    }
-                                    const dispLegado = siapeDados?.mg35_disponivel != null
-                                      ? Number(siapeDados!.mg35_disponivel)
-                                      : (consultaData.folhaAtual.margem_saldo_35 ?? 0);
-                                    return (
-                                      <span className={dispLegado >= 0 ? "text-green-600" : "text-red-600"}>
-                                        {formatCurrency(dispLegado)}
-                                      </span>
-                                    );
-                                  })()}
+                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_35 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_35)}
+                                  </span>
                                 </div>
                               </div>
                             </CardContent>
@@ -1724,16 +1698,16 @@ export default function VendasConsulta() {
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(siapeDados?.mg5cc_bruta ?? consultaData.folhaAtual.margem_bruta_5)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_5)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(siapeDados?.mg5cc_utilizado ?? consultaData.folhaAtual.margem_utilizada_5)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_5)}</span>
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Saldo:</span>
-                                  <span className={((siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(siapeDados?.mg5cc_disponivel ?? consultaData.folhaAtual.margem_saldo_5)}
+                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_5)}
                                   </span>
                                 </div>
                               </div>
@@ -1746,16 +1720,16 @@ export default function VendasConsulta() {
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(siapeDados?.mg5cb_bruta ?? consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(siapeDados?.mg5cb_utilizado ?? consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                  <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Saldo:</span>
-                                  <span className={((siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(siapeDados?.mg5cb_disponivel ?? consultaData.folhaAtual.margem_beneficio_saldo_5)}
+                                  <span className={(Number(consultaData.folhaAtual.margem_beneficio_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                                    {formatCurrency(consultaData.folhaAtual.margem_beneficio_saldo_5)}
                                   </span>
                                 </div>
                               </div>
