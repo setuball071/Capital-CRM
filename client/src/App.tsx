@@ -78,6 +78,7 @@ import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementar
 import MinhaCarteiraPage from "@/pages/minha-carteira";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
+import PrivacidadePage from "@/pages/privacidade";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
@@ -579,6 +580,9 @@ function Router() {
               </Route>
               <Route path="/contratos">
                 {() => <ProtectedRoute component={ContratosListaPage} />}
+              </Route>
+              <Route path="/privacidade">
+                {() => <ProtectedRoute component={PrivacidadePage} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
