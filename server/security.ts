@@ -15,13 +15,20 @@ import type { Request, Response, NextFunction } from "express";
 // 1. RATE LIMITERS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Em desenvolvimento, todos os rate limiters são desativados automaticamente.
+// Você trabalha sem restrições. Em produção, tudo ativo.
+const isDev = process.env.NODE_ENV !== "production";
+const skipInDev = () => isDev;
+
 /**
  * Login: máximo 5 tentativas por IP a cada 15 minutos.
  * Não conta tentativas bem-sucedidas.
+ * DESATIVADO em desenvolvimento.
  */
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5,
+  skip: skipInDev,
   skipSuccessfulRequests: true, // só conta falhas
   standardHeaders: true,
   legacyHeaders: false,
@@ -30,7 +37,6 @@ export const loginRateLimiter = rateLimit({
       "Muitas tentativas de login. Aguarde 15 minutos antes de tentar novamente.",
   },
   keyGenerator: (req: Request) => {
-    // Usa IP real mesmo atrás de proxy
     return (
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
       req.ip ||
@@ -41,11 +47,12 @@ export const loginRateLimiter = rateLimit({
 
 /**
  * API global: máximo 300 requisições por IP por minuto.
- * Proteção base contra DoS e scripts simples.
+ * DESATIVADO em desenvolvimento.
  */
 export const globalApiRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
+  windowMs: 60 * 1000,
   max: 300,
+  skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Muitas requisições. Aguarde um momento." },
@@ -59,13 +66,14 @@ export const globalApiRateLimiter = rateLimit({
 });
 
 /**
- * Rotas sensíveis (SIAPE, consulta de cliente, compra de listas):
- * máximo 30 requisições por usuário autenticado por minuto.
- * Impede scraping mesmo com conta válida.
+ * Rotas sensíveis (SIAPE, consulta de cliente):
+ * máximo 30 req por usuário por minuto.
+ * DESATIVADO em desenvolvimento.
  */
 export const sensitiveRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
+  windowMs: 60 * 1000,
   max: 30,
+  skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -73,7 +81,6 @@ export const sensitiveRateLimiter = rateLimit({
       "Velocidade de consulta muito alta. Aguarde um momento antes de continuar.",
   },
   keyGenerator: (req: Request) => {
-    // Rate limit por usuário logado — não por IP (contorna VPN rotation)
     const userId = (req as any).session?.userId;
     if (userId) return `user:${userId}`;
     return (
@@ -85,11 +92,13 @@ export const sensitiveRateLimiter = rateLimit({
 });
 
 /**
- * Upload de arquivos: máximo 10 uploads por usuário por minuto.
+ * Upload de arquivos: máximo 10 por usuário por minuto.
+ * DESATIVADO em desenvolvimento.
  */
 export const uploadRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Muitos uploads em pouco tempo. Aguarde." },
@@ -168,6 +177,9 @@ export function scrapingDetection(
   res: Response,
   next: NextFunction
 ) {
+  // Sem restrição em desenvolvimento
+  if (isDev) return next();
+
   const userId = (req as any).session?.userId;
   if (!userId) return next();
 
