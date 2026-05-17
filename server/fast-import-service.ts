@@ -996,6 +996,11 @@ class FastImportService {
       `[FastImport] Vinculos upserted: ${vinculoResult.rowCount || 0}`,
     );
 
+    // ── Fase 3: mergeFolha grava apenas cadastro (salários, sit_func) ──
+    // Margens são calculadas pelo Python (processar_pdf_siape.py → importar_siape_capital.py)
+    // e gravadas diretamente via importar_folha_crm(). O CCH/SERV do SIAPE tem margens
+    // unreliable, então no ON CONFLICT preservamos margens existentes (só preenche NULL).
+    // Salários (creditos/debitos/liquido) e sit_func sempre são atualizados pelo CCH.
     const folhaResult = await db.execute(sql`
       INSERT INTO clientes_folha_mes (
         pessoa_id, vinculo_id, competencia,
@@ -1014,7 +1019,6 @@ class FastImportService {
         ${competencia}::timestamp,
         s.margem_5_bruta::numeric,
         s.margem_5_utilizada::numeric,
-        -- Importa do arquivo; única regra: 70% balizadora (NULL→zera, >=0→LEAST, negativo→passa)
         CASE WHEN s.margem_70_saldo IS NULL THEN 0
              WHEN s.margem_70_saldo::numeric >= 0 THEN LEAST(s.margem_5_saldo::numeric, s.margem_70_saldo::numeric)
              ELSE s.margem_5_saldo::numeric END,
@@ -1046,39 +1050,36 @@ class FastImportService {
         s.exc_soma::numeric
       FROM staging_folha s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
-      JOIN clientes_vinculo v ON v.cpf = s.cpf 
-        AND v.matricula = s.matricula 
+      JOIN clientes_vinculo v ON v.cpf = s.cpf
+        AND v.matricula = s.matricula
         AND v.orgao = COALESCE(NULLIF(s.orgaodesc, ''), 'DESCONHECIDO')
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
-        margem_bruta_5 = COALESCE(EXCLUDED.margem_bruta_5, clientes_folha_mes.margem_bruta_5),
-        margem_utilizada_5 = COALESCE(EXCLUDED.margem_utilizada_5, clientes_folha_mes.margem_utilizada_5),
-        margem_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
-                              WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5), EXCLUDED.margem_saldo_70)
-                              ELSE COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5) END,
-        margem_beneficio_bruta_5 = COALESCE(EXCLUDED.margem_beneficio_bruta_5, clientes_folha_mes.margem_beneficio_bruta_5),
-        margem_beneficio_utilizada_5 = COALESCE(EXCLUDED.margem_beneficio_utilizada_5, clientes_folha_mes.margem_beneficio_utilizada_5),
-        margem_beneficio_saldo_5 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
-                                        WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5), EXCLUDED.margem_saldo_70)
-                                        ELSE COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5) END,
-        margem_bruta_35 = COALESCE(EXCLUDED.margem_bruta_35, clientes_folha_mes.margem_bruta_35),
-        margem_utilizada_35 = COALESCE(EXCLUDED.margem_utilizada_35, clientes_folha_mes.margem_utilizada_35),
-        margem_saldo_35 = CASE WHEN EXCLUDED.margem_saldo_70 IS NULL THEN 0
-                               WHEN EXCLUDED.margem_saldo_70 >= 0 THEN LEAST(COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35), EXCLUDED.margem_saldo_70)
-                               ELSE COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35) END,
-        margem_bruta_70 = COALESCE(EXCLUDED.margem_bruta_70, clientes_folha_mes.margem_bruta_70),
-        margem_utilizada_70 = COALESCE(EXCLUDED.margem_utilizada_70, clientes_folha_mes.margem_utilizada_70),
-        margem_saldo_70 = COALESCE(EXCLUDED.margem_saldo_70, clientes_folha_mes.margem_saldo_70),
-        margem_cartao_credito_saldo = COALESCE(EXCLUDED.margem_cartao_credito_saldo, clientes_folha_mes.margem_cartao_credito_saldo),
-        margem_cartao_beneficio_saldo = COALESCE(EXCLUDED.margem_cartao_beneficio_saldo, clientes_folha_mes.margem_cartao_beneficio_saldo),
+        -- Margens: só preenche se o campo atual estiver NULL (preserva valores do Python/PDF)
+        margem_bruta_5 = COALESCE(clientes_folha_mes.margem_bruta_5, EXCLUDED.margem_bruta_5),
+        margem_utilizada_5 = COALESCE(clientes_folha_mes.margem_utilizada_5, EXCLUDED.margem_utilizada_5),
+        margem_saldo_5 = COALESCE(clientes_folha_mes.margem_saldo_5, EXCLUDED.margem_saldo_5),
+        margem_beneficio_bruta_5 = COALESCE(clientes_folha_mes.margem_beneficio_bruta_5, EXCLUDED.margem_beneficio_bruta_5),
+        margem_beneficio_utilizada_5 = COALESCE(clientes_folha_mes.margem_beneficio_utilizada_5, EXCLUDED.margem_beneficio_utilizada_5),
+        margem_beneficio_saldo_5 = COALESCE(clientes_folha_mes.margem_beneficio_saldo_5, EXCLUDED.margem_beneficio_saldo_5),
+        margem_bruta_35 = COALESCE(clientes_folha_mes.margem_bruta_35, EXCLUDED.margem_bruta_35),
+        margem_utilizada_35 = COALESCE(clientes_folha_mes.margem_utilizada_35, EXCLUDED.margem_utilizada_35),
+        margem_saldo_35 = COALESCE(clientes_folha_mes.margem_saldo_35, EXCLUDED.margem_saldo_35),
+        margem_bruta_70 = COALESCE(clientes_folha_mes.margem_bruta_70, EXCLUDED.margem_bruta_70),
+        margem_utilizada_70 = COALESCE(clientes_folha_mes.margem_utilizada_70, EXCLUDED.margem_utilizada_70),
+        margem_saldo_70 = COALESCE(clientes_folha_mes.margem_saldo_70, EXCLUDED.margem_saldo_70),
+        margem_cartao_credito_saldo = COALESCE(clientes_folha_mes.margem_cartao_credito_saldo, EXCLUDED.margem_cartao_credito_saldo),
+        margem_cartao_beneficio_saldo = COALESCE(clientes_folha_mes.margem_cartao_beneficio_saldo, EXCLUDED.margem_cartao_beneficio_saldo),
+        -- Salários e sit_func: sempre atualiza (CCH é fonte confiável para esses dados)
         creditos = COALESCE(EXCLUDED.creditos, clientes_folha_mes.creditos),
         debitos = COALESCE(EXCLUDED.debitos, clientes_folha_mes.debitos),
         liquido = COALESCE(EXCLUDED.liquido, clientes_folha_mes.liquido),
         salario_bruto = COALESCE(EXCLUDED.salario_bruto, clientes_folha_mes.salario_bruto),
         descontos_brutos = COALESCE(EXCLUDED.descontos_brutos, clientes_folha_mes.descontos_brutos),
         salario_liquido = COALESCE(EXCLUDED.salario_liquido, clientes_folha_mes.salario_liquido),
+        sit_func_no_mes = COALESCE(EXCLUDED.sit_func_no_mes, clientes_folha_mes.sit_func_no_mes),
         base_tag = ${baseTag},
         import_run_id = ${run.id},
         exc_qtd = EXCLUDED.exc_qtd,
