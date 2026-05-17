@@ -389,6 +389,12 @@ import {
 } from "./tenant-middleware";
 import { validateAccess } from "./middleware/validateAccess";
 import {
+  loginRateLimiter,
+  sensitiveRateLimiter,
+  scrapingDetection,
+  uploadRateLimiter,
+} from "./security";
+import {
   loginSchema,
   registerSchema,
   insertBankSchema,
@@ -518,7 +524,7 @@ const uploadDisk = multer({
     },
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit for massive imports
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit (folha SIAPE real não passa disso)
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".csv"];
@@ -551,7 +557,7 @@ const uploadCsvXlsx = multer({
     },
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".csv", ".xlsx"];
@@ -580,7 +586,7 @@ const uploadTxt = multer({
     },
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit for TXT files
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = [".txt"];
@@ -2010,7 +2016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // Login
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     try {
       const result = loginSchema.safeParse(req.body);
 
@@ -27810,7 +27816,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ===== SIAPE — CONTRACHEQUES =====
 
   // GET /api/siape/contracheque/:cpf — histórico de meses disponíveis para um CPF
-  app.get("/api/siape/contracheque/:cpf", requireAuth, async (req: any, res) => {
+  app.get("/api/siape/contracheque/:cpf", requireAuth, sensitiveRateLimiter, scrapingDetection, async (req: any, res) => {
     try {
       const { cpf } = req.params;
       const cpfLimpo = cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
@@ -27829,7 +27835,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // GET /api/siape/contracheque/:cpf/html?mes=ABR2026 — gera e retorna HTML do contracheque
-  app.get("/api/siape/contracheque/:cpf/html", requireAuth, async (req: any, res) => {
+  app.get("/api/siape/contracheque/:cpf/html", requireAuth, sensitiveRateLimiter, scrapingDetection, async (req: any, res) => {
     try {
       const { cpf } = req.params;
       const { mes } = req.query as { mes?: string };
@@ -27911,7 +27917,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // GET /api/siape/dados/:cpf — dados enriquecidos do cliente (cargo, funcao, banco, financeiro)
-  app.get("/api/siape/dados/:cpf", requireAuth, async (req: any, res) => {
+  app.get("/api/siape/dados/:cpf", requireAuth, sensitiveRateLimiter, scrapingDetection, async (req: any, res) => {
     try {
       const cpf = req.params.cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
       if (!cpf || cpf.length !== 11) return res.status(400).json({ dados: null });
@@ -27956,7 +27962,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // GET /api/siape/parcelas/:cpf — parcelas consignadas do mês mais recente
-  app.get("/api/siape/parcelas/:cpf", requireAuth, async (req: any, res) => {
+  app.get("/api/siape/parcelas/:cpf", requireAuth, sensitiveRateLimiter, scrapingDetection, async (req: any, res) => {
     try {
       const cpf = req.params.cpf.replace(/\D/g, "");
       if (!cpf || cpf.length !== 11) return res.status(400).json({ message: "CPF inválido" });

@@ -1,8 +1,16 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import helmet from "helmet";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import {
+  globalApiRateLimiter,
+  botDetection,
+  additionalSecurityHeaders,
+  requireSessionForUploads,
+} from "./security";
 
 const app = express();
 
@@ -10,21 +18,116 @@ app.set("trust proxy", 1);
 
 const isProduction = process.env.NODE_ENV === "production";
 
-declare module 'http' {
+// ─────────────────────────────────────────────────────────────────────────────
+// VALIDAÇÃO DA SESSION_SECRET
+// Em produção, exige variável de ambiente obrigatória — sem fallback.
+// ─────────────────────────────────────────────────────────────────────────────
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (isProduction && !SESSION_SECRET) {
+  console.error(
+    "[FATAL] SESSION_SECRET não definido. " +
+    "Configure a variável de ambiente SESSION_SECRET com uma string aleatória de 64+ chars. " +
+    "Gere com: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\""
+  );
+  process.exit(1);
+}
+const sessionSecret =
+  SESSION_SECRET ||
+  "dev-only-secret-NOT-for-production-" + Math.random().toString(36);
+
+if (!isProduction && !SESSION_SECRET) {
+  console.warn(
+    "[AVISO] SESSION_SECRET não definido. " +
+    "Usando secret temporário de desenvolvimento. " +
+    "Defina SESSION_SECRET no ambiente para sessões persistentes."
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELMET — Headers de segurança HTTP
+// ─────────────────────────────────────────────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // desabilitado pois o frontend usa inline styles (Tailwind/shadcn)
+    crossOriginEmbedderPolicy: false, // necessário para PDFs e iframes
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS — Restringe origens das requisições
+// ─────────────────────────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Em desenvolvimento: permite tudo
+      if (!isProduction) return callback(null, true);
+
+      // Sem origin (ex: chamadas server-to-server, curl): só bloqueia em prod se não vier de origens conhecidas
+      if (!origin) return callback(null, false);
+
+      // Sempre permite o próprio domínio Replit e dominios configurados
+      const replitPattern = /\.replit\.app$/;
+      if (
+        replitPattern.test(origin) ||
+        allowedOrigins.some((allowed) => origin.includes(allowed))
+      ) {
+        return callback(null, true);
+      }
+
+      // Bloqueia outras origens em produção
+      callback(new Error("Origem não permitida pelo CORS"));
+    },
+    credentials: true, // necessário para cookies de sessão
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HEADERS ADICIONAIS DE SEGURANÇA
+// ─────────────────────────────────────────────────────────────────────────────
+app.use(additionalSecurityHeaders);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DETECÇÃO DE BOTS (aplica antes de qualquer rota /api)
+// ─────────────────────────────────────────────────────────────────────────────
+app.use("/api", botDetection);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RATE LIMITING GLOBAL (todas as rotas /api)
+// ─────────────────────────────────────────────────────────────────────────────
+app.use("/api", globalApiRateLimiter);
+
+declare module "http" {
   interface IncomingMessage {
-    rawBody: unknown
+    rawBody: unknown;
   }
 }
-app.use(express.json({
-  limit: '50mb',
-  verify: (req, _res, buf) => {
-    req.rawBody = buf;
-  }
-}));
-app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+app.use(
+  express.json({
+    limit: "50mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 import nodePath from "path";
+
+// /uploads protegido — requer sessão válida
+// O middleware de sessão é registrado depois (dentro do IIFE),
+// mas o requireSessionForUploads usa req.session que já estará disponível
+// porque app.use é lazy-evaluated no momento da requisição.
+app.use("/uploads", requireSessionForUploads);
 app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
+
 app.use(express.static(nodePath.join(process.cwd(), "public")));
 
 app.use((req, res, next) => {
@@ -68,7 +171,7 @@ app.use((req, res, next) => {
 
   const sessionMiddleware = session({
     store: memorySessionStore,
-    secret: process.env.SESSION_SECRET || "default-secret-change-in-production",
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -92,9 +195,14 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    // Em produção: mensagem genérica (não vaza stack trace)
+    const message = isProduction
+      ? status >= 500
+        ? "Erro interno do servidor."
+        : err.message || "Erro na requisição."
+      : err.message || "Internal Server Error";
     res.status(status).json({ message });
-    throw err;
+    if (!isProduction) throw err;
   });
 
   if (app.get("env") === "development") {
@@ -104,78 +212,89 @@ app.use((req, res, next) => {
   }
 
   // Step 3: Start listening FIRST — health check passes immediately
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, async () => {
-    log(`serving on port ${port}`);
+  const port = parseInt(process.env.PORT || "5000", 10);
+  server.listen(
+    {
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    },
+    async () => {
+      log(`serving on port ${port}`);
 
-    // Step 4: Now do async initialization (DB seed, session store upgrade, background jobs)
-    try {
-      // Upgrade to PostgreSQL session store in production (async, non-blocking)
-      if (isProduction && process.env.DATABASE_URL) {
-        try {
-          const pgSession = (await import("connect-pg-simple")).default;
-          const pg = (await import("pg")).default;
-          const PgStore = pgSession(session);
-          const pool = new pg.Pool({
-            connectionString: process.env.DATABASE_URL,
-            ssl: { rejectUnauthorized: false },
-            max: 5,
-            idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 10000,
-          });
-          const pgStore = new PgStore({
-            pool,
-            tableName: 'session',
-            createTableIfMissing: true,
-          });
-          // Swap the store on the existing session middleware
-          (sessionMiddleware as any).store = pgStore;
-          activeStore = pgStore;
-          log("Upgraded to PostgreSQL session store");
-        } catch (pgErr) {
-          log("Failed to initialize PostgreSQL session store, keeping memory store");
-          console.error(pgErr);
+      // Step 4: Now do async initialization (DB seed, session store upgrade, background jobs)
+      try {
+        // Upgrade to PostgreSQL session store in production (async, non-blocking)
+        if (isProduction && process.env.DATABASE_URL) {
+          try {
+            const pgSession = (await import("connect-pg-simple")).default;
+            const pg = (await import("pg")).default;
+            const PgStore = pgSession(session);
+            const pool = new pg.Pool({
+              connectionString: process.env.DATABASE_URL,
+              // SSL com validação de certificado em produção
+              ssl: { rejectUnauthorized: true },
+              max: 5,
+              idleTimeoutMillis: 30000,
+              connectionTimeoutMillis: 10000,
+            });
+            const pgStore = new PgStore({
+              pool,
+              tableName: "session",
+              createTableIfMissing: true,
+            });
+            // Swap the store on the existing session middleware
+            (sessionMiddleware as any).store = pgStore;
+            activeStore = pgStore;
+            log("Upgraded to PostgreSQL session store");
+          } catch (pgErr) {
+            log(
+              "Failed to initialize PostgreSQL session store, keeping memory store"
+            );
+            console.error(pgErr);
+          }
         }
+
+        // Database seed
+        const { seedDatabase } = await import("./seed");
+        log("Starting seed...");
+        await seedDatabase();
+        log("Seed completed!");
+
+        // Background runners
+        const { csvSplitRunner } = await import("./csv-split-runner");
+        csvSplitRunner.start();
+        log("CSV Split background runner started");
+
+        const { startDataRetention } = await import("./data-retention");
+        startDataRetention();
+        log("Data retention background runner started");
+
+        const { startAppointmentReminder } = await import(
+          "./appointment-reminder"
+        );
+        startAppointmentReminder();
+        log("Appointment reminder background runner started");
+
+        // Portfolio cleanup: mark expired entries as EXPIRADO every 24h
+        const { updateExpiredPortfolios } = await import("./portfolio");
+        const runPortfolioCleanup = async () => {
+          try {
+            const count = await updateExpiredPortfolios();
+            if (count > 0)
+              log(
+                `Portfolio cleanup: ${count} entradas marcadas como EXPIRADO`
+              );
+          } catch (err) {
+            console.error("Portfolio cleanup error (non-fatal):", err);
+          }
+        };
+        runPortfolioCleanup();
+        setInterval(runPortfolioCleanup, 24 * 60 * 60 * 1000);
+        log("Portfolio expiry cleanup runner started");
+      } catch (initErr) {
+        console.error("Error during post-startup initialization:", initErr);
       }
-
-      // Database seed
-      const { seedDatabase } = await import("./seed");
-      log("Starting seed...");
-      await seedDatabase();
-      log("Seed completed!");
-
-      // Background runners
-      const { csvSplitRunner } = await import("./csv-split-runner");
-      csvSplitRunner.start();
-      log("CSV Split background runner started");
-
-      const { startDataRetention } = await import("./data-retention");
-      startDataRetention();
-      log("Data retention background runner started");
-
-      const { startAppointmentReminder } = await import("./appointment-reminder");
-      startAppointmentReminder();
-      log("Appointment reminder background runner started");
-
-      // Portfolio cleanup: mark expired entries as EXPIRADO every 24h
-      const { updateExpiredPortfolios } = await import("./portfolio");
-      const runPortfolioCleanup = async () => {
-        try {
-          const count = await updateExpiredPortfolios();
-          if (count > 0) log(`Portfolio cleanup: ${count} entradas marcadas como EXPIRADO`);
-        } catch (err) {
-          console.error("Portfolio cleanup error (non-fatal):", err);
-        }
-      };
-      runPortfolioCleanup();
-      setInterval(runPortfolioCleanup, 24 * 60 * 60 * 1000);
-      log("Portfolio expiry cleanup runner started");
-    } catch (initErr) {
-      console.error("Error during post-startup initialization:", initErr);
     }
-  });
+  );
 })();

@@ -119,15 +119,21 @@ export function requireTenant(req: Request, res: Response, next: NextFunction) {
   if (!req.tenantId && req.tenant) {
     req.tenantId = req.tenant.id;
   }
-  
+
   if (!req.tenantId) {
-    if (process.env.NODE_ENV === "development") {
+    // Dev bypass: exige NODE_ENV=development E host local (dupla verificação)
+    const host = req.headers.host || "";
+    const isLocalHost =
+      host.includes("localhost") ||
+      host.includes("127.0.0.1") ||
+      host.includes("replit");
+    if (process.env.NODE_ENV === "development" && isLocalHost) {
       next();
       return;
     }
     return res.status(400).json({ message: "Tenant não identificado" });
   }
-  
+
   next();
 }
 
@@ -140,7 +146,13 @@ export async function validateTenantAccess(req: Request, res: Response, next: Ne
   }
   
   if (!tenantId) {
-    if (process.env.NODE_ENV === "development") {
+    // Dev bypass: exige NODE_ENV=development E host local (dupla verificação)
+    const host = req.headers.host || "";
+    const isLocalHost =
+      host.includes("localhost") ||
+      host.includes("127.0.0.1") ||
+      host.includes("replit");
+    if (process.env.NODE_ENV === "development" && isLocalHost) {
       return next();
     }
     return res.status(400).json({ message: "Tenant não identificado" });
