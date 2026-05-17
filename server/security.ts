@@ -3,13 +3,24 @@
  *
  * Inclui:
  * - Rate limiters por rota e por usuário
+ * - Bloqueio de conta após tentativas erradas
+ * - Limite de sessões simultâneas por usuário
  * - Detecção de bots / automação
  * - Detecção de comportamento suspeito (scraping em massa)
+ * - Log de auditoria
  * - Proteção de acesso ao /uploads
  */
 
 import rateLimit from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
+import { db } from "./storage";
+import { users, auditLog } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
+import {
+  sendAccountLockedAlert,
+  sendSuspiciousLoginAlert,
+  sendScrapingDetectedAlert,
+} from "./email-service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. RATE LIMITERS
@@ -247,7 +258,203 @@ setInterval(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. PROTEÇÃO DO DIRETÓRIO /uploads
+// 4. BLOQUEIO DE CONTA APÓS SENHAS ERRADAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutos
+const WARN_AT_ATTEMPT = 3; // Envia alerta de email a partir da 3ª tentativa
+
+/**
+ * Verifica se o usuário está bloqueado.
+ * Retorna { blocked: true, minutesLeft } ou { blocked: false }.
+ */
+export async function checkAccountLock(
+  userId: number
+): Promise<{ blocked: boolean; minutesLeft?: number }> {
+  const result = await db
+    .select({ lockedUntil: users.lockedUntil, loginAttempts: users.loginAttempts })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!result.length) return { blocked: false };
+
+  const { lockedUntil } = result[0];
+  if (!lockedUntil) return { blocked: false };
+
+  const now = new Date();
+  if (lockedUntil > now) {
+    const minutesLeft = Math.ceil((lockedUntil.getTime() - now.getTime()) / 60000);
+    return { blocked: true, minutesLeft };
+  }
+
+  // Bloqueio expirou — zera os campos
+  await db
+    .update(users)
+    .set({ loginAttempts: 0, lockedUntil: null })
+    .where(eq(users.id, userId));
+
+  return { blocked: false };
+}
+
+/**
+ * Registra uma tentativa de login falha.
+ * Bloqueia a conta após MAX_LOGIN_ATTEMPTS e envia alertas por email.
+ */
+export async function recordFailedLogin(
+  userId: number,
+  email: string,
+  ip: string,
+  userAgent: string
+): Promise<void> {
+  const result = await db
+    .update(users)
+    .set({ loginAttempts: sql`login_attempts + 1` })
+    .where(eq(users.id, userId))
+    .returning({ loginAttempts: users.loginAttempts });
+
+  const attempts = result[0]?.loginAttempts ?? 0;
+
+  // Alerta na 3ª tentativa (sem bloquear ainda)
+  if (attempts === WARN_AT_ATTEMPT) {
+    sendSuspiciousLoginAlert(email, ip, userAgent).catch(() => {});
+    console.warn(
+      `[SECURITY] ${WARN_AT_ATTEMPT} tentativas falhas para ${email} (IP: ${ip})`
+    );
+  }
+
+  // Bloqueia na 5ª tentativa
+  if (attempts >= MAX_LOGIN_ATTEMPTS) {
+    const lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
+    await db
+      .update(users)
+      .set({ lockedUntil })
+      .where(eq(users.id, userId));
+
+    sendAccountLockedAlert(email, ip, attempts).catch(() => {});
+    console.warn(
+      `[SECURITY] Conta bloqueada: ${email} (${attempts} tentativas, IP: ${ip})`
+    );
+  }
+}
+
+/**
+ * Zera o contador de tentativas após login bem-sucedido.
+ */
+export async function resetLoginAttempts(userId: number): Promise<void> {
+  await db
+    .update(users)
+    .set({ loginAttempts: 0, lockedUntil: null })
+    .where(eq(users.id, userId));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. LIMITE DE SESSÕES SIMULTÂNEAS POR USUÁRIO
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_SESSIONS_PER_USER = 3;
+
+// userId -> Set de sessionIds ativos
+const activeSessions = new Map<number, Set<string>>();
+
+/**
+ * Registra uma nova sessão para o usuário.
+ * Se exceder o limite, a sessão mais antiga é invalidada.
+ * Retorna true se a sessão foi aceita, false se foi recusada.
+ */
+export function registerSession(userId: number, sessionId: string): void {
+  if (!activeSessions.has(userId)) {
+    activeSessions.set(userId, new Set());
+  }
+
+  const sessions = activeSessions.get(userId)!;
+  sessions.add(sessionId);
+
+  // Se exceder o limite, remove o mais antigo (primeiro inserido)
+  if (sessions.size > MAX_SESSIONS_PER_USER) {
+    const oldest = sessions.values().next().value;
+    sessions.delete(oldest);
+    console.warn(
+      `[SECURITY] Sessão mais antiga invalidada para userId ${userId} ` +
+      `(excedeu limite de ${MAX_SESSIONS_PER_USER} sessões simultâneas)`
+    );
+  }
+}
+
+/**
+ * Remove sessão ao fazer logout.
+ */
+export function unregisterSession(userId: number, sessionId: string): void {
+  activeSessions.get(userId)?.delete(sessionId);
+}
+
+/**
+ * Retorna quantas sessões ativas o usuário tem.
+ */
+export function getActiveSessionCount(userId: number): number {
+  return activeSessions.get(userId)?.size ?? 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. LOG DE AUDITORIA
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AuditEntry {
+  tenantId?: number;
+  userId?: number;
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+/**
+ * Registra uma ação no log de auditoria.
+ * Falha silenciosamente para não impactar o fluxo principal.
+ */
+export async function logAudit(entry: AuditEntry): Promise<void> {
+  // Em desenvolvimento, só loga no console para não poluir o banco
+  if (isDev) {
+    console.log(`[AUDIT] ${entry.action}`, {
+      userId: entry.userId,
+      entityId: entry.entityId,
+    });
+    return;
+  }
+
+  try {
+    await db.insert(auditLog).values({
+      tenantId: entry.tenantId ?? null,
+      userId: entry.userId ?? null,
+      action: entry.action,
+      entityType: entry.entityType ?? null,
+      entityId: entry.entityId ?? null,
+      details: entry.details ?? null,
+      ipAddress: entry.ipAddress ?? null,
+      userAgent: entry.userAgent ?? null,
+    });
+  } catch (err) {
+    // Nunca deixa falha de auditoria derrubar a requisição
+    console.error("[AUDIT] Erro ao salvar log:", err);
+  }
+}
+
+/**
+ * Helper: extrai IP real da requisição.
+ */
+export function getClientIp(req: Request): string {
+  return (
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+    req.ip ||
+    "unknown"
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. PROTEÇÃO DO DIRETÓRIO /uploads
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -267,7 +474,7 @@ export function requireSessionForUploads(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. HEADERS DE SEGURANÇA ADICIONAIS (complementa o helmet)
+// 8. HEADERS DE SEGURANÇA ADICIONAIS (complementa o helmet)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function additionalSecurityHeaders(

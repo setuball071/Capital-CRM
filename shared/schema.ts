@@ -259,6 +259,9 @@ export const users = pgTable("users", {
   perfilDisc: varchar("perfil_disc", { length: 20 }),
   perfilDiscData: jsonb("perfil_disc_data"),
   perfilDiscCompletedAt: timestamp("perfil_disc_completed_at"),
+  // Bloqueio de conta por tentativas erradas de senha
+  loginAttempts: integer("login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -3674,3 +3677,36 @@ export const insertPortfolioTransferSchema = createInsertSchema(portfolioTransfe
 
 export type PortfolioTransfer = typeof portfolioTransfers.$inferSelect;
 export type InsertPortfolioTransfer = z.infer<typeof insertPortfolioTransferSchema>;
+
+// ===== AUDITORIA E SEGURANÇA =====
+
+/**
+ * Log de auditoria — registra todas as ações sensíveis do sistema.
+ * Usado para rastreabilidade, conformidade LGPD e detecção de abusos.
+ */
+export const auditLog = pgTable("audit_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  // Tipo de ação: "login", "login_failed", "logout", "consulta_siape",
+  // "consulta_cliente", "export_dados", "import_folha", "compra_lista",
+  // "account_locked", "scraping_detected"
+  action: varchar("action", { length: 100 }).notNull(),
+  // Tipo da entidade acessada: "cpf", "cliente", "contrato", etc.
+  entityType: varchar("entity_type", { length: 50 }),
+  // ID ou CPF da entidade acessada
+  entityId: varchar("entity_id", { length: 100 }),
+  // Detalhes adicionais em JSON (ex: filtros usados, número de registros)
+  details: jsonb("details"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

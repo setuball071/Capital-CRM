@@ -393,6 +393,13 @@ import {
   sensitiveRateLimiter,
   scrapingDetection,
   uploadRateLimiter,
+  checkAccountLock,
+  recordFailedLogin,
+  resetLoginAttempts,
+  registerSession,
+  unregisterSession,
+  logAudit,
+  getClientIp,
 } from "./security";
 import {
   loginSchema,
@@ -2029,9 +2036,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { email, password } = result.data;
 
+      const ip = getClientIp(req);
+      const ua = req.headers["user-agent"] || "";
+
       // Find user
       const user = await storage.getUserByEmail(email);
       if (!user) {
+        // Não revela se o email existe ou não
         return res.status(401).json({ message: "Email ou senha incorretos" });
       }
 
@@ -2039,11 +2050,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Usuário inativo" });
       }
 
+      // Verificar se conta está bloqueada
+      const lockStatus = await checkAccountLock(user.id);
+      if (lockStatus.blocked) {
+        logAudit({
+          userId: user.id,
+          action: "login_blocked",
+          entityType: "user",
+          entityId: String(user.id),
+          ipAddress: ip,
+          userAgent: ua,
+        }).catch(() => {});
+        return res.status(429).json({
+          message: `Conta bloqueada por excesso de tentativas. Aguarde ${lockStatus.minutesLeft} minuto(s).`,
+        });
+      }
+
       // Check password
       const validPassword = await bcrypt.compare(password, user.passwordHash);
       if (!validPassword) {
+        // Registra tentativa falha (pode bloquear a conta e enviar email)
+        await recordFailedLogin(user.id, email, ip, ua);
+        logAudit({
+          userId: user.id,
+          action: "login_failed",
+          entityType: "user",
+          entityId: String(user.id),
+          ipAddress: ip,
+          userAgent: ua,
+        }).catch(() => {});
         return res.status(401).json({ message: "Email ou senha incorretos" });
       }
+
+      // Login bem-sucedido — zera tentativas
+      await resetLoginAttempts(user.id);
 
       // Validate tenant access (only if tenant is resolved from domain)
       if (req.tenantId) {
@@ -2107,6 +2147,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Erro ao salvar sessão" });
         }
 
+        // Registra sessão para controle de simultâneas
+        registerSession(user.id, req.session.id);
+
+        // Log de auditoria
+        logAudit({
+          tenantId: sessionTenantId ?? undefined,
+          userId: user.id,
+          action: "login",
+          entityType: "user",
+          entityId: String(user.id),
+          ipAddress: ip,
+          userAgent: ua,
+        }).catch(() => {});
+
         // Don't send password hash to client
         const { passwordHash: _, ...userWithoutPassword } = user;
 
@@ -2141,6 +2195,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Logout
   app.post("/api/auth/logout", (req, res) => {
+    const userId = req.session?.userId;
+    const sessionId = req.session?.id;
+    const ip = getClientIp(req);
+
+    if (userId && sessionId) {
+      unregisterSession(userId, sessionId);
+      logAudit({
+        userId,
+        action: "logout",
+        ipAddress: ip,
+      }).catch(() => {});
+    }
+
     req.session.destroy((err: any) => {
       if (err) {
         return res.status(500).json({ message: "Erro ao fazer logout" });
@@ -27820,6 +27887,17 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const { cpf } = req.params;
       const cpfLimpo = cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
+
+      logAudit({
+        tenantId: req.tenantId,
+        userId: req.session?.userId,
+        action: "consulta_siape",
+        entityType: "cpf",
+        entityId: cpfLimpo,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"] || "",
+      }).catch(() => {});
+
       const result = await db.execute(sql`
         SELECT mes_pagamento, tipo_relacao, orgao_nome,
                total_bruto, total_descontos, total_liquido, importado_em
