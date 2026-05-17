@@ -794,6 +794,20 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
   req.user = user;
 
+  // Valida sessão exclusiva por navegador (só em produção)
+  // Tabs do mesmo navegador compartilham o mesmo sessionId → passam sempre
+  // Outro navegador gera sessionId diferente → sessão antiga é derrubada
+  if (process.env.NODE_ENV === "production") {
+    const { isSessionDisplaced } = await import("./security");
+    if (isSessionDisplaced(user.id, req.session.id)) {
+      req.session.destroy(() => {});
+      return res.status(401).json({
+        message: "Sessão encerrada — sua conta foi acessada em outro navegador.",
+        code: "SESSION_DISPLACED",
+      });
+    }
+  }
+
   // CRÍTICO: Derivar tenantId do usuário autenticado
   // Prioridade: session.tenantId (set at login) > domain-based (resolveTenant) > user_tenants lookup > dev fallback
   if (req.session.tenantId) {

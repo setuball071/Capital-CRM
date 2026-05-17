@@ -350,50 +350,70 @@ export async function resetLoginAttempts(userId: number): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. LIMITE DE SESSÕES SIMULTÂNEAS POR USUÁRIO
+// 5. CONTROLE DE SESSÃO EXCLUSIVA POR NAVEGADOR
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// REGRA:
+//   - Múltiplas abas no mesmo navegador → compartilham o mesmo cookie de sessão
+//     (mesmo sessionId) → todas funcionam normalmente ✅
+//   - Novo navegador (Chrome, Firefox, celular, etc.) → gera novo sessionId
+//     → derruba a sessão anterior automaticamente ✅
+//
+// Como funciona: guardamos somente o sessionId ativo de cada usuário.
+// Se uma requisição chegar com sessionId diferente do registrado, o antigo
+// é invalidado e o novo assume.
 
-const MAX_SESSIONS_PER_USER = 3;
-
-// userId -> Set de sessionIds ativos
-const activeSessions = new Map<number, Set<string>>();
+// userId -> sessionId ativo
+const activeSessionByUser = new Map<number, string>();
 
 /**
- * Registra uma nova sessão para o usuário.
- * Se exceder o limite, a sessão mais antiga é invalidada.
- * Retorna true se a sessão foi aceita, false se foi recusada.
+ * Registra o sessionId ativo do usuário (chamado no login).
+ * Se já havia outro sessionId, ele é derrubado — o novo assume.
  */
 export function registerSession(userId: number, sessionId: string): void {
-  if (!activeSessions.has(userId)) {
-    activeSessions.set(userId, new Set());
-  }
-
-  const sessions = activeSessions.get(userId)!;
-  sessions.add(sessionId);
-
-  // Se exceder o limite, remove o mais antigo (primeiro inserido)
-  if (sessions.size > MAX_SESSIONS_PER_USER) {
-    const oldest = sessions.values().next().value;
-    sessions.delete(oldest);
+  const previous = activeSessionByUser.get(userId);
+  if (previous && previous !== sessionId) {
     console.warn(
-      `[SECURITY] Sessão mais antiga invalidada para userId ${userId} ` +
-      `(excedeu limite de ${MAX_SESSIONS_PER_USER} sessões simultâneas)`
+      `[SECURITY] userId ${userId} logou em novo navegador — sessão anterior derrubada.`
     );
   }
+  activeSessionByUser.set(userId, sessionId);
 }
 
 /**
- * Remove sessão ao fazer logout.
+ * Remove o registro de sessão ao fazer logout.
  */
 export function unregisterSession(userId: number, sessionId: string): void {
-  activeSessions.get(userId)?.delete(sessionId);
+  if (activeSessionByUser.get(userId) === sessionId) {
+    activeSessionByUser.delete(userId);
+  }
 }
 
 /**
- * Retorna quantas sessões ativas o usuário tem.
+ * Verifica se a sessão atual foi deslocada por outro navegador.
+ *
+ * Retorna TRUE se a sessão deve ser bloqueada (outro navegador assumiu).
+ * Retorna FALSE se a sessão é válida (mesmas abas ou primeiro acesso).
+ *
+ * Lógica:
+ * - Tabs do mesmo navegador compartilham o mesmo cookie → mesmo sessionId → FALSE ✅
+ * - Outro navegador (ou celular) gera sessionId diferente → TRUE, derruba ✅
+ * - Restart do servidor limpa o mapa → primeira requisição registra e retorna FALSE ✅
  */
-export function getActiveSessionCount(userId: number): number {
-  return activeSessions.get(userId)?.size ?? 0;
+export function isSessionDisplaced(userId: number, sessionId: string): boolean {
+  const activeId = activeSessionByUser.get(userId);
+
+  // Sem registro ainda (restart do servidor) → registra e deixa passar
+  if (!activeId) {
+    activeSessionByUser.set(userId, sessionId);
+    return false;
+  }
+
+  // Mesma sessão (mesmas abas) → OK
+  if (activeId === sessionId) return false;
+
+  // Sessão diferente → foi deslocada por outro navegador
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
