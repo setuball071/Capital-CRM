@@ -508,8 +508,9 @@ export function additionalSecurityHeaders(
   // Impede que o navegador adivinhe o tipo de conteúdo
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  // Impede carregamento em iframe (clickjacking)
-  res.setHeader("X-Frame-Options", "DENY");
+  // Permite iframe apenas do mesmo domínio (SAMEORIGIN protege de clickjacking externo
+  // e ainda permite iframes internos como o Simulador de Contracheque)
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   // Força HTTPS por 1 ano em produção
   if (process.env.NODE_ENV === "production") {
