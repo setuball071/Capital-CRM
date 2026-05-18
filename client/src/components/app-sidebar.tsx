@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp } from "lucide-react";
+import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -191,6 +191,8 @@ export function AppSidebar() {
       title: "Administração",
       icon: Settings,
       items: [
+        { title: "Assinaturas", url: "/admin/assinaturas", icon: CreditCard, masterOnly: true },
+        { title: "Minha Assinatura", url: "/assinatura", icon: CreditCard, rolesAllowed: ["coordenacao", "vendedor", "financeiro"] },
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, module: "modulo_config_usuarios", subItem: "ambientes" },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },

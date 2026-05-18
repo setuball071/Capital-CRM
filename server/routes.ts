@@ -28076,6 +28076,176 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ASSINATURAS — Gerenciamento de planos por tenant
+  // ─────────────────────────────────────────────────────────────────────────
+  const { subscriptions } = await import("@shared/schema");
+
+  // GET /api/admin/subscriptions — lista todas as assinaturas (master only)
+  app.get("/api/admin/subscriptions", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const rows = await db.execute(sql`
+        SELECT s.*, t.name AS tenant_name, t.key AS tenant_key
+        FROM subscriptions s
+        JOIN tenants t ON t.id = s.tenant_id
+        ORDER BY s.created_at DESC
+      `);
+      res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao listar assinaturas", error: err.message });
+    }
+  });
+
+  // GET /api/subscription — assinatura do tenant atual
+  app.get("/api/subscription", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) return res.json(null);
+      const rows = await db.execute(sql`
+        SELECT s.*, t.name AS tenant_name
+        FROM subscriptions s
+        JOIN tenants t ON t.id = s.tenant_id
+        WHERE s.tenant_id = ${tenantId}
+        LIMIT 1
+      `);
+      res.json(rows.rows[0] || null);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar assinatura", error: err.message });
+    }
+  });
+
+  // POST /api/admin/subscriptions — cria assinatura para um tenant (master only)
+  app.post("/api/admin/subscriptions", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const { tenantId, plan, status, trialDays, notes } = req.body;
+      if (!tenantId || !plan) return res.status(400).json({ message: "tenantId e plan são obrigatórios" });
+
+      const trialEndsAt = status === "trial" && trialDays
+        ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
+        : null;
+
+      const now = new Date();
+      const periodEnd = status === "active"
+        ? new Date(now.getFullYear(), now.getMonth() + 1, now.getDate())
+        : null;
+
+      await db.execute(sql`
+        INSERT INTO subscriptions (tenant_id, plan, status, trial_ends_at, current_period_start, current_period_end, notes, updated_at)
+        VALUES (${tenantId}, ${plan}, ${status || "trial"}, ${trialEndsAt}, ${status === "active" ? now : null}, ${periodEnd}, ${notes || null}, NOW())
+        ON CONFLICT (tenant_id) DO UPDATE SET
+          plan = EXCLUDED.plan,
+          status = EXCLUDED.status,
+          trial_ends_at = EXCLUDED.trial_ends_at,
+          current_period_start = EXCLUDED.current_period_start,
+          current_period_end = EXCLUDED.current_period_end,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      `);
+
+      res.json({ message: "Assinatura salva com sucesso" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao criar assinatura", error: err.message });
+    }
+  });
+
+  // PATCH /api/admin/subscriptions/:tenantId — atualiza assinatura (master only)
+  app.patch("/api/admin/subscriptions/:tenantId", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const { tenantId } = req.params;
+      const { plan, status, notes, trialEndsAt, currentPeriodEnd } = req.body;
+
+      await db.execute(sql`
+        UPDATE subscriptions SET
+          plan = COALESCE(${plan}, plan),
+          status = COALESCE(${status}, status),
+          notes = COALESCE(${notes}, notes),
+          trial_ends_at = COALESCE(${trialEndsAt ? new Date(trialEndsAt) : null}, trial_ends_at),
+          current_period_end = COALESCE(${currentPeriodEnd ? new Date(currentPeriodEnd) : null}, current_period_end),
+          updated_at = NOW()
+        WHERE tenant_id = ${parseInt(tenantId)}
+      `);
+
+      res.json({ message: "Assinatura atualizada" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao atualizar assinatura", error: err.message });
+    }
+  });
+
+  // POST /api/admin/subscriptions/:tenantId/activate — ativa assinatura (master only)
+  app.post("/api/admin/subscriptions/:tenantId/activate", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const { tenantId } = req.params;
+      const { plan } = req.body;
+      const now = new Date();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+      await db.execute(sql`
+        UPDATE subscriptions SET
+          status = 'active',
+          plan = COALESCE(${plan}, plan),
+          current_period_start = ${now},
+          current_period_end = ${periodEnd},
+          updated_at = NOW()
+        WHERE tenant_id = ${parseInt(tenantId)}
+      `);
+
+      res.json({ message: "Assinatura ativada" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao ativar assinatura", error: err.message });
+    }
+  });
+
+  // POST /api/admin/subscriptions/:tenantId/suspend — suspende assinatura (master only)
+  app.post("/api/admin/subscriptions/:tenantId/suspend", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const { tenantId } = req.params;
+      await db.execute(sql`
+        UPDATE subscriptions SET status = 'suspended', updated_at = NOW()
+        WHERE tenant_id = ${parseInt(tenantId)}
+      `);
+      res.json({ message: "Assinatura suspensa" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao suspender assinatura", error: err.message });
+    }
+  });
+
+  // POST /api/admin/subscriptions/:tenantId/cancel — cancela assinatura (master only)
+  app.post("/api/admin/subscriptions/:tenantId/cancel", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const { tenantId } = req.params;
+      await db.execute(sql`
+        UPDATE subscriptions SET status = 'cancelled', updated_at = NOW()
+        WHERE tenant_id = ${parseInt(tenantId)}
+      `);
+      res.json({ message: "Assinatura cancelada" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao cancelar assinatura", error: err.message });
+    }
+  });
+
+  // GET /api/admin/tenants-without-subscription — tenants sem assinatura (master only)
+  app.get("/api/admin/tenants-without-subscription", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const rows = await db.execute(sql`
+        SELECT t.id, t.name, t.key
+        FROM tenants t
+        LEFT JOIN subscriptions s ON s.tenant_id = t.id
+        WHERE s.id IS NULL
+        ORDER BY t.name
+      `);
+      res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

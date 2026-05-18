@@ -80,6 +80,8 @@ import MinhaCarteiraPage from "@/pages/minha-carteira";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import NotFound from "@/pages/not-found";
 import PrivacidadePage from "@/pages/privacidade";
+import AdminAssinaturasPage from "@/pages/admin-assinaturas";
+import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
@@ -500,6 +502,12 @@ function Router() {
               </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
+              </Route>
+              <Route path="/admin/assinaturas">
+                {() => <MasterRoute component={AdminAssinaturasPage} />}
+              </Route>
+              <Route path="/assinatura">
+                {() => <ProtectedRoute component={MinhaAssinaturaPage} />}
               </Route>
               <Route path="/admin/branding">
                 {() => <MasterRoute component={AdminBrandingPage} />}

@@ -3711,3 +3711,62 @@ export const insertAuditLogSchema = createInsertSchema(auditLog).omit({
 
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSINATURAS / SUBSCRIPTIONS
+// Controla o plano de cada tenant (trial, ativo, suspenso, cancelado).
+// Gateway-agnostic: campos de gateway são opcionais para integração futura.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SUBSCRIPTION_PLANS = ["trial", "basico", "profissional", "expert", "enterprise"] as const;
+export const SUBSCRIPTION_STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
+
+export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
+export const PLAN_LABELS: Record<SubscriptionPlan, string> = {
+  trial: "Trial",
+  basico: "Básico",
+  profissional: "Profissional",
+  expert: "Expert",
+  enterprise: "Enterprise",
+};
+
+export const PLAN_PRICES: Record<SubscriptionPlan, number | null> = {
+  trial: 0,
+  basico: 12700,      // R$127,00 em centavos
+  profissional: 19700, // R$197,00
+  expert: 27700,       // R$277,00
+  enterprise: null,    // sob consulta
+};
+
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .unique(), // 1 assinatura por tenant
+  plan: varchar("plan", { length: 50 }).notNull().default("trial"),
+  status: varchar("status", { length: 50 }).notNull().default("trial"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  // Gateway (Asaas, Stripe, etc.) — preenchido quando integração ativa
+  gatewayCustomerId: varchar("gateway_customer_id", { length: 255 }),
+  gatewaySubscriptionId: varchar("gateway_subscription_id", { length: 255 }),
+  // Histórico de pagamentos em JSON [{date, amount, status, invoiceUrl}]
+  paymentHistory: jsonb("payment_history").default([]),
+  // Notas internas do master
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;

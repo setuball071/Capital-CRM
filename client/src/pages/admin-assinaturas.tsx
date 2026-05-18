@@ -1,0 +1,405 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import {
+  CreditCard,
+  Plus,
+  CheckCircle,
+  XCircle,
+  PauseCircle,
+  RefreshCw,
+  Building2,
+  Calendar,
+} from "lucide-react";
+
+const PLAN_LABELS: Record<string, string> = {
+  trial: "Trial",
+  basico: "Básico",
+  profissional: "Profissional",
+  expert: "Expert",
+  enterprise: "Enterprise",
+};
+
+const PLAN_PRICES: Record<string, string> = {
+  trial: "Grátis",
+  basico: "R$ 127/mês",
+  profissional: "R$ 197/mês",
+  expert: "R$ 277/mês",
+  enterprise: "Sob consulta",
+};
+
+const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
+  trial: { label: "Trial", variant: "secondary", icon: RefreshCw },
+  active: { label: "Ativa", variant: "default", icon: CheckCircle },
+  suspended: { label: "Suspensa", variant: "destructive", icon: PauseCircle },
+  cancelled: { label: "Cancelada", variant: "outline", icon: XCircle },
+};
+
+function formatDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+function formatDateDiff(d: string | null) {
+  if (!d) return null;
+  const diff = Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) return `Venceu há ${Math.abs(diff)} dias`;
+  if (diff === 0) return "Vence hoje";
+  return `${diff} dias restantes`;
+}
+
+export default function AdminAssinaturasPage() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    tenantId: "",
+    plan: "trial",
+    status: "trial",
+    trialDays: "7",
+    notes: "",
+  });
+
+  const { data: subscriptions = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/subscriptions"],
+  });
+
+  const { data: tenantsWithout = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/tenants-without-subscription"],
+    enabled: modalOpen && !editingTenantId,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (editingTenantId) {
+        return apiRequest("PATCH", `/api/admin/subscriptions/${editingTenantId}`, data);
+      }
+      return apiRequest("POST", "/api/admin/subscriptions", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants-without-subscription"] });
+      toast({ title: "Assinatura salva com sucesso" });
+      setModalOpen(false);
+      resetForm();
+    },
+    onError: () => toast({ title: "Erro ao salvar assinatura", variant: "destructive" }),
+  });
+
+  const actionMutation = useMutation({
+    mutationFn: async ({ tenantId, action, plan }: { tenantId: number; action: string; plan?: string }) =>
+      apiRequest("POST", `/api/admin/subscriptions/${tenantId}/${action}`, plan ? { plan } : {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] });
+      toast({ title: "Operação realizada com sucesso" });
+    },
+    onError: () => toast({ title: "Erro na operação", variant: "destructive" }),
+  });
+
+  function resetForm() {
+    setForm({ tenantId: "", plan: "trial", status: "trial", trialDays: "7", notes: "" });
+    setEditingTenantId(null);
+  }
+
+  function openNew() {
+    resetForm();
+    setModalOpen(true);
+  }
+
+  function openEdit(sub: any) {
+    setEditingTenantId(sub.tenant_id);
+    setForm({
+      tenantId: String(sub.tenant_id),
+      plan: sub.plan,
+      status: sub.status,
+      trialDays: "7",
+      notes: sub.notes || "",
+    });
+    setModalOpen(true);
+  }
+
+  function handleSave() {
+    saveMutation.mutate({
+      tenantId: editingTenantId || parseInt(form.tenantId),
+      plan: form.plan,
+      status: form.status,
+      trialDays: parseInt(form.trialDays),
+      notes: form.notes,
+    });
+  }
+
+  const counts = {
+    total: subscriptions.length,
+    active: subscriptions.filter((s: any) => s.status === "active").length,
+    trial: subscriptions.filter((s: any) => s.status === "trial").length,
+    suspended: subscriptions.filter((s: any) => s.status === "suspended").length,
+  };
+
+  return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CreditCard className="h-6 w-6 text-primary" />
+            Assinaturas
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Gerencie os planos e cobranças de cada tenant
+          </p>
+        </div>
+        <Button onClick={openNew} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Nova Assinatura
+        </Button>
+      </div>
+
+      {/* Resumo */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total", value: counts.total, color: "text-foreground" },
+          { label: "Ativas", value: counts.active, color: "text-green-600" },
+          { label: "Trial", value: counts.trial, color: "text-yellow-600" },
+          { label: "Suspensas", value: counts.suspended, color: "text-red-600" },
+        ].map((item) => (
+          <Card key={item.label}>
+            <CardContent className="pt-4 pb-3">
+              <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
+              <div className="text-xs text-muted-foreground">{item.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabela */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Todos os Tenants</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-8 text-center text-muted-foreground">Carregando...</div>
+          ) : subscriptions.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              Nenhuma assinatura cadastrada ainda.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Plano</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Trial até</TableHead>
+                  <TableHead>Notas</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subscriptions.map((sub: any) => {
+                  const statusCfg = STATUS_CONFIG[sub.status] || STATUS_CONFIG.trial;
+                  const Icon = statusCfg.icon;
+                  const diffMsg = sub.status === "trial"
+                    ? formatDateDiff(sub.trial_ends_at)
+                    : formatDateDiff(sub.current_period_end);
+
+                  return (
+                    <TableRow key={sub.id}>
+                      <TableCell>
+                        <div className="font-medium">{sub.tenant_name}</div>
+                        <div className="text-xs text-muted-foreground">{sub.tenant_key}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{PLAN_LABELS[sub.plan] || sub.plan}</div>
+                        <div className="text-xs text-muted-foreground">{PLAN_PRICES[sub.plan] || ""}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusCfg.variant} className="gap-1">
+                          <Icon className="h-3 w-3" />
+                          {statusCfg.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{formatDate(sub.current_period_end)}</div>
+                        {diffMsg && sub.status === "active" && (
+                          <div className={`text-xs ${diffMsg.includes("Venceu") ? "text-red-500" : "text-muted-foreground"}`}>
+                            {diffMsg}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {sub.status === "trial" ? (
+                          <>
+                            <div className="text-sm">{formatDate(sub.trial_ends_at)}</div>
+                            {diffMsg && (
+                              <div className={`text-xs ${diffMsg.includes("Venceu") ? "text-red-500" : "text-yellow-600"}`}>
+                                {diffMsg}
+                              </div>
+                            )}
+                          </>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[180px]">
+                        <span className="text-xs text-muted-foreground line-clamp-2">{sub.notes || "—"}</span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEdit(sub)}
+                          >
+                            Editar
+                          </Button>
+                          {sub.status !== "active" && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => actionMutation.mutate({ tenantId: sub.tenant_id, action: "activate", plan: sub.plan })}
+                            >
+                              Ativar
+                            </Button>
+                          )}
+                          {sub.status === "active" && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => actionMutation.mutate({ tenantId: sub.tenant_id, action: "suspend" })}
+                            >
+                              Suspender
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal de criar/editar */}
+      <Dialog open={modalOpen} onOpenChange={(v) => { setModalOpen(v); if (!v) resetForm(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingTenantId ? "Editar Assinatura" : "Nova Assinatura"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {!editingTenantId && (
+              <div>
+                <Label>Tenant</Label>
+                <Select value={form.tenantId} onValueChange={(v) => setForm({ ...form, tenantId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tenant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenantsWithout.map((t: any) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name} ({t.key})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <Label>Plano</Label>
+              <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PLAN_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label} {PLAN_PRICES[key] ? `— ${PLAN_PRICES[key]}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="active">Ativa</SelectItem>
+                  <SelectItem value="suspended">Suspensa</SelectItem>
+                  <SelectItem value="cancelled">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {form.status === "trial" && (
+              <div>
+                <Label>Dias de trial</Label>
+                <Input
+                  type="number"
+                  value={form.trialDays}
+                  onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
+                  min="1"
+                  max="90"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Notas internas</Label>
+              <Textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Ex: Pago via PIX em 15/05, aguardando confirmação..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setModalOpen(false); resetForm(); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
