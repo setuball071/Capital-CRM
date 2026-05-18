@@ -134,7 +134,7 @@ export function AppSidebar() {
         { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
         { title: "Simulador de Amortização", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
         { title: "Calculadora Renda Fixa", url: "/calculadora-renda-fixa", icon: TrendingUp, module: "modulo_simulador" },
-        { title: "Cálculo de Contracheque", url: "/calculadora-contracheque", icon: FileText, module: "modulo_simulador" },
+        { title: "Cálculo de Contracheque", url: "/calculadora-contracheque", icon: FileText, module: "modulo_simulador", subItem: "calculadora_contracheque" },
       ],
     },
     {
