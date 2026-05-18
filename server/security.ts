@@ -481,11 +481,26 @@ export function getClientIp(req: Request): string {
  * Verifica se a requisição tem sessão válida antes de servir arquivos do /uploads.
  * Impede acesso a arquivos privados sem autenticação.
  */
+/**
+ * Logos, favicons e arquivos de branding são públicos por natureza —
+ * aparecem na tela de login antes de qualquer autenticação.
+ * Apenas outros uploads (documentos, CSVs, etc.) exigem sessão.
+ */
+const PUBLIC_UPLOAD_PATTERNS = [
+  /\/(logo|favicon|brand|logo_login|logo_menu)/i,
+  /\.(png|jpg|jpeg|svg|gif|webp|ico)$/i,
+];
+
 export function requireSessionForUploads(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
+  // Imagens e logos são públicos (necessário para tela de login)
+  const isPublicAsset = PUBLIC_UPLOAD_PATTERNS.some((p) => p.test(req.path));
+  if (isPublicAsset) return next();
+
+  // Demais arquivos exigem autenticação
   const userId = (req as any).session?.userId;
   if (!userId) {
     return res.status(401).json({ message: "Autenticação necessária." });
