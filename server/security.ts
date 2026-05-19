@@ -11,7 +11,7 @@
  * - Proteção de acesso ao /uploads
  */
 
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "./storage";
 import { users, auditLog } from "@shared/schema";
@@ -50,8 +50,7 @@ export const loginRateLimiter = rateLimit({
   keyGenerator: (req: Request) => {
     return (
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.ip ||
-      "unknown"
+      ipKeyGenerator(req)
     );
   },
 });
@@ -70,8 +69,7 @@ export const globalApiRateLimiter = rateLimit({
   keyGenerator: (req: Request) => {
     return (
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.ip ||
-      "unknown"
+      ipKeyGenerator(req)
     );
   },
 });
@@ -96,8 +94,7 @@ export const sensitiveRateLimiter = rateLimit({
     if (userId) return `user:${userId}`;
     return (
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.ip ||
-      "unknown"
+      ipKeyGenerator(req)
     );
   },
 });
@@ -116,7 +113,7 @@ export const uploadRateLimiter = rateLimit({
   keyGenerator: (req: Request) => {
     const userId = (req as any).session?.userId;
     if (userId) return `user:${userId}`;
-    return req.ip || "unknown";
+    return ipKeyGenerator(req);
   },
 });
 
