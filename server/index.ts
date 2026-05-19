@@ -95,7 +95,9 @@ app.use(additionalSecurityHeaders);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DETECÇÃO DE BOTS (aplica antes de qualquer rota /api)
+// Rotas do Lemit Worker são isentas — têm autenticação própria por chave
 // ─────────────────────────────────────────────────────────────────────────────
+app.use("/api/lemit/worker", (req, res, next) => next()); // bypass botDetection
 app.use("/api", botDetection);
 
 // ─────────────────────────────────────────────────────────────────────────────
