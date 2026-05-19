@@ -657,6 +657,7 @@ function renderResults() {
       '<td style="white-space:nowrap;">' +
         '<button class="btn-icon" onclick="moveRend(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
         '<button class="btn-icon" onclick="moveRend(' + i + ',1)" title="Descer"' + (i===nRend-1?' disabled':'') + '>↓</button>' +
+        '<button class="btn-icon" onclick="openEditModal(\'rend\',' + i + ')" title="Editar" style="color:#1a6fc4;">✎</button>' +
         '<button class="btn-icon btn-danger" onclick="removeRend(' + i + ')" title="Remover">×</button>' +
       '</td>';
     tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'rend'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
@@ -723,6 +724,7 @@ function renderResults() {
       '<td style="white-space:nowrap;">' +
         '<button class="btn-icon" onclick="moveDesc(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
         '<button class="btn-icon" onclick="moveDesc(' + i + ',1)" title="Descer"' + (i===nDesc-1?' disabled':'') + '>↓</button>' +
+        '<button class="btn-icon" onclick="openEditModal(\'desc\',' + i + ')" title="Editar" style="color:#1a6fc4;">✎</button>' +
         '<button class="btn-icon btn-danger" onclick="removeDesc(' + i + ')" title="Remover">×</button>' +
       '</td>';
     tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'desc'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
@@ -1115,10 +1117,28 @@ function _populateDatalist(type) {
 function openAddModal(type) {
   if (!current) return;
   document.getElementById('addModalType').value = type;
+  document.getElementById('addModalEditIdx').value = '-1';
   document.getElementById('addModalTitle').textContent = type === 'rend' ? 'Adicionar Rendimento' : 'Adicionar Desconto';
+  document.getElementById('addModalConfirmBtn').textContent = 'Adicionar';
   document.getElementById('addDiscr').value = '';
   document.getElementById('addPrazo').value = '';
   document.getElementById('addValor').value = '';
+  _populateDatalist(type);
+  document.getElementById('addModal').classList.add('open');
+  setTimeout(() => document.getElementById('addDiscr').focus(), 80);
+}
+
+function openEditModal(type, idx) {
+  if (!current) return;
+  const item = type === 'rend' ? current.rendimentos[idx] : current.descontos[idx];
+  if (!item) return;
+  document.getElementById('addModalType').value = type;
+  document.getElementById('addModalEditIdx').value = String(idx);
+  document.getElementById('addModalTitle').textContent = type === 'rend' ? 'Editar Rendimento' : 'Editar Desconto';
+  document.getElementById('addModalConfirmBtn').textContent = 'Salvar';
+  document.getElementById('addDiscr').value = item.discriminacao || '';
+  document.getElementById('addPrazo').value = item.prazo ?? '';
+  document.getElementById('addValor').value = item.valor != null ? String(item.valor).replace('.', ',') : '';
   _populateDatalist(type);
   document.getElementById('addModal').classList.add('open');
   setTimeout(() => document.getElementById('addDiscr').focus(), 80);
@@ -1130,6 +1150,7 @@ function closeAddModal() {
 
 function confirmAddItem() {
   const type = document.getElementById('addModalType').value;
+  const editIdx = parseInt(document.getElementById('addModalEditIdx').value, 10);
   const discr = document.getElementById('addDiscr').value.trim();
   const prazoStr = document.getElementById('addPrazo').value.trim();
   const valorStr = document.getElementById('addValor').value.trim();
@@ -1138,10 +1159,13 @@ function confirmAddItem() {
   const valor = parseBRNumber(valorStr);
   if (isNaN(valor) || valor < 0) { alert('Valor invalido. Use formato: 1.234,56'); return; }
   _saveHist(type, discr.toUpperCase());
-  if (type === 'rend') {
-    current.rendimentos.push({ discriminacao: discr, prazo, valor });
+  const lista = type === 'rend' ? current.rendimentos : current.descontos;
+  if (editIdx >= 0) {
+    // Edição de item existente
+    lista[editIdx] = { ...lista[editIdx], discriminacao: discr, prazo, valor };
   } else {
-    current.descontos.push({ discriminacao: discr, prazo, valor });
+    // Novo item
+    lista.push({ discriminacao: discr, prazo, valor });
   }
   closeAddModal();
   renderResults();
@@ -1265,9 +1289,10 @@ function exportPDF() {
       <label>Valor * (use virgula: 1.234,56)</label>
       <input type="text" id="addValor" placeholder="Ex: 5.000,00">
     </div>
+    <input type="hidden" id="addModalEditIdx" value="-1">
     <div class="modal-actions">
       <button class="secondary" onclick="closeAddModal()">Cancelar</button>
-      <button onclick="confirmAddItem()">Adicionar</button>
+      <button id="addModalConfirmBtn" onclick="confirmAddItem()">Adicionar</button>
     </div>
   </div>
 </div>
