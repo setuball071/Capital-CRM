@@ -255,6 +255,36 @@ app.use((req, res, next) => {
           }
         }
 
+        // Auto-migrations (idempotentes — IF NOT EXISTS)
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE clientes_pessoa
+              ADD COLUMN IF NOT EXISTS lemit_data JSONB,
+              ADD COLUMN IF NOT EXISTS lemit_consultado_em TIMESTAMP
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS lemit_jobs (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              pessoa_id     INTEGER REFERENCES clientes_pessoa(id) ON DELETE CASCADE,
+              cpf           VARCHAR(20) NOT NULL,
+              requested_by  INTEGER,
+              status        VARCHAR(20) NOT NULL DEFAULT 'pending',
+              error_msg     TEXT,
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+              started_at    TIMESTAMP,
+              done_at       TIMESTAMP
+            )
+          `);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_status ON lemit_jobs(status)`);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_cpf ON lemit_jobs(cpf)`);
+          log("Lemit migration OK");
+        } catch (migErr) {
+          console.error("Lemit migration error (non-fatal):", migErr);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");
