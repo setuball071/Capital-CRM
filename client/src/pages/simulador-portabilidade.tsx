@@ -792,7 +792,7 @@ export default function SimuladorPortabilidadePage() {
           <div className="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
           <div className="prazos-wrap">
             <div>
-              <div className="prazos-col-label col-left-label">Tabela Cheia</div>
+              <div className="prazos-col-label col-left-label">Taxa Média</div>
               <div className="prazos-grid">
                 {leftCards.length === 0 ? (
                   <div className="empty-sim" style={{ padding: 16, gridColumn: "1/-1" }}>
@@ -809,14 +809,14 @@ export default function SimuladorPortabilidadePage() {
                       <div className="pc-meses">{card.meses}<small>meses</small></div>
                       <div className="pc-parc">{fmtR(card.parcMedia)}/mês</div>
                       <div className="pc-taxa">{fmtN(card.taxaImpl, 2)}% a.m.</div>
-                      <div className="pc-tag">CHEIA</div>
+                      <div className="pc-tag">MÉDIA</div>
                     </div>
                   ))
                 )}
               </div>
             </div>
             <div>
-              <div className="prazos-col-label col-right-label">Taxa Final</div>
+              <div className="prazos-col-label col-right-label">Taxa Média</div>
               <div className="prazos-grid">
                 {rightCards.length === 0 ? (
                   <div className="empty-sim" style={{ padding: 16, gridColumn: "1/-1" }}>
