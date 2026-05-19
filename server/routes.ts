@@ -480,6 +480,7 @@ import {
   creativeBrandConfig,
   companies,
   insertCompanySchema,
+  lemitJobs,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -28241,6 +28242,172 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         ORDER BY t.name
       `);
       res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
+  // ============================================================
+  // LEMIT — Enriquecimento de telefones via script local
+  // ============================================================
+
+  // Chave de API estática para o script Python se autenticar
+  const LEMIT_WORKER_KEY = process.env.LEMIT_WORKER_KEY || "lemit-worker-key-change-me";
+
+  function requireLemitWorker(req: any, res: any, next: any) {
+    const key = req.headers["x-lemit-key"] || req.query.key;
+    if (key !== LEMIT_WORKER_KEY) return res.status(401).json({ message: "Unauthorized" });
+    next();
+  }
+
+  // POST /api/lemit/queue — usuário solicita consulta de um CPF
+  // Se já tem cache (lemit_data), retorna imediatamente sem criar job
+  app.post("/api/lemit/queue", requireAuth, async (req: any, res) => {
+    try {
+      const { cpf, pessoaId } = req.body;
+      const tenantId = req.session.tenantId;
+      const userId = req.session.userId;
+
+      if (!cpf) return res.status(400).json({ message: "CPF obrigatório" });
+
+      const cpfLimpo = cpf.replace(/\D/g, "").padStart(11, "0");
+
+      // Verifica se já tem cache
+      const [cached] = await db
+        .select({ lemitData: clientesPessoa.lemitData, lemitConsultadoEm: clientesPessoa.lemitConsultadoEm })
+        .from(clientesPessoa)
+        .where(sql`REPLACE(REPLACE(${clientesPessoa.cpf}, '.', ''), '-', '') = ${cpfLimpo}`)
+        .limit(1);
+
+      if (cached?.lemitData) {
+        return res.json({ cached: true, data: cached.lemitData, consultadoEm: cached.lemitConsultadoEm });
+      }
+
+      // Verifica se já tem job pending/processing para esse CPF
+      const [existing] = await db
+        .select()
+        .from(lemitJobs)
+        .where(and(eq(lemitJobs.cpf, cpfLimpo), inArray(lemitJobs.status, ["pending", "processing"])))
+        .limit(1);
+
+      if (existing) {
+        return res.json({ cached: false, jobId: existing.id, status: existing.status });
+      }
+
+      // Cria novo job
+      const [job] = await db
+        .insert(lemitJobs)
+        .values({ tenantId, pessoaId: pessoaId || null, cpf: cpfLimpo, requestedBy: userId, status: "pending" })
+        .returning();
+
+      res.json({ cached: false, jobId: job.id, status: "pending" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
+  // GET /api/lemit/job/:id — front consulta status do job
+  app.get("/api/lemit/job/:id", requireAuth, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const [job] = await db.select().from(lemitJobs).where(eq(lemitJobs.id, jobId)).limit(1);
+      if (!job) return res.status(404).json({ message: "Job não encontrado" });
+
+      if (job.status === "done") {
+        // Busca o resultado do cache na pessoa
+        const [pessoa] = await db
+          .select({ lemitData: clientesPessoa.lemitData, lemitConsultadoEm: clientesPessoa.lemitConsultadoEm })
+          .from(clientesPessoa)
+          .where(sql`REPLACE(REPLACE(${clientesPessoa.cpf}, '.', ''), '-', '') = ${job.cpf}`)
+          .limit(1);
+        return res.json({ status: "done", data: pessoa?.lemitData || null });
+      }
+
+      res.json({ status: job.status, errorMsg: job.errorMsg || null });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
+  // GET /api/lemit/worker/poll — script Python busca próximo job pendente
+  app.get("/api/lemit/worker/poll", requireLemitWorker, async (req: any, res) => {
+    try {
+      // Pega o próximo pending e já marca como processing (atomicamente)
+      const [job] = await db
+        .update(lemitJobs)
+        .set({ status: "processing", startedAt: new Date() })
+        .where(
+          eq(
+            lemitJobs.id,
+            sql`(SELECT id FROM lemit_jobs WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1)`
+          )
+        )
+        .returning();
+
+      if (!job) return res.json({ job: null }); // fila vazia
+
+      res.json({ job: { id: job.id, cpf: job.cpf, pessoaId: job.pessoaId } });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
+  // POST /api/lemit/worker/done — script Python salva resultado
+  app.post("/api/lemit/worker/done", requireLemitWorker, async (req: any, res) => {
+    try {
+      const { jobId, cpf, data, error } = req.body;
+
+      if (error) {
+        await db
+          .update(lemitJobs)
+          .set({ status: "error", errorMsg: error, doneAt: new Date() })
+          .where(eq(lemitJobs.id, jobId));
+        return res.json({ ok: true });
+      }
+
+      const cpfLimpo = cpf.replace(/\D/g, "").padStart(11, "0");
+
+      // Salva resultado em cache na tabela clientes_pessoa
+      await db
+        .update(clientesPessoa)
+        .set({ lemitData: data, lemitConsultadoEm: new Date() } as any)
+        .where(sql`REPLACE(REPLACE(${clientesPessoa.cpf}, '.', ''), '-', '') = ${cpfLimpo}`);
+
+      // Marca job como concluído
+      await db
+        .update(lemitJobs)
+        .set({ status: "done", doneAt: new Date() })
+        .where(eq(lemitJobs.id, jobId));
+
+      // Insere telefones em clientes_telefones (sem duplicar)
+      if (data?.telefones_celular?.length || data?.telefones_fixo?.length) {
+        const [pessoa] = await db
+          .select({ id: clientesPessoa.id })
+          .from(clientesPessoa)
+          .where(sql`REPLACE(REPLACE(${clientesPessoa.cpf}, '.', ''), '-', '') = ${cpfLimpo}`)
+          .limit(1);
+
+        if (pessoa) {
+          const tels: any[] = [];
+          (data.telefones_celular || []).forEach((t: any) => {
+            const num = t.numero.replace(/\D/g, "");
+            if (num.length >= 10) tels.push({ pessoaId: pessoa.id, telefone: num, tipo: "celular" });
+          });
+          (data.telefones_fixo || []).forEach((t: any) => {
+            const num = t.numero.replace(/\D/g, "");
+            if (num.length >= 10) tels.push({ pessoaId: pessoa.id, telefone: num, tipo: "fixo" });
+          });
+
+          for (const tel of tels) {
+            await db
+              .insert(clientesTelefones)
+              .values(tel)
+              .onConflictDoNothing();
+          }
+        }
+      }
+
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ message: "Erro", error: err.message });
     }

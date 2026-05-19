@@ -771,6 +771,9 @@ export const clientesPessoa = pgTable(
     importRunId: integer("import_run_id"), // Link ao import que criou/atualizou
     // Observações/notas de atendimento
     notes: text("notes"), // Histórico de observações do cliente
+    // === LEMIT — Cache de enriquecimento ===
+    lemitData: jsonb("lemit_data"),           // Resultado completo da consulta Lemit (telefones, emails, endereços)
+    lemitConsultadoEm: timestamp("lemit_consultado_em"), // Quando foi consultado
     // === DADOS DE ENDEREÇO ===
     endereco: varchar("endereco", { length: 255 }), // Logradouro
     cidade: varchar("cidade", { length: 150 }),
@@ -3770,3 +3773,35 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+
+// ============================================================
+// LEMIT — Cache de consulta e fila de jobs
+// ============================================================
+
+// Adicionado via migration SQL: ALTER TABLE clientes_pessoa
+//   ADD COLUMN IF NOT EXISTS lemit_data JSONB,
+//   ADD COLUMN IF NOT EXISTS lemit_consultado_em TIMESTAMP;
+
+export const LEMIT_JOB_STATUSES = ["pending", "processing", "done", "error"] as const;
+export type LemitJobStatus = (typeof LEMIT_JOB_STATUSES)[number];
+
+export const lemitJobs = pgTable("lemit_jobs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  pessoaId: integer("pessoa_id").references(() => clientesPessoa.id, { onDelete: "cascade" }),
+  cpf: varchar("cpf", { length: 20 }).notNull(),          // CPF limpo (só dígitos)
+  requestedBy: integer("requested_by"),                    // userId que solicitou
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending/processing/done/error
+  errorMsg: text("error_msg"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  startedAt: timestamp("started_at"),
+  doneAt: timestamp("done_at"),
+});
+
+export const insertLemitJobSchema = createInsertSchema(lemitJobs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type LemitJob = typeof lemitJobs.$inferSelect;
+export type InsertLemitJob = z.infer<typeof insertLemitJobSchema>;

@@ -427,6 +427,11 @@ export default function ConsultaCliente() {
   const [taxasContratos, setTaxasContratos] = useState<Record<number, string>>({});
   const [showObsDialog, setShowObsDialog] = useState(false);
   
+  // === LEMIT — estados (effects/funções ficam após clienteDetalhado) ===
+  const [lemitJobId, setLemitJobId] = useState<number | null>(null);
+  const [lemitStatus, setLemitStatus] = useState<"idle" | "loading" | "polling" | "done" | "error">("idle");
+  const [lemitData, setLemitData] = useState<any | null>(null);
+
   // Função para calcular Saldo Devedor usando Tabela Price
   const calcularSaldoDevedorPrice = (valorParcela: number | null, taxaPercent: number, parcelasRestantes: number | null): number | null => {
     if (!valorParcela || !parcelasRestantes || taxaPercent <= 0) return null;
@@ -546,6 +551,72 @@ export default function ConsultaCliente() {
   });
   
   const clienteObsCpf = clienteDetalhado?.pessoa?.cpf?.replace(/[^0-9]/g, "") || "";
+
+  // === LEMIT — effects e funções (após clienteDetalhado) ===
+
+  // Polling do job Lemit
+  useEffect(() => {
+    if (lemitStatus !== "polling" || !lemitJobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lemit/job/${lemitJobId}`);
+        const json = await res.json();
+        if (json.status === "done") {
+          setLemitData(json.data);
+          setLemitStatus("done");
+          clearInterval(interval);
+        } else if (json.status === "error") {
+          setLemitStatus("error");
+          clearInterval(interval);
+          toast({ title: "Lemit: erro na consulta", description: json.errorMsg || "Erro desconhecido", variant: "destructive" });
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [lemitStatus, lemitJobId]);
+
+  // Carrega cache Lemit quando abre um cliente
+  useEffect(() => {
+    if (!clienteDetalhado?.pessoa?.cpf) return;
+    setLemitStatus("idle");
+    setLemitData(null);
+    setLemitJobId(null);
+    fetch("/api/lemit/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cpf: clienteDetalhado.pessoa.cpf, pessoaId: clienteDetalhado.pessoa.id }),
+    }).then(r => r.json()).then(json => {
+      if (json.cached && json.data) {
+        setLemitData(json.data);
+        setLemitStatus("done");
+      } else {
+        setLemitStatus("idle");
+      }
+    }).catch(() => setLemitStatus("idle"));
+  }, [clienteDetalhado?.pessoa?.id]);
+
+  async function buscarLemit() {
+    if (!clienteDetalhado?.pessoa?.cpf) return;
+    setLemitStatus("loading");
+    try {
+      const res = await fetch("/api/lemit/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cpf: clienteDetalhado.pessoa.cpf, pessoaId: clienteDetalhado.pessoa.id }),
+      });
+      const json = await res.json();
+      if (json.cached) {
+        setLemitData(json.data);
+        setLemitStatus("done");
+      } else {
+        setLemitJobId(json.jobId);
+        setLemitStatus("polling");
+      }
+    } catch {
+      setLemitStatus("error");
+      toast({ title: "Erro ao acionar Lemit", variant: "destructive" });
+    }
+  }
 
   // Dados enriquecidos do SIAPE (cargo, funcao, banco, financeiro)
   const { data: siapeEnrichData } = useQuery<{ dados: SiapeDados | null }>({
@@ -1640,6 +1711,143 @@ export default function ConsultaCliente() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* ===== LEMIT — Enriquecimento de telefones ===== */}
+              <Card className="border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-base">
+                      <Phone className="w-4 h-4 text-blue-500" />
+                      Telefones Lemit
+                      {lemitData?.consultado_em && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (atualizado {new Date(lemitData.consultado_em).toLocaleDateString("pt-BR")})
+                        </span>
+                      )}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant={lemitStatus === "done" ? "outline" : "default"}
+                      onClick={buscarLemit}
+                      disabled={lemitStatus === "loading" || lemitStatus === "polling"}
+                      className="gap-2"
+                    >
+                      {lemitStatus === "loading" || lemitStatus === "polling" ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                          </svg>
+                          {lemitStatus === "polling" ? "Aguardando worker..." : "Solicitando..."}
+                        </>
+                      ) : lemitStatus === "done" ? (
+                        "Atualizar"
+                      ) : (
+                        "Buscar Telefone"
+                      )}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lemitStatus === "idle" && (
+                    <p className="text-sm text-muted-foreground">
+                      Clique em "Buscar Telefone" para consultar telefones via Lemit.
+                      O worker precisa estar rodando na máquina local.
+                    </p>
+                  )}
+                  {lemitStatus === "polling" && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground py-2">
+                      <svg className="animate-spin h-4 w-4 text-blue-500" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      Consultando Lemit... aguarde (o worker está processando)
+                    </div>
+                  )}
+                  {lemitStatus === "error" && (
+                    <p className="text-sm text-red-500">Erro na consulta. Verifique se o worker está rodando.</p>
+                  )}
+                  {lemitStatus === "done" && lemitData && (
+                    <div className="space-y-4">
+                      {/* Celulares */}
+                      {lemitData.telefones_celular?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Celulares</p>
+                          <div className="space-y-1">
+                            {lemitData.telefones_celular.map((t: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                                <span className="font-mono">{t.numero}</span>
+                                <div className="flex items-center gap-2">
+                                  {t.situacao && <span className="text-xs text-muted-foreground">{t.situacao}</span>}
+                                  <Button variant="ghost" size="icon" className="h-6 w-6"
+                                    onClick={() => { navigator.clipboard.writeText(t.numero); handleCopy(t.numero, "Celular"); }}>
+                                    <Copy className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Fixos */}
+                      {lemitData.telefones_fixo?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Telefones Fixos</p>
+                          <div className="space-y-1">
+                            {lemitData.telefones_fixo.map((t: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                                <span className="font-mono">{t.numero}</span>
+                                <div className="flex items-center gap-2">
+                                  {t.situacao && <span className="text-xs text-muted-foreground">{t.situacao}</span>}
+                                  <Button variant="ghost" size="icon" className="h-6 w-6"
+                                    onClick={() => { navigator.clipboard.writeText(t.numero); handleCopy(t.numero, "Fixo"); }}>
+                                    <Copy className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Emails */}
+                      {lemitData.emails?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">E-mails</p>
+                          <div className="space-y-1">
+                            {lemitData.emails.map((email: string, i: number) => (
+                              <div key={i} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                                <span>{email}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6"
+                                  onClick={() => { navigator.clipboard.writeText(email); handleCopy(email, "E-mail"); }}>
+                                  <Copy className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Endereços */}
+                      {lemitData.enderecos?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Endereços</p>
+                          <div className="space-y-1">
+                            {lemitData.enderecos.map((e: any, i: number) => (
+                              <div key={i} className="p-2 bg-muted rounded text-sm">
+                                <p>{e.endereco}{e.bairro ? `, ${e.bairro}` : ""}</p>
+                                <p className="text-xs text-muted-foreground">{[e.cidade, e.cep].filter(Boolean).join(" — ")}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!lemitData.telefones_celular?.length && !lemitData.telefones_fixo?.length && !lemitData.emails?.length && (
+                        <p className="text-sm text-muted-foreground">Nenhum contato encontrado no Lemit para este CPF.</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
             </div>
             )
           })() : (
