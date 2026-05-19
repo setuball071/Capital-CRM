@@ -145,6 +145,9 @@ const BLOCKED_USER_AGENTS = [
 ];
 
 export function botDetection(req: Request, res: Response, next: NextFunction) {
+  // Rotas do Lemit Worker são isentas (autenticação própria por chave)
+  if (req.path.startsWith("/lemit/worker")) return next();
+
   // Só bloqueia em produção
   if (process.env.NODE_ENV !== "production") return next();
 
