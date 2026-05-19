@@ -28332,21 +28332,23 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // GET /api/lemit/worker/poll — script Python busca próximo job pendente
   app.get("/api/lemit/worker/poll", requireLemitWorker, async (req: any, res) => {
     try {
-      // Pega o próximo pending e já marca como processing (atomicamente)
-      const [job] = await db
+      // Busca próximo pending
+      const [pending] = await db
+        .select()
+        .from(lemitJobs)
+        .where(eq(lemitJobs.status, "pending"))
+        .orderBy(lemitJobs.createdAt)
+        .limit(1);
+
+      if (!pending) return res.json({ job: null });
+
+      // Marca como processing
+      await db
         .update(lemitJobs)
         .set({ status: "processing", startedAt: new Date() })
-        .where(
-          eq(
-            lemitJobs.id,
-            sql`(SELECT id FROM lemit_jobs WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1)`
-          )
-        )
-        .returning();
+        .where(eq(lemitJobs.id, pending.id));
 
-      if (!job) return res.json({ job: null }); // fila vazia
-
-      res.json({ job: { id: job.id, cpf: job.cpf, pessoaId: job.pessoaId } });
+      res.json({ job: { id: pending.id, cpf: pending.cpf, pessoaId: pending.pessoaId } });
     } catch (err: any) {
       res.status(500).json({ message: "Erro", error: err.message });
     }
