@@ -359,7 +359,7 @@ export default function SimuladorPortabilidadePage() {
       return;
     }
     if (!taxa) {
-      alert("Informe a Taxa Final a.m.");
+      alert("Informe a Taxa Média a.m.");
       return;
     }
     const coef = coefPrice(taxa, prazo);
@@ -681,7 +681,7 @@ export default function SimuladorPortabilidadePage() {
         <div className="main-grid">
           <div className="panel">
             <div className="panel-label">
-              <span className="sim-badge badge-left">CHEIA</span>
+              <span className="sim-badge badge-left">MÉDIA</span>
               Contrato Novo — Tabela de Comissão
             </div>
             <div className="mode-toggle">
@@ -747,7 +747,7 @@ export default function SimuladorPortabilidadePage() {
 
           <div className="panel panel-right">
             <div className="panel-label">
-              <span className="sim-badge badge-right">FINAL</span>
+              <span className="sim-badge badge-right">MÉDIA</span>
               Contrato Final — Após Portabilidade
             </div>
             <div className="form-row">
@@ -769,7 +769,7 @@ export default function SimuladorPortabilidadePage() {
                 <input type="number" ref={rContratoRef} placeholder="Calculado pelo lado esquerdo" step="0.01" readOnly data-testid="input-right-contrato" />
               </div>
               <div className="fg">
-                <label>Taxa Final a.m. (%)</label>
+                <label>Taxa Média a.m. (%)</label>
                 <input type="number" ref={rTaxaRef} placeholder="Ex: 1.45" step="0.0001" data-testid="input-right-taxa" />
               </div>
             </div>
@@ -780,7 +780,7 @@ export default function SimuladorPortabilidadePage() {
               <div className="ri"><label>Nova Parcela</label><div className="v destaque" data-testid="text-right-parcela">{rightState ? fmtR(rightState.margem) : "—"}</div></div>
               <div className="ri"><label>Contrato + IOF</label><div className="v">{rightState ? fmtR(rightState.comIof) : "—"}</div></div>
               <div className="ri"><label>Coeficiente Final</label><div className="v">{rightState ? fmtN(rightState.coef, 6) : "—"}</div></div>
-              <div className="ri"><label>Taxa Final</label><div className="v">{rightState ? fmtN(rightState.taxa, 4) + "%" : "—"}</div></div>
+              <div className="ri"><label>Taxa Média</label><div className="v">{rightState ? fmtN(rightState.taxa, 4) + "%" : "—"}</div></div>
               <div className="ri"><label>Quanto Antecipado</label><div className="v">—</div></div>
               <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">—</div></div>
               <div className="ri"><label>Remanescentes</label><div className="v">{rightState ? rightState.prazo + "x" : "—"}</div></div>
@@ -833,7 +833,7 @@ export default function SimuladorPortabilidadePage() {
                       <div className="pc-meses">{card.meses}<small>meses</small></div>
                       <div className="pc-parc">{fmtR(card.parcMedia)}/mês</div>
                       <div className="pc-taxa">{fmtN(card.taxaImpl, 2)}% a.m.</div>
-                      <div className="pc-tag">FINAL</div>
+                      <div className="pc-tag">MÉDIA</div>
                     </div>
                   ))
                 )}
