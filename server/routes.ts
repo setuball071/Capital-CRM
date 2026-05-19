@@ -28272,7 +28272,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       const cpfLimpo = cpf.replace(/\D/g, "").padStart(11, "0");
 
-      // Verifica se já tem cache
+      const BLOQUEIO_DIAS = 50;
+
+      // Verifica se já tem cache dentro do prazo de bloqueio (50 dias)
       const [cached] = await db
         .select({ lemitData: clientesPessoa.lemitData, lemitConsultadoEm: clientesPessoa.lemitConsultadoEm })
         .from(clientesPessoa)
@@ -28280,7 +28282,22 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         .limit(1);
 
       if (cached?.lemitData) {
-        return res.json({ cached: true, data: cached.lemitData, consultadoEm: cached.lemitConsultadoEm });
+        const consultadoEm = cached.lemitConsultadoEm ? new Date(cached.lemitConsultadoEm) : null;
+        const diasDesde = consultadoEm
+          ? Math.floor((Date.now() - consultadoEm.getTime()) / (1000 * 60 * 60 * 24))
+          : 999;
+
+        if (diasDesde < BLOQUEIO_DIAS) {
+          // Dentro do prazo — retorna cache, bloqueia nova consulta
+          return res.json({
+            cached: true,
+            bloqueado: true,
+            diasRestantes: BLOQUEIO_DIAS - diasDesde,
+            data: cached.lemitData,
+            consultadoEm: cached.lemitConsultadoEm,
+          });
+        }
+        // Fora do prazo — permite nova consulta (ignora cache antigo)
       }
 
       // Verifica se já tem job pending/processing para esse CPF

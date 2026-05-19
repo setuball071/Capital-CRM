@@ -341,7 +341,7 @@ export default function VendasConsulta() {
         body: JSON.stringify({ cpf: consultaData.clienteBase.cpf, pessoaId: consultaData.pessoaId }),
       });
       const json = await res.json();
-      if (json.cached) { setLemitData(json.data); setLemitStatus("done"); }
+      if (json.cached) { setLemitData({ ...json.data, _bloqueado: json.bloqueado, _diasRestantes: json.diasRestantes }); setLemitStatus("done"); }
       else { setLemitJobId(json.jobId); setLemitStatus("polling"); }
     } catch {
       setLemitStatus("error");
@@ -2475,6 +2475,9 @@ export default function VendasConsulta() {
                   {lemitData?.consultado_em && (
                     <p className="text-xs text-muted-foreground">
                       Atualizado em {new Date(lemitData.consultado_em).toLocaleDateString("pt-BR")}
+                      {lemitData._bloqueado && (
+                        <span className="ml-2 text-xs text-orange-500">· nova consulta em {lemitData._diasRestantes}d</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -2482,7 +2485,7 @@ export default function VendasConsulta() {
                   size="sm"
                   variant={lemitStatus === "done" ? "outline" : "default"}
                   onClick={buscarLemit}
-                  disabled={lemitStatus === "loading" || lemitStatus === "polling"}
+                  disabled={lemitStatus === "loading" || lemitStatus === "polling" || !!lemitData?._bloqueado}
                   className="gap-1.5"
                 >
                   {lemitStatus === "loading" || lemitStatus === "polling" ? (
