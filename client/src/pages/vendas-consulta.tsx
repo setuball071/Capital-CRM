@@ -263,6 +263,11 @@ export default function VendasConsulta() {
   const [selectedHistoricoItem, setSelectedHistoricoItem] = useState<HistoricoFolhaItem | null>(null);
   
   const [contatosModalOpen, setContatosModalOpen] = useState(false);
+
+  // === LEMIT ===
+  const [lemitJobId, setLemitJobId] = useState<number | null>(null);
+  const [lemitStatus, setLemitStatus] = useState<"idle" | "loading" | "polling" | "done" | "error">("idle");
+  const [lemitData, setLemitData] = useState<any | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
   const [interactionFormData, setInteractionFormData] = useState({
@@ -288,6 +293,61 @@ export default function VendasConsulta() {
   });
 
   const clienteCpf = consultaData?.clienteBase?.cpf?.replace(/[^0-9]/g, "") || "";
+
+  // === LEMIT — effects e funções ===
+  useEffect(() => {
+    if (lemitStatus !== "polling" || !lemitJobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lemit/job/${lemitJobId}`);
+        const json = await res.json();
+        if (json.status === "done") {
+          setLemitData(json.data);
+          setLemitStatus("done");
+          clearInterval(interval);
+        } else if (json.status === "error") {
+          setLemitStatus("error");
+          clearInterval(interval);
+          toast({ title: "Lemit: erro na consulta", description: json.errorMsg || "Erro desconhecido", variant: "destructive" });
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [lemitStatus, lemitJobId]);
+
+  // Carrega cache quando cliente muda
+  useEffect(() => {
+    if (!consultaData?.clienteBase?.cpf) return;
+    setLemitStatus("idle");
+    setLemitData(null);
+    setLemitJobId(null);
+    fetch("/api/lemit/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cpf: consultaData.clienteBase.cpf, pessoaId: consultaData.pessoaId }),
+    }).then(r => r.json()).then(json => {
+      if (json.cached && json.data) { setLemitData(json.data); setLemitStatus("done"); }
+      else setLemitStatus("idle");
+    }).catch(() => setLemitStatus("idle"));
+  }, [consultaData?.pessoaId]);
+
+  async function buscarLemit() {
+    if (!consultaData?.clienteBase?.cpf) return;
+    setLemitStatus("loading");
+    try {
+      const res = await fetch("/api/lemit/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cpf: consultaData.clienteBase.cpf, pessoaId: consultaData.pessoaId }),
+      });
+      const json = await res.json();
+      if (json.cached) { setLemitData(json.data); setLemitStatus("done"); }
+      else { setLemitJobId(json.jobId); setLemitStatus("polling"); }
+    } catch {
+      setLemitStatus("error");
+      toast({ title: "Erro ao acionar Lemit", variant: "destructive" });
+    }
+  }
 
   // Dados enriquecidos do SIAPE (cargo, função, UF, banco, financeiro, margens corretas)
   const { data: siapeEnrichData } = useQuery<{
@@ -2171,6 +2231,11 @@ export default function VendasConsulta() {
                 <MapPin className="h-3 w-3 mr-1" />
                 Endereço
               </TabsTrigger>
+              <TabsTrigger value="lemit" className="flex-1" data-testid="tab-lemit">
+                <Search className="h-3 w-3 mr-1" />
+                Lemit
+                {lemitStatus === "done" && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />}
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="telefones" className="p-4 space-y-2">
               {loadingContacts ? (
@@ -2398,6 +2463,106 @@ export default function VendasConsulta() {
               ) : (
                 <div className="text-center py-4 text-muted-foreground text-sm">
                   Sem endereço cadastrado
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ===== ABA LEMIT ===== */}
+            <TabsContent value="lemit" className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Telefones via Lemit</p>
+                  {lemitData?.consultado_em && (
+                    <p className="text-xs text-muted-foreground">
+                      Atualizado em {new Date(lemitData.consultado_em).toLocaleDateString("pt-BR")}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={lemitStatus === "done" ? "outline" : "default"}
+                  onClick={buscarLemit}
+                  disabled={lemitStatus === "loading" || lemitStatus === "polling"}
+                  className="gap-1.5"
+                >
+                  {lemitStatus === "loading" || lemitStatus === "polling" ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" />{lemitStatus === "polling" ? "Aguardando..." : "Solicitando..."}</>
+                  ) : lemitStatus === "done" ? "Atualizar" : "Buscar"}
+                </Button>
+              </div>
+
+              {lemitStatus === "idle" && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Clique em "Buscar" para consultar telefones via Lemit.<br/>
+                  <span className="text-xs">O worker precisa estar rodando na sua máquina.</span>
+                </p>
+              )}
+
+              {lemitStatus === "polling" && (
+                <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                  <p className="text-sm">Worker processando... aguarde</p>
+                </div>
+              )}
+
+              {lemitStatus === "error" && (
+                <p className="text-sm text-red-500 text-center py-3">
+                  Erro na consulta. Verifique se o worker está rodando.
+                </p>
+              )}
+
+              {lemitStatus === "done" && lemitData && (
+                <div className="space-y-3">
+                  {/* Celulares */}
+                  {lemitData.telefones_celular?.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium mb-1.5">Celulares</p>
+                      {lemitData.telefones_celular.map((t: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 p-2 border rounded text-sm mb-1">
+                          <span className="font-mono flex-1">{t.numero}</span>
+                          {t.situacao && <span className="text-xs text-muted-foreground">{t.situacao}</span>}
+                          <Button variant="ghost" size="icon" className="h-6 w-6"
+                            onClick={() => { navigator.clipboard.writeText(t.numero); toast({ title: "Copiado!" }); }}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Fixos */}
+                  {lemitData.telefones_fixo?.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium mb-1.5">Fixos</p>
+                      {lemitData.telefones_fixo.map((t: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 p-2 border rounded text-sm mb-1">
+                          <span className="font-mono flex-1">{t.numero}</span>
+                          {t.situacao && <span className="text-xs text-muted-foreground">{t.situacao}</span>}
+                          <Button variant="ghost" size="icon" className="h-6 w-6"
+                            onClick={() => { navigator.clipboard.writeText(t.numero); toast({ title: "Copiado!" }); }}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Emails */}
+                  {lemitData.emails?.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium mb-1.5">E-mails</p>
+                      {lemitData.emails.map((email: string, i: number) => (
+                        <div key={i} className="flex items-center gap-2 p-2 border rounded text-sm mb-1">
+                          <span className="flex-1 truncate">{email}</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6"
+                            onClick={() => { navigator.clipboard.writeText(email); toast({ title: "Copiado!" }); }}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!lemitData.telefones_celular?.length && !lemitData.telefones_fixo?.length && !lemitData.emails?.length && (
+                    <p className="text-sm text-muted-foreground text-center py-3">Nenhum contato encontrado no Lemit.</p>
+                  )}
                 </div>
               )}
             </TabsContent>
