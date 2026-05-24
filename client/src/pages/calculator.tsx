@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useProposta } from "@/contexts/proposta-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -36,6 +37,7 @@ export default function CalculatorPage() {
   const [ajusteSaldoPercentual, setAjusteSaldoPercentual] = useState<number>(0);
   const simulatorRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const propostaCtx = useProposta();
 
   // Fetch active agreements
   const { data: agreements = [] } = useQuery<Agreement[]>({
@@ -965,6 +967,31 @@ export default function CalculatorPage() {
                 </div>
               </div>
             </div>
+
+            {/* Bridge: Enviar para Criador de Proposta */}
+            {result && propostaCtx && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const banco = form.getValues("operation.bank") as string || "Banco";
+                    const prazo = form.getValues("operation.termMonths") as number || 0;
+                    propostaCtx.sendToProposta({
+                      contratos: [],
+                      novas: [{ parcela: liquidPayment, prazo, troco: result.clientRefund > 0 ? result.clientRefund : 0 }],
+                    });
+                  }}
+                  className="w-full h-10 rounded-lg font-semibold text-[13px] text-white flex items-center justify-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)", boxShadow: "0 4px 14px rgba(124,58,237,.28)" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  Enviar para Criador de Proposta
+                </button>
+              </div>
+            )}
 
             {/* Save Button with Format Options - Outside capture area */}
             <div className="mt-4">

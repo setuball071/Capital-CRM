@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
+import { useProposta } from "@/contexts/proposta-context";
 
 interface SimState {
   contrato: number;
@@ -168,6 +169,7 @@ function buildPrazoCards(s: SimState): PrazoCard[] {
 export default function SimuladorPortabilidadePage() {
   const { user } = useAuth();
   const { logoUrl } = useTenant();
+  const propostaCtx = useProposta();
   const [logoBase64, setLogoBase64] = useState<string>("");
 
   useEffect(() => {
@@ -861,18 +863,43 @@ export default function SimuladorPortabilidadePage() {
               )}
             </div>
             {cronograma && (
-              <button className="btn-pdf" onClick={() => {
-                // Sempre sincroniza convênio com o órgão selecionado ao abrir o dialog
-                if (cronograma) {
-                  const orgao = cronograma.side === "left"
-                    ? lOrgaoRef.current?.value
-                    : rOrgaoRef.current?.value;
-                  if (orgao) setPdfClientConvenio(orgao);
-                }
-                setShowPdfDialog(true);
-              }} data-testid="button-exportar-pdf">
-                Exportar PDF
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {propostaCtx && leftState && rightState && (
+                  <button
+                    onClick={() => {
+                      propostaCtx.sendToProposta({
+                        contratos: [{ banco: "Contrato Atual", parcela: leftState.margem, prazo: leftState.prazo }],
+                        novas: [{ parcela: rightState.margem, prazo: rightState.prazo, troco: 0 }],
+                      });
+                    }}
+                    style={{
+                      height: 32, padding: "0 14px", borderRadius: 8, border: "none",
+                      background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                      color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                      boxShadow: "0 2px 10px rgba(124,58,237,.3)", fontFamily: "inherit",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    Enviar para Proposta
+                  </button>
+                )}
+                <button className="btn-pdf" onClick={() => {
+                  // Sempre sincroniza convênio com o órgão selecionado ao abrir o dialog
+                  if (cronograma) {
+                    const orgao = cronograma.side === "left"
+                      ? lOrgaoRef.current?.value
+                      : rOrgaoRef.current?.value;
+                    if (orgao) setPdfClientConvenio(orgao);
+                  }
+                  setShowPdfDialog(true);
+                }} data-testid="button-exportar-pdf">
+                  Exportar PDF
+                </button>
+              </div>
             )}
           </div>
           <div>
