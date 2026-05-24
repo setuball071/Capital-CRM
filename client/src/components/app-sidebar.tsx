@@ -41,7 +41,7 @@ interface MenuSection {
 
 // Module URL mapping - matches new module structure
 const MODULE_URL_MAPPING: Record<string, string[]> = {
-  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-portabilidade", "/calculadora-contracheque", "/simulador-port-completo", "/criador-proposta"],
+  modulo_simulador: ["/simuladores", "/calculator", "/simulador-compra", "/simulador-portabilidade", "/calculadora-contracheque", "/simulador-port-completo", "/criador-proposta"],
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard", "/enriquecer-base", "/importar-dados-complementares", "/admin/importar-observacoes"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
@@ -66,7 +66,6 @@ export function AppSidebar() {
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     vendas: true,
-    simuladores: false,
     operacional: false,
     referências: false,
     desenvolvimento: false,
@@ -125,18 +124,6 @@ export function AppSidebar() {
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
         { title: "Minha Carteira", url: "/vendas/minha-carteira", icon: Upload, module: "modulo_alpha", subItem: "minha_carteira" },
-      ],
-    },
-    {
-      title: "Simuladores",
-      icon: Calculator,
-      items: [
-        { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
-        { title: "Simulador de Amortização", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
-        { title: "Simulador de Portabilidade", url: "/simulador-port-completo", icon: GitBranch, module: "modulo_simulador" },
-        { title: "Criador de Proposta", url: "/criador-proposta", icon: FileSignature, module: "modulo_simulador" },
-        { title: "Calculadora Renda Fixa", url: "/calculadora-renda-fixa", icon: TrendingUp, module: "modulo_simulador" },
-        { title: "Cálculo de Contracheque", url: "/calculadora-contracheque", icon: FileText, module: "modulo_simulador", subItem: "calculadora_contracheque" },
       ],
     },
     {
@@ -313,6 +300,20 @@ export function AppSidebar() {
                   </button>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {hasModuleAccess("modulo_simulador" as ModuleName) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/simuladores"}
+                    data-testid="sidebar-simuladores"
+                  >
+                    <button onClick={() => setLocation("/simuladores")} className="w-full">
+                      <Calculator className="h-4 w-4" />
+                      <span>Simuladores</span>
+                    </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               {filteredSections.map((section) => {
                 const sectionKey = getSectionKey(section.title);
                 const isOpen = openSections[sectionKey] ?? false;
