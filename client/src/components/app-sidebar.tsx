@@ -41,7 +41,7 @@ interface MenuSection {
 
 // Module URL mapping - matches new module structure
 const MODULE_URL_MAPPING: Record<string, string[]> = {
-  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-portabilidade", "/calculadora-contracheque"],
+  modulo_simulador: ["/calculator", "/simulador-compra", "/simulador-portabilidade", "/calculadora-contracheque", "/simulador-port-completo", "/criador-proposta"],
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard", "/enriquecer-base", "/importar-dados-complementares", "/admin/importar-observacoes"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
@@ -133,6 +133,8 @@ export function AppSidebar() {
       items: [
         { title: "Simulador de Compra", url: "/simulador-compra", icon: Calculator, module: "modulo_simulador", subItem: "simulador_compra" },
         { title: "Simulador de Amortização", url: "/simulador-portabilidade", icon: RefreshCw, module: "modulo_simulador", subItem: "simulador_portabilidade" },
+        { title: "Simulador de Portabilidade", url: "/simulador-port-completo", icon: GitBranch, module: "modulo_simulador" },
+        { title: "Criador de Proposta", url: "/criador-proposta", icon: FileSignature, module: "modulo_simulador" },
         { title: "Calculadora Renda Fixa", url: "/calculadora-renda-fixa", icon: TrendingUp, module: "modulo_simulador" },
         { title: "Cálculo de Contracheque", url: "/calculadora-contracheque", icon: FileText, module: "modulo_simulador", subItem: "calculadora_contracheque" },
       ],

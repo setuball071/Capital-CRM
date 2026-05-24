@@ -54,6 +54,8 @@ import AdminBrandingPage from "@/pages/admin-branding";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import CalculadoraContracheque from "@/pages/calculadora-contracheque";
+import CriadorPropostaPage from "@/pages/criador-proposta";
+import SimuladorPortCompletoPage from "@/pages/simulador-port-completo";
 import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
 import DashboardVendedorPage from "@/pages/dashboard-vendedor";
@@ -526,6 +528,12 @@ function Router() {
               </Route>
               <Route path="/calculadora-contracheque">
                 {() => <ModuleRoute component={CalculadoraContracheque} module="modulo_simulador" />}
+              </Route>
+              <Route path="/criador-proposta">
+                {() => <ModuleRoute component={CriadorPropostaPage} module="modulo_simulador" />}
+              </Route>
+              <Route path="/simulador-port-completo">
+                {() => <ModuleRoute component={SimuladorPortCompletoPage} module="modulo_simulador" />}
               </Route>
               <Route path="/funcionarios">
                 {() => <ModuleRoute component={FuncionariosPage} module="modulo_config_usuarios" />}
