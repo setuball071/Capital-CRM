@@ -67,13 +67,17 @@ export default function SimCriadorProposta() {
   const { tenant, logoUrl } = useTenant();
   const { user } = useAuth();
   const [logoBase64, setLogoBase64] = useState<string>("");
+  // Armazena dimensões reais da logo para calcular aspect ratio corretamente no PDF
+  const [logoDims, setLogoDims] = useState<{ w: number; h: number } | null>(null);
 
   // Pré-carrega logo como base64 para usar no PDF
   useEffect(() => {
-    if (!logoUrl) return;
+    if (!logoUrl) { setLogoBase64(""); setLogoDims(null); return; }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      // Guarda dimensões reais ANTES de qualquer uso
+      setLogoDims({ w: img.naturalWidth, h: img.naturalHeight });
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
@@ -83,7 +87,7 @@ export default function SimCriadorProposta() {
         setLogoBase64(canvas.toDataURL("image/png"));
       }
     };
-    img.onerror = () => setLogoBase64("");
+    img.onerror = () => { setLogoBase64(""); setLogoDims(null); };
     img.src = logoUrl;
   }, [logoUrl]);
 
@@ -203,15 +207,12 @@ export default function SimCriadorProposta() {
     doc.setFillColor(233, 30, 99);   doc.rect(140, 0, 70, 5, "F");
     y = 14;
 
-    // Logo ou nome da empresa
+    // Logo ou nome da empresa — usa dimensões pré-carregadas (logoDims) para aspect ratio correto
     const tenantName = tenant?.name ?? "Capital Go";
-    if (logoBase64) {
-      // Calcula dimensões proporcional: altura fixa 10mm
-      const tmpImg = new Image();
-      tmpImg.src = logoBase64;
-      const ratio = tmpImg.naturalWidth > 0 ? tmpImg.naturalWidth / tmpImg.naturalHeight : 3;
-      const logoH = 10;
-      const logoW = Math.min(logoH * ratio, 50); // máx 50mm
+    if (logoBase64 && logoDims && logoDims.w > 0 && logoDims.h > 0) {
+      const ratio = logoDims.w / logoDims.h;
+      const logoH = 10; // altura fixa 10mm
+      const logoW = Math.min(logoH * ratio, 52); // largura proporcional, máx 52mm
       doc.addImage(logoBase64, "PNG", ml, y - 8, logoW, logoH);
     } else {
       doc.setFont("helvetica", "bold"); doc.setFontSize(16);
@@ -317,14 +318,14 @@ export default function SimCriadorProposta() {
     y += 3;
 
     // RESULTADO
-    const resItems: [string, string][] = [];
-    if (tAt && tNv) resItems.push(["Economia mensal", fmtR(tAt - tNv)]);
-    if (tTroco > 0) resItems.push(["Troco total disponível", fmtR(tTroco)]);
+    const resItems: [string, string, "green" | "blue"][] = [];
+    if (tAt && tNv) resItems.push(["Economia mensal", fmtR(tAt - tNv), "green"]);
+    if (tTroco > 0) resItems.push(["Troco total disponível", fmtR(tTroco), "blue"]);
     const prazosAt = proposta.contratos.filter(c => parseInt(c.prazo)).map(c => parseInt(c.prazo));
     const prazosNv = proposta.novas.filter(n => parseInt(n.prazo)).map(n => parseInt(n.prazo));
     if (prazosAt.length && prazosNv.length && tAt && tNv) {
       const diff = tAt * Math.min(...prazosAt) - tNv * Math.min(...prazosNv);
-      resItems.push(["Economia total estimada", fmtR(diff)]);
+      resItems.push(["Economia total estimada", fmtR(diff), "green"]);
     }
     if (resItems.length > 0) {
       doc.setFillColor(248, 248, 248); doc.roundedRect(ml, y, cw, resItems.length * 8 + 14, 2, 2, "F");
@@ -334,7 +335,9 @@ export default function SimCriadorProposta() {
         const ry = y + 13 + i * 8;
         doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
         doc.text(r[0], ml + 5, ry);
-        doc.setFont("helvetica", "bold"); doc.setTextColor(59, 109, 17);
+        doc.setFont("helvetica", "bold");
+        if (r[2] === "blue") doc.setTextColor(30, 136, 229);
+        else doc.setTextColor(59, 109, 17);
         doc.text(r[1], W - mr - 3, ry, { align: "right" });
       });
       y += resItems.length * 8 + 18;
@@ -352,11 +355,9 @@ export default function SimCriadorProposta() {
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
     const subCor = [proposta.corCargo, proposta.corWa].filter(Boolean).join(" · ");
     doc.text(subCor, ml, y + 8.5);
-    if (logoBase64) {
-      // logo menor na assinatura
-      const tmpImg2 = new Image();
-      tmpImg2.src = logoBase64;
-      const ratio2 = tmpImg2.naturalWidth > 0 ? tmpImg2.naturalWidth / tmpImg2.naturalHeight : 3;
+    if (logoBase64 && logoDims && logoDims.w > 0 && logoDims.h > 0) {
+      // logo menor na assinatura — usa dimensões reais carregadas no useEffect
+      const ratio2 = logoDims.w / logoDims.h;
       const lH2 = 6; const lW2 = Math.min(lH2 * ratio2, 30);
       doc.addImage(logoBase64, "PNG", W - mr - lW2, y, lW2, lH2);
     } else {
@@ -381,7 +382,7 @@ export default function SimCriadorProposta() {
 
     const n = (proposta.nome || "proposta").replace(/\s+/g, "_");
     doc.save("proposta_" + n + ".pdf");
-  }, [proposta, tenant, logoBase64]);
+  }, [proposta, tenant, logoBase64, logoDims]);
 
   // ── render ──────────────────────────────────────────────────────────
   const CONVENIOS = [
