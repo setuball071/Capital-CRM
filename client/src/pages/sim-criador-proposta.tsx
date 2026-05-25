@@ -66,6 +66,26 @@ export default function SimCriadorProposta() {
   const propCtx = useProposta();
   const { tenant, logoUrl } = useTenant();
   const { user } = useAuth();
+  const [logoBase64, setLogoBase64] = useState<string>("");
+
+  // Pré-carrega logo como base64 para usar no PDF
+  useEffect(() => {
+    if (!logoUrl) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        setLogoBase64(canvas.toDataURL("image/png"));
+      }
+    };
+    img.onerror = () => setLogoBase64("");
+    img.src = logoUrl;
+  }, [logoUrl]);
 
   // ── estado do formulário ──
   const [nome, setNome] = useState("");
@@ -185,8 +205,18 @@ export default function SimCriadorProposta() {
 
     // Logo ou nome da empresa
     const tenantName = tenant?.name ?? "Capital Go";
-    doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-    doc.setTextColor(108, 43, 217); doc.text(tenantName, ml, y);
+    if (logoBase64) {
+      // Calcula dimensões proporcional: altura fixa 10mm
+      const tmpImg = new Image();
+      tmpImg.src = logoBase64;
+      const ratio = tmpImg.naturalWidth > 0 ? tmpImg.naturalWidth / tmpImg.naturalHeight : 3;
+      const logoH = 10;
+      const logoW = Math.min(logoH * ratio, 50); // máx 50mm
+      doc.addImage(logoBase64, "PNG", ml, y - 8, logoW, logoH);
+    } else {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+      doc.setTextColor(108, 43, 217); doc.text(tenantName, ml, y);
+    }
     doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(140, 140, 140);
     doc.text("Crédito Consignado", ml, y + 5);
     doc.text("Proposta nº " + proposta.num, W - mr, y, { align: "right" });
@@ -322,8 +352,17 @@ export default function SimCriadorProposta() {
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
     const subCor = [proposta.corCargo, proposta.corWa].filter(Boolean).join(" · ");
     doc.text(subCor, ml, y + 8.5);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(108, 43, 217);
-    doc.text(tenantName, W - mr, y + 4, { align: "right" });
+    if (logoBase64) {
+      // logo menor na assinatura
+      const tmpImg2 = new Image();
+      tmpImg2.src = logoBase64;
+      const ratio2 = tmpImg2.naturalWidth > 0 ? tmpImg2.naturalWidth / tmpImg2.naturalHeight : 3;
+      const lH2 = 6; const lW2 = Math.min(lH2 * ratio2, 30);
+      doc.addImage(logoBase64, "PNG", W - mr - lW2, y, lW2, lH2);
+    } else {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(108, 43, 217);
+      doc.text(tenantName, W - mr, y + 4, { align: "right" });
+    }
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
     doc.text(proposta.data, W - mr, y + 8.5, { align: "right" });
     y += 18;
@@ -342,7 +381,7 @@ export default function SimCriadorProposta() {
 
     const n = (proposta.nome || "proposta").replace(/\s+/g, "_");
     doc.save("proposta_" + n + ".pdf");
-  }, [proposta, tenant]);
+  }, [proposta, tenant, logoBase64]);
 
   // ── render ──────────────────────────────────────────────────────────
   const CONVENIOS = [

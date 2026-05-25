@@ -1602,11 +1602,10 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       </div>
     </div>
 
-    <!-- BOTÕES FINAIS -->
-    <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
-      <button class="btn-primary" onclick="simular()" style="flex:1;min-width:160px;padding:12px;font-size:14px;background:#7C3AED;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Simular Resultado Final</button>
-      <button onclick="simularEEnviar()" style="flex:1;min-width:160px;padding:12px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.25);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+    <!-- BOTÃO FINAL -->
+    <div style="margin-top:20px;">
+      <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Enviar para Criador de Proposta
       </button>
     </div>
@@ -5870,7 +5869,8 @@ function _buildPropostaPayload() {
       if (m.liberado > 0) {
         const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
         const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
-        nvData.push({ parcela, prazo, troco: 0 });
+        // troco = valor liberado ao cliente (m.liberado)
+        nvData.push({ parcela, prazo, troco: parseFloat(m.liberado) || 0 });
       }
     });
   } else {
@@ -5884,7 +5884,8 @@ function _buildPropostaPayload() {
       if (m.liberado > 0) {
         const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
         const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
-        nvData.push({ parcela, prazo, troco: 0 });
+        // troco = valor liberado ao cliente (m.liberado)
+        nvData.push({ parcela, prazo, troco: parseFloat(m.liberado) || 0 });
       }
     });
   }
