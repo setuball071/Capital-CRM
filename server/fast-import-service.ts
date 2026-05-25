@@ -1057,21 +1057,21 @@ class FastImportService {
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.matricula IS NOT NULL AND s.matricula != ''
       ON CONFLICT (vinculo_id, competencia) DO UPDATE SET
-        -- Margens: só preenche se o campo atual estiver NULL (preserva valores do Python/PDF)
-        margem_bruta_5 = COALESCE(clientes_folha_mes.margem_bruta_5, EXCLUDED.margem_bruta_5),
-        margem_utilizada_5 = COALESCE(clientes_folha_mes.margem_utilizada_5, EXCLUDED.margem_utilizada_5),
-        margem_saldo_5 = COALESCE(clientes_folha_mes.margem_saldo_5, EXCLUDED.margem_saldo_5),
-        margem_beneficio_bruta_5 = COALESCE(clientes_folha_mes.margem_beneficio_bruta_5, EXCLUDED.margem_beneficio_bruta_5),
-        margem_beneficio_utilizada_5 = COALESCE(clientes_folha_mes.margem_beneficio_utilizada_5, EXCLUDED.margem_beneficio_utilizada_5),
-        margem_beneficio_saldo_5 = COALESCE(clientes_folha_mes.margem_beneficio_saldo_5, EXCLUDED.margem_beneficio_saldo_5),
-        margem_bruta_35 = COALESCE(clientes_folha_mes.margem_bruta_35, EXCLUDED.margem_bruta_35),
-        margem_utilizada_35 = COALESCE(clientes_folha_mes.margem_utilizada_35, EXCLUDED.margem_utilizada_35),
-        margem_saldo_35 = COALESCE(clientes_folha_mes.margem_saldo_35, EXCLUDED.margem_saldo_35),
-        margem_bruta_70 = COALESCE(clientes_folha_mes.margem_bruta_70, EXCLUDED.margem_bruta_70),
-        margem_utilizada_70 = COALESCE(clientes_folha_mes.margem_utilizada_70, EXCLUDED.margem_utilizada_70),
-        margem_saldo_70 = COALESCE(clientes_folha_mes.margem_saldo_70, EXCLUDED.margem_saldo_70),
-        margem_cartao_credito_saldo = COALESCE(clientes_folha_mes.margem_cartao_credito_saldo, EXCLUDED.margem_cartao_credito_saldo),
-        margem_cartao_beneficio_saldo = COALESCE(clientes_folha_mes.margem_cartao_beneficio_saldo, EXCLUDED.margem_cartao_beneficio_saldo),
+        -- Margens: preferir dados novos (EXCLUDED) se existirem; senão manter existente
+        margem_bruta_5 = COALESCE(EXCLUDED.margem_bruta_5, clientes_folha_mes.margem_bruta_5),
+        margem_utilizada_5 = COALESCE(EXCLUDED.margem_utilizada_5, clientes_folha_mes.margem_utilizada_5),
+        margem_saldo_5 = COALESCE(EXCLUDED.margem_saldo_5, clientes_folha_mes.margem_saldo_5),
+        margem_beneficio_bruta_5 = COALESCE(EXCLUDED.margem_beneficio_bruta_5, clientes_folha_mes.margem_beneficio_bruta_5),
+        margem_beneficio_utilizada_5 = COALESCE(EXCLUDED.margem_beneficio_utilizada_5, clientes_folha_mes.margem_beneficio_utilizada_5),
+        margem_beneficio_saldo_5 = COALESCE(EXCLUDED.margem_beneficio_saldo_5, clientes_folha_mes.margem_beneficio_saldo_5),
+        margem_bruta_35 = COALESCE(EXCLUDED.margem_bruta_35, clientes_folha_mes.margem_bruta_35),
+        margem_utilizada_35 = COALESCE(EXCLUDED.margem_utilizada_35, clientes_folha_mes.margem_utilizada_35),
+        margem_saldo_35 = COALESCE(EXCLUDED.margem_saldo_35, clientes_folha_mes.margem_saldo_35),
+        margem_bruta_70 = COALESCE(EXCLUDED.margem_bruta_70, clientes_folha_mes.margem_bruta_70),
+        margem_utilizada_70 = COALESCE(EXCLUDED.margem_utilizada_70, clientes_folha_mes.margem_utilizada_70),
+        margem_saldo_70 = COALESCE(EXCLUDED.margem_saldo_70, clientes_folha_mes.margem_saldo_70),
+        margem_cartao_credito_saldo = COALESCE(EXCLUDED.margem_cartao_credito_saldo, clientes_folha_mes.margem_cartao_credito_saldo),
+        margem_cartao_beneficio_saldo = COALESCE(EXCLUDED.margem_cartao_beneficio_saldo, clientes_folha_mes.margem_cartao_beneficio_saldo),
         -- Salários e sit_func: sempre atualiza (CCH é fonte confiável para esses dados)
         creditos = COALESCE(EXCLUDED.creditos, clientes_folha_mes.creditos),
         debitos = COALESCE(EXCLUDED.debitos, clientes_folha_mes.debitos),

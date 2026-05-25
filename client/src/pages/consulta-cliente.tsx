@@ -261,6 +261,25 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+/**
+ * Corrige saldo inconsistente: se bruta e utilizada existem,
+ * o saldo nunca pode ser maior que (bruta - utilizada).
+ * Resolve bug de dados importados com saldo da margem 70% repetido nas margens 5%.
+ */
+function safeSaldo(
+  saldo: number | null | undefined,
+  bruta: number | null | undefined,
+  utilizada: number | null | undefined,
+): number | null {
+  if (bruta != null && utilizada != null) {
+    const calculado = bruta - utilizada;
+    if (saldo == null) return calculado;
+    // Saldo nunca pode ser maior que (bruta - utilizada) — corrige dados errados
+    return Math.min(saldo, calculado);
+  }
+  return saldo ?? null;
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
@@ -1289,9 +1308,11 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(folhaAtual.margem_saldo_70)}
+                                {(() => { const s = safeSaldo(folhaAtual.margem_saldo_70, folhaAtual.margem_bruta_70, folhaAtual.margem_utilizada_70); return (
+                                <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(s)}
                                 </span>
+                                ); })()}
                               </div>
                             </div>
                           </CardContent>
@@ -1312,9 +1333,11 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(folhaAtual.margem_saldo_35)}
+                                {(() => { const s = safeSaldo(folhaAtual.margem_saldo_35, folhaAtual.margem_bruta_35, folhaAtual.margem_utilizada_35); return (
+                                <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(s)}
                                 </span>
+                                ); })()}
                               </div>
                             </div>
                           </CardContent>
@@ -1335,9 +1358,11 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(folhaAtual.margem_saldo_5)}
+                                {(() => { const s = safeSaldo(folhaAtual.margem_saldo_5, folhaAtual.margem_bruta_5, folhaAtual.margem_utilizada_5); return (
+                                <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(s)}
                                 </span>
+                                ); })()}
                               </div>
                             </div>
                           </CardContent>
@@ -1358,8 +1383,11 @@ export default function ConsultaCliente() {
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Saldo:</span>
-                                <span className={(folhaAtual.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(folhaAtual.margem_beneficio_saldo_5)}
+                                {(() => { const s = safeSaldo(folhaAtual.margem_beneficio_saldo_5, folhaAtual.margem_beneficio_bruta_5, folhaAtual.margem_beneficio_utilizada_5); return (
+                                <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(s)}
+                                </span>
+                                ); })()}
                                 </span>
                               </div>
                             </div>
@@ -1967,13 +1995,15 @@ export default function ConsultaCliente() {
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>Saldo:</span>
-                            <span className={(selectedHistoricoCompetencia.margem_saldo_70 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_70)}
+                            {(() => { const s = safeSaldo(selectedHistoricoCompetencia.margem_saldo_70, selectedHistoricoCompetencia.margem_bruta_70, selectedHistoricoCompetencia.margem_utilizada_70); return (
+                            <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(s)}
                             </span>
+                            ); })()}
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/50 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">Margem Global</p>
                         <div className="space-y-1 text-sm">
@@ -1987,13 +2017,15 @@ export default function ConsultaCliente() {
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>Saldo:</span>
-                            <span className={(selectedHistoricoCompetencia.margem_saldo_35 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_35)}
+                            {(() => { const s = safeSaldo(selectedHistoricoCompetencia.margem_saldo_35, selectedHistoricoCompetencia.margem_bruta_35, selectedHistoricoCompetencia.margem_utilizada_35); return (
+                            <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(s)}
                             </span>
+                            ); })()}
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/50 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">Margem 5%</p>
                         <div className="space-y-1 text-sm">
@@ -2007,13 +2039,15 @@ export default function ConsultaCliente() {
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>Saldo:</span>
-                            <span className={(selectedHistoricoCompetencia.margem_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(selectedHistoricoCompetencia.margem_saldo_5)}
+                            {(() => { const s = safeSaldo(selectedHistoricoCompetencia.margem_saldo_5, selectedHistoricoCompetencia.margem_bruta_5, selectedHistoricoCompetencia.margem_utilizada_5); return (
+                            <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(s)}
                             </span>
+                            ); })()}
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/50 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">Benefício 5%</p>
                         <div className="space-y-1 text-sm">
@@ -2027,8 +2061,11 @@ export default function ConsultaCliente() {
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>Saldo:</span>
-                            <span className={(selectedHistoricoCompetencia.margem_beneficio_saldo_5 ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(selectedHistoricoCompetencia.margem_beneficio_saldo_5)}
+                            {(() => { const s = safeSaldo(selectedHistoricoCompetencia.margem_beneficio_saldo_5, selectedHistoricoCompetencia.margem_beneficio_bruta_5, selectedHistoricoCompetencia.margem_beneficio_utilizada_5); return (
+                            <span className={(s ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                              {formatCurrency(s)}
+                            </span>
+                            ); })()}
                             </span>
                           </div>
                         </div>

@@ -75,7 +75,11 @@ export const COLUMN_MAP: Record<string, string> = {
   utilz_70_: "margem_70_utilizada",
   saldo_70: "margem_70_saldo",
   saldo_70_: "margem_70_saldo",
-  
+  // Alias D8 CSV (d8_xlsx_to_csv.py): MG70_BRUTA, MG70_UTILIZADO, MG70_DISPONIVEL
+  mg70_bruta: "margem_70_bruta",
+  mg70_utilizado: "margem_70_utilizada",
+  mg70_disponivel: "margem_70_saldo",
+
   // === MARGEM 35% (Headers: "Bruta 35%", "Utilz 35%", "Saldo 35%") ===
   margem_35_bruta: "margem_35_bruta",
   margem_35_utilizada: "margem_35_utilizada",
@@ -87,6 +91,10 @@ export const COLUMN_MAP: Record<string, string> = {
   utilz_35_: "margem_35_utilizada",
   saldo_35: "margem_35_saldo",
   saldo_35_: "margem_35_saldo",
+  // Alias D8 CSV (d8_xlsx_to_csv.py): MG35_BRUTA, MG35_UTILIZADO, MG35_DISPONIVEL
+  mg35_bruta: "margem_35_bruta",
+  mg35_utilizado: "margem_35_utilizada",
+  mg35_disponivel: "margem_35_saldo",
   
   // === MARGEM 5% (Headers: "Bruta 5%", "Utilz 5%", "Saldo 5%") ===
   margem_5_bruta: "margem_5_bruta",
@@ -103,7 +111,11 @@ export const COLUMN_MAP: Record<string, string> = {
   margem_30_bruta: "margem_5_bruta",
   margem_30_utilizada: "margem_5_utilizada",
   margem_30_saldo: "margem_5_saldo",
-  
+  // Alias D8 CSV (d8_xlsx_to_csv.py): MG5_CC_BRUTA, MG5_CC_UTILIZADO, MG5_CC_DISPONIVEL
+  mg5_cc_bruta: "margem_5_bruta",
+  mg5_cc_utilizado: "margem_5_utilizada",
+  mg5_cc_disponivel: "margem_5_saldo",
+
   // === MARGEM BENEFÍCIO 5% (Headers: "Beneficio Bruta 5%", "Beneficio Utilizado 5%", "Beneficio Saldo 5%") ===
   margem_beneficio_5_bruta: "margem_beneficio_5_bruta",
   margem_beneficio_5_utilizada: "margem_beneficio_5_utilizada",
@@ -114,6 +126,10 @@ export const COLUMN_MAP: Record<string, string> = {
   beneficio_utilizado_5_: "margem_beneficio_5_utilizada",
   beneficio_saldo_5: "margem_beneficio_5_saldo",
   beneficio_saldo_5_: "margem_beneficio_5_saldo",
+  // Alias D8 CSV (d8_xlsx_to_csv.py): MG5_CB_BRUTA, MG5_CB_UTILIZADO, MG5_CB_DISPONIVEL
+  mg5_cb_bruta: "margem_beneficio_5_bruta",
+  mg5_cb_utilizado: "margem_beneficio_5_utilizada",
+  mg5_cb_disponivel: "margem_beneficio_5_saldo",
   
   // === CARTÃO (Campos legados) ===
   margem_cartao_credito_bruta: "margem_cartao_credito_bruta",
