@@ -5967,6 +5967,12 @@ window.addEventListener('load', function() {
     switchTab('simulador', document.getElementById('btn-simulador'));
   }
   // #proposta é o padrão, não precisa trocar
+
+  // ── Quando rodando dentro de iframe do CRM, esconde a tabs-bar interna ──
+  if (window.parent !== window) {
+    var tabsBar = document.querySelector('.tabs-bar');
+    if (tabsBar) tabsBar.style.display = 'none';
+  }
 });
 </script>
 
