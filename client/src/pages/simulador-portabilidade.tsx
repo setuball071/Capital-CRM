@@ -320,6 +320,8 @@ export default function SimuladorPortabilidadePage() {
   const rOrgaoRef = useRef<HTMLSelectElement>(null);
   const rPrazoRef = useRef<HTMLInputElement>(null);
   const rContratoRef = useRef<HTMLInputElement>(null);
+  // Guarda o valor do contrato SEM IOF (puro) vindo do lado esquerdo
+  const rContratoSemIofRef = useRef<HTMLInputElement>(null);
   const rTaxaRef = useRef<HTMLInputElement>(null);
 
   const tabelaRef = useRef<HTMLDivElement>(null);
@@ -349,11 +351,14 @@ export default function SimuladorPortabilidadePage() {
     setLeftState(s);
     setLeftCards(buildPrazoCards(s));
     if (rContratoRef.current) rContratoRef.current.value = comIof.toFixed(2);
+    if (rContratoSemIofRef.current) rContratoSemIofRef.current.value = contrato.toFixed(2);
     if (rPrazoRef.current) rPrazoRef.current.value = String(prazo);
   }, [calcMode]);
 
   const calcRight = useCallback(() => {
     const contratoIof = parseFloat(rContratoRef.current?.value || "0") || 0;
+    // Valor do contrato sem IOF — herdado do lado esquerdo quando disponível
+    const contratoSemIof = parseFloat(rContratoSemIofRef.current?.value || "0") || contratoIof;
     const taxa = parseFloat(rTaxaRef.current?.value || "0") || 0;
     const prazo = parseInt(rPrazoRef.current?.value || "96") || 96;
     if (!contratoIof) {
@@ -364,10 +369,13 @@ export default function SimuladorPortabilidadePage() {
       alert("Informe a Taxa Média a.m.");
       return;
     }
-    const coef = coefPrice(taxa, prazo);
-    const parcela = contratoIof * coef;
+    // Parcela calculada sobre o saldo total (contratoIof = saldo devedor portado)
+    const coefPrice_ = coefPrice(taxa, prazo);
+    const parcela = contratoIof * coefPrice_;
+    // Coeficiente exibido = parcela / Valor do Contrato (sem IOF) — igual à convenção do lado esquerdo
+    const coefExibido = contratoSemIof > 0 ? parcela / contratoSemIof : coefPrice_;
     const s: SimState = {
-      contrato: contratoIof, taxa, coef, comIof: contratoIof,
+      contrato: contratoSemIof, taxa, coef: coefExibido, comIof: contratoIof,
       saldo: contratoIof, margem: parcela, prazo, antecipa: 0, cliente: 0,
     };
     setRightState(s);
@@ -765,6 +773,8 @@ export default function SimuladorPortabilidadePage() {
                 <input type="number" ref={rPrazoRef} defaultValue={96} min={1} data-testid="input-right-prazo" />
               </div>
             </div>
+            {/* Input oculto: valor do contrato SEM IOF, herdado do lado esquerdo */}
+            <input type="number" ref={rContratoSemIofRef} style={{ display: "none" }} aria-hidden="true" />
             <div className="form-row">
               <div className="fg">
                 <label>Contrato + IOF (herdado)</label>
@@ -780,8 +790,9 @@ export default function SimuladorPortabilidadePage() {
             </button>
             <div className="results">
               <div className="ri"><label>Nova Parcela</label><div className="v destaque" data-testid="text-right-parcela">{rightState ? fmtR(rightState.margem) : "—"}</div></div>
-              <div className="ri"><label>Contrato + IOF</label><div className="v">{rightState ? fmtR(rightState.comIof) : "—"}</div></div>
+              <div className="ri"><label>Valor do Contrato</label><div className="v">{rightState ? fmtR(rightState.contrato) : "—"}</div></div>
               <div className="ri"><label>Coeficiente Final</label><div className="v">{rightState ? fmtN(rightState.coef, 6) : "—"}</div></div>
+              <div className="ri"><label>Contrato + IOF</label><div className="v">{rightState ? fmtR(rightState.comIof) : "—"}</div></div>
               <div className="ri"><label>Taxa Média</label><div className="v">{rightState ? fmtN(rightState.taxa, 4) + "%" : "—"}</div></div>
               <div className="ri"><label>Quanto Antecipado</label><div className="v">—</div></div>
               <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">—</div></div>
