@@ -206,6 +206,7 @@ export function AppSidebar() {
         { title: "Metas & Níveis", url: "/vendas/gestao-comercial/metas-niveis", icon: Target, rolesAllowed: ["master", "coordenacao"] },
         { title: "Regulamento", url: "/vendas/gestao-comercial/regulamento", icon: FileText, rolesAllowed: ["master", "coordenacao"] },
         { title: "Relatórios", url: "/vendas/gestao-comercial/relatorios", icon: FileBarChart, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Comissões", url: "/financeiro/comissoes", icon: DollarSign, rolesAllowed: ["master", "coordenacao"] },
       ],
     },
   ];
