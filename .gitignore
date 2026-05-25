@@ -13,3 +13,5 @@ attached_assets/*.csv
 .env.production
 .env.staging
 *.env
+
+.vercel

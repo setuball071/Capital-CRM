@@ -138,7 +138,7 @@ interface FolhaAtual {
   margem_beneficio_bruta_5: number | null;
   margem_beneficio_utilizada_5: number | null;
   margem_beneficio_saldo_5: number | null;
-  // Margem 35%
+  // Margem Global
   margem_bruta_35: number | null;
   margem_utilizada_35: number | null;
   margem_saldo_35: number | null;
@@ -1297,10 +1297,10 @@ export default function ConsultaCliente() {
                           </CardContent>
                         </Card>
 
-                        {/* Margem 35% */}
+                        {/* Margem Global */}
                         <Card className="bg-muted/50" data-testid="card-margem-35">
                           <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Margem 35%</p>
+                            <p className="text-sm font-medium mb-2">Margem Global</p>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bruta:</span>
@@ -1488,7 +1488,7 @@ export default function ConsultaCliente() {
                       <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         <span className="mt-0.5 text-base">⚠️</span>
                         <div>
-                          <span className="font-semibold">Desconto não identificado na margem 35%</span>
+                          <span className="font-semibold">Desconto não identificado na Margem Global</span>
                           <span className="ml-1">
                             — A folha aponta <strong>R$ {utilizada35.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> utilizada,
                             mas só encontramos <strong>R$ {somaConhecida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> em contratos.
@@ -1903,7 +1903,7 @@ export default function ConsultaCliente() {
                     <TableRow>
                       <TableHead>Competência</TableHead>
                       <TableHead className="text-right">Margem 70%</TableHead>
-                      <TableHead className="text-right">Margem 35%</TableHead>
+                      <TableHead className="text-right">Margem Global</TableHead>
                       <TableHead className="text-right">Margem 5%</TableHead>
                       <TableHead className="text-right">Benef. 5%</TableHead>
                       <TableHead className="text-right">Líquido</TableHead>
@@ -1975,7 +1975,7 @@ export default function ConsultaCliente() {
                       </div>
                       
                       <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Margem 35%</p>
+                        <p className="text-xs text-muted-foreground mb-1">Margem Global</p>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Bruta:</span>

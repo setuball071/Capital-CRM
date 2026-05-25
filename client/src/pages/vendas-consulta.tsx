@@ -1732,7 +1732,7 @@ export default function VendasConsulta() {
 
                           <Card className="bg-muted/50" data-testid="card-margem-35">
                             <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem 35%</p>
+                              <p className="text-sm font-medium mb-2">Margem Global</p>
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Bruta:</span>
@@ -2872,7 +2872,7 @@ export default function VendasConsulta() {
                               </div>
                             </div>
                             <div className="space-y-2" data-testid="historico-margem-35">
-                              <p className="font-medium">Margem 35%</p>
+                              <p className="font-medium">Margem Global</p>
                               <div className="pl-2 space-y-1 text-muted-foreground">
                                 <p data-testid="text-margem35-bruta">Bruta: {formatCurrency(selectedHistoricoItem.margem_bruta_35)}</p>
                                 <p data-testid="text-margem35-utilizada">Utilizada: {formatCurrency(selectedHistoricoItem.margem_utilizada_35)}</p>

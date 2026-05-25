@@ -1019,10 +1019,10 @@ export default function VendasAtendimento() {
                         </CardContent>
                       </Card>
 
-                      {/* Margem 35% */}
+                      {/* Margem Global */}
                       <Card className="bg-muted/50" data-testid="card-margem-35">
                         <CardContent className="p-4">
-                          <p className="text-sm font-medium mb-2">Margem 35%</p>
+                          <p className="text-sm font-medium mb-2">Margem Global</p>
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Bruta:</span>

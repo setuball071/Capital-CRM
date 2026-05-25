@@ -444,7 +444,7 @@ export default function CompraLista() {
       parts.push(`Margem 70%: ${f.margem_70_min ?? 0} - ${f.margem_70_max ?? "∞"}`);
     }
     if (f.margem_35_min !== undefined || f.margem_35_max !== undefined) {
-      parts.push(`Margem 35%: ${f.margem_35_min ?? 0} - ${f.margem_35_max ?? "∞"}`);
+      parts.push(`Margem Global: ${f.margem_35_min ?? 0} - ${f.margem_35_max ?? "∞"}`);
     }
     if (f.margem_cartao_credito_min !== undefined || f.margem_cartao_credito_max !== undefined) {
       parts.push(`Margem Cart.Créd: ${f.margem_cartao_credito_min ?? 0} - ${f.margem_cartao_credito_max ?? "∞"}`);
@@ -833,7 +833,7 @@ export default function CompraLista() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-xs">Margem 35%</Label>
+                    <Label className="text-xs">Margem Global</Label>
                     <div className="flex gap-2">
                       <Input
                         type="number"

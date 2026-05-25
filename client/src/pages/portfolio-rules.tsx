@@ -213,7 +213,7 @@ export default function PortfolioRulesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Consignado</label>
-              <p className="text-xs text-muted-foreground">Margem 35%</p>
+              <p className="text-xs text-muted-foreground">Margem Global</p>
               <Input
                 type="number"
                 step="0.000001"

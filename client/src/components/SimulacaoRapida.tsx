@@ -162,7 +162,7 @@ export function SimulacaoRapida({ convenio, saldo35, saldo5cartao, saldo5benefic
           <CardContent className="pt-0 pb-4 px-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <SimCard
-                title="Margem 35% — Consignado"
+                title="Margem Global — Consignado"
                 icon={<TrendingUp className="h-4 w-4" />}
                 accentColor="#1E88E5"
                 saldo={saldo35}
