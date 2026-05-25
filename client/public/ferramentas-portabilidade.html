@@ -1603,9 +1603,12 @@ body { background: #F8F8FC !important; color: #111827 !important; }
     </div>
 
     <!-- BOTÕES FINAIS -->
-    <div style="display:flex;gap:12px;margin-top:20px;">
-      <button class="btn-primary" onclick="simular()" style="flex:1;padding:12px;font-size:14px;background:#7C3AED;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Simular Resultado Final</button>
-      <button onclick="abrirModalProposta()" style="flex:1;padding:12px;font-size:14px;background:#7C3AED;border:none;color:white;border-radius:8px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.25);">📄 Gerar Proposta</button>
+    <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="simular()" style="flex:1;min-width:160px;padding:12px;font-size:14px;background:#7C3AED;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Simular Resultado Final</button>
+      <button onclick="simularEEnviar()" style="flex:1;min-width:160px;padding:12px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.25);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+        Enviar para Criador de Proposta
+      </button>
     </div>
   </div>
 
@@ -5832,21 +5835,84 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // ── BRIDGE: Simulador → Criador de Proposta ──────────────────────────────
+function simularEEnviar() {
+  simular();
+  setTimeout(() => enviarParaProposta(), 350);
+}
+
+function _buildPropostaPayload() {
+  const modo = document.getElementById('modoPort').value;
+
+  // Contratos atuais
+  const ctData = contratos.map(c => ({
+    banco:   c.banco   || '',
+    parcela: parseFloat(c.parcela) || 0,
+    prazo:   parseInt(c.prazo)     || 0,
+  }));
+
+  // Nova proposta calculada
+  const nvData = [];
+  if (modo === 'separado') {
+    contratos.forEach(c => {
+      let parcela = parseFloat(c.parcela) || 0;
+      let prazo   = parseInt(c.prazo)     || 0;
+      if (c.acao === 'quitar') return;
+      if (c.acao === 'amortizar') {
+        if (Math.max(0, c.saldo - c.amort) === 0) return;
+      }
+      if (c.portar && c.saldo > 0) {
+        parcela = parcelaPrice(c.saldo, c.taxaPort / 100, c.prazoPort);
+        prazo   = c.prazoPort;
+      }
+      if (parcela > 0) nvData.push({ parcela, prazo, troco: 0 });
+    });
+    margens.forEach(m => {
+      if (m.liberado > 0) {
+        const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
+        const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
+        nvData.push({ parcela, prazo, troco: 0 });
+      }
+    });
+  } else {
+    if (consolidadoSaldo > 0 && consolidadoParcela > 0)
+      nvData.push({ parcela: consolidadoParcela, prazo: consolidadoPrazo, troco: 0 });
+    contratos.forEach(c => {
+      if (!c.portar && c.acao === 'manter')
+        nvData.push({ parcela: parseFloat(c.parcela) || 0, prazo: parseInt(c.prazo) || 0, troco: 0 });
+    });
+    margens.forEach(m => {
+      if (m.liberado > 0) {
+        const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
+        const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
+        nvData.push({ parcela, prazo, troco: 0 });
+      }
+    });
+  }
+
+  return { contratos: ctData, novas: nvData };
+}
+
 function enviarParaProposta() {
-  // 1. Pega dados do cliente (hidden fields preenchidos pelo modal ou defaults)
-  const nomeVal   = document.getElementById('nomeCliente').value.trim();
-  const cpfVal    = document.getElementById('cpfCliente').value.trim();
-  const convVal   = document.getElementById('convenio').value.trim();
-  const corNomeV  = document.getElementById('consultorNome').value.trim();
-  const corWaV    = document.getElementById('consultorTelefone').value.trim();
+  const payload = _buildPropostaPayload();
 
-  // 2. Preenche campos do Criador de Proposta
-  document.getElementById('cli_nome').value  = nomeVal;
-  document.getElementById('cli_cpf').value   = cpfVal;
-  document.getElementById('cor_nome').value  = corNomeV;
-  document.getElementById('cor_wa').value    = corWaV;
+  // ── Quando dentro do CRM (iframe): envia postMessage para o React ──
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'CAPITAL_CRM_PROPOSTA_FILL', payload }, '*');
+    return;
+  }
 
-  // Convênio: tenta achar a option que bate, senão deixa em branco
+  // ── Modo standalone: preenche a aba HTML Criador de Proposta ──
+  const nomeVal  = document.getElementById('nomeCliente').value.trim();
+  const cpfVal   = document.getElementById('cpfCliente').value.trim();
+  const convVal  = document.getElementById('convenio').value.trim();
+  const corNomeV = document.getElementById('consultorNome').value.trim();
+  const corWaV   = document.getElementById('consultorTelefone').value.trim();
+
+  document.getElementById('cli_nome').value = nomeVal;
+  document.getElementById('cli_cpf').value  = cpfVal;
+  document.getElementById('cor_nome').value = corNomeV;
+  document.getElementById('cor_wa').value   = corWaV;
+
   const convSel = document.getElementById('cli_conv');
   let matched = false;
   Array.from(convSel.options).forEach(opt => {
@@ -5856,72 +5922,27 @@ function enviarParaProposta() {
   });
   if (!matched) convSel.selectedIndex = 0;
 
-  // 3. Limpa tabelas da proposta (sem disparar o limpar() que reinicia tudo)
   document.querySelectorAll('#atuais_wrap .tbl-row').forEach(el => el.remove());
   document.querySelectorAll('#novas_wrap .tbl-row').forEach(el => el.remove());
   atuais.length = 0; novas.length = 0; aidSeq = 0; nidSeq = 0;
 
-  // 4. Preenche CONTRATOS ATUAIS
-  const modo = document.getElementById('modoPort').value;
-  contratos.forEach(c => {
+  payload.contratos.forEach(c => {
     addAtual();
     const id = atuais[atuais.length - 1];
     const bancoEl = document.getElementById('at_banco_' + id);
     const parcEl  = document.getElementById('at_parc_'  + id);
     const prazoEl = document.getElementById('at_prazo_' + id);
-    if (bancoEl) bancoEl.value = c.banco || '';
-    if (parcEl)  parcEl.value  = c.parcela ? parseFloat(c.parcela).toFixed(2) : '';
-    if (prazoEl) prazoEl.value = c.prazo   || '';
+    if (bancoEl) bancoEl.value = c.banco;
+    if (parcEl)  parcEl.value  = c.parcela.toFixed(2);
+    if (prazoEl) prazoEl.value = c.prazo || '';
   });
   atualizaFooterAt();
 
-  // 5. Preenche NOVA PROPOSTA
-  // Reutiliza a mesma lógica do simular() para montar os itens novos
-  const incluirNovo = document.getElementById('incluirNovoEsquerda').checked;
-
-  if (modo === 'separado') {
-    contratos.forEach(c => {
-      let parcela = c.parcela, prazo = c.prazo;
-      if (c.acao === 'quitar') return;
-      if (c.acao === 'amortizar') {
-        const saldoFinal = Math.max(0, c.saldo - c.amort);
-        if (saldoFinal === 0) return;
-      }
-      if (c.portar && c.saldo > 0) {
-        parcela = parcelaPrice(c.saldo, c.taxaPort / 100, c.prazoPort);
-        prazo   = c.prazoPort;
-      }
-      if (parcela > 0) _addNovaProposta(parcela, prazo, 0);
-    });
-    margens.forEach(m => {
-      if (m.liberado > 0) {
-        const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : m.parcela;
-        const prazo   = m.portar ? m.prazoPort : m.prazo;
-        _addNovaProposta(parcela, prazo, 0);
-      }
-    });
-  } else {
-    // Consolidado
-    if (consolidadoSaldo > 0 && consolidadoParcela > 0)
-      _addNovaProposta(consolidadoParcela, consolidadoPrazo, 0);
-
-    contratos.forEach(c => {
-      if (!c.portar && c.acao === 'manter') _addNovaProposta(c.parcela, c.prazo, 0);
-    });
-    margens.forEach(m => {
-      if (m.liberado > 0) {
-        const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : m.parcela;
-        const prazo   = m.portar ? m.prazoPort : m.prazo;
-        _addNovaProposta(parcela, prazo, 0);
-      }
-    });
-  }
+  payload.novas.forEach(n => _addNovaProposta(n.parcela, n.prazo, n.troco));
   atualizaFooterNv();
 
-  // 6. Troca para a aba Proposta
   switchTab('proposta', document.querySelectorAll('.tab-btn')[0]);
-  window.scrollTo({top: 0, behavior: 'smooth'});
-
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => alert('✅ Dados enviados para o Criador de Proposta!\nRevise e clique em "Gerar proposta".'), 300);
 }
 

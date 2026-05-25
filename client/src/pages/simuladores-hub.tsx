@@ -1,9 +1,25 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
-import { PropostaProvider } from "@/contexts/proposta-context";
+import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
+
+// Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
+function IframeBridge() {
+  const ctx = useProposta();
+  useEffect(() => {
+    if (!ctx) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'CAPITAL_CRM_PROPOSTA_FILL' && event.data?.payload) {
+        ctx.sendToProposta(event.data.payload);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [ctx]);
+  return null;
+}
 
 const TABS = [
   {
@@ -82,6 +98,7 @@ export default function SimuladoresHub() {
 
   return (
     <PropostaProvider onNavigateToProposta={navigateToProposta}>
+      <IframeBridge />
       <div className="flex flex-col h-full w-full overflow-hidden">
         {/* ── TABS BAR ── */}
         <div
