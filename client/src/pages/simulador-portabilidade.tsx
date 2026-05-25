@@ -923,7 +923,14 @@ export default function SimuladorPortabilidadePage() {
               (() => {
                 const priceLines = gerarTabelaPrice(cronograma.parcMedia, cronograma.taxaImpl, cronograma.meses);
                 return (
-                  <table>
+                  <table style={{ tableLayout: "fixed" }}>
+                    <colgroup>
+                      <col style={{ width: "6%" }} />
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "28%" }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>Mês</th>
@@ -936,11 +943,11 @@ export default function SimuladorPortabilidadePage() {
                     <tbody>
                       {priceLines.map((l) => (
                         <tr key={l.mes}>
-                          <td className="tm">{l.mes}</td>
-                          <td className="ta2">{fmtR(l.parcela)}</td>
-                          <td className="ta" style={{ color: "#e05252" }}>{fmtR(l.juros)}</td>
-                          <td className="ta" style={{ color: "#2e7d32" }}>{fmtR(l.amortizacao)}</td>
-                          <td className="ta">{fmtR(l.saldoDevedor)}</td>
+                          <td className="tm">{String(l.mes).padStart(2, "0")}</td>
+                          <td className="ta2" style={{ textAlign: "right" }}>{fmtR(l.parcela)}</td>
+                          <td style={{ textAlign: "right", color: "#e05252", fontWeight: 600 }}>{fmtR(l.juros)}</td>
+                          <td style={{ textAlign: "right", color: "#2e7d32", fontWeight: 600 }}>{fmtR(l.amortizacao)}</td>
+                          <td className="ta" style={{ textAlign: "right" }}>{fmtR(l.saldoDevedor)}</td>
                         </tr>
                       ))}
                     </tbody>
