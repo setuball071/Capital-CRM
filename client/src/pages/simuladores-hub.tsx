@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
+import { useTheme } from "@/components/theme-provider";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
 function IframeBridge() {
@@ -18,6 +19,25 @@ function IframeBridge() {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [ctx]);
+  return null;
+}
+
+// Sincroniza o tema do CRM com os iframes filhos via postMessage
+function IframeThemeSync({
+  portabilidadeRef,
+  contrachequeRef,
+}: {
+  portabilidadeRef: React.RefObject<HTMLIFrameElement>;
+  contrachequeRef: React.RefObject<HTMLIFrameElement>;
+}) {
+  const { theme } = useTheme();
+  const sendTheme = useCallback((frame: HTMLIFrameElement | null, t: string) => {
+    try { frame?.contentWindow?.postMessage({ type: 'CAPITAL_CRM_THEME', theme: t }, '*'); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    sendTheme(portabilidadeRef.current, theme);
+    sendTheme(contrachequeRef.current, theme);
+  }, [theme, sendTheme, portabilidadeRef, contrachequeRef]);
   return null;
 }
 
@@ -93,12 +113,21 @@ const TABS = [
 
 export default function SimuladoresHub() {
   const [activeTab, setActiveTab] = useState("proposta");
+  const { theme } = useTheme();
+  const portabilidadeRef = useRef<HTMLIFrameElement>(null);
+  const contrachequeRef = useRef<HTMLIFrameElement>(null);
 
   const navigateToProposta = useCallback(() => setActiveTab("proposta"), []);
+
+  // Envia tema para um iframe assim que ele termina de carregar
+  const sendThemeToFrame = useCallback((frame: HTMLIFrameElement | null) => {
+    try { frame?.contentWindow?.postMessage({ type: 'CAPITAL_CRM_THEME', theme }, '*'); } catch { /* ignore */ }
+  }, [theme]);
 
   return (
     <PropostaProvider onNavigateToProposta={navigateToProposta}>
       <IframeBridge />
+      <IframeThemeSync portabilidadeRef={portabilidadeRef} contrachequeRef={contrachequeRef} />
       <div className="flex flex-col h-full w-full overflow-hidden">
         {/* ── TABS BAR ── */}
         <div
@@ -163,6 +192,7 @@ export default function SimuladoresHub() {
 
           {/* Simulador de Portabilidade — iframe (lógica complexa com PDF import, regras de bancos) */}
           <iframe
+            ref={portabilidadeRef}
             src="/ferramentas-portabilidade.html#simulador"
             title="Simulador de Portabilidade"
             style={{
@@ -172,6 +202,7 @@ export default function SimuladoresHub() {
               border: "none",
             }}
             allow="same-origin"
+            onLoad={() => sendThemeToFrame(portabilidadeRef.current)}
           />
 
           {/* Simulador de Compra — native React */}
@@ -191,6 +222,7 @@ export default function SimuladoresHub() {
 
           {/* Contracheque — iframe */}
           <iframe
+            ref={contrachequeRef}
             src="/simulador-contracheque.html"
             title="Cálculo de Contracheque"
             style={{
@@ -200,6 +232,7 @@ export default function SimuladoresHub() {
               border: "none",
             }}
             allow="same-origin"
+            onLoad={() => sendThemeToFrame(contrachequeRef.current)}
           />
         </div>
       </div>

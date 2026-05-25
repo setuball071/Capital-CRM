@@ -5960,6 +5960,13 @@ function _addNovaProposta(parcela, prazo, troco) {
 
 
 
+// ── Recebe tema do CRM pai via postMessage ──
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'CAPITAL_CRM_THEME') {
+    document.documentElement.setAttribute('data-theme', event.data.theme === 'dark' ? 'dark' : 'light');
+  }
+});
+
 // ── AUTO-SWITCH DE ABA POR HASH (#proposta | #simulador) ──
 window.addEventListener('load', function() {
   var hash = window.location.hash.replace('#', '');

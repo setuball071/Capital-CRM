@@ -571,23 +571,23 @@ export default function SimuladorPortabilidadePage() {
     <div className="sim-portabilidade-page overflow-auto h-full">
       <style>{`
         .sim-wrap * { box-sizing: border-box; }
-        .sim-wrap { font-family: 'Inter', sans-serif; font-size: 14px; color: #121212; }
-        .sim-wrap .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-        .sim-wrap .panel { padding: 24px 28px; background: #FFFFFF; border-right: 1px solid #E5E7EB; }
+        .sim-wrap { font-family: 'Inter', sans-serif; font-size: 14px; color: hsl(var(--foreground)); }
+        .sim-wrap .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: hsl(var(--card)); }
+        .sim-wrap .panel { padding: 24px 28px; background: hsl(var(--card)); border-right: 1px solid hsl(var(--border)); }
         .sim-wrap .panel:last-child { border-right: none; }
-        .sim-wrap .panel-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #6B7280; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+        .sim-wrap .panel-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: hsl(var(--muted-foreground)); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
         .sim-wrap .sim-badge { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
         .sim-wrap .badge-left { background: rgba(108,43,217,.1); color: #6C2BD9; border: 1px solid rgba(108,43,217,.25); }
         .sim-wrap .badge-right { background: rgba(30,136,229,.1); color: #1E88E5; border: 1px solid rgba(30,136,229,.25); }
         .sim-wrap .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
         .sim-wrap .form-row.single { grid-template-columns: 1fr; }
         .sim-wrap .fg { display: flex; flex-direction: column; gap: 5px; }
-        .sim-wrap label { font-size: 11px; font-weight: 500; color: #6B7280; }
-        .sim-wrap input, .sim-wrap select { background: #F3F4F6; border: 1.5px solid #E5E7EB; border-radius: 8px; color: #121212; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; padding: 9px 12px; width: 100%; outline: none; transition: border-color .15s, box-shadow .15s; }
+        .sim-wrap label { font-size: 11px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+        .sim-wrap input, .sim-wrap select { background: hsl(var(--muted)); border: 1.5px solid hsl(var(--border)); border-radius: 8px; color: hsl(var(--foreground)); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; padding: 9px 12px; width: 100%; outline: none; transition: border-color .15s, box-shadow .15s; }
         .sim-wrap input:focus, .sim-wrap select:focus { border-color: #6C2BD9; box-shadow: 0 0 0 3px rgba(108,43,217,.1); }
-        .sim-wrap input[readonly] { opacity: .55; cursor: not-allowed; background: #FAFAFA; border-style: dashed; }
-        .sim-wrap .results { background: #F3F4F6; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 16px; margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .sim-wrap .ri label { font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; }
+        .sim-wrap input[readonly] { opacity: .55; cursor: not-allowed; background: hsl(var(--background)); border-style: dashed; }
+        .sim-wrap .results { background: hsl(var(--muted)); border: 1.5px solid hsl(var(--border)); border-radius: 12px; padding: 16px; margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .sim-wrap .ri label { font-size: 10px; color: hsl(var(--muted-foreground)); text-transform: uppercase; letter-spacing: .05em; }
         .sim-wrap .ri .v { font-size: 15px; font-weight: 700; color: #6C2BD9; margin-top: 3px; }
         .sim-wrap .panel-right .ri .v { color: #1E88E5; }
         .sim-wrap .ri .v.destaque { font-size: 20px; }
@@ -595,96 +595,62 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(108,43,217,.12); }
         .sim-wrap .btn-sim-left { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
         .sim-wrap .btn-sim-right { background: linear-gradient(90deg, #1E88E5 0%, #0d47a1 100%); color: #fff; }
-        .sim-wrap .sim-section { border-top: 1px solid #E5E7EB; padding: 24px 28px; background: #F3F4F6; }
-        .sim-wrap .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #6B7280; margin-bottom: 16px; }
+        .sim-wrap .sim-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--muted)); }
+        .sim-wrap .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: hsl(var(--muted-foreground)); margin-bottom: 16px; }
         .sim-wrap .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .sim-wrap .prazos-col-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
         .sim-wrap .col-left-label { color: #6C2BD9; }
         .sim-wrap .col-right-label { color: #1E88E5; }
         .sim-wrap .prazos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; }
-        .sim-wrap .pc { background: #FFFFFF; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all .15s; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        .sim-wrap .pc { background: hsl(var(--card)); border: 1.5px solid hsl(var(--border)); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all .15s; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
         .sim-wrap .pc:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(108,43,217,.12); border-color: #6C2BD9; }
-        .sim-wrap .pc.al { border-color: #6C2BD9; background: rgba(108,43,217,.04); box-shadow: 0 0 0 3px rgba(108,43,217,.12); }
-        .sim-wrap .pc.ar { border-color: #1E88E5; background: rgba(30,136,229,.04); box-shadow: 0 0 0 3px rgba(30,136,229,.12); }
-        .sim-wrap .pc-meses { font-size: 20px; font-weight: 800; color: #121212; }
-        .sim-wrap .pc-meses small { font-size: 11px; font-weight: 400; color: #6B7280; margin-left: 3px; }
+        .sim-wrap .pc.al { border-color: #6C2BD9; background: rgba(108,43,217,.06); box-shadow: 0 0 0 3px rgba(108,43,217,.12); }
+        .sim-wrap .pc.ar { border-color: #1E88E5; background: rgba(30,136,229,.06); box-shadow: 0 0 0 3px rgba(30,136,229,.12); }
+        .sim-wrap .pc-meses { font-size: 20px; font-weight: 800; color: hsl(var(--foreground)); }
+        .sim-wrap .pc-meses small { font-size: 11px; font-weight: 400; color: hsl(var(--muted-foreground)); margin-left: 3px; }
         .sim-wrap .pc-parc { font-size: 12px; font-weight: 600; color: #6C2BD9; margin-top: 5px; }
         .sim-wrap .pc.ar .pc-parc { color: #1E88E5; }
-        .sim-wrap .pc-taxa { font-size: 10px; color: #6B7280; margin-top: 2px; }
+        .sim-wrap .pc-taxa { font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
         .sim-wrap .pc-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none; }
         .sim-wrap .pc.al .pc-tag { display: block; background: #6C2BD9; color: #fff; }
         .sim-wrap .pc.ar .pc-tag { display: block; background: #1E88E5; color: #fff; }
-        .sim-wrap .table-section { border-top: 1px solid #E5E7EB; padding: 24px 28px; background: #FFFFFF; }
+        .sim-wrap .table-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--card)); }
         .sim-wrap .table-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .sim-wrap .table-title { font-size: 15px; font-weight: 700; color: #121212; }
-        .sim-wrap .table-meta { font-size: 11px; color: #6B7280; margin-top: 3px; }
+        .sim-wrap .table-title { font-size: 15px; font-weight: 700; color: hsl(var(--foreground)); }
+        .sim-wrap .table-meta { font-size: 11px; color: hsl(var(--muted-foreground)); margin-top: 3px; }
         .sim-wrap .btn-pdf { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; transition: opacity .15s, box-shadow .15s; box-shadow: 0 4px 12px rgba(108,43,217,.12); }
         .sim-wrap .btn-pdf:hover { opacity: .88; box-shadow: 0 6px 18px rgba(108,43,217,.25); }
         .sim-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .sim-wrap thead th { background: #F3F4F6; color: #6B7280; text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .07em; padding: 10px 12px; text-align: left; border-bottom: 2px solid #E5E7EB; }
-        .sim-wrap tbody tr { border-bottom: 1px solid #E5E7EB; transition: background .1s; }
-        .sim-wrap tbody tr:hover { background: #F9F6FF; }
-        .sim-wrap td { padding: 8px 12px; color: #333333; }
-        .sim-wrap .tm { color: #6B7280; font-weight: 500; }
+        .sim-wrap thead th { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .07em; padding: 10px 12px; text-align: left; border-bottom: 2px solid hsl(var(--border)); }
+        .sim-wrap tbody tr { border-bottom: 1px solid hsl(var(--border)); transition: background .1s; }
+        .sim-wrap tbody tr:hover { background: rgba(108,43,217,.04); }
+        .sim-wrap td { padding: 8px 12px; color: hsl(var(--foreground)); }
+        .sim-wrap .tm { color: hsl(var(--muted-foreground)); font-weight: 500; }
         .sim-wrap .ta { color: #6C2BD9; font-weight: 700; }
-        .sim-wrap .ta2 { color: #121212; font-weight: 500; }
-        .sim-wrap .empty-sim { text-align: center; padding: 48px; color: #6B7280; font-size: 13px; }
-        .sim-wrap .mode-toggle { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1.5px solid #E5E7EB; }
-        .sim-wrap .mode-btn { flex: 1; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .03em; border: none; cursor: pointer; transition: all .15s; background: #F3F4F6; color: #6B7280; }
+        .sim-wrap .ta2 { color: hsl(var(--foreground)); font-weight: 500; }
+        .sim-wrap .empty-sim { text-align: center; padding: 48px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+        .sim-wrap .mode-toggle { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1.5px solid hsl(var(--border)); }
+        .sim-wrap .mode-btn { flex: 1; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .03em; border: none; cursor: pointer; transition: all .15s; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
         .sim-wrap .mode-btn.active { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
-        .sim-wrap .mode-btn:first-child { border-right: 1px solid #E5E7EB; }
+        .sim-wrap .mode-btn:first-child { border-right: 1px solid hsl(var(--border)); }
         .sim-wrap .pdf-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .sim-wrap .pdf-dialog { background: #fff; border-radius: 12px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
-        .sim-wrap .pdf-dialog-title { font-size: 15px; font-weight: 700; color: #121212; margin-bottom: 4px; }
-        .sim-wrap .pdf-dialog-sub { font-size: 11px; color: #6B7280; margin-bottom: 18px; }
+        .sim-wrap .pdf-dialog { background: hsl(var(--card)); border-radius: 12px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+        .sim-wrap .pdf-dialog-title { font-size: 15px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 4px; }
+        .sim-wrap .pdf-dialog-sub { font-size: 11px; color: hsl(var(--muted-foreground)); margin-bottom: 18px; }
         .sim-wrap .pdf-dialog .fg { margin-bottom: 12px; }
         .sim-wrap .pdf-dialog-actions { display: flex; gap: 10px; margin-top: 18px; }
         .sim-wrap .pdf-dialog-actions button { flex: 1; }
-        .sim-wrap .btn-cancel { padding: 10px; border: 1.5px solid #E5E7EB; border-radius: 8px; background: #F3F4F6; color: #6B7280; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; transition: opacity .15s; }
+        .sim-wrap .btn-cancel { padding: 10px; border: 1.5px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; transition: opacity .15s; }
         .sim-wrap .btn-cancel:hover { opacity: .8; }
         @media (max-width: 768px) {
           .sim-wrap .main-grid { grid-template-columns: 1fr; }
           .sim-wrap .prazos-wrap { grid-template-columns: 1fr; }
-          .sim-wrap .panel { border-right: none; border-bottom: 1px solid #E5E7EB; }
+          .sim-wrap .panel { border-right: none; border-bottom: 1px solid hsl(var(--border)); }
         }
-        /* ── Dark mode ── */
-        .dark .sim-wrap { color: #e5e7eb; }
-        .dark .sim-wrap .panel { background: #1e1e2e; border-right-color: #2d2d3f; }
-        .dark .sim-wrap .main-grid { background: #1e1e2e; }
-        .dark .sim-wrap label { color: #9ca3af; }
-        .dark .sim-wrap input, .dark .sim-wrap select { background: #2d2d3f; border-color: #3d3d55; color: #e5e7eb; }
-        .dark .sim-wrap input:focus, .dark .sim-wrap select:focus { border-color: #6C2BD9; }
-        .dark .sim-wrap input[readonly] { background: #252535; color: #6b7280; }
-        .dark .sim-wrap .results { background: #252535; border-color: #3d3d55; }
+        /* ── Dark mode: apenas cores de acento que precisam ser mais claras ── */
         .dark .sim-wrap .ri .v { color: #a78bfa; }
         .dark .sim-wrap .panel-right .ri .v { color: #60a5fa; }
-        .dark .sim-wrap .sim-section { background: #181825; border-top-color: #2d2d3f; }
-        .dark .sim-wrap .section-title { color: #9ca3af; }
-        .dark .sim-wrap .pc { background: #1e1e2e; border-color: #3d3d55; }
-        .dark .sim-wrap .pc:hover { border-color: #6C2BD9; }
-        .dark .sim-wrap .pc-meses { color: #e5e7eb; }
-        .dark .sim-wrap .pc-taxa { color: #9ca3af; }
-        .dark .sim-wrap .table-section { background: #1e1e2e; border-top-color: #2d2d3f; }
-        .dark .sim-wrap .table-title { color: #e5e7eb; }
-        .dark .sim-wrap .table-meta { color: #9ca3af; }
-        .dark .sim-wrap table { color: #e5e7eb; }
-        .dark .sim-wrap thead th { background: #252535; color: #9ca3af; border-bottom-color: #3d3d55; }
-        .dark .sim-wrap tbody tr { border-bottom-color: #2d2d3f; }
-        .dark .sim-wrap tbody tr:hover { background: #252535; }
-        .dark .sim-wrap td { color: #d1d5db; }
-        .dark .sim-wrap .tm { color: #6b7280; }
         .dark .sim-wrap .ta { color: #a78bfa; }
-        .dark .sim-wrap .ta2 { color: #e5e7eb; }
-        .dark .sim-wrap .pdf-dialog { background: #1e1e2e; color: #e5e7eb; }
-        .dark .sim-wrap .pdf-dialog-title { color: #e5e7eb; }
-        .dark .sim-wrap .pdf-dialog-sub { color: #9ca3af; }
-        .dark .sim-wrap .btn-cancel { background: #2d2d3f; border-color: #3d3d55; color: #9ca3af; }
-        .dark .sim-wrap .mode-toggle { border-color: #3d3d55; }
-        .dark .sim-wrap .mode-btn { background: #2d2d3f; color: #9ca3af; }
-        .dark .sim-wrap .mode-btn:first-child { border-right-color: #3d3d55; }
-        .dark .sim-wrap .panel-label { color: #9ca3af; }
-        .dark .sim-wrap .empty-sim { color: #6b7280; }
-        .dark .sim-wrap .prazos-col-label { color: #9ca3af; }
       `}</style>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <div className="sim-wrap">

@@ -110,6 +110,58 @@ button.btn-pdf:hover { background: #5a32a3; }
 .r-limitador { margin: 8px 0; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; }
 .r-limitador.ok { background: #d4edda; color: #155724; }
 .r-limitador.nok { background: #f8d7da; color: #721c24; }
+
+/* ── Dark Mode ── */
+[data-theme="dark"] body { background: #0f172a; color: #e2e8f0; }
+[data-theme="dark"] h1 { color: #93c5fd; }
+[data-theme="dark"] .sub { color: #94a3b8; }
+[data-theme="dark"] .card { background: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+[data-theme="dark"] label { color: #94a3b8; }
+[data-theme="dark"] input, [data-theme="dark"] select { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] input:focus, [data-theme="dark"] select:focus { border-color: #6366f1; }
+[data-theme="dark"] .drop-zone { border-color: #6366f1; background: #1e293b; }
+[data-theme="dark"] .drop-zone p { color: #93c5fd; }
+[data-theme="dark"] .drop-zone .small { color: #94a3b8; }
+[data-theme="dark"] .drop-zone:hover, [data-theme="dark"] .drop-zone.dragover { background: #263348; border-color: #818cf8; }
+[data-theme="dark"] th { background: #1e293b; color: #94a3b8; border-bottom-color: #334155; }
+[data-theme="dark"] td { border-bottom-color: #1e293b; }
+[data-theme="dark"] tr.total td { background: #263348; border-top-color: #334155; }
+[data-theme="dark"] .stat { background: #263348; border-left-color: #6366f1; }
+[data-theme="dark"] .stat .label { color: #94a3b8; }
+[data-theme="dark"] .stat .value { color: #93c5fd; }
+[data-theme="dark"] .summary { }
+[data-theme="dark"] #statusMsg.info { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] #statusMsg.error { background: #3b1a1a; color: #fca5a5; }
+[data-theme="dark"] #statusMsg.success { background: #14402a; color: #86efac; }
+[data-theme="dark"] .badge-yes { background: #14402a; color: #86efac; }
+[data-theme="dark"] .badge-no { background: #3b1a1a; color: #fca5a5; }
+[data-theme="dark"] .badge-skip { background: #3b2e00; color: #fde68a; }
+[data-theme="dark"] .badge-unk { background: #1e293b; color: #94a3b8; }
+[data-theme="dark"] .margin-card { }
+[data-theme="dark"] .margin-card.positive { border-color: #22c55e; background: #14402a; }
+[data-theme="dark"] .margin-card.negative { border-color: #ef4444; background: #3b1a1a; }
+[data-theme="dark"] .margin-card h3 { color: #94a3b8; }
+[data-theme="dark"] .margin-card.positive .big { color: #86efac; }
+[data-theme="dark"] .margin-card.negative .big { color: #fca5a5; }
+[data-theme="dark"] .margin-card .small { color: #94a3b8; }
+[data-theme="dark"] .r-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .r-card .r-label { color: #94a3b8; }
+[data-theme="dark"] .r-card .r-big { color: #93c5fd; }
+[data-theme="dark"] .r-card.highlight { border-color: #818cf8; background: #1e1e3b; }
+[data-theme="dark"] .r-card.highlight .r-big { color: #a5b4fc; }
+[data-theme="dark"] .r-limitador.ok { background: #14402a; color: #86efac; }
+[data-theme="dark"] .r-limitador.nok { background: #3b1a1a; color: #fca5a5; }
+[data-theme="dark"] .editable { background: #2d2a14; }
+[data-theme="dark"] .editable:hover { background: #3b380f; }
+[data-theme="dark"] tr.drag-over { background: #1e3a5f !important; outline-color: #6366f1; }
+[data-theme="dark"] button:not(.btn-icon):not(.btn-add) { background: #6366f1; }
+[data-theme="dark"] button:not(.btn-icon):not(.btn-add):hover { background: #4f46e5; }
+[data-theme="dark"] button.secondary { background: #475569; }
+[data-theme="dark"] button.secondary:hover { background: #334155; }
+[data-theme="dark"] button.success { background: #16a34a; }
+[data-theme="dark"] button.success:hover { background: #15803d; }
+[data-theme="dark"] .btn-add { background: #6366f1; }
+[data-theme="dark"] .btn-add:hover { background: #4f46e5; }
 </style>
 </head>
 <body>
@@ -1301,6 +1353,15 @@ function exportPDF() {
 document.getElementById('addModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAddModal(); });
 document.getElementById('addValor').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddItem(); });
 document.getElementById('addDiscr').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addPrazo').focus(); });
+</script>
+
+<!-- Sincronização de tema com o CRM pai -->
+<script>
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'CAPITAL_CRM_THEME') {
+    document.documentElement.setAttribute('data-theme', event.data.theme === 'dark' ? 'dark' : 'light');
+  }
+});
 </script>
 </body>
 </html>

@@ -144,18 +144,18 @@ export default function CalculadoraRendaFixa() {
             {/* Montante destaque */}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Montante Final</p>
-              <p className="text-3xl font-bold text-green-500">{fmt(resultado.montante)}</p>
+              <p className="text-3xl font-bold text-green-500 dark:text-green-400">{fmt(resultado.montante)}</p>
             </div>
 
             {/* Grid de métricas */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Investido</p>
-                <p className="text-lg font-semibold text-yellow-500">{fmt(resultado.totalInvestido)}</p>
+                <p className="text-lg font-semibold text-yellow-500 dark:text-amber-400">{fmt(resultado.totalInvestido)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total em Juros</p>
-                <p className="text-lg font-semibold text-blue-500">{fmt(resultado.totalJuros)}</p>
+                <p className="text-lg font-semibold text-blue-500 dark:text-blue-400">{fmt(resultado.totalJuros)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Rentabilidade</p>
@@ -175,7 +175,7 @@ export default function CalculadoraRendaFixa() {
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-green-500 dark:from-blue-400 dark:to-green-400 transition-all duration-500"
                   style={{ width: `${resultado.pctInvest}%` }}
                 />
               </div>
@@ -202,8 +202,8 @@ export default function CalculadoraRendaFixa() {
                       >
                         <td className="py-1.5 px-3 text-center text-muted-foreground">{r.m}</td>
                         <td className="py-1.5 px-3 text-right">{fmt(r.aporte)}</td>
-                        <td className="py-1.5 px-3 text-right text-blue-500">{fmt(r.juros)}</td>
-                        <td className="py-1.5 px-3 text-right text-green-500">{fmt(r.saldo)}</td>
+                        <td className="py-1.5 px-3 text-right text-blue-500 dark:text-blue-400">{fmt(r.juros)}</td>
+                        <td className="py-1.5 px-3 text-right text-green-500 dark:text-green-400">{fmt(r.saldo)}</td>
                       </tr>
                     ))}
                   </tbody>
