@@ -47,6 +47,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/abordagem", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas", "/vendas/importar-higienizados", "/vendas/minha-carteira"],
+  modulo_financeiro: ["/financeiro/contratos", "/financeiro/producao", "/financeiro/tabelas", "/financeiro/configuracoes"],
 };
 
 function getModuleForUrl(url: string): string | undefined {
@@ -213,10 +214,10 @@ export function AppSidebar() {
       title: "Financeiro",
       icon: TrendingUp,
       items: [
-        { title: "Contratos", url: "/financeiro/contratos", icon: FileText, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Produção", url: "/financeiro/producao", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Configurações", url: "/financeiro/configuracoes", icon: Settings2, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Contratos", url: "/financeiro/contratos", icon: FileText, module: "modulo_financeiro", subItem: "contratos" },
+        { title: "Produção", url: "/financeiro/producao", icon: BarChart3, module: "modulo_financeiro", subItem: "producao" },
+        { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, module: "modulo_financeiro", subItem: "tabelas" },
+        { title: "Configurações", url: "/financeiro/configuracoes", icon: Settings2, module: "modulo_financeiro", subItem: "configuracoes" },
       ],
     },
   ];

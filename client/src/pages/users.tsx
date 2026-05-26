@@ -712,8 +712,8 @@ export default function UsersPage() {
               Novo Usuário
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
               <DialogTitle>
                 {editingUser ? "Editar Usuário" : "Criar Novo Usuário"}
               </DialogTitle>
@@ -725,181 +725,188 @@ export default function UsersPage() {
                   : "Preencha os dados do novo usuário"}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {editingUser && canManageAllUsers && (
-                <div className="flex items-center gap-4">
-                  <div className="relative group">
-                    <Avatar className="w-16 h-16">
-                      {editingUser.avatarUrl && <AvatarImage src={editingUser.avatarUrl} alt={editingUser.name} className="object-cover" />}
-                      <AvatarFallback className="text-lg font-bold">
-                        {editingUser.name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" style={{ visibility: isUploadingAvatar ? "hidden" : "visible" }}>
-                      <Camera className="w-5 h-5 text-white" />
-                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarUpload} data-testid="input-avatar-upload" />
-                    </label>
-                    {isUploadingAvatar && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
-                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+            <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
+              {/* Body: 2 colunas no edit com permissões, 1 coluna no create */}
+              <div className={editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0)
+                ? "flex-1 overflow-hidden grid grid-cols-2 divide-x"
+                : "flex-1 overflow-y-auto"}>
+
+                {/* Coluna esquerda: dados do usuário */}
+                <div className={`overflow-y-auto p-6 space-y-4 ${!(editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0)) ? "max-w-lg mx-auto w-full" : ""}`}>
+                  {editingUser && canManageAllUsers && (
+                    <div className="flex items-center gap-4">
+                      <div className="relative group">
+                        <Avatar className="w-16 h-16">
+                          {editingUser.avatarUrl && <AvatarImage src={editingUser.avatarUrl} alt={editingUser.name} className="object-cover" />}
+                          <AvatarFallback className="text-lg font-bold">
+                            {editingUser.name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" style={{ visibility: isUploadingAvatar ? "hidden" : "visible" }}>
+                          <Camera className="w-5 h-5 text-white" />
+                          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarUpload} data-testid="input-avatar-upload" />
+                        </label>
+                        {isUploadingAvatar && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
+                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          </div>
+                        )}
                       </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">Foto do usuário</span>
+                        <span className="text-xs text-muted-foreground">JPG, PNG ou WebP (máx 2MB)</span>
+                        {editingUser.avatarUrl && (
+                          <Button type="button" variant="ghost" size="sm" onClick={handleAvatarDelete} disabled={isUploadingAvatar} className="justify-start px-0 text-destructive" data-testid="button-remove-avatar">
+                            <X className="w-3 h-3 mr-1" /> Remover foto
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome</Label>
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Nome completo"
+                      data-testid="input-user-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Login</Label>
+                    <Input
+                      id="email"
+                      type="text"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={editingUser ? "" : "1234"}
+                      data-testid="input-user-email"
+                      disabled={!!editingUser}
+                    />
+                    {!editingUser && (
+                      <p className="text-xs text-muted-foreground">
+                        Digite um código de 4 dígitos numéricos (ou email para compatibilidade)
+                      </p>
                     )}
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm font-medium">Foto do usuário</span>
-                    <span className="text-xs text-muted-foreground">JPG, PNG ou WebP (máx 2MB)</span>
-                    {editingUser.avatarUrl && (
-                      <Button type="button" variant="ghost" size="sm" onClick={handleAvatarDelete} disabled={isUploadingAvatar} className="justify-start px-0 text-destructive" data-testid="button-remove-avatar">
-                        <X className="w-3 h-3 mr-1" /> Remover foto
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Nome completo"
-                  data-testid="input-user-name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Login</Label>
-                <Input
-                  id="email"
-                  type="text"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={editingUser ? "" : "1234"}
-                  data-testid="input-user-email"
-                  disabled={!!editingUser}
-                />
-                {!editingUser && (
-                  <p className="text-xs text-muted-foreground">
-                    Digite um código de 4 dígitos numéricos (ou email para compatibilidade)
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">
-                  {editingUser ? "Nova Senha (opcional)" : "Senha"}
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingUser ? "Deixe em branco para manter" : "Mínimo 6 caracteres"}
-                  data-testid="input-user-password"
-                />
-              </div>
-              {getAvailableRoles().length > 1 && (
-                <div className="space-y-2">
-                  <Label htmlFor="role">Função</Label>
-                  <Select value={role} onValueChange={(v: UserRole) => setRole(v)}>
-                    <SelectTrigger id="role" data-testid="select-user-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getAvailableRoles().map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {ROLE_LABELS[r]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {isMaster && editingUser && role === "vendedor" && (
-                <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/40">
-                  <Checkbox
-                    id="is-demo"
-                    checked={isDemo}
-                    onCheckedChange={(v) => setIsDemo(v === true)}
-                    data-testid="checkbox-is-demo"
-                  />
-                  <div className="flex flex-col gap-0.5">
-                    <Label htmlFor="is-demo" className="cursor-pointer flex items-center gap-2">
-                      <Presentation className="w-4 h-4 text-muted-foreground" />
-                      Usuário Demo (apresentações)
+                  <div className="space-y-2">
+                    <Label htmlFor="password">
+                      {editingUser ? "Nova Senha (opcional)" : "Senha"}
                     </Label>
-                    <span className="text-xs text-muted-foreground">
-                      Dashboard sempre exibirá 70% da meta geral e 90% da meta de cartão
-                    </span>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={editingUser ? "Deixe em branco para manter" : "Mínimo 6 caracteres"}
+                      data-testid="input-user-password"
+                    />
                   </div>
-                </div>
-              )}
-
-              {canManageAllUsers && role === "vendedor" && (
-                <div className="space-y-2">
-                  <Label htmlFor="manager">Coordenador (opcional)</Label>
-                  <Select value={managerId || "none"} onValueChange={setManagerId}>
-                    <SelectTrigger id="manager" data-testid="select-user-manager">
-                      <SelectValue placeholder="Selecione um coordenador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {coordenadores.map((coord) => (
-                        <SelectItem key={coord.id} value={coord.id.toString()}>
-                          {coord.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {canManageAllUsers && allTenants.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-base font-semibold">Ambientes</Label>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Selecione os ambientes que este usuário terá acesso.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-md p-3">
-                    {allTenants.map((tenant) => (
-                      <div key={tenant.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`tenant-${tenant.id}`}
-                          checked={selectedTenantIds.includes(tenant.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedTenantIds(prev => [...prev, tenant.id]);
-                            } else {
-                              setSelectedTenantIds(prev => prev.filter(id => id !== tenant.id));
-                            }
-                          }}
-                          data-testid={`checkbox-tenant-${tenant.id}`}
-                        />
-                        <Label
-                          htmlFor={`tenant-${tenant.id}`}
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          {tenant.name}
+                  {getAvailableRoles().length > 1 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="role">Função</Label>
+                      <Select value={role} onValueChange={(v: UserRole) => setRole(v)}>
+                        <SelectTrigger id="role" data-testid="select-user-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getAvailableRoles().map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {isMaster && editingUser && role === "vendedor" && (
+                    <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/40">
+                      <Checkbox
+                        id="is-demo"
+                        checked={isDemo}
+                        onCheckedChange={(v) => setIsDemo(v === true)}
+                        data-testid="checkbox-is-demo"
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <Label htmlFor="is-demo" className="cursor-pointer flex items-center gap-2">
+                          <Presentation className="w-4 h-4 text-muted-foreground" />
+                          Usuário Demo (apresentações)
                         </Label>
+                        <span className="text-xs text-muted-foreground">
+                          Dashboard sempre exibirá 70% da meta geral e 90% da meta de cartão
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                  {selectedTenantIds.length === 0 && (
-                    <p className="text-xs text-amber-600">
-                      Nenhum ambiente selecionado. O usuário não terá acesso a nenhum ambiente.
-                    </p>
+                    </div>
+                  )}
+
+                  {canManageAllUsers && role === "vendedor" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="manager">Coordenador (opcional)</Label>
+                      <Select value={managerId || "none"} onValueChange={setManagerId}>
+                        <SelectTrigger id="manager" data-testid="select-user-manager">
+                          <SelectValue placeholder="Selecione um coordenador" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {coordenadores.map((coord) => (
+                            <SelectItem key={coord.id} value={coord.id.toString()}>
+                              {coord.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {canManageAllUsers && allTenants.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <Label className="text-base font-semibold">Ambientes</Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Selecione os ambientes que este usuário terá acesso.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-md p-3">
+                        {allTenants.map((tenant) => (
+                          <div key={tenant.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`tenant-${tenant.id}`}
+                              checked={selectedTenantIds.includes(tenant.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedTenantIds(prev => [...prev, tenant.id]);
+                                } else {
+                                  setSelectedTenantIds(prev => prev.filter(id => id !== tenant.id));
+                                }
+                              }}
+                              data-testid={`checkbox-tenant-${tenant.id}`}
+                            />
+                            <Label
+                              htmlFor={`tenant-${tenant.id}`}
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              {tenant.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      {selectedTenantIds.length === 0 && (
+                        <p className="text-xs text-amber-600">
+                          Nenhum ambiente selecionado. O usuário não terá acesso a nenhum ambiente.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
 
-              {hasConfigUsuariosPermission && editingUser && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0) && (
-                <>
-                  <Separator className="my-4" />
-                  <div className="space-y-3">
+                {/* Coluna direita: permissões (só no edit com permissões disponíveis) */}
+                {editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0) && (
+                  <div className="overflow-y-auto p-6 space-y-3">
                     <Label className="text-base font-semibold">Permissões de Acesso</Label>
                     <p className="text-sm text-muted-foreground">
-                      {isMaster 
+                      {isMaster
                         ? "Configure quais sub-itens de cada módulo este usuário pode acessar e editar."
                         : `Você pode delegar acesso aos seguintes módulos: ${delegatableModules.map(m => MODULE_TRANSLATIONS[m] || m).join(", ")}.`}
                     </p>
@@ -915,7 +922,7 @@ export default function UsersPage() {
                             const modulePermissions = permissions.filter(p => p.module.startsWith(module + "."));
                             const hasAnyView = modulePermissions.some(p => p.canView);
                             const hasAnyEdit = modulePermissions.some(p => p.canEdit);
-                            
+
                             return (
                               <AccordionItem key={module} value={module} data-testid={`permission-accordion-${module}`}>
                                 <AccordionTrigger className="px-4 hover:no-underline">
@@ -940,7 +947,7 @@ export default function UsersPage() {
                                     {subItems.map((subItem: { key: string; label: string }) => {
                                       const subItemKey = getSubItemPermissionKey(module as ModuleName, subItem.key);
                                       const perm = permissions.find(p => p.module === subItemKey) || { module: subItemKey, canView: false, canEdit: false, canDelegate: false };
-                                      
+
                                       return (
                                         <div key={subItemKey} className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50" data-testid={`permission-row-${subItemKey}`}>
                                           <span className="text-sm">{subItem.label}</span>
@@ -980,10 +987,11 @@ export default function UsersPage() {
                       </div>
                     )}
                   </div>
-                </>
-              )}
+                )}
+              </div>
 
-              <div className="flex justify-end gap-2 pt-4">
+              {/* Footer sempre visível */}
+              <div className="shrink-0 border-t px-6 py-4 flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"

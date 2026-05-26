@@ -1805,6 +1805,7 @@ export const MODULE_LIST = [
   "modulo_config_usuarios", // Administração
   "modulo_academia", // Treinamento
   "modulo_alpha", // ALPHA (new - consolidates CRM features)
+  "modulo_financeiro", // Financeiro
 ] as const;
 
 export type ModuleName = (typeof MODULE_LIST)[number];
@@ -1856,6 +1857,12 @@ export const MODULE_SUB_ITEMS = {
     { key: "gestao_pipeline", label: "Gestão Pipeline" },
     { key: "minha_carteira", label: "Minha Carteira" },
   ],
+  modulo_financeiro: [
+    { key: "contratos", label: "Contratos" },
+    { key: "producao", label: "Produção" },
+    { key: "tabelas", label: "Tabelas" },
+    { key: "configuracoes", label: "Configurações" },
+  ],
 } as const;
 
 // Helper type for sub-item keys
@@ -1871,6 +1878,7 @@ export const MODULE_LABELS: Record<ModuleName, string> = {
   modulo_config_usuarios: "Administração",
   modulo_academia: "Treinamento",
   modulo_alpha: "ALPHA",
+  modulo_financeiro: "Financeiro",
 };
 
 // Helper to get full permission key (module.subitem)

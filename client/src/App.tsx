@@ -595,16 +595,16 @@ function Router() {
                 {() => <RoleRoute component={ImportarDadosComplementaresPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/contratos">
-                {() => <RoleRoute component={FinanceiroComissoesPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
               <Route path="/financeiro/producao">
-                {() => <RoleRoute component={FinanceiroComissoesPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
               <Route path="/financeiro/tabelas">
-                {() => <RoleRoute component={FinanceiroComissoesPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
               <Route path="/financeiro/configuracoes">
-                {() => <RoleRoute component={FinanceiroComissoesPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
               <Route path="/financeiro/comissoes">
                 {() => <Redirect to="/financeiro/contratos" />}
