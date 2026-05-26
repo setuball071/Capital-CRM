@@ -3793,6 +3793,18 @@ export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export const LEMIT_JOB_STATUSES = ["pending", "processing", "done", "error"] as const;
 export type LemitJobStatus = (typeof LEMIT_JOB_STATUSES)[number];
 
+// ============================================================
+// FINANCEIRO — Config persistida por tenant (grupos, tabelas, corretores, contratos)
+// ============================================================
+export const financeiroConfig = pgTable("financeiro_config", {
+  id: serial("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  dados: jsonb("dados"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueTenant: uniqueIndex("financeiro_config_tenant_unique").on(table.tenantId),
+}));
+
 export const lemitJobs = pgTable("lemit_jobs", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),

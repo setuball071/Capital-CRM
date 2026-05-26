@@ -391,6 +391,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <select class="filter-select" id="tb-prazo" onchange="renderTabelas()"><option value="">Todos os prazos</option></select>
     <span class="count-chip" id="tb-count">—</span>
     <div class="filter-right" id="tb-master-btns">
+      <button id="btn-excluir-sel-tab" class="btn btn-danger btn-sm" style="display:none" onclick="excluirSelecionadasTabelas()">🗑 Excluir (<span id="sel-count-tab">0</span>)</button>
       <button class="btn btn-ghost btn-sm" onclick="abrirImportCSV()">📥 Importar CSV</button>
       <button class="btn btn-primary btn-sm" onclick="abrirModalTabela()">➕ Nova Tabela</button>
     </div>
@@ -916,20 +917,45 @@ let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
-let _selectedContratos=new Set(),_selectedCorretores=new Set();
-function salvarDados(){try{localStorage.setItem('crm_cap_grupos',JSON.stringify(GRUPOS));localStorage.setItem('crm_cap_corretores',JSON.stringify(CORRETORES));localStorage.setItem('crm_cap_tabelas',JSON.stringify(TABELAS_REF));localStorage.setItem('crm_cap_contratos',JSON.stringify(contratos));}catch(e){}}
-const DATA_VERSION='v2';
-function carregarDados(){
+let _selectedContratos=new Set(),_selectedCorretores=new Set(),_selectedTabelas=new Set();
+function salvarDados(){
+  // Salva localmente como backup imediato
   try{
-    // Limpa dados de demonstração na primeira execução desta versão
-    if(localStorage.getItem('crm_cap_version')!==DATA_VERSION){
-      ['crm_cap_contratos','crm_cap_corretores','crm_cap_tabelas','crm_cap_grupos'].forEach(k=>localStorage.removeItem(k));
-      localStorage.setItem('crm_cap_version',DATA_VERSION);
+    localStorage.setItem('crm_cap_grupos',JSON.stringify(GRUPOS));
+    localStorage.setItem('crm_cap_corretores',JSON.stringify(CORRETORES));
+    localStorage.setItem('crm_cap_tabelas',JSON.stringify(TABELAS_REF));
+    localStorage.setItem('crm_cap_contratos',JSON.stringify(contratos));
+  }catch(e){}
+  // Sincroniza com backend (fire-and-forget)
+  fetch('/api/financeiro/config',{
+    method:'POST',credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dados:{grupos:GRUPOS,corretores:CORRETORES,tabelas:TABELAS_REF,contratos:contratos}})
+  }).catch(()=>{});
+}
+async function carregarDados(){
+  // 1. Tenta carregar do backend (sincronizado entre dispositivos)
+  try{
+    const resp=await fetch('/api/financeiro/config',{credentials:'include'});
+    if(resp.ok){
+      const data=await resp.json();
+      if(data.dados){
+        if(data.dados.grupos)GRUPOS=data.dados.grupos;
+        if(data.dados.corretores)CORRETORES=data.dados.corretores;
+        if(data.dados.tabelas)TABELAS_REF=data.dados.tabelas;
+        if(data.dados.contratos)contratos=data.dados.contratos;
+        return; // sucesso — não precisa de localStorage
+      }
     }
+  }catch(e){}
+  // 2. Fallback: localStorage (dados locais do browser)
+  try{
     const g=localStorage.getItem('crm_cap_grupos');if(g)GRUPOS=JSON.parse(g);
     const c=localStorage.getItem('crm_cap_corretores');if(c)CORRETORES=JSON.parse(c);
     const t=localStorage.getItem('crm_cap_tabelas');if(t)TABELAS_REF=JSON.parse(t);
     const ct=localStorage.getItem('crm_cap_contratos');if(ct)contratos=JSON.parse(ct);
+    // Migra para o backend se havia dados locais
+    if(GRUPOS.length||TABELAS_REF.length||CORRETORES.length||contratos.length) salvarDados();
   }catch(e){}
 }
 
@@ -1852,16 +1878,17 @@ function renderTabelas(){
   }
   // ── MODO NORMAL ──
   if(isMaster){
-    thead.innerHTML=`<tr><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor (ex. Grupo Pleno)</th><th>Ações</th></tr>`;
+    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor (ex. Grupo Pleno)</th><th>Ações</th></tr>`;
   } else {
     thead.innerHTML=`<tr><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th>Flags</th><th class="r">Flat %</th></tr>`;
   }
   if(!list.length){
-    const cols=isMaster?10:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
+    const cols=isMaster?11:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
   }
   tbody.innerHTML=list.map(t=>{
     const pctCorr=pctCorretorGrupo(t.pctEmpresa,40);// ex Grupo Pleno 40%
     if(isMaster){return`<tr>
+      <td style="padding:6px 14px"><input type="checkbox" class="tab-chk" value="${t.id}" ${_selectedTabelas.has(t.id)?'checked':''} onchange="toggleTabelaSelecionada('${t.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td style="color:var(--muted);font-size:12px">${t.banco||'—'}</td>
       <td class="td-name">${t.nome}</td>
       <td>${tagConvenio(t.convenio)}</td><td>${tagTipo(t.tipo||'Novo')}</td>
@@ -2391,6 +2418,38 @@ function confirmarImportProd(){
 }
 
 // ══════════════════════════════════════════════════════
+// MULTI-SELECT: TABELAS
+// ══════════════════════════════════════════════════════
+function toggleTabelaSelecionada(id,checked){
+  if(checked)_selectedTabelas.add(id);else _selectedTabelas.delete(id);
+  atualizarBtnExcluirTabelas();
+}
+function toggleTodasTabelas(checked){
+  document.querySelectorAll('.tab-chk').forEach(chk=>{
+    chk.checked=checked;
+    if(checked)_selectedTabelas.add(chk.value);else _selectedTabelas.delete(chk.value);
+  });
+  atualizarBtnExcluirTabelas();
+}
+function atualizarBtnExcluirTabelas(){
+  const n=_selectedTabelas.size;
+  const btn=document.getElementById('btn-excluir-sel-tab');
+  const cnt=document.getElementById('sel-count-tab');
+  if(btn)btn.style.display=n>0?'':'none';
+  if(cnt)cnt.textContent=n;
+}
+function excluirSelecionadasTabelas(){
+  const n=_selectedTabelas.size;
+  if(!n)return;
+  if(!confirm(`Excluir ${n} tabela(s) selecionada(s)?`))return;
+  TABELAS_REF=TABELAS_REF.filter(t=>!_selectedTabelas.has(t.id));
+  _selectedTabelas.clear();
+  salvarDados();
+  atualizarBtnExcluirTabelas();
+  renderTabelas();
+  toast(`${n} tabela(s) excluída(s).`);
+}
+// ══════════════════════════════════════════════════════
 // MULTI-SELECT: CONTRATOS
 // ══════════════════════════════════════════════════════
 function toggleContratoSelecionado(id,checked){
@@ -2465,8 +2524,8 @@ function salvarAlterarGrupoMassa(){
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded',()=>{
-  carregarDados();
+document.addEventListener('DOMContentLoaded',async ()=>{
+  await carregarDados();
   document.querySelectorAll('.overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
   // Default tab = contratos (pode ser sobrescrito por postMessage logo após)
   setModule('contratos');

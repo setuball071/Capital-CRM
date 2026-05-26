@@ -465,6 +465,7 @@ import {
   type PricingSettings,
   producoesContratos,
   producoesImportacoes,
+  financeiroConfig,
   leadTags,
   leadTagAssignments,
   materials,
@@ -23240,6 +23241,40 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // ==========================================
   // Financeiro - Produção (dados reais)
   // ==========================================
+
+  // ==========================================
+  // Financeiro Config — sync entre dispositivos
+  // ==========================================
+  app.get("/api/financeiro/config", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const rows = await db.select().from(financeiroConfig).where(eq(financeiroConfig.tenantId, String(tenantId)));
+      if (rows.length === 0) return res.json({ dados: null });
+      return res.json({ dados: rows[0].dados });
+    } catch (error: any) {
+      console.error("[FINANCEIRO-CONFIG] GET Error:", error);
+      return res.status(500).json({ message: "Erro ao buscar configuração" });
+    }
+  });
+
+  app.post("/api/financeiro/config", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const { dados } = req.body;
+      const existing = await db.select({ id: financeiroConfig.id }).from(financeiroConfig).where(eq(financeiroConfig.tenantId, String(tenantId)));
+      if (existing.length > 0) {
+        await db.update(financeiroConfig).set({ dados, updatedAt: new Date() }).where(eq(financeiroConfig.tenantId, String(tenantId)));
+      } else {
+        await db.insert(financeiroConfig).values({ tenantId: String(tenantId), dados });
+      }
+      return res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[FINANCEIRO-CONFIG] POST Error:", error);
+      return res.status(500).json({ message: "Erro ao salvar configuração" });
+    }
+  });
 
   app.get("/api/financeiro/producao", requireAuth, async (req: any, res) => {
     try {
