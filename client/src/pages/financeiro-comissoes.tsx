@@ -1,6 +1,8 @@
 import { useRef, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/components/theme-provider";
+import { useAuth } from "@/lib/auth";
 
 interface CRMUser {
   id: number;
@@ -10,59 +12,85 @@ interface CRMUser {
   isActive: boolean;
 }
 
+// Mapeia URL para o tab do iframe
+function tabFromLocation(location: string): string {
+  if (location.includes("/producao")) return "producao";
+  if (location.includes("/tabelas")) return "tabelas";
+  if (location.includes("/configuracoes")) return "configuracoes";
+  return "contratos";
+}
+
 export default function FinanceiroComissoes() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const [location] = useLocation();
+  const tab = tabFromLocation(location);
 
-  // Busca usuários ativos do CRM
   const { data: users } = useQuery<CRMUser[]>({
     queryKey: ["/api/users"],
     select: (all) => all.filter((u) => u.isActive),
   });
 
-  const sendTheme = useCallback((frame: HTMLIFrameElement | null, t: string) => {
+  const send = useCallback((type: string, payload: Record<string, unknown>) => {
     try {
-      frame?.contentWindow?.postMessage({ type: "CAPITAL_CRM_THEME", theme: t }, "*");
+      frameRef.current?.contentWindow?.postMessage({ type, ...payload }, "*");
     } catch { /* ignore */ }
   }, []);
 
-  const sendUsers = useCallback((frame: HTMLIFrameElement | null, userList: CRMUser[] | undefined) => {
-    if (!frame || !userList) return;
-    try {
-      frame.contentWindow?.postMessage({
-        type: "CAPITAL_CRM_USERS",
-        users: userList.map((u) => ({
+  // Envia tema
+  useEffect(() => {
+    send("CAPITAL_CRM_THEME", { theme });
+  }, [theme, send]);
+
+  // Envia tab quando a rota muda
+  useEffect(() => {
+    send("CAPITAL_CRM_TAB", { tab });
+  }, [tab, send]);
+
+  // Envia usuários quando disponíveis
+  useEffect(() => {
+    if (!users) return;
+    send("CAPITAL_CRM_USERS", {
+      users: users.map((u) => ({
+        id: String(u.id),
+        nome: u.name,
+        email: u.email,
+        role: u.role,
+        isAtivo: u.isActive,
+      })),
+    });
+  }, [users, send]);
+
+  // Envia role do usuário logado
+  useEffect(() => {
+    if (!user) return;
+    send("CAPITAL_CRM_ROLE", { isMaster: user.isMaster || user.role === "master" || user.role === "coordenacao" });
+  }, [user, send]);
+
+  const handleLoad = useCallback(() => {
+    send("CAPITAL_CRM_THEME", { theme });
+    send("CAPITAL_CRM_TAB", { tab });
+    send("CAPITAL_CRM_ROLE", { isMaster: user?.isMaster || user?.role === "master" || user?.role === "coordenacao" });
+    if (users) {
+      send("CAPITAL_CRM_USERS", {
+        users: users.map((u) => ({
           id: String(u.id),
           nome: u.name,
           email: u.email,
           role: u.role,
           isAtivo: u.isActive,
         })),
-      }, "*");
-    } catch { /* ignore */ }
-  }, []);
-
-  // Envia tema ao mudar
-  useEffect(() => {
-    sendTheme(frameRef.current, theme);
-  }, [theme, sendTheme]);
-
-  // Envia usuários quando lista muda
-  useEffect(() => {
-    sendUsers(frameRef.current, users);
-  }, [users, sendUsers]);
-
-  const handleLoad = useCallback(() => {
-    sendTheme(frameRef.current, theme);
-    sendUsers(frameRef.current, users);
-  }, [theme, users, sendTheme, sendUsers]);
+      });
+    }
+  }, [theme, tab, user, users, send]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>
       <iframe
         ref={frameRef}
         src="/financeiro-comissoes.html"
-        title="Gestão Financeira — Comissões"
+        title="Financeiro — Comissões"
         style={{ display: "block", width: "100%", height: "100%", border: "none" }}
         allow="same-origin"
         onLoad={handleLoad}

@@ -24,7 +24,8 @@
   --shadow:0 1px 3px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;display:flex;flex-direction:column;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.content{flex:1;overflow-y:auto;padding:28px}
 .topbar{height:56px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:10}
 .topbar-logo{font-size:15px;font-weight:700;color:var(--accent)}
 .role-toggle{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px}
@@ -220,43 +221,21 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 </head>
 <body>
 
-<!-- TOPBAR -->
-<div class="topbar">
-  <div class="topbar-logo">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:6px"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>Comissões
-  </div>
+<!-- ROLE STRIP — visível apenas para master, permite ver visão de consultor -->
+<div id="role-strip" style="display:none;align-items:center;justify-content:flex-end;gap:8px;padding:6px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)">
+  <span>Visualizar como:</span>
   <div class="role-toggle">
     <button class="role-btn active" onclick="setRole('master',this)">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-1px;margin-right:4px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Master
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-1px;margin-right:3px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Master
     </button>
     <button class="role-btn" onclick="setRole('consultor',this)">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-1px;margin-right:4px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Consultor
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-1px;margin-right:3px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Consultor
     </button>
   </div>
 </div>
 
-<div class="app-body">
-
-<!-- SIDEBAR -->
-<div class="sidebar">
-  <div class="sidebar-header">Menu</div>
-  <button class="nav-item active" id="nav-contratos" onclick="setModule('contratos',this)">
-    <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>Contratos
-  </button>
-  <button class="nav-item" id="nav-producao" onclick="setModule('producao',this)">
-    <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>Produção
-  </button>
-  <button class="nav-item" id="nav-tabelas" onclick="setModule('tabelas',this)">
-    <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></span>Tabelas
-  </button>
-  <button class="nav-item" id="nav-config" onclick="setModule('config',this)">
-    <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Configurações
-  </button>
-  <div class="sidebar-footer" id="sidebar-footer"></div>
-</div>
-
-<!-- CONTENT -->
-<div class="content">
+<!-- CONTENT (ocupa toda a área, sem sidebar interna) -->
+<div class="content" style="height:calc(100vh - 0px);overflow-y:auto" id="main-content">
 
 <!-- ═══ MÓDULO: CONTRATOS ═══ -->
 <div id="mod-contratos">
@@ -1076,29 +1055,25 @@ function _hideTip(){document.getElementById('sens-tip').classList.remove('vis');
 // ══════════════════════════════════════════════════════
 // NAVEGAÇÃO
 // ══════════════════════════════════════════════════════
-function setModule(mod,el){
-  _activeModule=mod;
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  if(el)el.classList.add('active');
+function setModule(mod){
+  // Mapeia slug da URL para o id do módulo
+  const map={contratos:'contratos',producao:'producao',tabelas:'tabelas',configuracoes:'config',config:'config'};
+  const resolved=map[mod]||'contratos';
+  _activeModule=resolved;
   ['contratos','producao','tabelas','config'].forEach(m=>{
-    document.getElementById('mod-'+m).style.display=m===mod?'':'none';
+    const el=document.getElementById('mod-'+m);
+    if(el)el.style.display=m===resolved?'':'none';
   });
   renderAll();
 }
 function setRole(role,btn){
   _role=role;
   document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('nav-config').style.display=role==='master'?'':'none';
-  if(role==='consultor'&&_activeModule==='config')setModule('contratos',document.getElementById('nav-contratos'));
-  atualizarFooterSidebar();
+  if(btn)btn.classList.add('active');
+  if(role==='consultor'&&_activeModule==='config')setModule('contratos');
   renderAll();
 }
-function atualizarFooterSidebar(){
-  const el=document.getElementById('sidebar-footer');
-  if(_role==='master'){el.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">👑 Master</div><div style="font-size:12px;color:var(--text);margin-top:2px">Administrador</div>`;}
-  else{el.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">👤 Consultor</div><div style="font-size:12px;color:var(--text);margin-top:2px">Visão restrita</div>`;}
-}
+function atualizarFooterSidebar(){/* sidebar removida — função mantida por compatibilidade */}
 function renderAll(){
   salvarDados();
   if(_activeModule==='contratos')renderContratos();
@@ -2326,12 +2301,9 @@ function confirmarImportProd(){
 // ══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
   carregarDados();
-  atualizarFooterSidebar();
-  // Set today for date pickers default
-  const hoje=new Date().toISOString().slice(0,7);
-  // Auto-dismiss overlays on backdrop click
   document.querySelectorAll('.overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
-  setModule('contratos',document.getElementById('nav-contratos'));
+  // Default tab = contratos (pode ser sobrescrito por postMessage logo após)
+  setModule('contratos');
 });
 
 window.addEventListener('message',function(e){
@@ -2341,6 +2313,16 @@ window.addEventListener('message',function(e){
   }
   if(e.data.type==='CAPITAL_CRM_USERS'&&Array.isArray(e.data.users)){
     mesclarComCRM(e.data.users);
+  }
+  if(e.data.type==='CAPITAL_CRM_TAB'&&e.data.tab){
+    setModule(e.data.tab);
+  }
+  if(e.data.type==='CAPITAL_CRM_ROLE'){
+    // Master recebe role-strip, consultor não
+    const isMaster=e.data.isMaster;
+    const strip=document.getElementById('role-strip');
+    if(strip)strip.style.display=isMaster?'flex':'none';
+    if(!isMaster){setRole('consultor');}
   }
 });
 if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme','dark');

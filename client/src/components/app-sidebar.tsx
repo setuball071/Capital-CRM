@@ -213,7 +213,10 @@ export function AppSidebar() {
       title: "Financeiro",
       icon: TrendingUp,
       items: [
-        { title: "Comissões", url: "/financeiro/comissoes", icon: DollarSign, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Contratos", url: "/financeiro/contratos", icon: FileText, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Produção", url: "/financeiro/producao", icon: BarChart3, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Configurações", url: "/financeiro/configuracoes", icon: Settings2, rolesAllowed: ["master", "coordenacao"] },
       ],
     },
   ];
