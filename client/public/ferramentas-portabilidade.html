@@ -1624,6 +1624,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <th style="text-align:left;padding:8px;">Banco</th>
             <th style="text-align:center;padding:8px;">Entrada Mín (%)</th>
             <th style="text-align:center;padding:8px;">Taxa Refim (%)</th>
+            <th style="text-align:center;padding:8px;">Saldo Mín (R$)</th>
             <th style="text-align:center;padding:8px;">Troco Mín (R$)</th>
             <th style="width:40px;"></th>
           </tr>
@@ -1636,6 +1637,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           <div><label style="font-size:11px;display:block;margin-bottom:3px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:120px;"></div>
           <div><label style="font-size:11px;display:block;margin-bottom:3px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:90px;"></div>
           <div><label style="font-size:11px;display:block;margin-bottom:3px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:90px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:90px;"></div>
           <div><label style="font-size:11px;display:block;margin-bottom:3px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:80px;"></div>
           <button onclick="addRegra()" style="padding:8px 16px;background:#6C2BD9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Adicionar</button>
         </div>
@@ -5804,6 +5806,10 @@ function renderTbRegras() {
           onchange="regrasBancos[${i}].taxaRefim=parseBR(this.value);salvarRegras();popularSelectBancos();">
       </td>
       <td style="text-align:center;padding:8px;">
+        <input value="${String(r.saldoMin||0).replace('.',',')}" style="width:90px;text-align:center;"
+          onchange="regrasBancos[${i}].saldoMin=parseBR(this.value);salvarRegras();">
+      </td>
+      <td style="text-align:center;padding:8px;">
         <input value="${String(r.minTroco||250).replace('.',',')}" style="width:80px;text-align:center;"
           onchange="regrasBancos[${i}].minTroco=parseBR(this.value);salvarRegras();">
       </td>
@@ -5818,13 +5824,16 @@ function addRegra() {
   const banco    = document.getElementById('novoRegBanco').value.trim();
   const entrada  = parseBR(document.getElementById('novoRegEntrada').value);
   const refim    = parseBR(document.getElementById('novoRegRefim').value);
+  const saldoMin = parseBR(document.getElementById('novoRegSaldoMin').value) || 0;
   const minTroco = parseBR(document.getElementById('novoRegMinTroco').value) || 250;
   if (!banco || !entrada || !refim) { alert('Preencha todos os campos.'); return; }
-  regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, minTroco });
+  regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, saldoMin, minTroco });
   salvarRegras();
-  document.getElementById('novoRegBanco').value   = '';
-  document.getElementById('novoRegEntrada').value = '';
-  document.getElementById('novoRegRefim').value   = '';
+  document.getElementById('novoRegBanco').value    = '';
+  document.getElementById('novoRegEntrada').value  = '';
+  document.getElementById('novoRegRefim').value    = '';
+  document.getElementById('novoRegSaldoMin').value = '';
+  document.getElementById('novoRegMinTroco').value = '';
   renderTbRegras();
   popularSelectBancos();
 }
