@@ -297,68 +297,43 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 <div id="mod-producao" style="display:none">
   <!-- Master -->
   <div id="prod-master">
-    <div class="banner banner-master">👑 <strong>Visão Master:</strong> produção completa — todos os corretores, bancos, fechamentos e comissões.</div>
+    <!-- Filtros -->
     <div class="filter-bar">
-      <input class="search" id="m-busca" placeholder="🔍 Buscar cliente ou ADE..." oninput="renderProducao()"/>
-      <select class="filter-select" id="m-banco" onchange="renderProducao()"><option value="">Todos os bancos</option></select>
-      <select class="filter-select" id="m-corretor" onchange="renderProducao()"><option value="">Todos os corretores</option></select>
-      <select class="filter-select" id="m-stbanco" onchange="renderProducao()">
-        <option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option>
-      </select>
-      <select class="filter-select" id="m-stcomissao" onchange="renderProducao()">
-        <option value="">Status flat (todos)</option><option value="Aguardando">Aguardando banco</option><option value="A Pagar">A pagar</option><option value="Pago">Pago</option>
-      </select>
-      <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
-        <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">📅 Data:</span>
-        <input type="month" id="m-mes" onchange="renderProducao()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
-        <button onclick="document.getElementById('m-mes').value='';renderProducao()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
-      </div>
-      <span class="count-chip" id="m-count">—</span>
-      <div class="filter-right">
-        <button class="btn btn-yellow btn-sm" onclick="abrirPagLoteModal()">💰 Pagar Flat em Lote</button>
-        <button class="btn btn-primary btn-sm" onclick="abrirImportProdModal()">📊 Importar Produção</button>
-      </div>
+      <select class="filter-select" id="pf-mes" onchange="carregarProducaoAPI()"><option value="">Todos os meses</option></select>
+      <select class="filter-select" id="pf-banco" onchange="carregarProducaoAPI()"><option value="">Todos os bancos</option></select>
+      <select class="filter-select" id="pf-corretor" onchange="carregarProducaoAPI()"><option value="">Todos os corretores</option></select>
+      <button class="btn btn-sm" onclick="carregarProducaoAPI()" style="background:var(--accent);color:#fff;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px">🔄 Atualizar</button>
     </div>
-    <div class="kpi-grid kpi-grid-6" id="m-kpis"></div>
-    <div class="tabs" id="master-tabs">
-      <button class="tab-btn active" onclick="trocarAba('m-contratos',this,'master-tabs')">📋 Contratos</button>
-      <button class="tab-btn" onclick="trocarAba('m-corretores',this,'master-tabs')">👤 Por Corretor</button>
-      <button class="tab-btn" onclick="trocarAba('m-fechamento',this,'master-tabs')">📅 Fechamento Mensal</button>
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="prod-kpis" style="margin:16px 0;display:flex;gap:12px;flex-wrap:wrap"></div>
+
+    <!-- Tabela -->
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Contrato</th>
+            <th>Cliente</th>
+            <th>CPF</th>
+            <th>Banco</th>
+            <th>Tipo</th>
+            <th>Prazo</th>
+            <th>Corretor</th>
+            <th>Vendedor</th>
+            <th>Data Pgto</th>
+            <th class="r">Valor Base</th>
+            <th class="r">Valor Bruto</th>
+            <th class="r">Comissão %</th>
+            <th class="r">Comissão R$</th>
+            <th style="text-align:center">Cartão</th>
+          </tr>
+        </thead>
+        <tbody id="prod-tbody">
+          <tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Selecione um período para carregar</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div class="tab-pane active" id="tab-m-contratos">
-      <div class="legenda">
-        <span><span class="legenda-dot" style="background:var(--muted)"></span>Aguardando</span>
-        <span><span class="legenda-dot" style="background:var(--accent)"></span>No relatório</span>
-        <span><span class="legenda-dot" style="background:var(--green)"></span>Confirmado</span>
-        <span><span class="legenda-dot" style="background:var(--yellow)"></span>Flat a pagar</span>
-        <span><span class="legenda-dot" style="background:var(--blue)"></span>Flat pago</span>
-        <span style="margin-left:auto;font-style:italic;font-size:11px">Clique nos badges para atualizar</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>ADE</th><th>Data</th><th>Cliente / CPF</th><th>Corretor</th><th>Banco / Tabela</th>
-            <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
-            <th>Status Banco</th><th>Data Banco</th><th class="r">Flat</th><th>Status Flat</th><th>Data Flat</th><th></th>
-          </tr></thead>
-          <tbody id="m-tbody"></tbody>
-          <tfoot id="m-tfoot"></tfoot>
-        </table>
-      </div>
-    </div>
-    <div class="tab-pane" id="tab-m-corretores">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Corretor</th><th>Grupo / %</th><th class="r">Contratos</th><th class="r">Produção</th>
-            <th class="r">Val. Empresa</th><th class="r">Flat Total</th><th class="r">Flat Pago</th><th class="r">A Pagar</th><th class="r">Aguardando</th>
-          </tr></thead>
-          <tbody id="m-tbody-corr"></tbody>
-          <tfoot id="m-tfoot-corr"></tfoot>
-        </table>
-      </div>
-    </div>
-    <div class="tab-pane" id="tab-m-fechamento"><div id="m-fechamento-conteudo"></div></div>
   </div>
   <!-- Consultor Produção -->
   <div id="prod-consultor" style="display:none">
@@ -1376,26 +1351,117 @@ function ciclarBancoCont(id){
 // ══════════════════════════════════════════════════════
 // MÓDULO PRODUÇÃO
 // ══════════════════════════════════════════════════════
-function renderProducao(){
-  const isMaster=_role==='master';
-  document.getElementById('prod-master').style.display=isMaster?'':'none';
-  document.getElementById('prod-consultor').style.display=isMaster?'none':'';
-  if(isMaster){popularFiltrosMaster();renderMaster();}
-  else renderConsultor();
+// Estado dos dados de produção vindos da API
+let _prodData = null;
+let _prodLoading = false;
+
+async function renderProducao() {
+  const isMaster = _role === 'master';
+  document.getElementById('prod-master').style.display = isMaster ? '' : 'none';
+  document.getElementById('prod-consultor').style.display = isMaster ? 'none' : '';
+  if (!isMaster) { renderConsultor(); return; }
+  await carregarProducaoAPI();
 }
-function popularFiltrosMaster(){
-  const bancosRef=[...new Set(TABELAS_REF.map(t=>t.banco))];
-  const bancosImp=[...new Set(contratos.filter(c=>c._banco).map(c=>c._banco))];
-  const bancos=[...new Set([...bancosRef,...bancosImp])];
-  const sb=document.getElementById('m-banco');const prev=sb.value;
-  sb.innerHTML='<option value="">Todos os bancos</option>';
-  bancos.forEach(b=>{sb.innerHTML+=`<option>${b}</option>`;});
-  sb.value=prev;
-  const sc=document.getElementById('m-corretor');const prevc=sc.value;
-  sc.innerHTML='<option value="">Todos os corretores</option>';
-  CORRETORES.filter(c=>c.ativo).forEach(c=>{sc.innerHTML+=`<option value="${c.id}">${c.nome}</option>`;});
-  sc.value=prevc;
+
+async function carregarProducaoAPI() {
+  if (_prodLoading) return;
+  _prodLoading = true;
+
+  const mes      = document.getElementById('pf-mes')?.value || '';
+  const banco    = document.getElementById('pf-banco')?.value || '';
+  const corretor = document.getElementById('pf-corretor')?.value || '';
+
+  // Mostrar loading
+  const tbody = document.getElementById('prod-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
+
+  try {
+    const params = new URLSearchParams();
+    if (mes)      params.set('mes', mes);
+    if (banco)    params.set('banco', banco);
+    if (corretor) params.set('corretor', corretor);
+
+    const resp = await fetch('/api/financeiro/producao?' + params.toString(), {
+      credentials: 'include'
+    });
+
+    if (!resp.ok) throw new Error('Erro ' + resp.status);
+    const data = await resp.json();
+
+    _prodData = data;
+
+    // Popula filtros na primeira carga (ou sempre que muda)
+    popularFiltrosProd(data.filtros, mes, banco, corretor);
+    renderTabelaProducaoAPI(data);
+
+  } catch (e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
+  } finally {
+    _prodLoading = false;
+  }
 }
+
+function popularFiltrosProd(filtros, selMes, selBanco, selCorretor) {
+  const smEl = document.getElementById('pf-mes');
+  const sbEl = document.getElementById('pf-banco');
+  const scEl = document.getElementById('pf-corretor');
+  if (!smEl || !sbEl || !scEl) return;
+
+  smEl.innerHTML = '<option value="">Todos os meses</option>' +
+    (filtros.meses || []).map(m => `<option value="${m}" ${m===selMes?'selected':''}>${m}</option>`).join('');
+
+  sbEl.innerHTML = '<option value="">Todos os bancos</option>' +
+    (filtros.bancos || []).map(b => `<option value="${b}" ${b===selBanco?'selected':''}>${escHtml(b)}</option>`).join('');
+
+  scEl.innerHTML = '<option value="">Todos os corretores</option>' +
+    (filtros.corretores || []).map(c => `<option value="${c}" ${c===selCorretor?'selected':''}>${escHtml(c)}</option>`).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderTabelaProducaoAPI(data) {
+  const { contratos, totais } = data;
+
+  // KPIs
+  const kpisEl = document.getElementById('prod-kpis');
+  if (kpisEl) {
+    kpisEl.innerHTML = `
+      <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${totais.count}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Produção (bruto)</div><div class="kpi-value kpi-green">${fmtBRL(totais.totValorBruto)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Comissão Total</div><div class="kpi-value kpi-yellow">${fmtBRL(totais.totComissao)}</div></div>
+    `;
+  }
+
+  // Tabela
+  const tbody = document.getElementById('prod-tbody');
+  if (!tbody) return;
+
+  if (!contratos.length) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = contratos.map(c => `<tr>
+    <td><span class="ade-chip">${escHtml(c.contratoId)}</span></td>
+    <td><div class="td-name">${escHtml(c.nomeCliente||'')}</div></td>
+    <td style="font-size:11px;color:var(--muted)">${escHtml(c.cpfCliente||'')}</td>
+    <td style="font-size:12px;font-weight:600">${escHtml(c.banco||'')}</td>
+    <td>${escHtml(c.tipoContrato||'')}</td>
+    <td style="text-align:center">${escHtml(c.prazo||'')}</td>
+    <td>${escHtml(c.nomeCorretor||'')}</td>
+    <td style="color:var(--accent);font-weight:500">${escHtml(c.vendedorNome||c.nomeCorretor||'')}</td>
+    <td>${escHtml(c.dataPagamento||'')}</td>
+    <td class="r">${fmtBRL(parseFloat(c.valorBase||'0'))}</td>
+    <td class="r v-accent">${fmtBRL(parseFloat(c.valorBruto||'0'))}</td>
+    <td class="r" style="color:var(--muted)">${parseFloat(c.comissaoRepassePerc||'0').toFixed(2)}%</td>
+    <td class="r v-yellow">${fmtBRL(parseFloat(c.comissaoRepasseValor||'0'))}</td>
+    <td style="text-align:center">${c.isCartao ? '<span style="font-size:18px">💳</span>' : '<span style="color:var(--muted)">—</span>'}</td>
+  </tr>`).join('');
+}
+
+function popularFiltrosMaster() { /* substituída por carregarProducaoAPI */ }
 function filtrarParaMaster(){
   const busca=(document.getElementById('m-busca').value||'').toLowerCase();
   const banco=document.getElementById('m-banco').value;

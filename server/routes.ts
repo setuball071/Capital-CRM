@@ -23234,6 +23234,58 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   );
 
   // ==========================================
+  // Financeiro - Produção (dados reais)
+  // ==========================================
+
+  app.get("/api/financeiro/producao", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const { mes, banco, corretor } = req.query;
+
+      const conditions: any[] = [eq(producoesContratos.tenantId, tenantId)];
+      if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
+      if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
+      if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
+
+      const contratos = await db
+        .select()
+        .from(producoesContratos)
+        .where(and(...conditions))
+        .orderBy(desc(producoesContratos.dataPagamento));
+
+      // Totais
+      const totValorBase = contratos.reduce((s, c) => s + parseFloat(c.valorBase || "0"), 0);
+      const totValorBruto = contratos.reduce((s, c) => s + parseFloat(c.valorBruto || "0"), 0);
+      const totComissao = contratos.reduce((s, c) => s + parseFloat(c.comissaoRepasseValor || "0"), 0);
+
+      // Lista de meses, bancos, corretores disponíveis para filtros
+      const todos = await db
+        .select({
+          mesReferencia: producoesContratos.mesReferencia,
+          banco: producoesContratos.banco,
+          nomeCorretor: producoesContratos.nomeCorretor,
+        })
+        .from(producoesContratos)
+        .where(eq(producoesContratos.tenantId, tenantId));
+
+      const meses = [...new Set(todos.map(c => c.mesReferencia).filter(Boolean))].sort().reverse();
+      const bancos = [...new Set(todos.map(c => c.banco).filter(Boolean))].sort();
+      const corretores = [...new Set(todos.map(c => c.nomeCorretor).filter(Boolean))].sort();
+
+      return res.json({
+        contratos,
+        totais: { totValorBase, totValorBruto, totComissao, count: contratos.length },
+        filtros: { meses, bancos, corretores },
+      });
+    } catch (error: any) {
+      console.error("[FINANCEIRO-PRODUCAO] Error:", error);
+      return res.status(500).json({ message: "Erro ao buscar produção" });
+    }
+  });
+
+  // ==========================================
   // Gestão Comercial - Importar Produção
   // ==========================================
 
