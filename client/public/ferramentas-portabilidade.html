@@ -2066,7 +2066,7 @@ function gerar(){
   const grid=document.getElementById('res_grid');
   if(grid) grid.innerHTML='';
   const items=[];
-  if(totalAt&&totalNv)
+  if(totalAt&&totalNv&&(totalAt-totalNv)>0)
     items.push({label:'Economia mensal',val:'R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">Por mês</span>'});
   if(totalTroco>0)
     items.push({label:'Troco total disponível',val:'R$ '+totalTroco.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-troco',tag:'<span class="res-tag tag-troco">Disponível</span>'});
@@ -2074,7 +2074,7 @@ function gerar(){
   const mPNv=dadosNv.filter(n=>n.prazo>0).map(n=>n.prazo);
   if(mPAt.length&&mPNv.length&&totalAt&&totalNv){
     const diff=(totalAt*Math.min(...mPAt))-(totalNv*Math.min(...mPNv));
-    items.push({label:'Economia total estimada',val:'R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">No período</span>'});
+    if(diff>0) items.push({label:'Economia total estimada',val:'R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">No período</span>'});
   }
 
   const resBox=document.getElementById('resultado_box');
@@ -2219,13 +2219,13 @@ function exportPDF(){
 
   // RESULTADO
   const resItems=[];
-  if(totalAt&&totalNv) resItems.push(['Economia mensal','R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2})]);
+  if(totalAt&&totalNv&&(totalAt-totalNv)>0) resItems.push(['Economia mensal','R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   if(totalTroco>0) resItems.push(['Troco total disponível',fmt(totalTroco)]);
   const mPAt=dadosAt.filter(c=>c.prazo>0).map(c=>c.prazo);
   const mPNv=dadosNv.filter(n=>n.prazo>0).map(n=>n.prazo);
   if(mPAt.length&&mPNv.length&&totalAt&&totalNv){
     const diff=(totalAt*Math.min(...mPAt))-(totalNv*Math.min(...mPNv));
-    resItems.push(['Economia total estimada','R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2})]);
+    if(diff>0) resItems.push(['Economia total estimada','R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   }
   if(resItems.length>0){
     doc.setFillColor(248,248,248);doc.roundedRect(ml,y,cw,resItems.length*8+14,2,2,'F');
