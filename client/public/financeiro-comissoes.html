@@ -928,30 +928,9 @@ let GRUPOS = [
   {id:'g3',nome:'Sênior',   repasse:50,cargo:'Consultor Sr.',  desc:'Alta performance consistente.',      cor:'#f59e0b'},
   {id:'g4',nome:'Master',   repasse:60,cargo:'Especialista',   desc:'Topo de carreira e especialistas.',  cor:'#ef4444'},
 ];
-let CORRETORES = [
-  {id:'u1',nome:'Ana Lima',      email:'ana@capital.com',    cargo:'Consultor Jr.', grupoId:'g1',salarioBase:1800,cor:'#6c63ff',ativo:true},
-  {id:'u2',nome:'Bruno Souza',   email:'bruno@capital.com',  cargo:'Consultor',     grupoId:'g2',salarioBase:2200,cor:'#22c55e',ativo:true},
-  {id:'u3',nome:'Carla Mota',    email:'carla@capital.com',  cargo:'Consultor Sr.', grupoId:'g3',salarioBase:2800,cor:'#f59e0b',ativo:true},
-  {id:'u4',nome:'Diego Faria',   email:'diego@capital.com',  cargo:'Especialista',  grupoId:'g4',salarioBase:3500,cor:'#ef4444',ativo:true},
-  {id:'u5',nome:'Eva Rocha',     email:'eva@capital.com',    cargo:'Consultor',     grupoId:'g2',salarioBase:2200,cor:'#22c55e',ativo:false},
-];
-let TABELAS_REF = [
-  {id:'t1', banco:'Banco do Brasil', nome:'Tabela SIAPE A',        convenio:'SIAPE',   tipo:'Novo',            prazo:96, coef:0.01580, pctEmpresa:10, srcc:true,  remuneraMenos12:false},
-  {id:'t2', banco:'Caixa',           nome:'Tabela SIAPE Porto',    convenio:'SIAPE',   tipo:'Portabilidade',   prazo:84, coef:0.01750, pctEmpresa:10, srcc:true,  remuneraMenos12:true},
-  {id:'t3', banco:'Bradesco',        nome:'Tabela Benefício A',    convenio:'INSS',    tipo:'Novo',            prazo:72, coef:0.01900, pctEmpresa:9,  srcc:false, remuneraMenos12:false},
-  {id:'t4', banco:'Itaú',            nome:'Tabela Benefício B',    convenio:'INSS',    tipo:'Portabilidade',   prazo:60, coef:0.02050, pctEmpresa:9,  srcc:false, remuneraMenos12:false},
-  {id:'t5', banco:'Santander',       nome:'Tabela Privada Prem.',  convenio:'Privado', tipo:'Cartão',          prazo:60, coef:0.02100, pctEmpresa:12, srcc:false, remuneraMenos12:false},
-  {id:'t6', banco:'Banco do Brasil', nome:'Tabela Militar RMI',    convenio:'Militar', tipo:'Novo',            prazo:96, coef:0.01620, pctEmpresa:10, srcc:true,  remuneraMenos12:false},
-  {id:'t7', banco:'BMG',             nome:'Tabela Refinanc. SC',   convenio:'SIAPE',   tipo:'Refinanciamento', prazo:84, coef:0.01780, pctEmpresa:8,  srcc:false, remuneraMenos12:false},
-];
-let contratos = [
-  {id:'c1',ade:'001234',data:'2025-01-10',cliente:'João Pedro Silva',cpf:'123.456.789-00',corretorId:'u1',tabelaId:'t1',valor:18000,statusBanco:'Recebido', dataRecBanco:'2025-02-05',statusComissao:'Pago',   dataPagComissao:'2025-02-10',obs:''},
-  {id:'c2',ade:'001235',data:'2025-01-15',cliente:'Maria Clara Souza',cpf:'234.567.890-11',corretorId:'u2',tabelaId:'t3',valor:22000,statusBanco:'Recebido', dataRecBanco:'2025-02-06',statusComissao:'Pago',   dataPagComissao:'2025-02-11',obs:''},
-  {id:'c3',ade:'001236',data:'2025-02-03',cliente:'Carlos Eduardo Lima',cpf:'345.678.901-22',corretorId:'u3',tabelaId:'t5',valor:31000,statusBanco:'Recebido', dataRecBanco:'2025-03-01',statusComissao:'A Pagar',dataPagComissao:'',obs:''},
-  {id:'c4',ade:'001237',data:'2025-02-14',cliente:'Fernanda Oliveira',cpf:'456.789.012-33',corretorId:'u2',tabelaId:'t2',valor:14500,statusBanco:'Importado',dataRecBanco:'',statusComissao:'Aguardando',dataPagComissao:'',obs:''},
-  {id:'c5',ade:'001238',data:'2025-03-01',cliente:'Roberto Alves',cpf:'567.890.123-44',corretorId:'u4',tabelaId:'t7',valor:8000, statusBanco:'Aguardando',dataRecBanco:'',statusComissao:'Aguardando',dataPagComissao:'',obs:'Formalização pendente'},
-  {id:'c6',ade:'001239',data:'2025-03-08',cliente:'Patricia Gomes',cpf:'678.901.234-55',corretorId:'u1',tabelaId:'t1',valor:12000,statusBanco:'Aguardando',dataRecBanco:'',statusComissao:'Aguardando',dataPagComissao:'',obs:''},
-];
+let CORRETORES = [];
+let TABELAS_REF = [];
+let contratos = [];
 let _importRows=[];
 let _csvRows=[];
 let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
@@ -959,7 +938,20 @@ let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
 function salvarDados(){try{localStorage.setItem('crm_cap_grupos',JSON.stringify(GRUPOS));localStorage.setItem('crm_cap_corretores',JSON.stringify(CORRETORES));localStorage.setItem('crm_cap_tabelas',JSON.stringify(TABELAS_REF));localStorage.setItem('crm_cap_contratos',JSON.stringify(contratos));}catch(e){}}
-function carregarDados(){try{const g=localStorage.getItem('crm_cap_grupos');if(g)GRUPOS=JSON.parse(g);const c=localStorage.getItem('crm_cap_corretores');if(c)CORRETORES=JSON.parse(c);const t=localStorage.getItem('crm_cap_tabelas');if(t)TABELAS_REF=JSON.parse(t);const ct=localStorage.getItem('crm_cap_contratos');if(ct)contratos=JSON.parse(ct);}catch(e){}}
+const DATA_VERSION='v2';
+function carregarDados(){
+  try{
+    // Limpa dados de demonstração na primeira execução desta versão
+    if(localStorage.getItem('crm_cap_version')!==DATA_VERSION){
+      ['crm_cap_contratos','crm_cap_corretores','crm_cap_tabelas','crm_cap_grupos'].forEach(k=>localStorage.removeItem(k));
+      localStorage.setItem('crm_cap_version',DATA_VERSION);
+    }
+    const g=localStorage.getItem('crm_cap_grupos');if(g)GRUPOS=JSON.parse(g);
+    const c=localStorage.getItem('crm_cap_corretores');if(c)CORRETORES=JSON.parse(c);
+    const t=localStorage.getItem('crm_cap_tabelas');if(t)TABELAS_REF=JSON.parse(t);
+    const ct=localStorage.getItem('crm_cap_contratos');if(ct)contratos=JSON.parse(ct);
+  }catch(e){}
+}
 
 // ══════════════════════════════════════════════════════
 // INTEGRAÇÃO CRM — USUÁRIOS
