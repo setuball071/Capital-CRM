@@ -252,12 +252,16 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <button onclick="document.getElementById('cm-mes').value='';renderContratos()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
       </div>
       <span class="count-chip" id="cm-count">—</span>
-      <div class="filter-right"><button class="btn btn-primary btn-sm" onclick="abrirModalContrato()">➕ Novo Contrato</button></div>
+      <div class="filter-right">
+        <button id="btn-excluir-sel-cont" class="btn btn-danger btn-sm" style="display:none" onclick="excluirSelecionadosContratos()">🗑 Excluir (<span id="sel-count-cont">0</span>)</button>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalContrato()">➕ Novo Contrato</button>
+      </div>
     </div>
     <div class="kpi-grid kpi-grid-4" id="cm-kpis"></div>
     <div class="table-wrap">
       <table>
         <thead><tr>
+          <th style="width:36px;padding:6px 14px"><input type="checkbox" id="cm-chk-all" onchange="toggleTodosContratos(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
           <th>ADE</th><th>Data</th><th>Cliente / CPF</th><th>Corretor</th><th>Banco / Tabela</th>
           <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
           <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Banco</th><th>Status Flat</th><th></th>
@@ -437,6 +441,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <select class="filter-select" id="usr-ativo" onchange="renderCorretores()"><option value="">Ativos e inativos</option><option value="1">Somente ativos</option><option value="0">Somente inativos</option></select>
       <span class="count-chip" id="usr-count">—</span>
       <div class="filter-right">
+        <button id="btn-alterar-grupo-sel" class="btn btn-ghost btn-sm" style="display:none;border-color:var(--accent);color:var(--accent)" onclick="abrirModalAlterarGrupoMassa()">✏️ Alterar Grupo (<span id="sel-count-cor">0</span>)</button>
         <button class="btn btn-ghost btn-sm" onclick="abrirModalCorretor()" id="btn-novo-cor-manual" style="display:none">+ Manual</button>
         <button class="btn btn-primary btn-sm" onclick="abrirModalAddCRM()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -447,6 +452,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div class="table-wrap">
       <table>
         <thead><tr>
+          <th style="width:36px;padding:6px 14px"><input type="checkbox" id="usr-chk-all" onchange="toggleTodosCorretores(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
           <th>Nome / Email</th><th>Cargo</th><th>Grupo / Repasse</th><th class="r">Salário Base</th><th>Ativo</th><th>Ações</th>
         </tr></thead>
         <tbody id="usr-tbody"></tbody>
@@ -455,6 +461,25 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   </div>
 </div>
 
+<!-- modal alterar grupo massa -->
+<div class="overlay" id="modal-alterar-grupo-massa">
+  <div class="modal" style="width:400px">
+    <div class="modal-header"><h3>Alterar Grupo de Repasse</h3><button class="modal-close" onclick="fecharModal('modal-alterar-grupo-massa')">✕</button></div>
+    <div class="modal-body">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Alterar grupo de <strong><span id="agm-count">0</span> corretor(es)</strong> selecionado(s).</p>
+      <div class="form-group">
+        <label>Novo Grupo de Repasse</label>
+        <select id="agm-grupo-sel" style="width:100%">
+          <option value="">Selecione o grupo...</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-alterar-grupo-massa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAlterarGrupoMassa()">Confirmar</button>
+    </div>
+  </div>
+</div>
 </div><!-- /content -->
 </div><!-- /app-body -->
 
@@ -891,6 +916,7 @@ let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
+let _selectedContratos=new Set(),_selectedCorretores=new Set();
 function salvarDados(){try{localStorage.setItem('crm_cap_grupos',JSON.stringify(GRUPOS));localStorage.setItem('crm_cap_corretores',JSON.stringify(CORRETORES));localStorage.setItem('crm_cap_tabelas',JSON.stringify(TABELAS_REF));localStorage.setItem('crm_cap_contratos',JSON.stringify(contratos));}catch(e){}}
 const DATA_VERSION='v2';
 function carregarDados(){
@@ -1119,6 +1145,7 @@ function renderMasterContratos(){
     const bBanco=badgeBanco(c.statusBanco,`abrirRecebimentoCont('${c.id}')`);
     const bFlat=badgeComissao(c.statusComissao,`abrirComissaoCont('${c.id}')`);
     return`<tr>
+      <td style="padding:6px 14px"><input type="checkbox" class="cont-chk" value="${c.id}" ${_selectedContratos.has(c.id)?'checked':''} onchange="toggleContratoSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td><span class="ade-chip">${c.ade}</span></td>
       <td>${fmtData(c.data)}</td>
       <td><div class="td-name">${c.cliente}</div><div class="td-muted">${c.cpf||''}</div></td>
@@ -1135,8 +1162,8 @@ function renderMasterContratos(){
       <td><button class="btn btn-ghost btn-sm" onclick="verDetalheContrato('${c.id}')">👁</button> <button class="btn btn-ghost btn-sm" onclick="abrirModalContrato('${c.id}')">✏️</button> <button class="btn btn-danger btn-sm" onclick="excluirContrato('${c.id}')">🗑</button></td>
     </tr>`;
   }).join('');
-  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>`;
-  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="7" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
+  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>`;
+  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
   document.getElementById('cm-kpis').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Produção Total</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
@@ -2058,6 +2085,7 @@ function renderCorretores(){
   const rows=list.map(c=>{
     const g=grupoById(c.grupoId);
     return`<tr>
+      <td style="padding:6px 14px"><input type="checkbox" class="cor-chk" value="${c.id}" ${_selectedCorretores.has(c.id)?'checked':''} onchange="toggleCorretorSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td><div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:${c.cor||'#666'};flex-shrink:0"></span><div><div class="td-name">${c.nome}</div><div class="td-muted">${c.email}</div></div></div></td>
       <td>${c.cargo||'—'}</td>
       <td><span style="color:${g?g.cor:'var(--muted)'}">${g?g.nome:'—'}</span> <span class="td-muted">${g?g.repasse+'%':''}</span></td>
@@ -2066,7 +2094,7 @@ function renderCorretores(){
       <td><button class="btn btn-ghost btn-sm" onclick="abrirModalCorretor('${c.id}')">✏️</button> <button class="btn btn-danger btn-sm" onclick="excluirCorretor('${c.id}')">🗑</button></td>
     </tr>`;
   }).join('');
-  document.getElementById('usr-tbody').innerHTML=rows||`<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">Nenhum corretor</td></tr>`;
+  document.getElementById('usr-tbody').innerHTML=rows||`<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--muted)">Nenhum corretor</td></tr>`;
 }
 function abrirModalGrupo(id){
   _editGrupoId=id||null;
@@ -2362,6 +2390,78 @@ function confirmarImportProd(){
   fecharModal('modal-import-prod');toast(`Importado! ${novos} novo(s), ${atualizados} atualizado(s).`);salvarDados();renderProducao();
 }
 
+// ══════════════════════════════════════════════════════
+// MULTI-SELECT: CONTRATOS
+// ══════════════════════════════════════════════════════
+function toggleContratoSelecionado(id,checked){
+  if(checked)_selectedContratos.add(id);else _selectedContratos.delete(id);
+  atualizarBtnExcluirContratos();
+}
+function toggleTodosContratos(checked){
+  document.querySelectorAll('.cont-chk').forEach(chk=>{
+    chk.checked=checked;
+    if(checked)_selectedContratos.add(chk.value);else _selectedContratos.delete(chk.value);
+  });
+  atualizarBtnExcluirContratos();
+}
+function atualizarBtnExcluirContratos(){
+  const n=_selectedContratos.size;
+  const btn=document.getElementById('btn-excluir-sel-cont');
+  const cnt=document.getElementById('sel-count-cont');
+  if(btn)btn.style.display=n>0?'':'none';
+  if(cnt)cnt.textContent=n;
+}
+function excluirSelecionadosContratos(){
+  const n=_selectedContratos.size;
+  if(!n)return;
+  if(!confirm(`Excluir ${n} contrato(s) selecionado(s)?`))return;
+  contratos=contratos.filter(c=>!_selectedContratos.has(c.id));
+  _selectedContratos.clear();
+  salvarDados();
+  atualizarBtnExcluirContratos();
+  renderContratos();
+  toast(`${n} contrato(s) excluído(s).`);
+}
+// ══════════════════════════════════════════════════════
+// MULTI-SELECT: CORRETORES (grupo de repasse)
+// ══════════════════════════════════════════════════════
+function toggleCorretorSelecionado(id,checked){
+  if(checked)_selectedCorretores.add(id);else _selectedCorretores.delete(id);
+  atualizarBtnAlterarGrupo();
+}
+function toggleTodosCorretores(checked){
+  document.querySelectorAll('.cor-chk').forEach(chk=>{
+    chk.checked=checked;
+    if(checked)_selectedCorretores.add(chk.value);else _selectedCorretores.delete(chk.value);
+  });
+  atualizarBtnAlterarGrupo();
+}
+function atualizarBtnAlterarGrupo(){
+  const n=_selectedCorretores.size;
+  const btn=document.getElementById('btn-alterar-grupo-sel');
+  const cnt=document.getElementById('sel-count-cor');
+  if(btn)btn.style.display=n>0?'':'none';
+  if(cnt)cnt.textContent=n;
+}
+function abrirModalAlterarGrupoMassa(){
+  const sg=document.getElementById('agm-grupo-sel');
+  sg.innerHTML='<option value="">Selecione o grupo...</option>';
+  GRUPOS.forEach(g=>{sg.innerHTML+=`<option value="${g.id}">${g.nome} (${g.repasse}%)</option>`;});
+  document.getElementById('agm-count').textContent=_selectedCorretores.size;
+  abrirModal('modal-alterar-grupo-massa');
+}
+function salvarAlterarGrupoMassa(){
+  const grupoId=document.getElementById('agm-grupo-sel').value;
+  if(!grupoId){toast('Selecione um grupo.',true);return;}
+  let count=0;
+  CORRETORES.forEach(c=>{if(_selectedCorretores.has(c.id)){c.grupoId=grupoId;count++;}});
+  _selectedCorretores.clear();
+  salvarDados();
+  atualizarBtnAlterarGrupo();
+  fecharModal('modal-alterar-grupo-massa');
+  renderConfig();
+  toast(`Grupo atualizado para ${count} corretor(es).`);
+}
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
