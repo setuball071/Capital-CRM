@@ -5251,6 +5251,9 @@ let prazosSeparado = {}; // não usado no refim (prazo sempre 96)
 let trocosSeparado = {}; // { idx: trocoLiquido } — troco editável por contrato no modo separado
 let prazosSimpSeparado = {}; // { idx: prazo } — prazo editável por contrato na port. simples separada
 
+// Resultado do refim — atualizado por renderResultadoRefim e calcRefim (separado)
+let _refimResult = null; // { modo:'unificado'|'separado', parcela, troco, prazo, linhas:[{banco,parcela,troco}] }
+
 function setTipoPort(tipo) {
   tipoPort = tipo;
   document.getElementById('secaoSimples').style.display = tipo === 'simples' ? '' : 'none';
@@ -5453,6 +5456,7 @@ function renderRefimContratos() {
   prazosSeparado = {}; // reset ao trocar banco/contratos
   trocosSeparado = {};
   prazosSimpSeparado = {};
+  _refimResult = null; // limpa resultado anterior ao mudar seleção
   const nome  = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nome);
   const marcados = getContratosMarcados();
@@ -5749,6 +5753,12 @@ function calcRefim() {
     avisoEl.innerHTML = '<span style="color:#16A34A;font-weight:600;">✅ ' + marcados.length +
       ' contrato(s) — saldo total: ' + fmtBRL(totalSaldo).replace('R$ ','') + '</span>';
 
+    // Salva resultado separado para uso no Criador de Proposta
+    _refimResult = {
+      modo: 'separado',
+      linhas: linhas.map(l => ({ banco: l.banco, parcela: l.parcelaTotal, troco: l.trocoLiquido, prazo: l.prazo })),
+    };
+
     document.getElementById('refimResultadoSeparado').style.display = '';
   }
 }
@@ -5763,6 +5773,8 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
   document.getElementById('rValorBruto').textContent   = fmtBRL(valorBruto);
   document.getElementById('rTaxaRefim').textContent    = fmtPct(taxaRefim) + ' a.m.';
   document.getElementById('refimResultado').style.display = '';
+  // Salva resultado para uso no Criador de Proposta
+  _refimResult = { modo: 'unificado', parcela: parcelaTotal, troco: trocoLiquido, prazo };
 }
 
 // ── MODAL REGRAS DOS BANCOS ────────────────────────────
@@ -5835,11 +5847,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ── BRIDGE: Simulador → Criador de Proposta ──────────────────────────────
 function simularEEnviar() {
-  simular();
+  // No modo refim, não executa simular() (que é para portabilidade simples)
+  // — apenas monta o payload direto dos resultados do refim
+  if (tipoPort !== 'refim') simular();
   setTimeout(() => enviarParaProposta(), 350);
 }
 
 function _buildPropostaPayload() {
+  // ── MODO PORTABILIDADE COM TROCO (REFIM) ──────────────────────────────
+  if (tipoPort === 'refim') {
+    if (!_refimResult) {
+      alert('⚠️ Calcule a portabilidade com troco antes de enviar para a proposta.');
+      return null;
+    }
+    // Contratos atuais = todos os contratos marcados para portar
+    const marcados = getContratosMarcados();
+    const ctData = marcados.map(c => ({
+      banco:   c.banco   || '',
+      parcela: parseFloat(c.parcela) || 0,
+      prazo:   parseInt(c.prazo)     || 0,
+    }));
+    // Nova proposta = resultado do cálculo refim
+    const nvData = [];
+    if (_refimResult.modo === 'unificado') {
+      // Uma linha: parcela nova unificada + troco total
+      nvData.push({ parcela: _refimResult.parcela, prazo: _refimResult.prazo, troco: _refimResult.troco });
+    } else {
+      // Uma linha por contrato: parcela individual + troco individual
+      _refimResult.linhas.forEach(l => {
+        nvData.push({ parcela: l.parcela, prazo: l.prazo || 96, troco: l.troco });
+      });
+    }
+    return { contratos: ctData, novas: nvData };
+  }
+
+  // ── MODO PORTABILIDADE SIMPLES ─────────────────────────────────────────
   const modo = document.getElementById('modoPort').value;
 
   // Contratos atuais
@@ -5869,7 +5911,6 @@ function _buildPropostaPayload() {
       if (m.liberado > 0) {
         const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
         const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
-        // troco = valor liberado ao cliente (m.liberado)
         nvData.push({ parcela, prazo, troco: parseFloat(m.liberado) || 0 });
       }
     });
@@ -5884,7 +5925,6 @@ function _buildPropostaPayload() {
       if (m.liberado > 0) {
         const parcela = m.portar ? parcelaPrice(m.saldoEncargo, m.taxaPort / 100, m.prazoPort) : (parseFloat(m.parcela) || 0);
         const prazo   = m.portar ? m.prazoPort : (parseInt(m.prazo) || 0);
-        // troco = valor liberado ao cliente (m.liberado)
         nvData.push({ parcela, prazo, troco: parseFloat(m.liberado) || 0 });
       }
     });
@@ -5895,6 +5935,7 @@ function _buildPropostaPayload() {
 
 function enviarParaProposta() {
   const payload = _buildPropostaPayload();
+  if (!payload) return; // erro já alertado dentro de _buildPropostaPayload
 
   // ── Quando dentro do CRM (iframe): envia postMessage para o React ──
   if (window.parent !== window) {
