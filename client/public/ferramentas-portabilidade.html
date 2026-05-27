@@ -6013,7 +6013,26 @@ function _addNovaProposta(parcela, prazo, troco) {
 // ── Recebe tema do CRM pai via postMessage ──
 window.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'CAPITAL_CRM_THEME') {
-    document.documentElement.setAttribute('data-theme', event.data.theme === 'dark' ? 'dark' : 'light');
+    const isDark = event.data.theme === 'dark';
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    // Limpa o force-light que bloqueia o dark mode com !important
+    const forceStyle = document.getElementById('force-light');
+    if (forceStyle) {
+      if (isDark) {
+        forceStyle.textContent = '/* dark mode active */';
+      } else {
+        forceStyle.textContent = [
+          'html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}',
+          'body{background:#F8F8FC!important;color:#111827!important}',
+          '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}',
+          'input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}',
+          'th{background:#F3F4F6!important;color:#6B7280!important}',
+          'td{color:#111827!important}'
+        ].join('\n');
+      }
+    }
+    // Aplica dark mode nos elementos com estilos inline
+    if (typeof applyDarkMode === 'function') applyDarkMode(isDark);
   }
 });
 
