@@ -917,6 +917,8 @@ let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
+let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
+let _pendingModule=null,_inicializado=false;
 let _selectedContratos=new Set(),_selectedCorretores=new Set(),_selectedTabelas=new Set();
 function salvarDados(){
   // Salva localmente como backup imediato
@@ -1044,6 +1046,12 @@ function corretorById(id){return CORRETORES.find(c=>c.id===id);}
 function tabelaById(id){return TABELAS_REF.find(t=>t.id===id);}
 function contratoByAde(ade){return contratos.find(c=>c.ade===ade);}
 function corretorRepasse(cor){if(!cor)return 0;const g=grupoById(cor.grupoId);return g?g.repasse:0;}
+function getMyRepasse(){
+  const cor=_myCorretorId?corretorById(_myCorretorId):CORRETORES[0];
+  if(!cor)return 40;
+  const g=grupoById(cor.grupoId);
+  return g?g.repasse:40;
+}
 function getTabelaInfo(c){
   if(c._banco!==undefined){return{banco:c._banco||'—',nome:c._tabela||'—',convenio:c._convenio||'—',tipo:c._tipo||'—',pctEmpresa:c._pctEmpresa||0,prazo:'—',coef:0};}
   return tabelaById(c.tabelaId)||{banco:'—',nome:'—',convenio:'—',tipo:'—',pctEmpresa:0,prazo:'—',coef:0};
@@ -1886,7 +1894,8 @@ function renderTabelas(){
     const cols=isMaster?11:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
   }
   tbody.innerHTML=list.map(t=>{
-    const pctCorr=pctCorretorGrupo(t.pctEmpresa,40);// ex Grupo Pleno 40%
+    const myRep=getMyRepasse();
+    const pctCorr=pctCorretorGrupo(t.pctEmpresa,myRep);
     if(isMaster){return`<tr>
       <td style="padding:6px 14px"><input type="checkbox" class="tab-chk" value="${t.id}" ${_selectedTabelas.has(t.id)?'checked':''} onchange="toggleTabelaSelecionada('${t.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td style="color:var(--muted);font-size:12px">${t.banco||'—'}</td>
@@ -1896,7 +1905,7 @@ function renderTabelas(){
       <td class="r" style="font-family:monospace;font-size:12px">${fmtCoef(t.coef)}</td>
       <td class="r"><span class="pct-empresa">${t.pctEmpresa}%</span></td>
       <td>${badgesFlags(t)}</td>
-      <td><span class="pct-corretor">${Number(pctCorr).toFixed(2).replace('.',',')}%</span> <span style="font-size:11px;color:var(--muted)">(40% repasse)</span></td>
+      <td><span class="pct-corretor">${Number(pctCorr).toFixed(2).replace('.',',')}%</span> <span style="font-size:11px;color:var(--muted)">(${myRep}% repasse)</span></td>
       <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button></td>
     </tr>`;}
     else{return`<tr>
@@ -2527,8 +2536,9 @@ function salvarAlterarGrupoMassa(){
 document.addEventListener('DOMContentLoaded',async ()=>{
   await carregarDados();
   document.querySelectorAll('.overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
-  // Default tab = contratos (pode ser sobrescrito por postMessage logo após)
-  setModule('contratos');
+  _inicializado=true;
+  setModule(_pendingModule||'contratos');
+  _pendingModule=null;
 });
 
 window.addEventListener('message',function(e){
@@ -2540,11 +2550,16 @@ window.addEventListener('message',function(e){
     mesclarComCRM(e.data.users);
   }
   if(e.data.type==='CAPITAL_CRM_TAB'&&e.data.tab){
-    setModule(e.data.tab);
+    if(_inicializado)setModule(e.data.tab);
+    else _pendingModule=e.data.tab;
   }
   if(e.data.type==='CAPITAL_CRM_ROLE'){
-    // Master recebe role-strip, consultor não
     const isMaster=e.data.isMaster;
+    if(e.data.userId)_myUserId=e.data.userId;
+    if(e.data.userEmail)_myUserEmail=e.data.userEmail;
+    // Identifica o corretor do usuário logado
+    const cor=CORRETORES.find(c=>(_myUserId&&c._crmId===_myUserId)||(_myUserEmail&&c.email===_myUserEmail));
+    if(cor)_myCorretorId=cor.id;
     const strip=document.getElementById('role-strip');
     if(strip)strip.style.display=isMaster?'flex':'none';
     if(!isMaster){setRole('consultor');}

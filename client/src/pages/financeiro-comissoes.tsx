@@ -65,13 +65,13 @@ export default function FinanceiroComissoes() {
   // Envia role do usuário logado
   useEffect(() => {
     if (!user) return;
-    send("CAPITAL_CRM_ROLE", { isMaster: user.isMaster || user.role === "master" || user.role === "coordenacao" });
+    send("CAPITAL_CRM_ROLE", { isMaster: user.isMaster || user.role === "master" || user.role === "coordenacao", userId: String(user.id), userEmail: user.email });
   }, [user, send]);
 
   const handleLoad = useCallback(() => {
     send("CAPITAL_CRM_THEME", { theme });
     send("CAPITAL_CRM_TAB", { tab });
-    send("CAPITAL_CRM_ROLE", { isMaster: user?.isMaster || user?.role === "master" || user?.role === "coordenacao" });
+    send("CAPITAL_CRM_ROLE", { isMaster: user?.isMaster || user?.role === "master" || user?.role === "coordenacao", userId: user ? String(user.id) : "", userEmail: user?.email || "" });
     if (users) {
       send("CAPITAL_CRM_USERS", {
         users: users.map((u) => ({
