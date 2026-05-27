@@ -2568,6 +2568,9 @@ window.addEventListener('message',function(e){
     const strip=document.getElementById('role-strip');
     if(strip)strip.style.display=isMaster?'flex':'none';
     if(!isMaster){setRole('consultor');}
+    // Re-renderiza o módulo ativo para aplicar o repasse correto do usuário logado
+    if(_inicializado&&_activeModule==='tabelas')renderTabelas();
+    else if(_inicializado&&_activeModule==='contratos')renderContratos();
   }
 });
 if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme','dark');
