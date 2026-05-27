@@ -1514,7 +1514,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           </div>
           <div class="field" style="max-width:180px;" id="wrapRefimPrazo">
             <label>Prazo (meses)</label>
-            <input id="refimPrazo" type="number" value="96" placeholder="96" oninput="calcRefim()">
+            <input id="refimPrazo" type="number" value="120" placeholder="120" oninput="calcRefim()">
           </div>
           <div class="field" style="max-width:200px;">
             <label>Calcular por</label>
@@ -5342,7 +5342,7 @@ window.addEventListener('message', function(event) {
 
 // --- TIPO DE PORTABILIDADE ---
 let tipoPort = 'simples';
-let prazosSeparado = {}; // não usado no refim (prazo sempre 96)
+let prazosSeparado = {}; // não usado no refim (prazo sempre 120)
 let trocosSeparado = {}; // { idx: trocoLiquido } — troco editável por contrato no modo separado
 let prazosSimpSeparado = {}; // { idx: prazo } — prazo editável por contrato na port. simples separada
 
@@ -5688,7 +5688,7 @@ function calcRefim() {
 
   if (unificado) {
     // ── MODO UNIFICADO (comportamento atual) ──
-    const prazo   = parseInt(document.getElementById('refimPrazo').value) || 96;
+    const prazo   = parseInt(document.getElementById('refimPrazo').value) || 120;
     const price   = mkPrice(taxaRefim, prazo);
 
     function validarUnif(trocoBruto, parcelaTotal, trocoLiquido) {
@@ -5752,8 +5752,8 @@ function calcRefim() {
     const linhas = marcados.map((c, idx) => {
       const saldo        = parseBR(c.saldo);
       const parc         = parseBR(c.parcela);
-      const prazoOriginal = parseInt(c.prazo) || 96;  // prazo restante do extrato
-      const prazo        = 96; // refim com troco sempre em 96 meses
+      const prazoOriginal = parseInt(c.prazo) || 96;  // prazo restante do extrato (default 96 do contrato atual)
+      const prazo        = 120; // refim com troco sempre em 120 meses (mudou de 96 em 27/05/2026)
       // IOF fixo 3,20% sobre troco líquido (global IOF_RATE)
       const price  = mkPrice(taxaRefim, prazo);
 
