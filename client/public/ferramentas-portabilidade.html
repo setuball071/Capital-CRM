@@ -1587,8 +1587,10 @@ body { background: #F8F8FC !important; color: #111827 !important; }
                 <th style="padding:8px;text-align:left;">Banco Origem</th>
                 <th style="padding:8px;text-align:right;">Saldo</th>
                 <th style="padding:8px;text-align:center;">Prazo</th>
-                <th style="padding:8px;text-align:right;">Parcela Nova</th>
-                <th style="padding:8px;text-align:right;">Troco Bruto</th>
+                <th style="padding:8px;text-align:right;">Parc. Atual</th>
+                <th style="padding:8px;text-align:right;">Parc. Nova</th>
+                <th style="padding:8px;text-align:right;">Dif. Parcela</th>
+                <th style="display:none;">Troco Bruto</th>
                 <th style="padding:8px;text-align:right;">IOF</th>
                 <th style="padding:8px;text-align:right;">Troco Líq. ✏️</th>
                 <th style="padding:8px;text-align:center;">Status</th>
@@ -5712,19 +5714,26 @@ function calcRefim() {
       totalParcela += parcelaTotal;
       totalEncargos += encargos;
 
-      return { banco: c.banco, saldo, prazo, prazoOriginal, parcelaTotal, trocoBruto, iof, trocoLiquido, minTroco, status, ok };
+      return { banco: c.banco, saldo, prazo, prazoOriginal, parcelaOriginal: parc, parcelaTotal, trocoBruto, iof, trocoLiquido, minTroco, status, ok };
     });
 
     // Renderizar tabela separada
     const tbody = document.getElementById('tbRefimSeparado');
     if(!tbody) return;
-  tbody.innerHTML = linhas.map((l, idx) => `
+  tbody.innerHTML = linhas.map((l, idx) => {
+    const diff = l.parcelaOriginal - l.parcelaTotal;
+    const diffColor = diff >= 0 ? '#16A34A' : '#EF4444';
+    const diffSign  = diff >= 0 ? '▼ ' : '▲ ';
+    const diffLabel = diffSign + fmtBRL(Math.abs(diff));
+    return `
       <tr style="border-bottom:1px solid #F3F4F6;">
         <td style="padding:7px 8px;">${l.banco || '-'}</td>
         <td style="padding:7px 8px;text-align:right;">${fmtBRL(l.saldo)}</td>
         <td style="padding:7px 8px;text-align:center;font-weight:600;color:#6B7280;">96m</td>
+        <td style="padding:7px 8px;text-align:right;color:#6B7280;">${fmtBRL(l.parcelaOriginal)}</td>
         <td style="padding:7px 8px;text-align:right;font-weight:700;color:#6C2BD9;">${fmtBRL(l.parcelaTotal)}</td>
-        <td style="padding:7px 8px;text-align:right;">${fmtBRL(l.trocoBruto)}</td>
+        <td style="padding:7px 8px;text-align:right;font-weight:700;color:${diffColor};">${diffLabel}</td>
+        <td style="display:none;">${fmtBRL(l.trocoBruto)}</td>
         <td style="padding:7px 8px;text-align:right;color:#EA580C;">${fmtBRL(l.iof)}</td>
         <td style="padding:7px 8px;text-align:right;">
           <input type="number" value="${l.trocoLiquido.toFixed(2)}" min="${l.minTroco}" step="50"
@@ -5733,15 +5742,22 @@ function calcRefim() {
             onchange="trocosSeparado[${idx}]=parseBR(this.value);calcRefim()">
         </td>
         <td style="padding:7px 8px;text-align:center;">${l.status}</td>
-      </tr>`).join('');
+      </tr>`;
+  }).join('');
 
+    const totalParcelaOriginal = linhas.reduce((a,l)=>a+l.parcelaOriginal,0);
+    const totalDiff = totalParcelaOriginal - totalParcela;
+    const totalDiffColor = totalDiff >= 0 ? '#16A34A' : '#EF4444';
+    const totalDiffLabel = (totalDiff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(totalDiff));
     document.getElementById('tfRefimSeparado').innerHTML = `
       <tr style="border-top:2px solid #6C2BD9;">
         <td style="padding:8px;font-weight:700;">TOTAL</td>
         <td style="padding:8px;text-align:right;font-weight:700;">${fmtBRL(totalSaldo)}</td>
         <td></td>
+        <td style="padding:8px;text-align:right;font-weight:700;color:#6B7280;">${fmtBRL(totalParcelaOriginal)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:#6C2BD9;">${fmtBRL(totalParcela)}</td>
-        <td style="padding:8px;text-align:right;font-weight:700;">${fmtBRL(linhas.reduce((a,l)=>a+l.trocoBruto,0))}</td>
+        <td style="padding:8px;text-align:right;font-weight:800;color:${totalDiffColor};">${totalDiffLabel}</td>
+        <td style="display:none;">${fmtBRL(linhas.reduce((a,l)=>a+l.trocoBruto,0))}</td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#EA580C;">${fmtBRL(totalIOF)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:#16A34A;">${fmtBRL(totalTroco)}</td>
         <td style="padding:8px;text-align:center;font-size:11px;color:#6B7280;">Taxa: ${fmtPct(taxaRefim*100)}% a.m.</td>
