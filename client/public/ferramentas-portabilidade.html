@@ -5393,10 +5393,10 @@ function calcParcela(saldo, taxaMensal, prazo) {
 // trocoBruto = trocoLiquido * 1.032  →  iof = trocoLiquido * 0.032
 const IOF_RATE = 0.032;
 
-// Fator de correção de saldo: o extrato SIAPE/convênio tem defasagem de ~15-20 dias
-// O banco usa o saldo atualizado do dia → aplicamos +1,6% para aproximar a parcela real
-// Resultado: parcela simulada fica ~R$3-15 acima do extrato puro (conservador, nunca abaixo)
-const FATOR_SALDO = 1.016;
+// FATOR_SALDO desativado em 27/05/2026 — o saldo do extrato é o saldo que entra na
+// operação; multiplicar por 1.016 inflava o PV do refim e gerava parcelas acima do
+// que o banco realmente cobra. Mantido apenas como referência histórica.
+// const FATOR_SALDO = 1.016;
 function calcIOF(trocoBruto) {
   // IOF = trocoBruto - trocoBruto/1.032 = trocoBruto * (1 - 1/1.032)
   return trocoBruto * (1 - 1 / (1 + IOF_RATE));
@@ -5715,14 +5715,14 @@ function calcRefim() {
       if (!trocoLiquido) return;
       trocoBruto    = trocoBrutoDeLiquido(trocoLiquido); // bruto = líquido × 1,032
       iof           = calcIOF(trocoBruto);
-      parcelaTotal  = price.pmt(saldoPortado * FATOR_SALDO + trocoBruto);
+      parcelaTotal  = price.pmt(saldoPortado + trocoBruto);
     } else {
       parcelaTotal  = parseBR(document.getElementById('refimParcelaInput').value);
       if (!parcelaTotal) return;
-      trocoBruto    = price.pv(parcelaTotal) - saldoPortado * FATOR_SALDO;
+      trocoBruto    = price.pv(parcelaTotal) - saldoPortado;
       if (trocoBruto <= 0) {
         avisoEl.innerHTML = '<span style="color:#EF4444;font-weight:600;">⚠️ Parcela insuficiente — ' +
-          'mínimo sem troco: ' + fmtBRL(price.pmt(saldoPortado * FATOR_SALDO)).replace('R$ ','') + '/mês.</span>';
+          'mínimo sem troco: ' + fmtBRL(price.pmt(saldoPortado)).replace('R$ ','') + '/mês.</span>';
         return;
       }
       iof          = calcIOF(trocoBruto);
@@ -5764,14 +5764,14 @@ function calcRefim() {
         trocoLiquido = trocosSeparado[idx] ?? minTroco;
         trocoBruto   = trocoBrutoDeLiquido(trocoLiquido);
         iof          = calcIOF(trocoBruto);
-        parcelaTotal = price.pmt(saldo * FATOR_SALDO + trocoBruto);
+        parcelaTotal = price.pmt(saldo + trocoBruto);
       } else {
         // Distribui a parcela proporcionalmente ao saldo de cada contrato
         const totalSaldos = marcados.reduce((a,x) => a+parseBR(x.saldo), 0);
         const parcelaProp = inputValor * (saldo / totalSaldos);
-        trocoBruto   = price.pv(parcelaProp) - saldo * FATOR_SALDO;
+        trocoBruto   = price.pv(parcelaProp) - saldo;
         if (trocoBruto <= 0) {
-          trocoBruto = 0; iof = 0; trocoLiquido = 0; parcelaTotal = price.pmt(saldo * FATOR_SALDO);
+          trocoBruto = 0; iof = 0; trocoLiquido = 0; parcelaTotal = price.pmt(saldo);
           ok = false;
           status = '<span style="color:#EF4444;font-weight:600;">❌ Sem troco</span>';
         } else {
@@ -5820,7 +5820,7 @@ function calcRefim() {
       <tr style="border-bottom:1px solid #F3F4F6;">
         <td style="padding:7px 8px;">${l.banco || '-'}</td>
         <td style="padding:7px 8px;text-align:right;">${fmtBRL(l.saldo)}</td>
-        <td style="padding:7px 8px;text-align:center;font-weight:600;color:#6B7280;">96m</td>
+        <td style="padding:7px 8px;text-align:center;font-weight:600;color:#6B7280;">${l.prazo}m</td>
         <td style="padding:7px 8px;text-align:right;color:#6B7280;">${fmtBRL(l.parcelaOriginal)}</td>
         <td style="padding:7px 8px;text-align:right;font-weight:700;color:#6C2BD9;">${fmtBRL(l.parcelaTotal)}</td>
         <td style="padding:7px 8px;text-align:right;font-weight:700;color:${diffColor};">${diffLabel}</td>
