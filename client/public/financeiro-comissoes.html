@@ -1884,7 +1884,7 @@ function renderTabelas(){
         ${tdE}
         <td class="r"><span class="pct-corretor">${Number(flatPct).toFixed(2).replace('.',',')}%</span></td>
         <td class="r" style="font-weight:600">${fmtBRL(valorContrato)}</td>
-        <td style="color:var(--muted)">${fmtBRL(parcela)}</td>
+        <td class="r" style="color:var(--muted)">${fmtBRL(parcela)}</td>
         <td class="r"><span class="sim-comissao">${fmtBRL(ganho)}</span></td>
       </tr>`;
     }).join('');
