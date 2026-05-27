@@ -2072,10 +2072,11 @@ function gerar(){
     items.push({label:'Economia mensal',val:'R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">Por mês</span>'});
   if(totalTroco>0)
     items.push({label:'Troco total disponível',val:'R$ '+totalTroco.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-troco',tag:'<span class="res-tag tag-troco">Disponível</span>'});
-  const mPAt=dadosAt.filter(c=>c.prazo>0).map(c=>c.prazo);
-  const mPNv=dadosNv.filter(n=>n.prazo>0).map(n=>n.prazo);
-  if(mPAt.length&&mPNv.length&&totalAt&&totalNv){
-    const diff=(totalAt*Math.min(...mPAt))-(totalNv*Math.min(...mPNv));
+  // Economia total: soma (parcela × prazo) de cada contrato individualmente
+  const totalPagoAt=dadosAt.reduce((acc,c)=>acc+(c.parc*(c.prazo||0)),0);
+  const totalPagoNv=dadosNv.reduce((acc,n)=>acc+(n.parc*(n.prazo||0)),0);
+  if(totalPagoAt>0&&totalPagoNv>0){
+    const diff=totalPagoAt-totalPagoNv;
     if(diff>0) items.push({label:'Economia total estimada',val:'R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">No período</span>'});
   }
 
