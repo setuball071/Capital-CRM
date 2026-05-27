@@ -921,6 +921,8 @@ let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
 let _pendingModule=null,_inicializado=false;
 let _selectedContratos=new Set(),_selectedCorretores=new Set(),_selectedTabelas=new Set();
 function salvarDados(){
+  // Não salva antes de carregar — evita sobrescrever banco com dados vazios
+  if(!_inicializado)return;
   // Salva localmente como backup imediato
   try{
     localStorage.setItem('crm_cap_grupos',JSON.stringify(GRUPOS));
@@ -1890,8 +1892,7 @@ function renderTabelas(){
   }
   // ── MODO NORMAL ──
   if(isMaster){
-    const _hGrupo=getMyGrupo();const _hGrupoLabel=_hGrupo?_hGrupo.nome:'—';
-    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor (${escHtml(_hGrupoLabel)})</th><th>Ações</th></tr>`;
+    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor</th><th>Ações</th></tr>`;
   } else {
     thead.innerHTML=`<tr><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th>Flags</th><th class="r">Flat %</th></tr>`;
   }
