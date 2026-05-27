@@ -1046,10 +1046,15 @@ function corretorById(id){return CORRETORES.find(c=>c.id===id);}
 function tabelaById(id){return TABELAS_REF.find(t=>t.id===id);}
 function contratoByAde(ade){return contratos.find(c=>c.ade===ade);}
 function corretorRepasse(cor){if(!cor)return 0;const g=grupoById(cor.grupoId);return g?g.repasse:0;}
+function getMyGrupo(){
+  // tenta corretor logado; fallback = primeiro grupo disponível
+  const cor=_myCorretorId?corretorById(_myCorretorId)
+    :CORRETORES.find(c=>(_myUserId&&c._crmId===_myUserId)||(_myUserEmail&&c.email===_myUserEmail));
+  const g=cor?grupoById(cor.grupoId):null;
+  return g||GRUPOS[0]||null;
+}
 function getMyRepasse(){
-  const cor=_myCorretorId?corretorById(_myCorretorId):CORRETORES[0];
-  if(!cor)return 40;
-  const g=grupoById(cor.grupoId);
+  const g=getMyGrupo();
   return g?g.repasse:40;
 }
 function getTabelaInfo(c){
@@ -1855,8 +1860,7 @@ function renderTabelas(){
   // ── MODO SIMULADOR ──
   if(_simAtivo){
     const resultados=list.filter(t=>t.coef>0).map(t=>{
-      // usa grupo do consultor logado (CORRETORES[0]) ou grupo Pleno demo (40%)
-      const consultor=CORRETORES[0];const g=grupoById(consultor?consultor.grupoId:'');const rep=g?g.repasse:40;
+      const rep=getMyRepasse();
       const flatPct=pctCorretorGrupo(t.pctEmpresa,rep);
       const valorContrato=_simModo==='parcela'?_simValor/t.coef:_simValor;
       const parcela=_simModo==='parcela'?_simValor:_simValor*t.coef;
@@ -1886,7 +1890,8 @@ function renderTabelas(){
   }
   // ── MODO NORMAL ──
   if(isMaster){
-    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor (ex. Grupo Pleno)</th><th>Ações</th></tr>`;
+    const _hGrupo=getMyGrupo();const _hGrupoLabel=_hGrupo?_hGrupo.nome:'—';
+    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor (${escHtml(_hGrupoLabel)})</th><th>Ações</th></tr>`;
   } else {
     thead.innerHTML=`<tr><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th>Flags</th><th class="r">Flat %</th></tr>`;
   }
