@@ -15,3 +15,6 @@ attached_assets/*.csv
 *.env
 
 .vercel
+
+# Memórias do projeto (uso local/Claude — não enviar pro Replit)
+memoria/
