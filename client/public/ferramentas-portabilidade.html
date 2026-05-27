@@ -1465,7 +1465,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <div id="refimRegraObs" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;"></div>
           </div>
         </div>
-        <button onclick="abrirModalRegras()" style="padding:8px 14px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#374151;white-space:nowrap;">
+        <button id="btnGerenciarBancos" onclick="abrirModalRegras()" style="padding:8px 14px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#374151;white-space:nowrap;display:none;">
           ⚙️ Gerenciar Bancos
         </button>
       </div>
@@ -5231,24 +5231,114 @@ const regrasBancosDefault = [
     ]
   },
 ];
-// Mescla padrões com eventuais customizações salvas (só campos numéricos)
-function carregarRegras() {
-  const saved = JSON.parse(storage.getItem('regrasBancos') || 'null');
-  if (!saved) return regrasBancosDefault.map(r => ({...r}));
+// ── REGRAS DOS BANCOS — CARREGAMENTO / SALVAMENTO ────────────────────────
+// As regras vinham do localStorage (por navegador). Agora vêm do backend
+// (compartilhadas entre todos os usuários do tenant). Apenas master pode editar.
+// Defaults hardcoded acima servem como fallback offline / pré-API.
+
+// Mescla defaults com customizações vindas da API/localStorage (só campos numéricos)
+function _mesclarRegras(saved) {
+  if (!Array.isArray(saved) || saved.length === 0) {
+    return regrasBancosDefault.map(r => ({...r}));
+  }
   return regrasBancosDefault.map(def => {
     const sv = saved.find(s => s.banco === def.banco);
     return sv ? { ...def, entradaMin:   sv.entradaMin   ?? def.entradaMin,
                           taxaRefim:    sv.taxaRefim    ?? def.taxaRefim,
                           minTroco:     sv.minTroco     ?? def.minTroco,
                           saldoMin:     sv.saldoMin     ?? def.saldoMin,
-                          taxaSugerida: sv.taxaSugerida ?? def.taxaSugerida } : {...def};
+                          taxaSugerida: sv.taxaSugerida ?? def.taxaSugerida,
+                          // obs: prioriza o da API se vier preenchido, senão mantém o do default
+                          obs: (Array.isArray(sv.obs) && sv.obs.length) ? sv.obs : def.obs } : {...def};
   }).concat(saved.filter(s => !regrasBancosDefault.find(d => d.banco === s.banco)));
+}
+
+function carregarRegras() {
+  // Inicializa com defaults; será sobrescrito por _fetchRulesFromAPI() quando responder.
+  return regrasBancosDefault.map(r => ({...r}));
 }
 let regrasBancos = carregarRegras();
 
-function salvarRegras() {
-  storage.setItem('regrasBancos', JSON.stringify(regrasBancos));
+// Controle de permissão e estado
+let _isMaster = false;     // setado via postMessage CAPITAL_CRM_ROLE (default não pode editar)
+let _rulesLoaded = false;  // true após primeiro fetch bem sucedido (ou fallback)
+let _saveTimeout = null;   // debounce do PUT
+
+async function _fetchRulesFromAPI() {
+  try {
+    const resp = await fetch('/api/portability-bank-rules', { credentials: 'include' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const rows = await resp.json();
+    regrasBancos = _mesclarRegras(rows);
+    _rulesLoaded = true;
+    // Re-renderiza UIs que dependem das regras
+    try { popularSelectBancos(); } catch (e) { /* ignore */ }
+    try { if (document.getElementById('modalRegras')?.style.display === 'flex') renderTbRegras(); } catch (e) { /* ignore */ }
+  } catch (err) {
+    console.warn('[portabilidade] Não foi possível carregar regras da API, usando defaults locais.', err);
+    _rulesLoaded = true; // continua com defaults
+  }
 }
+
+function salvarRegras() {
+  // Salvamento é restrito a master. Outros usuários NÃO devem alterar a config compartilhada.
+  if (!_isMaster) {
+    console.warn('[portabilidade] Tentativa de salvar regras sem permissão de master. Ignorando.');
+    return;
+  }
+  // Debounce: agrupa múltiplas mudanças (ex: digitar em vários campos) em um único PUT.
+  if (_saveTimeout) clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(_pushRulesToAPI, 400);
+}
+
+async function _pushRulesToAPI() {
+  _saveTimeout = null;
+  try {
+    const payload = regrasBancos.map((r, idx) => ({
+      banco:        r.banco,
+      entradaMin:   Number(r.entradaMin)   || 0,
+      taxaRefim:    Number(r.taxaRefim)    || 0,
+      saldoMin:     Number(r.saldoMin)     || 0,
+      minTroco:     Number(r.minTroco)     || 0,
+      taxaLivre:    !!r.taxaLivre,
+      taxaSugerida: r.taxaSugerida == null ? null : Number(r.taxaSugerida),
+      obs:          Array.isArray(r.obs) ? r.obs : null,
+      ordem:        idx,
+    }));
+    const resp = await fetch('/api/portability-bank-rules', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.message || ('HTTP ' + resp.status));
+    }
+  } catch (err) {
+    console.error('[portabilidade] Erro ao salvar regras:', err);
+    alert('⚠️ Não foi possível salvar as regras: ' + (err.message || 'erro desconhecido'));
+  }
+}
+
+function _applyMasterUI() {
+  // Mostra/esconde o botão Gerenciar Bancos conforme permissão
+  const btn = document.getElementById('btnGerenciarBancos');
+  if (btn) btn.style.display = _isMaster ? '' : 'none';
+  // Se modal aberto e o usuário perdeu permissão (caso extremo), fecha
+  const modal = document.getElementById('modalRegras');
+  if (!_isMaster && modal && modal.style.display === 'flex') {
+    modal.style.display = 'none';
+  }
+}
+
+// ── Listener da role enviada pelo CRM pai via postMessage ──
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'CAPITAL_CRM_ROLE') {
+    _isMaster = Boolean(event.data.isMaster);
+    _applyMasterUI();
+  }
+});
 
 // --- TIPO DE PORTABILIDADE ---
 let tipoPort = 'simples';
@@ -5799,6 +5889,10 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
 // ── MODAL REGRAS DOS BANCOS ────────────────────────────
 
 function abrirModalRegras() {
+  if (!_isMaster) {
+    alert('Apenas usuários master podem editar as regras dos bancos.');
+    return;
+  }
   renderTbRegras();
   const m = document.getElementById('modalRegras');
   m.style.display = 'flex';
@@ -5838,12 +5932,16 @@ function renderTbRegras() {
 }
 
 function addRegra() {
+  if (!_isMaster) { alert('Apenas usuários master podem adicionar bancos.'); return; }
   const banco    = document.getElementById('novoRegBanco').value.trim();
   const entrada  = parseBR(document.getElementById('novoRegEntrada').value);
   const refim    = parseBR(document.getElementById('novoRegRefim').value);
   const saldoMin = parseBR(document.getElementById('novoRegSaldoMin').value) || 0;
   const minTroco = parseBR(document.getElementById('novoRegMinTroco').value) || 250;
   if (!banco || !entrada || !refim) { alert('Preencha todos os campos.'); return; }
+  if (regrasBancos.some(r => r.banco.toLowerCase() === banco.toLowerCase())) {
+    alert(`Já existe um banco com o nome "${banco}".`); return;
+  }
   regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, saldoMin, minTroco });
   salvarRegras();
   document.getElementById('novoRegBanco').value    = '';
@@ -5856,6 +5954,7 @@ function addRegra() {
 }
 
 function removerRegra(i) {
+  if (!_isMaster) { alert('Apenas usuários master podem remover bancos.'); return; }
   if (!confirm(`Remover banco "${regrasBancos[i].banco}"?`)) return;
   regrasBancos.splice(i, 1);
   salvarRegras();
@@ -5867,6 +5966,10 @@ function removerRegra(i) {
 document.addEventListener('DOMContentLoaded', function() {
   popularSelectBancos();
   calcSimples();
+  // Aplica UI baseada na permissão atual (master default = false)
+  _applyMasterUI();
+  // Carrega regras do banco em background — sobrescreve defaults assim que chegar
+  _fetchRulesFromAPI();
 });
 
 

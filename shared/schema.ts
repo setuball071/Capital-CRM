@@ -3825,3 +3825,44 @@ export const insertLemitJobSchema = createInsertSchema(lemitJobs).omit({
 
 export type LemitJob = typeof lemitJobs.$inferSelect;
 export type InsertLemitJob = z.infer<typeof insertLemitJobSchema>;
+
+// ===== REGRAS DOS BANCOS — SIMULADOR DE PORTABILIDADE =====
+// Substitui o localStorage do ferramentas-portabilidade.html para compartilhar
+// as regras entre todos os usuários do mesmo tenant. Edição é restrita a master
+// (ver routes /api/portability-bank-rules).
+export const portabilityBankRules = pgTable(
+  "portability_bank_rules",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+    banco: varchar("banco", { length: 100 }).notNull(),
+    entradaMin: decimal("entrada_min", { precision: 10, scale: 6 }).notNull().default("0"),
+    taxaRefim: decimal("taxa_refim", { precision: 10, scale: 6 }).notNull().default("0"),
+    saldoMin: decimal("saldo_min", { precision: 14, scale: 2 }).notNull().default("0"),
+    minTroco: decimal("min_troco", { precision: 14, scale: 2 }).notNull().default("0"),
+    taxaLivre: boolean("taxa_livre").notNull().default(false),
+    taxaSugerida: decimal("taxa_sugerida", { precision: 10, scale: 6 }),
+    obs: jsonb("obs"),
+    ordem: integer("ordem").notNull().default(0),
+    updatedBy: integer("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqTenantBanco: uniqueIndex("portability_bank_rules_tenant_banco_unique").on(
+      table.tenantId,
+      table.banco,
+    ),
+  }),
+);
+
+export const insertPortabilityBankRuleSchema = createInsertSchema(portabilityBankRules).omit({
+  id: true,
+  tenantId: true,
+  updatedBy: true,
+  updatedAt: true,
+  createdAt: true,
+});
+
+export type PortabilityBankRule = typeof portabilityBankRules.$inferSelect;
+export type InsertPortabilityBankRule = z.infer<typeof insertPortabilityBankRuleSchema>;

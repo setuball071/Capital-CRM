@@ -27226,6 +27226,130 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // REGRAS DOS BANCOS — SIMULADOR DE PORTABILIDADE
+  // Substitui o antigo localStorage do ferramentas-portabilidade.html.
+  // Leitura: qualquer usuário autenticado do tenant.
+  // Edição: apenas master (isMaster=true ou role='master').
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // GET /api/portability-bank-rules — listar regras do tenant atual
+  app.get("/api/portability-bank-rules", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const result = await db.execute(sql`
+        SELECT id, banco,
+               entrada_min::float  AS "entradaMin",
+               taxa_refim::float   AS "taxaRefim",
+               saldo_min::float    AS "saldoMin",
+               min_troco::float    AS "minTroco",
+               taxa_livre          AS "taxaLivre",
+               taxa_sugerida::float AS "taxaSugerida",
+               obs,
+               ordem,
+               updated_at          AS "updatedAt"
+        FROM portability_bank_rules
+        WHERE tenant_id = ${tenantId}
+        ORDER BY ordem, banco
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[PORTABILITY_RULES] GET error:", err);
+      res.status(500).json({ message: "Erro ao listar regras de portabilidade" });
+    }
+  });
+
+  // PUT /api/portability-bank-rules — substitui o conjunto completo de regras do tenant (master only)
+  // Body: array de regras. Bancos ausentes do array são REMOVIDOS.
+  app.put("/api/portability-bank-rules", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      if (!user.isMaster && user.role !== "master") {
+        return res.status(403).json({ message: "Acesso restrito ao administrador master" });
+      }
+      const tenantId = req.tenantId!;
+      const body = req.body;
+      if (!Array.isArray(body)) {
+        return res.status(400).json({ message: "Body deve ser um array de regras" });
+      }
+
+      // Normaliza e valida cada regra
+      const toNum = (v: any, fallback = 0) => {
+        const n = typeof v === "number" ? v : parseFloat(v);
+        return Number.isFinite(n) ? n : fallback;
+      };
+      const rules = body.map((r: any, idx: number) => {
+        const banco = String(r?.banco ?? "").trim();
+        if (!banco) throw new Error(`Regra #${idx + 1}: campo "banco" é obrigatório`);
+        return {
+          banco,
+          entradaMin: toNum(r.entradaMin),
+          taxaRefim: toNum(r.taxaRefim),
+          saldoMin: toNum(r.saldoMin),
+          minTroco: toNum(r.minTroco),
+          taxaLivre: Boolean(r.taxaLivre),
+          taxaSugerida: r.taxaSugerida == null || r.taxaSugerida === "" ? null : toNum(r.taxaSugerida),
+          obs: Array.isArray(r.obs) ? r.obs : null,
+          ordem: Number.isFinite(parseInt(r.ordem, 10)) ? parseInt(r.ordem, 10) : idx,
+        };
+      });
+
+      // Detecta duplicatas (mesmo nome de banco no array)
+      const seen = new Set<string>();
+      for (const r of rules) {
+        const key = r.banco.toLowerCase();
+        if (seen.has(key)) {
+          return res.status(400).json({ message: `Banco "${r.banco}" aparece duplicado no array` });
+        }
+        seen.add(key);
+      }
+
+      // neon-http não suporta transactions multi-statement.
+      // Estratégia segura: UPSERT primeiro (idempotente), depois DELETE dos ausentes.
+      // Se falhar no meio dos upserts, nenhum dado é apagado e o master pode reenviar.
+      const bancosEnviados = rules.map((r) => r.banco);
+      for (const r of rules) {
+        await db.execute(sql`
+          INSERT INTO portability_bank_rules
+            (tenant_id, banco, entrada_min, taxa_refim, saldo_min, min_troco,
+             taxa_livre, taxa_sugerida, obs, ordem, updated_by, updated_at)
+          VALUES
+            (${tenantId}, ${r.banco}, ${r.entradaMin}, ${r.taxaRefim}, ${r.saldoMin}, ${r.minTroco},
+             ${r.taxaLivre}, ${r.taxaSugerida}, ${r.obs ? JSON.stringify(r.obs) : null}::jsonb,
+             ${r.ordem}, ${user.id}, NOW())
+          ON CONFLICT (tenant_id, banco) DO UPDATE SET
+            entrada_min   = EXCLUDED.entrada_min,
+            taxa_refim    = EXCLUDED.taxa_refim,
+            saldo_min     = EXCLUDED.saldo_min,
+            min_troco     = EXCLUDED.min_troco,
+            taxa_livre    = EXCLUDED.taxa_livre,
+            taxa_sugerida = EXCLUDED.taxa_sugerida,
+            obs           = EXCLUDED.obs,
+            ordem         = EXCLUDED.ordem,
+            updated_by    = ${user.id},
+            updated_at    = NOW()
+        `);
+      }
+      if (bancosEnviados.length > 0) {
+        await db.execute(sql`
+          DELETE FROM portability_bank_rules
+          WHERE tenant_id = ${tenantId}
+            AND banco NOT IN (${sql.join(bancosEnviados.map((b) => sql`${b}`), sql`, `)})
+        `);
+      } else {
+        // Array vazio: limpa todas as regras do tenant
+        await db.execute(sql`
+          DELETE FROM portability_bank_rules WHERE tenant_id = ${tenantId}
+        `);
+      }
+
+      res.json({ success: true, count: rules.length });
+    } catch (err: any) {
+      console.error("[PORTABILITY_RULES] PUT error:", err);
+      res.status(500).json({ message: err?.message || "Erro ao salvar regras de portabilidade" });
+    }
+  });
+
   // GET /api/portfolio/check/:cpf — verifica bloqueio de CPF
   app.get("/api/portfolio/check/:cpf", requireAuth, async (req: any, res) => {
     try {

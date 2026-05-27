@@ -5,6 +5,7 @@ import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
+import { useAuth } from "@/lib/auth";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
 function IframeBridge() {
@@ -114,15 +115,36 @@ const TABS = [
 export default function SimuladoresHub() {
   const [activeTab, setActiveTab] = useState("proposta");
   const { theme } = useTheme();
+  const { user } = useAuth();
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
 
   const navigateToProposta = useCallback(() => setActiveTab("proposta"), []);
 
+  // Apenas master verdadeiro (system master OU role 'master' do tenant) pode editar regras.
+  // Coordenacao/financeiro/vendedor recebem isMaster=false.
+  const isMaster = Boolean(user?.isMaster || user?.role === "master");
+
   // Envia tema para um iframe assim que ele termina de carregar
   const sendThemeToFrame = useCallback((frame: HTMLIFrameElement | null) => {
     try { frame?.contentWindow?.postMessage({ type: 'CAPITAL_CRM_THEME', theme }, '*'); } catch { /* ignore */ }
   }, [theme]);
+
+  // Envia role pro iframe (usado pela ferramenta de portabilidade pra liberar edição de regras de bancos)
+  const sendRoleToFrame = useCallback((frame: HTMLIFrameElement | null) => {
+    if (!user) return;
+    try {
+      frame?.contentWindow?.postMessage(
+        { type: 'CAPITAL_CRM_ROLE', isMaster, userId: String(user.id), userEmail: user.email },
+        '*',
+      );
+    } catch { /* ignore */ }
+  }, [user, isMaster]);
+
+  // Reenvia role se o user mudar (login/logout) ou se isMaster recalcular
+  useEffect(() => {
+    sendRoleToFrame(portabilidadeRef.current);
+  }, [sendRoleToFrame]);
 
   return (
     <PropostaProvider onNavigateToProposta={navigateToProposta}>
@@ -202,7 +224,10 @@ export default function SimuladoresHub() {
               border: "none",
             }}
             allow="same-origin"
-            onLoad={() => sendThemeToFrame(portabilidadeRef.current)}
+            onLoad={() => {
+              sendThemeToFrame(portabilidadeRef.current);
+              sendRoleToFrame(portabilidadeRef.current);
+            }}
           />
 
           {/* Simulador de Compra — native React */}
