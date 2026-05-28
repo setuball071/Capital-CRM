@@ -23426,13 +23426,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             }
           }
 
-          const isPago = statusProposta === "PAGO AO CLIENTE";
+          const isPago = statusProposta === "PAGO AO CLIENTE" || statusProposta === "PAGO";
 
           const valorBruto =
             parseFloat(String(row.ValorBruto || "0").replace(",", ".")) || 0;
           const valorLiquido =
             parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
-          const comissaoRepasseValor =
+          const comissaoEmpresaValor =
+            parseFloat(
+              String(row.ComissaoEmpresaVistaValor || "0").replace(",", "."),
+            ) || 0;
+          let comissaoRepasseValor =
             parseFloat(
               String(row.ComissaoRepasseValor || "0").replace(",", "."),
             ) || 0;
@@ -23440,6 +23444,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             parseFloat(
               String(row.ComissaoRepassePercentual || "0").replace(",", "."),
             ) || 0;
+          // Fallback: se repasse não veio preenchido, usa comissão da empresa como base
+          // (o repasse real será calculado pela tabela do grupo no módulo financeiro)
+          if (comissaoRepasseValor === 0 && comissaoEmpresaValor > 0) {
+            comissaoRepasseValor = comissaoEmpresaValor;
+          }
           const pt1000Raw = String(
             row["pt_1000"] ||
               row["pt.1000"] ||
@@ -23709,8 +23718,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           .returning();
 
         for (const c of contratos) {
-          const isPago =
-            String(c.status || "").toUpperCase() === "PAGO AO CLIENTE";
+          const statusUp = String(c.status || "").toUpperCase().trim();
+          const isPago = statusUp === "PAGO AO CLIENTE" || statusUp === "PAGO";
           const hasDate = !!c.dataPagamento;
           if (!isPago || !hasDate) {
             ignoradosCount++;

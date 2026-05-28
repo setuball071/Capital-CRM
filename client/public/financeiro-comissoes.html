@@ -1065,7 +1065,7 @@ function getTabelaInfo(c){
 }
 function valEmpresa(c){if(c._vEmpresa!==undefined)return c._vEmpresa;const t=tabelaById(c.tabelaId);return t?c.valor*t.pctEmpresa/100:0;}
 function valComissao(c){
-  if(c._flatValor!==undefined)return c._flatValor;
+  if(c._flatValor!==undefined&&c._flatValor>0)return c._flatValor;
   const t=tabelaById(c.tabelaId);const cor=corretorById(c.corretorId);
   if(!t||!cor)return 0;return c.valor*(t.pctEmpresa*corretorRepasse(cor)/100)/100;
 }
