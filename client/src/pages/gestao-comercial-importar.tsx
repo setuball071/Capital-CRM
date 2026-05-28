@@ -117,7 +117,7 @@ export default function GestaoComercialImportarPage() {
   };
 
   const validContratos = useMemo(() =>
-    contratos.filter((c) => c.status === "PAGO AO CLIENTE" && c.dataPagamento),
+    contratos.filter((c) => (c.status === "PAGO AO CLIENTE" || c.status === "PAGO") && c.dataPagamento),
     [contratos]
   );
 

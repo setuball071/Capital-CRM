@@ -22224,7 +22224,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
-          AND pt_1000 > 0
           AND comissao_repasse_valor > 0
         GROUP BY TO_DATE(data_pagamento, 'DD/MM/YYYY')
         ORDER BY dia ASC
@@ -22255,7 +22254,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
-          AND pt_1000 > 0
           AND comissao_repasse_valor > 0
       `);
 
@@ -22518,7 +22516,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND tenant_id = ${tenantId}
             AND mes_referencia = ${mesRef}
             AND confirmado = true
-            AND pt_1000 > 0
             AND comissao_repasse_valor > 0
         `);
 
@@ -22692,7 +22689,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND tenant_id = ${tenantId}
             AND mes_referencia = ${mesRef}
             AND confirmado = true
-            AND pt_1000 > 0
             AND comissao_repasse_valor > 0
         `);
 
