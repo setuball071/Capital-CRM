@@ -2830,7 +2830,7 @@ function renderMargens() {
     if (modoCalculoMargem === 'parcela') {
       // Modo Parcela: campo parcela é editável
       parcelaInput = `<input data-id="${m.id}" data-k="parcela" value="" placeholder="0,00">`;
-      liberadoDisplay = `<span class="muted" data-field="liberado">${fmt(m.liberado)}</span>`;
+      liberadoDisplay = `<span data-field="liberado" style="font-weight:700;font-size:15px;">${fmt(m.liberado)}</span>`;
     } else {
       // Modo Liberado: campo liberado é editável
       parcelaInput = `<span class="muted" data-field="parcela">${fmt(m.parcela)}</span>`;
@@ -2849,7 +2849,7 @@ function renderMargens() {
       <td><input data-id="${m.id}" data-k="coef" value="${fmtCoef(m.coef)}" placeholder="0,0220"></td>
       <td><input data-id="${m.id}" data-k="prazo" type="number" value="${m.prazo}" placeholder="96"></td>
       <td class="text-right">${liberadoDisplay}</td>
-      <td class="text-right"><span class="muted" data-field="saldoEncargo">${fmt(m.saldoEncargo)}</span></td>
+      <td class="text-right"><span data-field="saldoEncargo" style="font-size:11px;color:#9CA3AF;">${fmt(m.saldoEncargo)}</span></td>
       <td class="text-center"><input type="checkbox" data-id="${m.id}" data-toggle-port="true"></td>
       <td><button class="btn-small" onclick="delMargem(${m.id})">X</button></td>
     `;
