@@ -2915,6 +2915,14 @@ function renderMargens() {
             // Mostra/esconde linha de portabilidade
             const portRow = tb.querySelector(`tr[data-id="port-${marg.id}"]`);
             if (portRow) portRow.style.display = e.target.checked ? '' : 'none';
+            // Atualiza nova parcela ao marcar (era '-' porque criado com portar=false)
+            if (e.target.checked) {
+              const spanNP = portRow && portRow.querySelector(`[data-nova-parcela="${marg.id}"]`);
+              if (spanNP) {
+                const np = parcelaPrice(marg.saldoEncargo, (marg.taxaPort || 1.30) / 100, marg.prazoPort || 96);
+                spanNP.textContent = np ? fmt(np) : '-';
+              }
+            }
             renderConfigSeparado();
             calcSimples(); calcRefim();
           }
