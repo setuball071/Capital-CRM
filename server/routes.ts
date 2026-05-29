@@ -23758,7 +23758,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const pontosCartao = c.isCartao ? pontosGeral : 0;
 
           const telefoneRaw = c.telefoneCliente || c.telefone || c.celular || c.fone || c.tel || null;
-          // Calcula repasse via regras de vigência do grupo (se configurado)
+          // Calcula repasse via regras do grupo por tipo de produto (se configurado)
           let repasseValorFinal = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
           let repassePercFinal = parseFloat(String(c.comissaoRepassePerc || 0)) || 0;
           if (c.vendedorId && fcCorretores.length) {
@@ -23766,23 +23766,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             if (corretor && corretor.grupoId) {
               const grupo = fcGrupos.find((g: any) => g.id === corretor.grupoId);
               if (grupo) {
-                const vigencias: any[] = grupo.vigencias || [];
-                const dataPag = String(c.dataPagamento || '').slice(0, 10); // YYYY-MM-DD
-                // Vigência mais recente onde dataInicio <= dataPagamento
-                const vigAtiva = vigencias
-                  .filter((v: any) => v.dataInicio && v.dataInicio <= dataPag)
-                  .sort((a: any, b: any) => b.dataInicio.localeCompare(a.dataInicio))[0];
-                if (vigAtiva) {
-                  const tipoLower = String(c.tipoContrato || '').toLowerCase();
-                  const regra = (vigAtiva.regras || []).find((r: any) =>
-                    r.tipo && tipoLower.includes(r.tipo.toLowerCase())
-                  );
-                  const pct = regra != null ? Number(regra.repasse) : Number(vigAtiva.repassePadrao ?? grupo.repasse);
-                  const empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
-                  if (empVal > 0 && pct > 0) {
-                    repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
-                    repassePercFinal = pct;
-                  }
+                const tipoLower = String(c.tipoContrato || '').toLowerCase();
+                const rules: any[] = grupo.repasseRules || [];
+                // Procura regra específica para o tipo de produto
+                const regra = rules.find((r: any) =>
+                  r.tipo && tipoLower.includes(r.tipo.toLowerCase())
+                );
+                // Se tem regra específica usa ela, senão usa o repasse padrão do grupo
+                const pct = regra != null ? Number(regra.repasse) : Number(grupo.repasse);
+                const empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
+                if (empVal > 0 && pct > 0) {
+                  repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
+                  repassePercFinal = pct;
                 }
               }
             }
