@@ -23798,13 +23798,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               if (grupo) {
                 const categoriaStd = mapTipoParaCategoria(c.tipoContrato, c.isCartao);
                 const rules: any[] = grupo.repasseRules || [];
-                // Procura regra pela categoria padrão (mesmo vocabulário das tabelas)
                 const regra = rules.find((r: any) => r.tipo === categoriaStd);
                 const pct = regra != null ? Number(regra.repasse) : Number(grupo.repasse);
-                const empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
-                if (empVal > 0 && pct > 0) {
+
+                // Estratégia 1: empresa_valor direto do Excel
+                let empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
+
+                // Estratégia 2: inferir empresa_valor via repasse_valor / pct_antigo
+                if (empVal === 0 && repasseValorFinal > 0) {
+                  const oldPct = repassePercFinal > 0 ? repassePercFinal : Number(grupo.repasse);
+                  if (oldPct > 0) empVal = repasseValorFinal / (oldPct / 100);
+                }
+
+                // Estratégia 3: usar valorBase como base quando nada mais funcionar
+                if (empVal === 0 && valorBase > 0) empVal = valorBase;
+
+                if (pct > 0 && empVal > 0) {
                   repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
                   repassePercFinal = pct;
+                  console.log(`[REPASSE-REGRA] contrato=${c.contratoId} tipo=${categoriaStd} grupo=${grupo.nome} pct=${pct}% (regra:${!!regra}) emp=${empVal} → repasse=${repasseValorFinal}`);
                 }
               }
             }

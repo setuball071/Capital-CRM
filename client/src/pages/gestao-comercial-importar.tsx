@@ -34,6 +34,7 @@ interface ContratoPreview {
   valorLiquido: number;
   comissaoRepasseValor: number;
   comissaoRepassePerc: number;
+  comissaoEmpresaValor: number;
   isCartao: boolean;
   mesReferencia: string;
   vendedorId?: number | null;
