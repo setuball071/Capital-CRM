@@ -975,11 +975,7 @@ async function carregarDados(){
         if(data.dados.corretores)CORRETORES=data.dados.corretores;
         if(data.dados.tabelas)TABELAS_REF=data.dados.tabelas;
         if(data.dados.contratos)contratos=data.dados.contratos;
-        // Carrega tipos de contrato distintos (para select de regras por produto)
-        try{
-          const tr=await fetch('/api/gestao-comercial/tipos-contrato',{credentials:'include'});
-          if(tr.ok){const td=await tr.json();if(td.tipos&&td.tipos.length)_tiposContrato=td.tipos;}
-        }catch(e){}
+        // _tiposContrato não usado mais — usando TIPOS_PADRAO fixo alinhado com tabelas
         return; // sucesso — não precisa de localStorage
       }
     }
@@ -2101,7 +2097,12 @@ function atualizarPreviewTabela(){
   }
   const pctPleno=pctCorretorGrupo(pct,40);
   document.getElementById('t-pct-preview').value=Number(pctPleno).toFixed(2).replace('.',',')+'% (Pleno)';
-  document.getElementById('tb-preview').innerHTML=GRUPOS.map(g=>`<span style="margin-right:14px;color:var(--muted)">${g.nome} (${g.repasse}%) → <strong style="color:${g.cor}">${Number(pctCorretorGrupo(pct,g.repasse)).toFixed(2).replace('.',',')}%</strong></span>`).join('');
+  document.getElementById('tb-preview').innerHTML=GRUPOS.map(g=>{
+    const rep=getRepasseForTipo(g,tipo);
+    const flat=pctCorretorGrupo(pct,rep);
+    const extra=rep!==g.repasse?` <span style="font-size:10px;color:var(--accent)">(regra ${tipo}: ${rep}%)</span>`:'';
+    return`<span style="margin-right:14px;color:var(--muted)">${g.nome} (${g.repasse}%)${extra} → <strong style="color:${g.cor}">${Number(flat).toFixed(2).replace('.',',')}%</strong></span>`;
+  }).join('');
 }
 function salvarTabela(){
   const banco=document.getElementById('t-banco').value.trim();
@@ -2258,10 +2259,17 @@ function renderCorretores(){
   document.getElementById('usr-tbody').innerHTML=rows||`<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--muted)">Nenhum corretor</td></tr>`;
 }
 // ── Regras de repasse por tipo de produto ─────────────────────
+// Tipos padrão do sistema — mesmos do campo "Tipo" nas tabelas
+const TIPOS_PADRAO=['Novo','Portabilidade','Refinanciamento','Cartão','Outro'];
 function _tipoOpts(selected){
-  // Monta options do select com os tipos reais do banco
-  const opts=_tiposContrato.length?_tiposContrato:['Consignado','Portabilidade','Refinanciamento','Cartão RMC','Cartão Benefício','Saque Complementar'];
-  return`<option value="">Selecione o tipo...</option>`+opts.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
+  return`<option value="">Selecione o tipo...</option>`+TIPOS_PADRAO.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
+}
+// Retorna o repasse % do grupo para um tipo específico (com fallback para o repasse padrão)
+function getRepasseForTipo(grupo,tipo){
+  if(!grupo)return 0;
+  const rules=grupo.repasseRules||[];
+  const regra=rules.find(r=>r.tipo&&r.tipo===tipo);
+  return regra!=null?Number(regra.repasse):Number(grupo.repasse);
 }
 function renderGrpRules(){
   const el=document.getElementById('grp-rules-list');
