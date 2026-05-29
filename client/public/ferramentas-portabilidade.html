@@ -2728,6 +2728,7 @@ function login() {
     encargo.addEventListener('blur', function() {
       margens.forEach(m => calcMargemEncargo(m));
       renderMargens();
+      calcSimples();
     });
   }
 }
@@ -2915,6 +2916,7 @@ function renderMargens() {
             const portRow = tb.querySelector(`tr[data-id="port-${marg.id}"]`);
             if (portRow) portRow.style.display = e.target.checked ? '' : 'none';
             renderConfigSeparado();
+            calcSimples(); calcRefim();
           }
         });
       } else if (el.dataset.k === 'parcela') {
@@ -2925,6 +2927,7 @@ function renderMargens() {
             e.target.value = marg.parcela ? fmt(marg.parcela) : '';
             updateMargemCalc(marg.id);
             renderConfigSeparado();
+            calcSimples();
           }
         });
       } else if (el.dataset.k === 'liberado') {
@@ -2935,6 +2938,7 @@ function renderMargens() {
             e.target.value = marg.liberado ? fmt(marg.liberado) : '';
             updateMargemCalc(marg.id);
             renderConfigSeparado();
+            calcSimples();
           }
         });
       } else if (el.dataset.k === 'coef' || el.dataset.k === 'prazo') {
@@ -2947,6 +2951,7 @@ function renderMargens() {
             if (e.target.dataset.k === 'coef' && marg.coef) {
               e.target.value = fmtCoef(marg.coef);
             }
+            calcSimples();
           }
         });
       } else {
@@ -2975,6 +2980,7 @@ function renderMargens() {
             const spanNovaParcela = document.querySelector(`[data-nova-parcela="${marg.id}"]`);
             if (spanNovaParcela) spanNovaParcela.textContent = fmt(novaParcela);
             renderConfigSeparado();
+            calcSimples();
           }
         });
       } else if (el.dataset.port === 'prazo') {
@@ -2987,12 +2993,13 @@ function renderMargens() {
             const spanNovaParcela = document.querySelector(`[data-nova-parcela="${marg.id}"]`);
             if (spanNovaParcela) spanNovaParcela.textContent = fmt(novaParcela);
             renderConfigSeparado();
+            calcSimples();
           }
         });
       }
     });
   });
-  
+
   Array.from(tb.querySelectorAll('tr[data-id]')).forEach(tr => {
     if (!tr.dataset.id.startsWith('port-') && !margens.find(m => m.id === num(tr.dataset.id))) tr.remove();
   });
@@ -3483,7 +3490,7 @@ function renderContratos() {
               cont.amort = 0;
               amortInput.value = '';
             }
-            calcSimples();
+            calcSimples(); calcRefim();
           }
         });
       } else {
