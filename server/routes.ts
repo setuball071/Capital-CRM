@@ -23489,6 +23489,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             valorLiquido,
             comissaoRepasseValor,
             comissaoRepassePerc,
+            comissaoEmpresaValor,
             isCartao,
             mesReferencia,
             pt1000,
@@ -23687,6 +23688,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Tenant não identificado" });
         }
 
+        // Carrega config financeiro para aplicar regras de repasse por produto/vigência
+        let fcGrupos: any[] = [];
+        let fcCorretores: any[] = [];
+        try {
+          const fcRows = await db.select().from(financeiroConfig).where(eq(financeiroConfig.tenantId, String(tenantId))).limit(1);
+          if (fcRows.length > 0 && fcRows[0].dados) {
+            const d: any = fcRows[0].dados;
+            fcGrupos = d.grupos || [];
+            fcCorretores = d.corretores || [];
+          }
+        } catch (fcErr) {
+          console.error("[PRODUCAO-IMPORT] Erro ao carregar financeiro_config (não-fatal):", fcErr);
+        }
+
         const { contratos, fileName } = req.body;
         if (!contratos || !Array.isArray(contratos) || contratos.length === 0) {
           return res
@@ -23743,6 +23758,36 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const pontosCartao = c.isCartao ? pontosGeral : 0;
 
           const telefoneRaw = c.telefoneCliente || c.telefone || c.celular || c.fone || c.tel || null;
+          // Calcula repasse via regras de vigência do grupo (se configurado)
+          let repasseValorFinal = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
+          let repassePercFinal = parseFloat(String(c.comissaoRepassePerc || 0)) || 0;
+          if (c.vendedorId && fcCorretores.length) {
+            const corretor = fcCorretores.find((cr: any) => Number(cr._crmId) === Number(c.vendedorId));
+            if (corretor && corretor.grupoId) {
+              const grupo = fcGrupos.find((g: any) => g.id === corretor.grupoId);
+              if (grupo) {
+                const vigencias: any[] = grupo.vigencias || [];
+                const dataPag = String(c.dataPagamento || '').slice(0, 10); // YYYY-MM-DD
+                // Vigência mais recente onde dataInicio <= dataPagamento
+                const vigAtiva = vigencias
+                  .filter((v: any) => v.dataInicio && v.dataInicio <= dataPag)
+                  .sort((a: any, b: any) => b.dataInicio.localeCompare(a.dataInicio))[0];
+                if (vigAtiva) {
+                  const tipoLower = String(c.tipoContrato || '').toLowerCase();
+                  const regra = (vigAtiva.regras || []).find((r: any) =>
+                    r.tipo && tipoLower.includes(r.tipo.toLowerCase())
+                  );
+                  const pct = regra != null ? Number(regra.repasse) : Number(vigAtiva.repassePadrao ?? grupo.repasse);
+                  const empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
+                  if (empVal > 0 && pct > 0) {
+                    repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
+                    repassePercFinal = pct;
+                  }
+                }
+              }
+            }
+          }
+
           const contratoData = {
             nomeCliente: c.nomeCliente,
             cpfCliente: c.cpfCliente,
@@ -23761,8 +23806,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             valorBase: String(c.valorBase),
             valorBruto: String(c.valorBruto || 0),
             valorLiquido: String(c.valorLiquido || 0),
-            comissaoRepasseValor: String(c.comissaoRepasseValor || 0),
-            comissaoRepassePerc: String(c.comissaoRepassePerc || 0),
+            comissaoRepasseValor: String(repasseValorFinal),
+            comissaoRepassePerc: String(repassePercFinal),
             isCartao: c.isCartao,
             mesReferencia: c.mesReferencia,
             importacaoId: importacao.id,

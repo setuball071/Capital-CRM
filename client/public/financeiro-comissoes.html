@@ -185,6 +185,12 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 .sort-th .sa{font-size:10px;margin-left:3px;opacity:.4}
 .sort-th.sort-on .sa{opacity:1;color:var(--green)}
 .sort-th.sort-on{color:var(--green)}
+.vig-card{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.vig-header{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;background:var(--surface);transition:background .15s;flex-wrap:wrap}
+.vig-header:hover{background:rgba(99,102,241,.06)}
+.vig-body{padding:12px;border-top:1px solid var(--border);background:var(--bg)}
+.vig-arrow{font-size:14px;margin-left:auto;transition:transform .2s;display:inline-block}
+.vig-rule-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
 .sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .sec-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .fech-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}
@@ -807,15 +813,15 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 
 <!-- ════ MODAIS CONFIGURAÇÕES ════ -->
 <div class="overlay" id="modal-grupo">
-  <div class="modal" style="width:460px">
+  <div class="modal" style="width:580px;max-height:90vh;display:flex;flex-direction:column">
     <div class="modal-header"><h3 id="grp-modal-title">Novo Grupo</h3><button class="modal-close" onclick="fecharModal('modal-grupo')">✕</button></div>
-    <div class="modal-body">
+    <div class="modal-body" style="overflow-y:auto;flex:1">
       <div class="form-grid-2">
         <div class="form-group"><label>Nome do Grupo</label><input id="grp-nome" oninput="atualizarPreviewGrupo()"/></div>
         <div class="form-group"><label>Cargo vinculado</label><input id="grp-cargo" placeholder="ex: Consultor"/></div>
       </div>
       <div class="form-group">
-        <label>% Repasse</label>
+        <label>% Repasse Padrão <span style="font-weight:400;color:var(--muted)">(usado quando não há vigência ativa)</span></label>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" id="grp-slider" min="0" max="100" oninput="document.getElementById('grp-repasse').value=this.value;atualizarPreviewGrupo()" style="flex:1;accent-color:var(--accent)"/>
           <input type="number" id="grp-repasse" min="0" max="100" style="width:80px" oninput="document.getElementById('grp-slider').value=this.value;atualizarPreviewGrupo()"/>
@@ -835,7 +841,19 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         </div>
         <input type="hidden" id="grp-cor" value="#6c63ff"/>
       </div>
-      <div class="info-box" style="margin-bottom:0"><div class="info-box-title">Preview</div><div id="grp-preview" style="font-size:13px"></div></div>
+      <div class="info-box" style="margin-bottom:16px"><div class="info-box-title">Preview</div><div id="grp-preview" style="font-size:13px"></div></div>
+
+      <!-- Vigências de repasse por produto -->
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">Repasse por Tipo de Produto</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Define regras específicas por produto com data de início de vigência</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="addVigencia()">+ Nova Vigência</button>
+        </div>
+        <div id="grp-vigencias-list"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharModal('modal-grupo')">Cancelar</button>
@@ -922,6 +940,8 @@ let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _tbSortSim={col:'ganho',dir:'desc'};
 let _tbSortNorm={col:null,dir:'desc'};
+let _grpVigencias=[];
+let _vigExpandedId=null;
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
 let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
@@ -2232,8 +2252,71 @@ function renderCorretores(){
   }).join('');
   document.getElementById('usr-tbody').innerHTML=rows||`<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--muted)">Nenhum corretor</td></tr>`;
 }
+// ── Vigências de repasse por produto ──────────────────────────
+function renderGrpVigencias(){
+  const el=document.getElementById('grp-vigencias-list');
+  if(!el)return;
+  if(!_grpVigencias.length){
+    el.innerHTML='<p style="font-size:12px;color:var(--muted);padding:6px 0;margin:0">Nenhuma vigência cadastrada. Sem vigências, o % repasse padrão do grupo se aplica a todos os produtos.</p>';
+    return;
+  }
+  const sorted=[..._grpVigencias].sort((a,b)=>(b.dataInicio||'').localeCompare(a.dataInicio||''));
+  el.innerHTML=sorted.map(v=>{
+    const isOpen=_vigExpandedId===v.id;
+    let dtLabel='—';
+    if(v.dataInicio){try{dtLabel=new Date(v.dataInicio+'T12:00:00').toLocaleDateString('pt-BR');}catch(e){dtLabel=v.dataInicio;}}
+    const nR=(v.regras||[]).length;
+    return`<div class="vig-card">
+      <div class="vig-header" onclick="toggleVig('${v.id}')">
+        <span style="font-weight:600;font-size:13px">📅 A partir de ${dtLabel}</span>
+        <span style="font-size:12px;color:var(--muted)">Padrão: ${v.repassePadrao??'—'}%</span>
+        <span style="font-size:12px;color:var(--muted)">${nR} produto${nR!==1?'s':''}</span>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
+          <span class="vig-arrow" style="transform:rotate(${isOpen?180:0}deg)">▼</span>
+          <button class="btn btn-danger btn-sm" onclick="delVig('${v.id}')">🗑️</button>
+        </div>
+      </div>
+      ${isOpen?`<div class="vig-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Data de Início da Vigência</label>
+            <input type="date" value="${v.dataInicio||''}" onchange="updateVig('${v.id}','dataInicio',this.value)">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">% Repasse Padrão (fallback)</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" min="0" max="100" style="width:75px" value="${v.repassePadrao??0}" onchange="updateVig('${v.id}','repassePadrao',+this.value)">
+              <span style="color:var(--muted);font-size:13px">%</span>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px">Regras por Tipo de Produto</div>
+        ${(v.regras||[]).map((r,i)=>`<div class="vig-rule-row">
+          <input style="flex:1;font-size:12px" placeholder="Ex: Cartão RMC, Consignado, Portabilidade..." value="${r.tipo||''}" onchange="updateVigRule('${v.id}',${i},'tipo',this.value)">
+          <input type="number" min="0" max="100" style="width:70px;font-size:12px" value="${r.repasse??0}" onchange="updateVigRule('${v.id}',${i},'repasse',+this.value)">
+          <span style="color:var(--muted);font-size:12px;white-space:nowrap">%</span>
+          <button class="btn btn-ghost btn-sm" onclick="delVigRule('${v.id}',${i})" style="padding:4px 8px">🗑️</button>
+        </div>`).join('')}
+        <button class="btn btn-ghost btn-sm" onclick="addVigRule('${v.id}')" style="margin-top:4px;font-size:12px">+ Adicionar Produto</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+function toggleVig(id){_vigExpandedId=_vigExpandedId===id?null:id;renderGrpVigencias();}
+function addVigencia(){
+  const repPadrao=parseInt(document.getElementById('grp-repasse').value)||0;
+  const v={id:uid(),dataInicio:new Date().toISOString().slice(0,10),repassePadrao:repPadrao,regras:[]};
+  _grpVigencias.push(v);_vigExpandedId=v.id;renderGrpVigencias();
+}
+function delVig(id){_grpVigencias=_grpVigencias.filter(v=>v.id!==id);if(_vigExpandedId===id)_vigExpandedId=null;renderGrpVigencias();}
+function updateVig(id,key,val){const v=_grpVigencias.find(x=>x.id===id);if(v){v[key]=val;renderGrpVigencias();}}
+function addVigRule(vigId){const v=_grpVigencias.find(x=>x.id===vigId);if(v){const rep=parseInt(document.getElementById('grp-repasse').value)||0;v.regras.push({tipo:'',repasse:rep});renderGrpVigencias();}}
+function delVigRule(vigId,idx){const v=_grpVigencias.find(x=>x.id===vigId);if(v){v.regras.splice(idx,1);renderGrpVigencias();}}
+function updateVigRule(vigId,idx,key,val){const v=_grpVigencias.find(x=>x.id===vigId);if(v&&v.regras[idx])v.regras[idx][key]=val;}
+// ──────────────────────────────────────────────────────────────
 function abrirModalGrupo(id){
   _editGrupoId=id||null;
+  _vigExpandedId=null;
   document.getElementById('grp-modal-title').textContent=id?'Editar Grupo':'Novo Grupo';
   if(id){
     const g=grupoById(id);if(!g)return;
@@ -2244,13 +2327,17 @@ function abrirModalGrupo(id){
     document.getElementById('grp-desc').value=g.desc||'';
     document.getElementById('grp-cor').value=g.cor;
     document.querySelectorAll('.color-swatch').forEach(s=>{s.classList.toggle('selected',s.style.background===g.cor||s.style.background==='rgb'+hexToRgb(g.cor));});
+    _grpVigencias=JSON.parse(JSON.stringify(g.vigencias||[]));
   } else {
     ['grp-nome','grp-cargo','grp-desc'].forEach(i=>document.getElementById(i).value='');
     document.getElementById('grp-repasse').value=20;document.getElementById('grp-slider').value=20;
     document.getElementById('grp-cor').value='#6c63ff';
     document.querySelectorAll('.color-swatch').forEach((s,i)=>s.classList.toggle('selected',i===0));
+    _grpVigencias=[];
   }
-  atualizarPreviewGrupo();abrirModal('modal-grupo');
+  atualizarPreviewGrupo();
+  renderGrpVigencias();
+  abrirModal('modal-grupo');
 }
 function hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`(${r}, ${g}, ${b})`;}
 function selecionarCorGrupo(cor,el){
@@ -2272,13 +2359,20 @@ function salvarGrupo(){
   const desc=document.getElementById('grp-desc').value.trim();
   const cor=document.getElementById('grp-cor').value;
   if(!nome){toast('Informe o nome do grupo.',true);return;}
+  // Valida vigências
+  for(const v of _grpVigencias){
+    if(!v.dataInicio){toast('Informe a data de início em todas as vigências.',true);return;}
+    for(const r of(v.regras||[])){
+      if(!r.tipo||!r.tipo.trim()){toast('Informe o tipo de produto em todas as regras.',true);return;}
+    }
+  }
+  const vigencias=JSON.parse(JSON.stringify(_grpVigencias));
   if(_editGrupoId){
     const g=grupoById(_editGrupoId);
-    if(g)Object.assign(g,{nome,cargo,repasse,desc,cor});
-    // cascade cor to corretores with this group
+    if(g)Object.assign(g,{nome,cargo,repasse,desc,cor,vigencias});
     CORRETORES.filter(c=>c.grupoId===_editGrupoId).forEach(c=>c.cor=cor);
   } else {
-    GRUPOS.push({id:uid(),nome,cargo,repasse,desc,cor});
+    GRUPOS.push({id:uid(),nome,cargo,repasse,desc,cor,vigencias});
   }
   fecharModal('modal-grupo');toast('Grupo salvo!');renderConfig();
 }
