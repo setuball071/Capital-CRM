@@ -3363,8 +3363,10 @@ function selecionarTodasPortabilidades(marcar) {
     c.portar = marcar;
     if (marcar) contador++;
   });
-  
+
   renderContratos();
+  calcSimples();
+  calcRefim();
   
   const msg = marcar 
     ? `✅ ${contador} contrato(s) selecionado(s) para portabilidade`
@@ -3423,6 +3425,8 @@ function renderContratos() {
           const cont = contratos.find(x => x.id === num(e.target.dataset.id));
           if (cont) cont.portar = e.target.checked;
           renderConfigSeparado();
+          calcSimples();
+          calcRefim();
         });
       } else if (el.dataset.k === 'parcela' || el.dataset.k === 'amort') {
         el.addEventListener('blur', e => {
@@ -3431,6 +3435,7 @@ function renderContratos() {
             cont[e.target.dataset.k] = num(e.target.value);
             e.target.value = cont[e.target.dataset.k] ? fmt(cont[e.target.dataset.k]) : '';
             updateContratoCalc(cont.id);
+            calcSimples();
           }
         });
       } else if (el.dataset.k === 'taxa') {
@@ -3446,6 +3451,7 @@ function renderContratos() {
           if (cont) {
             updateContratoCalc(cont.id);
             renderConfigSeparado();
+            calcSimples();
             if (cont.taxa) {
               e.target.value = fmtPct(cont.taxa);
             }
@@ -3477,6 +3483,7 @@ function renderContratos() {
               cont.amort = 0;
               amortInput.value = '';
             }
+            calcSimples();
           }
         });
       } else {
