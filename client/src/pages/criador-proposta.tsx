@@ -19,6 +19,17 @@ export default function CriadorPropostaPage() {
           "*",
         );
       }
+      // Repassa payload pendente do simulador de portabilidade
+      const pending = sessionStorage.getItem('proposta_fill_pending');
+      if (pending) {
+        sessionStorage.removeItem('proposta_fill_pending');
+        try {
+          const payload = JSON.parse(pending);
+          setTimeout(() => {
+            win.postMessage({ type: 'CAPITAL_CRM_PROPOSTA_FILL', payload }, '*');
+          }, 400);
+        } catch {}
+      }
     } catch { /* ignore */ }
   }, [theme, user, isMaster]);
 

@@ -6156,6 +6156,41 @@ window.addEventListener('message', function(event) {
   }
 });
 
+// ── Recebe payload de portabilidade do React pai e preenche o Criador de Proposta ──
+window.addEventListener('message', function(event) {
+  if (!event.data || event.data.type !== 'CAPITAL_CRM_PROPOSTA_FILL') return;
+  const p = event.data.payload;
+  if (!p) return;
+
+  // Limpa linhas atuais
+  document.querySelectorAll('#atuais_wrap .tbl-row').forEach(function(el){el.remove();});
+  document.querySelectorAll('#novas_wrap .tbl-row').forEach(function(el){el.remove();});
+  atuais.length = 0; novas.length = 0; aidSeq = 0; nidSeq = 0;
+
+  // Preenche contratos atuais
+  (p.contratos || []).forEach(function(c) {
+    addAtual();
+    var id = atuais[atuais.length - 1];
+    var bancoEl = document.getElementById('at_banco_' + id);
+    var parcEl  = document.getElementById('at_parc_'  + id);
+    var prazoEl = document.getElementById('at_prazo_' + id);
+    if (bancoEl) bancoEl.value = c.banco || '';
+    if (parcEl)  parcEl.value  = parseFloat(c.parcela || 0).toFixed(2);
+    if (prazoEl) prazoEl.value = c.prazo || '';
+  });
+  atualizaFooterAt();
+
+  // Preenche novas propostas
+  (p.novas || []).forEach(function(n) {
+    _addNovaProposta(n.parcela, n.prazo, n.troco);
+  });
+  atualizaFooterNv();
+
+  // Muda para a aba proposta
+  switchTab('proposta', document.getElementById('btn-proposta'));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 // ── AUTO-SWITCH DE ABA POR HASH (#proposta | #simulador) ──
 window.addEventListener('load', function() {
   var hash = window.location.hash.replace('#', '');

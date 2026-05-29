@@ -1,4 +1,5 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/components/theme-provider";
 
@@ -6,7 +7,22 @@ export default function SimuladorPortCompletoPage() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const { user } = useAuth();
   const { theme } = useTheme();
+  const [, navigate] = useLocation();
   const isMaster = Boolean(user?.isMaster || user?.role === "master");
+
+  // Captura payload do simulador e redireciona para o criador de proposta
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'CAPITAL_CRM_PROPOSTA_FILL' && e.data?.payload) {
+        try {
+          sessionStorage.setItem('proposta_fill_pending', JSON.stringify(e.data.payload));
+        } catch {}
+        navigate('/criador-proposta');
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [navigate]);
 
   const handleLoad = useCallback(() => {
     const win = frameRef.current?.contentWindow;
