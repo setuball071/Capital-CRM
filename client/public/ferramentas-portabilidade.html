@@ -2817,17 +2817,10 @@ function updateMargemCalc(id) {
 
 function renderMargens() {
   const tb = document.getElementById('tbMargens');
-  const existingIds = Array.from(tb.querySelectorAll('tr[data-id]')).map(tr => num(tr.dataset.id));
-  
+  // Limpa tudo antes de re-renderizar — evita empilhamento de linhas de portabilidade
+  tb.innerHTML = '';
+
   margens.forEach(m => {
-    // Remove linha existente se o modo mudou (para recriar com campos corretos)
-    if (existingIds.includes(m.id)) {
-      const existingRow = tb.querySelector(`tr[data-id="${m.id}"]`);
-      if (existingRow) existingRow.remove();
-      // Remove também a linha de portabilidade para evitar empilhamento
-      const existingPortRow = tb.querySelector(`tr[data-id="port-${m.id}"]`);
-      if (existingPortRow) existingPortRow.remove();
-    }
     
     const tr = document.createElement('tr');
     tr.dataset.id = m.id;
@@ -3011,9 +3004,6 @@ function renderMargens() {
     });
   });
 
-  Array.from(tb.querySelectorAll('tr[data-id]')).forEach(tr => {
-    if (!tr.dataset.id.startsWith('port-') && !margens.find(m => m.id === num(tr.dataset.id))) tr.remove();
-  });
 }
 
 function delMargem(id) {
