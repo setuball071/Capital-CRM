@@ -2824,6 +2824,9 @@ function renderMargens() {
     if (existingIds.includes(m.id)) {
       const existingRow = tb.querySelector(`tr[data-id="${m.id}"]`);
       if (existingRow) existingRow.remove();
+      // Remove também a linha de portabilidade para evitar empilhamento
+      const existingPortRow = tb.querySelector(`tr[data-id="port-${m.id}"]`);
+      if (existingPortRow) existingPortRow.remove();
     }
     
     const tr = document.createElement('tr');
