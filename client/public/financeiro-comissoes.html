@@ -180,6 +180,11 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 .pct-empresa{color:var(--green);font-weight:700}
 .pct-corretor{color:var(--accent);font-weight:700}
 .sim-comissao{font-size:14px;font-weight:800;color:var(--green)}
+.sort-th{cursor:pointer;user-select:none;white-space:nowrap;transition:background .15s}
+.sort-th:hover{background:rgba(99,102,241,.08)}
+.sort-th .sa{font-size:10px;margin-left:3px;opacity:.4}
+.sort-th.sort-on .sa{opacity:1;color:var(--green)}
+.sort-th.sort-on{color:var(--green)}
 .sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .sec-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .fech-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}
@@ -915,6 +920,8 @@ let _importRows=[];
 let _csvRows=[];
 let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
+let _tbSortSim={col:'ganho',dir:'desc'};
+let _tbSortNorm={col:null,dir:'desc'};
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
 let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
@@ -1830,6 +1837,31 @@ function imprimirRecibo(){window.print();}
 // ══════════════════════════════════════════════════════
 // MÓDULO TABELAS
 // ══════════════════════════════════════════════════════
+function sTh(label,col,sort,fn,cls=''){
+  const on=sort.col===col;
+  const arrow=on?(sort.dir==='desc'?'↓':'↑'):'↕';
+  return`<th class="${cls} sort-th${on?' sort-on':''}" onclick="${fn}('${col}')">${label}<span class="sa">${arrow}</span></th>`;
+}
+function toggleSortSim(col){
+  if(_tbSortSim.col===col)_tbSortSim.dir=_tbSortSim.dir==='desc'?'asc':'desc';
+  else{_tbSortSim.col=col;_tbSortSim.dir='desc';}
+  renderTabelas();
+}
+function toggleSortNorm(col){
+  if(_tbSortNorm.col===col)_tbSortNorm.dir=_tbSortNorm.dir==='desc'?'asc':'desc';
+  else{_tbSortNorm.col=col;_tbSortNorm.dir='desc';}
+  renderTabelas();
+}
+function applySort(arr,col,dir,getV){
+  const d=dir==='desc'?-1:1;
+  return arr.slice().sort((a,b)=>{
+    const va=getV(a,col),vb=getV(b,col);
+    if(va==null&&vb==null)return 0;
+    if(va==null)return 1;if(vb==null)return -1;
+    if(typeof va==='string')return d*va.localeCompare(vb,undefined,{sensitivity:'base'});
+    return d*(va-vb);
+  });
+}
 function renderTabelas(){
   const isMaster=_role==='master';
   document.getElementById('tb-master-btns').style.display=isMaster?'':'none';
@@ -1848,7 +1880,7 @@ function renderTabelas(){
   const conv=document.getElementById('tb-conv').value;
   const tipo=document.getElementById('tb-tipo').value;
   const prazo=document.getElementById('tb-prazo').value;
-  const list=TABELAS_REF.filter(t=>{
+  let list=TABELAS_REF.filter(t=>{
     if(busca&&!(t.nome.toLowerCase().includes(busca)||(t.banco||'').toLowerCase().includes(busca)||(t.convenio||'').toLowerCase().includes(busca)))return false;
     if(banco&&t.banco!==banco)return false;
     if(conv&&t.convenio!==conv)return false;
@@ -1861,16 +1893,41 @@ function renderTabelas(){
   const tbody=document.getElementById('tb-tbody');
   // ── MODO SIMULADOR ──
   if(_simAtivo){
-    const resultados=list.filter(t=>t.coef>0).map(t=>{
+    let resultados=list.filter(t=>t.coef>0).map(t=>{
       const rep=getMyRepasse();
       const flatPct=pctCorretorGrupo(t.pctEmpresa,rep);
       const valorContrato=_simModo==='parcela'?_simValor/t.coef:_simValor;
       const parcela=_simModo==='parcela'?_simValor:_simValor*t.coef;
       const ganho=valorContrato*flatPct/100;
       return{t,flatPct,valorContrato,parcela,ganho,rep};
-    }).sort((a,b)=>b.ganho-a.ganho);
-    const thEmp=isMaster?'<th class="r">% Empresa</th>':'';
-    thead.innerHTML=`<tr><th>#</th><th>Banco / Tabela</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th>Flags</th>${thEmp}<th class="r">Flat %</th><th class="r">Val. Contrato</th><th class="r">Parcela</th><th class="r">Comissão</th></tr>`;
+    });
+    // Sort dinâmico por coluna
+    resultados=applySort(resultados,_tbSortSim.col,_tbSortSim.dir,(r,c)=>{
+      if(c==='banco')return((r.t.banco||'')+r.t.nome).toLowerCase();
+      if(c==='convenio')return(r.t.convenio||'').toLowerCase();
+      if(c==='tipo')return(r.t.tipo||'').toLowerCase();
+      if(c==='prazo')return r.t.prazo;
+      if(c==='empresa')return r.t.pctEmpresa;
+      if(c==='flat')return r.flatPct;
+      if(c==='contrato')return r.valorContrato;
+      if(c==='parcela')return r.parcela;
+      return r.ganho; // 'ganho' default
+    });
+    const s=_tbSortSim;
+    const thEmp=isMaster?sTh('% Empresa','empresa',s,'toggleSortSim','r'):'';
+    thead.innerHTML=`<tr>
+      <th>#</th>
+      ${sTh('Banco / Tabela','banco',s,'toggleSortSim')}
+      ${sTh('Convênio','convenio',s,'toggleSortSim')}
+      ${sTh('Tipo','tipo',s,'toggleSortSim')}
+      ${sTh('Prazo','prazo',s,'toggleSortSim','r')}
+      <th>Flags</th>
+      ${thEmp}
+      ${sTh('Flat %','flat',s,'toggleSortSim','r')}
+      ${sTh('Val. Contrato','contrato',s,'toggleSortSim','r')}
+      ${sTh('Parcela','parcela',s,'toggleSortSim','r')}
+      ${sTh('Comissão','ganho',s,'toggleSortSim','r')}
+    </tr>`;
     if(!resultados.length){tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
     tbody.innerHTML=resultados.map(({t,flatPct,valorContrato,parcela,ganho,rep},i)=>{
       const rc=['rank-1','rank-2','rank-3'][i]||'rank-n';
@@ -1891,10 +1948,47 @@ function renderTabelas(){
     return;
   }
   // ── MODO NORMAL ──
+  // Sort dinâmico modo normal
+  const sn=_tbSortNorm;
+  if(sn.col){
+    const myRepS=getMyRepasse();
+    list=applySort(list,sn.col,sn.dir,(t,c)=>{
+      if(c==='banco')return(t.banco||'').toLowerCase();
+      if(c==='nome')return t.nome.toLowerCase();
+      if(c==='convenio')return(t.convenio||'').toLowerCase();
+      if(c==='tipo')return(t.tipo||'').toLowerCase();
+      if(c==='prazo')return t.prazo;
+      if(c==='coef')return t.coef;
+      if(c==='empresa')return t.pctEmpresa;
+      if(c==='flat')return pctCorretorGrupo(t.pctEmpresa,myRepS);
+      return 0;
+    });
+  }
   if(isMaster){
-    thead.innerHTML=`<tr><th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th class="r">% Empresa</th><th>Flags</th><th>% Corretor</th><th>Ações</th></tr>`;
+    thead.innerHTML=`<tr>
+      <th style="width:36px;padding:6px 14px"><input type="checkbox" id="tb-chk-all" onchange="toggleTodasTabelas(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
+      ${sTh('Banco','banco',sn,'toggleSortNorm')}
+      ${sTh('Nome','nome',sn,'toggleSortNorm')}
+      ${sTh('Convênio','convenio',sn,'toggleSortNorm')}
+      ${sTh('Tipo','tipo',sn,'toggleSortNorm')}
+      ${sTh('Prazo','prazo',sn,'toggleSortNorm','r')}
+      ${sTh('Coeficiente','coef',sn,'toggleSortNorm','r')}
+      ${sTh('% Empresa','empresa',sn,'toggleSortNorm','r')}
+      <th>Flags</th>
+      ${sTh('% Corretor','flat',sn,'toggleSortNorm')}
+      <th>Ações</th>
+    </tr>`;
   } else {
-    thead.innerHTML=`<tr><th>Banco</th><th>Nome</th><th>Convênio</th><th>Tipo</th><th class="r">Prazo</th><th class="r">Coeficiente</th><th>Flags</th><th class="r">Flat %</th></tr>`;
+    thead.innerHTML=`<tr>
+      ${sTh('Banco','banco',sn,'toggleSortNorm')}
+      ${sTh('Nome','nome',sn,'toggleSortNorm')}
+      ${sTh('Convênio','convenio',sn,'toggleSortNorm')}
+      ${sTh('Tipo','tipo',sn,'toggleSortNorm')}
+      ${sTh('Prazo','prazo',sn,'toggleSortNorm','r')}
+      ${sTh('Coeficiente','coef',sn,'toggleSortNorm','r')}
+      <th>Flags</th>
+      ${sTh('Flat %','flat',sn,'toggleSortNorm','r')}
+    </tr>`;
   }
   if(!list.length){
     const cols=isMaster?11:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
