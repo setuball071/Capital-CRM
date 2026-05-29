@@ -23324,6 +23324,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // Gestão Comercial - Importar Produção
   // ==========================================
 
+  // Tipos de contrato distintos já importados (para select no financeiro)
+  app.get("/api/gestao-comercial/tipos-contrato", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const rows = await db
+        .selectDistinct({ tipo: producoesContratos.tipoContrato })
+        .from(producoesContratos)
+        .where(eq(producoesContratos.tenantId, tenantId));
+      const tipos = rows
+        .map((r: any) => (r.tipo || "").trim())
+        .filter((t: string) => t.length > 0)
+        .sort();
+      res.json({ tipos });
+    } catch (err) {
+      console.error("[TIPOS-CONTRATO]", err);
+      res.json({ tipos: [] });
+    }
+  });
+
   app.post(
     "/api/gestao-comercial/importar/preview",
     requireAuth,

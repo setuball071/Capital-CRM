@@ -941,6 +941,7 @@ let _simModo='parcela',_simAtivo=false,_simValor=0;
 let _tbSortSim={col:'ganho',dir:'desc'};
 let _tbSortNorm={col:null,dir:'desc'};
 let _grpVigencias=[]; // regras de repasse por tipo de produto do grupo em edição
+let _tiposContrato=[]; // tipos distintos carregados do banco
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
 let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
@@ -974,6 +975,11 @@ async function carregarDados(){
         if(data.dados.corretores)CORRETORES=data.dados.corretores;
         if(data.dados.tabelas)TABELAS_REF=data.dados.tabelas;
         if(data.dados.contratos)contratos=data.dados.contratos;
+        // Carrega tipos de contrato distintos (para select de regras por produto)
+        try{
+          const tr=await fetch('/api/gestao-comercial/tipos-contrato',{credentials:'include'});
+          if(tr.ok){const td=await tr.json();if(td.tipos&&td.tipos.length)_tiposContrato=td.tipos;}
+        }catch(e){}
         return; // sucesso — não precisa de localStorage
       }
     }
@@ -2252,6 +2258,11 @@ function renderCorretores(){
   document.getElementById('usr-tbody').innerHTML=rows||`<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--muted)">Nenhum corretor</td></tr>`;
 }
 // ── Regras de repasse por tipo de produto ─────────────────────
+function _tipoOpts(selected){
+  // Monta options do select com os tipos reais do banco
+  const opts=_tiposContrato.length?_tiposContrato:['Consignado','Portabilidade','Refinanciamento','Cartão RMC','Cartão Benefício','Saque Complementar'];
+  return`<option value="">Selecione o tipo...</option>`+opts.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
+}
 function renderGrpRules(){
   const el=document.getElementById('grp-rules-list');
   if(!el)return;
@@ -2261,7 +2272,7 @@ function renderGrpRules(){
   }
   el.innerHTML=_grpVigencias.map((r,i)=>`
     <div class="vig-rule-row">
-      <input style="flex:1;font-size:13px" placeholder="Tipo de produto (ex: Cartão RMC)" value="${r.tipo||''}" onchange="updateGrpRule(${i},'tipo',this.value)">
+      <select style="flex:1;font-size:13px" onchange="updateGrpRule(${i},'tipo',this.value)">${_tipoOpts(r.tipo||'')}</select>
       <input type="number" min="0" max="100" style="width:70px;font-size:13px;text-align:right" value="${r.repasse??''}" placeholder="%" onchange="updateGrpRule(${i},'repasse',+this.value)">
       <span style="color:var(--muted);font-size:13px;white-space:nowrap">%</span>
       <button class="btn btn-ghost btn-sm" onclick="delGrpRule(${i})" style="padding:4px 8px;color:var(--red)">✕</button>
