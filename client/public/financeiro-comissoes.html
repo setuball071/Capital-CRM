@@ -354,19 +354,19 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   <div id="prod-consultor" style="display:none">
     <div class="banner banner-consultor">👤 <strong>Visão Consultor:</strong> você vê apenas seus contratos e sua comissão.</div>
     <div class="filter-bar">
-      <input class="search" id="c-busca" placeholder="🔍 Buscar..." oninput="renderConsultor()"/>
+      <input class="search" id="c-busca" placeholder="🔍 Buscar..." oninput="carregarProducaoConsultor()"/>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
         <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">📅 Contrato:</span>
-        <input type="month" id="c-mes-contrato" onchange="renderConsultor()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
-        <button onclick="document.getElementById('c-mes-contrato').value='';renderConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+        <input type="month" id="c-mes-contrato" onchange="carregarProducaoConsultor()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
+        <button onclick="document.getElementById('c-mes-contrato').value='';carregarProducaoConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
         <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">🏦 Mês banco:</span>
-        <input type="month" id="c-mes" onchange="renderConsultor()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
-        <button onclick="document.getElementById('c-mes').value='';renderConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+        <input type="month" id="c-mes" onchange="carregarProducaoConsultor()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
+        <button onclick="document.getElementById('c-mes').value='';carregarProducaoConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
       </div>
-      <select class="filter-select" id="c-stbanco" onchange="renderConsultor()"><option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option></select>
-      <select class="filter-select" id="c-stflat" onchange="renderConsultor()"><option value="">Status flat (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
+      <select class="filter-select" id="c-stbanco" onchange="carregarProducaoConsultor()"><option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option></select>
+      <select class="filter-select" id="c-stflat" onchange="carregarProducaoConsultor()"><option value="">Status flat (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
       <span class="count-chip" id="c-count">—</span>
     </div>
     <div class="kpi-grid kpi-grid-4" id="c-kpis"></div>
@@ -1456,8 +1456,80 @@ async function renderProducao() {
   const isMaster = _role === 'master';
   document.getElementById('prod-master').style.display = isMaster ? '' : 'none';
   document.getElementById('prod-consultor').style.display = isMaster ? 'none' : '';
-  if (!isMaster) { renderConsultor(); return; }
+  if (!isMaster) { await carregarProducaoConsultor(); return; }
   await carregarProducaoAPI();
+}
+
+async function carregarProducaoConsultor() {
+  _resetMask();
+  const tbody = document.getElementById('c-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  try {
+    // Identifica o corretor logado
+    const myCor = _myCorretorId ? corretorById(_myCorretorId)
+      : CORRETORES.find(c => (_myUserId && c._crmId === _myUserId) || (_myUserEmail && c.email === _myUserEmail));
+
+    // Filtros dos selects da UI
+    const mesC = document.getElementById('c-mes-contrato').value;
+    const busca = (document.getElementById('c-busca').value || '').toLowerCase();
+    const stb   = document.getElementById('c-stbanco').value;
+    const stf   = document.getElementById('c-stflat').value;
+
+    const params = new URLSearchParams();
+    if (mesC)           params.set('mes', mesC);
+    if (myCor && myCor.nome) params.set('corretor', myCor.nome);
+
+    const resp = await fetch('/api/financeiro/producao?' + params.toString(), { credentials: 'include' });
+    if (!resp.ok) throw new Error('Erro ' + resp.status);
+    const data = await resp.json();
+
+    let list = data.contratos || [];
+
+    // Filtros client-side adicionais
+    if (busca) list = list.filter(c =>
+      (c.contratoId || '').toLowerCase().includes(busca) ||
+      (c.nomeCliente || '').toLowerCase().includes(busca));
+    if (stb) list = list.filter(c => (c.statusBanco || 'Aguardando') === stb);
+    if (stf) list = list.filter(c => (c.statusComissao || 'Aguardando') === stf);
+
+    document.getElementById('c-count').textContent = list.length + ' contrato' + (list.length !== 1 ? 's' : '');
+
+    let totVal = 0, totFlat = 0, totPago = 0, totReceber = 0;
+    const rows = list.map(c => {
+      const val = parseFloat(c.valorBruto || 0);
+      const vf  = parseFloat(c.comissaoRepasseValor || 0);
+      totVal += val; totFlat += vf;
+      if (c.statusComissao === 'Pago')    totPago    += vf;
+      if (c.statusComissao === 'A Pagar') totReceber += vf;
+      const stBanco = c.statusBanco || 'Aguardando';
+      const stFlat  = c.statusComissao || 'Aguardando';
+      const bBanco = `<span class="badge ${stBanco==='Recebido'?'b-recebido':stBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${stBanco}</span>`;
+      const bFlat  = `<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'} no-click">${stFlat==='A Pagar'?'A receber':stFlat}</span>`;
+      const dtStatus = stFlat === 'Pago' ? fmtData(c.dataPagamento) : '—';
+      return `<tr>
+        <td><span class="ade-chip">${escHtml(c.contratoId||'—')}</span></td>
+        <td>${fmtData(c.dataContrato||c.dataPagamento)}</td>
+        <td>${msk(escHtml(c.nomeCliente||'—'))}</td>
+        <td><div style="font-size:12px;font-weight:600">${escHtml(c.banco||'—')}</div><div class="td-muted">${escHtml(c.tabela||'')}</div></td>
+        <td>${tagConvenio(c.convenio||'')}</td>
+        <td>${tagTipo(c.tipoContrato||'')}</td>
+        <td class="r">${msk(fmtBRL(val))}</td>
+        <td class="r v-yellow">${msk(fmtBRL(vf))}</td>
+        <td>${bBanco}</td><td>${bFlat}</td>
+        <td>${dtStatus}</td>
+      </tr>`;
+    }).join('');
+
+    if (tbody) tbody.innerHTML = rows || '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato</td></tr>';
+    document.getElementById('c-tfoot').innerHTML = `<tr><td colspan="6">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="3"></td></tr>`;
+    document.getElementById('c-kpis').innerHTML = `
+      <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
+  }
 }
 
 async function carregarProducaoAPI() {
@@ -1691,39 +1763,6 @@ function filtrarParaConsultor(){
     if(stf&&c.statusComissao!==stf)return false;
     return true;
   });
-}
-function renderConsultor(){
-  _resetMask();
-  const list=filtrarParaConsultor();
-  document.getElementById('c-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
-  let totVal=0,totFlat=0,totPago=0,totReceber=0;
-  const rows=list.map(c=>{
-    const ti=getTabelaInfo(c);
-    const vf=valComissao(c),fp=flatPct(c);
-    totVal+=c.valor;totFlat+=vf;
-    if(c.statusComissao==='Pago')totPago+=vf;
-    if(c.statusComissao==='A Pagar')totReceber+=vf;
-    const bBanco=`<span class="badge ${c.statusBanco==='Recebido'?'b-recebido':c.statusBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${c.statusBanco}</span>`;
-    const bFlat=`<span class="badge ${c.statusComissao==='Pago'?'b-pago':c.statusComissao==='A Pagar'?'b-a-pagar':'b-aguardando'} no-click">${c.statusComissao==='A Pagar'?'A receber':c.statusComissao}</span>`;
-    return`<tr>
-      <td><span class="ade-chip">${c.ade}</span> ${chipSemana(c.data)}</td>
-      <td>${fmtData(c.data)}</td>
-      <td>${msk(c.cliente)}</td>
-      <td><div style="font-size:12px;font-weight:600">${ti.banco}</div><div class="td-muted">${ti.nome}</div></td>
-      <td>${tagConvenio(ti.convenio)}</td><td>${tagTipo(ti.tipo)}</td>
-      <td class="r">${msk(fmtBRL(c.valor))}</td>
-      <td class="r v-yellow">${msk(fmtBRL(vf))}</td>
-      <td>${bBanco}</td><td>${bFlat}</td>
-      <td>${dataStatusFlat(c)}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('c-tbody').innerHTML=rows||`<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato</td></tr>`;
-  document.getElementById('c-tfoot').innerHTML=`<tr><td colspan="6">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="3"></td></tr>`;
-  document.getElementById('c-kpis').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
 }
 function abrirRecebimento(id){
   _recProdId=id;const c=contratos.find(x=>x.id===id);if(!c)return;
