@@ -1174,12 +1174,12 @@ function trocarSubAbaConfig(sub,btn){
 // ══════════════════════════════════════════════════════
 // MÓDULO CONTRATOS
 // ══════════════════════════════════════════════════════
-function renderContratos(){
+async function renderContratos(){
   const isMaster=_role==='master';
   document.getElementById('cont-master').style.display=isMaster?'':'none';
   document.getElementById('cont-consultor').style.display=isMaster?'none':'';
   if(isMaster)renderMasterContratos();
-  else renderConsultorContratos();
+  else await renderConsultorContratos();
 }
 function filtrarContMaster(){
   const busca=(document.getElementById('cm-busca').value||'').toLowerCase();
@@ -1240,48 +1240,71 @@ function renderMasterContratos(){
     <div class="kpi-card"><div class="kpi-label">Val. Empresa</div><div class="kpi-value kpi-yellow">${fmtBRL(totEmp)}</div></div>
     <div class="kpi-card"><div class="kpi-label">Flat Pago</div><div class="kpi-value kpi-blue">${fmtBRL(totPago)}</div></div>`;
 }
-function renderConsultorContratos(){
-  const consultor=CORRETORES[0]; // demo: primeiro corretor
-  const busca=(document.getElementById('cc-busca').value||'').toLowerCase();
-  const st=document.getElementById('cc-st').value;
-  const mes=document.getElementById('cc-mes').value;
-  const list=contratos.filter(c=>{
-    if(c.corretorId!==consultor.id)return false;
-    if(busca&&!(c.ade.includes(busca)||c.cliente.toLowerCase().includes(busca)))return false;
-    if(st&&c.statusBanco!==st)return false;
-    if(mes&&!(c.data||'').startsWith(mes))return false;
-    return true;
-  });
-  document.getElementById('cc-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
+async function renderConsultorContratos(){
   _resetMask();
-  let totVal=0,totFlat=0,totPago=0,totReceber=0;
-  const rows=list.map(c=>{
-    const ti=getTabelaInfo(c);
-    const vf=valComissao(c),fp=flatPct(c);
-    totVal+=c.valor;totFlat+=vf;
-    if(c.statusComissao==='Pago')totPago+=vf;
-    if(c.statusComissao==='A Pagar')totReceber+=vf;
-    const bBanco=`<span class="badge ${c.statusBanco==='Recebido'?'b-recebido':c.statusBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${c.statusBanco}</span>`;
-    const bFlat=`<span class="badge ${c.statusComissao==='Pago'?'b-pago':c.statusComissao==='A Pagar'?'b-a-pagar':'b-aguardando'} no-click">${c.statusComissao==='A Pagar'?'A receber':c.statusComissao}</span>`;
-    return`<tr>
-      <td><span class="ade-chip">${c.ade}</span></td>
-      <td>${fmtData(c.data)}</td>
-      <td>${msk(c.cliente)}</td>
-      <td><div style="font-size:12px;font-weight:600">${ti.banco}</div><div class="td-muted">${ti.nome}</div></td>
-      <td>${tagConvenio(ti.convenio)}</td><td>${tagTipo(ti.tipo)}</td>
-      <td class="r">${msk(fmtBRL(c.valor))}</td>
-      <td class="r">${fmtPct(fp)}</td>
-      <td class="r v-yellow">${msk(fmtBRL(vf))}</td>
-      <td>${bBanco}</td><td>${bFlat}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('cc-tbody').innerHTML=rows||`<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato</td></tr>`;
-  document.getElementById('cc-tfoot').innerHTML=`<tr><td colspan="6" style="padding:10px 14px">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td></td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="2"></td></tr>`;
-  document.getElementById('cc-kpis').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+  const tbody=document.getElementById('cc-tbody');
+  if(tbody)tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  try{
+    // Identifica o corretor logado
+    const myCor=_myCorretorId?corretorById(_myCorretorId)
+      :CORRETORES.find(c=>(_myUserId&&c._crmId===_myUserId)||(_myUserEmail&&c.email===_myUserEmail));
+
+    // Filtros da UI
+    const busca=(document.getElementById('cc-busca').value||'').toLowerCase();
+    const st=document.getElementById('cc-st').value;
+    const mes=document.getElementById('cc-mes').value;
+
+    const params=new URLSearchParams();
+    if(mes)params.set('mes',mes);
+    if(myCor&&myCor.nome)params.set('corretor',myCor.nome);
+
+    const resp=await fetch('/api/financeiro/producao?'+params.toString(),{credentials:'include'});
+    if(!resp.ok)throw new Error('Erro '+resp.status);
+    const data=await resp.json();
+
+    let list=data.contratos||[];
+
+    // Filtros client-side adicionais
+    if(busca)list=list.filter(c=>
+      (c.contratoId||'').toLowerCase().includes(busca)||
+      (c.nomeCliente||'').toLowerCase().includes(busca));
+    if(st)list=list.filter(c=>(c.statusBanco||'Aguardando')===st);
+
+    document.getElementById('cc-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
+    let totVal=0,totFlat=0,totPago=0,totReceber=0;
+    const rows=list.map(c=>{
+      const val=parseFloat(c.valorBruto||0);
+      const vf=parseFloat(c.comissaoRepasseValor||0);
+      const fp=parseFloat(c.comissaoRepassePerc||0);
+      totVal+=val;totFlat+=vf;
+      if(c.statusComissao==='Pago')totPago+=vf;
+      if(c.statusComissao==='A Pagar')totReceber+=vf;
+      const stBanco=c.statusBanco||'Aguardando';
+      const stFlat=c.statusComissao||'Aguardando';
+      const bBanco=`<span class="badge ${stBanco==='Recebido'?'b-recebido':stBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${stBanco}</span>`;
+      const bFlat=`<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'} no-click">${stFlat==='A Pagar'?'A receber':stFlat}</span>`;
+      return`<tr>
+        <td><span class="ade-chip">${escHtml(c.contratoId||'—')}</span></td>
+        <td>${fmtData(c.dataContrato||c.dataPagamento)}</td>
+        <td>${msk(escHtml(c.nomeCliente||'—'))}</td>
+        <td><div style="font-size:12px;font-weight:600">${escHtml(c.banco||'—')}</div><div class="td-muted">${escHtml(c.tabela||'')}</div></td>
+        <td>${tagConvenio(c.convenio||'')}</td><td>${tagTipo(c.tipoContrato||'')}</td>
+        <td class="r">${msk(fmtBRL(val))}</td>
+        <td class="r">${fmtPct(fp)}</td>
+        <td class="r v-yellow">${msk(fmtBRL(vf))}</td>
+        <td>${bBanco}</td><td>${bFlat}</td>
+      </tr>`;
+    }).join('');
+    if(tbody)tbody.innerHTML=rows||'<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato</td></tr>';
+    document.getElementById('cc-tfoot').innerHTML=`<tr><td colspan="6" style="padding:10px 14px">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td></td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="2"></td></tr>`;
+    document.getElementById('cc-kpis').innerHTML=`
+      <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+  }catch(e){
+    if(tbody)tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
+  }
 }
 function abrirModalContrato(id){
   _editContId=id||null;
