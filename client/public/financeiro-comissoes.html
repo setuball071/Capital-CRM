@@ -398,7 +398,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <input class="search" id="tb-busca" placeholder="🔍 Buscar tabela ou banco..." oninput="renderTabelas()"/>
     <select class="filter-select" id="tb-banco" onchange="renderTabelas()"><option value="">Todos os bancos</option></select>
     <select class="filter-select" id="tb-conv" onchange="renderTabelas()"><option value="">Todos convênios</option><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option><option>Outro</option></select>
-    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Outro</option></select>
+    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
     <select class="filter-select" id="tb-prazo" onchange="renderTabelas()"><option value="">Todos os prazos</option></select>
     <span class="count-chip" id="tb-count">—</span>
     <div class="filter-right" id="tb-master-btns">
@@ -722,7 +722,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <select id="t-conv" onchange="atualizarPreviewTabela()"><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option></select>
         </div>
         <div class="form-group"><label>Tipo</label>
-          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Outro</option></select>
+          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
         </div>
       </div>
       <div class="form-grid-2">
@@ -1104,7 +1104,7 @@ function flatPct(c){
   if(!t||!cor)return 0;const tipo=t.tipo||c._tipo||'';return(t.pctEmpresa*corretorRepasse(cor,tipo))/100;
 }
 function tagConvenio(v){const m={SIAPE:'tag-siape',INSS:'tag-inss',Militar:'tag-militar',Privado:'tag-privado'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
-function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao',Refinanciamento:'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
+function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao',Refinanciamento:'tag-refin','Compra de Dívida':'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function fmtCoef(v){return Number(v).toFixed(5).replace('.',',');}
 function badgesFlags(t){let h=t.srcc?`<span class="badge-srcc">SRCC</span>`:`<span class="badge-fora-srcc">Fora da SRCC</span>`;if(t.tipo==='Portabilidade'&&t.remuneraMenos12)h+=`<span class="badge-rem12">Rem. &lt;12</span>`;return h;}
 function pctCorretorGrupo(pctEmpresa,repasse){return(pctEmpresa*repasse)/100;}
@@ -2339,7 +2339,7 @@ function renderCorretores(){
 }
 // ── Regras de repasse por tipo de produto ─────────────────────
 // Tipos padrão do sistema — mesmos do campo "Tipo" nas tabelas
-const TIPOS_PADRAO=['Novo','Portabilidade','Refinanciamento','Cartão','Outro'];
+const TIPOS_PADRAO=['Novo','Portabilidade','Refinanciamento','Cartão','Compra de Dívida','Outro'];
 function _tipoOpts(selected){
   return`<option value="">Selecione o tipo...</option>`+TIPOS_PADRAO.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
 }
@@ -2354,6 +2354,7 @@ function mapTipoFront(t){
   const s=(t||'').toLowerCase();
   if(s.includes('cart')||s.includes('benef')||s.includes('saque'))return'Cartão';
   if(s.includes('port'))return'Portabilidade';
+  if(s.includes('compra')||s.includes('dívida')||s.includes('divida'))return'Compra de Dívida';
   if(s.includes('refin'))return'Refinanciamento';
   if(s.includes('novo')||s.includes('consig'))return'Novo';
   return'Outro';
