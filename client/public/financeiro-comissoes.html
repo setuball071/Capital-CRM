@@ -1256,13 +1256,21 @@ async function renderConsultorContratos(){
 
     const params=new URLSearchParams();
     if(mes)params.set('mes',mes);
-    if(myCor&&myCor.nome)params.set('corretor',myCor.nome);
+    // Não filtra na API — nomeCorretor pode ser a promotora, não o nome da pessoa
 
     const resp=await fetch('/api/financeiro/producao?'+params.toString(),{credentials:'include'});
     if(!resp.ok)throw new Error('Erro '+resp.status);
     const data=await resp.json();
 
     let list=data.contratos||[];
+
+    // Filtro por corretor logado (compara nomeCorretor E vendedorNome)
+    if(myCor&&myCor.nome){
+      const nome=myCor.nome.toLowerCase();
+      list=list.filter(c=>
+        (c.nomeCorretor||'').toLowerCase()===nome||
+        (c.vendedorNome||'').toLowerCase()===nome);
+    }
 
     // Filtros client-side adicionais
     if(busca)list=list.filter(c=>
@@ -1499,14 +1507,23 @@ async function carregarProducaoConsultor() {
     const stf   = document.getElementById('c-stflat').value;
 
     const params = new URLSearchParams();
-    if (mesC)           params.set('mes', mesC);
-    if (myCor && myCor.nome) params.set('corretor', myCor.nome);
+    if (mesC) params.set('mes', mesC);
+    // Não filtra por corretor na API pois nomeCorretor pode ser a promotora,
+    // não o nome da pessoa — filtramos client-side por nomeCorretor OU vendedorNome
 
     const resp = await fetch('/api/financeiro/producao?' + params.toString(), { credentials: 'include' });
     if (!resp.ok) throw new Error('Erro ' + resp.status);
     const data = await resp.json();
 
     let list = data.contratos || [];
+
+    // Filtro por corretor logado (compara com nomeCorretor E vendedorNome)
+    if (myCor && myCor.nome) {
+      const nome = myCor.nome.toLowerCase();
+      list = list.filter(c =>
+        (c.nomeCorretor || '').toLowerCase() === nome ||
+        (c.vendedorNome || '').toLowerCase() === nome);
+    }
 
     // Filtros client-side adicionais
     if (busca) list = list.filter(c =>
