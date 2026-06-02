@@ -483,7 +483,7 @@ import {
   insertCompanySchema,
   lemitJobs,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray, not, gt } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -23279,7 +23279,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const { mes, banco, corretor } = req.query;
 
-      const conditions: any[] = [eq(producoesContratos.tenantId, tenantId)];
+      const conditions: any[] = [
+        eq(producoesContratos.tenantId, tenantId),
+        // Contratos com comissão zerada NÃO devem aparecer na Produção
+        // (banco/operadora não pagou comissão — não é produção efetiva)
+        sql`${producoesContratos.comissaoRepasseValor}::numeric > 0`,
+      ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
       if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
@@ -23456,7 +23461,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             parseFloat(
               String(row.ComissaoRepasseValor || "0").replace(",", "."),
             ) || 0;
-          const comissaoRepassePerc =
+          // Normaliza o % de repasse para sempre ficar em base "percentual" (2.1 = 2,1%)
+          // Excel pode mandar o valor como decimal (célula formatada como %, ex.: 0.021)
+          // OU como número inteiro/decimal direto (ex.: 30, 2.1). Detectamos pelo valor:
+          //   se <= 1, assumimos decimal (multiplicamos por 100); se > 1, está em percentual.
+          const comissaoRepassePercRaw =
             parseFloat(
               String(row.ComissaoRepassePercentual || "0").replace(",", "."),
             ) || 0;
@@ -23465,6 +23474,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           if (comissaoRepasseValor === 0 && comissaoEmpresaValor > 0) {
             comissaoRepasseValor = comissaoEmpresaValor;
           }
+          const comissaoRepassePerc =
+            comissaoRepassePercRaw > 0 && comissaoRepassePercRaw <= 1
+              ? comissaoRepassePercRaw * 100
+              : comissaoRepassePercRaw;
           const pt1000Raw = String(
             row["pt_1000"] ||
               row["pt.1000"] ||
@@ -23753,6 +23766,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const isPago = statusUp === "PAGO AO CLIENTE" || statusUp === "PAGO";
           const hasDate = !!c.dataPagamento;
           if (!isPago || !hasDate) {
+            ignoradosCount++;
+            continue;
+          }
+
+          // Contratos com comissão zerada não são produção efetiva — banco/operadora
+          // não pagou comissão (cancelamento, estorno, ou contrato que não gerou ganho).
+          // Não salvamos no DB.
+          const comissaoNum = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
+          if (comissaoNum <= 0) {
             ignoradosCount++;
             continue;
           }
