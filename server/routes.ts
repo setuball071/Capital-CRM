@@ -23815,7 +23815,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
                 if (pct > 0 && empVal > 0) {
                   repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
-                  repassePercFinal = pct;
+                  // NÃO sobrescreve repassePercFinal — esse campo guarda o % original
+                  // da planilha (% que a empresa recebe do banco), não o repasse do grupo.
                   console.log(`[REPASSE-REGRA] contrato=${c.contratoId} tipo=${categoriaStd} grupo=${grupo.nome} pct=${pct}% (regra:${!!regra}) emp=${empVal} → repasse=${repasseValorFinal}`);
                 }
               }
