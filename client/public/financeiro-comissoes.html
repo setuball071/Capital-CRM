@@ -2654,7 +2654,13 @@ function _tipoOpts(selected){
 function getRepasseForTipo(grupo,tipo){
   if(!grupo)return 0;
   const rules=grupo.repasseRules||[];
-  const regra=rules.find(r=>r.tipo&&r.tipo===tipo);
+  // Match exato primeiro (caso o tipo já esteja padronizado)
+  let regra=rules.find(r=>r.tipo&&r.tipo===tipo);
+  // Se não achou, normaliza o tipo bruto da planilha → categoria padrão
+  if(!regra&&typeof mapTipoFront==='function'){
+    const tipoStd=mapTipoFront(tipo);
+    regra=rules.find(r=>r.tipo&&r.tipo===tipoStd);
+  }
   return regra!=null?Number(regra.repasse):Number(grupo.repasse);
 }
 function mapTipoFront(t){
