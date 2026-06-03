@@ -23736,6 +23736,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         let inseridos = 0;
         let atualizados = 0;
         let ignoradosCount = 0;
+        let ignoradosNaoPago = 0;
+        let ignoradosSemComissao = 0;
+        const exemplosIgnorados: any[] = [];
         let totalValorGeral = 0;
         let totalValorCartao = 0;
         let mesRef = "";
@@ -23758,6 +23761,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const hasDate = !!c.dataPagamento;
           if (!isPago || !hasDate) {
             ignoradosCount++;
+            ignoradosNaoPago++;
             continue;
           }
 
@@ -23812,6 +23816,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           // o contrato não é produção efetiva e é ignorado.
           if (repasseValorFinal <= 0) {
             ignoradosCount++;
+            ignoradosSemComissao++;
+            if (exemplosIgnorados.length < 5) {
+              exemplosIgnorados.push({
+                contratoId: c.contratoId,
+                nomeCliente: c.nomeCliente,
+                comissaoRepasseValor: c.comissaoRepasseValor,
+                comissaoEmpresaValor: c.comissaoEmpresaValor,
+                comissaoRepassePerc: c.comissaoRepassePerc,
+                valorBase: c.valorBase,
+                valorBruto: c.valorBruto,
+                status: c.status,
+              });
+            }
             continue;
           }
 
@@ -23937,9 +23954,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           })
           .where(eq(producoesImportacoes.id, importacao.id));
 
+        console.log(`[IMPORT-PRODUCAO] Resultado: inseridos=${inseridos} atualizados=${atualizados} ignorados=${ignoradosCount} (naoPago=${ignoradosNaoPago}, semComissao=${ignoradosSemComissao})`);
+        if (exemplosIgnorados.length) {
+          console.log('[IMPORT-PRODUCAO] Exemplos ignorados por comissão zerada:', JSON.stringify(exemplosIgnorados, null, 2));
+        }
         res.json({
           message: "Importação confirmada com sucesso",
-          resultado: { inseridos, atualizados, ignorados: ignoradosCount },
+          resultado: {
+            inseridos,
+            atualizados,
+            ignorados: ignoradosCount,
+            ignoradosNaoPago,
+            ignoradosSemComissao,
+            exemplosIgnorados,
+          },
           importacaoId: importacao.id,
         });
       } catch (error: any) {
