@@ -23366,20 +23366,83 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Nenhum arquivo enviado" });
         }
 
-        // cellDates:false + raw:false → datas voltam como STRING no formato original
-        // da planilha (impede XLSX de tentar adivinhar MM/DD vs DD/MM).
-        const workbook = XLSX.read(req.file.buffer, {
-          type: "buffer",
-          cellDates: false,
-          cellNF: false,
-        });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet, {
-          raw: false,
-          dateNF: "dd/mm/yyyy",
-          defval: "",
-        });
+        // Parse manual de CSV para preservar strings BR (vírgula decimal, DD/MM datas).
+        // XLSX corrompe ao interpretar "41195,47" como formato US (vírgula = milhar
+        // → 4119547) e "07/05/2026" como MM/DD (07 de maio vira 5 de julho).
+        const parseCsvBR = (text: string, delimiter = ";"): any[] => {
+          const records: string[][] = [];
+          let current: string[] = [];
+          let field = "";
+          let inQuotes = false;
+          let i = 0;
+          while (i < text.length) {
+            const c = text[i];
+            if (inQuotes) {
+              if (c === '"' && text[i + 1] === '"') {
+                field += '"';
+                i += 2;
+              } else if (c === '"') {
+                inQuotes = false;
+                i++;
+              } else {
+                field += c;
+                i++;
+              }
+            } else if (c === '"') {
+              inQuotes = true;
+              i++;
+            } else if (c === delimiter) {
+              current.push(field);
+              field = "";
+              i++;
+            } else if (c === "\n" || c === "\r") {
+              current.push(field);
+              field = "";
+              if (current.length && current.some(f => f.trim())) records.push(current);
+              current = [];
+              if (c === "\r" && text[i + 1] === "\n") i += 2;
+              else i++;
+            } else {
+              field += c;
+              i++;
+            }
+          }
+          if (field || current.length) {
+            current.push(field);
+            if (current.length && current.some(f => f.trim())) records.push(current);
+          }
+          if (!records.length) return [];
+          const headers = records[0].map(h => h.trim());
+          return records.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((h, idx) => {
+              obj[h] = row[idx] !== undefined ? row[idx] : "";
+            });
+            return obj;
+          });
+        };
+
+        const buf = req.file.buffer;
+        const isXlsx = buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4B;
+        let rows: any[];
+        if (isXlsx) {
+          const workbook = XLSX.read(buf, {
+            type: "buffer",
+            cellDates: false,
+            cellNF: false,
+          });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(sheet, {
+            raw: false,
+            dateNF: "dd/mm/yyyy",
+            defval: "",
+          });
+        } else {
+          // CSV — parse manual preservando strings BR
+          const text = buf.toString("utf-8");
+          rows = parseCsvBR(text, ";");
+        }
 
         if (!rows.length) {
           return res.status(400).json({ message: "Planilha vazia" });
