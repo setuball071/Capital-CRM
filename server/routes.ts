@@ -23330,6 +23330,58 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   // Financeiro - Pagamentos ao consultor
   // ==========================================
 
+  // Ajuste manual do repasse de um contrato (master/coord)
+  app.patch("/api/financeiro/producao/:id/ajuste", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const id = Number(req.params.id);
+      if (!id) return res.status(400).json({ message: "ID inválido" });
+
+      const { repassePercOverride, grupoIdOverride, obsAjuste } = req.body || {};
+      const set: any = {};
+      // null/string vazia limpa o override; número define
+      if (repassePercOverride === null || repassePercOverride === "") {
+        set.repassePercOverride = null;
+      } else if (repassePercOverride !== undefined) {
+        const n = parseFloat(String(repassePercOverride));
+        if (isNaN(n) || n < 0 || n > 100) {
+          return res.status(400).json({ message: "% inválido (0-100)" });
+        }
+        set.repassePercOverride = String(n);
+      }
+      if (grupoIdOverride === null || grupoIdOverride === "") {
+        set.grupoIdOverride = null;
+      } else if (grupoIdOverride !== undefined) {
+        set.grupoIdOverride = String(grupoIdOverride);
+      }
+      if (obsAjuste !== undefined) {
+        set.obsAjuste = obsAjuste || null;
+      }
+      if (!Object.keys(set).length) {
+        return res.status(400).json({ message: "Nada para atualizar" });
+      }
+      await db
+        .update(producoesContratos)
+        .set(set)
+        .where(
+          and(
+            eq(producoesContratos.id, id),
+            eq(producoesContratos.tenantId, tenantId),
+          ),
+        );
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-AJUSTE] Error:", e);
+      res.status(500).json({ message: "Erro ao salvar ajuste" });
+    }
+  });
+
   // Atualizar status de comissão de um ou mais contratos (master/coord)
   app.patch("/api/financeiro/producao/status", requireAuth, async (req: any, res) => {
     try {

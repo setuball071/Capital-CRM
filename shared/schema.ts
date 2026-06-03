@@ -2876,6 +2876,10 @@ export const producoesContratos = pgTable(
     statusComissao: varchar("status_comissao", { length: 50 }).default("Aguardando"),
     dataPagComissao: varchar("data_pag_comissao", { length: 20 }),
     pagamentoId: integer("pagamento_id"),
+    // Ajustes manuais (sobrescrevem o cálculo automático do grupo):
+    repassePercOverride: decimal("repasse_perc_override", { precision: 6, scale: 2 }),
+    grupoIdOverride: varchar("grupo_id_override", { length: 100 }),
+    obsAjuste: text("obs_ajuste"),
     pt1000: decimal("pt_1000", { precision: 10, scale: 2 }).default("0"),
     pontosGeral: decimal("pontos_geral", { precision: 14, scale: 2 }).default(
       "0",

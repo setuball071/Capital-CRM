@@ -275,7 +275,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <th style="width:36px;padding:6px 14px"><input type="checkbox" id="cm-chk-all" onchange="toggleTodosContratos(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
           <th>ADE</th><th>Data Pgto</th><th>Cliente / CPF</th><th>Consultor</th><th>Banco</th>
           <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
-          <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Flat</th><th>Data Pag.</th>
+          <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Flat</th><th>Data Pag.</th><th></th>
         </tr></thead>
         <tbody id="cm-tbody"></tbody>
         <tfoot id="cm-tfoot"></tfoot>
@@ -681,6 +681,42 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharModal('modal-pagamento')">Cancelar</button>
       <button class="btn btn-primary" id="pag-btn-confirmar" onclick="confirmarPagamento()">💰 Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ajuste manual de repasse -->
+<div class="overlay" id="modal-ajuste">
+  <div class="modal" style="width:520px;max-width:97vw">
+    <div class="modal-header"><h3>✏️ Ajustar Repasse</h3><button class="modal-close" onclick="fecharModal('modal-ajuste')">✕</button></div>
+    <div class="modal-body">
+      <div id="ajuste-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px;font-size:13px"></div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Grupo de comissão</label>
+        <select id="ajuste-grupo" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+          <option value="">— Usar grupo do consultor (padrão) —</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Sobrescreve o grupo do consultor SÓ para este contrato.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">OU % manual de repasse</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="ajuste-pct" step="0.01" min="0" max="100" placeholder="ex: 30" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+          <span style="color:var(--muted)">%</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Sobrescreve tudo. Deixe vazio para usar grupo.</div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Observação (opcional)</label>
+        <textarea id="ajuste-obs" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
+      </div>
+      <div id="ajuste-preview" style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="limparAjuste()">🧹 Limpar ajuste</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-ajuste')">Cancelar</button>
+      <button class="btn btn-primary" id="ajuste-btn-salvar" onclick="salvarAjuste()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -1289,7 +1325,19 @@ async function renderMasterContratos(){
   document.getElementById('cm-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
   let totVal=0,totEmp=0,totFlat=0,totPago=0,totReceber=0;
   // Mapa de repasse por consultor (calcula pelo nome do vendedor)
+  // Ordem de precedência: % manual override → grupo manual override → grupo do consultor
   const calcRepasseConsultor=(c)=>{
+    // 1) % manual override
+    if(c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!==''){
+      const n=Number(c.repassePercOverride);
+      if(!isNaN(n))return n;
+    }
+    // 2) Grupo manual override
+    if(c.grupoIdOverride){
+      const g=grupoById(c.grupoIdOverride);
+      if(g)return getRepasseForTipo(g,c.tipoContrato);
+    }
+    // 3) Grupo do consultor cadastrado
     const nome=(c.vendedorNome||c.nomeCorretor||'').toLowerCase();
     const cor=CORRETORES.find(x=>(x.nome||'').toLowerCase()===nome);
     if(!cor)return Number(c.comissaoRepassePerc||0);
@@ -1304,6 +1352,7 @@ async function renderMasterContratos(){
     const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
     const valor=parseFloat(c.valorBruto||0);
     const pctConsultor=calcRepasseConsultor(c);
+    const temOverride=!!((c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!=='')||c.grupoIdOverride);
     const vf=Math.round(empValor*pctConsultor/100*100)/100;
     totVal+=valor;totEmp+=empValor;totFlat+=vf;
     const stFlat=c.statusComissao||'Aguardando';
@@ -1321,14 +1370,15 @@ async function renderMasterContratos(){
       <td>${tagTipo(c.tipoContrato||'')}</td>
       <td class="r v-accent">${fmtBRL(valor)}</td>
       <td class="r v-green">${fmtBRL(empValor)}</td>
-      <td class="r">${pctConsultor.toFixed(2)}%</td>
+      <td class="r">${pctConsultor.toFixed(2)}%${temOverride?' <span title="Ajuste manual" style="color:#e67e22">✏️</span>':''}</td>
       <td class="r v-yellow">${fmtBRL(vf)}</td>
       <td>${bFlat}</td>
       <td>${stFlat==='Pago'?fmtData(c.dataPagComissao):'—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="abrirAjusteContrato(${c.id})" title="Ajustar repasse">✏️</button></td>
     </tr>`;
   }).join('');
-  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato importado</td></tr>`;
-  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="2"></td></tr>`;
+  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato importado</td></tr>`;
+  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
   document.getElementById('cm-kpis').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Produção</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
@@ -2848,6 +2898,95 @@ function excluirSelecionadasTabelas(){
 // ══════════════════════════════════════════════════════
 // MULTI-SELECT: CONTRATOS
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// AJUSTE MANUAL de Repasse
+// ══════════════════════════════════════════════════════
+let _ajusteContratoId=null;
+
+function abrirAjusteContrato(id){
+  const c=_contratosMasterAPI.find(x=>String(x.id)===String(id));
+  if(!c){toast('Contrato não encontrado',true);return;}
+  _ajusteContratoId=id;
+  // Popular select de grupos
+  const sel=document.getElementById('ajuste-grupo');
+  sel.innerHTML='<option value="">— Usar grupo do consultor (padrão) —</option>';
+  GRUPOS.forEach(g=>{sel.innerHTML+=`<option value="${g.id}">${g.nome} (${g.repasse}% padrão)</option>`;});
+  sel.value=c.grupoIdOverride||'';
+  document.getElementById('ajuste-pct').value=c.repassePercOverride!==null&&c.repassePercOverride!==undefined?c.repassePercOverride:'';
+  document.getElementById('ajuste-obs').value=c.obsAjuste||'';
+  const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
+  document.getElementById('ajuste-info').innerHTML=`
+    <div><b>${escHtml(c.contratoId||'—')}</b> — ${escHtml(c.nomeCliente||'')}</div>
+    <div style="color:var(--muted);font-size:12px">Consultor: ${escHtml(c.vendedorNome||c.nomeCorretor||'—')} • Tipo: ${escHtml(c.tipoContrato||'—')}</div>
+    <div style="color:var(--muted);font-size:12px">Val. Empresa: <b>${fmtBRL(empValor)}</b></div>`;
+  atualizarPreviewAjuste();
+  // Eventos para preview ao vivo
+  sel.onchange=atualizarPreviewAjuste;
+  document.getElementById('ajuste-pct').oninput=atualizarPreviewAjuste;
+  abrirModal('modal-ajuste');
+}
+
+function atualizarPreviewAjuste(){
+  const c=_contratosMasterAPI.find(x=>String(x.id)===String(_ajusteContratoId));
+  if(!c)return;
+  const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
+  const pctManual=document.getElementById('ajuste-pct').value;
+  const grupoId=document.getElementById('ajuste-grupo').value;
+  // Simula a precedência da regra
+  const simulado={...c,repassePercOverride:pctManual,grupoIdOverride:grupoId};
+  const pct=calcRepasseConsultor(simulado);
+  const vf=Math.round(empValor*pct/100*100)/100;
+  document.getElementById('ajuste-preview').innerHTML=`
+    <div style="display:flex;justify-content:space-between"><span>% aplicado:</span><b>${pct.toFixed(2)}%</b></div>
+    <div style="display:flex;justify-content:space-between;color:var(--accent);font-weight:700;margin-top:4px"><span>Flat resultante:</span><span>${fmtBRL(vf)}</span></div>`;
+}
+
+async function salvarAjuste(){
+  if(!_ajusteContratoId)return;
+  const btn=document.getElementById('ajuste-btn-salvar');
+  btn.disabled=true;btn.textContent='Salvando...';
+  try{
+    const pct=document.getElementById('ajuste-pct').value;
+    const grupoId=document.getElementById('ajuste-grupo').value;
+    const obs=document.getElementById('ajuste-obs').value;
+    const resp=await fetch('/api/financeiro/producao/'+_ajusteContratoId+'/ajuste',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        repassePercOverride:pct===''?null:pct,
+        grupoIdOverride:grupoId||null,
+        obsAjuste:obs,
+      }),
+    });
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    fecharModal('modal-ajuste');
+    toast('Ajuste salvo!');
+    _contratosMasterAPI=[];
+    renderContratos();
+  }catch(e){toast('Erro: '+(e.message||e),true);}
+  finally{btn.disabled=false;btn.textContent='💾 Salvar';}
+}
+
+async function limparAjuste(){
+  if(!_ajusteContratoId)return;
+  if(!confirm('Remover ajuste manual deste contrato?'))return;
+  try{
+    const resp=await fetch('/api/financeiro/producao/'+_ajusteContratoId+'/ajuste',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({repassePercOverride:null,grupoIdOverride:null,obsAjuste:''}),
+    });
+    if(!resp.ok)throw new Error('Erro');
+    fecharModal('modal-ajuste');
+    toast('Ajuste removido!');
+    _contratosMasterAPI=[];
+    renderContratos();
+  }catch(e){toast('Erro ao limpar',true);}
+}
+window.abrirAjusteContrato=abrirAjusteContrato;
+window.salvarAjuste=salvarAjuste;
+window.limparAjuste=limparAjuste;
+
 // ══════════════════════════════════════════════════════
 // PAGAMENTO ao Consultor
 // ══════════════════════════════════════════════════════
