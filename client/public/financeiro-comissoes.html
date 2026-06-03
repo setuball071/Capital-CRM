@@ -317,35 +317,43 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <select class="filter-select" id="pf-mes" onchange="carregarProducaoAPI()"><option value="">Todos os meses</option></select>
       <select class="filter-select" id="pf-banco" onchange="carregarProducaoAPI()"><option value="">Todos os bancos</option></select>
       <select class="filter-select" id="pf-corretor" onchange="carregarProducaoAPI()"><option value="">Todos os corretores</option></select>
+      <select class="filter-select" id="pf-status" onchange="carregarProducaoAPI()">
+        <option value="">Todos status</option>
+        <option value="Aguardando">Aguardando</option>
+        <option value="A Pagar">A pagar</option>
+        <option value="Pago">Pago</option>
+      </select>
       <button class="btn btn-sm" onclick="carregarProducaoAPI()" style="background:var(--accent);color:#fff;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px">🔄 Atualizar</button>
     </div>
 
     <!-- KPIs -->
     <div class="kpi-row" id="prod-kpis" style="margin:16px 0;display:flex;gap:12px;flex-wrap:wrap"></div>
 
+    <!-- Barra de selecionados -->
+    <div id="prod-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;margin:10px 0"></div>
+
     <!-- Tabela -->
     <div style="overflow-x:auto">
       <table class="tbl">
         <thead>
           <tr>
+            <th style="width:36px"><input type="checkbox" id="prod-chk-all" onchange="toggleTodosProducao(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
             <th>Contrato</th>
             <th>Cliente</th>
-            <th>CPF</th>
             <th>Banco</th>
             <th>Tipo</th>
-            <th>Prazo</th>
-            <th>Corretor</th>
             <th>Vendedor</th>
             <th>Data Pgto</th>
-            <th class="r">Valor Base</th>
             <th class="r">Valor Bruto</th>
-            <th class="r">Comissão %</th>
-            <th class="r">Comissão R$</th>
-            <th style="text-align:center">Cartão</th>
+            <th class="r">Val. Empresa</th>
+            <th class="r">Flat %</th>
+            <th class="r">Flat R$</th>
+            <th>Status</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="prod-tbody">
-          <tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Selecione um período para carregar</td></tr>
+          <tr><td colspan="13" style="text-align:center;padding:30px;color:var(--muted)">Selecione um período para carregar</td></tr>
         </tbody>
       </table>
     </div>
@@ -1308,17 +1316,20 @@ async function renderMasterContratos(){
   consultores.forEach(n=>{sel.innerHTML+=`<option value="${n}">${n}</option>`;});
   sel.value=prev;
 
-  // Filtros
+  // Filtros — só mostra contratos marcados para pagamento ou já pagos
   const busca=(document.getElementById('cm-busca').value||'').toLowerCase();
   const corFiltro=document.getElementById('cm-corretor').value;
   const conv=document.getElementById('cm-conv').value;
   const st=document.getElementById('cm-st').value;
   const mes=document.getElementById('cm-mes').value;
   const list=_contratosMasterAPI.filter(c=>{
+    const stat=c.statusComissao||'Aguardando';
+    // Filtra apenas A Pagar e Pago — Produção é onde se marca para pagamento
+    if(stat!=='A Pagar'&&stat!=='Pago')return false;
     if(busca&&!((c.contratoId||'').toLowerCase().includes(busca)||(c.nomeCliente||'').toLowerCase().includes(busca)))return false;
     if(corFiltro&&(c.vendedorNome||c.nomeCorretor)!==corFiltro)return false;
     if(conv&&c.convenio!==conv)return false;
-    if(st&&(c.statusComissao||'Aguardando')!==st)return false;
+    if(st&&stat!==st)return false;
     if(mes&&c.mesReferencia!==mes)return false;
     return true;
   });
@@ -1374,10 +1385,10 @@ async function renderMasterContratos(){
       <td class="r v-yellow">${fmtBRL(vf)}</td>
       <td>${bFlat}</td>
       <td>${stFlat==='Pago'?fmtData(c.dataPagComissao):'—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="abrirAjusteContrato(${c.id})" title="Ajustar repasse">✏️</button></td>
+      <td>${stFlat==='A Pagar'?`<button class="btn btn-ghost btn-sm" onclick="voltarContratoParaAguardando(${c.id})" title="Voltar para Aguardando">↩</button>`:''}</td>
     </tr>`;
   }).join('');
-  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato importado</td></tr>`;
+  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato marcado para pagamento. Vá em Produção e marque os contratos.</td></tr>`;
   document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
   document.getElementById('cm-kpis').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
@@ -1807,45 +1818,158 @@ function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Cache de contratos da produção (usado para abrir modal de ajuste, gerar pagamento, etc.)
+let _producaoContratosCache = [];
+// IDs selecionados na produção
+let _selectedProducao = new Set();
+
+// Reusa a função calcRepasseConsultor definida em renderMasterContratos (escopo global via window)
+function calcRepasseConsultorProd(c){
+  // 1) % manual override
+  if(c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!==''){
+    const n=Number(c.repassePercOverride);
+    if(!isNaN(n))return n;
+  }
+  // 2) Grupo manual override
+  if(c.grupoIdOverride){
+    const g=grupoById(c.grupoIdOverride);
+    if(g)return getRepasseForTipo(g,c.tipoContrato);
+  }
+  // 3) Grupo do consultor cadastrado (por nome)
+  const nome=(c.vendedorNome||c.nomeCorretor||'').toLowerCase();
+  const cor=CORRETORES.find(x=>(x.nome||'').toLowerCase()===nome);
+  if(!cor)return Number(c.comissaoRepassePerc||0);
+  const g=grupoById(cor.grupoId);
+  if(!g)return Number(c.comissaoRepassePerc||0);
+  return getRepasseForTipo(g,c.tipoContrato);
+}
+
 function renderTabelaProducaoAPI(data) {
   const { contratos, totais } = data;
+  _producaoContratosCache = contratos || [];
 
-  // KPIs
+  // Filtro client-side por status
+  const filtroSt = document.getElementById('pf-status')?.value || '';
+  let lista = _producaoContratosCache;
+  if (filtroSt) lista = lista.filter(c => (c.statusComissao||'Aguardando') === filtroSt);
+
+  // Recalcula totais aplicando regra do grupo
+  let totVal = 0, totEmp = 0, totFlat = 0;
+  lista.forEach(c => {
+    totVal += parseFloat(c.valorBruto||0);
+    const emp = parseFloat(c.comissaoEmpresaValor||0) || parseFloat(c.comissaoRepasseValor||0);
+    totEmp += emp;
+    const pct = calcRepasseConsultorProd(c);
+    totFlat += Math.round(emp * pct / 100 * 100) / 100;
+  });
+
   const kpisEl = document.getElementById('prod-kpis');
   if (kpisEl) {
     kpisEl.innerHTML = `
-      <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${totais.count}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Produção (bruto)</div><div class="kpi-value kpi-green">${fmtBRL(totais.totValorBruto)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Comissão Total</div><div class="kpi-value kpi-yellow">${fmtBRL(totais.totComissao)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${lista.length}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Produção (bruto)</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Val. Empresa</div><div class="kpi-value kpi-yellow">${fmtBRL(totEmp)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Comissão Total (consultor)</div><div class="kpi-value kpi-blue">${fmtBRL(totFlat)}</div></div>
     `;
   }
 
-  // Tabela
   const tbody = document.getElementById('prod-tbody');
   if (!tbody) return;
-
-  if (!contratos.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>';
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>';
+    atualizarBarraProducao();
     return;
   }
 
-  tbody.innerHTML = contratos.map(c => `<tr>
-    <td><span class="ade-chip">${escHtml(c.contratoId)}</span></td>
-    <td><div class="td-name">${escHtml(c.nomeCliente||'')}</div></td>
-    <td style="font-size:11px;color:var(--muted)">${escHtml(c.cpfCliente||'')}</td>
-    <td style="font-size:12px;font-weight:600">${escHtml(c.banco||'')}</td>
-    <td>${escHtml(c.tipoContrato||'')}</td>
-    <td style="text-align:center">${escHtml(c.prazo||'')}</td>
-    <td>${escHtml(c.nomeCorretor||'')}</td>
-    <td style="color:var(--accent);font-weight:500">${escHtml(c.vendedorNome||c.nomeCorretor||'')}</td>
-    <td>${escHtml(c.dataPagamento||'')}</td>
-    <td class="r">${fmtBRL(parseFloat(c.valorBase||'0'))}</td>
-    <td class="r v-accent">${fmtBRL(parseFloat(c.valorBruto||'0'))}</td>
-    <td class="r" style="color:var(--muted)">${parseFloat(c.comissaoRepassePerc||'0').toFixed(2)}%</td>
-    <td class="r v-yellow">${fmtBRL(parseFloat(c.comissaoRepasseValor||'0'))}</td>
-    <td style="text-align:center">${c.isCartao ? '<span style="font-size:18px">💳</span>' : '<span style="color:var(--muted)">—</span>'}</td>
-  </tr>`).join('');
+  tbody.innerHTML = lista.map(c => {
+    const empValor = parseFloat(c.comissaoEmpresaValor||0) || parseFloat(c.comissaoRepasseValor||0);
+    const pct = calcRepasseConsultorProd(c);
+    const vf = Math.round(empValor * pct / 100 * 100) / 100;
+    const stFlat = c.statusComissao || 'Aguardando';
+    const bFlat = `<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'}">${stFlat==='A Pagar'?'A pagar':stFlat}</span>`;
+    const corNome = c.vendedorNome || c.nomeCorretor || '—';
+    const temOverride = !!((c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!=='')||c.grupoIdOverride);
+    const disabledChk = stFlat === 'Pago' ? 'disabled' : '';
+    return `<tr>
+      <td style="padding:6px"><input type="checkbox" class="prod-chk" value="${c.id}" data-vf="${vf}" data-vend="${escHtml(corNome)}" ${_selectedProducao.has(String(c.id))?'checked':''} ${disabledChk} onchange="toggleProducaoSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
+      <td><span class="ade-chip">${escHtml(c.contratoId)}</span></td>
+      <td><div class="td-name">${escHtml(c.nomeCliente||'')}</div><div class="td-muted" style="font-size:11px">${escHtml(c.cpfCliente||'')}</div></td>
+      <td style="font-size:12px;font-weight:600">${escHtml(c.banco||'')}</td>
+      <td>${tagTipo(c.tipoContrato||'')}</td>
+      <td style="color:var(--accent);font-weight:500">${escHtml(corNome)}</td>
+      <td>${fmtData(c.dataPagamento)}</td>
+      <td class="r v-accent">${fmtBRL(parseFloat(c.valorBruto||0))}</td>
+      <td class="r v-green">${fmtBRL(empValor)}</td>
+      <td class="r">${pct.toFixed(2)}%${temOverride?' <span title="Ajuste manual" style="color:#e67e22">✏️</span>':''}</td>
+      <td class="r v-yellow">${fmtBRL(vf)}</td>
+      <td>${bFlat}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="abrirAjusteContrato(${c.id})" title="Ajustar repasse">✏️</button></td>
+    </tr>`;
+  }).join('');
+  atualizarBarraProducao();
 }
+
+function toggleProducaoSelecionado(id, checked){
+  const k=String(id);
+  if(checked) _selectedProducao.add(k); else _selectedProducao.delete(k);
+  atualizarBarraProducao();
+}
+function toggleTodosProducao(checked){
+  document.querySelectorAll('#prod-tbody .prod-chk:not(:disabled)').forEach(ch=>{
+    ch.checked=checked;
+    const k=String(ch.value);
+    if(checked) _selectedProducao.add(k); else _selectedProducao.delete(k);
+  });
+  atualizarBarraProducao();
+}
+function atualizarBarraProducao(){
+  const bar=document.getElementById('prod-bar-sel');
+  if(!bar)return;
+  const chks=[...document.querySelectorAll('#prod-tbody .prod-chk:checked')];
+  if(!chks.length){bar.style.display='none';return;}
+  let total=0;
+  chks.forEach(ch=>{total+=parseFloat(ch.dataset.vf||0);});
+  bar.style.display='flex';
+  bar.innerHTML=`
+    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} selecionado${chks.length>1?'s':''} • Total: <b>${fmtBRL(total)}</b></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:#fff;color:var(--accent);font-weight:600" onclick="marcarParaPagamento()">📌 Marcar para Pagamento</button>
+      <button class="btn btn-ghost" style="color:#fff;border:1px solid #fff" onclick="desmarcarSelecionadosProd()">↩ Desmarcar</button>
+    </div>`;
+}
+async function marcarParaPagamento(){
+  const ids=[..._selectedProducao].map(Number);
+  if(!ids.length){toast('Selecione ao menos um',true);return;}
+  try{
+    const resp=await fetch('/api/financeiro/producao/status',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contratoIds:ids,statusComissao:'A Pagar'}),
+    });
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    toast(`${ids.length} contrato${ids.length>1?'s':''} marcado${ids.length>1?'s':''} para pagamento`);
+    _selectedProducao.clear();
+    carregarProducaoAPI();
+  }catch(e){toast('Erro: '+(e.message||e),true);}
+}
+async function desmarcarSelecionadosProd(){
+  const ids=[..._selectedProducao].map(Number);
+  if(!ids.length)return;
+  try{
+    const resp=await fetch('/api/financeiro/producao/status',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contratoIds:ids,statusComissao:'Aguardando'}),
+    });
+    if(!resp.ok)throw new Error('Erro');
+    _selectedProducao.clear();
+    carregarProducaoAPI();
+  }catch(e){toast('Erro ao desmarcar',true);}
+}
+window.toggleProducaoSelecionado=toggleProducaoSelecionado;
+window.toggleTodosProducao=toggleTodosProducao;
+window.marcarParaPagamento=marcarParaPagamento;
+window.desmarcarSelecionadosProd=desmarcarSelecionadosProd;
 
 function popularFiltrosMaster() { /* substituída por carregarProducaoAPI */ }
 function filtrarParaMaster(){
@@ -2983,6 +3107,21 @@ async function limparAjuste(){
     renderContratos();
   }catch(e){toast('Erro ao limpar',true);}
 }
+async function voltarContratoParaAguardando(id){
+  if(!confirm('Voltar este contrato para Aguardando? Ele sai da lista de pagamentos.'))return;
+  try{
+    const resp=await fetch('/api/financeiro/producao/status',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contratoIds:[Number(id)],statusComissao:'Aguardando'}),
+    });
+    if(!resp.ok)throw new Error('Erro');
+    _contratosMasterAPI=[];
+    renderContratos();
+    toast('Contrato voltou para Aguardando');
+  }catch(e){toast('Erro: '+(e.message||e),true);}
+}
+window.voltarContratoParaAguardando=voltarContratoParaAguardando;
 window.abrirAjusteContrato=abrirAjusteContrato;
 window.salvarAjuste=salvarAjuste;
 window.limparAjuste=limparAjuste;
