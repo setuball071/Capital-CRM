@@ -23279,7 +23279,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const { mes, banco, corretor } = req.query;
 
-      const conditions: any[] = [eq(producoesContratos.tenantId, tenantId)];
+      const conditions: any[] = [
+        eq(producoesContratos.tenantId, tenantId),
+        // Contratos com comissão zerada não são produção efetiva — empresa não ganhou
+        sql`${producoesContratos.comissaoRepasseValor}::numeric > 0`,
+      ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
       if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
@@ -23810,8 +23814,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                   if (oldPct > 0) empVal = repasseValorFinal / (oldPct / 100);
                 }
 
-                // Estratégia 3: usar valorBase como base quando nada mais funcionar
-                if (empVal === 0 && valorBase > 0) empVal = valorBase;
+                // NÃO usar valorBase como fallback — se empresa não ganhou nada
+                // (comissão zerada), o contrato não deve gerar repasse.
 
                 if (pct > 0 && empVal > 0) {
                   repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
@@ -23821,6 +23825,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 }
               }
             }
+          }
+
+          // Se mesmo após o cálculo o repasse continua zerado, a empresa não ganhou
+          // nada — não é produção efetiva e o contrato é ignorado.
+          if (repasseValorFinal <= 0) {
+            ignoradosCount++;
+            continue;
           }
 
           const contratoData = {
