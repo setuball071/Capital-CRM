@@ -944,7 +944,7 @@ let _grpVigencias=[]; // regras de repasse por tipo de produto do grupo em ediç
 let _tiposContrato=[]; // tipos distintos carregados do banco
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 let _role='master';
-let _myUserId=null,_myUserEmail=null,_myCorretorId=null;
+let _myUserId=null,_myUserEmail=null,_myCorretorId=null,_isMasterUser=false;
 let _pendingModule=null,_inicializado=false;
 let _selectedContratos=new Set(),_selectedCorretores=new Set(),_selectedTabelas=new Set();
 function salvarDados(){
@@ -1264,8 +1264,9 @@ async function renderConsultorContratos(){
 
     let list=data.contratos||[];
 
-    // Filtro por corretor logado (compara nomeCorretor E vendedorNome)
-    if(myCor&&myCor.nome){
+    // Filtro por corretor logado (compara nomeCorretor E vendedorNome).
+    // Master simulando: vê todos.
+    if(myCor&&myCor.nome&&!_isMasterUser){
       const nome=myCor.nome.toLowerCase();
       list=list.filter(c=>
         (c.nomeCorretor||'').toLowerCase()===nome||
@@ -1520,8 +1521,9 @@ async function carregarProducaoConsultor() {
 
     let list = data.contratos || [];
 
-    // Filtro por corretor logado (compara com nomeCorretor E vendedorNome)
-    if (myCor && myCor.nome) {
+    // Filtro por corretor logado (compara com nomeCorretor E vendedorNome).
+    // Master simulando modo Consultor (sem corretor real associado): vê todos.
+    if (myCor && myCor.nome && !_isMasterUser) {
       const nome = myCor.nome.toLowerCase();
       list = list.filter(c =>
         (c.nomeCorretor || '').toLowerCase() === nome ||
@@ -2821,6 +2823,7 @@ window.addEventListener('message',function(e){
   }
   if(e.data.type==='CAPITAL_CRM_ROLE'){
     const isMaster=e.data.isMaster;
+    _isMasterUser=!!isMaster;
     if(e.data.userId)_myUserId=e.data.userId;
     if(e.data.userEmail)_myUserEmail=e.data.userEmail;
     // Identifica o corretor do usuário logado
