@@ -23770,21 +23770,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             continue;
           }
 
-          // Contratos com comissão zerada não são produção efetiva — banco/operadora
-          // não pagou comissão (cancelamento, estorno, ou contrato que não gerou ganho).
-          // Não salvamos no DB; e se já existir (porque uma importação antiga trouxe
-          // valor > 0 e agora o banco corrigiu para 0), DELETAMOS a linha existente
-          // para manter o DB sincronizado com a planilha vigente.
+          // Contratos com comissão zerada são simplesmente ignorados (não salvos).
+          // NÃO deletamos registros existentes — a planilha de um mês pode conter
+          // contratos de meses anteriores com comissão zerada sem que isso signifique
+          // que o dado histórico deve ser apagado.
           const comissaoNum = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
           if (comissaoNum <= 0) {
-            await db
-              .delete(producoesContratos)
-              .where(
-                and(
-                  eq(producoesContratos.contratoId, String(c.contratoId)),
-                  eq(producoesContratos.tenantId, tenantId),
-                ),
-              );
             ignoradosCount++;
             continue;
           }
