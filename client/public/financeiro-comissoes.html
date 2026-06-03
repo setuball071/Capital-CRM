@@ -256,7 +256,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <input class="search" id="cm-busca" placeholder="🔍 Buscar ADE ou cliente..." oninput="renderContratos()"/>
       <select class="filter-select" id="cm-corretor" onchange="renderContratos()"><option value="">Todos corretores</option></select>
       <select class="filter-select" id="cm-conv" onchange="renderContratos()"><option value="">Todos convênios</option><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option></select>
-      <select class="filter-select" id="cm-st" onchange="renderContratos()"><option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option></select>
+      <select class="filter-select" id="cm-st" onchange="renderContratos()"><option value="">Status flat (todos)</option><option>Aguardando</option><option value="A Pagar">A pagar</option><option>Pago</option></select>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
         <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">📅 Mês:</span>
         <input type="month" id="cm-mes" onchange="renderContratos()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
@@ -264,18 +264,18 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       </div>
       <span class="count-chip" id="cm-count">—</span>
       <div class="filter-right">
-        <button id="btn-excluir-sel-cont" class="btn btn-danger btn-sm" style="display:none" onclick="excluirSelecionadosContratos()">🗑 Excluir (<span id="sel-count-cont">0</span>)</button>
-        <button class="btn btn-primary btn-sm" onclick="abrirModalContrato()">➕ Novo Contrato</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirHistoricoPagamentos()">📜 Histórico</button>
       </div>
     </div>
     <div class="kpi-grid kpi-grid-4" id="cm-kpis"></div>
+    <div id="cm-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;margin:10px 0"></div>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th style="width:36px;padding:6px 14px"><input type="checkbox" id="cm-chk-all" onchange="toggleTodosContratos(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
-          <th>ADE</th><th>Data</th><th>Cliente / CPF</th><th>Corretor</th><th>Banco / Tabela</th>
+          <th>ADE</th><th>Data Pgto</th><th>Cliente / CPF</th><th>Consultor</th><th>Banco</th>
           <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
-          <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Banco</th><th>Status Flat</th><th></th>
+          <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Flat</th><th>Data Pag.</th>
         </tr></thead>
         <tbody id="cm-tbody"></tbody>
         <tfoot id="cm-tfoot"></tfoot>
@@ -652,6 +652,60 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharModal('modal-recibo')">Fechar</button>
       <button class="btn btn-primary" onclick="imprimirRecibo()">🖨️ Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Gerar Pagamento -->
+<div class="overlay" id="modal-pagamento">
+  <div class="modal" style="width:680px;max-width:97vw">
+    <div class="modal-header"><h3>💰 Gerar Pagamento</h3><button class="modal-close" onclick="fecharModal('modal-pagamento')">✕</button></div>
+    <div class="modal-body">
+      <div id="pag-resumo" style="background:var(--surface2);padding:14px;border-radius:8px;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:12px;color:var(--muted)">Data do pagamento</label>
+          <input type="date" id="pag-data" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted)">Total a pagar</label>
+          <div id="pag-total" style="padding:8px 0;font-weight:700;font-size:18px;color:var(--accent)">R$ 0,00</div>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted)">Observação (opcional)</label>
+        <textarea id="pag-obs" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
+      </div>
+      <div id="pag-lista" style="margin-top:14px;max-height:280px;overflow:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-pagamento')">Cancelar</button>
+      <button class="btn btn-primary" id="pag-btn-confirmar" onclick="confirmarPagamento()">💰 Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Histórico de Pagamentos -->
+<div class="overlay" id="modal-historico-pag">
+  <div class="modal" style="width:920px;max-width:97vw">
+    <div class="modal-header"><h3>📜 Histórico de Pagamentos</h3><button class="modal-close" onclick="fecharModal('modal-historico-pag')">✕</button></div>
+    <div class="modal-body">
+      <div id="hist-pag-tbody"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-historico-pag')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalhe de pagamento (recibo) -->
+<div class="overlay" id="modal-recibo-pag">
+  <div class="modal" style="width:720px;max-width:97vw">
+    <div class="modal-header"><h3>🧾 Recibo de Pagamento</h3><button class="modal-close" onclick="fecharModal('modal-recibo-pag')">✕</button></div>
+    <div class="modal-body" id="recibo-pag-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-recibo-pag')">Fechar</button>
+      <button class="btn btn-primary" onclick="imprimirReciboPag()">🖨️ Imprimir</button>
     </div>
   </div>
 </div>
@@ -1178,9 +1232,12 @@ async function renderContratos(){
   const isMaster=_role==='master';
   document.getElementById('cont-master').style.display=isMaster?'':'none';
   document.getElementById('cont-consultor').style.display=isMaster?'none':'';
-  if(isMaster)renderMasterContratos();
+  if(isMaster)await renderMasterContratos();
   else await renderConsultorContratos();
 }
+
+// Cache de contratos importados na visão Master/Contratos
+let _contratosMasterAPI = [];
 function filtrarContMaster(){
   const busca=(document.getElementById('cm-busca').value||'').toLowerCase();
   const cor=document.getElementById('cm-corretor').value;
@@ -1197,49 +1254,108 @@ function filtrarContMaster(){
     return true;
   });
 }
-function renderMasterContratos(){
-  // populate corretor filter
+async function renderMasterContratos(){
+  // Carrega contratos importados da API se ainda não carregou
+  const tbody=document.getElementById('cm-tbody');
+  if(tbody&&!_contratosMasterAPI.length){
+    tbody.innerHTML='<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
+    try{
+      const resp=await fetch('/api/financeiro/producao',{credentials:'include'});
+      if(resp.ok){const d=await resp.json();_contratosMasterAPI=d.contratos||[];}
+    }catch(e){_contratosMasterAPI=[];}
+  }
+  // populate corretor filter — usa vendedores únicos da API
   const sel=document.getElementById('cm-corretor');
   const prev=sel.value;
-  sel.innerHTML='<option value="">Todos corretores</option>';
-  CORRETORES.filter(c=>c.ativo).forEach(c=>{sel.innerHTML+=`<option value="${c.id}">${c.nome}</option>`;});
+  sel.innerHTML='<option value="">Todos consultores</option>';
+  const consultores=[...new Set(_contratosMasterAPI.map(c=>c.vendedorNome||c.nomeCorretor).filter(Boolean))].sort();
+  consultores.forEach(n=>{sel.innerHTML+=`<option value="${n}">${n}</option>`;});
   sel.value=prev;
-  const list=filtrarContMaster();
+
+  // Filtros
+  const busca=(document.getElementById('cm-busca').value||'').toLowerCase();
+  const corFiltro=document.getElementById('cm-corretor').value;
+  const conv=document.getElementById('cm-conv').value;
+  const st=document.getElementById('cm-st').value;
+  const mes=document.getElementById('cm-mes').value;
+  const list=_contratosMasterAPI.filter(c=>{
+    if(busca&&!((c.contratoId||'').toLowerCase().includes(busca)||(c.nomeCliente||'').toLowerCase().includes(busca)))return false;
+    if(corFiltro&&(c.vendedorNome||c.nomeCorretor)!==corFiltro)return false;
+    if(conv&&c.convenio!==conv)return false;
+    if(st&&(c.statusComissao||'Aguardando')!==st)return false;
+    if(mes&&c.mesReferencia!==mes)return false;
+    return true;
+  });
   document.getElementById('cm-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
-  let totVal=0,totEmp=0,totFlat=0,totPago=0;
+  let totVal=0,totEmp=0,totFlat=0,totPago=0,totReceber=0;
+  // Mapa de repasse por consultor (calcula pelo nome do vendedor)
+  const calcRepasseConsultor=(c)=>{
+    const nome=(c.vendedorNome||c.nomeCorretor||'').toLowerCase();
+    const cor=CORRETORES.find(x=>(x.nome||'').toLowerCase()===nome);
+    if(!cor)return Number(c.comissaoRepassePerc||0);
+    const g=grupoById(cor.grupoId);
+    if(!g)return Number(c.comissaoRepassePerc||0);
+    return getRepasseForTipo(g,c.tipoContrato);
+  };
   const rows=list.map(c=>{
-    const ti=getTabelaInfo(c);
-    const cor=corretorById(c.corretorId);
-    const ve=valEmpresa(c),vf=valComissao(c),fp=flatPct(c);
-    totVal+=c.valor;totEmp+=ve;totFlat+=vf;if(c.statusComissao==='Pago')totPago+=vf;
-    const bBanco=badgeBanco(c.statusBanco,`abrirRecebimentoCont('${c.id}')`);
-    const bFlat=badgeComissao(c.statusComissao,`abrirComissaoCont('${c.id}')`);
+    const empValor=parseFloat(c.comissaoRepasseValor||0);
+    const valor=parseFloat(c.valorBruto||0);
+    const pctConsultor=calcRepasseConsultor(c);
+    const vf=Math.round(empValor*pctConsultor/100*100)/100;
+    totVal+=valor;totEmp+=empValor;totFlat+=vf;
+    const stFlat=c.statusComissao||'Aguardando';
+    if(stFlat==='Pago')totPago+=vf;else if(stFlat==='A Pagar')totReceber+=vf;
+    const corNome=c.vendedorNome||c.nomeCorretor||'—';
+    const bFlat=`<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'}">${stFlat==='A Pagar'?'A pagar':stFlat}</span>`;
     return`<tr>
-      <td style="padding:6px 14px"><input type="checkbox" class="cont-chk" value="${c.id}" ${_selectedContratos.has(c.id)?'checked':''} onchange="toggleContratoSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
-      <td><span class="ade-chip">${c.ade}</span></td>
-      <td>${fmtData(c.data)}</td>
-      <td><div class="td-name">${c.cliente}</div><div class="td-muted">${c.cpf||''}</div></td>
-      <td>${cor?`<div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${cor.cor||'#666'};flex-shrink:0"></span>${cor.nome}</div>`:'—'}</td>
-      <td><div style="font-weight:600;font-size:12px">${ti.banco}</div><div class="td-muted">${ti.nome}</div></td>
-      <td>${tagConvenio(ti.convenio)}</td>
-      <td>${tagTipo(ti.tipo)}</td>
-      <td class="r v-accent">${fmtBRL(c.valor)}</td>
-      <td class="r v-green">${fmtBRL(ve)}</td>
-      <td class="r">${fmtPct(fp)}</td>
+      <td style="padding:6px 14px"><input type="checkbox" class="cont-chk" value="${c.id}" data-vf="${vf}" data-vend="${escHtml(corNome)}" ${_selectedContratos.has(String(c.id))?'checked':''} onchange="toggleContratoSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
+      <td><span class="ade-chip">${escHtml(c.contratoId||'—')}</span></td>
+      <td>${fmtData(c.dataPagamento)}</td>
+      <td><div class="td-name">${escHtml(c.nomeCliente||'')}</div><div class="td-muted">${escHtml(c.cpfCliente||'')}</div></td>
+      <td>${escHtml(corNome)}</td>
+      <td><div style="font-weight:600;font-size:12px">${escHtml(c.banco||'—')}</div></td>
+      <td>${tagConvenio(c.convenio||'')}</td>
+      <td>${tagTipo(c.tipoContrato||'')}</td>
+      <td class="r v-accent">${fmtBRL(valor)}</td>
+      <td class="r v-green">${fmtBRL(empValor)}</td>
+      <td class="r">${pctConsultor.toFixed(2)}%</td>
       <td class="r v-yellow">${fmtBRL(vf)}</td>
-      <td>${bBanco}</td>
       <td>${bFlat}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="verDetalheContrato('${c.id}')">👁</button> <button class="btn btn-ghost btn-sm" onclick="abrirModalContrato('${c.id}')">✏️</button> <button class="btn btn-danger btn-sm" onclick="excluirContrato('${c.id}')">🗑</button></td>
+      <td>${stFlat==='Pago'?fmtData(c.dataPagComissao):'—'}</td>
     </tr>`;
   }).join('');
-  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>`;
-  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
+  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato importado</td></tr>`;
+  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="2"></td></tr>`;
   document.getElementById('cm-kpis').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Produção Total</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Val. Empresa</div><div class="kpi-value kpi-yellow">${fmtBRL(totEmp)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Flat Pago</div><div class="kpi-value kpi-blue">${fmtBRL(totPago)}</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Produção</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">A Pagar</div><div class="kpi-value kpi-yellow">${fmtBRL(totReceber)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Pago</div><div class="kpi-value kpi-blue">${fmtBRL(totPago)}</div></div>`;
+  atualizarBarraSelecionados();
 }
+
+// Atualiza a barra fixa que mostra "X selecionados, R$ Y" e o botão "Pagar"
+function atualizarBarraSelecionados(){
+  const chks=[...document.querySelectorAll('#cm-tbody .cont-chk:checked')];
+  const bar=document.getElementById('cm-bar-sel');
+  if(!bar)return;
+  if(!chks.length){bar.style.display='none';return;}
+  // Agrupa por vendedor
+  const porVend={};
+  let total=0;
+  chks.forEach(ch=>{
+    const v=ch.dataset.vend||'(sem)';
+    const vf=parseFloat(ch.dataset.vf||0);
+    if(!porVend[v])porVend[v]={qtd:0,total:0};
+    porVend[v].qtd++;porVend[v].total+=vf;total+=vf;
+  });
+  const vendCount=Object.keys(porVend).length;
+  bar.style.display='flex';
+  bar.innerHTML=`
+    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} de <b>${vendCount}</b> consultor${vendCount>1?'es':''} • Total: <b>${fmtBRL(total)}</b></div>
+    <button class="btn btn-primary" onclick="abrirModalPagamento()">💰 Gerar Pagamento</button>`;
+}
+window.atualizarBarraSelecionados=atualizarBarraSelecionados;
 async function renderConsultorContratos(){
   _resetMask();
   const tbody=document.getElementById('cc-tbody');
@@ -2729,16 +2845,181 @@ function excluirSelecionadasTabelas(){
 // ══════════════════════════════════════════════════════
 // MULTI-SELECT: CONTRATOS
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// PAGAMENTO ao Consultor
+// ══════════════════════════════════════════════════════
+function abrirModalPagamento(){
+  const chks=[...document.querySelectorAll('#cm-tbody .cont-chk:checked')];
+  if(!chks.length){toast('Selecione ao menos um contrato',true);return;}
+  // Agrupa por consultor
+  const porVend={};
+  let total=0;
+  chks.forEach(ch=>{
+    const v=ch.dataset.vend||'(sem)';
+    const vf=parseFloat(ch.dataset.vf||0);
+    if(!porVend[v])porVend[v]={qtd:0,total:0,ids:[]};
+    porVend[v].qtd++;porVend[v].total+=vf;porVend[v].ids.push({id:ch.value,vf});
+    total+=vf;
+  });
+  document.getElementById('pag-resumo').innerHTML=Object.keys(porVend).map(v=>{
+    const o=porVend[v];
+    return`<div style="display:flex;justify-content:space-between;padding:4px 0">
+      <span><b>${v}</b> — ${o.qtd} contrato${o.qtd>1?'s':''}</span>
+      <span class="v-yellow"><b>${fmtBRL(o.total)}</b></span>
+    </div>`;
+  }).join('');
+  document.getElementById('pag-total').textContent=fmtBRL(total);
+  document.getElementById('pag-data').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pag-obs').value='';
+  // Detalhe dos contratos
+  const linhas=chks.map(ch=>{
+    const c=_contratosMasterAPI.find(x=>String(x.id)===String(ch.value));
+    if(!c)return '';
+    return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span>${escHtml(c.contratoId)} — ${escHtml(c.nomeCliente||'')}</span>
+      <span class="v-yellow">${fmtBRL(parseFloat(ch.dataset.vf))}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('pag-lista').innerHTML=linhas;
+  // Guarda para uso no confirmar
+  window._pagamentoPending={porVend,total,chks};
+  abrirModal('modal-pagamento');
+}
+
+async function confirmarPagamento(){
+  const p=window._pagamentoPending;
+  if(!p)return;
+  const data=document.getElementById('pag-data').value;
+  const obs=document.getElementById('pag-obs').value||'';
+  if(!data){toast('Informe a data',true);return;}
+  const btn=document.getElementById('pag-btn-confirmar');
+  btn.disabled=true;btn.textContent='Processando...';
+  try{
+    // Cria um pagamento por consultor
+    for(const vendNome of Object.keys(p.porVend)){
+      const o=p.porVend[vendNome];
+      const itens=o.ids.map(x=>({contratoId:x.id,valorComissao:x.vf}));
+      const resp=await fetch('/api/financeiro/pagamentos',{
+        method:'POST',
+        credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({vendedorNome:vendNome,dataPagamento:data,observacao:obs,itens}),
+      });
+      if(!resp.ok){
+        const e=await resp.json().catch(()=>({}));
+        throw new Error(e.message||'Erro');
+      }
+    }
+    fecharModal('modal-pagamento');
+    toast('Pagamento(s) gerado(s) com sucesso!');
+    _selectedContratos.clear();
+    _contratosMasterAPI=[]; // força reload
+    renderContratos();
+  }catch(e){
+    toast('Erro: '+(e.message||e),true);
+  }finally{
+    btn.disabled=false;btn.textContent='💰 Confirmar Pagamento';
+  }
+}
+
+async function abrirHistoricoPagamentos(){
+  abrirModal('modal-historico-pag');
+  const tb=document.getElementById('hist-pag-tbody');
+  tb.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</div>';
+  try{
+    const resp=await fetch('/api/financeiro/pagamentos',{credentials:'include'});
+    const d=await resp.json();
+    const list=d.pagamentos||[];
+    if(!list.length){tb.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">Nenhum pagamento registrado.</div>';return;}
+    tb.innerHTML=`<table style="width:100%;font-size:13px">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:8px">Data</th><th>Consultor</th><th class="r">Qtd</th><th class="r">Total</th><th>Pago por</th><th></th>
+      </tr></thead><tbody>
+      ${list.map(p=>`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px">${fmtData(p.dataPagamento)}</td>
+        <td>${escHtml(p.vendedorNome||'—')}</td>
+        <td class="r">${p.qtdContratos||'—'}</td>
+        <td class="r v-yellow">${fmtBRL(parseFloat(p.valorTotal||0))}</td>
+        <td style="font-size:11px;color:var(--muted)">${escHtml(p.pagoPorNome||'')}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="verReciboPagamento(${p.id})">🧾 Recibo</button></td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  }catch(e){
+    tb.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">Erro ao carregar.</div>';
+  }
+}
+
+async function verReciboPagamento(id){
+  try{
+    const resp=await fetch('/api/financeiro/pagamentos/'+id,{credentials:'include'});
+    const d=await resp.json();
+    const p=d.pagamento;
+    const itens=d.itens||[];
+    document.getElementById('recibo-pag-body').innerHTML=`
+      <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:14px;font-weight:700;color:var(--accent)">💼 Capital CRM</div>
+        <div style="font-size:11px;color:var(--muted)">Comprovante de Pagamento — Pagamento #${p.id}</div>
+      </div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Consultor:</span><b>${escHtml(p.vendedorNome||'—')}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Data do pagamento:</span><b>${fmtData(p.dataPagamento)}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Qtd contratos:</span><b>${p.qtdContratos||itens.length}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Pago por:</span><b>${escHtml(p.pagoPorNome||'')}</b></div>
+        ${p.observacao?`<div style="margin-top:8px;font-size:12px;color:var(--muted)">Obs: ${escHtml(p.observacao)}</div>`:''}
+      </div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px">Contrato</th><th style="text-align:left">Cliente</th>
+          <th style="text-align:left">Banco</th><th class="r">Valor Contrato</th><th class="r">Comissão</th>
+        </tr></thead><tbody>
+        ${itens.map(i=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px">${escHtml(i.contratoId||'—')}</td>
+          <td>${escHtml(i.nomeCliente||'')}</td>
+          <td>${escHtml(i.banco||'')}</td>
+          <td class="r">${fmtBRL(parseFloat(i.valorBruto||0))}</td>
+          <td class="r v-yellow">${fmtBRL(parseFloat(i.valorComissao||0))}</td>
+        </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="border-top:2px solid var(--border);font-weight:700">
+          <td colspan="4" style="padding:8px 6px">Total</td>
+          <td class="r v-accent">${fmtBRL(parseFloat(p.valorTotal||0))}</td>
+        </tr></tfoot>
+      </table>
+      <div style="margin-top:30px;text-align:center;font-size:11px;color:var(--muted)">
+        Recebi de Capital CRM a quantia acima referente aos contratos listados.
+        <div style="margin-top:30px">Assinatura: ____________________________________________</div>
+      </div>`;
+    abrirModal('modal-recibo-pag');
+  }catch(e){toast('Erro ao abrir recibo',true);}
+}
+
+function imprimirReciboPag(){
+  const html=document.getElementById('recibo-pag-body').innerHTML;
+  const w=window.open('','_blank','width=800,height=900');
+  w.document.write(`<html><head><title>Recibo</title><style>
+    body{font-family:Arial,sans-serif;padding:30px;color:#222}
+    table{border-collapse:collapse;width:100%}
+    .r{text-align:right}
+    .v-yellow{color:#b58900}
+    .v-accent{color:#0066cc;font-weight:bold}
+  </style></head><body>${html}</body></html>`);
+  w.document.close();setTimeout(()=>{w.print();},250);
+}
+
 function toggleContratoSelecionado(id,checked){
-  if(checked)_selectedContratos.add(id);else _selectedContratos.delete(id);
+  const k=String(id);
+  if(checked)_selectedContratos.add(k);else _selectedContratos.delete(k);
   atualizarBtnExcluirContratos();
+  if(typeof atualizarBarraSelecionados==='function')atualizarBarraSelecionados();
 }
 function toggleTodosContratos(checked){
   document.querySelectorAll('.cont-chk').forEach(chk=>{
     chk.checked=checked;
-    if(checked)_selectedContratos.add(chk.value);else _selectedContratos.delete(chk.value);
+    const k=String(chk.value);
+    if(checked)_selectedContratos.add(k);else _selectedContratos.delete(k);
   });
   atualizarBtnExcluirContratos();
+  if(typeof atualizarBarraSelecionados==='function')atualizarBarraSelecionados();
 }
 function atualizarBtnExcluirContratos(){
   const n=_selectedContratos.size;

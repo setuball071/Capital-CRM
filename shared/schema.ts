@@ -2863,6 +2863,11 @@ export const producoesContratos = pgTable(
     mesReferencia: varchar("mes_referencia", { length: 7 }),
     importadoPor: integer("importado_por").references(() => users.id),
     confirmado: boolean("confirmado").default(false),
+    // Status de pagamento ao consultor (fluxo interno):
+    //   'Aguardando' | 'A Pagar' | 'Pago' | 'Cancelado'
+    statusComissao: varchar("status_comissao", { length: 50 }).default("Aguardando"),
+    dataPagComissao: varchar("data_pag_comissao", { length: 20 }),
+    pagamentoId: integer("pagamento_id"),
     pt1000: decimal("pt_1000", { precision: 10, scale: 2 }).default("0"),
     pontosGeral: decimal("pontos_geral", { precision: 14, scale: 2 }).default(
       "0",
@@ -2886,6 +2891,39 @@ export const insertProducaoContratoSchema = createInsertSchema(
 ).omit({ id: true, createdAt: true });
 
 export type ProducaoContrato = typeof producoesContratos.$inferSelect;
+
+// Cabeçalho de um pagamento ao consultor (lote de contratos)
+export const pagamentosConsultor = pgTable("pagamentos_consultor", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  vendedorId: integer("vendedor_id").references(() => users.id),
+  vendedorNome: varchar("vendedor_nome", { length: 255 }),
+  dataPagamento: varchar("data_pagamento", { length: 20 }).notNull(),
+  valorTotal: decimal("valor_total", { precision: 14, scale: 2 }).notNull(),
+  qtdContratos: integer("qtd_contratos").default(0),
+  observacao: text("observacao"),
+  pagoPor: integer("pago_por").references(() => users.id),
+  pagoPorNome: varchar("pago_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Itens de um pagamento (relação 1-N com contratos pagos)
+export const pagamentosConsultorItens = pgTable("pagamentos_consultor_itens", {
+  id: serial("id").primaryKey(),
+  pagamentoId: integer("pagamento_id")
+    .references(() => pagamentosConsultor.id, { onDelete: "cascade" })
+    .notNull(),
+  contratoId: integer("contrato_id")
+    .references(() => producoesContratos.id, { onDelete: "cascade" })
+    .notNull(),
+  valorComissao: decimal("valor_comissao", { precision: 14, scale: 2 }).notNull(),
+});
+
+export type PagamentoConsultor = typeof pagamentosConsultor.$inferSelect;
+export type PagamentoConsultorItem = typeof pagamentosConsultorItens.$inferSelect;
+
 export type InsertProducaoContrato = z.infer<
   typeof insertProducaoContratoSchema
 >;

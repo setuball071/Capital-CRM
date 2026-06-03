@@ -1,0 +1,1400 @@
+126f6ab 2026-05-15 12:36:26 -0300 fix: contratos mostram apenas competencia mais recente
+51b11bf 2026-05-15 10:01:35 -0300 fix: remove } solto que causava erro de build JSX (consulta-cliente)
+c726972 2026-05-14 02:11:07 +0000 Published your App
+817076d 2026-05-13 13:14:31 +0000 Published your App
+6407915 2026-05-12 14:51:51 +0000 Published your App
+2154267 2026-05-12 14:28:39 +0000 Published your App
+02d99bb 2026-05-15 02:55:46 -0300 fix: remove todos os fallbacks siapeDados de margens e financeiro
+dfd3e51 2026-05-15 02:50:32 -0300 fix: contratos sempre via D8, remove prioridade siapeParcelas da tabela
+14c1be3 2026-05-14 22:36:26 -0300 refactor: D8 como única fonte de margens, contracheque PDF apenas para HTML
+3e5c792 2026-05-13 22:51:18 -0300 fix: toggle fonte inline no titulo do card
+34c2503 2026-05-13 11:01:23 -0300 fix: toggle fonte com inline style fora do CardHeader (abordagem definitiva)
+31707a5 2026-05-13 10:48:05 -0300 fix: toggle D8/Contracheque no header do card sempre visivel
+2f27bff 2026-05-13 10:26:04 -0300 fix: toggle D8/Contracheque sempre visivel abaixo dos cards de margem
+329570f 2026-05-13 10:12:17 -0300 fix: toggle D8/Contracheque visivel para todos com dados SIAPE
+4c02c2e 2026-05-13 10:03:14 -0300 feat: calculadora de renda fixa em Simuladores
+73179e1 2026-05-13 09:19:47 -0300 fix: isMaster com !! (tolerante a truthy) e indicador de fonte dinâmico
+094e80b 2026-05-13 09:15:57 -0300 feat: filtro de base respeita fonte de margem (D8 ou CONTRACHEQUE)
+767918d 2026-05-13 08:55:18 -0300 feat: seletor de fonte de margem (D8 vs Contracheque)
+b22e17f 2026-05-12 12:56:15 -0300 fix: campo snake_case margem_utilizada_35 (frontend usa snake, nao camelCase)
+06e3808 2026-05-12 11:31:47 -0300 fix: campo camelCase margemUtilizada35 (nao margem_utilizada_35)
+b7f2ac0 2026-05-12 11:23:58 -0300 fix: alerta de desconto nao identificado usa siapeDados e compara soma correta
+21851a6 2026-05-12 11:05:19 -0300 feat: alerta de desconto nao identificado na margem 35% (consulta cliente)
+e9c338d 2026-05-12 11:02:32 -0300 feat: botao imprimir PDF no modal do contracheque SIAPE
+8fc9014 2026-05-12 00:35:59 -0300 perf: usa clientes_folha_ultima quando nao ha base_ref (margem sem timeout)
+0fbe95e 2026-05-12 00:04:51 -0300 revert: restaura fast-import-service.ts para estado de 09/05
+694751b 2026-05-12 00:00:18 -0300 revert: restaura storage.ts e compra-lista.tsx para estado de 09/05 (funcionando)
+80e3922 2026-05-11 23:36:49 -0300 perf: invert CTE order in COUNT query — start from contratos (15% selectivity) instead of folha (80%)
+17321f7 2026-05-11 22:48:42 -0300 perf: usar view materializada clientes_folha_ultima no filtro de base
+c2f7d98 2026-05-11 22:11:08 -0300 perf: CTE count query para filtros complexos (folha+contrato+idade)
+6e24a24 2026-05-11 21:32:05 -0300 fix: tratar total=-1 no frontend quando count expira timeout
+347241a 2026-05-11 16:36:00 -0300 Revert "feat: página Filtrar Clientes com filtros combinados SIAPE"
+3c3bea3 2026-05-11 16:33:50 -0300 feat: página Filtrar Clientes com filtros combinados SIAPE
+d9a9fef 2026-05-11 16:17:22 -0300 perf: add 15s timeout to COUNT query to prevent 502/524
+92152f2 2026-05-11 11:26:23 -0300 perf: reverse COUNT direction for contrato join (10x faster)
+06d9d48 2026-05-11 09:21:07 -0300 perf: fix filter dropdowns loading 1.3M rows into memory
+1f5d8ef 2026-05-10 10:11:24 -0300 fix: filtro de bancos exclui 520 valores corrompidos e usa SELECT DISTINCT eficiente
+c9ad08a 2026-05-09 21:24:26 -0300 fix: filtros de base agora exibem nomes legíveis (tipo_contrato, orgao, sit_func)
+ae40c58 2026-05-09 21:03:59 -0300 fix: restaura regra 70% balizadora (importa direto, sem calcular 35-5-5)
+b23456b 2026-05-07 15:50:24 -0300 refactor: remove todos os cálculos de margem no import SIAPE
+7ccb68c 2026-05-07 15:48:08 -0300 fix: restaura regra 70% balizadora correta no import SIAPE
+ab6f491 2026-05-07 15:12:43 -0300 fix(siape): parar de zerar margens quando 70% ausente, importar direto do arquivo
+6db06b9 2026-05-07 15:02:45 -0300 fix(siape): importar margens direto do arquivo, manter só regra 70% balizadora
+f55c539 2026-05-07 13:26:25 -0300 fix(estadual): move data_nascimento into main INSERT, use [0-9] regex
+bf93920 2026-05-07 11:53:46 -0300 fix(maranhao): mapear coluna 'Tipo de Cargo' corretamente no import estadual
+a6af07f 2026-05-07 10:51:14 -0300 fix(maranhao): corrigir campos ausentes na tela de consulta
+cd3756a 2026-05-07 10:07:23 -0300 feat(maranhao): adicionar entrada manual de dados bancários e contratos
+8a4cff6 2026-05-07 09:33:07 -0300 feat: layout Dados do Cliente especifico para Maranhao
+2857e75 2026-05-07 08:05:37 -0300 fix: remove acentos do template MA para compatibilidade com Excel Windows
+074d5e9 2026-05-07 07:55:35 -0300 refactor: simplifica modal de modelos de planilha
+a5b66ec 2026-05-07 07:35:33 -0300 feat: adiciona modelo Governo do Maranhao no modal de templates
+ec9bd84 2026-05-07 07:11:17 -0300 feat: Maranhao - campos funcionais completos (orgao, cargo, situacao, data admissao)
+47e971f 2026-05-07 00:55:09 -0300 fix: template e mapa de colunas Maranhao ajustados para dados reais
+3d7cda3 2026-05-07 00:41:25 -0300 feat: planilha modelo de importacao Governo do Maranhao
+dfbb5bd 2026-05-07 00:33:06 -0300 fix: deteccao especifica por estado no layout de margens
+05298b3 2026-05-07 00:20:15 -0300 feat: convênio-aware margin display + UF auto-derive from rjur
+9436592 2026-05-06 16:36:42 -0300 feat(estadual): importa data_nascimento do arquivo estadual
+013b095 2026-05-06 13:19:02 -0300 fix(estadual): corrige matricula e margens na importação estadual
+202e15a 2026-05-06 13:01:21 -0300 feat(estadual): suporte completo a folha Governo Maranhão
+be6a0a3 2026-05-06 02:34:30 -0300 fix(vendas-consulta): mg70 usa folha SIAPE como fonte primaria (base restrita correta)
+b4642ee 2026-05-06 02:02:15 -0300 fix(ui): margem 70% usa dados SIAPE quando disponivel, igual ao 35%
+98b529a 2026-05-06 01:02:39 -0300 fix(imports): insert telefones direto por pessoa_id sem filtro de tenant
+f71df6e 2026-05-06 00:49:36 -0300 fix(imports): remove filtro de tenant no import dados-complementares
+fa13520 2026-05-05 23:32:09 -0300 fix(imports): contorna limite 413 com chunking no browser
+bad5d53 2026-05-05 20:55:39 -0300 perf(imports): batch SQL em dados complementares para suportar 987k+ linhas
+dc8263f 2026-05-05 20:17:54 -0300 fix(siape): decodifica mojibake nas descrições de rubricas no contracheque HTML
+4b7744e 2026-05-05 18:39:36 -0300 fix(siape): corrige contracheque HTML em branco e saldo 35% com balizadora 70% errada
+da9aa81 2026-05-05 17:05:22 -0300 feat: download automático do brasão PNG no servidor
+1b79ac9 2026-05-05 16:51:22 -0300 fix: __dirname not defined em ESM — usar process.cwd() para brasão PNG
+3b07d6a 2026-05-05 15:25:35 -0300 fix: margem 35% balizada pelo teto de 70%
+bca4499 2026-05-05 12:28:32 -0300 fix: margens 35%/5%/Benefício usando dados SIAPE corretos
+b676fb2 2026-05-05 09:53:19 -0300 fix: brasão real no contracheque + botão Ver Contracheque destacado
+838f76a 2026-05-04 09:40:46 -0300 fix: importação de produção - pt_1000 com underscore + parsing de data como objeto Date
+0b0811d 2026-05-03 23:46:49 -0300 fix: dados bancários SIAPE + botão contracheque em vendas-consulta
+3e77197 2026-05-03 22:04:15 -0300 feat: contratos SIAPE em vendas-consulta (tipo/banco/valor/prazo sem Nº contrato)
+d26f55b 2026-05-03 21:51:20 -0300 feat: contratos via SIAPE parcelas + botão contracheque visível
+f31b0a5 2026-05-03 20:41:13 -0300 feat: atualizar Dados do Cliente em vendas-consulta (mesma estrutura de consulta-cliente)
+18aff91 2026-05-03 20:14:43 -0300 feat: margens corretas do SIAPE (MG5CC vs MG5CB separados)
+bef4f80 2026-05-03 17:23:58 -0300 feat: enriquecer dados do cliente com SIAPE (cargo, funcao, banco, financeiro, uf)
+dac4fe1 2026-05-03 16:03:11 -0300 feat: add /api/siape/parcelas/:cpf endpoint
+94cea6e 2026-05-03 15:13:21 -0300 fix: remove banner fora de folha de vendas-consulta
+34b499c 2026-05-03 14:32:19 -0300 feat: simulacao rapida starts collapsed by default
+1e520d2 2026-05-03 10:50:16 -0300 feat: SIAPE contracheque - rotas HTML, historico, botao cliente, remove banner fora-folha
+3d710de 2026-04-29 13:41:48 -0300 fix: COLUMN_MAP telefones numerados antes do generico; coletar telefone1-8 no batch
+2798d8e 2026-04-29 13:20:32 -0300 fix: corrigir ANY(array) passando como string PostgreSQL em vez de array JS
+70068c1 2026-04-29 13:10:45 -0300 feat: import higienizados assincrono com polling de progresso
+4ec8c50 2026-04-29 13:02:27 -0300 debug: logs estrategicos e expor mensagem de erro real no import higienizados
+0fb2a9c 2026-04-29 12:25:03 -0300 fix: usar Promise.all em lotes de 50 em vez de db.insert bulk (evita crash 502 no Replit)
+af75696 2026-04-29 12:19:15 -0300 fix: corrigir tipo cpf em phoneRows (string nao null) e melhorar log de erro
+f6af9bc 2026-04-29 12:07:08 -0300 perf: importar-higienizados em lote para evitar timeout 524
+44cc24b 2026-04-29 09:47:35 -0300 feat: persistir dados do consultor no PDF via localStorage
+d6f7434 2026-04-28 23:21:09 -0300 feat: exibir e excluir observacoes antigas (sem batch_id) no historico
+04f501f 2026-04-28 23:15:34 -0300 fix: mover rotas /imports antes de /:cpf para evitar conflito de parametro Express
+6e8a3a2 2026-04-28 22:28:27 -0300 feat: historico de importacoes de observacoes com exclusao por lote
+5c7de43 2026-04-28 21:21:50 -0300 fix: filtros combinados, remocao de observacoes, contratos fora de folha por competencia
+075019e 2026-04-27 22:28:18 -0300 feat: painel individual por corretor e timeline de retornos do operacional
+0921b55 2026-04-26 11:59:36 -0300 fix: convênio sempre sincroniza com órgão selecionado ao abrir dialog PDF
+0fbe567 2026-04-26 09:42:42 -0300 fix: órgão pré-preenche convênio no PDF; popup não fecha ao clicar fora
+6d5316e 2026-04-26 09:20:01 -0300 fix: separador consultor/cliente por sombra em vez de borda roxa
+635872d 2026-04-26 09:11:26 -0300 fix: ajustes finos no PDF — texto consultor mais afastado da foto, telefone formatado, área cliente redesenhada com mais presença visual
+f25b287 2026-04-26 08:53:55 -0300 fix: remove fade overlay do PDF — foto sobre degradê limpo, texto em z-index com sombra
+abba1e3 2026-04-26 08:26:13 -0300 fix: foto do consultor no PDF estilo Canva — fade overlay em 3 camadas, sem corte na imagem
+83e54f2 2026-04-26 07:58:54 -0300 feat: prazo máximo exibe Tabela Price (saldo devedor, juros, amortização) em vez de cronograma de antecipação
+152e2d8 2026-04-25 20:39:50 -0300 perf: índices de banco de dados para acelerar consultas de clientes, folha e contratos
+5c87b18 2026-04-23 01:59:55 -0300 fix: foto consultor absolute na base esquerda, texto com padding-left — sem caixa solta
+b6a53fb 2026-04-23 01:55:26 -0300 fix: foto do consultor colada na borda esquerda da barra, mesma altura, pessoa ancoranda na base
+bba4522 2026-04-23 01:48:16 -0300 fix: foto do consultor ancorada na base da barra — alinhamento flex-end para efeito de posicionado
+5d00061 2026-04-23 01:40:24 -0300 fix: foto do consultor no PDF sem bordas, maior e com suporte a fundo transparente (PNG)
+56f7e36 2026-04-22 23:53:26 -0300 feat: foto com crop no PDF + reorganizacao menu importacoes + pagina Dados Complementares
+8985a7c 2026-04-22 23:39:48 -0300 feat: foto do consultor no PDF da proposta + fix Solicitar Boleto sumindo
+2f59e52 2026-04-23 02:28:19 +0000 Published your App
+9f0fa77 2026-04-22 20:38:10 +0000 Published your App
+565f173 2026-04-22 20:14:49 +0000 Published your App
+67041c4 2026-04-22 11:45:35 +0000 Published your App
+e878927 2026-04-22 21:28:45 -0300 fix: dark mode em Solicitacoes Boleto e Simulador de Amortizacao
+7ebcb0d 2026-04-22 17:34:46 -0300 fix: ReferenceError portfolioCheck fora do escopo — busca de cliente quebrando
+f7241a3 2026-04-22 17:33:49 -0300 fix: substituir like e innerJoin por sql raw para compatibilidade drizzle
+fe67008 2026-04-22 16:53:54 -0300 feat: minha_carteira como sub-item de permissao independente
+d3f3a66 2026-04-22 16:01:48 -0300 fix: carteira importada nao entra na regra de bloqueio de portfolio
+f54b6e4 2026-04-22 14:57:01 -0300 fix: busca de CPF mais tolerante + mensagem quando lead existe mas base nao importada
+3a92f2b 2026-04-22 13:59:55 -0300 feat: Minha Carteira — auto-importacao de CPFs pelo vendedor
+cfaf779 2026-04-22 08:18:57 -0300 Rename PDF table columns for clarity and alignment
+3dc145f 2026-04-21 21:25:13 +0000 Published your App
+e3ea3bc 2026-04-21 18:44:33 +0000 Published your App
+9c47c67 2026-04-21 17:07:16 +0000 Published your App
+10b354c 2026-04-22 08:12:31 -0300 feat: campo de título/cargo do consultor no PDF de amortização
+13befc4 2026-04-22 08:11:12 -0300 design: estilo assinatura no PDF - remove ícone, nome em itálico elegante
+3f283e4 2026-04-22 00:00:11 -0300 design: redesign do PDF de amortização - consultor e cliente em barra unificada
+a65095d 2026-04-21 23:55:47 -0300 fix: PDF amortização mostra nome/telefone do consultor sem avatar
+9c086a8 2026-04-21 17:03:55 -0300 feat: enriquecer base por CPF em Base de Clientes
+ea59279 2026-04-21 14:55:47 -0300 fix: remove abas Tabelas e Processos do header global
+996ee7f 2026-04-21 14:42:33 -0300 fix: remove abas Tabelas e Processos do modal de material de apoio
+8d8db9a 2026-04-21 14:22:36 -0300 fix: remove abas Tabelas e Processos do material de apoio
+998bf44 2026-04-21 13:37:18 -0300 fix: pipeline não atualizava após salvar atendimento
+07d1d7c 2026-04-21 14:01:36 +0000 remove large CSV files from tracking
+eb9ebb6 2026-04-17 12:16:49 +0000 Add phone number search from contact data
+c6ac82f 2026-04-17 12:10:38 +0000 fix: exclude demo users from team rankings in dashboard endpoints
+9b2ad31 2026-04-17 05:20:23 +0000 Task #63: Reaproveitar busca por telefone (componente reutilizável)
+c43ffc2 2026-04-17 05:19:06 +0000 Task #63: Reaproveitar busca por telefone (componente reutilizável)
+e973f2a 2026-04-17 05:11:21 +0000 Task #63: Reaproveitar busca por telefone (componente reutilizável)
+d2edff2 2026-04-17 05:03:40 +0000 Task #62: Popular clientes_telefones em novas importações
+001336b 2026-04-17 04:59:07 +0000 Task #62: Popular clientes_telefones em novas importações
+0b4636d 2026-04-17 04:57:26 +0000 Task #62: Popular clientes_telefones em novas importações
+7e371c4 2026-04-17 04:48:51 +0000 Task #61: Busca por telefone na consulta de cliente (master + vendedor)
+410ee6c 2026-04-17 04:47:24 +0000 Task #61: Busca por telefone na consulta de cliente (master + vendedor)
+ef5ce1e 2026-04-17 04:43:28 +0000 Task #61: Busca por telefone na consulta de cliente (master + vendedor)
+3ce0d25 2026-04-17 04:33:27 +0000 Transitioned from Plan to Build mode
+faea893 2026-04-16 15:16:21 +0000 Published your App
+461aeea 2026-04-16 13:43:53 +0000 feat: Usuário Demo — dashboard vendedor sempre exibe 70%/90% de meta (early-exit sem queries)
+f38869b 2026-04-16 13:40:29 +0000 feat: Usuário Demo — dashboard vendedor sempre exibe 70% meta geral e 90% meta cartão
+3a7b7ad 2026-04-16 13:38:29 +0000 feat: Usuário Demo — dashboard vendedor sempre exibe 70% meta geral e 90% meta cartão
+e777dd3 2026-04-15 17:27:14 +0000 fix: corrige bloqueio de consulta para corretor que recebeu transferência de carteira
+47a4724 2026-04-15 17:16:44 +0000 fix: corrige transferência de carteira — SQL inválido e filtro de tenant
+a324b42 2026-04-13 11:45:06 +0000 Update the WhatsApp button link to a new platform URL
+92db7b9 2026-04-08 15:38:38 +0000 Task #53: Observações por CPF — acumular, nunca sobrescrever
+9011c0e 2026-04-08 15:34:48 +0000 Transitioned from Plan to Build mode
+f113594 2026-03-31 12:31:32 +0000 Task #52: Fix Data de Nascimento always blank in CSV export
+687d2f3 2026-03-31 12:30:37 +0000 Task #52: Fix Data de Nascimento always blank in CSV export
+a9d671a 2026-03-31 12:29:58 +0000 Transitioned from Plan to Build mode
+19b3684 2026-03-30 18:35:51 +0000 Restore promissory note creation and PDF generation functionality
+07daf33 2026-03-30 15:53:40 +0000 Improve CSV import by handling encoding and delimiters
+73dd8d5 2026-03-30 15:22:11 +0000 Task #51: Exportação de base — incluir margens brutas
+db0b19b 2026-03-30 14:19:01 +0000 Restrict sales representatives from viewing other agents' requests
+8d4c866 2026-03-30 12:16:01 +0000 Task #50: Boletos — vendedor só vê as suas próprias solicitações
+b8547c9 2026-03-29 21:55:58 +0000 Published your App
+9699f4d 2026-03-29 21:09:02 +0000 Task #49: Exportação de base: incluir data de nascimento
+daabd90 2026-03-29 21:08:08 +0000 Transitioned from Plan to Build mode
+7f4ec08 2026-03-29 21:00:33 +0000 Task #48: Teto de 70% — margem_saldo_70 null forçado como zero explícito
+05c8b79 2026-03-29 20:58:15 +0000 Task #48: Teto de 70% — margem_saldo_70 null tratado como zero
+bcfe574 2026-03-29 20:42:51 +0000 Make margin calculations more explicit during data import
+cceea83 2026-03-29 20:40:46 +0000 Task #47: Teto de 70% nas margens de folha — COMPLETE
+d451387 2026-03-29 20:39:02 +0000 Task #47: Teto de 70% nas margens de folha — COMPLETE
+77b84b5 2026-03-29 19:08:46 +0000 Fix issue with saving simulation coefficients for loan products
+df1d474 2026-03-29 19:05:36 +0000 Enhance loan simulation with adjustable coefficients and improved interface
+ef3c0f3 2026-03-29 18:18:17 +0000 Task #46: Corrigir Simulação Rápida — fonte do convênio e layout editável
+db3bcbe 2026-03-29 18:17:18 +0000 Task #46: Corrigir Simulação Rápida — fonte do convênio e layout editável
+a4eb75b 2026-03-29 16:44:38 +0000 Improve accuracy of loan coefficient calculations for better user comparisons
+e7a5d5c 2026-03-29 16:42:38 +0000 Task #45: Simulação Rápida de Margem nas telas de consulta
+0995417 2026-03-29 16:38:44 +0000 Transitioned from Plan to Build mode
+7274373 2026-03-29 15:01:07 +0000 Update sidebar label for client observations
+9cc0715 2026-03-29 14:59:18 +0000 Task #44: Informações Complementares por CPF — CSV import + popup
+c2b892b 2026-03-29 14:57:16 +0000 Task #44: Informações Complementares por CPF — CSV import + popup (fixed)
+c2a38f6 2026-03-29 14:52:59 +0000 Task #44: Informações Complementares por CPF — CSV import + Info popup
+c01a95b 2026-03-29 14:43:47 +0000 Transitioned from Plan to Build mode
+6d15422 2026-03-29 13:13:57 +0000 Update system labels from "Etiquetas" to "Tags" for clarity
+39ca874 2026-03-29 13:13:01 +0000 Task #43: Renomear "Etiquetas" para "Tags" em toda a UI
+e358e54 2026-03-28 21:20:33 +0000 Update sales pipeline dashboard with interactive charts
+f23947d 2026-03-28 21:18:33 +0000 Task #42: Dashboard Carteira — Donut Chart (Por Produto) e BarCharts (Banco/Convênio) com Recharts
+266586b 2026-03-28 20:10:36 +0000 Task #41: Fix campos nulos (convênio, telefone, banco) no portfolio para master e coordenação
+fbfe6ae 2026-03-28 20:08:48 +0000 Transitioned from Plan to Build mode
+32720ac 2026-03-28 18:21:07 +0000 Task #40: Fix captura de TelefoneCliente na importação de produção
+0aa0061 2026-03-28 18:20:18 +0000 Transitioned from Plan to Build mode
+415c081 2026-03-28 16:58:20 +0000 Update simulation error message to refer to filters
+11bef82 2026-03-28 16:57:06 +0000 Task #39: Ajustes em Filtros de Base (rename + tooltip + modal detalhes)
+9bf0261 2026-03-28 16:54:45 +0000 Task #39: Ajustes em Filtros de Base (rename + tooltip + modal detalhes)
+e8f201f 2026-03-28 16:53:20 +0000 Task #39: Ajustes em Filtros de Base (rename + tooltip + modal detalhes)
+ff6ee5f 2026-03-28 16:16:03 +0000 Improve display of recurring clients and related data
+a564d94 2026-03-28 16:14:23 +0000 Task #38: Dashboard do Corretor — telefone_cliente, is_recorrente, banco/convênio no dashboard
+5b3f70b 2026-03-28 16:12:30 +0000 Task #38: Dashboard do Corretor — telefone_cliente, is_recorrente, banco/convênio no dashboard
+04e9a3a 2026-03-28 16:06:27 +0000 Transitioned from Plan to Build mode
+45b8916 2026-03-28 02:56:50 +0000 Update loan portability simulation to clarify phone number handling
+1b5fdee 2026-03-28 02:56:09 +0000 Task #37: Minha Carteira — 3 fixes: dados, Dashboard, regras
+c22f9a3 2026-03-28 02:54:31 +0000 Task #37: Minha Carteira — 3 fixes: dados, Dashboard, regras
+0548760 2026-03-28 02:49:57 +0000 Transitioned from Plan to Build mode
+92ad8cc 2026-03-28 02:28:08 +0000 Remove PDF editor and promissory note functionalities from the system
+13b0817 2026-03-27 02:07:42 +0000 Update permissions and file upload validation for loan applications
+9621f80 2026-03-27 02:06:10 +0000 Task #36: Boleto — full vendor permissions + multiple file attachments
+e7f4284 2026-03-27 01:09:58 +0000 Update system with new features and improvements
+b61f9c4 2026-03-26 15:20:35 +0000 Fix intermittent "Unauthorized" errors for client searches
+edae643 2026-03-26 10:37:32 +0000 Task #35: Fix trocar-vínculo 404 e histórico para todos os roles
+82300f3 2026-03-26 04:34:01 +0000 Task #34: Ajustes Minha Carteira — expiração, scroll, stats, clique
+ba4b074 2026-03-26 04:31:58 +0000 Task #34: Ajustes Minha Carteira — expiração, scroll, stats, clique
+53f3e1d 2026-03-26 04:28:24 +0000 Task #34: Ajustes Minha Carteira — expiração, scroll, stats, clique
+c9a1bd6 2026-03-26 04:22:25 +0000 Transitioned from Plan to Build mode
+625281b 2026-03-26 03:40:12 +0000 Improve PDF text replacement to accurately blend with document backgrounds
+c450ef1 2026-03-26 03:25:06 +0000 Improve PDF generation by ensuring consistent font handling and embedding
+ea16edb 2026-03-26 02:52:06 +0000 Fix error when saving PDF documents with specific font styles
+acb5065 2026-03-26 02:49:46 +0000 Ensure PDF files can be saved after editing or correction
+fa29388 2026-03-26 02:43:10 +0000 Task #31: Preview ao vivo de correções no Editor PDF
+069934d 2026-03-26 02:41:26 +0000 Task #31: Preview ao vivo de correções no Editor PDF
+75c1db5 2026-03-26 02:36:22 +0000 Update PDF editor to save vector files without rasterization
+38e7d95 2026-03-26 02:34:39 +0000 Task #32: Editor PDF — salvar PDF vetorial real com pdf-lib (sem rasterização)
+d13ea70 2026-03-26 02:32:00 +0000 Update pipeline view to show days without deals and use correct badge variants
+24c1e06 2026-03-26 02:29:59 +0000 Task #33: Ajustes na aba "Minha Carteira" do Pipeline
+324b80e 2026-03-26 02:26:31 +0000 Task #33: Ajustes na aba "Minha Carteira" do Pipeline
+7e0b5f3 2026-03-26 02:23:24 +0000 Task #33: Ajustes na aba "Minha Carteira" do Pipeline
+982116b 2026-03-26 02:16:50 +0000 Transitioned from Plan to Build mode
+96b48bd 2026-03-26 01:28:03 +0000 Improve text color detection when editing PDF files
+789d3b7 2026-03-25 03:27:28 +0000 Accurately detect and display text colors from PDF files
+076e903 2026-03-25 03:23:38 +0000 fix: Corrigir detecção e troca de cor no Editor PDF (Task #30)
+702be37 2026-03-25 03:09:14 +0000 Preserve original text colors when editing and saving PDFs
+15a541f 2026-03-25 02:58:25 +0000 Improve PDF editing by adding automatic color detection and dynamic filenames
+b945dee 2026-03-25 02:50:54 +0000 Update PDF editor to use jsPDF for improved compatibility
+652bb55 2026-03-25 02:43:17 +0000 Update PDF editor to use jsPDF for improved saving functionality
+962bf34 2026-03-25 02:36:54 +0000 Improve PDF editing compatibility and file handling efficiency
+5077b2a 2026-03-25 01:55:17 +0000 feat: Add PDF Editor to Operacional section (Task #29)
+fdf35c7 2026-03-25 01:50:52 +0000 Transitioned from Plan to Build mode
+ff31c8c 2026-03-25 01:32:26 +0000 Task #28: Enforce portfolio block in backend for all search types
+51c3eb9 2026-03-24 16:26:59 +0000 Task #27: Exclude zero-point contracts (pt_1000 = 0) from production totals
+b36b193 2026-03-24 16:24:14 +0000 Transitioned from Plan to Build mode
+b8c859c 2026-03-24 14:06:17 +0000 Update client portfolio banner to show contract expiry date
+234d7dc 2026-03-24 14:05:34 +0000 Complete Task #26 (portfolio banner in consulta) + Task #25 (portfolio backfill)
+7f58dbd 2026-03-24 12:26:06 +0000 Fix calculation for card contract points to prevent artificial capping
+2fec3d8 2026-03-24 01:49:33 +0000 Correct card sales point calculation to accurately reflect total earned points
+9d5c06b 2026-03-23 21:58:51 +0000 Task #24: Remove "Novo" column from pipeline kanban view
+e09aab7 2026-03-23 21:57:59 +0000 Transitioned from Plan to Build mode
+efef99d 2026-03-23 21:32:06 +0000 fix: Task #23 code review fixes - Carteira de Clientes
+c9ff082 2026-03-23 21:22:58 +0000 feat: Complete Task #23 - Carteira de Clientes (Portfolio Lock System)
+8f7f480 2026-03-23 21:06:03 +0000 Transitioned from Plan to Build mode
+b562b6e 2026-03-23 18:48:27 +0000 Add ability to upload images directly to system updates
+ccc5417 2026-03-23 18:46:14 +0000 Feat #22: Imagens na Central de Atualizações (screenshot upload)
+c29032f 2026-03-23 15:13:34 +0000 Update import service to handle larger data batches safely
+d40ebf0 2026-03-23 15:12:29 +0000 Perf: 4x faster fast-import — larger chunks + DB indexes
+ff04bb7 2026-03-23 14:51:23 +0000 Fix: Add exc_qtd/exc_soma to vendas/consulta/buscar endpoint response
+46ec978 2026-03-23 14:13:40 +0000 Add columns for tracking excluded quantities and sums
+34a6f87 2026-03-23 13:38:31 +0000 Task #18: Fix EXC fora de folha — colunas ausentes no banco
+7897081 2026-03-23 13:36:47 +0000 Task #18: Fix EXC fora de folha — colunas ausentes no banco
+8cd31c6 2026-03-23 11:01:12 +0000 Task #17: Banner amber de parcelas fora de folha nas telas de consulta
+bb0af0c 2026-03-23 10:58:57 +0000 Task #17: Banner amber de parcelas fora de folha nas telas de consulta
+ec61cac 2026-03-23 10:57:28 +0000 Task #17: Banner amber de parcelas fora de folha nas telas de consulta
+8968f45 2026-03-20 21:24:06 +0000 Task #16: Fix corretor status permission in solicitações de boleto
+76f7d04 2026-03-20 21:08:38 +0000 Published your App
+4437877 2026-03-20 12:12:30 +0000 Task #15: Fix creatives upload — store base64 in DB instead of disk
+90cc4b8 2026-03-20 02:38:17 +0000 Improve file import accuracy and robustness for various encodings
+84e4681 2026-03-20 02:36:06 +0000 Task #12: Fix D8 import header validation in fast-import-service.ts
+d348b60 2026-03-20 02:31:57 +0000 Transitioned from Plan to Build mode
+b17ba90 2026-03-19 13:14:37 +0000 Prevent session expiry during large file imports
+315b00e 2026-03-19 13:12:44 +0000 Task #14: Session keep-alive durante Importação Rápida
+049ecc9 2026-03-19 12:15:56 +0000 Published your App
+b88937a 2026-03-19 11:39:54 +0000 Task #13: Multi-vínculo support in Consulta Individual de Vendas
+9a1d2fd 2026-03-19 11:36:49 +0000 Task #13: Multi-vínculo support in Consulta Individual de Vendas
+d2869c4 2026-03-19 11:33:28 +0000 Transitioned from Plan to Build mode
+fd3e6e2 2026-03-19 06:37:53 +0000 Restored to '39c03a681c9717c1057c4d3e41d913d628bb4839'
+3a3d1ae 2026-03-19 06:29:42 +0000 Improve contract display by fixing D8 import and query logic
+5f4416c 2026-03-19 06:07:04 +0000 Update file import to correctly detect and use various delimiters
+cb85af2 2026-03-19 06:00:03 +0000 Add fallback matricula generation for D8 imports and improve diagnostics
+ce17c15 2026-03-19 05:40:35 +0000 Improve file import by handling encoding and expanding column recognition
+4f4e4c1 2026-03-19 05:09:25 +0000 Improve import data validation by expanding column name recognition
+ad70acb 2026-03-19 04:46:09 +0000 Improve file import process by making 'competência' optional for D8 and contact imports
+d12f82f 2026-03-19 04:25:16 +0000 Update button text from "Salvar" to "Publicar" for system updates
+72e518d 2026-03-19 04:23:31 +0000 feat: Central de Atualizações (Task #11) - system update notification module
+ad05638 2026-03-19 04:17:12 +0000 feat: Central de Atualizações (Task #11) - system update notification module
+81e0e06 2026-03-19 04:10:20 +0000 feat: Central de Atualizações (Task #11)
+a530376 2026-03-19 03:56:40 +0000 Transitioned from Plan to Build mode
+5a16da6 2026-03-19 03:43:49 +0000 feat: vendedor/owner can cancel boleto requests; notifications without limit
+d1742a3 2026-03-19 03:42:44 +0000 feat: vendedor/owner can cancel boleto requests; notifications limit raised to 200
+e0f9012 2026-03-19 03:39:38 +0000 Transitioned from Plan to Build mode
+6ccbbb5 2026-03-19 03:28:01 +0000 Extend contract retention period to ninety days
+7071374 2026-03-17 14:29:10 +0000 fix: show all vinculos in cliente detail view (task #9)
+ab91241 2026-03-17 04:28:36 +0000 Update sidebar logo to appear white in dark mode
+cf38856 2026-03-17 04:23:39 +0000 Adapt tenant theme settings for dark mode compatibility
+82fcf92 2026-03-17 04:18:27 +0000 Improve sidebar visibility in dark mode by adjusting text colors
+51c3035 2026-03-17 04:12:17 +0000 Add theme toggle and update dark mode colors
+13c98f7 2026-03-17 04:07:28 +0000 Improve sidebar contrast by hardcoding accent color for open groups
+7336ee9 2026-03-17 04:05:51 +0000 Improve background contrast for open sidebar groups
+6ee997b 2026-03-17 04:01:19 +0000 Improve sidebar distinction between open and closed groups
+da90d9d 2026-03-17 03:51:08 +0000 Improve sidebar readability by making collapsed group labels fully visible
+c3c1d35 2026-03-17 03:45:17 +0000 Improve sidebar visibility for collapsed group labels and chevrons
+137362e 2026-03-17 03:26:41 +0000 Update sidebar styling to use primary color theme
+6030efc 2026-03-17 03:25:53 +0000 Reorganização + visual da sidebar (#8)
+5f9cb7a 2026-03-17 03:21:24 +0000 Transitioned from Plan to Build mode
+fc88846 2026-03-17 02:28:39 +0000 Restrict access to nota-promissoria page to specific roles
+9409096 2026-03-17 02:27:36 +0000 Restringir Nota Promissória a master e coordenação (#7)
+2610028 2026-03-16 10:27:09 +0000 Restrict creative tool access to master users only
+53c8e84 2026-03-16 02:55:16 +0000 Add brand configuration for consistent creative generation
+9c8ee6a 2026-03-16 02:17:44 +0000 Add brand configuration options for creative generation
+1a5ad03 2026-03-16 02:15:40 +0000 Add visual customization for brand configuration in creative tools
+a40b82f 2026-03-15 21:31:58 +0000 Improve image generation prompts by cleaning user input
+3e948e6 2026-03-15 21:26:37 +0000 Improve image generation prompts by clarifying visual requirements
+23da744 2026-03-15 20:58:13 +0000 Remove creative generation limit for master users
+8f59023 2026-03-15 20:45:09 +0000 Add fullscreen image preview and refine prompt service
+48b2358 2026-03-15 20:23:34 +0000 Simplify creative asset generation form and AI prompt
+46b5144 2026-03-15 19:42:14 +0000 Add custom instructions field and shortcut to creative generator
+390fdb8 2026-03-15 19:31:51 +0000 Fix error when displaying generated images on creative page
+621736c 2026-03-15 19:14:19 +0000 Trocar geração de imagens de DALL-E para Google Imagen 4
+42c1d7c 2026-03-15 19:10:56 +0000 Transitioned from Plan to Build mode
+c039ca8 2026-03-15 17:56:36 +0000 Add AI-powered creative image generation tool
+8108051 2026-03-15 14:39:30 +0000 Fix runtime error in contract flow step editing
+4874005 2026-03-15 05:33:00 +0000 Add flow management for contracts with step reordering
+ea0cafd 2026-03-15 01:15:09 +0000 Update proposal form to correctly handle Brazilian number formats
+b30cf63 2026-03-14 22:50:49 +0000 Add contract management features with API and UI components
+80b4408 2026-03-14 22:12:01 +0000 Add contract module database tables and schema definitions
+db5cb65 2026-03-14 21:48:50 +0000 Update promissory note document layout for improved clarity
+1bf7601 2026-03-14 21:47:51 +0000 Task #3: Rebuild Nota Promissória PDF with correct legal text
+6cb15dd 2026-03-14 21:46:46 +0000 Task #3: Rebuild Nota Promissória PDF with correct legal text
+adc0afa 2026-03-14 21:42:40 +0000 Transitioned from Plan to Build mode
+21da577 2026-03-14 21:24:31 +0000 Task #2: Move company management from standalone page to inline Sheet
+b5c94b8 2026-03-14 21:22:45 +0000 Task #2: Move company management from standalone page to inline Sheet
+13a8669 2026-03-14 21:08:38 +0000 Post-merge setup completed successfully
+aed0336 2026-03-14 21:06:09 +0000 Add Promissory Note (Nota Promissória) module
+53b6953 2026-03-14 21:06:08 +0000 Git commit prior to merge
+f5a0ec4 2026-03-14 13:36:18 +0000 Add a two-level navigation system to the beta hub layout
+2c1cdfc 2026-03-14 13:23:42 +0000 Add a beta layout for master users with drag-and-drop functionality
+5d38e1c 2026-03-14 13:09:48 +0000 Add new screens for detailed campaign and module navigation flows
+793620a 2026-03-14 02:34:58 +0000 Add four distinct layout variations for the application's user interface
+de79a8b 2026-03-14 02:30:09 +0000 Update navigation bar icon for individual searches
+f981868 2026-03-14 02:27:02 +0000 Add missing icon and adjust user table layout for better visibility
+e4dcd79 2026-03-14 02:14:22 +0000 Add three distinct layout variations for the application's user interface
+a8907e4 2026-03-14 02:02:49 +0000 Published your App
+a8a02d8 2026-03-14 01:32:25 +0000 Update default tenant in development environment
+a08bf08 2026-03-11 13:30:02 +0000 Increase time limit for generating large lists
+cb4bd10 2026-03-11 13:29:41 +0000 Transitioned from Plan to Build mode
+81590a2 2026-03-11 03:26:53 +0000 Automatically approve list purchase requests for master users
+67119e3 2026-03-11 03:25:55 +0000 Transitioned from Plan to Build mode
+6b543ee 2026-03-11 02:37:37 +0000 Improve feedback system with automatic read status and draft saving
+379e2c8 2026-03-11 01:27:21 +0000 Adjust user access controls to use Brazil's time zone and normalize day comparisons
+521fe94 2026-03-11 01:23:00 +0000 Transitioned from Plan to Build mode
+dadcd6b 2026-03-11 01:19:28 +0000 Improve feedback privacy and manager visibility
+8facc14 2026-03-11 01:15:41 +0000 Transitioned from Plan to Build mode
+da40af2 2026-03-09 23:32:08 +0000 Add a commission table management system with CSV import capabilities
+e303731 2026-03-09 23:25:34 +0000 Transitioned from Plan to Build mode
+8d0ec96 2026-03-09 16:50:16 +0000 Published your App
+9478eff 2026-03-09 16:43:08 +0000 Add direct image upload functionality to creative gallery and improve form validation
+1e47b2e 2026-03-09 16:37:02 +0000 Add image to creative asset for improved user experience
+66213d6 2026-03-09 14:18:33 +0000 Fix error preventing file imports by correcting module loading
+6352e6e 2026-03-09 14:17:44 +0000 Transitioned from Plan to Build mode
+b7fbbca 2026-03-09 12:30:29 +0000 Add name field to commission tables and update related forms
+064f0e5 2026-03-09 12:20:16 +0000 Adjust avatar positioning and appearance on user cards
+9895974 2026-03-09 12:15:27 +0000 Adjust avatar size and positioning on the generated card
+a1fd4ec 2026-03-09 12:12:39 +0000 Update card generation to adjust avatar size and container dimensions
+b2d1b57 2026-03-09 12:09:03 +0000 Update card appearance by resizing white box and removing avatar border
+dc063bd 2026-03-09 12:05:02 +0000 Update avatar rendering and border styles for improved visual appearance
+4f2af07 2026-03-09 12:00:48 +0000 Update card design by adjusting avatar size and text positioning
+715de36 2026-03-09 11:55:13 +0000 Update card design to improve avatar and text positioning
+af57dd6 2026-03-09 11:48:27 +0000 Update avatar and text positioning for better visual presentation
+e8dddc4 2026-03-09 11:47:35 +0000 Adjust card display to accommodate a larger avatar and improved text spacing
+a1adba0 2026-03-09 11:25:29 +0000 Remove avatar border from finalized card
+e6a89cf 2026-03-09 11:23:49 +0000 Update avatar border to solid purple color
+1dd352d 2026-03-09 11:12:22 +0000 Update card finalizer display with visual adjustments
+d7f43a7 2026-03-09 11:05:18 +0000 Adjust card layout to improve spacing and positioning of text elements
+8b084e7 2026-03-09 10:44:45 +0000 Remove QR code and Instagram icon from signature display
+23cba5b 2026-03-09 10:24:16 +0000 Adjust card layout to improve text alignment and icon placement
+91afb0d 2026-03-09 10:20:48 +0000 Adjust avatar position within the calibrated card display
+b09479c 2026-03-09 10:17:55 +0000 Adjust avatar and text positioning in the card finalizer component
+4453f1c 2026-03-09 10:15:52 +0000 Remove WhatsApp webhook integration from CRM
+96dfcfb 2026-03-09 10:01:20 +0000 Adjust signature proportions on the finalizer card for better element alignment
+c4a46af 2026-03-09 09:51:37 +0000 Visual edit
+c1fd36e 2026-03-09 09:51:20 +0000 Visual edit
+11c3d4f 2026-03-09 09:50:45 +0000 Visual edit
+46903f0 2026-03-09 09:49:42 +0000 Remove user avatar from dashboard header to display only their name
+0f29b76 2026-03-09 09:33:30 +0000 Remove large photo from seller dashboard, revert to displaying user name only
+9b8963e 2026-03-09 09:32:56 +0000 Transitioned from Plan to Build mode
+9d05b4c 2026-03-08 21:59:18 +0000 Add an alias for the WhatsApp labels webhook endpoint
+6f86fa1 2026-03-08 21:33:41 +0000 Address startup timeouts by deferring database and background operations
+67842a8 2026-03-08 20:37:18 +0000 Saved progress at the end of the loop
+ef7d9fc 2026-03-08 20:25:24 +0000 Integrate CRM user data with WhatsApp platform for seamless agent management
+514550c 2026-03-08 20:20:24 +0000 Transitioned from Plan to Build mode
+179f872 2026-03-08 19:35:02 +0000 Add WhatsApp label integration for client communication and tracking
+66a3a60 2026-03-08 19:28:06 +0000 Transitioned from Plan to Build mode
+86005a1 2026-03-08 19:05:33 +0000 Add Instagram QR code and improve card preview functionality
+7f1720a 2026-03-08 19:00:41 +0000 Transitioned from Plan to Build mode
+2906148 2026-03-08 18:21:27 +0000 Update card design with calibrated proportions and proper font loading
+1c54be5 2026-03-08 18:16:29 +0000 Transitioned from Plan to Build mode
+0cbc392 2026-03-08 17:15:09 +0000 Add a gallery of customizable creatives for users to personalize and download
+24a8aa2 2026-03-08 17:06:03 +0000 Transitioned from Plan to Build mode
+310ffcf 2026-03-08 15:25:48 +0000 Add total points calculation to the commission table simulator results
+7e64d48 2026-03-08 15:23:29 +0000 Transitioned from Plan to Build mode
+de4cd22 2026-03-08 14:54:09 +0000 Add a commission table simulator for loan portability comparisons
+f71aff8 2026-03-08 14:44:31 +0000 Transitioned from Plan to Build mode
+13f4c96 2026-03-08 14:02:55 +0000 Improve access to support materials with smart header shortcuts
+a3ac889 2026-03-08 13:55:46 +0000 Transitioned from Plan to Build mode
+7347dd8 2026-03-08 12:36:33 +0000 Add a support materials section with file uploads and category filtering
+839f460 2026-03-08 12:29:02 +0000 Transitioned from Plan to Build mode
+d3e8c97 2026-03-06 21:46:38 +0000 Expand production card detection to include complementary withdrawals
+a2bd7e9 2026-03-06 21:45:50 +0000 Transitioned from Plan to Build mode
+246f8c4 2026-03-06 17:41:28 +0000 Keep sellers on the same campaign list when registering attendance
+c668335 2026-03-06 12:58:02 +0000 Update proposal validity date to display tomorrow's date
+4464fe0 2026-03-06 12:52:01 +0000 Add options to export simulation data to PDF and switch calculation modes
+205308a 2026-03-06 12:37:19 +0000 Update PDF export to include tenant logo and improve design
+8521d46 2026-03-06 12:33:37 +0000 Transitioned from Plan to Build mode
+97e9afa 2026-03-06 12:27:58 +0000 Update sidebar to show correct simulator names
+169906e 2026-03-06 12:27:42 +0000 Transitioned from Plan to Build mode
+1c2b443 2026-03-06 12:25:35 +0000 Update sidebar to show 'Simulador de Compra' twice
+735c736 2026-03-06 12:25:01 +0000 Update simulator title to reflect amortization functionality
+637048e 2026-03-06 12:14:53 +0000 Replace amortization simulator with full portability simulator functionality
+1d7dfd7 2026-03-06 12:08:44 +0000 Transitioned from Plan to Build mode
+7a5d126 2026-03-06 01:30:26 +0000 Add user permissions directly to login response for improved reliability
+26b6af8 2026-03-06 01:26:47 +0000 Transitioned from Plan to Build mode
+1eada0c 2026-03-05 16:06:35 +0000 Add ability to exclude specific banks when searching for clients
+aea3c56 2026-03-05 15:36:43 +0000 Fix issue where exported CSV files are empty or incomplete
+cd42549 2026-03-05 15:35:53 +0000 Transitioned from Plan to Build mode
+5f8cc18 2026-03-05 15:28:58 +0000 Add direct CSV export functionality for campaign leads
+2e4807b 2026-03-05 15:28:30 +0000 Transitioned from Plan to Build mode
+c5137ac 2026-03-04 18:12:21 +0000 Fix issue preventing users from exporting campaign data
+8c41922 2026-03-04 18:11:29 +0000 Transitioned from Plan to Build mode
+def9854 2026-03-04 17:32:33 +0000 Transitioned from Plan to Build mode
+153c62c 2026-03-04 16:49:08 +0000 Add functionality to export campaign leads and import enriched client data
+93cf219 2026-03-04 16:38:43 +0000 Transitioned from Plan to Build mode
+8e78be4 2026-03-04 16:03:56 +0000 Add direct download for missing birth date customer data
+d3cedef 2026-03-04 16:02:22 +0000 Transitioned from Plan to Build mode
+4309f7a 2026-03-04 15:57:14 +0000 Saved progress at the end of the loop
+aa3c4e1 2026-03-04 15:49:22 +0000 Published your App
+c5f4e3e 2026-03-04 14:20:19 +0000 Allow users to input zero values in various filtering fields
+533d38e 2026-03-04 14:16:03 +0000 Transitioned from Plan to Build mode
+0537d42 2026-03-04 10:42:31 +0000 Update state government import to use dynamic UF selection for convenio
+d5c02cb 2026-03-04 03:41:09 +0000 Add new import type for state government employee data
+46878c6 2026-03-04 03:07:45 +0000 Add support for importing employee data from government state sources
+5dbbed9 2026-03-04 02:25:51 +0000 Add missing import for OR condition in database queries
+cc19581 2026-03-04 02:21:51 +0000 Transitioned from Plan to Build mode
+df00a31 2026-03-04 00:47:00 +0000 Improve functional status filtering with multi-select and backward compatibility
+15113df 2026-03-04 00:35:00 +0000 Transitioned from Plan to Build mode
+281fb87 2026-03-03 12:27:03 +0000 Add ability for managers to delete feedback entries
+cce1afc 2026-03-03 02:49:51 +0000 Improve feedback system with AI and individual commenting features
+023b011 2026-03-03 02:37:40 +0000 Transitioned from Plan to Build mode
+1f2f7a2 2026-03-03 02:26:42 +0000 Add DISC behavioral profiler and feedback system for employee development
+8d0f485 2026-03-03 02:08:18 +0000 Transitioned from Plan to Build mode
+9ff5218 2026-03-02 16:07:30 +0000 Update ranking badges to display only the rank number in a yellow box
+811faa0 2026-03-02 16:05:27 +0000 Transitioned from Plan to Build mode
+45209c1 2026-03-02 14:40:17 +0000 Enable tagging for all individual client consultations
+cd655e1 2026-03-02 12:09:36 +0000 Published your App
+f406c5e 2026-03-02 03:19:51 +0000 Add a metric to track manually handled sales leads
+f8fb8b1 2026-03-02 03:16:38 +0000 Transitioned from Plan to Build mode
+37b5096 2026-03-02 03:07:50 +0000 Add comprehensive sales reports for production history and daily activities
+0b1c09b 2026-03-02 03:00:17 +0000 Transitioned from Plan to Build mode
+cbb1fdf 2026-03-02 02:41:24 +0000 Update dashboard rankings layout and avatar display for better user experience
+06e1081 2026-03-02 02:38:26 +0000 Transitioned from Plan to Build mode
+c5f607a 2026-03-02 01:40:54 +0000 Fix manager dashboard errors by ensuring correct integer casting for team IDs
+a20a618 2026-03-02 01:15:20 +0000 Fix error when displaying team production data on dashboard
+0b932bd 2026-03-02 01:14:15 +0000 Transitioned from Plan to Build mode
+bce1688 2026-03-02 00:57:45 +0000 Update dashboards to display team and individual sales performance rankings
+8db9c5e 2026-03-02 00:20:12 +0000 Fix scrolling issue on the pipeline page
+ee84de6 2026-03-02 00:18:22 +0000 Transitioned from Plan to Build mode
+a75c95f 2026-03-02 00:10:46 +0000 Update sales features and navigation with new options and labels
+9ab5765 2026-03-01 23:21:57 +0000 Restrict CSV export functionality to specific user roles
+754cab6 2026-03-01 23:20:12 +0000 Transitioned from Plan to Build mode
+d0cc2d9 2026-03-01 22:43:54 +0000 Fix permission editing for new sub-items in user management
+f40b633 2026-03-01 22:40:30 +0000 Transitioned from Plan to Build mode
+34ce985 2026-03-01 22:08:34 +0000 Improve client contact management and layout in sales attendance
+05c57fa 2026-03-01 21:30:06 +0000 Update how user and tenant information is accessed for tag management
+db77a80 2026-03-01 21:22:38 +0000 Transitioned from Plan to Build mode
+fd0b862 2026-03-01 21:01:58 +0000 Transitioned from Plan to Build mode
+aee912f 2026-03-01 20:49:11 +0000 Add TagManager component to the sales and service page
+5b4ba00 2026-03-01 20:39:45 +0000 Fix file organization and restore application functionality
+a42aa04 2026-03-01 20:38:58 +0000 Transitioned from Plan to Build mode
+e5a286f 2026-02-26 03:32:42 +0000 Make margin and estimated proposal values optional and animate notification bell
+6a21bc1 2026-02-26 03:27:40 +0000 Transitioned from Plan to Build mode
+b323ced 2026-02-26 03:17:02 +0000 Add reference base selection to filter contracts and payroll data
+433d44b 2026-02-26 03:09:53 +0000 Transitioned from Plan to Build mode
+738a5d7 2026-02-26 01:12:32 +0000 Published your App
+9d82cb9 2026-02-26 00:11:43 +0000 Improve data import accuracy and performance for payroll and client data
+2598651 2026-02-26 00:05:56 +0000 Transitioned from Plan to Build mode
+8039ced 2026-02-24 13:08:36 +0000 Add ability to schedule follow-up appointments directly from client consultation screen
+3c9e456 2026-02-24 09:45:53 +0000 Add a scheduling system to manage appointments and send reminders
+634df68 2026-02-24 09:33:39 +0000 Transitioned from Plan to Build mode
+4a79bc0 2026-02-24 03:07:02 +0000 Add general appointments to the agenda page alongside lead return schedules
+de05e86 2026-02-24 03:04:37 +0000 Integrate appointment scheduling into sales and attendance workflows
+037f528 2026-02-24 03:00:06 +0000 Add appointment scheduling functionality and related API endpoints
+b5e9fb6 2026-02-24 02:14:26 +0000 Add a notification system to the application header
+b70d97b 2026-02-24 02:09:09 +0000 Add notifications for important events within the sales pipeline
+d3633f5 2026-02-24 02:05:50 +0000 Add a central service for creating new notifications
+1d30030 2026-02-24 02:03:38 +0000 Add a system for managing user notifications and their statuses
+119d0d6 2026-02-24 01:35:20 +0000 Improve login hook resilience during hot module replacement
+6cfb653 2026-02-24 01:34:25 +0000 Transitioned from Plan to Build mode
+f4a16fd 2026-02-24 01:10:23 +0000 Visual edit
+1607982 2026-02-24 00:44:46 +0000 Add requirement for last four digits of card for specific banks and loan types
+39c83f0 2026-02-24 00:43:02 +0000 Transitioned from Plan to Build mode
+7178943 2026-02-24 00:37:01 +0000 Add ability for users to upload and attach payment slips
+8eb30b7 2026-02-23 05:09:23 +0000 Visual edit
+47a4aa6 2026-02-23 05:09:12 +0000 Visual edit
+c7ab8a9 2026-02-23 05:08:52 +0000 Visual edit
+1cb751d 2026-02-23 05:08:02 +0000 Visual edit
+612a2d9 2026-02-23 05:07:46 +0000 Visual edit
+e025d86 2026-02-23 05:07:28 +0000 Visual edit
+ef0a15b 2026-02-23 05:07:07 +0000 Visual edit
+fae3eb7 2026-02-23 05:05:52 +0000 Visual edit
+696ee11 2026-02-23 05:05:42 +0000 Visual edit
+531f81b 2026-02-23 05:05:30 +0000 Visual edit
+3c344ee 2026-02-23 05:05:01 +0000 Visual edit
+dc7afb7 2026-02-23 05:03:36 +0000 Adjust user avatar size and layering with dashboard cards
+19adb1a 2026-02-23 05:03:09 +0000 Transitioned from Plan to Build mode
+f190592 2026-02-23 04:58:58 +0000 Improve user avatar display and spacing on the dashboard
+1adfb51 2026-02-23 04:56:55 +0000 Improve user avatar appearance and positioning on the dashboard
+8613d86 2026-02-23 04:54:46 +0000 Improve user avatar display and card layering on the dashboard
+e74c389 2026-02-23 04:50:31 +0000 Improve broker avatar display and storage for better user profile representation
+5500c3e 2026-02-23 04:50:22 +0000 Visual edit
+dc7b779 2026-02-23 04:48:56 +0000 Visual edit
+536b391 2026-02-23 04:45:14 +0000 Make broker avatar images larger and more proportional on the dashboard
+8933282 2026-02-23 04:44:48 +0000 Transitioned from Plan to Build mode
+91faf77 2026-02-23 04:41:34 +0000 Update user avatar storage to use database and increase size limits
+92fcfd5 2026-02-23 04:36:27 +0000 Improve user avatar display and adjust layout for larger screens
+e0ef056 2026-02-23 04:32:40 +0000 Transitioned from Plan to Build mode
+2fb0fe1 2026-02-23 03:38:01 +0000 Restrict "Solicitar Boleto" menu and improve date of birth import handling
+75b8a4f 2026-02-23 03:33:25 +0000 Prevent editing of imported phone contacts in sales and attendance views
+aeca157 2026-02-23 03:21:57 +0000 Remove contact deletion and improve birthdate import recognition
+e0b33bb 2026-02-23 03:20:01 +0000 Transitioned from Plan to Build mode
+4b42f00 2026-02-23 03:11:49 +0000 Update request summary cards to show counts and total values
+511823e 2026-02-23 03:10:15 +0000 Transitioned from Plan to Build mode
+87dd51c 2026-02-23 03:00:11 +0000 Add ability to delete requests and display total value
+ca79f58 2026-02-23 02:19:09 +0000 Add new item to operational group in sidebar menu
+258ad07 2026-02-23 02:18:20 +0000 Transitioned from Plan to Build mode
+0461956 2026-02-23 01:50:11 +0000 Add ability to reprocess failed or pending data imports
+77650b1 2026-02-23 01:45:52 +0000 Transitioned from Plan to Build mode
+037913b 2026-02-23 01:32:33 +0000 Improve data cleanup for stalled and orphaned imports
+280a3d6 2026-02-23 01:20:43 +0000 Transitioned from Plan to Build mode
+c6fea64 2026-02-23 01:14:03 +0000 Fix contact import errors by correctly handling missing matricula column
+6032055 2026-02-23 00:46:29 +0000 Published your App
+21901d0 2026-02-22 21:29:26 +0000 Expand capacity for state abbreviations in contact and payroll staging tables
+d9ad5ce 2026-02-22 21:25:54 +0000 Transitioned from Plan to Build mode
+2d6afe2 2026-02-22 15:53:16 +0000 Fix import process to correctly match contract bank details
+f28b0de 2026-02-22 15:51:10 +0000 Transitioned from Plan to Build mode
+47e74d2 2026-02-22 15:14:14 +0000 Improve contract data management by adding surgical deletion and retention policies
+8707b28 2026-02-22 15:10:29 +0000 Transitioned from Plan to Build mode
+b79c57f 2026-02-22 13:38:57 +0000 Allow users to see all client contracts regardless of tenant
+5b4e9f2 2026-02-22 04:21:13 +0000 Published your App
+5c6e98a 2026-02-22 00:15:45 +0000 Correctly delete and insert loan contracts during data import
+40b0821 2026-02-21 23:50:13 +0000 Update contract display to show only the most recent available contracts
+91effe9 2026-02-21 23:48:31 +0000 Transitioned from Plan to Build mode
+5c2e0c7 2026-02-21 23:25:55 +0000 Correctly display payroll and contract dates across the application
+30b2c1c 2026-02-21 23:19:46 +0000 Published your App
+66353c8 2026-02-21 22:58:11 +0000 Fix date display issues caused by timezone inconsistencies
+d1e3a51 2026-02-21 22:54:41 +0000 Transitioned from Plan to Build mode
+c0bb672 2026-02-21 22:02:05 +0000 Make client data globally accessible and remove tenant restrictions
+2b8adde 2026-02-21 18:42:55 +0000 Improve data retrieval by ensuring tenant isolation
+2708804 2026-02-21 18:36:10 +0000 Transitioned from Plan to Build mode
+a714a09 2026-02-21 02:25:55 +0000 Correctly display imported data month and year on client screens
+4b43794 2026-02-21 02:24:05 +0000 Transitioned from Plan to Build mode
+7517829 2026-02-20 23:18:18 +0000 Improve customer base page performance by reducing automatic data refreshes
+56e5280 2026-02-20 23:16:52 +0000 Transitioned from Plan to Build mode
+e4fb7fb 2026-02-20 21:39:30 +0000 Adjust data retention and import status handling for improved performance
+a3a4fc7 2026-02-20 21:37:05 +0000 Improve import processing and data retention policies
+8a71a72 2026-02-20 21:24:32 +0000 Transitioned from Plan to Build mode
+3a533b1 2026-02-18 04:07:50 +0000 Add summary of user points to the awards section
+e14a410 2026-02-18 04:06:03 +0000 Transitioned from Plan to Build mode
+90f5da4 2026-02-18 03:24:38 +0000 Transitioned from Plan to Build mode
+2252dc4 2026-02-18 03:12:22 +0000 Add new icons to customize sales targets and levels
+aba8898 2026-02-18 02:59:08 +0000 Add new icons to represent various entities and concepts
+a3cc05d 2026-02-18 02:58:36 +0000 Transitioned from Plan to Build mode
+c93bb61 2026-02-18 02:18:14 +0000 Add a corn icon option for sales performance levels
+29da868 2026-02-18 02:17:14 +0000 Transitioned from Plan to Build mode
+491df4f 2026-02-18 02:00:47 +0000 Add regulation section to sales dashboard and management Add CRUD operations and API endpoints for managing and displaying the commercial regulation text.
+84da74d 2026-02-18 01:54:19 +0000 Transitioned from Plan to Build mode
+4aa515b 2026-02-18 00:35:23 +0000 Update import parser to handle points data format
+7a6e0fe 2026-02-18 00:34:25 +0000 Transitioned from Plan to Build mode
+2ef3f8e 2026-02-18 00:07:00 +0000 Update sales performance tracking to use points instead of monetary values
+682dba5 2026-02-17 23:58:37 +0000 Transitioned from Plan to Build mode
+a68ca77 2026-02-17 23:38:06 +0000 Improve seller avatar display in the dashboard header
+b040fef 2026-02-17 23:36:22 +0000 Improve how user avatars are displayed on the sales dashboard
+2e5cef7 2026-02-17 23:35:33 +0000 Transitioned from Plan to Build mode
+ff8e104 2026-02-17 23:20:16 +0000 Add ability for users to upload and manage profile avatars
+139e3ce 2026-02-17 23:14:04 +0000 Transitioned from Plan to Build mode
+a2064a3 2026-02-17 16:33:25 +0000 Fix display issues and restore missing levels in the goals and levels management
+964e050 2026-02-17 16:21:45 +0000 Add functionality to manage sales goals and levels
+bb31809 2026-02-17 15:45:39 +0000 Published your App
+1378b2b 2026-02-17 14:51:55 +0000 Improve seller dashboard display for sales levels and progress
+3b05199 2026-02-17 14:33:06 +0000 Correct login redirect to show dashboard for authorized users
+30977b3 2026-02-17 14:22:25 +0000 Ensure users can access their assigned modules and dashboards
+4aca1c4 2026-02-17 14:14:23 +0000 Enable users to view performance data and fix dashboard loading issues
+754bb92 2026-02-17 14:02:34 +0000 Add "My Dashboard" module and update tenant branding
+0c8ec6b 2026-02-17 13:31:24 +0000 Restrict access to sales management features for non-managerial roles
+0cff28a 2026-02-17 13:25:47 +0000 Update authentication to correctly identify user tenants
+cbd5bc9 2026-02-17 13:21:14 +0000 Transitioned from Plan to Build mode
+1b22dff 2026-02-17 13:16:53 +0000 Update seller dashboard to display correct individual card goals
+f34c72d 2026-02-17 05:30:51 +0000 Update sales dashboard to show correct meta and production values
+5b79cea 2026-02-17 05:17:54 +0000 Fix infinite loop in monthly goals page and update team management
+514239d 2026-02-17 05:09:15 +0000 Update team management to use general users instead of specific employees
+d471dbd 2026-02-17 04:22:46 +0000 Update team member addition to simplify form and remove unnecessary fields
+3ded3dc 2026-02-17 04:19:48 +0000 Remove unnecessary fields and validations when adding new team members
+c805682 2026-02-17 04:16:45 +0000 Transitioned from Plan to Build mode
+a66ac6c 2026-02-17 04:09:25 +0000 Update team creation to correctly assign coordinators and display their names
+a1abcec 2026-02-17 02:19:42 +0000 Fix coordinator selection in team management and API routing
+308fe64 2026-02-17 02:11:58 +0000 Add monthly sales performance goals and team management features
+bd5b5c0 2026-02-17 00:04:04 +0000 Add seller selection and import history tracking for payroll loan portability
+c7d3e67 2026-02-16 23:53:53 +0000 Transitioned from Plan to Build mode
+e64861e 2026-02-16 23:45:24 +0000 Add more contract details to the production import feature
+ce4be61 2026-02-16 23:39:21 +0000 Transitioned from Plan to Build mode
+e95b6a0 2026-02-16 23:34:13 +0000 Update contract import to use correct status column and value
+54027ed 2026-02-16 23:26:31 +0000 Show why contracts are ignored during import
+a85e974 2026-02-16 23:15:49 +0000 Add functionality to import production data for sales management
+cfde728 2026-02-16 23:07:03 +0000 Transitioned from Plan to Build mode
+cc70786 2026-02-16 22:19:42 +0000 Add commercial management section with role-based access controls
+aa98889 2026-02-16 22:10:48 +0000 Transitioned from Plan to Build mode
+e065c50 2026-02-16 19:08:46 +0000 Published your App
+5b5c7c6 2026-02-16 19:04:30 +0000 Update login flow to respect development tenant preference
+cca1138 2026-02-16 03:51:09 +0000 Enable performance module access for specific user roles
+67ac425 2026-02-16 01:32:31 +0000 Combine general and card level tiers into a single component
+b0520f7 2026-02-16 01:27:43 +0000 Add level progression cards to display general and card-specific performance metrics
+33cd197 2026-02-16 01:24:23 +0000 Transitioned from Plan to Build mode
+cf4f564 2026-02-16 01:17:14 +0000 Update dashboard layout to display general and card goals side-by-side
+0fdacd5 2026-02-16 01:12:04 +0000 Transitioned from Plan to Build mode
+09b966c 2026-02-16 00:55:22 +0000 Implement individual performance tracking and remove all ranking displays
+3c7ce73 2026-02-16 00:45:38 +0000 Transitioned from Plan to Build mode
+58ee426 2026-02-16 00:24:33 +0000 Update chart colors to a more positive purple hue
+15466c1 2026-02-16 00:23:51 +0000 Transitioned from Plan to Build mode
+59c6aaa 2026-02-16 00:21:45 +0000 Visual edit
+f2f854a 2026-02-16 00:21:29 +0000 Visual edit
+67498d9 2026-02-16 00:16:54 +0000 Update performance dashboard colors to use company palette
+0b293f0 2026-02-15 15:05:32 +0000 Improve chart readability by differentiating sales goal achievement colors
+5b62d3e 2026-02-15 15:01:43 +0000 Transitioned from Plan to Build mode
+d6cf3ca 2026-02-15 14:17:38 +0000 Transitioned from Plan to Build mode
+bfc9185 2026-02-15 14:11:54 +0000 Visual edit
+1cd3067 2026-02-15 14:11:16 +0000 Visual edit
+14f9d78 2026-02-15 14:08:02 +0000 Set Capital Go as the primary development environment
+ad1d382 2026-02-13 05:10:45 +0000 Increase font sizes for key dashboard elements
+8ca577c 2026-02-13 05:03:36 +0000 Apply Barlow Condensed font to dashboard titles for improved visual hierarchy
+aabf381 2026-02-13 05:00:52 +0000 Transitioned from Plan to Build mode
+1be53c8 2026-02-13 04:54:10 +0000 Visual edit
+614ea74 2026-02-13 04:48:35 +0000 Improve sales performance tracking with visible goal indicators and ranking
+d5ba8bb 2026-02-13 04:45:07 +0000 Transitioned from Plan to Build mode
+de888b8 2026-02-13 04:26:59 +0000 Update dashboard colors and improve screen resizing to match system theme
+268940e 2026-02-13 04:17:28 +0000 Update the sales dashboard to include gamified performance tiers and a dynamically adjusted daily goal
+27262dd 2026-02-13 04:11:22 +0000 Transitioned from Plan to Build mode
+7bc70e5 2026-02-13 03:25:50 +0000 Remove tenant filtering from client data retrieval
+66901c0 2026-02-13 01:00:04 +0000 Add vendor sales performance tracking and display
+c0f6cb2 2026-02-13 00:50:03 +0000 Transitioned from Plan to Build mode
+62238ab 2026-02-12 17:03:14 +0000 Transitioned from Plan to Build mode
+36afbb1 2026-02-12 16:53:44 +0000 Add a dedicated dashboard for sales representatives with personalized metrics
+4343a5f 2026-02-12 16:46:17 +0000 Update charting library for enhanced data visualization
+f448ed0 2026-02-12 16:45:13 +0000 Transitioned from Plan to Build mode
+79a8023 2026-02-09 22:58:47 +0000 Remove older import tracking data to free up database storage
+4e1b8b4 2026-02-09 03:18:38 +0000 Update data retention to 15 days for cleanup
+904dc0f 2026-02-09 03:17:53 +0000 Transitioned from Plan to Build mode
+0cd551f 2026-02-09 00:18:54 +0000 Add automatic data retention and staging cleanup routines
+0a4c22e 2026-02-08 23:56:43 +0000 Transitioned from Plan to Build mode
+fde0da0 2026-02-08 22:53:43 +0000 Add ability to delete user data and associated simulations
+5e62734 2026-02-08 22:51:06 +0000 Transitioned from Plan to Build mode
+c05095d 2026-02-08 22:32:10 +0000 Add ability to delete multiple users at once from the users list
+7f3b942 2026-02-08 22:27:24 +0000 Transitioned from Plan to Build mode
+57a9c7a 2026-02-06 02:12:25 +0000 Fix error when filtering by remaining installments
+661924c 2026-02-06 02:11:28 +0000 Transitioned from Plan to Build mode
+dbb5892 2026-02-03 21:24:46 +0000 Adapt bank filtering to use contract data directly
+f8a39f2 2026-02-03 21:23:31 +0000 Transitioned from Plan to Build mode
+3aff02d 2026-02-03 21:07:18 +0000 Add minimum and maximum remaining installments filter to purchase list
+ab07656 2026-02-03 01:15:50 +0000 Improve user list layout for better readability on smaller screens
+e853935 2026-02-03 01:12:32 +0000 Transitioned from Plan to Build mode
+a656c2a 2026-02-03 00:57:23 +0000 Improve user management layout by organizing action buttons
+c64a4a9 2026-02-03 00:56:22 +0000 Transitioned from Plan to Build mode
+4994265 2026-02-02 20:57:04 +0000 Move contact and attendance buttons to the header
+b690c2a 2026-02-02 20:54:47 +0000 Transitioned from Plan to Build mode
+2d2695b 2026-02-02 19:52:35 +0000 Add ability to import all contact phone numbers and address details
+8b3b1df 2026-02-02 19:49:06 +0000 Transitioned from Plan to Build mode
+e346c5f 2026-02-02 19:33:02 +0000 Fix import errors by correcting database column names
+d057020 2026-02-02 19:31:50 +0000 Transitioned from Plan to Build mode
+8db11ef 2026-02-02 12:43:54 +0000 Update login system to accept 4-digit codes and existing emails
+6a51d66 2026-02-02 12:39:37 +0000 Transitioned from Plan to Build mode
+358aab3 2026-02-02 05:14:13 +0000 Add ability to link employees to existing users and manage access
+f00c982 2026-02-02 05:06:47 +0000 Transitioned from Plan to Build mode
+7b647d0 2026-02-02 05:00:46 +0000 Add access restrictions based on time, day, and IP address
+8d59bf6 2026-02-02 04:59:24 +0000 Add filter for users without employee links and access validation
+a8afb2c 2026-02-02 04:57:57 +0000 Add ability for administrators to configure user access times and IP restrictions
+0f821f2 2026-02-02 04:51:06 +0000 Add access controls for users based on time, days, and IP addresses
+6e7f8db 2026-02-02 04:42:15 +0000 Update employee import to use exact JSON field names and order
+5174f92 2026-02-02 04:39:31 +0000 Add ability to import employee data from JSON file
+5b09beb 2026-02-02 04:31:30 +0000 Add a new API endpoint to save employee data from the hiring form
+cd21029 2026-02-02 04:13:56 +0000 Add detailed contract and personal information fields to employee records
+c28a95f 2026-02-02 03:50:14 +0000 Add system access creation to employee registration form
+5ee2cb3 2026-02-02 03:18:26 +0000 Add new fields to employee registration and update backend API
+6b2d31c 2026-02-02 03:00:55 +0000 Add comprehensive hiring details to employee records
+bf50470 2026-02-02 02:44:57 +0000 Add employees to existing users through a database migration script
+aba55e2 2026-02-02 02:10:56 +0000 Update employee selection to show available coordinators
+846f96a 2026-02-02 00:09:19 +0000 Ensure employee data is always treated as an array before filtering
+c5249b9 2026-02-02 00:07:39 +0000 Transitioned from Plan to Build mode
+18418f5 2026-02-01 23:52:17 +0000 Add ability to update team members and their compensation details
+f977089 2026-02-01 23:28:53 +0000 Add a commercial teams module with management features
+dee9cd2 2026-02-01 23:27:54 +0000 Add commercial teams management page with full CRUD operations
+6523b96 2026-02-01 13:52:47 +0000 Add a module for managing employees with enhanced security and permissions
+0cfe636 2026-02-01 13:41:58 +0000 Transitioned from Plan to Build mode
+b6770e4 2026-02-01 13:35:52 +0000 Published your App
+71d19d8 2026-01-29 19:23:54 +0000 Improve dashboard loading speed by optimizing data queries
+7bb1ac3 2026-01-29 14:28:07 +0000 Saved progress after completing a task
+d908cc7 2026-01-29 13:55:10 +0000 Enhance dashboard with client data and improve roleplay training features
+1c4e160 2026-01-29 13:53:36 +0000 Add a dashboard to display payroll loan portability metrics
+3818656 2026-01-26 14:55:08 +0000 Add a separate floating button for contact panel access
+dc89296 2026-01-26 14:53:32 +0000 Transitioned from Plan to Build mode
+c478d3b 2026-01-26 14:42:40 +0000 Improve contact panel by adding a modal for better data management
+b23b4c5 2026-01-26 14:37:00 +0000 Transitioned from Plan to Build mode
+384a6e6 2026-01-25 21:23:12 +0000 Update template headers to remove accents
+0dc190e 2026-01-25 21:20:41 +0000 Transitioned from Plan to Build mode
+7d73487 2026-01-25 15:09:34 +0000 Add history button next to payroll competence information
+b9a3c1f 2026-01-25 15:05:24 +0000 Correctly display the month and year for loan competencies
+7417c2c 2026-01-25 15:04:43 +0000 Transitioned from Plan to Build mode
+8407919 2026-01-25 14:59:04 +0000 Update loan portability simulation to show historical benefit and margin balances
+6b6349e 2026-01-25 14:57:24 +0000 Transitioned from Plan to Build mode
+86bc5e1 2026-01-25 14:46:16 +0000 Add a history view to the client consultation screen
+e0c2e9b 2026-01-25 14:37:23 +0000 Transitioned from Plan to Build mode
+747b29b 2026-01-25 14:22:33 +0000 Add historical payroll data view for client consultations
+93fc624 2026-01-25 14:07:31 +0000 Correctly display the most recent loan agreement information
+43d5b5c 2026-01-25 14:01:53 +0000 Transitioned from Plan to Build mode
+8324048 2026-01-25 13:49:33 +0000 Add detailed logging for payroll data import and retrieval
+23733ee 2026-01-25 12:56:46 +0000 Restored to 'ac04c1089f9933dddb7e05a914552e91f4b94dc7'
+494220f 2026-01-25 12:34:06 +0000 Remove obsolete staging folha data processing and related code
+8544fef 2026-01-25 12:32:32 +0000 Remove temporary staging tables and related data handling
+e01ec1d 2026-01-25 12:32:02 +0000 Saved progress after completing a task
+fa29e71 2026-01-25 12:31:42 +0000 Remove staging_folha table from import and delete operations
+4c9749d 2026-01-25 12:19:25 +0000 Restored to 'e7e89c6d8d63ec7f6b12c20df3075199fe05d43c'
+fe884c3 2026-01-25 01:03:13 +0000 Remove redundant salary and discount fields from import processing
+ede2d55 2026-01-25 01:01:55 +0000 Remove redundant fields from payroll import processing
+2ddfc97 2026-01-25 01:00:59 +0000 Transitioned from Plan to Build mode
+1e8e8e2 2026-01-24 23:56:17 +0000 Enhance client history view with credits and debits
+125ba44 2026-01-24 23:46:37 +0000 Clarify current and future system architecture for payroll loan data
+6ab90ef 2026-01-24 23:41:40 +0000 Revert payroll import template to original columns and mapping
+e87fae6 2026-01-24 22:23:01 +0000 Improve payroll data display by merging historical records
+2849355 2026-01-24 17:10:59 +0000 Update payroll loan import to correctly process salary information
+d8b6e59 2026-01-24 17:06:29 +0000 Transitioned from Plan to Build mode
+4402900 2026-01-24 11:11:15 +0000 Add enhanced file encoding detection and handling for imports
+a71154b 2026-01-24 11:06:44 +0000 Transitioned from Plan to Build mode
+19f7e4e 2026-01-24 10:12:06 +0000 Add customizable pagination to import history table
+383ee9a 2026-01-24 09:59:46 +0000 Add ability to delete multiple D8 loan agreements in bulk
+b12a28b 2026-01-24 09:54:45 +0000 Transitioned from Plan to Build mode
+e96804c 2026-01-24 03:56:25 +0000 Add retry logic for database connection failures during bulk deletion
+9baa922 2026-01-24 03:44:52 +0000 Simplify bulk delete operation by splitting complex queries
+04c4e22 2026-01-24 03:34:02 +0000 Fix error when deleting multiple import runs in bulk
+94328e5 2026-01-24 03:16:07 +0000 Improve bulk deletion of import runs by validating and sanitizing IDs
+70dcdd9 2026-01-24 03:03:50 +0000 Add ability to delete multiple import runs at once
+354ef51 2026-01-24 03:02:00 +0000 Add bulk deletion modal and progress tracking for imported data
+ade6da1 2026-01-24 03:01:10 +0000 Add bulk deletion functionality for imported data
+9236a35 2026-01-24 03:00:33 +0000 Add bulk deletion functionality for imported client bases
+35f9ab9 2026-01-23 20:08:32 +0000 Update AI prompt for PDF to JSON conversion to expect numeric values
+a7ede0f 2026-01-23 19:18:04 +0000 Update routes to allow operational users access to specific modules
+14acf36 2026-01-23 19:10:29 +0000 Add debugging logs to track user access to operational modules
+8749731 2026-01-23 18:55:59 +0000 Add debug logs to investigate user access issues for operational module
+8d202e6 2026-01-23 18:39:28 +0000 Grant operational users access to the routing module
+cf1d842 2026-01-23 18:38:39 +0000 Transitioned from Plan to Build mode
+e7f7b0a 2026-01-23 18:24:32 +0000 Grant operational users full editing access to system configurations
+179ef25 2026-01-23 18:23:57 +0000 Allow operational users to manage coefficient tables and nomenclature
+3ef7cb4 2026-01-23 18:22:57 +0000 Grant operational users access to manage agreements and coefficient tables
+1a37666 2026-01-23 18:21:28 +0000 Grant operational users editing access to the operational area
+0de450c 2026-01-19 00:50:00 +0000 Increase visibility of lead details and interaction history
+7ebbd2d 2026-01-19 00:36:21 +0000 Update lead interaction endpoint to avoid route conflicts
+199f76f 2026-01-18 23:27:47 +0000 Add ability to add observations and interactions to leads without changing their stage
+78c78a8 2026-01-18 23:16:51 +0000 Add random persona selection and validation for AI prompts
+38cbe37 2026-01-18 23:10:04 +0000 Add multiple personas to the free mode of roleplay
+f7d8b59 2026-01-18 23:06:56 +0000 Allow master users to delete imported data from any tenant
+b65b156 2026-01-18 22:19:41 +0000 Improve roleplay mode to support levels and track user progression
+c485630 2026-01-18 19:45:45 +0000 Add structured learning paths for sales roleplay scenarios
+b47e9b2 2026-01-18 16:19:04 +0000 Improve AI roleplay prompt customization and application
+f594e22 2026-01-18 16:02:13 +0000 Add conversation memory to the AI roleplay feature
+4f78522 2026-01-18 15:07:38 +0000 Allow access to modules based on sub-item permissions
+ebaa80d 2026-01-18 14:12:46 +0000 Add comprehensive test suite for contact utility functions
+02cb3ef 2026-01-18 13:39:31 +0000 Allow multiple contract types to be selected for list purchases
+4c5f6fa 2026-01-18 13:24:47 +0000 Make contract type filter work with manually entered bank names
+88b6e67 2026-01-18 12:54:23 +0000 Make contract type filter dynamic based on selected bank
+098ca95 2026-01-18 12:33:04 +0000 Improve file naming for downloaded loan lists
+87cc560 2026-01-18 12:26:10 +0000 Create descriptive filenames for downloaded CSV files
+72d2c47 2026-01-18 12:17:11 +0000 Show all import history records instead of just fifty
+89e3fde 2026-01-18 02:29:34 +0000 Apply gradient background to sidebar and update preview
+92b9fbf 2026-01-18 02:05:39 +0000 Update admin branding to migrate legacy gradient configurations
+f2e608a 2026-01-18 02:04:29 +0000 Introduce visual gradient editor for tenant branding customization
+476af98 2026-01-18 01:40:11 +0000 Published your App
+b3125db 2026-01-17 23:54:02 +0000 Add support for custom gradient colors to tenant branding
+405aac8 2026-01-17 23:51:04 +0000 Add gradient support for tenant branding customization
+1399fb4 2026-01-17 22:37:39 +0000 Add audit trail for tenant branding changes and improve persistence
+ef9782c 2026-01-17 22:32:26 +0000 Add detailed logging and update timestamps for tenant branding changes
+a0de4f6 2026-01-17 22:30:03 +0000 Add logging and timestamp updates to tenant branding and logo modifications
+d75b2e3 2026-01-15 03:55:53 +0000 Improve loan filtering speed by optimizing data retrieval
+5f94da8 2026-01-15 03:11:47 +0000 Improve filtering by functional status and adjust data source
+c70f24d 2026-01-15 03:01:32 +0000 Fix filters for loan purchase list screen
+927b94f 2026-01-15 02:25:09 +0000 Populate functional status and margin columns accurately in exported CSV files
+d943515 2026-01-15 02:22:04 +0000 Update order export to adjust CSV columns and data accuracy
+d944a66 2026-01-15 00:36:48 +0000 Published your App
+d23cbf4 2026-01-15 00:18:31 +0000 Improve CSV generation for loan portability by fixing data handling and adding detailed logging
+5e55274 2026-01-15 00:13:39 +0000 Transitioned from Plan to Build mode
+b0e8b3c 2026-01-14 22:42:32 +0000 Add ability to cancel ongoing file generation and processing
+1974add 2026-01-14 19:56:16 +0000 Improve file generation process and error handling for loan portability simulations
+05eed05 2026-01-14 18:40:13 +0000 Published your App
+df8edee 2026-01-14 16:59:50 +0000 Add ability to reprocess failed export orders and fix database query limits
+e0424ac 2026-01-14 16:27:35 +0000 Fix error when attempting to set a contact as primary
+e84973f 2026-01-14 16:00:49 +0000 Improve client export performance with optimized queries and chunking
+3aedff1 2026-01-14 15:39:35 +0000 Limit order generation to selected package size for large search results
+1ade30d 2026-01-14 03:32:53 +0000 Add ability to customize sidebar colors for user interface
+3960dc4 2026-01-14 03:32:15 +0000 Add custom colors and responsiveness for the side menu
+03e2237 2026-01-14 03:28:54 +0000 Add custom colors for the sidebar menu and its font
+42ddeac 2026-01-14 02:55:20 +0000 Update system title and tenant theme provider settings
+5a4dc1f 2026-01-14 02:10:23 +0000 Make system name display optional on the login screen
+4fda734 2026-01-14 00:39:45 +0000 Enhance tenant branding and login experience with persistent settings
+2ea372d 2026-01-13 23:45:14 +0000 Published your App
+3bd31cc 2026-01-13 23:40:38 +0000 Allow customization of the sidebar logo height per tenant
+c057e40 2026-01-13 20:33:42 +0000 Improve database error handling and retry mechanisms
+481ab11 2026-01-13 20:30:25 +0000 Allow uploading custom logos for tenant branding
+1b39ffc 2026-01-12 03:51:40 +0000 Improve visual identity customization for multiple tenants
+24a06c0 2026-01-12 03:48:38 +0000 Update visual identity settings to support multiple tenants
+1b3eb2b 2026-01-12 03:33:34 +0000 Restructure ALPHA module permissions to use individual sub-item controls
+78a2a87 2026-01-12 02:25:41 +0000 Display ALPHA module sub-items as individual rows instead of a grouped section
+c1f3ca2 2026-01-12 01:52:02 +0000 Implement granular sub-item permissions with UI and backend updates
+c95e4b2 2026-01-12 01:46:24 +0000 Add granular control for user permissions within modules
+1dab770 2026-01-12 01:28:41 +0000 Update page title and subtitle for the purchase simulator
+74ca8a0 2026-01-12 01:05:04 +0000 Add functionality to delete leads from the sales pipeline
+0acb605 2026-01-12 00:48:29 +0000 Add ability to automatically search for clients using CPF from URL
+df07eda 2026-01-11 22:33:16 +0000 Make CPF a clickable link to the customer consultation page
+4d8ed97 2026-01-11 21:19:57 +0000 Add phone numbers to lead details in the sales pipeline
+c3cea91 2026-01-11 21:08:42 +0000 Improve lead card display to show client phone numbers
+9a5a7a3 2026-01-11 20:42:25 +0000 Make moving leads in the sales pipeline more efficient
+67d7f2b 2026-01-11 20:32:24 +0000 Correctly map lead markers to pipeline columns for accurate lead tracking
+e16d102 2026-01-11 20:00:23 +0000 Improve lead creation and update flow for sales pipeline
+d5f82bf 2026-01-11 19:21:39 +0000 Add campaign ID to sales lead assignments for accurate tracking
+71066c1 2026-01-09 17:52:25 +0000 Add lead creation to sales pipeline from client consultation
+afbb5e4 2026-01-09 17:47:24 +0000 Published your App
+849ab7a 2026-01-09 16:25:52 +0000 Ensure leads appear in the sales pipeline by creating assignments
+b030f14 2026-01-09 16:16:32 +0000 Fix error when assigning existing leads to users
+02b9132 2026-01-09 16:09:59 +0000 Add direct lead creation with automatic campaign assignment
+d6cf67f 2026-01-09 16:07:26 +0000 Simplify lead creation for direct sales consultations
+8f6060c 2026-01-09 15:58:56 +0000 Add ability to add clients to sales pipeline from consultation screen
+c66d0f3 2026-01-09 15:39:03 +0000 Add a notes field to customer records to store interaction history
+acfbd35 2026-01-09 02:23:13 +0000 Improve AI extraction prompt for better data type handling
+1123854 2026-01-09 02:17:27 +0000 Update PDF text extraction service to use pdfjs-dist directly
+01bc7ce 2026-01-08 16:47:08 +0000 Update PDF import to correctly process files using a new module
+b171771 2026-01-08 16:44:06 +0000 Update PDF import to use correct module loading
+aabce5a 2026-01-08 16:00:47 +0000 Add PDF upload and extraction for creating loan itineraries
+08cd315 2026-01-08 15:55:21 +0000 Add PDF parsing for automated roteiro import
+1a4e3ac 2026-01-08 15:43:22 +0000 Update payroll loan portability rules for PH Tech bank
+7b45489 2026-01-08 15:39:05 +0000 Update loan import format to include new operational fields
+724f4d3 2026-01-08 05:00:27 +0000 Provide example JSON for importing payroll loan portability data
+1de7d83 2026-01-08 04:59:05 +0000 Update loan portability simulation with expanded operational and eligibility details
+bc130eb 2026-01-08 04:56:00 +0000 Update script to import loan scenarios with new expanded JSON format
+7d0e26e 2026-01-08 04:47:53 +0000 Update module names and organize permissions across the application
+50ede38 2026-01-08 04:34:59 +0000 Update user access control to use profile permissions instead of roles
+3a35535 2026-01-08 04:28:48 +0000 Update access permissions to rely on user profiles instead of roles
+1ddbe41 2026-01-07 17:28:18 +0000 Ensure download functionality for client lists works correctly
+74b9271 2026-01-07 17:01:34 +0000 Fix error when adding contact phone numbers to client records
+8970cb7 2026-01-07 16:50:05 +0000 Fix error with contact sorting after schema update
+3295fa9 2026-01-07 16:45:09 +0000 Protect manual contacts from being deleted during data re-imports
+9405cc8 2026-01-07 16:42:57 +0000 Add "Hot" badge to manually added leads in sales and consultation views
+87ac498 2026-01-07 16:40:16 +0000 Add ability to manually create client contacts with a hot badge
+a5f8552 2026-01-07 16:39:50 +0000 Add manual phone number persistence and hot badge for client contacts
+fa4afb2 2026-01-07 16:09:47 +0000 Add ability to copy customer names with proper formatting
+b70bc6f 2026-01-07 15:55:39 +0000 Add ability to copy customer names with correct capitalization
+6d98c6e 2026-01-07 03:35:09 +0000 Improve custom font selection and URL handling for branding
+82b5c3d 2026-01-07 03:32:09 +0000 Enhance visual customization options for tenant branding and login screens
+913d13d 2026-01-07 03:06:40 +0000 Add spacing between the wolf logo and the ALPHA menu item
+94c782b 2026-01-07 03:05:15 +0000 Increase the size of the wolf logo in the application sidebar
+794c40d 2026-01-07 02:58:14 +0000 Improve logo display in the application sidebar
+5cb0206 2026-01-07 02:48:37 +0000 Improve the visibility and alignment of the wolf logo in the sidebar
+a66bf00 2026-01-07 02:46:42 +0000 Improve display of wolf logo in the application sidebar
+8abce20 2026-01-07 02:44:33 +0000 Improve sidebar navigation and icon alignment for better user experience
+7801b33 2026-01-07 02:31:19 +0000 Increase wolf logo size and bold ALPHA title in sidebar
+d43d1b9 2026-01-07 02:27:14 +0000 Increase the size of the wolf logo in the application sidebar
+639cfdf 2026-01-07 02:26:12 +0000 Increase size of wolf logo displayed in application sidebar
+1d5554c 2026-01-07 02:25:34 +0000 Update wolf icon to use custom logo image
+eb2059d 2026-01-07 02:23:49 +0000 Update sidebar to display a wolf logo next to Alpha
+f62429a 2026-01-07 01:51:22 +0000 Update login screen with tenant branding and visual configurations
+3907571 2026-01-07 01:45:54 +0000 Add tenant branding customization and new simulator pages
+34ca845 2026-01-07 01:42:29 +0000 Update application navigation and add tenant customization options
+45dc44e 2026-01-07 01:06:46 +0000 Update access controls to use module-based permissions
+88fe1fa 2026-01-07 00:51:32 +0000 Improve client filtering to accurately show clients with zero contracts
+2e012b2 2026-01-07 00:39:48 +0000 Restored to '70b3be74d3b3495dd8358f2ccfdb07ccfcd0b0f7'
+ff1aa37 2026-01-07 00:31:36 +0000 Remove client type filter and fix functional status dropdown
+eb9f5ac 2026-01-07 00:18:55 +0000 Add ability to filter clients by type for purchase list
+926fa05 2026-01-07 00:14:52 +0000 Remove unused filters and simplify mutation logic in sales attendance
+63fec47 2026-01-07 00:12:44 +0000 Move client filters to the correct screen
+09f4985 2026-01-06 23:52:43 +0000 Add advanced filters for client situation and type to sales screens
+670ca24 2026-01-06 19:12:00 +0000 Add functionality to register client interactions and manage contact types
+984d846 2026-01-06 18:48:12 +0000 Add contact management and note-taking features for client interactions
+519f164 2026-01-06 18:21:28 +0000 Published your App
+89577bb 2026-01-06 17:59:18 +0000 Improve client consultation for sales by standardizing data formats
+729355b 2026-01-06 17:56:26 +0000 Add a client consultation page for sales and integrate client link data
+77ff8a7 2026-01-06 17:51:49 +0000 Add manual client search functionality to sales CRM
+6fb3b3a 2026-01-06 17:26:21 +0000 Improve currency parsing for accurate financial calculations
+4c06230 2026-01-06 16:58:59 +0000 Ensure benefit margins display correctly in attendance and sales views
+c649949 2026-01-06 16:28:42 +0000 Improve display of client and employment details on sales screen
+0ed1386 2026-01-06 15:57:22 +0000 Update address and contact handling for improved user data management
+1ef8a20 2026-01-06 15:30:12 +0000 Add birthday celebration and contract selection features to sales support
+986de65 2026-01-06 14:44:20 +0000 Update sales and service screen to match client consultation details
+8e25892 2026-01-06 13:46:54 +0000 Improve sales CRM by enhancing contact information display and management
+26ac034 2026-01-06 02:15:17 +0000 Add age filtering to the customer list purchase functionality
+d0446e9 2026-01-06 02:03:48 +0000 Improve handling of various date formats during data import
+da82be3 2026-01-06 02:00:15 +0000 Update customer records to include missing birth dates
+f6ae46d 2026-01-06 01:53:58 +0000 Improve date parsing to handle Excel serial date format
+6effe83 2026-01-06 01:48:32 +0000 Update client details screen with improved data display and layout
+fd2fc02 2026-01-06 01:32:23 +0000 Improve contact information handling by merging phone number data
+7af7fc8 2026-01-06 01:12:49 +0000 Update client data display and contact information handling
+d1daea5 2026-01-06 00:28:27 +0000 Allow filtering clients by zero active contracts
+521b154 2026-01-06 00:10:47 +0000 Improve organ selection component with fallback and code display
+32d8042 2026-01-06 00:08:27 +0000 Improve organization filters to show names and allow custom entries
+976c929 2026-01-06 00:05:29 +0000 Improve bank and agency filtering with creatable options and naming
+cc28c38 2026-01-05 23:53:07 +0000 Improve bank and organization filtering with normalized data
+1e5e225 2026-01-05 23:13:52 +0000 Improve combobox accessibility with a clear option
+08f4444 2026-01-05 23:10:40 +0000 Improve list purchase and consultation filters with enhanced selection
+9ebab23 2026-01-05 23:09:31 +0000 Add reusable combobox component for enhanced filtering
+20b26ea 2026-01-05 15:31:50 +0000 Update file download to use a persistent directory
+fb3de95 2026-01-05 13:35:50 +0000 Add new filters for contract type and campaign lead limits
+9717ac2 2026-01-05 13:16:32 +0000 Increase contact CPF field size to prevent import errors
+e584e99 2026-01-05 13:13:16 +0000 Published your App
+60e5b8a 2026-01-05 12:54:15 +0000 Fix incorrect margin filtering and display for user data
+e12eba9 2026-01-05 12:43:12 +0000 Improve security and validation for package selection and pricing
+eaa4199 2026-01-05 12:36:17 +0000 Add new filters for contract quantity and improve existing search capabilities
+8ee4b86 2026-01-05 03:29:30 +0000 Update contact import to include additional fields and improve data handling
+6357393 2026-01-05 03:05:22 +0000 Add ability to import client complementary data and phone numbers
+6903b2b 2026-01-05 03:03:17 +0000 Add support for importing additional client contact details
+7fa4c75 2026-01-05 02:45:04 +0000 Update import options to better reflect data types
+79f118b 2026-01-04 20:35:36 +0000 Update import history screen to show file names and full history
+bda0944 2026-01-04 15:24:52 +0000 Add editable interest rate column and auto-calculate debt balance
+2af7966 2026-01-03 22:02:44 +0000 Improve client consultation screen with visual updates to margins and loan origin
+a44f1bd 2026-01-03 20:31:40 +0000 Add a queue system for processing multiple file imports automatically
+0c5e087 2026-01-03 19:23:02 +0000 Update the model spreadsheet template to match the correct format
+5c6352e 2026-01-03 18:55:45 +0000 Fix contract import error by improving data deduplication
+b718714 2026-01-03 18:12:29 +0000 Update D8 import parser to automatically detect pensionist layout
+668c94c 2026-01-03 17:45:28 +0000 Add pensionista matricula and correct contract due date
+9783d71 2026-01-03 16:10:52 +0000 Display the institutor's registration for pensioners
+ae58bf2 2026-01-03 15:55:48 +0000 Improve contract association by matching CPF, enrollment, and department
+8afb168 2026-01-03 15:54:18 +0000 Associate loan contracts with specific customer relationships
+cdaead3 2026-01-03 14:16:05 +0000 Update customer data with import information and correct data mapping
+39b12a6 2026-01-03 14:09:07 +0000 Display correct nomenclature for UPAG and related codes
+00d49c3 2026-01-03 13:57:42 +0000 Update client data import to correctly replace old values
+9bc3bbf 2026-01-03 13:19:44 +0000 Fix nomenclature display by handling leading zeros in codes
+8ee9d8f 2026-01-02 05:34:26 +0000 Improve category compatibility for UPAG and ARQ. UPAG
+b425647 2026-01-02 01:15:58 +0000 Add ability to delete nomenclatures individually and in bulk
+c7ce340 2026-01-02 00:43:34 +0000 Fix error when editing nomenclature entries manually
+9e86103 2026-01-01 17:22:18 +0000 Improve import result display with color tokens and test IDs
+0416bf1 2026-01-01 17:20:21 +0000 Add ability to import nomenclature data from Excel files
+939f1c2 2025-12-31 22:43:13 +0000 Add unique indexes to customer data tables to prevent duplicates
+0434bae 2025-12-31 22:38:10 +0000 Transitioned from Plan to Build mode
+662ddc3 2025-12-31 18:21:11 +0000 Restored to 'dbb5103c06c98c90d200b6fb0402de6e078a1e5c'
+0ea92b6 2025-12-31 17:53:01 +0000 Restored to 'd0be137ded14bd22c10a93b6501f2aaad1347f98'
+6d9e070 2025-12-31 17:24:35 +0000 Restored to 'b9d7887a2c249f9f220d0cee3fa16443daea3085'
+0d451fc 2025-12-31 04:58:35 +0000 Add error handling to fast import upsert operations
+d18837f 2025-12-31 02:35:38 +0000 Add a tool to clean up duplicate payroll data for specific tenants
+dcd702c 2025-12-31 02:30:24 +0000 Add diagnostic endpoint to view database indexes and constraints
+05008f5 2025-12-31 02:28:56 +0000 Add temporary logs to track table and conflict columns during upserts
+6254e21 2025-12-31 01:51:16 +0000 Add duplicate data handling for imported files
+994509e 2025-12-31 01:49:50 +0000 Correctly update monthly payroll records using specific identifiers
+202663d 2025-12-31 01:47:56 +0000 Standardize unique index names for payroll and link data
+46b17b5 2025-12-31 01:45:43 +0000 Add diagnostic tool to inspect database table constraints and indexes
+3a90e4a 2025-12-31 01:27:16 +0000 Improve handling of duplicate imports by implementing atomic upserts
+63a3801 2025-12-31 01:24:06 +0000 Add a unique identifier for client contracts including bank information
+15ead54 2025-12-31 01:15:16 +0000 Add temporary logging to identify insertion errors
+8e6863d 2025-12-30 19:11:44 +0000 Add secure deletion with preview for D8 import runs
+911be60 2025-12-30 19:07:22 +0000 Add a button to delete D8 import contracts and clean up orphans
+28fca1a 2025-12-30 19:03:57 +0000 Remove D8 imported contracts and clean up orphaned records
+419c7b5 2025-12-30 19:00:13 +0000 Add endpoint to delete only D8 import contracts
+afef25f 2025-12-30 04:11:37 +0000 Add caching to active nomenclatures to improve performance
+c7e12f6 2025-12-30 04:09:11 +0000 Translate contract types to their full names on contract lists
+d116587 2025-12-30 04:07:55 +0000 Improve client consultation view by displaying names instead of codes
+31d2ae2 2025-12-30 04:05:23 +0000 Add a page to manage product naming conventions and their categories
+7fdc714 2025-12-30 04:02:31 +0000 Add CRUD endpoints for managing nomenclature data
+2cee2ca 2025-12-30 03:59:18 +0000 Add a lookup table for organizational and contract details
+04ff81e 2025-12-30 03:57:24 +0000 Improve contract linking and organization data accuracy
+cef8dae 2025-12-30 03:53:09 +0000 Improve data import by filling missing person details from CSV files
+ad66a74 2025-12-30 02:46:36 +0000 Improve import process logging with detailed header and summary information
+60d3781 2025-12-30 02:40:49 +0000 Improve data import validation and fix streaming progress tracking
+6c99f92 2025-12-30 02:38:18 +0000 Add soft merge logic for pensionist contracts and update name processing
+bf5e9a3 2025-12-30 02:35:33 +0000 Improve data normalization for user imports and currency values
+4647fcf 2025-12-30 02:33:20 +0000 Update pensionista template to include specific columns and improve validation
+9ca905f 2025-12-30 01:20:31 +0000 Update loan import template to match required column order and remove extraneous fields
+379c6c6 2025-12-30 01:17:46 +0000 Update loan data import to exclude unused fields
+4d44c64 2025-12-30 00:29:26 +0000 Update loan import to enforce required headers and ignore extras
+baab0be 2025-12-29 23:39:30 +0000 Improve bulk import by adding contract uniqueness constraint
+899aa56 2025-12-29 23:10:32 +0000 Remove contract status field from data import and updates
+af614ca 2025-12-29 06:34:58 +0000 Add name field to supplementary data import and update related templates
+1ad6df6 2025-12-29 06:31:08 +0000 Add a button to download supplementary data import templates
+8a5bf1c 2025-12-29 06:27:27 +0000 Add template for importing complementary data with phone and bank information
+233a99e 2025-12-29 06:20:13 +0000 Add phone numbers and complementary data to client details
+2999646 2025-12-29 06:17:02 +0000 Update customer data storage to handle phone numbers and dates correctly
+c79c475 2025-12-29 06:13:11 +0000 Update import endpoint to process client data from CSV and XLSX files
+bf6b926 2025-12-29 06:11:23 +0000 Update client details view to show phone summary and add a modal
+3bc4d60 2025-12-29 05:45:38 +0000 Add endpoint to import complementary customer data via CSV or XLSX
+f419633 2025-12-29 05:43:01 +0000 Add functionality to update customer complementary data and phone numbers
+6451c50 2025-12-29 05:41:20 +0000 Add complementary person data fields and a new phone number table
+8b4c81a 2025-12-29 04:31:31 +0000 Add strict validation for missing organization data in D8 imports
+a57fcab 2025-12-29 04:30:39 +0000 Update how employee links are identified and created
+a018afc 2025-12-29 04:29:05 +0000 Add ORGAO column processing to D8 import parser
+d76d368 2025-12-29 04:26:00 +0000 Update D8 import template to include the ORGAO column
+2603586 2025-12-29 04:04:17 +0000 Remove debug logs and display final alert with normalized values
+0d7a554 2025-12-29 03:55:22 +0000 Ensure numerical calculations for loan exceptions are accurate
+7c254b5 2025-12-29 03:51:18 +0000 Standardize data source for margin and credit/debit/net values
+739e219 2025-12-29 03:48:24 +0000 Add on-screen debug information for external discounts
+06946e6 2025-12-29 03:15:33 +0000 Add debug logging to display loan calculation values
+82b411b 2025-12-29 02:29:06 +0000 Add detailed explanations for out-of-payroll deductions
+add3324 2025-12-29 02:20:03 +0000 Add visual indicator for employees with outside payroll deductions
+9bc0e72 2025-12-29 02:17:42 +0000 Add a toggle to filter for loans with off-payroll discounts
+be50f96 2025-12-29 02:14:29 +0000 Add new calculated fields to loan purchase list for frontend display
+d8b9c8d 2025-12-29 02:13:13 +0000 Add filter to exclude non-payroll deductions when simulating loan purchases
+31f2e8c 2025-12-29 02:05:59 +0000 Add pop-up window for off-payroll deduction details
+096bf01 2025-12-29 02:02:56 +0000 Add alert for out-of-payroll deductions on client details page
+0e2710b 2025-12-29 01:58:05 +0000 Add additional payroll loan details to client information
+c9aed25 2025-12-28 20:54:12 +0000 Correctly associate payroll records with specific employee roles
+d287652 2025-12-28 20:27:34 +0000 Add detailed reports for imported data and improve error handling
+9aa7b6a 2025-12-28 20:26:01 +0000 Add detailed reports for imported data and errors
+6544c02 2025-12-28 20:04:59 +0000 Add import report and display import results to users
+e57237e 2025-12-28 19:49:42 +0000 Update client portal to display correct financial data and fix loan benefit bugs
+0c9d63c 2025-12-28 19:37:11 +0000 Update payroll template and parser with new headers and synonyms
+8dbce12 2025-12-28 19:27:51 +0000 Ensure tenant is correctly identified after user login
+7a5e33b 2025-12-28 19:23:42 +0000 Improve data reset process by using SQL transactions and ordered deletes
+2f14aec 2025-12-28 18:46:48 +0000 Add a sanity check to verify data integrity after reset operations
+334d4ae 2025-12-28 18:36:38 +0000 Implement asynchronous tenant data reset with progress tracking
+5034205 2025-12-28 18:24:57 +0000 Speed up tenant data reset by temporarily disabling triggers
+e02b9bf 2025-12-28 18:20:58 +0000 Add progress logs to data reset process
+c2f8369 2025-12-28 18:18:37 +0000 Add detailed analysis of tenant data reset endpoint
+a19fc18 2025-12-28 17:26:38 +0000 Add a button to reset tenant data visible only to masters
+2593275 2025-12-28 17:13:52 +0000 Update client data deletion to reset local states and refresh data
+284250f 2025-12-28 17:10:25 +0000 Ensure all client lookups are isolated by tenant ID
+77e1397 2025-12-28 17:02:45 +0000 Improve deletion of imported data to prevent misleading results
+ff71714 2025-12-28 16:55:32 +0000 Add endpoint to forcefully delete all tenant data securely
+2dcd1fc 2025-12-28 16:45:50 +0000 Add admin endpoint for database diagnostic snapshot and masked connection details
+67bb504 2025-12-28 16:11:56 +0000 Unify sales CRM and customer base consultation screens
+be20b5e 2025-12-28 16:06:27 +0000 Update client loan details to correctly display zero values and amounts
+af78e36 2025-12-28 16:00:40 +0000 Update payroll template column mapping to accept specific headers
+2cabe97 2025-12-28 15:36:45 +0000 Update import process to enforce tenant isolation and improve data handling
+03ffb0e 2025-12-28 15:33:25 +0000 Update loan linkage to use tenant, CPF, and enrollment for uniqueness
+11f1848 2025-12-28 14:48:40 +0000 Improve client search to respect chosen base and exclude deleted records
+b6d7ea2 2025-12-28 14:30:28 +0000 Ensure safe deletion of import runs and associated data
+72ecd15 2025-12-28 13:55:59 +0000 Make deleting imported data safely transactional and tenant-aware
+d0fd6ce 2025-12-28 04:27:18 +0000 Add mandatory traceability for imported data records
+5a3ec85 2025-12-28 04:17:25 +0000 Add import run tracking to customer records
+aa51ef7 2025-12-28 04:07:00 +0000 Update client to display complete deletion results for customer bases
+28c56c5 2025-12-28 04:04:19 +0000 Improve data deletion processes and add tracking for imports
+3c9b402 2025-12-28 03:06:13 +0000 Improve loan import process by adjusting batch sizes and data handling
+538b7fd 2025-12-28 03:01:21 +0000 Improve data import process by splitting large batches
+51b84e6 2025-12-28 03:00:40 +0000 Reduce data import batch size to prevent transmission errors
+a3ebb96 2025-12-28 02:59:57 +0000 Transitioned from Plan to Build mode
+31ee473 2025-12-27 23:33:34 +0000 Update import template and data handling for payroll calculations
+25ee391 2025-12-27 23:29:41 +0000 Update loan import to correctly map and display financial data
+6aa2960 2025-12-27 22:58:24 +0000 Add payroll information and update loan linkage during data import
+efaa332 2025-12-27 22:57:05 +0000 Update loan portability system to correctly display UPAG and salary information
+3048ced 2025-12-27 21:59:51 +0000 Add new margin types to client financial situation display
+445f412 2025-12-27 21:46:45 +0000 Update client view to display selected relationship data
+6361a84 2025-12-27 21:45:11 +0000 Update sales menu and redirect customer query to unified page
+f21bd68 2025-12-27 21:43:35 +0000 Update calculations and data mapping for financial margins
+1deedc8 2025-12-27 18:01:08 +0000 Update import mapping to include payroll loan fields
+e1998d7 2025-12-27 16:18:13 +0000 Add credit card and benefit margin fields and update client data display
+5b675e8 2025-12-27 15:21:36 +0000 Add legal regime option for customer links
+8529986 2025-12-27 15:11:49 +0000 Published your App
+6267e7d 2025-12-27 15:03:43 +0000 Add missing column to database for client details
+0187d55 2025-12-27 13:43:07 +0000 Improve client detail loading error handling and display
+6c98f28 2025-12-27 13:42:04 +0000 Correctly find and display customer data when searching by CPF
+3fcebb5 2025-12-27 03:53:33 +0000 Fix duplicate import errors and improve data integrity reporting
+7740310 2025-12-27 03:25:44 +0000 Add ability to create and select agreements for import processing
+ffae29f 2025-12-27 03:19:03 +0000 Improve error handling for API requests and display
+0745141 2025-12-27 03:17:38 +0000 Improve data import process and standardize API validation
+c6c6f03 2025-12-27 03:16:24 +0000 Update data import handling to use shared types and improve validation
+90553ad 2025-12-27 03:06:56 +0000 Update how new agreements are created and displayed
+b659f89 2025-12-27 03:03:18 +0000 Improve import process by using a combobox for selecting agreements
+6b00248 2025-12-27 03:02:40 +0000 Add functionality to manage standardized loan agreements for tenants
+cf3c011 2025-12-27 03:00:28 +0000 Add standardized convenio system for import modals
+1cdd7eb 2025-12-27 02:44:49 +0000 Add unique indexes to customer tables for data consistency
+1e28c29 2025-12-27 02:43:28 +0000 Add unique indexes to tables for improved data integrity
+edf835f 2025-12-27 02:34:09 +0000 Improve fast import functionality and error reporting for better data processing
+bda4a52 2025-12-27 00:56:44 +0000 Improve loan portability by automatically selecting the most recent user affiliation
+a51f5b7 2025-12-27 00:44:21 +0000 Update system to handle multiple employment links per person
+b5e392f 2025-12-27 00:29:21 +0000 Allow deletion of processing bases and update deletion logging
+19ed935 2025-12-27 00:15:21 +0000 Allow deletion of import bases stuck in processing state
+9bcfcae 2025-12-27 00:01:12 +0000 Add ability to delete import records from the import history
+d80cad8 2025-12-26 23:49:23 +0000 Add detailed import tracking and error downloading capabilities
+b7d1df8 2025-12-26 23:39:53 +0000 Improve import process by recording individual row statuses and adding detail endpoints
+6fa7764 2025-12-26 23:37:08 +0000 Add detailed tracking for every line processed during file imports
+39c1627 2025-12-26 23:20:40 +0000 Fix issues with data import and update processing status
+ad0b871 2025-12-26 23:16:33 +0000 Improve fast import functionality and fix data insertion issues
+3fda571 2025-12-26 22:57:21 +0000 Add a fast import option for processing data files quickly
+0c446a3 2025-12-26 22:43:08 +0000 Add fast import service for bulk data processing
+0371d1a 2025-12-26 22:31:24 +0000 Transitioned from Plan to Build mode
+e28c8e2 2025-12-26 16:50:30 +0000 Improve client base import module to support bulk uploads
+613cfad 2025-12-26 04:42:20 +0000 Improve CSV and XLSX file import robustness
+7bbdd85 2025-12-26 04:11:33 +0000 Add pensionista layout to payroll import and data handling
+53f044f 2025-12-26 03:34:49 +0000 Add pensionista import functionality with layout detection and flexible persistence
+dca1e89 2025-12-25 15:09:22 +0000 Update payroll importer to match exact column order and naming specifications
+116a568 2025-12-24 05:13:10 +0000 Remove split file option from the main navigation menu
+2ccf75c 2025-12-24 04:33:44 +0000 Make CSV splitting an asynchronous background job
+3b88252 2025-12-24 03:56:51 +0000 Enable downloading split CSV files as a ZIP archive
+d0ea70e 2025-12-24 03:27:21 +0000 Update payroll import to use current margin percentages
+3b1cf0e 2025-12-24 02:35:12 +0000 Add support for uploading XLSX files to the CSV splitting tool
+e7051e3 2025-12-24 02:27:08 +0000 Add tool to split large CSV files into smaller manageable parts
+bd854ce 2025-12-24 01:52:28 +0000 Implement incremental splitting for large text files to prevent worker errors
+7077f08 2025-12-23 21:02:54 +0000 Display all available spreadsheet template download options
+bf9c52d 2025-12-23 20:05:08 +0000 Add downloadable Excel templates for bulk data import
+ae4294a 2025-12-23 15:04:36 +0000 Add functionality to download specific Excel templates for data import
+99b2e59 2025-12-23 12:50:30 +0000 Allow support users to use roleplay and manage user environments
+7b8c9c0 2025-12-23 12:15:00 +0000 Add a system for importing and processing large data files
+115e87e 2025-12-23 12:14:28 +0000 Enable massive file uploads using disk storage for improved performance
+c5835a0 2025-12-23 12:09:12 +0000 Add a streaming system for large file imports
+40d6d94 2025-12-23 06:01:57 +0000 Update AI training prompts for more realistic customer simulations
+20afb0f 2025-12-23 02:21:12 +0000 Add new endpoints for tracking and managing bulk data imports
+a7e90dc 2025-12-23 01:32:26 +0000 Improve logo display and theme handling for tenants
+49b3bff 2025-12-23 01:28:49 +0000 Update application styling to a modern, sober aesthetic
+db42105 2025-12-23 01:27:30 +0000 Update application styling and theming for a modern, branded experience
+046bbc2 2025-12-22 23:54:06 +0000 Improve domain handling and user feedback for tenant configuration
+e0970f7 2025-12-22 23:40:14 +0000 Published your App
+338638e 2025-12-22 23:32:04 +0000 Grant master administrative privileges to the main administrator account
+b8f8510 2025-12-22 23:28:55 +0000 Add branding assets and update logo and favicon
+d80c768 2025-12-21 04:46:21 +0000 Add tenant filtering to CRM API endpoints and clean up unused code
+5793787 2025-12-18 15:04:17 +0000 Update task management to use single tags instead of multiple
+02ad752 2025-12-18 13:23:41 +0000 Improve task management by adding client-side limit checks
+30ae1e5 2025-12-18 13:20:22 +0000 Add a personal task management board to organize work
+6cd8c3e 2025-12-18 13:15:54 +0000 Add personal task management features to the kanban board
+948cf4d 2025-12-18 13:14:34 +0000 Add personal task management for individual productivity tracking
+b4edddc 2025-12-17 16:21:25 +0000 Add tenant filtering and master user access to sales campaigns
+aa25e30 2025-12-17 16:17:13 +0000 Add tenant management features for master users
+45460f9 2025-12-17 16:12:36 +0000 Add tenant support to the application and secure access
+8d70a5f 2025-12-17 16:09:41 +0000 Add multi-tenant white-label system to support different client environments
+7b4207f 2025-12-17 15:49:03 +0000 Saved your changes before starting work
+a740c11 2025-12-17 02:01:30 +0000 Add database export and installation guide for external setup
+64f0adc 2025-12-17 00:44:26 +0000 Saved progress at the end of the loop
+43d4876 2025-12-16 19:41:24 +0000 Limit database connections to prevent deployment errors
+17c4b9d 2025-12-16 19:33:53 +0000 Adjust server machine settings to improve deployment stability
+5fbff7b 2025-12-16 15:37:22 +0000 Add instructions on how to contact platform support for deployment issues
+313d92b 2025-12-16 15:36:06 +0000 Improve deployment stability by resolving platform-related issues
+3b35460 2025-12-16 15:27:09 +0000 Add missing operators to database query functions
+7026779 2025-12-16 14:47:55 +0000 Update coefficient tables view to show inactive entries correctly
+20b28b9 2025-12-16 14:42:16 +0000 Add ability to reactivate coefficient tables in bulk
+3ef42ca 2025-12-16 14:38:32 +0000 Allow sales representatives to access training materials
+fb6ae83 2025-12-16 14:35:33 +0000 Add ability to deactivate multiple coefficient tables at once
+812c766 2025-12-16 14:29:09 +0000 Allow coordinators to access training administration sections
+0ce58ad 2025-12-16 14:25:30 +0000 Allow coordinators to view and manage their team's training data
+7f804f8 2025-12-16 14:16:20 +0000 Improve AI approach generator by specifying response structure
+e1161d7 2025-12-16 14:07:07 +0000 Improve AI role-play evaluation by specifying expected JSON structure
+38f93b2 2025-12-16 13:55:08 +0000 Improve the display of AI evaluation scores in the training section
+0c52245 2025-12-16 13:49:27 +0000 Reactivate AI features by fixing the OpenAI client integration
+71c7c20 2025-12-16 13:23:47 +0000 Restrict access to sensitive menu items for unauthorized users
+3ebad74 2025-12-16 13:19:38 +0000 Allow coordinators to access all training materials without restrictions
+9928c61 2025-12-16 13:17:43 +0000 Allow coordinators to view training test results and feedback
+32d7610 2025-12-16 13:08:14 +0000 Update training section and improve coordinator access and team management
+fa7aed7 2025-12-16 12:48:57 +0000 Make roleplay prompts dynamic based on user and team
+4752bc1 2025-12-16 12:47:03 +0000 Add a new section to configure AI prompts for improved interactions
+09f60c7 2025-12-16 12:42:58 +0000 Add team management features including creating, updating, and deleting teams
+bfb366c 2025-12-16 12:40:34 +0000 Add team and AI prompt management features for role-playing simulations
+bfa3933 2025-12-15 16:05:54 +0000 Add methods to synchronize client data and create campaigns from filters
+55130ab 2025-12-15 16:01:31 +0000 Update customer data and contract details with new financial information
+86bfee5 2025-12-15 15:10:35 +0000 Update client import and campaign creation rules
+d884be7 2025-12-15 15:02:46 +0000 Add comprehensive CRM sales system with lead management and client data hygiene
+e023211 2025-12-15 13:00:48 +0000 Update application name from Simulador GoldCard to CRM pro
+8ef0363 2025-12-15 12:47:19 +0000 Add a new client consultation page for CRM sales interactions
+7432312 2025-12-14 03:56:33 +0000 Improve pipeline filtering by allowing users to view others' pipelines
+3b72503 2025-12-14 03:51:36 +0000 Add user filter to pipeline view for managers
+a8b53fd 2025-12-14 03:41:25 +0000 Update navigation paths for sales pipeline management
+35374ce 2025-12-14 03:37:20 +0000 Enable pipeline drill-down for managers and supervisors
+102b4bd 2025-12-14 03:20:41 +0000 Update pipeline overview to use direct lead values for calculations
+fa29629 2025-12-14 03:18:55 +0000 Add margin and estimated proposal values to sales interactions
+8ca7cfa 2025-12-14 03:06:46 +0000 Improve sales pipeline management by adding financial summaries and interaction tracking
+ade43b6 2025-12-13 23:42:14 +0000 Make contact selection optional for lead interactions
+2e0a977 2025-12-13 19:33:03 +0000 Add aggregated financial data and team filtering to sales pipeline view
+9ea8096 2025-12-13 19:30:00 +0000 Add interaction history and summary totals to lead pipeline view
+863854c 2025-12-13 19:24:33 +0000 Update sales pipeline to require contact and value details
+5e83028 2025-12-13 19:20:26 +0000 Add new fields to track lead interaction values and user pipeline settings
+281d1e5 2025-12-13 19:19:08 +0000 Update sales pipeline to use interaction data and financial metrics
+e9001a0 2025-12-13 18:27:23 +0000 Add sales pipeline management features and new API endpoints
+65801a7 2025-12-13 17:51:31 +0000 Add marker distribution and repescagem functionality to campaign management
+69ef7a6 2025-12-13 17:47:43 +0000 Add campaign management endpoints for lead distribution and reassignment
+04ab6e4 2025-12-13 17:45:00 +0000 Update customer interaction tracking and remove legacy tag features
+3e0c9ef 2025-12-13 17:38:54 +0000 Add lead interaction tracking and queue management features
+bc03730 2025-12-13 17:36:53 +0000 Remove the outdated tag system from the application's core functionality
+1e0626a 2025-12-13 17:31:13 +0000 Replace lead tags with a new marker system for better lead management
+044eb9e 2025-12-13 16:57:49 +0000 Fix issue where specific requests were incorrectly handled by a general route
+b96c374 2025-12-13 16:54:19 +0000 Fix incorrect route order to prevent assignment ID errors
+9927fff 2025-12-13 16:48:57 +0000 Correctly order routes to display available campaigns to users
+3ba283d 2025-12-13 16:29:54 +0000 Fix tag selection issue in sales and service screen
+3dd0f35 2025-12-13 16:11:51 +0000 Fix issue where tags are not applied to contacts on the user interface
+ff6e5d5 2025-12-13 15:41:23 +0000 Update database to correctly link contact tags to lead tags
+df55775 2025-12-13 13:04:52 +0000 Update tag system to use unified sales endpoint for management
+49ae1d9 2025-12-13 12:38:46 +0000 Make contact label optional in the system
+9c1f10d 2025-12-13 12:26:24 +0000 Display relevant tags associated with customer contacts in the client header
+66f183a 2025-12-13 12:25:39 +0000 Add tag management and display functionality to contact phones
+e84b870 2025-12-13 12:22:51 +0000 Remove contact labeling functionality from the sales and service page
+0e0150d 2025-12-13 12:19:17 +0000 Add functionality to manage contact tags and assignments
+c7821d7 2025-12-13 12:16:42 +0000 Update contact system to manage tags and improve usability
+80f07e6 2025-12-13 04:30:36 +0000 Remove duplicate "Next Client" button from the header
+0e77326 2025-12-13 04:17:27 +0000 Temporarily disable AI functionality by mocking the OpenAI client
+b3b181f 2025-12-12 23:05:53 +0000 Remove general lead tag system and use per-phone labels
+ed81223 2025-12-12 23:01:42 +0000 Add functionality to manage lead contacts and their details
+32d3883 2025-12-12 22:56:38 +0000 Add functionality to manage lead contact information and details
+e9fe175 2025-12-12 22:39:44 +0000 Make the "Register Service" button compact and always visible
+3eefbe3 2025-12-12 18:45:01 +0000 Display client information when clicking on tag usage counts
+e90a82e 2025-12-12 18:30:36 +0000 Make the call to action for registering attendance more prominent
+9481cb5 2025-12-12 18:14:19 +0000 Update sales attendant screen with new layout and functionality
+91fde6e 2025-12-12 16:35:23 +0000 Expand user management permissions and improve sidebar access control
+67e790b 2025-12-12 15:40:13 +0000 Add ability for administrators to delegate user permissions to other users
+bbc6edc 2025-12-12 15:35:03 +0000 Hide admin academy section for non-master users
+f36933b 2025-12-12 12:18:05 +0000 Grant master users direct access to all academy levels
+a4d08ed 2025-12-12 04:06:46 +0000 Add a new user permissions system and sales CRM module
+5edcea5 2025-12-12 04:05:21 +0000 Add new pages for sales agenda and labels, and improve campaign creation
+e2ba129 2025-12-12 03:24:20 +0000 Add user permission system and lead management tools
+9fea5cd 2025-12-12 00:47:07 +0000 Optimize lead import by batching database queries
+457a7f8 2025-12-12 00:36:50 +0000 Add CRM sales features for campaign management and lead handling
+b279bda 2025-12-11 23:25:02 +0000 Improve roleplay simulation with message limits and session finalization
+644d08a 2025-12-11 23:02:49 +0000 Add AI-powered feedback for sales training in the admin dashboard
+31d83a8 2025-12-11 23:01:45 +0000 Add AI-driven performance feedback for sales representatives
+7c73e64 2025-12-11 19:01:23 +0000 Add ability to copy credentials after editing user accounts
+8730289 2025-12-11 18:51:03 +0000 Add functionality to copy user credentials and filter the user list
+8f128e3 2025-12-11 17:34:39 +0000 Fix session ID handling in roleplay and evaluation mutations
+ce3e461 2025-12-11 17:25:16 +0000 Add options to customize approach style and initiate roleplay scenarios
+faa9d61 2025-12-11 16:50:23 +0000 Restrict access to the Academia ConsigOne section for specific user roles
+a3ea470 2025-12-11 15:58:22 +0000 Add inline evaluation for roleplay responses
+647d06b 2025-12-11 15:51:15 +0000 Add lesson progress tracking and API endpoints for training
+c2eff7e 2025-12-11 15:30:16 +0000 Organize the application menu into collapsible sections
+f49f50a 2025-12-11 15:08:16 +0000 Add training module for sales consultants with AI-powered simulations
+93de639 2025-12-11 14:59:55 +0000 Add new learning modules for sales training and improve navigation
+3541d05 2025-12-11 14:53:25 +0000 Add training and evaluation features for sales representatives
+fe501f1 2025-12-11 14:47:27 +0000 Securely protect admin order list and approval/rejection routes
+c669cb2 2025-12-11 14:20:00 +0000 Restrict access to sensitive modules to administrators only
+9e20b83 2025-12-11 00:34:46 +0000 Saved progress at the end of the loop
+603783d 2025-12-10 23:59:38 +0000 Improve deletion performance by optimizing database queries
+5051fa4 2025-12-10 23:51:29 +0000 Add ability to delete client bases and their associated data
+aaa719b 2025-12-10 01:29:41 +0000 Improve file import by using a more efficient parser for CSV files
+8b63781 2025-12-10 00:50:33 +0000 Optimize file import to handle larger files efficiently
+4abfe76 2025-12-10 00:47:22 +0000 Saved progress at the end of the loop
+0087e37 2025-12-09 23:29:33 +0000 Increase file upload limit to accommodate larger imports
+3299c7f 2025-12-09 23:28:22 +0000 Saved progress at the end of the loop
+fb7d26e 2025-12-09 22:29:59 +0000 Improve the import template and data handling for client bases
+c2c79d8 2025-12-09 17:37:57 +0000 Saved progress at the end of the loop
+ccf1b9b 2025-12-09 17:35:39 +0000 Update client data display and improve contract import logic
+4a9c23b 2025-12-09 14:52:25 +0000 Expand state field to accommodate longer values during import
+31ba4ae 2025-12-09 14:42:07 +0000 Improve client import by expanding column mapping and adding deduplication logic
+3247081 2025-12-09 14:38:53 +0000 Simplify and improve client base import functionality
+48e7d20 2025-12-09 02:40:12 +0000 Add help modal for spreadsheet template and download functionality
+1573637 2025-12-09 02:27:04 +0000 Update import system to support official header template and legacy variations
+b7b0c1f 2025-12-09 02:25:53 +0000 Update import process to use official template and header mapping
+9579753 2025-12-09 02:18:51 +0000 Add ability to edit pricing packages and update related data
+246157a 2025-12-09 01:50:49 +0000 Add banking details and contract information to loan simulator
+2129d81 2025-12-09 01:37:25 +0000 Update payroll loan simulator with enhanced data mapping and copy functionality
+b92e246 2025-12-08 23:49:28 +0000 Update pricing information to reflect package-based model
+0c41aae 2025-12-08 23:48:19 +0000 Update pricing model to use fixed packages instead of per-record calculations
+be8aada 2025-12-08 16:52:19 +0000 Display minimum lot size and estimated order cost on the list purchase screen
+102e743 2025-12-08 16:28:31 +0000 Update pricing simulator to enforce minimum lot size and new pricing structure
+f286798 2025-12-07 12:09:05 +0000 Update pricing calculations to use unit prices with linear interpolation
+f555787 2025-12-07 12:03:05 +0000 Add dynamic pricing calculation and settings management
+5d46e2e 2025-12-07 12:00:35 +0000 Add intelligent pricing configuration and calculation for list orders
+eda9a97 2025-12-07 01:10:58 +0000 Update order status display and logic for better tracking
+4f33b17 2025-12-07 01:07:28 +0000 Add estimated cost and final cost columns to order lists
+25431d8 2025-12-07 01:04:13 +0000 Add cost calculation and background file generation for export requests
+c02586c 2025-12-07 01:01:52 +0000 Add pricing and file generation for list purchase orders
+e83a785 2025-12-06 03:10:38 +0000 Add endpoint to retrieve available partner agreements for client inquiries
+8f87aa7 2025-12-06 02:53:11 +0000 Enhance upload security and processing controls for large files
+dc6ba7a 2025-12-06 02:31:05 +0000 Enable importing large files by handling uploads directly on the server
+b398453 2025-12-06 02:15:34 +0000 Increase file upload size limit to handle larger Excel imports
+ffc289e 2025-12-06 02:08:13 +0000 Reorganize loan margin filters and remove 30% option
+4189eb9 2025-12-06 01:59:09 +0000 Add ability to search for clients by affiliation and affiliation-specific or general registration
+cc82793 2025-12-06 01:56:32 +0000 Enhance customer search to include affiliation filtering
+4e331f5 2025-12-06 01:52:51 +0000 Saved progress at the end of the loop
+ad98ecc 2025-12-06 01:47:54 +0000 Add an administration screen for managing list requests
+df4a7ea 2025-12-06 01:45:39 +0000 Add admin screen for managing list orders for MASTER users
+af56abd 2025-12-05 23:07:03 +0000 Add new filters for loan margins and contract details to the simulator
+1a74461 2025-12-05 14:23:02 +0000 Add client search functionality with detailed information display
+aef3a4e 2025-12-05 12:51:20 +0000 Add client base management and list purchasing features
+12fd5af 2025-12-05 01:27:55 +0000 Add advanced AI search capabilities and a delete function for banking roadmaps
+017a77d 2025-12-05 00:46:29 +0000 Add a human-like AI response to the loan simulator search results
+155c3a1 2025-12-05 00:40:54 +0000 Fix invalid HTML structure by changing paragraph to div
+0e8e441 2025-12-05 00:36:18 +0000 Add a new feature for interpreting user queries using AI
+2eb5be9 2025-12-05 00:23:31 +0000 Fix error when searching for payroll loan options
+f594a2c 2025-12-05 00:18:10 +0000 Organize OpenAI client into a separate reusable module
+71633b0 2025-12-04 23:55:17 +0000 Improve AI-powered search by refining query interpretation rules
+29234e1 2025-12-04 23:47:45 +0000 Improve roteiro editing and add AI-powered search capabilities
+e76683b 2025-12-04 23:35:20 +0000 Add manual editing and AI-powered search for loan contracts
+f6030e0 2025-12-04 18:24:16 +0000 Improve handling of operation types during loan data import
+03f85a2 2025-12-04 18:04:31 +0000 Fix error when importing JSON data for bank routes
+04ed13c 2025-12-04 17:35:11 +0000 Saved progress at the end of the loop
+6c9e03f 2025-12-04 17:21:36 +0000 Add bank routes and permissions to the application sidebar
+5e99306 2025-12-04 17:18:58 +0000 Add a new page for managing bank routing information
+5fce85f 2025-12-04 17:16:10 +0000 Add new API endpoints for managing banking routings and importing data
+1363193 2025-12-04 17:14:37 +0000 Add functionality to manage and import bank routing data
+2939b80 2025-12-04 17:13:12 +0000 Add intelligent banking script module for CRM
+d9b0e89 2025-12-03 13:58:56 +0000 Update simulation results and PDF exports to clarify adjustment messaging
+da45301 2025-12-03 13:18:35 +0000 Update simulation results and PDF export to simplify displayed messages
+ee8a8bd 2025-12-03 03:55:29 +0000 Update loan simulator to allow negative percentage adjustments
+a10671f 2025-12-03 03:53:16 +0000 Add a new section to manage bank accounts and their settings
+c6f05e4 2025-12-03 03:50:37 +0000 Add adjusted final balance calculation and display to the simulator
+c2dcfde 2025-12-03 03:47:27 +0000 Add ability to configure and apply a bank-specific balance adjustment
+9427b33 2025-12-03 03:36:49 +0000 Update user profile to display correct role labels
+af44d51 2025-12-03 03:19:18 +0000 Saved progress at the end of the loop
+653ed01 2025-12-03 03:12:15 +0000 Update user roles and permissions to streamline access management
+7868bbb 2025-12-03 02:55:24 +0000 Update sidebar navigation based on user roles and permissions
+044daa1 2025-12-03 02:54:56 +0000 Update user role system and access permissions across the application
+60321a7 2025-12-01 01:13:37 +0000 Update data retrieval to display accurate dashboard statistics
+2db50df 2025-12-01 00:43:40 +0000 Adjust user access to dashboard and welcome screens
+87de42c 2025-12-01 00:36:17 +0000 Restrict dashboard access to administrators and redirect others to a welcome page
+5efe812 2025-12-01 00:14:49 +0000 Fix dashboard to show correct statistics for all users
+b99e359 2025-12-01 00:01:44 +0000 Improve error display and retry functionality on the dashboard page
+8f23414 2025-11-30 23:51:42 +0000 Saved progress at the end of the loop
+e6f96cc 2025-11-27 12:00:43 +0000 Make dashboard accessible to all users and display relevant statistics
+c4deb51 2025-11-26 12:37:52 +0000 Improve user visibility rules for coordinators
+488d8ea 2025-11-25 19:11:14 +0000 Update browser tab title and description to match new branding
+ef08862 2025-11-25 18:46:15 +0000 Update website icon to reflect new company branding
+b38086d 2025-11-25 18:37:34 +0000 Update application logo and favicon to reflect custom branding
+25f0acb 2025-11-25 15:31:44 +0000 Update project overview and system architecture documentation
+5fb650e 2025-11-25 15:21:29 +0000 Add support for fixed and percentage-based security margins
+6e7cd1a 2025-11-25 14:51:35 +0000 Published your App
+4106338 2025-11-25 13:55:00 +0000 Improve session management by using PostgreSQL for production deployments
+f7999c4 2025-11-25 13:51:48 +0000 Allow secure cookies to function correctly in production environments
+d3187fc 2025-11-25 00:28:36 +0000 Published your App
+f051d9e 2025-11-25 00:20:09 +0000 Add a way to save user sessions after login
+99e9d06 2025-11-25 00:09:56 +0000 Published your App
+dfd23bd 2025-11-24 23:46:34 +0000 Ensure user login sessions are properly maintained after page reloads
+cb6bd0a 2025-11-24 23:43:03 +0000 Published your App
+829f71f 2025-11-24 23:12:54 +0000 Revert session storage to memory for stability
+5de4978 2025-11-24 23:08:15 +0000 Published your App
+d41fd07 2025-11-24 22:28:54 +0000 Improve session persistence by using PostgreSQL in production environments
+ac2a397 2025-11-24 15:52:33 +0000 Update admin user creation logic to ensure correct credentials
+0f2b314 2025-11-24 15:45:51 +0000 Add logging to seed database process to ensure proper startup
+c4fd29c 2025-11-24 15:43:37 +0000 Clear old user data and simulations from the production database
+c94f5f7 2025-11-24 15:38:35 +0000 Published your App
+ed784b6 2025-11-24 15:31:51 +0000 Update initial user creation process for the simulator
+a73f8bb 2025-11-24 15:27:25 +0000 Update user creation logic in the database seeding process
+e9f6b1f 2025-11-24 15:17:00 +0000 Create user account for production login
+2d047da 2025-11-24 15:15:52 +0000 Publish latest code and update user credentials
+c7fdc40 2025-11-24 15:07:43 +0000 Fix user login issues by correcting database entries
+b650c75 2025-11-24 15:02:54 +0000 Update user credentials for secure login access
+a905fa4 2025-11-24 14:55:32 +0000 Published your App
+6173fb1 2025-11-24 14:51:25 +0000 Correctly create a user for the production environment
+bdd293d 2025-11-24 14:48:53 +0000 Update database column names for user creation and login
+99ff60a 2025-11-24 14:47:23 +0000 Fix issue with user creation in database due to incorrect column naming
+9472be8 2025-11-24 14:45:38 +0000 Add master user creation to production database via SQL
+9965263 2025-11-24 14:43:52 +0000 Add manual user creation guide via database console
+dc58544 2025-11-24 13:53:36 +0000 Improve user management by adding a disable option and robust seeding
+4e088b8 2025-11-24 13:46:21 +0000 Add automatic master user creation for empty databases
+1918f9a 2025-11-24 13:32:24 +0000 Fix login error by ensuring production database has user data
+868a511 2025-11-24 12:51:25 +0000 Update user status to disable and enable accounts
+54794b5 2025-11-23 15:22:02 +0000 Saved progress at the end of the loop
+2e40e12 2025-11-23 15:21:16 +0000 Improve dashboard by handling missing ranking data gracefully
+3b7c38c 2025-11-23 14:42:25 +0000 Add detailed statistics and filtering to the admin dashboard
+210d101 2025-11-23 14:11:57 +0000 Fix error when saving simulation data to the database
+21917eb 2025-11-23 14:02:33 +0000 Filter operation types based on selected agreement and reset when unavailable
+bf0dfaa 2025-11-23 13:54:21 +0000 Remove notice about automatic simulation saving
+3fbf7b4 2025-11-21 13:59:10 +0000 Improve user access by reorganizing routes and implementing protected pages
+a780e68 2025-11-21 12:29:54 +0000 Add user roles and dashboard for simulation analysis
+b016e65 2025-11-21 12:08:42 +0000 Update menu name to "Simulador Compra"
+16e261e 2025-11-21 12:07:52 +0000 Published your App
+96744d7 2025-11-21 11:53:12 +0000 Organize loan tables using tabs and accordions for better navigation
+432d87e 2025-11-20 13:46:22 +0000 Add debugging logs to track data fetching in the loan simulator
+38cc2d4 2025-11-20 13:29:39 +0000 Add filtering to easily find and manage coefficient tables
+f2c2fd9 2025-11-20 13:27:20 +0000 Add ability to select and delete multiple coefficient tables at once
+aef7c9e 2025-11-20 13:10:36 +0000 Published your App
+097ec11 2025-11-20 12:39:25 +0000 Improve loan simulator by generating professional receipts and using direct PDF/image creation
+deead9b 2025-11-20 12:25:55 +0000 Create a professional receipt for loan simulation results
+c1f1994 2025-11-20 11:58:24 +0000 Improve image export quality and format for the simulator
+bb858fa 2025-11-20 11:49:57 +0000 Adjust layout to capture only relevant simulation data
+0a0c9bd 2025-11-20 03:19:53 +0000 Adjust padding on client data section to respect layout constraints
+268b06b 2025-11-20 03:18:43 +0000 Visual edit
+9f7da58 2025-11-20 03:17:31 +0000 Visual edit
+b082a26 2025-11-20 03:16:54 +0000 Visual edit
+712d7be 2025-11-20 03:15:23 +0000 Adjust layout and spacing for client data section
+012863b 2025-11-20 03:13:45 +0000 Adjust table layout to display full table names
+edddb56 2025-11-20 03:06:55 +0000 Make client refund display red when negative
+233e037 2025-11-20 03:04:59 +0000 Update text to prompt users to calculate change
+fcca636 2025-11-20 03:02:39 +0000 Arrange client data fields side-by-side for better layout
+2c6fb06 2025-11-20 01:39:33 +0000 Update calculation logic to correctly display loan savings
+5332812 2025-11-20 01:25:43 +0000 Add operation type to loan calculation data payload
+3a021df 2025-11-20 01:20:56 +0000 Fix duplicate term input field in table creation form
+4542065 2025-11-20 01:20:20 +0000 Fix duplicate term months field in the edit form
+6edbe37 2025-11-20 00:57:01 +0000 Enhance loan simulator with operation type filtering and optimized layout
+532a67e 2025-11-20 00:55:34 +0000 Adjust layout spacing and element sizes for a cleaner user interface
+e6e5308 2025-11-20 00:50:53 +0000 Add operation type selection to loan simulator calculations
+3b0a87d 2025-11-20 00:47:41 +0000 Add operation type to loan simulation and coefficient tables
+6c30609 2025-11-20 00:44:45 +0000 Add operation type as a new filtering criterion for loan simulations
+0f1a9c3 2025-11-20 00:43:13 +0000 Add operation type to loan simulation and coefficient tables
+3b73595 2025-11-19 16:29:22 +0000 Add redirect to prevent 404 errors after successful login
+39c8e67 2025-11-19 16:10:58 +0000 Fix loan term and coefficient table selection issues
+27e030a 2025-11-19 16:08:02 +0000 Update loan calculation to include safety margin
+2b47761 2025-11-19 15:48:30 +0000 Add safety margin to loan calculations and agreement management
+2713b02 2025-11-19 15:38:10 +0000 Add safety margin calculation for loan payments
+1237c21 2025-11-19 13:33:58 +0000 Update CSS to fix image export functionality
+8bda3d2 2025-11-19 13:21:42 +0000 Improve error handling and logging for simulation saving functionality
+97ae892 2025-11-19 12:57:51 +0000 Add ability to save simulation results in multiple formats
+48f79f3 2025-11-19 12:48:59 +0000 Update calculator to automatically calculate and enable saving screenshots
+5ca8083 2025-11-19 04:12:47 +0000 Improve CSV export by adding BOM and Windows line endings
+70bc8be 2025-11-19 04:12:10 +0000 Improve bulk import of tables with better CSV formatting and validation
+c3763c5 2025-11-19 04:09:38 +0000 Correctly format CSV templates for easier user imports
+ebd18b5 2025-11-19 04:08:49 +0000 Add ability to import coefficient tables from a spreadsheet file
+2ab9713 2025-11-19 03:54:17 +0000 Allow users to manually enter bank and fintech names
+85269d2 2025-11-19 03:44:57 +0000 Use a predefined list of banks for the coefficient table entries
+e86ca02 2025-11-19 03:43:51 +0000 Allow coefficient input using Brazilian decimal format
+8f718ef 2025-11-19 03:41:48 +0000 Ensure all API routes are properly protected and accessible
+b2a879e 2025-11-19 03:18:44 +0000 Update loan simulator to dynamically fetch bank and term data
+59001db 2025-11-19 03:11:41 +0000 Add administrative pages for managing loan agreements and coefficient tables
+24e8663 2025-11-19 02:59:18 +0000 Update system name to 'Simulador GoldCard' across the application
+80bcb77 2025-11-19 02:49:57 +0000 Saved progress at the end of the loop
+ae0fdff 2025-11-19 02:45:38 +0000 Update simulator name and remove client CPF field
+8db4065 2025-11-19 02:11:01 +0000 Add ability for users to delete accounts with confirmation
+54dcec4 2025-11-19 01:35:28 +0000 Update user roles and permissions, fix sidebar display
+859f76e 2025-11-19 01:17:24 +0000 Implement user management with hierarchical access levels
+61c8cc1 2025-11-19 01:03:34 +0000 Add user authentication, sidebar navigation, and profile management
+82d5afc 2025-11-19 00:50:36 +0000 Update loan simulator to fetch data from database and fix calculation logic
+a1aada7 2025-11-19 00:43:19 +0000 Set up user authentication and database integration for the payroll loan simulator
+9fe25a3 2025-11-19 00:08:58 +0000 Add success and error notifications to the loan simulation form
+0305948 2025-11-18 22:14:20 +0000 Add Brazilian Portuguese localization and theme switching to loan simulator
+313d9d8 2025-11-18 21:58:04 +0000 Extracted stack files
+f8302c4 2025-11-18 21:57:10 +0000 Initial commit

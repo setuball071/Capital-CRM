@@ -482,6 +482,8 @@ import {
   companies,
   insertCompanySchema,
   lemitJobs,
+  pagamentosConsultor,
+  pagamentosConsultorItens,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -23321,6 +23323,179 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error: any) {
       console.error("[FINANCEIRO-PRODUCAO] Error:", error);
       return res.status(500).json({ message: "Erro ao buscar produção" });
+    }
+  });
+
+  // ==========================================
+  // Financeiro - Pagamentos ao consultor
+  // ==========================================
+
+  // Atualizar status de comissão de um ou mais contratos (master/coord)
+  app.patch("/api/financeiro/producao/status", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const { contratoIds, statusComissao, dataPagComissao } = req.body || {};
+      if (!Array.isArray(contratoIds) || !contratoIds.length) {
+        return res.status(400).json({ message: "contratoIds vazio" });
+      }
+      const set: any = {};
+      if (statusComissao) set.statusComissao = statusComissao;
+      if (dataPagComissao !== undefined) set.dataPagComissao = dataPagComissao;
+      if (!Object.keys(set).length) {
+        return res.status(400).json({ message: "Nenhum campo para atualizar" });
+      }
+      await db
+        .update(producoesContratos)
+        .set(set)
+        .where(
+          and(
+            eq(producoesContratos.tenantId, tenantId),
+            inArray(producoesContratos.id, contratoIds.map(Number)),
+          ),
+        );
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-STATUS] Error:", e);
+      res.status(500).json({ message: "Erro ao atualizar status" });
+    }
+  });
+
+  // Criar um pagamento (lote) — marca contratos como Pago e gera recibo
+  app.post("/api/financeiro/pagamentos", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const userRole = req.user?.role;
+      const isMaster = req.user?.isMaster;
+      if (!isMaster && userRole !== "master" && userRole !== "coordenacao") {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const {
+        vendedorId,
+        vendedorNome,
+        dataPagamento,
+        observacao,
+        itens, // [{ contratoId, valorComissao }, ...]
+      } = req.body || {};
+      if (!dataPagamento || !Array.isArray(itens) || !itens.length) {
+        return res.status(400).json({ message: "Dados insuficientes" });
+      }
+
+      const valorTotal = itens.reduce(
+        (s: number, i: any) => s + (parseFloat(i.valorComissao) || 0),
+        0,
+      );
+
+      const [pag] = await db
+        .insert(pagamentosConsultor)
+        .values({
+          tenantId,
+          vendedorId: vendedorId ? Number(vendedorId) : null,
+          vendedorNome: vendedorNome || null,
+          dataPagamento: String(dataPagamento),
+          valorTotal: String(Math.round(valorTotal * 100) / 100),
+          qtdContratos: itens.length,
+          observacao: observacao || null,
+          pagoPor: req.user?.id || null,
+          pagoPorNome: req.user?.name || null,
+        })
+        .returning();
+
+      // Insere itens
+      if (itens.length) {
+        await db.insert(pagamentosConsultorItens).values(
+          itens.map((i: any) => ({
+            pagamentoId: pag.id,
+            contratoId: Number(i.contratoId),
+            valorComissao: String(Math.round((parseFloat(i.valorComissao) || 0) * 100) / 100),
+          })),
+        );
+      }
+
+      // Atualiza contratos: status_comissao='Pago' + data_pag_comissao + pagamento_id
+      const contratoIds = itens.map((i: any) => Number(i.contratoId));
+      await db
+        .update(producoesContratos)
+        .set({
+          statusComissao: "Pago",
+          dataPagComissao: String(dataPagamento),
+          pagamentoId: pag.id,
+        })
+        .where(
+          and(
+            eq(producoesContratos.tenantId, tenantId),
+            inArray(producoesContratos.id, contratoIds),
+          ),
+        );
+
+      res.json({ ok: true, pagamentoId: pag.id, valorTotal });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-PAGAMENTO] Error:", e);
+      res.status(500).json({ message: "Erro ao criar pagamento: " + (e.message || "") });
+    }
+  });
+
+  // Listar histórico de pagamentos
+  app.get("/api/financeiro/pagamentos", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const pags = await db
+        .select()
+        .from(pagamentosConsultor)
+        .where(eq(pagamentosConsultor.tenantId, tenantId))
+        .orderBy(desc(pagamentosConsultor.createdAt));
+      res.json({ pagamentos: pags });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-PAGAMENTOS-LIST] Error:", e);
+      res.status(500).json({ message: "Erro ao listar pagamentos" });
+    }
+  });
+
+  // Detalhe de um pagamento + itens (para recibo)
+  app.get("/api/financeiro/pagamentos/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      const id = Number(req.params.id);
+      if (!tenantId || !id) return res.status(400).json({ message: "Inválido" });
+
+      const [pag] = await db
+        .select()
+        .from(pagamentosConsultor)
+        .where(and(eq(pagamentosConsultor.id, id), eq(pagamentosConsultor.tenantId, tenantId)));
+      if (!pag) return res.status(404).json({ message: "Pagamento não encontrado" });
+
+      const itens = await db
+        .select({
+          itemId: pagamentosConsultorItens.id,
+          valorComissao: pagamentosConsultorItens.valorComissao,
+          contratoId: producoesContratos.contratoId,
+          nomeCliente: producoesContratos.nomeCliente,
+          cpfCliente: producoesContratos.cpfCliente,
+          banco: producoesContratos.banco,
+          tipoContrato: producoesContratos.tipoContrato,
+          convenio: producoesContratos.convenio,
+          valorBase: producoesContratos.valorBase,
+          valorBruto: producoesContratos.valorBruto,
+          dataPagamento: producoesContratos.dataPagamento,
+        })
+        .from(pagamentosConsultorItens)
+        .innerJoin(
+          producoesContratos,
+          eq(pagamentosConsultorItens.contratoId, producoesContratos.id),
+        )
+        .where(eq(pagamentosConsultorItens.pagamentoId, id));
+
+      res.json({ pagamento: pag, itens });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-PAGAMENTO-DETAIL] Error:", e);
+      res.status(500).json({ message: "Erro ao buscar pagamento" });
     }
   });
 
