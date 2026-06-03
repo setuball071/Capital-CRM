@@ -23792,43 +23792,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             return 'Outro';
           };
 
-          // Calcula repasse via regras do grupo por tipo de produto (se configurado)
+          // Backend NÃO recalcula repasse via grupo — isso quebrava o import quando
+          // o vendedor não estava mapeado. O cálculo correto do repasse (aplicando
+          // as regras de grupo/tipo de produto) acontece na EXIBIÇÃO (frontend).
+          //
+          // Aqui apenas salvamos o que veio da planilha:
+          //   - comissaoRepasseValor: valor de repasse da planilha; se zerado mas a
+          //     empresa ganhou algo (comissaoEmpresaValor > 0), usa esse valor como
+          //     base. Garante que Marina/Rafael (cuja % vem zerada no Excel) entrem.
+          //   - comissaoRepassePerc: % original da planilha, sem mexer.
           let repasseValorFinal = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
-          let repassePercFinal = parseFloat(String(c.comissaoRepassePerc || 0)) || 0;
-          if (c.vendedorId && fcCorretores.length) {
-            const corretor = fcCorretores.find((cr: any) => Number(cr._crmId) === Number(c.vendedorId));
-            if (corretor && corretor.grupoId) {
-              const grupo = fcGrupos.find((g: any) => g.id === corretor.grupoId);
-              if (grupo) {
-                const categoriaStd = mapTipoParaCategoria(c.tipoContrato, c.isCartao);
-                const rules: any[] = grupo.repasseRules || [];
-                const regra = rules.find((r: any) => r.tipo === categoriaStd);
-                const pct = regra != null ? Number(regra.repasse) : Number(grupo.repasse);
-
-                // Estratégia 1: empresa_valor direto do Excel
-                let empVal = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
-
-                // Estratégia 2: inferir empresa_valor via repasse_valor / pct_antigo
-                if (empVal === 0 && repasseValorFinal > 0) {
-                  const oldPct = repassePercFinal > 0 ? repassePercFinal : Number(grupo.repasse);
-                  if (oldPct > 0) empVal = repasseValorFinal / (oldPct / 100);
-                }
-
-                // NÃO usar valorBase como fallback — se empresa não ganhou nada
-                // (comissão zerada), o contrato não deve gerar repasse.
-
-                if (pct > 0 && empVal > 0) {
-                  repasseValorFinal = Math.round(empVal * pct / 100 * 100) / 100;
-                  // NÃO sobrescreve repassePercFinal — esse campo guarda o % original
-                  // da planilha (% que a empresa recebe do banco), não o repasse do grupo.
-                  console.log(`[REPASSE-REGRA] contrato=${c.contratoId} tipo=${categoriaStd} grupo=${grupo.nome} pct=${pct}% (regra:${!!regra}) emp=${empVal} → repasse=${repasseValorFinal}`);
-                }
-              }
-            }
+          const repassePercFinal = parseFloat(String(c.comissaoRepassePerc || 0)) || 0;
+          const empValorPlanilha = parseFloat(String(c.comissaoEmpresaValor || 0)) || 0;
+          if (repasseValorFinal === 0 && empValorPlanilha > 0) {
+            repasseValorFinal = empValorPlanilha;
           }
 
-          // Se mesmo após o cálculo o repasse continua zerado, a empresa não ganhou
-          // nada — não é produção efetiva e o contrato é ignorado.
+          // Se a empresa não ganhou nada (caso do James — comissão e empresa zeradas),
+          // o contrato não é produção efetiva e é ignorado.
           if (repasseValorFinal <= 0) {
             ignoradosCount++;
             continue;

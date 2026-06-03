@@ -1282,8 +1282,11 @@ async function renderConsultorContratos(){
     let totVal=0,totFlat=0,totPago=0,totReceber=0;
     const rows=list.map(c=>{
       const val=parseFloat(c.valorBruto||0);
-      const vf=parseFloat(c.comissaoRepasseValor||0);
-      const fp=parseFloat(c.comissaoRepassePerc||0);
+      const empValor=parseFloat(c.comissaoRepasseValor||0);
+      // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
+      const myPct=getMyRepasse(c.tipoContrato);
+      const vf=Math.round(empValor*myPct/100*100)/100;
+      const fp=myPct;
       totVal+=val;totFlat+=vf;
       if(c.statusComissao==='Pago')totPago+=vf;
       if(c.statusComissao==='A Pagar')totReceber+=vf;
@@ -1537,7 +1540,10 @@ async function carregarProducaoConsultor() {
     let totVal = 0, totFlat = 0, totPago = 0, totReceber = 0;
     const rows = list.map(c => {
       const val = parseFloat(c.valorBruto || 0);
-      const vf  = parseFloat(c.comissaoRepasseValor || 0);
+      const empValor = parseFloat(c.comissaoRepasseValor || 0);
+      // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
+      const myPct = getMyRepasse(c.tipoContrato);
+      const vf = Math.round(empValor * myPct / 100 * 100) / 100;
       totVal += val; totFlat += vf;
       if (c.statusComissao === 'Pago')    totPago    += vf;
       if (c.statusComissao === 'A Pagar') totReceber += vf;
