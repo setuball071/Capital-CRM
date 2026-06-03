@@ -23281,9 +23281,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const conditions: any[] = [
         eq(producoesContratos.tenantId, tenantId),
-        // Contratos com comissão zerada NÃO devem aparecer na Produção
-        // (banco/operadora não pagou comissão — não é produção efetiva)
-        sql`${producoesContratos.comissaoRepasseValor}::numeric > 0`,
       ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
@@ -23770,15 +23767,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             continue;
           }
 
-          // Contratos com comissão zerada são simplesmente ignorados (não salvos).
-          // NÃO deletamos registros existentes — a planilha de um mês pode conter
-          // contratos de meses anteriores com comissão zerada sem que isso signifique
-          // que o dado histórico deve ser apagado.
-          const comissaoNum = parseFloat(String(c.comissaoRepasseValor || 0)) || 0;
-          if (comissaoNum <= 0) {
-            ignoradosCount++;
-            continue;
-          }
+          // Todos os contratos PAGO com data são salvos independente do valor de comissão.
+          // A comissão pode ser 0 na planilha quando é calculada internamente pelo sistema.
 
           const valorBase = parseFloat(String(c.valorBase || 0)) || 0;
           totalValorGeral += valorBase;
