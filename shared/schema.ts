@@ -2859,6 +2859,14 @@ export const producoesContratos = pgTable(
       precision: 6,
       scale: 2,
     }),
+    comissaoEmpresaValor: decimal("comissao_empresa_valor", {
+      precision: 14,
+      scale: 2,
+    }),
+    comissaoEmpresaPerc: decimal("comissao_empresa_perc", {
+      precision: 6,
+      scale: 2,
+    }),
     isCartao: boolean("is_cartao").default(false),
     mesReferencia: varchar("mes_referencia", { length: 7 }),
     importadoPor: integer("importado_por").references(() => users.id),

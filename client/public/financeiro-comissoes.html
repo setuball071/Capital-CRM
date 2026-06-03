@@ -1298,7 +1298,10 @@ async function renderMasterContratos(){
     return getRepasseForTipo(g,c.tipoContrato);
   };
   const rows=list.map(c=>{
-    const empValor=parseFloat(c.comissaoRepasseValor||0);
+    // Val Empresa = o que o banco paga à empresa (comissaoEmpresaValor da planilha).
+    // Fallback: se vier 0 (contratos antigos importados antes da coluna existir),
+    // usa comissaoRepasseValor (que era armazenado nessa coluna anteriormente).
+    const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
     const valor=parseFloat(c.valorBruto||0);
     const pctConsultor=calcRepasseConsultor(c);
     const vf=Math.round(empValor*pctConsultor/100*100)/100;
@@ -1399,7 +1402,7 @@ async function renderConsultorContratos(){
     let totVal=0,totFlat=0,totPago=0,totReceber=0;
     const rows=list.map(c=>{
       const val=parseFloat(c.valorBruto||0);
-      const empValor=parseFloat(c.comissaoRepasseValor||0);
+      const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
       // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
       const myPct=getMyRepasse(c.tipoContrato);
       const vf=Math.round(empValor*myPct/100*100)/100;
@@ -1658,7 +1661,7 @@ async function carregarProducaoConsultor() {
     let totVal = 0, totFlat = 0, totPago = 0, totReceber = 0;
     const rows = list.map(c => {
       const val = parseFloat(c.valorBruto || 0);
-      const empValor = parseFloat(c.comissaoRepasseValor || 0);
+      const empValor = parseFloat(c.comissaoEmpresaValor || 0) || parseFloat(c.comissaoRepasseValor || 0);
       // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
       const myPct = getMyRepasse(c.tipoContrato);
       const vf = Math.round(empValor * myPct / 100 * 100) / 100;
