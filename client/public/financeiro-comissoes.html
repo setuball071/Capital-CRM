@@ -1065,7 +1065,7 @@ let _maskedCells=new Map(), _maskedCounter=0;
 // ══════════════════════════════════════════════════════
 function fmtBRL(v){return(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
 function fmtPct(v){return(+v||0).toFixed(1)+'%';}
-function fmtData(s){if(!s)return'—';const[y,m,d]=(s+'').split('-');return`${d}/${m}/${y}`;}
+function fmtData(s){if(!s)return'—';const str=(s+'').trim();if(str.indexOf('/')>-1)return str;const[y,m,d]=str.split('-');if(!y||!m||!d)return str||'—';return`${d}/${m}/${y}`;}
 function maskCPF(v){return v.replace(/\D/g,'').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');}
 function toast(msg,err){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(err?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 function abrirModal(id){document.getElementById(id).classList.add('open');}
@@ -1118,7 +1118,7 @@ function badgeComissao(st,onclick){const m={Aguardando:'b-aguardando ●',['A Pa
 // MASCARAMENTO (consultor)
 // ══════════════════════════════════════════════════════
 function _resetMask(){_maskedCells=new Map();_maskedCounter=0;}
-function msk(v,id){const k=id||('m'+(++_maskedCounter));_maskedCells.set(k,v);return`<span class="cell-sensitive mask-txt" data-msk="${k}" onmouseenter="_showTip('${k}',event)" onmousemove="_moveTip(event)" onmouseleave="_hideTip()">●●●●●</span>`;}
+function msk(v,id){if(_isMasterUser)return v;const k=id||('m'+(++_maskedCounter));_maskedCells.set(k,v);return`<span class="cell-sensitive mask-txt" data-msk="${k}" onmouseenter="_showTip('${k}',event)" onmousemove="_moveTip(event)" onmouseleave="_hideTip()">●●●●●</span>`;}
 function _showTip(k,e){const tip=document.getElementById('sens-tip');tip.textContent=_maskedCells.get(k)||'';tip.classList.add('vis');_moveTip(e);}
 function _moveTip(e){const tip=document.getElementById('sens-tip');tip.style.left=(e.clientX+16)+'px';tip.style.top=(e.clientY-10)+'px';}
 function _hideTip(){document.getElementById('sens-tip').classList.remove('vis');}
