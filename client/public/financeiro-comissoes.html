@@ -1446,10 +1446,11 @@ async function renderConsultorContratos(){
     const rows=list.map(c=>{
       const val=parseFloat(c.valorBruto||0);
       const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
-      // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
-      const myPct=getMyRepasse(c.tipoContrato);
-      const vf=Math.round(empValor*myPct/100*100)/100;
-      const fp=myPct;
+      // Usa o mesmo cálculo unificado da Produção (respeita override do contrato)
+      const pctGrupo=calcRepasseConsultorProd(c);
+      const vf=Math.round(empValor*pctGrupo/100*100)/100;
+      // Flat % efetivo sobre o valor do contrato (não o % do grupo)
+      const fp=val>0?(vf/val*100):0;
       totVal+=val;totFlat+=vf;
       if(c.statusComissao==='Pago')totPago+=vf;
       if(c.statusComissao==='A Pagar')totReceber+=vf;
@@ -1705,9 +1706,9 @@ async function carregarProducaoConsultor() {
     const rows = list.map(c => {
       const val = parseFloat(c.valorBruto || 0);
       const empValor = parseFloat(c.comissaoEmpresaValor || 0) || parseFloat(c.comissaoRepasseValor || 0);
-      // Calcula repasse do consultor aplicando regra do grupo por tipo de produto
-      const myPct = getMyRepasse(c.tipoContrato);
-      const vf = Math.round(empValor * myPct / 100 * 100) / 100;
+      // Mesmo cálculo unificado (respeita override por contrato)
+      const pctGrupo = calcRepasseConsultorProd(c);
+      const vf = Math.round(empValor * pctGrupo / 100 * 100) / 100;
       totVal += val; totFlat += vf;
       if (c.statusComissao === 'Pago')    totPago    += vf;
       if (c.statusComissao === 'A Pagar') totReceber += vf;
