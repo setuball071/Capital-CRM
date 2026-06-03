@@ -483,7 +483,7 @@ import {
   insertCompanySchema,
   lemitJobs,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray, not, gt } from "drizzle-orm";
+import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import ExcelJS from "exceljs";
@@ -23279,9 +23279,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const { mes, banco, corretor } = req.query;
 
-      const conditions: any[] = [
-        eq(producoesContratos.tenantId, tenantId),
-      ];
+      const conditions: any[] = [eq(producoesContratos.tenantId, tenantId)];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
       if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
@@ -23458,11 +23456,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             parseFloat(
               String(row.ComissaoRepasseValor || "0").replace(",", "."),
             ) || 0;
-          // Normaliza o % de repasse para sempre ficar em base "percentual" (2.1 = 2,1%)
-          // Excel pode mandar o valor como decimal (célula formatada como %, ex.: 0.021)
-          // OU como número inteiro/decimal direto (ex.: 30, 2.1). Detectamos pelo valor:
-          //   se <= 1, assumimos decimal (multiplicamos por 100); se > 1, está em percentual.
-          const comissaoRepassePercRaw =
+          const comissaoRepassePerc =
             parseFloat(
               String(row.ComissaoRepassePercentual || "0").replace(",", "."),
             ) || 0;
@@ -23471,10 +23465,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           if (comissaoRepasseValor === 0 && comissaoEmpresaValor > 0) {
             comissaoRepasseValor = comissaoEmpresaValor;
           }
-          const comissaoRepassePerc =
-            comissaoRepassePercRaw > 0 && comissaoRepassePercRaw <= 1
-              ? comissaoRepassePercRaw * 100
-              : comissaoRepassePercRaw;
           const pt1000Raw = String(
             row["pt_1000"] ||
               row["pt.1000"] ||
@@ -23766,9 +23756,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             ignoradosCount++;
             continue;
           }
-
-          // Todos os contratos PAGO com data são salvos independente do valor de comissão.
-          // A comissão pode ser 0 na planilha quando é calculada internamente pelo sistema.
 
           const valorBase = parseFloat(String(c.valorBase || 0)) || 0;
           totalValorGeral += valorBase;
