@@ -1336,27 +1336,8 @@ async function renderMasterContratos(){
   });
   document.getElementById('cm-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
   let totVal=0,totEmp=0,totFlat=0,totPago=0,totReceber=0;
-  // Mapa de repasse por consultor (calcula pelo nome do vendedor)
-  // Ordem de precedência: % manual override → grupo manual override → grupo do consultor
-  const calcRepasseConsultor=(c)=>{
-    // 1) % manual override
-    if(c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!==''){
-      const n=Number(c.repassePercOverride);
-      if(!isNaN(n))return n;
-    }
-    // 2) Grupo manual override
-    if(c.grupoIdOverride){
-      const g=grupoById(c.grupoIdOverride);
-      if(g)return getRepasseForTipo(g,c.tipoContrato);
-    }
-    // 3) Grupo do consultor cadastrado
-    const nome=(c.vendedorNome||c.nomeCorretor||'').toLowerCase();
-    const cor=CORRETORES.find(x=>(x.nome||'').toLowerCase()===nome);
-    if(!cor)return Number(c.comissaoRepassePerc||0);
-    const g=grupoById(cor.grupoId);
-    if(!g)return Number(c.comissaoRepassePerc||0);
-    return getRepasseForTipo(g,c.tipoContrato);
-  };
+  // Usa função global calcRepasseConsultorProd (mesma lógica para Produção e Contratos)
+  const calcRepasseConsultor=calcRepasseConsultorProd;
   const rows=list.map(c=>{
     // Val Empresa = o que o banco paga à empresa (comissaoEmpresaValor da planilha).
     // Fallback: se vier 0 (contratos antigos importados antes da coluna existir),
@@ -3071,9 +3052,9 @@ function atualizarPreviewAjuste(){
   const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
   const pctManual=document.getElementById('ajuste-pct').value;
   const grupoId=document.getElementById('ajuste-grupo').value;
-  // Simula a precedência da regra
+  // Simula a precedência da regra (usa a função global calcRepasseConsultorProd)
   const simulado={...c,repassePercOverride:pctManual,grupoIdOverride:grupoId};
-  const pct=calcRepasseConsultor(simulado);
+  const pct=calcRepasseConsultorProd(simulado);
   const vf=Math.round(empValor*pct/100*100)/100;
   document.getElementById('ajuste-preview').innerHTML=`
     <div style="display:flex;justify-content:space-between"><span>% aplicado:</span><b>${pct.toFixed(2)}%</b></div>
