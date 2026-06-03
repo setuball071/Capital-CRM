@@ -23375,6 +23375,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Planilha vazia" });
         }
 
+        // Normaliza nomes de colunas (trim de espaços nas chaves)
+        for (const row of rows) {
+          const keys = Object.keys(row);
+          for (const k of keys) {
+            const trimmed = k.trim();
+            if (trimmed !== k) {
+              row[trimmed] = row[k];
+              delete row[k];
+            }
+          }
+        }
+
+        // Parser numérico robusto para formatos BR: "R$ 282,12", "R$ 7.000,00",
+        // "R$ -", "1128.18", "7,00%", etc.
+        const parseNumBR = (v: any): number => {
+          if (v == null || v === "") return 0;
+          let s = String(v).trim();
+          s = s.replace(/R\$\s*/gi, "").replace(/\s+/g, "").replace(/%/g, "");
+          if (s === "" || s === "-" || s === "—") return 0;
+          // Se tem vírgula E ponto, assume formato BR (1.234,56)
+          if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
+            s = s.replace(/\./g, "").replace(",", ".");
+          } else if (s.indexOf(",") > -1) {
+            s = s.replace(",", ".");
+          }
+          const n = parseFloat(s);
+          return isNaN(n) ? 0 : n;
+        };
+
         const firstRow = rows[0];
         const hasContratoId = "ContratoId" in firstRow;
         if (!hasContratoId) {
@@ -23415,8 +23444,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const tipoContrato = String(row.TipoContrato || "").trim();
           const tipoLower = tipoContrato.toLowerCase();
           const isCartao = tipoLower.includes("cart") || tipoLower.includes("saque complementar");
-          const valorBase =
-            parseFloat(String(row.ValorBase || "0").replace(",", ".")) || 0;
+          const valorBase = parseNumBR(row.ValorBase);
 
           const dataPagamentoRaw = row.DataStatusBancoCliente || row.DataPagamento || "";
           let mesReferencia = "";
@@ -23458,26 +23486,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
           const isPago = statusProposta === "PAGO AO CLIENTE" || statusProposta === "PAGO";
 
-          const valorBruto =
-            parseFloat(String(row.ValorBruto || "0").replace(",", ".")) || 0;
-          const valorLiquido =
-            parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
-          let comissaoEmpresaValor =
-            parseFloat(
-              String(row.ComissaoEmpresaVistaValor || "0").replace(",", "."),
-            ) || 0;
-          const comissaoEmpresaPerc =
-            parseFloat(
-              String(row.ComissaoEmpresaVistaPerc || row.ComissaoEmpresaPerc || "0").replace(",", "."),
-            ) || 0;
-          let comissaoRepasseValor =
-            parseFloat(
-              String(row.ComissaoRepasseValor || "0").replace(",", "."),
-            ) || 0;
-          let comissaoRepassePerc =
-            parseFloat(
-              String(row.ComissaoRepassePercentual || "0").replace(",", "."),
-            ) || 0;
+          const valorBruto = parseNumBR(row.ValorBruto);
+          const valorLiquido = parseNumBR(row.ValorLiquido);
+          let comissaoEmpresaValor = parseNumBR(row.ComissaoEmpresaVistaValor);
+          const comissaoEmpresaPerc = parseNumBR(
+            row.ComissaoEmpresaVistaPerc || row.ComissaoEmpresaPerc,
+          );
+          let comissaoRepasseValor = parseNumBR(row.ComissaoRepasseValor);
+          let comissaoRepassePerc = parseNumBR(row.ComissaoRepassePercentual);
           // Se o valor R$ da empresa não veio, calcula pelo % × valorBase
           if (comissaoEmpresaValor === 0 && comissaoEmpresaPerc > 0 && valorBase > 0) {
             comissaoEmpresaValor = Math.round(valorBase * comissaoEmpresaPerc) / 100;
