@@ -23366,10 +23366,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Nenhum arquivo enviado" });
         }
 
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        // cellDates:false + raw:false → datas voltam como STRING no formato original
+        // da planilha (impede XLSX de tentar adivinhar MM/DD vs DD/MM).
+        const workbook = XLSX.read(req.file.buffer, {
+          type: "buffer",
+          cellDates: false,
+          cellNF: false,
+        });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, {
+          raw: false,
+          dateNF: "dd/mm/yyyy",
+          defval: "",
+        });
 
         if (!rows.length) {
           return res.status(400).json({ message: "Planilha vazia" });
