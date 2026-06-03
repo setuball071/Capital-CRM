@@ -23434,15 +23434,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 // DD/MM/YYYY
                 d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
                 dataPagamento = s;
+              } else if (!isNaN(Number(s)) && Number(s) > 1000 && Number(s) < 80000) {
+                // Serial Excel (dias desde 1900-01-01, com bug de 1900 sendo bissexto)
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                d = new Date(excelEpoch.getTime() + Number(s) * 86400000);
               } else if (!isNaN(Date.parse(s))) {
                 d = new Date(s);
               }
             }
+            // Valida que o ano está em range razoável — descarta datas absurdas
             if (d && !isNaN(d.getTime())) {
               const y = d.getFullYear();
-              const m = String(d.getMonth() + 1).padStart(2, "0");
-              mesReferencia = `${y}-${m}`;
-              dataPagamento = `${String(d.getDate()).padStart(2, "0")}/${m}/${y}`;
+              if (y >= 2000 && y <= 2100) {
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                mesReferencia = `${y}-${m}`;
+                dataPagamento = `${String(d.getDate()).padStart(2, "0")}/${m}/${y}`;
+              } else {
+                // Data fora de range — limpa e força contrato a ser ignorado
+                dataPagamento = "";
+              }
             }
           }
 
@@ -23452,18 +23462,30 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             parseFloat(String(row.ValorBruto || "0").replace(",", ".")) || 0;
           const valorLiquido =
             parseFloat(String(row.ValorLiquido || "0").replace(",", ".")) || 0;
-          const comissaoEmpresaValor =
+          let comissaoEmpresaValor =
             parseFloat(
               String(row.ComissaoEmpresaVistaValor || "0").replace(",", "."),
+            ) || 0;
+          const comissaoEmpresaPerc =
+            parseFloat(
+              String(row.ComissaoEmpresaVistaPerc || row.ComissaoEmpresaPerc || "0").replace(",", "."),
             ) || 0;
           let comissaoRepasseValor =
             parseFloat(
               String(row.ComissaoRepasseValor || "0").replace(",", "."),
             ) || 0;
-          const comissaoRepassePerc =
+          let comissaoRepassePerc =
             parseFloat(
               String(row.ComissaoRepassePercentual || "0").replace(",", "."),
             ) || 0;
+          // Se o valor R$ da empresa não veio, calcula pelo % × valorBase
+          if (comissaoEmpresaValor === 0 && comissaoEmpresaPerc > 0 && valorBase > 0) {
+            comissaoEmpresaValor = Math.round(valorBase * comissaoEmpresaPerc) / 100;
+          }
+          // O % que vai pra coluna "Comissão %" deve ser o % da empresa (não o do repasse)
+          if (comissaoRepassePerc === 0 && comissaoEmpresaPerc > 0) {
+            comissaoRepassePerc = comissaoEmpresaPerc;
+          }
           // Fallback: se repasse não veio preenchido, usa comissão da empresa como base
           // (o repasse real será calculado pela tabela do grupo no módulo financeiro)
           if (comissaoRepasseValor === 0 && comissaoEmpresaValor > 0) {
