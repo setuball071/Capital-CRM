@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Pencil, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Trash2, Download } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -233,6 +233,29 @@ export default function NomenclaturasPage() {
     setImportDialogOpen(true);
   };
 
+  const baixarModeloCSV = () => {
+    // CSV simples com BOM UTF-8 (Excel abre direto com acentos certos)
+    const linhas = [
+      "Categoria;Codigo;Nome;Ativo",
+      "RUBRICA;AMORT CARTAO CREDITO;Cartão de Crédito Consignado;TRUE",
+      "RUBRICA;AMORT CARTAO BENEFICIO;Cartão Benefício;TRUE",
+      "RUBRICA;AMORT EMP CONSIG;Empréstimo Consignado;TRUE",
+      "ORGAO;20114;Ministério da Fazenda;TRUE",
+      "TIPO_CONTRATO;EMP NOVO;Empréstimo Novo;TRUE",
+      "UPAG;0001;Brasília/DF;TRUE",
+    ];
+    const csv = "﻿" + linhas.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "modelo_nomenclaturas.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const closeImportDialog = () => {
     setImportDialogOpen(false);
     setSelectedFile(null);
@@ -298,6 +321,10 @@ export default function NomenclaturasPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-semibold">Nomenclaturas</h1>
         <div className="flex gap-2">
+          <Button variant="ghost" onClick={baixarModeloCSV} data-testid="button-baixar-modelo">
+            <Download className="w-4 h-4 mr-2" />
+            Baixar Modelo
+          </Button>
           <Button variant="outline" onClick={openImportDialog} data-testid="button-import-excel">
             <Upload className="w-4 h-4 mr-2" />
             Importar Excel
