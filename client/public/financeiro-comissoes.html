@@ -1465,7 +1465,7 @@ async function renderConsultorContratos(){
         <td><div style="font-size:12px;font-weight:600">${escHtml(c.banco||'—')}</div><div class="td-muted">${escHtml(c.tabela||'')}</div></td>
         <td>${tagConvenio(c.convenio||'')}</td><td>${tagTipo(c.tipoContrato||'')}</td>
         <td class="r">${msk(fmtBRL(val))}</td>
-        <td class="r">${fmtPct(fp)}</td>
+        <td class="r">${msk(fmtPct(fp))}</td>
         <td class="r v-yellow">${msk(fmtBRL(vf))}</td>
         <td>${bBanco}</td><td>${bFlat}</td>
       </tr>`;
