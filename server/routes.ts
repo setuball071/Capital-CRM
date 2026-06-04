@@ -23666,8 +23666,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             defval: "",
           });
         } else {
-          // CSV — parse manual preservando strings BR
-          const text = buf.toString("utf-8");
+          // CSV — detecta encoding (UTF-8 com/sem BOM ou Windows-1252)
+          // e faz parse manual preservando strings BR
+          let text: string;
+          if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+            text = buf.slice(3).toString("utf-8");
+          } else {
+            const tentativaUtf8 = buf.toString("utf-8");
+            if (tentativaUtf8.includes("�")) {
+              // Tem caractere de substituição → CSV não é UTF-8 válido
+              text = buf.toString("latin1");
+            } else {
+              text = tentativaUtf8;
+            }
+          }
           rows = parseCsvBR(text, ";");
         }
 

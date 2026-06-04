@@ -2540,9 +2540,28 @@ function executarSim(){
 function abrirImportCSV(){document.getElementById('csv-file').value='';document.getElementById('csv-preview').innerHTML='';document.getElementById('csv-btn-ok').style.display='none';_csvRows=[];abrirModal('modal-csv');}
 function handleCSVFile(file){
   if(!file)return;
+  // Lê como bytes e detecta o encoding (UTF-8 BOM, UTF-8 puro ou Windows-1252)
   const reader=new FileReader();
   reader.onload=e=>{
-    const lines=e.target.result.split('\n').filter(l=>l.trim());
+    const buf=new Uint8Array(e.target.result);
+    let text;
+    // 1) BOM UTF-8 (EF BB BF)
+    if(buf.length>=3&&buf[0]===0xEF&&buf[1]===0xBB&&buf[2]===0xBF){
+      text=new TextDecoder('utf-8').decode(buf.slice(3));
+    } else {
+      // 2) Tenta UTF-8 estrito; se gerar caractere de substituição (), usa Windows-1252
+      try{
+        const tentativaUtf8=new TextDecoder('utf-8',{fatal:false}).decode(buf);
+        if(tentativaUtf8.includes('�')){
+          text=new TextDecoder('windows-1252').decode(buf);
+        } else {
+          text=tentativaUtf8;
+        }
+      }catch(err){
+        text=new TextDecoder('windows-1252').decode(buf);
+      }
+    }
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2){toast('CSV inválido.',true);return;}
     const header=lines[0].split(';').map(h=>h.trim().replace(/"/g,''));
     _csvRows=lines.slice(1).map(l=>{const cols=l.split(';').map(v=>v.trim().replace(/"/g,''));const obj={};header.forEach((h,i)=>obj[h]=cols[i]||'');return obj;});
@@ -2550,7 +2569,7 @@ function handleCSVFile(file){
     document.getElementById('csv-preview').innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:6px">${_csvRows.length} linha(s) — preview das 5 primeiras:</div>${rows}`;
     document.getElementById('csv-btn-ok').style.display='';
   };
-  reader.readAsText(file,'UTF-8');
+  reader.readAsArrayBuffer(file);
 }
 function confirmarImportCSV(){
   let novos=0;
