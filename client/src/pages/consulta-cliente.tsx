@@ -476,13 +476,19 @@ export default function ConsultaCliente() {
     if (!nomenclaturas) return codigo;
     // Normaliza categoria para busca (ARQ. UPAG → UPAG)
     const normalizedCategoria = categoria === "ARQ. UPAG" ? "UPAG" : categoria;
-    // Remove zeros à esquerda para comparação numérica
+    // Compara código bruto e também sem zeros à esquerda (códigos numéricos)
     const normalizedCodigo = codigo.replace(/^0+/, "") || "0";
-    const found = nomenclaturas.find(n => {
+    const codigoUpper = codigo.trim().toUpperCase();
+    const matchPor = (cat: string) => nomenclaturas.find(n => {
+      if (!n.ativo) return false;
       const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;
+      if (nCategoria !== cat) return false;
       const nCodigo = n.codigo.replace(/^0+/, "") || "0";
-      return nCategoria === normalizedCategoria && nCodigo === normalizedCodigo && n.ativo;
+      // Match exato, sem zeros à esquerda, ou case-insensitive
+      return n.codigo === codigo || nCodigo === normalizedCodigo || n.codigo.trim().toUpperCase() === codigoUpper;
     });
+    // Tenta a categoria pedida; se não achar, faz fallback pra RUBRICA (base mestra)
+    const found = matchPor(normalizedCategoria) || (normalizedCategoria !== "RUBRICA" ? matchPor("RUBRICA") : null);
     return found ? found.nome : codigo;
   };
 

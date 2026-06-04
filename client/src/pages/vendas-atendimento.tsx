@@ -316,7 +316,13 @@ export default function VendasAtendimento() {
   const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR" | "RUBRICA", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
-    const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);
+    const codigoUpper = String(codigo).trim().toUpperCase();
+    const matchPor = (cat: string) => nomenclaturas.find(n =>
+      n.ativo && n.categoria === cat &&
+      (n.codigo === codigo || n.codigo.trim().toUpperCase() === codigoUpper)
+    );
+    // Tenta a categoria pedida; se não achar, fallback para RUBRICA (base mestra)
+    const found = matchPor(categoria) || (categoria !== "RUBRICA" ? matchPor("RUBRICA") : null);
     return found ? found.nome : codigo;
   };
 
