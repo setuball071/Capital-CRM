@@ -455,7 +455,7 @@ export default function VendasConsulta() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR", codigo: string | null | undefined): string => {
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR" | "RUBRICA", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
     const found = nomenclaturas.find(n => n.categoria === categoria && n.codigo === codigo && n.ativo);

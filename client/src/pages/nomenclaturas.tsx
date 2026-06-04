@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Nomenclatura } from "@shared/schema";
 
-const CATEGORIAS = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "OUTRO"] as const;
+const CATEGORIAS = ["ORGAO", "TIPO_CONTRATO", "UPAG", "UF", "RUBRICA", "OUTRO"] as const;
 
 interface ImportResult {
   message: string;

@@ -471,7 +471,7 @@ export default function ConsultaCliente() {
   // Função De-Para: retorna nome se existir, senão código original
   // Suporta alias de categorias (ex: ARQ. UPAG → UPAG)
   // Remove zeros à esquerda para comparação (ex: "000000947" → "947")
-  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "ARQ. UPAG", codigo: string | null): string => {
+  const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "ARQ. UPAG" | "RUBRICA", codigo: string | null): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
     // Normaliza categoria para busca (ARQ. UPAG → UPAG)

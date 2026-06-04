@@ -678,6 +678,7 @@ export const NOMENCLATURA_CATEGORIA = [
   "TIPO_CONTRATO",
   "UPAG",
   "UF",
+  "RUBRICA",
   "OUTRO",
 ] as const;
 export type NomenclaturaCategoria = (typeof NOMENCLATURA_CATEGORIA)[number];
