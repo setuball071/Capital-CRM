@@ -606,7 +606,7 @@ export default function NomenclaturasPage() {
                   </table>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Categorias válidas: ORGAO, TIPO_CONTRATO, UPAG, UF, OUTRO
+                  Categorias válidas: ORGAO, TIPO_CONTRATO, UPAG, UF, RUBRICA, OUTRO
                 </p>
               </CardContent>
             </Card>
