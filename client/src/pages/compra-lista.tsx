@@ -225,6 +225,29 @@ export default function CompraLista() {
     queryKey: ["/api/clientes/filtros/sit-func"],
   });
 
+  // Nomenclaturas (RUBRICA + TIPO_CONTRATO) para traduzir códigos em nome amigável
+  const { data: nomenclaturas = [] } = useQuery<Array<{ categoria: string; codigo: string; nome: string; ativo: boolean }>>({
+    queryKey: ["/api/nomenclaturas-cached"],
+  });
+
+  // Lookup que faz match exato + match truncado (5 dígitos para códigos SIAPE 6+)
+  const labelTipoContrato = (codigo: string): string => {
+    if (!codigo) return codigo;
+    const cod = String(codigo).trim();
+    const codNorm = cod.replace(/^0+/, "") || "0";
+    const codTrunc = /^\d{6,}$/.test(cod) ? cod.substring(0, 5) : null;
+    const codTruncNorm = codTrunc ? (codTrunc.replace(/^0+/, "") || "0") : null;
+    const buscaCat = (cat: string) => nomenclaturas.find(n => {
+      if (!n.ativo || n.categoria !== cat) return false;
+      const nCod = n.codigo.replace(/^0+/, "") || "0";
+      if (n.codigo === cod || nCod === codNorm) return true;
+      if (codTrunc && (n.codigo === codTrunc || nCod === codTruncNorm)) return true;
+      return false;
+    });
+    const found = buscaCat("TIPO_CONTRATO") || buscaCat("RUBRICA");
+    return found ? `${cod} — ${found.nome}` : cod;
+  };
+
   // Buscar tipos de contrato dinamicamente quando os bancos mudarem
   useEffect(() => {
     const fetchTiposContrato = async () => {
@@ -678,9 +701,10 @@ export default function CompraLista() {
                       value={filtros.tipos_contrato || []}
                       onValueChange={(v) => setFiltros({ ...filtros, tipos_contrato: v.length > 0 ? v : undefined })}
                       placeholder={isLoadingTipos ? "Carregando..." : "Todos"}
-                      searchPlaceholder="Buscar tipo..."
+                      searchPlaceholder="Buscar código ou nome..."
                       emptyText="Nenhum tipo encontrado."
                       disabled={isLoadingTipos}
+                      getLabel={labelTipoContrato}
                       data-testid="multiselect-tipo-contrato"
                     />
                     {filtros.bancos && filtros.bancos.length === 1 && tiposContratoFiltrados.length > 0 && (

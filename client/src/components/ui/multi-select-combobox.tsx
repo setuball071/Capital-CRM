@@ -28,6 +28,8 @@ interface MultiSelectComboboxProps {
   disabled?: boolean
   className?: string
   maxDisplay?: number
+  /** Função opcional para customizar o texto exibido de cada opção/valor. */
+  getLabel?: (option: string) => string
   "data-testid"?: string
 }
 
@@ -41,22 +43,27 @@ export function MultiSelectCombobox({
   disabled = false,
   className,
   maxDisplay = 3,
+  getLabel,
   "data-testid": testId,
 }: MultiSelectComboboxProps) {
+  const labelOf = (opt: string) => getLabel ? getLabel(opt) : opt;
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState("")
 
   const sortedOptions = React.useMemo(() => {
-    return [...options].sort((a, b) => a.localeCompare(b, "pt-BR"))
-  }, [options])
+    return [...options].sort((a, b) => labelOf(a).localeCompare(labelOf(b), "pt-BR"))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, getLabel])
 
   const filteredOptions = React.useMemo(() => {
     if (!inputValue) return sortedOptions
     const lowerInput = inputValue.toLowerCase()
     return sortedOptions.filter((option) =>
-      option.toLowerCase().includes(lowerInput)
+      option.toLowerCase().includes(lowerInput) ||
+      labelOf(option).toLowerCase().includes(lowerInput)
     )
-  }, [sortedOptions, inputValue])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedOptions, inputValue, getLabel])
 
   const handleSelect = (selectedValue: string) => {
     const newValue = value.includes(selectedValue)
@@ -77,11 +84,13 @@ export function MultiSelectCombobox({
 
   const displayValue = React.useMemo(() => {
     if (value.length === 0) return placeholder
+    const labels = value.map(labelOf)
     if (value.length <= maxDisplay) {
-      return value.join(", ")
+      return labels.join(", ")
     }
-    return `${value.slice(0, maxDisplay).join(", ")} +${value.length - maxDisplay}`
-  }, [value, maxDisplay, placeholder])
+    return `${labels.slice(0, maxDisplay).join(", ")} +${value.length - maxDisplay}`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, maxDisplay, placeholder, getLabel])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -133,7 +142,7 @@ export function MultiSelectCombobox({
                       value.includes(option) ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option}
+                  {labelOf(option)}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -154,7 +163,7 @@ export function MultiSelectCombobox({
                   onClick={(e) => handleRemove(e, item)}
                   data-testid={`multiselect-badge-${item}`}
                 >
-                  {item}
+                  {labelOf(item)}
                   <X className="ml-1 h-3 w-3" />
                 </Badge>
               ))}
