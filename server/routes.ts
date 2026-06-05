@@ -2835,7 +2835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // DELETE (soft delete - set ativo=false)
+  // DELETE (hard delete - remove do banco)
   app.delete(
     "/api/nomenclaturas/:id",
     requireAuth,
@@ -2844,70 +2844,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const id = parseInt(req.params.id);
 
-        const [updated] = await db
-          .update(nomenclaturas)
-          .set({ ativo: false })
+        const deleted = await db
+          .delete(nomenclaturas)
           .where(eq(nomenclaturas.id, id))
           .returning();
 
-        if (!updated) {
+        if (!deleted.length) {
           return res
             .status(404)
             .json({ message: "Nomenclatura não encontrada" });
         }
 
         invalidateNomenclaturasCache();
-        return res.json({ message: "Nomenclatura desativada com sucesso" });
+        return res.json({ message: "Nomenclatura excluída com sucesso" });
       } catch (error) {
         console.error("Delete nomenclatura error:", error);
         return res
           .status(500)
-          .json({ message: "Erro ao desativar nomenclatura" });
+          .json({ message: "Erro ao excluir nomenclatura" });
       }
     },
   );
 
-  // DELETE em lote (soft delete - set ativo=false)
+  // DELETE em lote (hard delete)
   app.post(
     "/api/nomenclaturas/delete-batch",
     requireAuth,
     requireMasterOrAdmin,
     async (req, res) => {
       try {
-        const { ids } = req.body;
+        const { ids, categoria } = req.body;
 
-        if (!Array.isArray(ids) || ids.length === 0) {
-          return res
-            .status(400)
-            .json({ message: "Lista de IDs é obrigatória" });
+        // Modo 1: lista de IDs específicos
+        if (Array.isArray(ids) && ids.length) {
+          const numericIds = ids
+            .map((id: any) => parseInt(id))
+            .filter((id: number) => !isNaN(id));
+
+          if (numericIds.length === 0) {
+            return res
+              .status(400)
+              .json({ message: "Nenhum ID válido fornecido" });
+          }
+
+          const deleted = await db
+            .delete(nomenclaturas)
+            .where(inArray(nomenclaturas.id, numericIds))
+            .returning();
+
+          invalidateNomenclaturasCache();
+          return res.json({
+            message: `${deleted.length} nomenclatura(s) excluída(s) com sucesso`,
+            count: deleted.length,
+          });
         }
 
-        const numericIds = ids
-          .map((id: any) => parseInt(id))
-          .filter((id: number) => !isNaN(id));
+        // Modo 2: apagar TUDO de uma categoria
+        if (categoria && typeof categoria === "string") {
+          const deleted = await db
+            .delete(nomenclaturas)
+            .where(eq(nomenclaturas.categoria, categoria.toUpperCase()))
+            .returning();
 
-        if (numericIds.length === 0) {
-          return res
-            .status(400)
-            .json({ message: "Nenhum ID válido fornecido" });
+          invalidateNomenclaturasCache();
+          return res.json({
+            message: `${deleted.length} nomenclatura(s) da categoria ${categoria} excluída(s) com sucesso`,
+            count: deleted.length,
+          });
         }
 
-        const updated = await db
-          .update(nomenclaturas)
-          .set({ ativo: false })
-          .where(inArray(nomenclaturas.id, numericIds))
-          .returning();
-
-        invalidateNomenclaturasCache();
-        return res.json({
-          message: `${updated.length} nomenclatura(s) desativada(s) com sucesso`,
-          count: updated.length,
-        });
+        return res
+          .status(400)
+          .json({ message: "Informe 'ids' ou 'categoria'" });
       } catch (error) {
         console.error("Delete batch nomenclaturas error:", error);
         return res
           .status(500)
-          .json({ message: "Erro ao desativar nomenclaturas" });
+          .json({ message: "Erro ao excluir nomenclaturas" });
       }
     },
   );

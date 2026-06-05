@@ -459,12 +459,18 @@ export default function VendasConsulta() {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
     const codigoUpper = String(codigo).trim().toUpperCase();
-    const matchPor = (cat: string) => nomenclaturas.find(n =>
+    const matchPorCodigo = (cat: string) => nomenclaturas.find(n =>
       n.ativo && n.categoria === cat &&
       (n.codigo === codigo || n.codigo.trim().toUpperCase() === codigoUpper)
     );
-    // Tenta a categoria pedida; se não achar, fallback para RUBRICA (base mestra)
-    const found = matchPor(categoria) || (categoria !== "RUBRICA" ? matchPor("RUBRICA") : null);
+    const matchPorNome = (cat: string) => nomenclaturas.find(n =>
+      n.ativo && n.categoria === cat && n.nome.trim().toUpperCase() === codigoUpper
+    );
+    const found =
+      matchPorCodigo(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorCodigo("RUBRICA") : null) ||
+      matchPorNome(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorNome("RUBRICA") : null);
     return found ? found.nome : codigo;
   };
 

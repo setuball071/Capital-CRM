@@ -474,21 +474,29 @@ export default function ConsultaCliente() {
   const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "ARQ. UPAG" | "RUBRICA", codigo: string | null): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
-    // Normaliza categoria para busca (ARQ. UPAG → UPAG)
     const normalizedCategoria = categoria === "ARQ. UPAG" ? "UPAG" : categoria;
-    // Compara código bruto e também sem zeros à esquerda (códigos numéricos)
     const normalizedCodigo = codigo.replace(/^0+/, "") || "0";
     const codigoUpper = codigo.trim().toUpperCase();
-    const matchPor = (cat: string) => nomenclaturas.find(n => {
+    // Match por código (exato, sem zeros, case-insensitive)
+    const matchPorCodigo = (cat: string) => nomenclaturas.find(n => {
       if (!n.ativo) return false;
       const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;
       if (nCategoria !== cat) return false;
       const nCodigo = n.codigo.replace(/^0+/, "") || "0";
-      // Match exato, sem zeros à esquerda, ou case-insensitive
       return n.codigo === codigo || nCodigo === normalizedCodigo || n.codigo.trim().toUpperCase() === codigoUpper;
     });
-    // Tenta a categoria pedida; se não achar, faz fallback pra RUBRICA (base mestra)
-    const found = matchPor(normalizedCategoria) || (normalizedCategoria !== "RUBRICA" ? matchPor("RUBRICA") : null);
+    // Match por NOME (quando o "código" no contrato é na verdade a descrição bruta)
+    const matchPorNome = (cat: string) => nomenclaturas.find(n => {
+      if (!n.ativo) return false;
+      const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;
+      if (nCategoria !== cat) return false;
+      return n.nome.trim().toUpperCase() === codigoUpper;
+    });
+    const found =
+      matchPorCodigo(normalizedCategoria) ||
+      (normalizedCategoria !== "RUBRICA" ? matchPorCodigo("RUBRICA") : null) ||
+      matchPorNome(normalizedCategoria) ||
+      (normalizedCategoria !== "RUBRICA" ? matchPorNome("RUBRICA") : null);
     return found ? found.nome : codigo;
   };
 
