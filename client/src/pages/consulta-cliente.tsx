@@ -477,15 +477,20 @@ export default function ConsultaCliente() {
     const normalizedCategoria = categoria === "ARQ. UPAG" ? "UPAG" : categoria;
     const normalizedCodigo = codigo.replace(/^0+/, "") || "0";
     const codigoUpper = codigo.trim().toUpperCase();
-    // Match por código (exato, sem zeros, case-insensitive)
+    // Códigos SIAPE: 6+ dígitos = código rubrica (5) + sequencial de ordem (1+).
+    // Truncar para os 5 primeiros dígitos permite achar a nomenclatura cadastrada.
+    const codigoTruncado = /^\d{6,}$/.test(codigo.trim()) ? codigo.trim().substring(0, 5) : null;
+    const codigoTruncadoNorm = codigoTruncado ? (codigoTruncado.replace(/^0+/, "") || "0") : null;
     const matchPorCodigo = (cat: string) => nomenclaturas.find(n => {
       if (!n.ativo) return false;
       const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;
       if (nCategoria !== cat) return false;
       const nCodigo = n.codigo.replace(/^0+/, "") || "0";
-      return n.codigo === codigo || nCodigo === normalizedCodigo || n.codigo.trim().toUpperCase() === codigoUpper;
+      if (n.codigo === codigo || nCodigo === normalizedCodigo || n.codigo.trim().toUpperCase() === codigoUpper) return true;
+      // Match truncado (rubrica SIAPE de 6+ dígitos)
+      if (codigoTruncado && (n.codigo === codigoTruncado || nCodigo === codigoTruncadoNorm)) return true;
+      return false;
     });
-    // Match por NOME (quando o "código" no contrato é na verdade a descrição bruta)
     const matchPorNome = (cat: string) => nomenclaturas.find(n => {
       if (!n.ativo) return false;
       const nCategoria = n.categoria === "ARQ. UPAG" ? "UPAG" : n.categoria;

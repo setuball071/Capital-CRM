@@ -316,11 +316,16 @@ export default function VendasAtendimento() {
   const mapNomenclatura = (categoria: "ORGAO" | "TIPO_CONTRATO" | "UPAG" | "UF" | "SIT_FUNC" | "RJUR" | "RUBRICA", codigo: string | null | undefined): string => {
     if (!codigo) return "-";
     if (!nomenclaturas) return codigo;
-    const codigoUpper = String(codigo).trim().toUpperCase();
-    const matchPorCodigo = (cat: string) => nomenclaturas.find(n =>
-      n.ativo && n.categoria === cat &&
-      (n.codigo === codigo || n.codigo.trim().toUpperCase() === codigoUpper)
-    );
+    const codigoStr = String(codigo).trim();
+    const codigoUpper = codigoStr.toUpperCase();
+    // Códigos SIAPE: 6+ dígitos = código rubrica (5) + sequencial.
+    const codigoTruncado = /^\d{6,}$/.test(codigoStr) ? codigoStr.substring(0, 5) : null;
+    const matchPorCodigo = (cat: string) => nomenclaturas.find(n => {
+      if (!n.ativo || n.categoria !== cat) return false;
+      if (n.codigo === codigo || n.codigo.trim().toUpperCase() === codigoUpper) return true;
+      if (codigoTruncado && n.codigo.trim() === codigoTruncado) return true;
+      return false;
+    });
     const matchPorNome = (cat: string) => nomenclaturas.find(n =>
       n.ativo && n.categoria === cat && n.nome.trim().toUpperCase() === codigoUpper
     );
