@@ -148,7 +148,7 @@ function TimelineRetorno({ texto }: { texto: string }) {
 
 // ── Helper ────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-gray-100 text-muted-foreground border-gray-200", icon: null };
+  const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-gray-100 text-muted-foreground border-gray-200 dark:bg-gray-800 dark:border-gray-700", icon: null };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${cfg.color}`}>
       {cfg.icon}{cfg.label}

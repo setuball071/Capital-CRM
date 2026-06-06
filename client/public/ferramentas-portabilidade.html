@@ -313,6 +313,54 @@ tr:last-child td { border-bottom: none !important; }
 [data-theme="dark"] .nova-strong { color: #F1F1F8 !important; }
 [data-theme="dark"] #proposta_box { background: #1A1A2E !important; }
 
+/* ── SIMULADOR DE PORTABILIDADE — DARK MODE OVERRIDES ──
+   Os style="" inline da seção do simulador usam cores hardcoded.
+   Aqui sobrescrevo as principais para que respeitem o tema dark. */
+[data-theme="dark"] #secaoSimples [style*="background:#F0FDF4"],
+[data-theme="dark"] #secaoRefim   [style*="background:#F0FDF4"],
+[data-theme="dark"] #totaisSimples,
+[data-theme="dark"] #totaisRefim,
+[data-theme="dark"] [style*="background:#F0FDF4"] {
+  background: #0A2E1F !important;
+  border-color: #14532D !important;
+}
+[data-theme="dark"] [style*="background:#FFF7ED"] {
+  background: #2A1A0A !important;
+  border-color: #92400E !important;
+}
+[data-theme="dark"] [style*="background:#EDE9FE"],
+[data-theme="dark"] [style*="background:#F8F7FF"] {
+  background: #2D1F5E !important;
+  border-color: #4C1D95 !important;
+}
+[data-theme="dark"] [style*="background:#F3F4F6"] {
+  background: #252540 !important;
+  color: #9CA3AF !important;
+}
+[data-theme="dark"] [style*="border:1px solid #E5E7EB"],
+[data-theme="dark"] [style*="border: 1px solid #E5E7EB"] {
+  border-color: #2E2E4A !important;
+}
+[data-theme="dark"] [style*="color:#1a0030"],
+[data-theme="dark"] [style*="color: #1a0030"],
+[data-theme="dark"] [style*="color:#111827"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#374151"],
+[data-theme="dark"] [style*="color: #374151"],
+[data-theme="dark"] [style*="color:#4B1FA6"],
+[data-theme="dark"] [style*="color: #4B1FA6"] {
+  color: #F1F1F8 !important;
+}
+[data-theme="dark"] [style*="color:#6B7280"],
+[data-theme="dark"] [style*="color: #6B7280"] {
+  color: #9CA3AF !important;
+}
+/* Botões inativos do toggle "Simples / Refim" */
+[data-theme="dark"] #btnTipoSimples[style*="background:#F3F4F6"],
+[data-theme="dark"] #btnTipoRefim[style*="background:#F3F4F6"] {
+  background: #252540 !important;
+  color: #9CA3AF !important;
+}
 
 body{font-family:var(--font);background:var(--bg);min-height:100vh;padding:2rem 1rem}
 .wrap{max-width:820px;margin:0 auto;padding-bottom:4rem}

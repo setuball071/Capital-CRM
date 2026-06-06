@@ -36,7 +36,7 @@ const ACTION_ICONS: Record<string, any> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, className: "bg-zinc-100 text-zinc-700" };
+  const cfg = STATUS_CONFIG[status] || { label: status, className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" };
   return (
     <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${cfg.className}`}>
       {cfg.label}

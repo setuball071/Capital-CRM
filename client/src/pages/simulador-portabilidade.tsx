@@ -1020,7 +1020,7 @@ export default function SimuladorPortabilidadePage() {
                       <button
                         type="button"
                         onClick={() => fotoInputRef.current?.click()}
-                        style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid #6C2BD9", background: "#fff", color: "#6C2BD9", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid #6C2BD9", background: "hsl(var(--card))", color: "#6C2BD9", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                       >
                         {fotoAtiva ? "Trocar foto" : "Escolher foto"}
                       </button>
@@ -1028,21 +1028,21 @@ export default function SimuladorPortabilidadePage() {
                         <button
                           type="button"
                           onClick={() => setConsultorFotoOverride("")}
-                          style={{ padding: "6px 8px", borderRadius: 7, border: "1.5px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 11, cursor: "pointer" }}
+                          style={{ padding: "6px 8px", borderRadius: 7, border: "1.5px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--muted-foreground))", fontSize: 11, cursor: "pointer" }}
                           title="Usar foto do perfil"
                         >↩</button>
                       )}
                     </div>
                     {/* Toggle incluir/ocultar */}
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "#64748b", userSelect: "none" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "hsl(var(--muted-foreground))", userSelect: "none" }}>
                       <div style={{ position: "relative", width: 32, height: 18, flexShrink: 0 }}>
                         <input type="checkbox" checked={pdfIncluirFoto} onChange={e => setPdfIncluirFoto(e.target.checked)} style={{ opacity: 0, width: 0, height: 0, position: "absolute" }} />
-                        <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirFoto ? "#6C2BD9" : "#cbd5e1", transition: "background .2s", display: "block" }} />
+                        <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirFoto ? "#6C2BD9" : "hsl(var(--border))", transition: "background .2s", display: "block" }} />
                         <span style={{ position: "absolute", top: 3, left: pdfIncluirFoto ? 17 : 3, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block" }} />
                       </div>
                       Exibir foto no PDF
                     </label>
-                    <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                    <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
                       {fotoAtiva ? (consultorFotoOverride ? "Foto escolhida manualmente" : "Foto do perfil") : "Sem foto: será exibida inicial"}
                     </div>
                   </div>
@@ -1051,8 +1051,8 @@ export default function SimuladorPortabilidadePage() {
                 <input ref={fotoInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleFotoSelect} />
               </div>
               {/* ── Seção Cliente ── */}
-              <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0 10px", paddingTop: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b" }}>👤 Dados do Cliente</span>
+              <div style={{ borderTop: "1px solid hsl(var(--border))", margin: "8px 0 10px", paddingTop: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "hsl(var(--muted-foreground))" }}>👤 Dados do Cliente</span>
               </div>
 
               <div className="fg">
@@ -1106,17 +1106,17 @@ export default function SimuladorPortabilidadePage() {
             onClick={() => setCropModalOpen(false)}
           >
             <div
-              style={{ background: "#fff", borderRadius: 16, padding: 24, width: 320, boxShadow: "0 24px 60px rgba(0,0,0,0.4)" }}
+              style={{ background: "hsl(var(--card))", color: "hsl(var(--foreground))", borderRadius: 16, padding: 24, width: 320, boxShadow: "0 24px 60px rgba(0,0,0,0.4)" }}
               onClick={e => e.stopPropagation()}
             >
               <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Enquadrar foto</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Arraste para reposicionar e ajuste o zoom.</div>
+              <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginBottom: 16 }}>Arraste para reposicionar e ajuste o zoom.</div>
 
               {/* Canvas circular */}
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
                 <canvas
                   ref={cropCanvasRef}
-                  style={{ borderRadius: 8, cursor: cropDragging ? "grabbing" : "grab", border: "2px solid #e2e8f0", userSelect: "none" }}
+                  style={{ borderRadius: 8, cursor: cropDragging ? "grabbing" : "grab", border: "2px solid hsl(var(--border))", userSelect: "none" }}
                   onMouseDown={handleCropMouseDown}
                   onMouseMove={handleCropMouseMove}
                   onMouseUp={handleCropMouseUp}
@@ -1129,7 +1129,7 @@ export default function SimuladorPortabilidadePage() {
 
               {/* Zoom */}
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                   <span>Zoom</span><span style={{ fontWeight: 600 }}>{Math.round(cropZoom * 100)}%</span>
                 </div>
                 <input
@@ -1144,7 +1144,7 @@ export default function SimuladorPortabilidadePage() {
                 <button
                   type="button"
                   onClick={() => setCropModalOpen(false)}
-                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#f8fafc", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1.5px solid hsl(var(--border))", background: "hsl(var(--muted))", color: "hsl(var(--foreground))", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
                 >Cancelar</button>
                 <button
                   type="button"
