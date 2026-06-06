@@ -2,41 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LIGHT MODE - Tremor-inspired sober design */
+/* LIGHT MODE - mais contraste em bordas e fundo levemente acinzentado
+   para reduzir brilho e dar melhor separação visual entre cards e o canvas */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0,0,0, .14);
+  --badge-outline: rgba(0,0,0, .08);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .02);
-  --elevate-2: rgba(0,0,0, .05);
-  --background: 0 0% 98%;
+  --elevate-1: rgba(0,0,0, .025);
+  --elevate-2: rgba(0,0,0, .06);
+  --background: 220 14% 95%;          /* antes 0 0% 98% (quase branco) */
   --foreground: 224 71% 4%;
-  --border: 220 13% 91%;
-  --card: 0 0% 100%;
+  --border: 220 13% 84%;              /* antes 91% — bordas mais marcadas */
+  --card: 0 0% 100%;                  /* card permanece branco → contrasta com canvas */
   --card-foreground: 224 71% 4%;
-  --card-border: 220 13% 91%;
+  --card-border: 220 13% 84%;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 224 71% 4%;
-  --sidebar-border: 220 13% 91%;
+  --sidebar-border: 220 13% 84%;
   --sidebar-primary: 221 83% 53%;
   --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 220 14% 96%;
+  --sidebar-accent: 220 14% 93%;      /* antes 96% — hover mais perceptível */
   --sidebar-accent-foreground: 224 71% 4%;
   --sidebar-ring: 221 83% 53%;
   --popover: 0 0% 100%;
   --popover-foreground: 224 71% 4%;
-  --popover-border: 220 13% 91%;
+  --popover-border: 220 13% 84%;
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 220 14% 96%;
+  --secondary: 220 14% 93%;
   --secondary-foreground: 224 71% 4%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 220 14% 96%;
+  --muted: 220 14% 93%;
+  --muted-foreground: 220 9% 40%;     /* antes 46% — texto secundário mais legível */
+  --accent: 220 14% 93%;
   --accent-foreground: 224 71% 4%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-  --input: 220 13% 91%;
+  --input: 220 13% 84%;               /* antes 91% — campos de input com borda visível */
   --ring: 221 83% 53%;
   --chart-1: 221 83% 53%;
   --chart-2: 142 76% 36%;
@@ -59,11 +60,11 @@
   --spacing: 0.25rem;
 
   --sidebar-primary-border: 221 83% 45%;
-  --sidebar-accent-border: 220 13% 88%;
+  --sidebar-accent-border: 220 13% 82%;
   --primary-border: 221 83% 45%;
-  --secondary-border: 220 13% 88%;
-  --muted-border: 220 13% 88%;
-  --accent-border: 220 13% 88%;
+  --secondary-border: 220 13% 82%;
+  --muted-border: 220 13% 82%;
+  --accent-border: 220 13% 82%;
   --destructive-border: 0 84% 52%;
 }
 
