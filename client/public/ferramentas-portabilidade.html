@@ -39,15 +39,18 @@ td { color: #111827 !important; }
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 
+/* Cores alinhadas com o React global (client/src/index.css)
+   para que TODAS as abas (Criador, Portabilidade, Compra, etc) tenham
+   o mesmo visual neutro. Removidas tonalidades roxas do background. */
 :root {
-  --bg:           #F8F8FC;
+  --bg:           #F0F1F4;     /* era #F8F8FC (lilás) → cinza neutro */
   --surface:      #FFFFFF;
-  --surface-2:    #F3F3F8;
-  --border:       #E8E8F0;
-  --border-soft:  #F0F0F6;
-  --text-primary: #111827;
-  --text-secondary:#6B7280;
-  --text-muted:   #9CA3AF;
+  --surface-2:    #E8EAEE;     /* era #F3F3F8 (lilás) → cinza neutro */
+  --border:       #D2D5DC;     /* era #E8E8F0 → mais marcada */
+  --border-soft:  #DDE0E6;     /* era #F0F0F6 (lilás) → cinza */
+  --text-primary: #0A0F1F;
+  --text-secondary:#5C636E;    /* mais legível */
+  --text-muted:   #8B92A1;
   --purple:       #7C3AED;
   --purple-light: #EDE9FE;
   --purple-mid:   #DDD6FE;
@@ -64,13 +67,13 @@ td { color: #111827 !important; }
 }
 
 [data-theme="dark"] {
-  --bg:           #0F0F1A;
-  --surface:      #1A1A2E;
-  --surface-2:    #252540;
-  --border:       #2E2E4A;
-  --border-soft:  #252540;
-  --text-primary: #F1F1F8;
-  --text-secondary:#9CA3AF;
+  --bg:           #131319;     /* era #0F0F1A (azul-roxo) → cinza-azulado neutro */
+  --surface:      #1C1C24;     /* era #1A1A2E (roxo) → neutro */
+  --surface-2:    #25252E;     /* era #252540 (azul-roxo) → neutro */
+  --border:       #30303A;     /* era #2E2E4A (roxo) → neutro */
+  --border-soft:  #25252E;
+  --text-primary: #F2F2F4;
+  --text-secondary:#A0A4AE;
   --text-muted:   #6B7280;
   --purple-light: #2D1F5E;
   --green-light:  #0A2E1F;
@@ -89,8 +92,8 @@ body {
 
 /* ── TABS BAR ── */
 .tabs-bar {
-  background: #FFFFFF;
-  border-bottom: 1px solid #E8E8F0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   box-shadow: 0 1px 0 var(--border), 0 2px 8px rgba(0,0,0,.04);
   position: sticky;
   top: 0;
@@ -159,16 +162,16 @@ body {
 
 /* ── SHARED COMPONENT OVERRIDES ── */
 .box, .card, .proposta-view {
-  background: #FFFFFF !important;
-  border: 1px solid #E8E8F0 !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
   box-shadow: 0 1px 3px rgba(0,0,0,.06) !important;
 }
 [data-theme="dark"] .box,
 [data-theme="dark"] .card,
 [data-theme="dark"] .proposta-view {
-  background: #1A1A2E !important;
-  border-color: #2E2E4A !important;
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
   box-shadow: 0 1px 3px rgba(0,0,0,.3) !important;
 }
 
@@ -178,10 +181,10 @@ select, textarea,
 #tab-sim-content select {
   -webkit-appearance: none !important;
   appearance: none !important;
-  background: #F9FAFB;
-  border: 1px solid #E5E7EB;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: var(--radius) !important;
-  color: #111827;
+  color: var(--text-primary);
   font-family: var(--font) !important;
   font-size: 13px !important;
   padding: 8px 12px !important;
@@ -195,9 +198,9 @@ select, textarea,
 [data-theme="dark"] textarea,
 [data-theme="dark"] #tab-sim-content input:not([type=checkbox]):not([type=radio]),
 [data-theme="dark"] #tab-sim-content select {
-  background: #252540 !important;
-  border-color: #2E2E4A !important;
-  color: #F1F1F8 !important;
+  background: var(--surface-2) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
 }
 input:focus, select:focus {
   border-color: var(--purple) !important;
@@ -263,20 +266,21 @@ tr:last-child td { border-bottom: none !important; }
 :root{
   --p:#6C2BD9;--b:#1E88E5;--k:#E91E63;
   --font:'DM Sans',sans-serif;
-  --bg:#f0eef8;--card:#fff;--surf:#f5f4fa;--surf2:#faf9ff;
+  /* Alinhado com o bloco :root principal (cinza neutro, sem matiz roxa) */
+  --bg:#F0F1F4;--card:#fff;--surf:#E8EAEE;--surf2:#FFFFFF;
   --border:rgba(0,0,0,0.11);--border2:rgba(0,0,0,0.18);
-  --txt:#1a1a1a;--muted:#6b6b6b;--rad:8px;--radlg:12px;
+  --txt:#0A0F1F;--muted:#5C636E;--rad:8px;--radlg:12px;
 }
 
 [data-theme="dark"] {
-  --bg:#0F0F1A;
-  --card:#1A1A2E;
-  --surf:#252540;
-  --surf2:#1E1E38;
+  --bg:#131319;
+  --card:#1C1C24;
+  --surf:#25252E;
+  --surf2:#1C1C24;
   --border:rgba(255,255,255,0.08);
   --border2:rgba(255,255,255,0.14);
-  --txt:#F1F1F8;
-  --muted:#9CA3AF;
+  --txt:#F2F2F4;
+  --muted:#A0A4AE;
 }
 
 /* Proposta preview dark overrides */
@@ -1299,7 +1303,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       ondragover="event.preventDefault();document.getElementById('dropZone').classList.add('dz-hover')"
       ondragleave="document.getElementById('dropZone').classList.remove('dz-hover')"
       ondrop="event.preventDefault();document.getElementById('dropZone').classList.remove('dz-hover');handleDropPDF(event)"
-      style="margin-bottom:16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;transition:all .15s;background:#F8F7FF;">
+      style="margin-bottom:16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2);">
 
       <div style="font-size:28px;margin-bottom:8px;line-height:1;">📄</div>
       <div style="font-size:13px;font-weight:600;color:#7C3AED;margin-bottom:4px;">
