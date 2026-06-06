@@ -202,6 +202,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           isPaused: proposals.isPaused,
           ade: proposals.ade,
           commissionStatus: proposals.commissionStatus,
+          commissionPercentage: proposals.commissionPercentage,
+          companyCommissionValue: proposals.companyCommissionValue,
+          corretorCommissionPercentage: proposals.corretorCommissionPercentage,
+          corretorCommissionValue: proposals.corretorCommissionValue,
+          commissionPaidAt: proposals.commissionPaidAt,
           vendorId: proposals.vendorId,
           flowId: proposals.flowId,
           currentStepId: proposals.currentStepId,
@@ -377,13 +382,30 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
 
-      const { status, nextStepId, ade, notes, action } = req.body;
+      const {
+        status, nextStepId, ade, notes, action,
+        contractValue: contractValueInput,
+        commissionPercentage: commissionPctInput,
+        companyCommissionValue: companyCommInput,
+        corretorCommissionPercentage: corretorPctInput,
+        corretorCommissionValue: corretorCommInput,
+      } = req.body;
 
       const updateData: any = {};
       if (status) updateData.status = status;
       if (nextStepId) updateData.currentStepId = nextStepId;
       if (ade !== undefined) updateData.ade = ade;
       updateData.updatedAt = new Date();
+
+      // Ao marcar PAGO: salva dados de comissão e inicializa commissionStatus = PENDENTE
+      if (status === "PAGO") {
+        if (contractValueInput !== undefined) updateData.contractValue = String(contractValueInput);
+        if (commissionPctInput !== undefined) updateData.commissionPercentage = String(commissionPctInput);
+        if (companyCommInput !== undefined) updateData.companyCommissionValue = String(companyCommInput);
+        if (corretorPctInput !== undefined) updateData.corretorCommissionPercentage = String(corretorPctInput);
+        if (corretorCommInput !== undefined) updateData.corretorCommissionValue = String(corretorCommInput);
+        updateData.commissionStatus = "PENDENTE"; // aguarda recebimento do banco
+      }
 
       const [updated] = await db
         .update(proposals)

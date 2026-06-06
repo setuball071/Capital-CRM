@@ -71,10 +71,30 @@ export default function ContratosDetalhePage() {
   const [pauseType, setPauseType] = useState<"CORRETOR" | "BANCO">("CORRETOR");
   const [nextStatus, setNextStatus] = useState("");
 
+  // Campos de comissão — preenchidos ao marcar PAGO
+  const [commPercEmpresa, setCommPercEmpresa] = useState("");
+  const [corretorPercRepasse, setCorretorPercRepasse] = useState("");
+  const [contractValComm, setContractValComm] = useState("");
+
   const isOperacional =
     user?.isMaster || ["coordenacao", "operacional"].includes(user?.role || "");
   const isMasterOrCoord =
     user?.isMaster || user?.role === "coordenacao";
+
+  // Helper: parse "1.234,56" → 1234.56
+  function parseBrNum(v: string): number {
+    return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+
+  // Cálculos derivados de comissão (ao vivo)
+  const contractValNum   = parseBrNum(contractValComm);
+  const commPercNum      = parseBrNum(commPercEmpresa);
+  const corretorPercNum  = parseBrNum(corretorPercRepasse);
+  const companyCommVal   = commPercNum > 0 ? contractValNum * commPercNum / 100 : 0;
+  const corretorCommVal  = corretorPercNum > 0 ? companyCommVal * corretorPercNum / 100 : 0;
+
+  // Pré-preenche campos de comissão quando a proposta carrega
+  const [commPrefilled, setCommPrefilled] = useState(false);
 
   const { data: proposal, isLoading } = useQuery<any>({
     queryKey: ["/api/contracts/proposals", proposalId],
@@ -107,7 +127,28 @@ export default function ContratosDetalhePage() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals", proposalId] });
     queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals", proposalId, "history"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/contracts/producao"] });
   };
+
+  // Pré-preenche campos de comissão uma única vez quando a proposta carrega
+  if (proposal && !commPrefilled) {
+    setCommPrefilled(true);
+    if (proposal.contractValue) {
+      setContractValComm(
+        parseFloat(proposal.contractValue).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      );
+    }
+    if (proposal.commissionPercentage) {
+      setCommPercEmpresa(
+        (parseFloat(proposal.commissionPercentage) * 100).toFixed(2).replace(".", ",")
+      );
+    }
+    if (proposal.corretorCommissionPercentage) {
+      setCorretorPercRepasse(
+        (parseFloat(proposal.corretorCommissionPercentage) * 100).toFixed(2).replace(".", ",")
+      );
+    }
+  }
 
   const sendMessageMutation = useMutation({
     mutationFn: (msg: string) =>
@@ -318,6 +359,61 @@ export default function ContratosDetalhePage() {
                     />
                   </div>
                 </div>
+                {/* Painel de comissão — exibido ao selecionar PAGO */}
+                {nextStatus === "PAGO" && (
+                  <div className="col-span-2 rounded-md border border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Dados de Comissão
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs text-muted-foreground mb-1">Valor Liberado (R$)</p>
+                        <Input
+                          value={contractValComm}
+                          onChange={(e) => setContractValComm(e.target.value)}
+                          placeholder="0,00"
+                          data-testid="input-comm-contract-value"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Comissão Empresa (%)</p>
+                        <Input
+                          value={commPercEmpresa}
+                          onChange={(e) => setCommPercEmpresa(e.target.value)}
+                          placeholder="7,00"
+                          data-testid="input-comm-perc-empresa"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">R$ Empresa</p>
+                        <p className="font-medium text-sm mt-2">
+                          {companyCommVal > 0
+                            ? companyCommVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                            : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Repasse Corretor (%)</p>
+                        <Input
+                          value={corretorPercRepasse}
+                          onChange={(e) => setCorretorPercRepasse(e.target.value)}
+                          placeholder="30,00"
+                          data-testid="input-comm-perc-corretor"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">R$ Corretor</p>
+                        <p className="font-semibold text-sm mt-2 text-green-700 dark:text-green-400">
+                          {corretorCommVal > 0
+                            ? corretorCommVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-xs text-muted-foreground mb-1.5">Observação</p>
                   <Textarea
@@ -338,6 +434,13 @@ export default function ContratosDetalhePage() {
                         ade: adeValue || undefined,
                         notes: actionNotes,
                         action: nextStatus === "PAGO" ? "PAGAMENTO" : nextStatus === "CANCELADA" ? "CANCELAMENTO" : "AVANCO",
+                        ...(nextStatus === "PAGO" && commPercNum > 0 ? {
+                          contractValue: contractValNum || undefined,
+                          commissionPercentage: commPercNum / 100,
+                          companyCommissionValue: companyCommVal,
+                          corretorCommissionPercentage: corretorPercNum > 0 ? corretorPercNum / 100 : undefined,
+                          corretorCommissionValue: corretorCommVal > 0 ? corretorCommVal : undefined,
+                        } : {}),
                       })
                     }
                     data-testid="button-advance-status"

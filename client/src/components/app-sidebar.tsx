@@ -134,6 +134,7 @@ export function AppSidebar() {
       items: [
         { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
         { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
+        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
         { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
         { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
