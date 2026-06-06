@@ -9,6 +9,7 @@ import {
   contractFlowSteps,
   commissionGroups,
   financialDebits,
+  users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
@@ -185,7 +186,21 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const user = req.user!;
       const tenantId = req.tenantId!;
 
-      let query = db
+      const conditions = [eq(proposals.tenantId, tenantId)];
+
+      if (user.role === "vendedor") {
+        conditions.push(eq(proposals.vendorId, user.id));
+      }
+
+      const { status, bank, product, startDate, endDate, vendorId } = req.query;
+      if (status) conditions.push(eq(proposals.status, status as string));
+      if (bank) conditions.push(eq(proposals.bank, bank as string));
+      if (product) conditions.push(eq(proposals.product, product as string));
+      if (vendorId && user.role !== "vendedor") {
+        conditions.push(eq(proposals.vendorId, parseInt(vendorId as string)));
+      }
+
+      const results = await db
         .select({
           id: proposals.id,
           clientName: proposals.clientName,
@@ -208,31 +223,14 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           corretorCommissionValue: proposals.corretorCommissionValue,
           commissionPaidAt: proposals.commissionPaidAt,
           vendorId: proposals.vendorId,
+          vendorName: users.name,
           flowId: proposals.flowId,
           currentStepId: proposals.currentStepId,
           createdAt: proposals.createdAt,
           updatedAt: proposals.updatedAt,
         })
         .from(proposals)
-        .$dynamic();
-
-      const conditions = [eq(proposals.tenantId, tenantId)];
-
-      if (user.role === "vendedor") {
-        conditions.push(eq(proposals.vendorId, user.id));
-      }
-
-      const { status, bank, product, startDate, endDate, vendorId } = req.query;
-      if (status) conditions.push(eq(proposals.status, status as string));
-      if (bank) conditions.push(eq(proposals.bank, bank as string));
-      if (product) conditions.push(eq(proposals.product, product as string));
-      if (vendorId && user.role !== "vendedor") {
-        conditions.push(eq(proposals.vendorId, parseInt(vendorId as string)));
-      }
-
-      const results = await db
-        .select()
-        .from(proposals)
+        .leftJoin(users, eq(proposals.vendorId, users.id))
         .where(and(...conditions))
         .orderBy(desc(proposals.createdAt));
 
@@ -250,6 +248,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
+        ade, commissionPercentage, corretorCommissionPercentage,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -303,6 +302,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           contractValue: contractValue || null,
           installmentValue: installmentValue || null,
           term: term ? parseInt(term) : null,
+          ade: ade || null,
+          commissionPercentage: commissionPercentage != null && commissionPercentage !== ""
+            ? String(commissionPercentage) : null,
+          corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
+            ? String(corretorCommissionPercentage) : null,
           status: "CADASTRADA",
           isPaused: false,
           flowId: matchedFlowId,

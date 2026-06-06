@@ -4,13 +4,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, FileText, Upload, X, CheckCircle } from "lucide-react";
+import {
+  ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
+  Building2, BadgePercent,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -25,6 +27,9 @@ const formSchema = z.object({
   contractValue: z.string().optional(),
   installmentValue: z.string().optional(),
   term: z.string().optional(),
+  ade: z.string().optional(),
+  commissionPercentage: z.string().optional(),
+  corretorCommissionPercentage: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -51,13 +56,42 @@ interface FileAttachment {
   preview: string;
 }
 
+function parseBrNumber(value: string | undefined) {
+  if (!value) return undefined;
+  const clean = String(value).replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(clean);
+  return isNaN(n) ? undefined : n;
+}
+
+function formatCpf(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+function formatPercent(value: string) {
+  // Permite "7,5" ou "7.5" — retorna string limpa com vírgula
+  return value.replace(/[^0-9,\.]/g, "").slice(0, 6);
+}
+
 export default function ContratosPropostaPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [bankMode, setBankMode] = useState<"select" | "text">("select");
+  const [convenioMode, setConvenioMode] = useState<"select" | "text">("select");
+  const [showComercial, setShowComercial] = useState(false);
 
+  // Dados auxiliares
+  const { data: banks = [] } = useQuery<any[]>({
+    queryKey: ["/api/banks"],
+  });
+  const { data: convenios = [] } = useQuery<any[]>({
+    queryKey: ["/api/convenios"],
+  });
   const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/coefficient-tables"],
   });
@@ -75,15 +109,24 @@ export default function ContratosPropostaPage() {
       contractValue: "",
       installmentValue: "",
       term: "",
+      ade: "",
+      commissionPercentage: "",
+      corretorCommissionPercentage: "",
     },
   });
 
-  function parseBrNumber(value: string | undefined) {
-    if (!value) return undefined;
-    const clean = String(value).replace(/\./g, "").replace(",", ".");
-    const n = parseFloat(clean);
-    return isNaN(n) ? undefined : n;
-  }
+  const watchedBank = form.watch("bank");
+  const watchedConvenio = form.watch("clientConvenio");
+  const watchedContractValue = form.watch("contractValue");
+  const watchedCommPerc = form.watch("commissionPercentage");
+  const watchedCorretorPerc = form.watch("corretorCommissionPercentage");
+
+  // Cálculos de comissão esperada (read-only, só para visualização)
+  const contractValNum = parseBrNumber(watchedContractValue) || 0;
+  const commPercNum = parseBrNumber(watchedCommPerc) || 0;
+  const corretorPercNum = parseBrNumber(watchedCorretorPerc) || 0;
+  const companyCommCalc = commPercNum > 0 ? contractValNum * commPercNum / 100 : 0;
+  const corretorCommCalc = corretorPercNum > 0 ? companyCommCalc * corretorPercNum / 100 : 0;
 
   const createMutation = useMutation({
     mutationFn: (data: FormValues) =>
@@ -93,8 +136,15 @@ export default function ContratosPropostaPage() {
         installmentValue: parseBrNumber(data.installmentValue),
         tableId: data.tableId || undefined,
         term: data.term || undefined,
+        ade: data.ade || undefined,
+        commissionPercentage: data.commissionPercentage
+          ? (parseBrNumber(data.commissionPercentage) || 0) / 100
+          : undefined,
+        corretorCommissionPercentage: data.corretorCommissionPercentage
+          ? (parseBrNumber(data.corretorCommissionPercentage) || 0) / 100
+          : undefined,
       }),
-    onSuccess: (res: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
       toast({ title: "Proposta cadastrada com sucesso!" });
       setLocation("/contratos");
@@ -103,18 +153,6 @@ export default function ContratosPropostaPage() {
       toast({ title: "Erro ao cadastrar proposta", description: e.message, variant: "destructive" });
     },
   });
-
-  function formatCpf(value: string) {
-    return value.replace(/\D/g, "").slice(0, 11)
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-  }
-
-  function formatMoney(value: string) {
-    const num = value.replace(/\D/g, "");
-    return num ? (parseInt(num) / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
-  }
 
   function handleAddFile(files: FileList | null) {
     if (!files) return;
@@ -139,18 +177,18 @@ export default function ContratosPropostaPage() {
   }
 
   function updateDocType(idx: number, type: string) {
-    setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, documentType: type } : a));
+    setAttachments((prev) => prev.map((a, i) => (i === idx ? { ...a, documentType: type } : a)));
   }
+
+  const fmtBRL = (v: number) =>
+    v > 0
+      ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : "—";
 
   return (
     <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-3">
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setLocation("/contratos")}
-          data-testid="button-back"
-        >
+        <Button size="icon" variant="ghost" onClick={() => setLocation("/contratos")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -161,6 +199,8 @@ export default function ContratosPropostaPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
+
+          {/* ── Dados do Cliente ── */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Dados do Cliente</CardTitle>
@@ -209,38 +249,144 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Convênio — Select ou text livre */}
               <FormField
                 control={form.control}
                 name="clientConvenio"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Convênio</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Ex: INSS, Prefeitura..." data-testid="input-client-convenio" />
-                    </FormControl>
+                    {convenios.length > 0 && convenioMode === "select" ? (
+                      <>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            if (v === "_outro_") {
+                              setConvenioMode("text");
+                              field.onChange("");
+                            } else {
+                              field.onChange(v);
+                            }
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-convenio">
+                              <SelectValue placeholder="Selecione o convênio..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {convenios.map((c: any) => (
+                              <SelectItem key={c.id} value={c.label}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="_outro_">Outro (digitar)...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : (
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ex: INSS, Prefeitura..."
+                            data-testid="input-client-convenio"
+                          />
+                        </FormControl>
+                        {convenios.length > 0 && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            onClick={() => {
+                              setConvenioMode("select");
+                              field.onChange("");
+                            }}
+                          >
+                            ↩ Lista
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />
             </CardContent>
           </Card>
 
+          {/* ── Dados do Contrato ── */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Dados do Contrato</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Dados do Contrato
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Banco — Select ou text livre */}
               <FormField
                 control={form.control}
                 name="bank"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Banco</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Ex: Banco do Brasil" data-testid="input-bank" />
-                    </FormControl>
+                    {banks.length > 0 && bankMode === "select" ? (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v === "_outro_") {
+                            setBankMode("text");
+                            field.onChange("");
+                          } else {
+                            field.onChange(v);
+                          }
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bank">
+                            <SelectValue placeholder="Selecione o banco..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {banks.map((b: any) => (
+                            <SelectItem key={b.id} value={b.name}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="_outro_">Outro banco...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ex: Banco do Brasil"
+                            data-testid="input-bank"
+                          />
+                        </FormControl>
+                        {banks.length > 0 && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            onClick={() => {
+                              setBankMode("select");
+                              field.onChange("");
+                            }}
+                          >
+                            ↩ Lista
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="product"
@@ -262,6 +408,7 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="tableId"
@@ -285,6 +432,7 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="contractValue"
@@ -292,15 +440,12 @@ export default function ContratosPropostaPage() {
                   <FormItem>
                     <FormLabel>Valor do Contrato (R$)</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="0,00"
-                        data-testid="input-contract-value"
-                      />
+                      <Input {...field} placeholder="0,00" data-testid="input-contract-value" />
                     </FormControl>
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="installmentValue"
@@ -308,15 +453,12 @@ export default function ContratosPropostaPage() {
                   <FormItem>
                     <FormLabel>Valor da Parcela (R$)</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="0,00"
-                        data-testid="input-installment-value"
-                      />
+                      <Input {...field} placeholder="0,00" data-testid="input-installment-value" />
                     </FormControl>
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="term"
@@ -335,9 +477,110 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="ade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ADE / Nº Protocolo</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Número do banco (opcional)" data-testid="input-ade" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
+          {/* ── Comissão Esperada (expansível) ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <button
+                type="button"
+                className="flex items-center justify-between w-full"
+                onClick={() => setShowComercial((v) => !v)}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BadgePercent className="h-4 w-4" />
+                  Comissão Esperada
+                  <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                </CardTitle>
+                {showComercial ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+            </CardHeader>
+
+            {showComercial && (
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Preencha para acompanhar a comissão esperada. Estes dados serão pré-carregados ao marcar como PAGO.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="commissionPercentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>% Comissão Empresa</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              {...field}
+                              placeholder="Ex: 7,5"
+                              data-testid="input-comm-perc"
+                              onChange={(e) => field.onChange(formatPercent(e.target.value))}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                          </div>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">R$ Empresa (calculado)</label>
+                    <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm font-medium">
+                      {fmtBRL(companyCommCalc)}
+                    </div>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="corretorCommissionPercentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>% Repasse Corretor</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              {...field}
+                              placeholder="Ex: 50"
+                              data-testid="input-corretor-perc"
+                              onChange={(e) => field.onChange(formatPercent(e.target.value))}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                          </div>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">R$ Corretor (calculado)</label>
+                    <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
+                      {fmtBRL(corretorCommCalc)}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* ── Documentos ── */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -355,9 +598,7 @@ export default function ContratosPropostaPage() {
                 data-testid="dropzone-documents"
               >
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Arraste arquivos aqui ou clique para selecionar
-                </p>
+                <p className="text-sm text-muted-foreground">Arraste arquivos aqui ou clique para selecionar</p>
                 <p className="text-xs text-muted-foreground mt-1">Máx. 5MB por arquivo</p>
                 <input
                   id="doc-upload"
@@ -414,11 +655,7 @@ export default function ContratosPropostaPage() {
             >
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={createMutation.isPending}
-              data-testid="button-submit"
-            >
+            <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit">
               {createMutation.isPending ? "Cadastrando..." : "Cadastrar Proposta"}
             </Button>
           </div>
