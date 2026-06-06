@@ -224,6 +224,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           commissionPaidAt: proposals.commissionPaidAt,
           vendorId: proposals.vendorId,
           vendorName: users.name,
+          clientMeta: proposals.clientMeta,
           flowId: proposals.flowId,
           currentStepId: proposals.currentStepId,
           createdAt: proposals.createdAt,
@@ -249,6 +250,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
+        clientMeta,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -307,6 +309,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             ? String(commissionPercentage) : null,
           corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
             ? String(corretorCommissionPercentage) : null,
+          clientMeta: clientMeta || null,
           status: "CADASTRADA",
           isPaused: false,
           flowId: matchedFlowId,
