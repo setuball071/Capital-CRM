@@ -642,19 +642,19 @@ table.pv-table tfoot td{font-weight:600;background:#f7f7f7;font-size:12px;border
 #tab-sim-content .totais{
     margin-top:16px;
     padding:16px;
-    background:#F3F4F6;
+    background:var(--surface-2);
     border-radius:8px;
     display:flex;
     gap:24px;
     flex-wrap:wrap;
-    border:1px solid #E5E7EB;
+    border:1px solid var(--border);
   }
 #tab-sim-content .totais div{
     font-size:14px;
-    color:#6B7280;
+    color:var(--text-secondary);
   }
 #tab-sim-content .totais strong{
-    color:#121212;
+    color:var(--text-primary);
     font-weight:600;
   }
 #tab-sim-content .resultado{
@@ -968,34 +968,34 @@ body { background: #F8F8FC !important; color: #111827 !important; }
   color: #6B7280 !important;
   border-bottom: 1px solid #E8E8F0 !important;
 }
-#tab-sim-content td { color: #111827 !important; border-bottom: 1px solid #F0F0F6 !important; }
+#tab-sim-content td { color: var(--text-primary) !important; border-bottom: 1px solid var(--border-soft) !important; }
 
 #tab-sim-content .totais {
-  background: #F3F4F6 !important;
-  color: #111827 !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
 }
 
 #tab-sim-content input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
 #tab-sim-content select {
-  background: #F9FAFB !important;
-  color: #111827 !important;
-  border: 1px solid #E5E7EB !important;
+  background: var(--bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
 }
 
 /* ── DARK MODE (user-triggered via button) ── */
-[data-theme="dark"] body { background: #0F0F1A !important; color: #F1F1F8 !important; }
+[data-theme="dark"] body { background: var(--bg) !important; color: var(--text-primary) !important; }
 
 [data-theme="dark"] .box,
 [data-theme="dark"] #tab-sim-content .box {
-  background: #1A1A2E !important;
-  border-color: #2E2E4A !important;
-  color: #F1F1F8 !important;
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] #tab-sim-content,
 [data-theme="dark"] #tab-sim-content .container {
-  background: #0F0F1A !important;
-  color: #F1F1F8 !important;
+  background: var(--bg) !important;
+  color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] #tab-sim-content h2,
@@ -1011,8 +1011,15 @@ body { background: #F8F8FC !important; color: #111827 !important; }
   border-color: #252540 !important;
 }
 [data-theme="dark"] #tab-sim-content .totais {
-  background: #252540 !important;
-  color: #E5E7EB !important;
+  background: var(--surface-2) !important;
+  border-color: var(--border) !important;
+  color: var(--text-secondary) !important;
+}
+[data-theme="dark"] #tab-sim-content .totais strong {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] #tab-sim-content .totais div {
+  color: var(--text-secondary) !important;
 }
 [data-theme="dark"] #tab-sim-content input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
 [data-theme="dark"] #tab-sim-content select {
