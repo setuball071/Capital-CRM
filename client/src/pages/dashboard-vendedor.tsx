@@ -677,21 +677,21 @@ export default function DashboardVendedorPage() {
           </p>
         </div>
 
-        <div className="flex bg-muted p-1 rounded-lg border border-border shrink-0" data-testid="nav-toggle">
-          <button
-            onClick={() => setView("dashboard")}
-            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
-              view === "dashboard"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid="button-view-dashboard"
-          >
-            Dashboard
-          </button>
-          {/* Aba Premiação desativada — sistema de níveis/pontuação em stand-by
-              (será reformulado em etapa futura). Mantida no código para reativação fácil. */}
-          {false && (
+        {/* Toggle Dashboard / Premiação / Regulamento desativado — só Dashboard ativo no momento.
+            Mantido no código para reativação fácil quando as outras abas voltarem. */}
+        {false && (
+          <div className="flex bg-muted p-1 rounded-lg border border-border shrink-0" data-testid="nav-toggle">
+            <button
+              onClick={() => setView("dashboard")}
+              className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+                view === "dashboard"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="button-view-dashboard"
+            >
+              Dashboard
+            </button>
             <button
               onClick={() => setView("premiacao")}
               className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
@@ -703,19 +703,19 @@ export default function DashboardVendedorPage() {
             >
               Premiação
             </button>
-          )}
-          <button
-            onClick={() => setView("regulamento")}
-            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
-              view === "regulamento"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid="button-view-regulamento"
-          >
-            Regulamento
-          </button>
-        </div>
+            <button
+              onClick={() => setView("regulamento")}
+              className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+                view === "regulamento"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="button-view-regulamento"
+            >
+              Regulamento
+            </button>
+          </div>
+        )}
       </header>
       {view === "dashboard" && <DashboardPanel />}
       {view === "premiacao" && <RegulationPanel />}
