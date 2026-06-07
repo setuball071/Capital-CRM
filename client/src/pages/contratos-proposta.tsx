@@ -66,6 +66,51 @@ const PRODUCTS = [
   { value: "CARTAO", label: "Cartão" },
 ];
 
+const CONTRACT_TYPES = [
+  {
+    id: "NOVO",
+    label: "Contrato Novo",
+    description: "Empréstimo consignado novo",
+    icon: "✨",
+    product: "NOVO",
+  },
+  {
+    id: "CARTAO",
+    label: "Cartão com Saque",
+    description: "Cartão consignado com saque",
+    icon: "💳",
+    product: "CARTAO",
+  },
+  {
+    id: "PORTABILIDADE",
+    label: "Portabilidade",
+    description: "Portabilidade simples sem refinanciamento",
+    icon: "🔄",
+    product: "PORTABILIDADE",
+  },
+  {
+    id: "PORTABILIDADE_REFIN",
+    label: "Portabilidade + Refinanciamento",
+    description: "Portabilidade com troco refinanciado",
+    icon: "🔄📋",
+    product: "PORTABILIDADE",
+  },
+  {
+    id: "COMPRA_DIVIDA",
+    label: "Compra de Dívida",
+    description: "Quitação de dívida externa com consignado",
+    icon: "💰",
+    product: "PORTABILIDADE",
+  },
+  {
+    id: "REFINANCIAMENTO",
+    label: "Refinanciamento",
+    description: "Refin de contrato existente na mesma instituição",
+    icon: "📋",
+    product: "REFINANCIAMENTO",
+  },
+];
+
 const DOCUMENT_TYPES = [
   { value: "RG_CNH", label: "RG / CNH" },
   { value: "COMPROVANTE_RESIDENCIA", label: "Comprovante de Residência" },
@@ -90,6 +135,10 @@ const formSchema = z.object({
   ade: z.string().optional(),
   commissionPercentage: z.string().optional(),
   corretorCommissionPercentage: z.string().optional(),
+  // Portabilidade / Compra de Dívida
+  bancoOrigem: z.string().optional(),
+  saldoDevedor: z.string().optional(),
+  prazoAtual: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -127,7 +176,58 @@ interface FileAttachment {
 
 // ─── Tipos de step ────────────────────────────────────────────────────────────
 
-type Step = "convenio" | "siape-upload" | "form";
+type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato";
+
+// ─── Wizard progress indicator ────────────────────────────────────────────────
+
+const WIZARD_STEPS = [
+  { key: "dados-cadastrais", label: "Dados Cadastrais" },
+  { key: "tipo-contrato",    label: "Tipo de Contrato" },
+  { key: "conferencia",      label: "Conferência" },
+];
+
+function StepIndicator({ current }: { current: string }) {
+  const idx = WIZARD_STEPS.findIndex((s) => s.key === current);
+  return (
+    <div className="flex items-center">
+      {WIZARD_STEPS.map((s, i) => {
+        const done   = i < idx;
+        const active = i === idx;
+        return (
+          <div key={s.key} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <div
+                className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  done
+                    ? "bg-primary text-primary-foreground"
+                    : active
+                    ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {done ? "✓" : i + 1}
+              </div>
+              <span
+                className={`text-xs mt-1 whitespace-nowrap ${
+                  active ? "font-semibold text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+            {i < WIZARD_STEPS.length - 1 && (
+              <div
+                className={`h-0.5 w-10 sm:w-16 mx-1 mb-4 transition-colors ${
+                  done ? "bg-primary" : "bg-border"
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
@@ -139,6 +239,7 @@ export default function ContratosPropostaPage() {
   // ── Step state ──────────────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("convenio");
   const [selectedConvenio, setSelectedConvenio] = useState<typeof CONVENIOS[0] | null>(null);
+  const [contractType, setContractType] = useState<string | null>(null);
 
   // ── SIAPE parse state ───────────────────────────────────────────────────────
   const [isParsing, setIsParsing] = useState(false);
@@ -295,6 +396,7 @@ export default function ContratosPropostaPage() {
       bank: "", product: "", tableId: "",
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
+      bancoOrigem: "", saldoDevedor: "", prazoAtual: "",
     },
   });
 
@@ -356,7 +458,13 @@ export default function ContratosPropostaPage() {
         corretorCommissionPercentage: data.corretorCommissionPercentage
           ? (parseBrNumber(data.corretorCommissionPercentage) || 0) / 100
           : undefined,
-        clientMeta: clientMeta || undefined,
+        clientMeta: {
+          ...(clientMeta || {}),
+          ...(contractType ? { tipoContrato: contractType } : {}),
+          ...(data.bancoOrigem ? { bancoOrigem: data.bancoOrigem } : {}),
+          ...(data.saldoDevedor ? { saldoDevedor: data.saldoDevedor } : {}),
+          ...(data.prazoAtual ? { prazoAtual: data.prazoAtual } : {}),
+        } || undefined,
       });
     },
     onSuccess: () => {
@@ -448,7 +556,7 @@ export default function ContratosPropostaPage() {
       return updated;
     });
 
-    setStep("form");
+    setStep("dados-cadastrais");
   }
 
   function handleDocFiles(files: FileList | null) {
@@ -483,7 +591,7 @@ export default function ContratosPropostaPage() {
               key={conv.id}
               onClick={() => {
                 setSelectedConvenio(conv);
-                setStep(conv.hasPdfUpload ? "siape-upload" : "form");
+                setStep(conv.hasPdfUpload ? "siape-upload" : "dados-cadastrais");
               }}
               className="text-left p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all group focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
@@ -836,7 +944,7 @@ export default function ContratosPropostaPage() {
           </Button>
           <button
             type="button"
-            onClick={() => setStep("form")}
+            onClick={() => setStep("dados-cadastrais")}
             className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
           >
             Preencher manualmente sem contracheque
@@ -846,8 +954,9 @@ export default function ContratosPropostaPage() {
     );
   }
 
-  // ─── STEP 3 — Formulário (SIAPE pré-preenchido ou manual) ────────────────
+  // ─── STEP 3 — Dados Cadastrais ────────────────────────────────────────────
 
+  if (step === "dados-cadastrais") {
   const isSiape = selectedConvenio?.id === "SIAPE";
   const hasExtracted = isSiape && parsedData !== null;
 
@@ -873,10 +982,13 @@ export default function ContratosPropostaPage() {
           <p className="text-sm text-muted-foreground">
             {hasExtracted
               ? "Dados extraídos do contracheque — revise e confirme"
-              : "Preencha os dados da proposta"}
+              : "Preencha os dados do cliente"}
           </p>
         </div>
       </div>
+
+      {/* Indicador de progresso */}
+      <StepIndicator current="dados-cadastrais" />
 
       {/* Banner de extração bem-sucedida */}
       {hasExtracted && (
@@ -1104,250 +1216,6 @@ export default function ContratosPropostaPage() {
             </Card>
           )}
 
-          {/* ── Dados do Contrato ── */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Dados do Contrato
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Banco do empréstimo */}
-              <FormField
-                control={form.control}
-                name="bank"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Banco (credor)</FormLabel>
-                    {banks.length > 0 && bankMode === "select" ? (
-                      <Select
-                        value={field.value}
-                        onValueChange={(v) => {
-                          if (v === "_outro_") {
-                            setBankMode("text");
-                            field.onChange("");
-                          } else {
-                            field.onChange(v);
-                          }
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o banco..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {banks.map((b: any) => (
-                            <SelectItem key={b.id} value={b.name}>
-                              {b.name}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="_outro_">Outro banco...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="flex gap-2">
-                        <FormControl>
-                          <Input {...field} placeholder="Nome do banco" />
-                        </FormControl>
-                        {banks.length > 0 && (
-                          <Button
-                            type="button" size="sm" variant="outline"
-                            className="shrink-0"
-                            onClick={() => { setBankMode("select"); field.onChange(""); }}
-                          >
-                            ↩
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="product"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Produto</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {PRODUCTS.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="tableId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tabela</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {tables.map((t: any) => (
-                          <SelectItem key={t.id} value={String(t.id)}>
-                            {t.tableName || t.name || `Tabela ${t.id}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="contractValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor Liberado (R$)</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="0,00" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="installmentValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor da Parcela (R$)</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="0,00" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="term"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Prazo (meses)</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" placeholder="Ex: 60" min={1} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="ade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ADE / Nº Protocolo</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Número do banco (opcional)" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          {/* ── Comissão Esperada (expansível) ── */}
-          <Card>
-            <CardHeader className="pb-2">
-              <button
-                type="button"
-                className="flex items-center justify-between w-full"
-                onClick={() => setShowComercial((v) => !v)}
-              >
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BadgePercent className="h-4 w-4" />
-                  Comissão Esperada
-                  <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
-                </CardTitle>
-                {showComercial ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
-              </button>
-            </CardHeader>
-
-            {showComercial && (
-              <CardContent className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Preencha para acompanhar a comissão esperada. Estes dados serão pré-carregados ao marcar como PAGO.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="commissionPercentage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>% Comissão Empresa</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              {...field}
-                              placeholder="Ex: 7,5"
-                              onChange={(e) => field.onChange(formatPercent(e.target.value))}
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">R$ Empresa</label>
-                    <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm font-medium">
-                      {fmtBRL(companyCommCalc)}
-                    </div>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="corretorCommissionPercentage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>% Repasse Corretor</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              {...field}
-                              placeholder="Ex: 50"
-                              onChange={(e) => field.onChange(formatPercent(e.target.value))}
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">R$ Corretor</label>
-                    <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
-                      {fmtBRL(corretorCommCalc)}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
           {/* ── Documentos ── */}
           <Card>
             <CardHeader className="pb-3">
@@ -1438,12 +1306,368 @@ export default function ContratosPropostaPage() {
             >
               Voltar
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Cadastrando..." : "Cadastrar Proposta"}
+            <Button
+              type="button"
+              onClick={async () => {
+                const valid = await form.trigger(["clientName", "clientCpf"]);
+                if (valid) setStep("tipo-contrato");
+              }}
+            >
+              Próximo →
             </Button>
           </div>
         </form>
       </Form>
+    </div>
+  );
+  } // end dados-cadastrais
+
+  // ─── STEP 4 — Tipo de Contrato ────────────────────────────────────────────
+
+  return (
+    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
+      <div className="flex items-center gap-3">
+        <Button size="icon" variant="ghost" onClick={() => setStep("dados-cadastrais")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Nova Proposta</h1>
+            {selectedConvenio && <Badge variant="outline">{selectedConvenio.label}</Badge>}
+          </div>
+          <p className="text-sm text-muted-foreground">Selecione o tipo de operação</p>
+        </div>
+      </div>
+
+      {/* Indicador de progresso */}
+      <StepIndicator current="tipo-contrato" />
+
+      {/* ── Seleção do tipo de contrato ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl">
+        {CONTRACT_TYPES.map((ct) => (
+          <button
+            key={ct.id}
+            type="button"
+            onClick={() => {
+              setContractType(ct.id);
+              form.setValue("product", ct.product);
+            }}
+            className={`text-left p-4 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+              contractType === ct.id
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary hover:bg-primary/5"
+            }`}
+          >
+            <div className="text-2xl mb-2">{ct.icon}</div>
+            <div className={`font-semibold text-sm ${contractType === ct.id ? "text-primary" : ""}`}>
+              {ct.label}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">{ct.description}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Campos específicos por tipo ── */}
+      {contractType && (
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
+            className="space-y-4 max-w-4xl"
+          >
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  {CONTRACT_TYPES.find((c) => c.id === contractType)?.label}
+                  <span className="text-xs font-normal text-muted-foreground">— dados da operação</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                {/* ── Banco Origem (portabilidade / compra dívida) ── */}
+                {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN" || contractType === "COMPRA_DIVIDA") && (
+                  <FormField
+                    control={form.control}
+                    name="bancoOrigem"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Banco de Origem</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Banco atual do cliente" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Saldo devedor (portabilidade / refin / compra) ── */}
+                {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN" || contractType === "COMPRA_DIVIDA" || contractType === "REFINANCIAMENTO") && (
+                  <FormField
+                    control={form.control}
+                    name="saldoDevedor"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Saldo Devedor (R$)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="0,00" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Prazo atual (portabilidade) ── */}
+                {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") && (
+                  <FormField
+                    control={form.control}
+                    name="prazoAtual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prazo Restante (meses)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" placeholder="Ex: 48" min={1} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Banco destino / credor (todos exceto portabilidade sem banco) ── */}
+                <FormField
+                  control={form.control}
+                  name="bank"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN" || contractType === "COMPRA_DIVIDA")
+                          ? "Banco de Destino"
+                          : contractType === "CARTAO"
+                          ? "Banco Emissor"
+                          : "Banco (credor)"}
+                      </FormLabel>
+                      {banks.length > 0 && bankMode === "select" ? (
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            if (v === "_outro_") { setBankMode("text"); field.onChange(""); }
+                            else field.onChange(v);
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Selecione o banco..." /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {banks.map((b: any) => (
+                              <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
+                            ))}
+                            <SelectItem value="_outro_">Outro banco...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex gap-2">
+                          <FormControl>
+                            <Input {...field} placeholder="Nome do banco" />
+                          </FormControl>
+                          {banks.length > 0 && (
+                            <Button type="button" size="sm" variant="outline" className="shrink-0"
+                              onClick={() => { setBankMode("select"); field.onChange(""); }}>↩</Button>
+                          )}
+                        </div>
+                      )}
+                    </FormItem>
+                  )}
+                />
+
+                {/* ── Tabela (não aparece em cartão) ── */}
+                {contractType !== "CARTAO" && (
+                  <FormField
+                    control={form.control}
+                    name="tableId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tabela</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {tables.map((t: any) => (
+                              <SelectItem key={t.id} value={String(t.id)}>
+                                {t.tableName || t.name || `Tabela ${t.id}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Valor Liberado / Valor Saque / Troco ── */}
+                <FormField
+                  control={form.control}
+                  name="contractValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {contractType === "CARTAO" ? "Valor do Saque (R$)"
+                          : contractType === "PORTABILIDADE_REFIN" ? "Troco / Refinanciamento (R$)"
+                          : "Valor Liberado (R$)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="0,00" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* ── Parcela ── */}
+                <FormField
+                  control={form.control}
+                  name="installmentValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
+                          ? "Nova Parcela (R$)"
+                          : "Valor da Parcela (R$)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="0,00" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* ── Prazo novo ── */}
+                <FormField
+                  control={form.control}
+                  name="term"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
+                          ? "Novo Prazo (meses)"
+                          : "Prazo (meses)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" placeholder="Ex: 60" min={1} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* ── ADE ── */}
+                <FormField
+                  control={form.control}
+                  name="ade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ADE / Nº Protocolo</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Número do banco (opcional)" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* ── Comissão Esperada (expansível) ── */}
+            <Card>
+              <CardHeader className="pb-2">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full"
+                  onClick={() => setShowComercial((v) => !v)}
+                >
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BadgePercent className="h-4 w-4" />
+                    Comissão Esperada
+                    <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                  </CardTitle>
+                  {showComercial ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </CardHeader>
+              {showComercial && (
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Preencha para acompanhar a comissão esperada. Serão pré-carregados ao marcar como PAGO.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="commissionPercentage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>% Comissão Empresa</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input {...field} placeholder="Ex: 7,5"
+                                onChange={(e) => field.onChange(formatPercent(e.target.value))} />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">R$ Empresa</label>
+                      <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm font-medium">
+                        {fmtBRL(companyCommCalc)}
+                      </div>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="corretorCommissionPercentage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>% Repasse Corretor</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input {...field} placeholder="Ex: 50"
+                                onChange={(e) => field.onChange(formatPercent(e.target.value))} />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">R$ Corretor</label>
+                      <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
+                        {fmtBRL(corretorCommCalc)}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <div className="flex justify-end gap-3 pb-4">
+              <Button type="button" variant="outline" onClick={() => setStep("dados-cadastrais")}>
+                Voltar
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Cadastrando..." : "Cadastrar Proposta"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      )}
+
+      {/* Footer sem tipo selecionado */}
+      {!contractType && (
+        <div className="flex justify-start pb-4">
+          <Button type="button" variant="outline" onClick={() => setStep("dados-cadastrais")}>
+            Voltar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
