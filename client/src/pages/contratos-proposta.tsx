@@ -1254,8 +1254,8 @@ export default function ContratosPropostaPage() {
                       wide
                     />
                   )}
-                  {/* ── Seleção de conta bancária para crédito ── */}
-                  {(parsedData.contas?.length > 0 || parsedData.bancoSalario) && (
+                  {/* ── Seleção de conta bancária para crédito (sempre para SIAPE) ── */}
+                  {isSiape && (
                     <div id="conta-selecao" className={`col-span-2 md:col-span-3 lg:col-span-4 space-y-2 rounded-lg p-3 transition-colors ${
                       contaError ? "bg-destructive/5 ring-2 ring-destructive/40" : ""
                     }`}>
@@ -1264,12 +1264,16 @@ export default function ContratosPropostaPage() {
                         {contaError && <span className="ml-1 font-semibold">— selecione uma das opções abaixo para continuar</span>}
                       </p>
 
-                      {/* Lista de contas do contracheque */}
+                      {/* Lista de contas extraídas do contracheque (0, 1 ou 2) */}
                       <div className="grid gap-2">
-                        {(parsedData.contas?.length > 0
-                          ? parsedData.contas
-                          : [{ banco: parsedData.bancoSalario, agencia: parsedData.agencia, conta: parsedData.conta, tipo: "salario" as const, label: "Conta Salário" }]
-                        ).map((c, i) => (
+                        {(() => {
+                          const contas = parsedData?.contas?.length
+                            ? parsedData.contas
+                            : parsedData?.bancoSalario
+                              ? [{ banco: parsedData.bancoSalario, agencia: parsedData.agencia, conta: parsedData.conta, tipo: "salario" as const, label: "Conta Salário" }]
+                              : [];
+                          return contas;
+                        })().map((c, i) => (
                           <button
                             key={i}
                             type="button"
@@ -1518,12 +1522,9 @@ export default function ContratosPropostaPage() {
                 const valid = await form.trigger(["clientName", "clientCpf"]);
                 if (!valid) return;
 
-                // Barreira: conta bancária obrigatória para SIAPE
-                const hasContaData = isSiape && parsedData &&
-                  (parsedData.contas?.length > 0 || !!parsedData.bancoSalario);
-                if (hasContaData && selectedContaIdx === null) {
+                // Barreira: conta bancária sempre obrigatória para SIAPE
+                if (isSiape && parsedData && selectedContaIdx === null) {
                   setContaError(true);
-                  // Rola até a seção de conta
                   document.getElementById("conta-selecao")?.scrollIntoView({ behavior: "smooth", block: "center" });
                   return;
                 }
