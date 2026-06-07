@@ -1529,8 +1529,8 @@ export default function ContratosPropostaPage() {
                   return;
                 }
 
-                // Confirmação extra para conta manual
-                if (selectedContaIdx === "manual") {
+                // Confirmação para QUALQUER conta selecionada (contracheque ou manual)
+                if (isSiape && parsedData && selectedContaIdx !== null) {
                   setShowManualConfirm(true);
                   return;
                 }
@@ -1544,30 +1544,65 @@ export default function ContratosPropostaPage() {
         </form>
       </Form>
 
-      {/* ── Popup de confirmação para conta manual ── */}
+      {/* ── Popup de confirmação de conta bancária ── */}
       <AlertDialog open={showManualConfirm} onOpenChange={setShowManualConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <TriangleAlert className="h-5 w-5 text-amber-500" />
-              Conta informada manualmente
-            </AlertDialogTitle>
+            {selectedContaIdx === "manual" ? (
+              <AlertDialogTitle className="flex items-center gap-2">
+                <TriangleAlert className="h-5 w-5 text-amber-500" />
+                Conta informada manualmente
+              </AlertDialogTitle>
+            ) : (
+              <AlertDialogTitle className="flex items-center gap-2">
+                <TriangleAlert className="h-5 w-5 text-blue-500" />
+                Confirmar conta para crédito
+              </AlertDialogTitle>
+            )}
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>
-                  A conta bancária que você digitou <strong>não consta no contracheque</strong> do cliente.
-                  Usar uma conta diferente pode gerar problemas no crédito da operação.
-                </p>
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-300">
-                  Você confirmou esses dados diretamente com o cliente?
-                </div>
+                {selectedContaIdx === "manual" ? (
+                  <>
+                    <p>
+                      A conta bancária que você digitou <strong>não consta no contracheque</strong> do cliente.
+                      Usar uma conta diferente pode gerar problemas no crédito da operação.
+                    </p>
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-300 font-medium">
+                      ⚠️ Você confirmou esses dados diretamente com o cliente antes de continuar?
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {(() => {
+                      const contas = parsedData?.contas?.length
+                        ? parsedData.contas
+                        : parsedData?.bancoSalario
+                          ? [{ banco: parsedData.bancoSalario, agencia: parsedData.agencia, conta: parsedData.conta, label: "Conta Salário" }]
+                          : [];
+                      const c = typeof selectedContaIdx === "number" ? contas[selectedContaIdx] : null;
+                      return c ? (
+                        <div className="rounded-lg bg-muted border p-3 space-y-1 text-sm font-mono">
+                          <p><span className="text-muted-foreground font-sans font-medium">Banco:</span> {c.banco}</p>
+                          <p><span className="text-muted-foreground font-sans font-medium">Agência:</span> {c.agencia}</p>
+                          <p><span className="text-muted-foreground font-sans font-medium">Conta:</span> {c.conta}</p>
+                          <p className="font-sans text-xs text-muted-foreground pt-1">{(c as any).label}</p>
+                        </div>
+                      ) : null;
+                    })()}
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-300 font-medium">
+                      Você confirmou com o cliente que o crédito será realizado nessa conta?
+                    </div>
+                  </>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar e corrigir</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-amber-500 hover:bg-amber-600 text-white"
+              className={selectedContaIdx === "manual"
+                ? "bg-amber-500 hover:bg-amber-600 text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"}
               onClick={() => {
                 setShowManualConfirm(false);
                 setStep("tipo-contrato");
