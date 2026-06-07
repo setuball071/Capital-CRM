@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
-  User, MapPin, History, ExternalLink,
+  User, MapPin, History, ExternalLink, CreditCard, ImageIcon, TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,6 +147,8 @@ export default function ContratosPropostaPage() {
   const [siapeFile, setSiapeFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docFrenteRef = useRef<HTMLInputElement>(null);
+  const docVersoRef  = useRef<HTMLInputElement>(null);
 
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
@@ -182,6 +184,93 @@ export default function ContratosPropostaPage() {
     } finally {
       setIsLookingUp(false);
     }
+  }
+
+  // ── Estado do documento com foto (RG / CNH) ─────────────────────────────────
+  interface DocPhotoData {
+    tipo: "RG" | "CNH" | string;
+    nome: string | null;
+    numeroRegistro: string | null;
+    cpf: string | null;
+    filiacao: [string | null, string | null];
+    dataNascimento: string | null;
+    dataExpedicao: string | null;
+    orgaoEmissor: string | null;
+  }
+  const [docFrenteFile, setDocFrenteFile] = useState<File | null>(null);
+  const [docVersoFile,  setDocVersoFile]  = useState<File | null>(null);
+  const [docFrentePreview, setDocFrentePreview] = useState<string | null>(null);
+  const [docVersoPreview,  setDocVersoPreview]  = useState<string | null>(null);
+  const [docFrenteDrag, setDocFrenteDrag] = useState(false);
+  const [docVersoDrag,  setDocVersoDrag]  = useState(false);
+  const [isOcring,    setIsOcring]    = useState(false);
+  const [ocrError,    setOcrError]    = useState<string | null>(null);
+  const [docPhotoData, setDocPhotoData] = useState<DocPhotoData | null>(null);
+  const [nameAlert,    setNameAlert]    = useState<string | null>(null);
+
+  // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
+  async function resizeImageToBlob(file: File, maxPx = 1600): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error("Falha ao comprimir imagem"))),
+          "image/jpeg",
+          0.88
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Falha ao carregar imagem")); };
+      img.src = url;
+    });
+  }
+
+  // Chama o endpoint OCR com as imagens da frente e verso
+  async function runDocOcr(frente: File, verso: File | null) {
+    setIsOcring(true);
+    setOcrError(null);
+    try {
+      const formData = new FormData();
+      const frenteBlob = await resizeImageToBlob(frente);
+      formData.append("frente", new File([frenteBlob], "frente.jpg", { type: "image/jpeg" }));
+      if (verso) {
+        const versoBlob = await resizeImageToBlob(verso);
+        formData.append("verso", new File([versoBlob], "verso.jpg", { type: "image/jpeg" }));
+      }
+      const res = await fetch("/api/ocr/document", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("OCR falhou");
+      const data: DocPhotoData = await res.json();
+      setDocPhotoData(data);
+    } catch {
+      setOcrError("Não foi possível ler o documento. Tente uma foto mais nítida.");
+    } finally {
+      setIsOcring(false);
+    }
+  }
+
+  // Verifica divergência entre nomes (contracheque x documento)
+  function detectNameAlert(siapeName: string | undefined, docName: string | null): string | null {
+    if (!siapeName || !docName) return null;
+    const norm = (s: string) =>
+      s.toUpperCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z\s]/g, "").replace(/\s+/g, " ").trim();
+    const n1 = norm(siapeName);
+    const n2 = norm(docName);
+    if (n1 === n2) return null;
+    const w1 = new Set(n1.split(" ").filter((w) => w.length > 2));
+    const w2 = new Set(n2.split(" ").filter((w) => w.length > 2));
+    const shared = [...w1].filter((w) => w2.has(w)).length;
+    if (shared / Math.max(w1.size, w2.size) >= 0.65) return null;
+    return `⚠️ Nome divergente: contracheque "${siapeName}" × documento "${docName}". Verifique antes de continuar (pode ser casamento, emancipação ou erro de cadastro).`;
   }
 
   // ── Form state ──────────────────────────────────────────────────────────────
@@ -222,19 +311,36 @@ export default function ContratosPropostaPage() {
   // ── Mutation ────────────────────────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: (data: FormValues) => {
-      const clientMeta = parsedData
-        ? {
-            identSiape: parsedData.identSiape || undefined,
-            uf: parsedData.uf || undefined,
-            orgao: parsedData.orgao || undefined,
-            regJuridico: parsedData.regJuridico || undefined,
-            bancoSalario: parsedData.bancoSalario || undefined,
-            agencia: parsedData.agencia || undefined,
-            conta: parsedData.conta || undefined,
-            mesAno: parsedData.mesAno || undefined,
-            vinculo: parsedData.vinculo || undefined,
-          }
-        : undefined;
+      const clientMeta =
+        parsedData || docPhotoData
+          ? {
+              // ── SIAPE contracheque ──
+              ...(parsedData && {
+                identSiape:   parsedData.identSiape   || undefined,
+                uf:           parsedData.uf           || undefined,
+                orgao:        parsedData.orgao        || undefined,
+                regJuridico:  parsedData.regJuridico  || undefined,
+                bancoSalario: parsedData.bancoSalario || undefined,
+                agencia:      parsedData.agencia      || undefined,
+                conta:        parsedData.conta        || undefined,
+                mesAno:       parsedData.mesAno       || undefined,
+                vinculo:      parsedData.vinculo      || undefined,
+              }),
+              // ── Documento com foto (RG / CNH) ──
+              ...(docPhotoData && {
+                docFoto: {
+                  tipo:            docPhotoData.tipo,
+                  nome:            docPhotoData.nome,
+                  numeroRegistro:  docPhotoData.numeroRegistro,
+                  dataNascimento:  docPhotoData.dataNascimento,
+                  dataExpedicao:   docPhotoData.dataExpedicao,
+                  orgaoEmissor:    docPhotoData.orgaoEmissor,
+                  filiacao:        docPhotoData.filiacao,
+                  cpf:             docPhotoData.cpf,
+                },
+              }),
+            }
+          : undefined;
 
       return apiRequest("POST", "/api/contracts/proposals", {
         ...data,
@@ -286,33 +392,8 @@ export default function ContratosPropostaPage() {
     try {
       const data = await parseSiapeContracheque(file);
       setParsedData(data);
-
-      // Lookup por CPF — traz dados de propostas anteriores para preencher lacunas
-      let existing: ClientLookup | null = null;
-      if (data.cpf) {
-        existing = await lookupByCpf(data.cpf);
-      }
-
-      // Mescla: dados do contracheque têm prioridade; cadastro anterior preenche lacunas
-      const nome      = data.nome      || existing?.clientName    || "";
-      const matricula = data.matricula || existing?.clientMatricula || "";
-
-      form.reset({
-        clientName: nome,
-        clientCpf: data.cpf ? formatCpf(data.cpf) : "",
-        clientMatricula: matricula,
-        bank: form.getValues("bank"),
-        product: form.getValues("product"),
-        tableId: form.getValues("tableId"),
-        contractValue: "",
-        installmentValue: "",
-        term: "",
-        ade: "",
-        commissionPercentage: "",
-        corretorCommissionPercentage: "",
-      });
-
-      setStep("form");
+      // Não avança automaticamente — o usuário clica em "Continuar"
+      // para ter tempo de também enviar o documento com foto
     } catch (err: any) {
       console.error("Erro ao processar PDF:", err);
       setParseError(
@@ -321,6 +402,35 @@ export default function ContratosPropostaPage() {
     } finally {
       setIsParsing(false);
     }
+  }
+
+  // Avança para o formulário: faz lookup, detecta divergências e pré-preenche
+  async function handleContinue() {
+    if (!parsedData) return;
+
+    // Lookup por CPF para dados anteriores
+    let existing: ClientLookup | null = null;
+    if (parsedData.cpf) {
+      existing = await lookupByCpf(parsedData.cpf);
+    }
+
+    // Detecta divergência de nome entre contracheque e documento com foto
+    const alert = detectNameAlert(parsedData.nome || undefined, docPhotoData?.nome ?? null);
+    setNameAlert(alert);
+
+    const nome      = parsedData.nome      || existing?.clientName      || "";
+    const matricula = parsedData.matricula || existing?.clientMatricula || "";
+
+    form.reset({
+      clientName: nome,
+      clientCpf: parsedData.cpf ? formatCpf(parsedData.cpf) : "",
+      clientMatricula: matricula,
+      bank: "", product: "", tableId: "",
+      contractValue: "", installmentValue: "", term: "",
+      ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
+    });
+
+    setStep("form");
   }
 
   function handleDocFiles(files: FileList | null) {
@@ -371,11 +481,111 @@ export default function ContratosPropostaPage() {
     );
   }
 
-  // ─── STEP 2 — Upload Contracheque SIAPE ──────────────────────────────────
+  // ─── STEP 2 — Upload Contracheque + Documento com Foto ──────────────────────
 
   if (step === "siape-upload") {
+    // Handler para frente do documento com foto
+    function handleFrenteFile(file: File) {
+      if (!file.type.startsWith("image/")) {
+        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+        return;
+      }
+      const preview = URL.createObjectURL(file);
+      setDocFrenteFile(file);
+      setDocFrentePreview(preview);
+      setDocPhotoData(null);
+      setOcrError(null);
+      // Dispara OCR se verso já estiver carregado
+      if (docVersoFile) runDocOcr(file, docVersoFile);
+    }
+
+    function handleVersoFile(file: File) {
+      if (!file.type.startsWith("image/")) {
+        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+        return;
+      }
+      const preview = URL.createObjectURL(file);
+      setDocVersoFile(file);
+      setDocVersoPreview(preview);
+      setDocPhotoData(null);
+      setOcrError(null);
+      // Dispara OCR se frente já estiver carregada
+      if (docFrenteFile) runDocOcr(docFrenteFile, file);
+    }
+
+    // Miniatura de imagem carregada
+    function ImageSlot({
+      label, preview, file,
+      onDrop, onDragOver, onDragLeave, onDrop2, dragOver: isDragOver,
+      inputRef, onFileChange, onRemove,
+    }: {
+      label: string; preview: string | null; file: File | null;
+      onDrop: (f: File) => void; onDragOver: () => void; onDragLeave: () => void;
+      onDrop2?: never; dragOver: boolean;
+      inputRef: React.RefObject<HTMLInputElement>; onFileChange: (f: File) => void;
+      onRemove: () => void;
+    }) {
+      return (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          {preview ? (
+            <div className="relative group rounded-xl overflow-hidden border-2 border-green-300 dark:border-green-800">
+              <img
+                src={preview}
+                alt={label}
+                className="w-full h-36 object-cover"
+              />
+              {/* Overlay de remoção ao passar o mouse */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-black/80 text-destructive rounded-full p-1.5"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Badge de confirmação */}
+              <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-green-600 text-white rounded-full px-2 py-0.5 text-xs font-medium">
+                <CheckCircle2 className="h-3 w-3" /> {label}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`border-2 border-dashed rounded-xl h-36 flex flex-col items-center justify-center cursor-pointer transition-colors text-center px-3 ${
+                isDragOver
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary hover:bg-primary/5"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
+              onDragLeave={onDragLeave}
+              onDrop={(e) => {
+                e.preventDefault(); onDragLeave();
+                if (e.dataTransfer.files[0]) onDrop(e.dataTransfer.files[0]);
+              }}
+              onClick={() => inputRef.current?.click()}
+            >
+              <ImageIcon className="h-8 w-8 mb-2 text-muted-foreground" />
+              <p className="text-xs font-medium">Arraste aqui</p>
+              <p className="text-xs text-muted-foreground">ou clique para selecionar</p>
+            </div>
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) onFileChange(e.target.files[0]); }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
+        {/* Cabeçalho */}
         <div className="flex items-center gap-3">
           <Button size="icon" variant="ghost" onClick={() => setStep("convenio")}>
             <ArrowLeft className="h-4 w-4" />
@@ -383,90 +593,236 @@ export default function ContratosPropostaPage() {
           <div>
             <h1 className="text-xl font-bold">Nova Proposta — SIAPE</h1>
             <p className="text-sm text-muted-foreground">
-              Carregue o contracheque para preenchimento automático
+              Carregue os documentos para preenchimento automático
             </p>
           </div>
         </div>
 
-        <div className="max-w-xl space-y-4">
-          {/* Drop zone */}
-          <div
-            className={`relative border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
-              dragOver
-                ? "border-primary bg-primary/5"
-                : isParsing
-                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
-                : parseError
-                ? "border-red-400 bg-red-50 dark:bg-red-950/20"
-                : "border-border hover:border-primary hover:bg-primary/5"
-            }`}
-            onDragOver={(e) => { e.preventDefault(); if (!isParsing) setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              if (!isParsing && e.dataTransfer.files[0]) {
-                handlePdfFile(e.dataTransfer.files[0]);
-              }
-            }}
-            onClick={() => !isParsing && fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) handlePdfFile(e.target.files[0]);
-              }}
-            />
+        {/* ── Duas colunas: Contracheque | Documento com Foto ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
 
-            {isParsing ? (
-              <>
-                <Loader2 className="h-12 w-12 mx-auto mb-3 text-blue-500 animate-spin" />
-                <p className="font-medium text-blue-600 dark:text-blue-400">
-                  Lendo contracheque...
+          {/* ───── Coluna 1: Contracheque ───── */}
+          <div className="space-y-4">
+            {/* Header da coluna */}
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Contracheque SIAPE</p>
+                <p className="text-xs text-muted-foreground">PDF do contracheque de pagamento</p>
+              </div>
+            </div>
+
+            {/* Estado: carregado com sucesso */}
+            {siapeFile && parsedData ? (
+              <div className="rounded-xl border-2 border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/20 p-6 text-center space-y-2">
+                <CheckCircle2 className="h-10 w-10 mx-auto text-green-600 dark:text-green-400" />
+                <p className="font-semibold text-sm text-green-700 dark:text-green-400">
+                  Contracheque lido com sucesso
                 </p>
-                <p className="text-sm text-muted-foreground mt-1">Aguarde</p>
-              </>
-            ) : parseError ? (
-              <>
-                <AlertCircle className="h-12 w-12 mx-auto mb-3 text-red-500" />
-                <p className="font-medium text-red-600 dark:text-red-400">
-                  Não foi possível ler o arquivo
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">{parseError}</p>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Clique ou arraste outro arquivo
-                </p>
-              </>
+                {parsedData.nome && (
+                  <p className="text-sm font-medium">{parsedData.nome}</p>
+                )}
+                <p className="text-xs text-muted-foreground truncate">{siapeFile.name}</p>
+                <button
+                  type="button"
+                  onClick={() => { setSiapeFile(null); setParsedData(null); setParseError(null); }}
+                  className="text-xs text-destructive hover:underline mt-1"
+                >
+                  Remover e enviar outro
+                </button>
+              </div>
             ) : (
-              <>
-                <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                <p className="font-medium">Arraste o contracheque SIAPE aqui</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  ou clique para selecionar
-                </p>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Apenas PDF · Máx. 20MB
-                </p>
-              </>
+              /* Estado: drop zone */
+              <div
+                className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+                  dragOver
+                    ? "border-primary bg-primary/5"
+                    : isParsing
+                    ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
+                    : parseError
+                    ? "border-red-400 bg-red-50 dark:bg-red-950/20"
+                    : "border-border hover:border-primary hover:bg-primary/5"
+                }`}
+                onDragOver={(e) => { e.preventDefault(); if (!isParsing) setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault(); setDragOver(false);
+                  if (!isParsing && e.dataTransfer.files[0]) handlePdfFile(e.dataTransfer.files[0]);
+                }}
+                onClick={() => !isParsing && fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files?.[0]) handlePdfFile(e.target.files[0]); }}
+                />
+                {isParsing ? (
+                  <>
+                    <Loader2 className="h-10 w-10 mx-auto mb-3 text-blue-500 animate-spin" />
+                    <p className="font-medium text-blue-600 dark:text-blue-400">Lendo contracheque...</p>
+                    <p className="text-xs text-muted-foreground mt-1">Aguarde</p>
+                  </>
+                ) : parseError ? (
+                  <>
+                    <AlertCircle className="h-10 w-10 mx-auto mb-3 text-red-500" />
+                    <p className="font-medium text-red-600 dark:text-red-400 text-sm">Não foi possível ler o arquivo</p>
+                    <p className="text-xs text-muted-foreground mt-1">{parseError}</p>
+                    <p className="text-xs text-muted-foreground mt-2">Clique ou arraste outro arquivo</p>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                    <p className="font-medium text-sm">Arraste o contracheque SIAPE aqui</p>
+                    <p className="text-xs text-muted-foreground mt-1">ou clique para selecionar</p>
+                    <p className="text-xs text-muted-foreground mt-3">Apenas PDF · Máx. 20MB</p>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Botão alternativo */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground">ou</span>
-            <div className="flex-1 h-px bg-border" />
+          {/* ───── Coluna 2: Documento com Foto ───── */}
+          <div className="space-y-4">
+            {/* Header da coluna */}
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center shrink-0">
+                <CreditCard className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Documento com Foto</p>
+                <p className="text-xs text-muted-foreground">RG ou CNH — frente e verso obrigatórios</p>
+              </div>
+            </div>
+
+            {/* Frente + Verso lado a lado */}
+            <div className="grid grid-cols-2 gap-3">
+              <ImageSlot
+                label="Frente"
+                preview={docFrentePreview}
+                file={docFrenteFile}
+                dragOver={docFrenteDrag}
+                onDragOver={() => setDocFrenteDrag(true)}
+                onDragLeave={() => setDocFrenteDrag(false)}
+                onDrop={handleFrenteFile}
+                inputRef={docFrenteRef}
+                onFileChange={handleFrenteFile}
+                onRemove={() => { setDocFrenteFile(null); setDocFrentePreview(null); setDocPhotoData(null); setOcrError(null); }}
+              />
+              <ImageSlot
+                label="Verso"
+                preview={docVersoPreview}
+                file={docVersoFile}
+                dragOver={docVersoDrag}
+                onDragOver={() => setDocVersoDrag(true)}
+                onDragLeave={() => setDocVersoDrag(false)}
+                onDrop={handleVersoFile}
+                inputRef={docVersoRef}
+                onFileChange={handleVersoFile}
+                onRemove={() => { setDocVersoFile(null); setDocVersoPreview(null); setDocPhotoData(null); setOcrError(null); }}
+              />
+            </div>
+
+            {/* Status do OCR */}
+            {isOcring && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                Lendo documento com IA...
+              </div>
+            )}
+            {ocrError && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                {ocrError}
+              </div>
+            )}
+
+            {/* Dados extraídos pelo OCR */}
+            {docPhotoData && !isOcring && (
+              <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 p-3 space-y-2">
+                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento"} lido
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  {docPhotoData.nome && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Nome: </span>
+                      <span className="font-medium">{docPhotoData.nome}</span>
+                    </div>
+                  )}
+                  {docPhotoData.numeroRegistro && (
+                    <div>
+                      <span className="text-muted-foreground">Nº Registro: </span>
+                      <span className="font-medium">{docPhotoData.numeroRegistro}</span>
+                    </div>
+                  )}
+                  {docPhotoData.dataNascimento && (
+                    <div>
+                      <span className="text-muted-foreground">Nascimento: </span>
+                      <span className="font-medium">{docPhotoData.dataNascimento}</span>
+                    </div>
+                  )}
+                  {docPhotoData.dataExpedicao && (
+                    <div>
+                      <span className="text-muted-foreground">Expedição: </span>
+                      <span className="font-medium">{docPhotoData.dataExpedicao}</span>
+                    </div>
+                  )}
+                  {docPhotoData.orgaoEmissor && (
+                    <div>
+                      <span className="text-muted-foreground">Emissor: </span>
+                      <span className="font-medium">{docPhotoData.orgaoEmissor}</span>
+                    </div>
+                  )}
+                  {docPhotoData.filiacao?.[0] && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Pai: </span>
+                      <span className="font-medium">{docPhotoData.filiacao[0]}</span>
+                    </div>
+                  )}
+                  {docPhotoData.filiacao?.[1] && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Mãe: </span>
+                      <span className="font-medium">{docPhotoData.filiacao[1]}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Instrução quando nenhuma imagem ainda enviada */}
+            {!docFrenteFile && !docVersoFile && (
+              <p className="text-xs text-muted-foreground">
+                Envie a frente e o verso do documento. O sistema extrai os dados automaticamente.
+              </p>
+            )}
           </div>
+        </div>
+
+        {/* ── Botões de ação ── */}
+        <div className="flex flex-wrap items-center gap-3 max-w-4xl">
           <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setStep("form")}
+            onClick={handleContinue}
+            disabled={!parsedData || isParsing || isOcring}
+            className="flex-1 sm:flex-none"
           >
-            Preencher manualmente
+            {isParsing || isOcring
+              ? "Processando..."
+              : !parsedData
+              ? "Aguardando contracheque..."
+              : "Continuar →"}
           </Button>
+          <button
+            type="button"
+            onClick={() => setStep("form")}
+            className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            Preencher manualmente sem contracheque
+          </button>
         </div>
       </div>
     );
@@ -541,6 +897,14 @@ export default function ContratosPropostaPage() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
           Verificando cadastro anterior...
+        </div>
+      )}
+
+      {/* Alerta de divergência de nome entre contracheque e documento */}
+      {nameAlert && (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-300">
+          <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+          <span>{nameAlert}</span>
         </div>
       )}
 
@@ -681,6 +1045,41 @@ export default function ContratosPropostaPage() {
                         )}
                       </div>
                     </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Dados do Documento com Foto (somente leitura) ── */}
+          {docPhotoData && (
+            <Card className="border-purple-200 dark:border-purple-900">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                  <CreditCard className="h-4 w-4" />
+                  {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
+                  <span className="text-xs font-normal text-muted-foreground">(apenas informação)</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+                  {docPhotoData.numeroRegistro && (
+                    <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />
+                  )}
+                  {docPhotoData.dataNascimento && (
+                    <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />
+                  )}
+                  {docPhotoData.dataExpedicao && (
+                    <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />
+                  )}
+                  {docPhotoData.orgaoEmissor && (
+                    <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
+                  )}
+                  {docPhotoData.filiacao?.[0] && (
+                    <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />
+                  )}
+                  {docPhotoData.filiacao?.[1] && (
+                    <InfoField label="Filiação — Mãe" value={docPhotoData.filiacao[1]} wide />
                   )}
                 </div>
               </CardContent>

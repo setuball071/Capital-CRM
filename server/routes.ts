@@ -495,6 +495,7 @@ import * as os from "os";
 import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
+import { registerOcrRoutes } from "./ocr";
 import {
   addToPortfolio,
   checkPortfolioBlock,
@@ -28580,6 +28581,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
+
+  // ===== OCR DE DOCUMENTOS =====
+  registerOcrRoutes(app, requireAuth);
 
   // ===== SIAPE — CONTRACHEQUES =====
 
