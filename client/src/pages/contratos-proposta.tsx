@@ -18,6 +18,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
+import {
+  parseExtratoConsignacao,
+  type ExtratoConsignacaoParsed,
+} from "@/lib/extrato-consignacao-parser";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -247,9 +251,17 @@ export default function ContratosPropostaPage() {
   const [parsedData, setParsedData] = useState<SiapeParsedData | null>(null);
   const [siapeFile, setSiapeFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const docFrenteRef = useRef<HTMLInputElement>(null);
-  const docVersoRef  = useRef<HTMLInputElement>(null);
+  const fileInputRef  = useRef<HTMLInputElement>(null);
+  const docFrenteRef  = useRef<HTMLInputElement>(null);
+  const docVersoRef   = useRef<HTMLInputElement>(null);
+  const extratoRef    = useRef<HTMLInputElement>(null);
+
+  // ── Extrato de Consignações ─────────────────────────────────────────────────
+  const [extratoFile,        setExtratoFile]        = useState<File | null>(null);
+  const [extratoData,        setExtratoData]        = useState<ExtratoConsignacaoParsed | null>(null);
+  const [isParsingExtrato,   setIsParsingExtrato]   = useState(false);
+  const [extratoError,       setExtratoError]       = useState<string | null>(null);
+  const [extratoDrag,        setExtratoDrag]        = useState(false);
 
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
@@ -464,6 +476,18 @@ export default function ContratosPropostaPage() {
           ...(data.bancoOrigem ? { bancoOrigem: data.bancoOrigem } : {}),
           ...(data.saldoDevedor ? { saldoDevedor: data.saldoDevedor } : {}),
           ...(data.prazoAtual ? { prazoAtual: data.prazoAtual } : {}),
+          ...(extratoData ? {
+            extrato: {
+              emitidoEm:                        extratoData.emitidoEm,
+              margemLiquidaFacultativaGlobal:   extratoData.margemLiquidaFacultativaGlobal,
+              margemLiquidaCompulsoria:          extratoData.margemLiquidaCompulsoria,
+              margemLiquidaCartao:               extratoData.margemLiquidaCartao,
+              margemLiquidaCartaoBeneficio:      extratoData.margemLiquidaCartaoBeneficio,
+              margemUtilizadaFacultativa:        extratoData.margemUtilizadaFacultativa,
+              margemUtilizadaCartao:             extratoData.margemUtilizadaCartao,
+              contratos:                         extratoData.contratos,
+            },
+          } : {}),
         } || undefined,
       });
     },
@@ -568,6 +592,34 @@ export default function ContratosPropostaPage() {
       }
       setAttachments((prev) => [...prev, { file, documentType: "OUTRO" }]);
     });
+  }
+
+  async function handleExtratoFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setExtratoError("Por favor selecione um arquivo PDF.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setExtratoError("Arquivo muito grande (máx. 20MB).");
+      return;
+    }
+    setExtratoFile(file);
+    setIsParsingExtrato(true);
+    setExtratoError(null);
+    setExtratoData(null);
+    try {
+      const data = await parseExtratoConsignacao(file);
+      setExtratoData(data);
+      // Adiciona aos documentos automaticamente
+      setAttachments((prev) => {
+        const filtered = prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES");
+        return [...filtered, { file, documentType: "EXTRATO_CONSIGNACOES" }];
+      });
+    } catch {
+      setExtratoError("Não foi possível ler o extrato. Verifique se é um PDF válido do SIAPE.");
+    } finally {
+      setIsParsingExtrato(false);
+    }
   }
 
   // ─── STEP 1 — Seleção de Convênio ─────────────────────────────────────────
@@ -1367,6 +1419,194 @@ export default function ContratosPropostaPage() {
         ))}
       </div>
 
+      {/* ── Upload do Extrato de Consignações (SIAPE) ── */}
+      {selectedConvenio?.id === "SIAPE" && contractType && (
+        <div className="space-y-3 max-w-4xl">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-semibold">Extrato de Consignações</span>
+            <Badge variant="outline" className="text-xs">SIAPE obrigatório</Badge>
+          </div>
+
+          {extratoFile && extratoData && !isParsingExtrato ? (
+            /* ── Estado: extrato lido com sucesso ── */
+            <div className="rounded-xl border-2 border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                    Extrato lido — {extratoFile.name}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExtratoFile(null);
+                    setExtratoData(null);
+                    setAttachments((prev) => prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES"));
+                  }}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Remover
+                </button>
+              </div>
+
+              {/* ── Contrato Novo: exibe margem líquida global ── */}
+              {contractType === "NOVO" && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {extratoData.margemLiquidaFacultativaGlobal !== null && (
+                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Disponível</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
+                        {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
+                          style: "currency", currency: "BRL",
+                        })}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Parcela máxima permitida</p>
+                    </div>
+                  )}
+                  {extratoData.margemBrutaFacultativaGlobal !== null && (
+                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Margem Bruta Global</p>
+                      <p className="text-lg font-semibold">
+                        {extratoData.margemBrutaFacultativaGlobal.toLocaleString("pt-BR", {
+                          style: "currency", currency: "BRL",
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  {extratoData.margemUtilizadaFacultativa !== null && (
+                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Já Comprometido</p>
+                      <p className="text-lg font-semibold text-destructive">
+                        {extratoData.margemUtilizadaFacultativa.toLocaleString("pt-BR", {
+                          style: "currency", currency: "BRL",
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Cartão com Saque: exibe margem de cartão ── */}
+              {contractType === "CARTAO" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {extratoData.margemLiquidaCartao !== null && (
+                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Cartão</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
+                        {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
+                          style: "currency", currency: "BRL",
+                        })}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Limite de saque consignado</p>
+                    </div>
+                  )}
+                  {extratoData.margemLiquidaCartaoBeneficio !== null && (
+                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Cartão Benefício</p>
+                      <p className="text-lg font-semibold">
+                        {extratoData.margemLiquidaCartaoBeneficio.toLocaleString("pt-BR", {
+                          style: "currency", currency: "BRL",
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Portabilidade / Refinanciamento / Compra: exibe contratos ── */}
+              {(contractType === "PORTABILIDADE" ||
+                contractType === "PORTABILIDADE_REFIN" ||
+                contractType === "COMPRA_DIVIDA" ||
+                contractType === "REFINANCIAMENTO") &&
+                extratoData.contratos.filter((c) => c.tipoContrato === "EMPRESTIMO").length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Contratos ativos no extrato
+                  </p>
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                    {extratoData.contratos
+                      .filter((c) => c.tipoContrato === "EMPRESTIMO")
+                      .map((c, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-wrap items-center gap-x-4 gap-y-1 p-2 rounded-md border bg-white dark:bg-black/20 text-xs"
+                        >
+                          <span className="font-mono font-semibold text-foreground">{c.numeroContrato}</span>
+                          <span className="text-muted-foreground flex-1 min-w-0 truncate">{c.nomeRubrica}</span>
+                          <span className="font-medium">
+                            {c.valorParcela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {c.prazoAtual}/{c.prazoTotal} parc.
+                          </span>
+                          <span className="text-muted-foreground">até {c.fim}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Emissão */}
+              {extratoData.emitidoEm && (
+                <p className="text-xs text-muted-foreground">
+                  Extrato emitido em {extratoData.emitidoEm}
+                </p>
+              )}
+            </div>
+          ) : (
+            /* ── Estado: drop zone ── */
+            <div
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                extratoDrag
+                  ? "border-primary bg-primary/5"
+                  : isParsingExtrato
+                  ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
+                  : extratoError
+                  ? "border-red-400 bg-red-50 dark:bg-red-950/20"
+                  : "border-border hover:border-primary hover:bg-primary/5"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); if (!isParsingExtrato) setExtratoDrag(true); }}
+              onDragLeave={() => setExtratoDrag(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setExtratoDrag(false);
+                if (!isParsingExtrato && e.dataTransfer.files[0]) handleExtratoFile(e.dataTransfer.files[0]);
+              }}
+              onClick={() => !isParsingExtrato && extratoRef.current?.click()}
+            >
+              <input
+                ref={extratoRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.[0]) handleExtratoFile(e.target.files[0]); }}
+              />
+              {isParsingExtrato ? (
+                <>
+                  <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Lendo extrato...</p>
+                  <p className="text-xs text-muted-foreground mt-1">Extraindo margens e contratos</p>
+                </>
+              ) : extratoError ? (
+                <>
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                  <p className="text-sm font-medium text-red-600 dark:text-red-400">{extratoError}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Clique ou arraste outro arquivo</p>
+                </>
+              ) : (
+                <>
+                  <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm font-medium">Arraste o Extrato de Consignações aqui</p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF emitido pelo SIAPE · Máx. 20MB</p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Campos específicos por tipo ── */}
       {contractType && (
         <Form {...form}>
@@ -1527,10 +1767,26 @@ export default function ContratosPropostaPage() {
                   name="installmentValue"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
+                      <FormLabel className="flex items-center gap-2">
                         {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                           ? "Nova Parcela (R$)"
                           : "Valor da Parcela (R$)"}
+                        {/* Hint de margem para Contrato Novo */}
+                        {contractType === "NOVO" && extratoData?.margemLiquidaFacultativaGlobal != null && (
+                          <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
+                            máx. {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
+                              style: "currency", currency: "BRL",
+                            })}
+                          </span>
+                        )}
+                        {/* Hint de margem para Cartão */}
+                        {contractType === "CARTAO" && extratoData?.margemLiquidaCartao != null && (
+                          <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
+                            máx. {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
+                              style: "currency", currency: "BRL",
+                            })}
+                          </span>
+                        )}
                       </FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="0,00" />
