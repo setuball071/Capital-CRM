@@ -143,6 +143,10 @@ const formSchema = z.object({
   bancoOrigem: z.string().optional(),
   saldoDevedor: z.string().optional(),
   prazoAtual: z.string().optional(),
+  // Conta bancária para crédito (manual)
+  contaBanco: z.string().optional(),
+  contaAgencia: z.string().optional(),
+  contaConta: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -260,6 +264,8 @@ export default function ContratosPropostaPage() {
   const [extratoFile,        setExtratoFile]        = useState<File | null>(null);
   const [extratoData,        setExtratoData]        = useState<ExtratoConsignacaoParsed | null>(null);
   const [isParsingExtrato,   setIsParsingExtrato]   = useState(false);
+  // índice da conta selecionada do contracheque (0, 1) ou "manual"
+  const [selectedContaIdx,   setSelectedContaIdx]   = useState<number | "manual" | null>(null);
   const [extratoError,       setExtratoError]       = useState<string | null>(null);
   const [extratoDrag,        setExtratoDrag]        = useState(false);
 
@@ -494,6 +500,31 @@ export default function ContratosPropostaPage() {
               contratos:                         extratoData.contratos,
             },
           } : {}),
+          // Conta bancária selecionada para crédito
+          ...(() => {
+            if (selectedContaIdx === "manual") {
+              return {
+                contaSelecionada: {
+                  banco:   data.contaBanco   || "",
+                  agencia: data.contaAgencia || "",
+                  conta:   data.contaConta   || "",
+                  origem:  "manual" as const,
+                },
+              };
+            }
+            if (typeof selectedContaIdx === "number" && parsedData?.contas?.[selectedContaIdx]) {
+              const c = parsedData.contas[selectedContaIdx];
+              return {
+                contaSelecionada: {
+                  banco:   c.banco,
+                  agencia: c.agencia,
+                  conta:   c.conta,
+                  origem:  c.tipo as string,
+                },
+              };
+            }
+            return {};
+          })(),
         } || undefined,
       });
     },
@@ -1216,22 +1247,129 @@ export default function ContratosPropostaPage() {
                       wide
                     />
                   )}
-                  {(parsedData.bancoSalario || parsedData.agencia || parsedData.conta) && (
-                    <div className="col-span-2 md:col-span-3 lg:col-span-4">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">
-                        Conta Salário
+                  {/* ── Seleção de conta bancária para crédito ── */}
+                  {(parsedData.contas?.length > 0 || parsedData.bancoSalario) && (
+                    <div className="col-span-2 md:col-span-3 lg:col-span-4 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Conta para Crédito
                       </p>
-                      <div className="flex flex-wrap gap-4">
-                        {parsedData.bancoSalario && (
-                          <InfoField label="Banco" value={parsedData.bancoSalario} />
-                        )}
-                        {parsedData.agencia && (
-                          <InfoField label="Agência" value={parsedData.agencia} />
-                        )}
-                        {parsedData.conta && (
-                          <InfoField label="Conta" value={parsedData.conta} />
-                        )}
+
+                      {/* Lista de contas do contracheque */}
+                      <div className="grid gap-2">
+                        {(parsedData.contas?.length > 0
+                          ? parsedData.contas
+                          : [{ banco: parsedData.bancoSalario, agencia: parsedData.agencia, conta: parsedData.conta, tipo: "salario" as const, label: "Conta Salário" }]
+                        ).map((c, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setSelectedContaIdx(i)}
+                            className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-colors ${
+                              selectedContaIdx === i
+                                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                                : "border-border hover:border-blue-300 dark:hover:border-blue-700"
+                            }`}
+                          >
+                            {/* Radio circle */}
+                            <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                              selectedContaIdx === i ? "border-blue-500" : "border-muted-foreground/40"
+                            }`}>
+                              {selectedContaIdx === i && (
+                                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground leading-none mb-1">{c.label}</p>
+                              <p className="text-sm font-mono">
+                                Banco <strong>{c.banco}</strong>
+                                {" · "}Ag <strong>{c.agencia}</strong>
+                                {" · "}Conta <strong>{c.conta}</strong>
+                              </p>
+                            </div>
+                            {selectedContaIdx === i && (
+                              <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />
+                            )}
+                          </button>
+                        ))}
+
+                        {/* Opção manual */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedContaIdx("manual")}
+                          className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-colors ${
+                            selectedContaIdx === "manual"
+                              ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                              : "border-border hover:border-amber-300 dark:hover:border-amber-700"
+                          }`}
+                        >
+                          <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            selectedContaIdx === "manual" ? "border-amber-500" : "border-muted-foreground/40"
+                          }`}>
+                            {selectedContaIdx === "manual" && (
+                              <div className="h-2 w-2 rounded-full bg-amber-500" />
+                            )}
+                          </div>
+                          <div className="flex-1 flex items-center gap-2 flex-wrap">
+                            <span className="text-sm">Informar conta manualmente</span>
+                            {selectedContaIdx === "manual" && (
+                              <span className="inline-flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700">
+                                <TriangleAlert className="h-3 w-3" />
+                                Conta diferente do contracheque
+                              </span>
+                            )}
+                          </div>
+                        </button>
                       </div>
+
+                      {/* Campos de entrada manual */}
+                      {selectedContaIdx === "manual" && (
+                        <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/10 p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <TriangleAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              Esta conta não consta no contracheque. Confirme os dados com o cliente antes de prosseguir.
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <FormField
+                              control={form.control}
+                              name="contaBanco"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Cód. Banco</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Ex: 033" maxLength={4} />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="contaAgencia"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Agência</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Ex: 022840" />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="contaConta"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Conta</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Ex: 0000710177973" />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

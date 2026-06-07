@@ -30,6 +30,16 @@ if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
 
 // ─── Interface pública ────────────────────────────────────────────────────────
 
+export interface ContaBancariaSiape {
+  banco: string;
+  agencia: string;
+  conta: string;
+  /** "salario" = Conta para Recebimento de Salário; "operacoes" = Conta para Outras Operações */
+  tipo: "salario" | "operacoes";
+  /** Rótulo legível exibido na UI */
+  label: string;
+}
+
 export interface SiapeParsedData {
   nome: string;
   cpf: string;
@@ -45,11 +55,16 @@ export interface SiapeParsedData {
   vinculo: string;
   /** Regime jurídico (EST, CLT, MIL…) */
   regJuridico: string;
-  /** Código do banco de salário (ex: "033") */
+  /**
+   * Todas as contas bancárias encontradas no contracheque (0–2 itens).
+   * Substituirá bancoSalario/agencia/conta quando disponível.
+   */
+  contas: ContaBancariaSiape[];
+  /** @deprecated Usar contas[0].banco quando disponível */
   bancoSalario: string;
-  /** Agência do banco salário */
+  /** @deprecated Usar contas[0].agencia quando disponível */
   agencia: string;
-  /** Conta salário */
+  /** @deprecated Usar contas[0].conta quando disponível */
   conta: string;
   /** Competência no formato ABR/2026 */
   mesAno: string;
@@ -150,6 +165,7 @@ export async function parseSiapeContracheque(
     orgao: "",
     vinculo: "",
     regJuridico: "",
+    contas: [],
     bancoSalario: "",
     agencia: "",
     conta: "",
@@ -266,9 +282,10 @@ export async function parseSiapeContracheque(
 
     // ────────────────────────────────────────────────────────────────────────
     // 5. DADOS BANCÁRIOS
-    // Há uma linha intermediária: "CONTA PARA RECEBIMENTO DE SALÁRIO ..."
-    // Header: "BANCO  AGÊNCIA  CONTA SALÁRIO  BANCO  AGÊNCIA  CONTA"
-    // Values: "033    022840   0000710177973  104    002160   0000000224831"
+    // Estrutura no PDF:
+    //   "CONTA PARA RECEBIMENTO DE SALÁRIO  |  CONTA PARA OUTRAS OPERAÇÕES"
+    //   "BANCO  AGÊNCIA  CONTA SALÁRIO       |  BANCO  AGÊNCIA  CONTA"
+    //   "033    022840   0000710177973        |  104    002160   0000000224831"
     // ────────────────────────────────────────────────────────────────────────
     if (
       !result.bancoSalario &&
@@ -279,12 +296,49 @@ export async function parseSiapeContracheque(
       // Próxima linha com valores numéricos (pode estar em i+1 ou i+2)
       for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
         const vt = lines[j].text.trim();
-        // Padrão: "033  022840  0000710177973  ..."
-        const m = vt.match(/(\d{3})\s+(\d{4,8})\s+(\d{8,17})/);
-        if (m) {
-          result.bancoSalario = m[1]; // código do banco (033 = Santander)
-          result.agencia      = m[2]; // agência
-          result.conta        = m[3]; // conta salário
+
+        // ── Tenta capturar DUAS contas (salário + outras operações) ──
+        const mTwo = vt.match(
+          /(\d{3})\s+(\d{4,8})\s+(\d{8,17})\s+(\d{3})\s+(\d{4,8})\s+(\d{8,17})/
+        );
+        if (mTwo) {
+          result.contas = [
+            {
+              banco:   mTwo[1],
+              agencia: mTwo[2],
+              conta:   mTwo[3],
+              tipo:    "salario",
+              label:   "Conta Salário",
+            },
+            {
+              banco:   mTwo[4],
+              agencia: mTwo[5],
+              conta:   mTwo[6],
+              tipo:    "operacoes",
+              label:   "Conta para Outras Operações",
+            },
+          ];
+          result.bancoSalario = mTwo[1];
+          result.agencia      = mTwo[2];
+          result.conta        = mTwo[3];
+          break;
+        }
+
+        // ── Fallback: apenas uma conta (salário) ──
+        const mOne = vt.match(/(\d{3})\s+(\d{4,8})\s+(\d{8,17})/);
+        if (mOne) {
+          result.contas = [
+            {
+              banco:   mOne[1],
+              agencia: mOne[2],
+              conta:   mOne[3],
+              tipo:    "salario",
+              label:   "Conta Salário",
+            },
+          ];
+          result.bancoSalario = mOne[1];
+          result.agencia      = mOne[2];
+          result.conta        = mOne[3];
           break;
         }
       }
