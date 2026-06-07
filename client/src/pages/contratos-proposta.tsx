@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
-  User, Users, MapPin,
+  User, MapPin, History, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,6 +148,42 @@ export default function ContratosPropostaPage() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
+  interface ClientLookup {
+    clientName: string;
+    clientMatricula: string | null;
+    clientMeta: any;
+    clientConvenio: string | null;
+    proposalCount: number;
+    lastProposalId: number;
+    lastStatus: string;
+  }
+  const [clientLookup, setClientLookup] = useState<ClientLookup | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+
+  async function lookupByCpf(cpf: string): Promise<ClientLookup | null> {
+    const raw = cpf.replace(/\D/g, "");
+    if (raw.length !== 11) return null;
+    try {
+      setIsLookingUp(true);
+      const res = await fetch(`/api/contracts/client-lookup/${raw}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setClientLookup(null);
+        return null;
+      }
+      const existing: ClientLookup = await res.json();
+      setClientLookup(existing);
+      return existing;
+    } catch {
+      setClientLookup(null);
+      return null;
+    } finally {
+      setIsLookingUp(false);
+    }
+  }
+
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
   const [showComercial, setShowComercial] = useState(false);
@@ -251,13 +287,20 @@ export default function ContratosPropostaPage() {
       const data = await parseSiapeContracheque(file);
       setParsedData(data);
 
-      // Pré-preenche o formulário com os dados extraídos
+      // Lookup por CPF — traz dados de propostas anteriores para preencher lacunas
+      let existing: ClientLookup | null = null;
+      if (data.cpf) {
+        existing = await lookupByCpf(data.cpf);
+      }
+
+      // Mescla: dados do contracheque têm prioridade; cadastro anterior preenche lacunas
+      const nome      = data.nome      || existing?.clientName    || "";
+      const matricula = data.matricula || existing?.clientMatricula || "";
+
       form.reset({
-        clientName: data.nome || "",
-        clientCpf: data.cpf
-          ? formatCpf(data.cpf)
-          : "",
-        clientMatricula: data.matricula || "",
+        clientName: nome,
+        clientCpf: data.cpf ? formatCpf(data.cpf) : "",
+        clientMatricula: matricula,
         bank: form.getValues("bank"),
         product: form.getValues("product"),
         tableId: form.getValues("tableId"),
@@ -471,6 +514,36 @@ export default function ContratosPropostaPage() {
         </div>
       )}
 
+      {/* Banner de cliente recorrente */}
+      {clientLookup && (
+        <div className="flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-3 text-sm text-blue-700 dark:text-blue-400">
+          <History className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="font-medium">Cliente já cadastrado</span>
+            {" — "}
+            <span>
+              {clientLookup.proposalCount} proposta{clientLookup.proposalCount !== 1 ? "s" : ""} anterior{clientLookup.proposalCount !== 1 ? "es" : ""}.
+              {" "}Dados do último cadastro pré-carregados automaticamente.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLocation(`/contratos/${clientLookup.lastProposalId}`)}
+            className="flex items-center gap-1 shrink-0 underline underline-offset-2 hover:opacity-70"
+          >
+            Ver última <ExternalLink className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Indicador de lookup em andamento */}
+      {isLookingUp && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Verificando cadastro anterior...
+        </div>
+      )}
+
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
@@ -517,6 +590,22 @@ export default function ContratosPropostaPage() {
                         {...field}
                         placeholder="000.000.000-00"
                         onChange={(e) => field.onChange(formatCpf(e.target.value))}
+                        onBlur={async (e) => {
+                          field.onBlur();
+                          // Para entrada manual: lookup ao sair do campo
+                          if (!hasExtracted) {
+                            const found = await lookupByCpf(e.target.value);
+                            if (found) {
+                              // Preenche nome e matrícula apenas se estiverem vazios
+                              if (!form.getValues("clientName") && found.clientName) {
+                                form.setValue("clientName", found.clientName);
+                              }
+                              if (!form.getValues("clientMatricula") && found.clientMatricula) {
+                                form.setValue("clientMatricula", found.clientMatricula);
+                              }
+                            }
+                          }
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

@@ -622,6 +622,68 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // ===================== BUSCA POR CPF (memória de cadastro) =====================
+
+  /**
+   * GET /api/contracts/client-lookup/:cpf
+   *
+   * Retorna dados do cliente mais recente com este CPF no tenant.
+   * Usado pelo wizard de Nova Proposta para pré-preencher o formulário
+   * quando o mesmo cliente já foi cadastrado antes.
+   */
+  app.get("/api/contracts/client-lookup/:cpf", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const rawCpf = req.params.cpf.replace(/\D/g, "");
+
+      if (rawCpf.length !== 11) {
+        return res.status(400).json({ message: "CPF inválido" });
+      }
+
+      // Busca todas as propostas deste CPF neste tenant (CPF pode estar formatado ou não)
+      const rows = await db
+        .select({
+          id: proposals.id,
+          clientName: proposals.clientName,
+          clientCpf: proposals.clientCpf,
+          clientMatricula: proposals.clientMatricula,
+          clientMeta: proposals.clientMeta,
+          clientConvenio: proposals.clientConvenio,
+          status: proposals.status,
+          createdAt: proposals.createdAt,
+        })
+        .from(proposals)
+        .where(
+          and(
+            eq(proposals.tenantId, tenantId),
+            sql`regexp_replace(${proposals.clientCpf}, '[^0-9]', '', 'g') = ${rawCpf}`
+          )
+        )
+        .orderBy(desc(proposals.createdAt))
+        .limit(50);
+
+      if (!rows.length) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+
+      const latest = rows[0];
+
+      return res.json({
+        clientName: latest.clientName,
+        clientCpf: latest.clientCpf,
+        clientMatricula: latest.clientMatricula,
+        clientMeta: latest.clientMeta,
+        clientConvenio: latest.clientConvenio,
+        proposalCount: rows.length,
+        lastProposalId: latest.id,
+        lastStatus: latest.status,
+      });
+    } catch (e: any) {
+      console.error("GET /api/contracts/client-lookup/:cpf error:", e);
+      return res.status(500).json({ message: "Erro ao buscar cliente" });
+    }
+  });
+
   // ===================== GRUPOS DE COMISSÃO =====================
 
   app.get("/api/contracts/commission-groups", requireAuth, async (req: any, res) => {
