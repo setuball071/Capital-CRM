@@ -49,6 +49,9 @@ interface DashboardData {
   metaCartao: number;
   totalValor: number;
   totalCartao: number;
+  totalGeral: number;          // produção total sem cartão (Novo + Port + Refin + Outro)
+  totalNovo: number;           // breakdown da Meta Geral
+  totalPortabilidade: number;  // breakdown da Meta Geral
   totalContratos: number;
   percentualMeta: number;
   projecaoMensal: number;
@@ -91,16 +94,15 @@ function getTierIcon(iconName: string) {
   return TIER_ICONS[iconName] || Shield;
 }
 
-function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, totalVendedores }: {
-  performance: CategoriaPerformance | undefined;
+function MetaGeralCard({ totalGeral, totalNovo, totalPortabilidade, mesNome, metaMensal, posicaoRanking }: {
+  totalGeral: number;
+  totalNovo: number;
+  totalPortabilidade: number;
   mesNome: string;
   metaMensal: number;
   posicaoRanking?: number;
-  totalVendedores?: number;
 }) {
-  if (!performance) return null;
-  const nivel = performance.nivelAtual;
-  const percentual = metaMensal > 0 ? Math.round((performance.produzido / metaMensal) * 100) : 0;
+  const percentual = metaMensal > 0 ? Math.round((totalGeral / metaMensal) * 100) : 0;
 
   return (
     <Card className="rounded-2xl border-primary/20 shadow-lg flex-1 min-w-0" data-testid="card-meta-geral">
@@ -117,11 +119,11 @@ function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, total
           )}
         </div>
 
-        <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-primary tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-geral-produzido">
-                R$ {performance.produzido.toLocaleString("pt-BR")}
+                R$ {totalGeral.toLocaleString("pt-BR")}
               </span>
               <span className="text-base sm:text-lg lg:text-xl font-bold text-muted-foreground/50">
                 / {metaMensal.toLocaleString("pt-BR")}
@@ -135,10 +137,6 @@ function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, total
           </div>
         </div>
 
-        <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2" data-testid="text-nivel-geral">
-          Nível Atual: <span style={{ color: nivel?.cor || "hsl(var(--muted-foreground))" }}>{nivel?.nome || "Sem Nível"}</span>
-        </p>
-
         <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden mb-3">
           <div
             className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-chart-2"
@@ -146,26 +144,38 @@ function MetaGeralCard({ performance, mesNome, metaMensal, posicaoRanking, total
           />
         </div>
 
+        {/* Breakdown: Novo + Portabilidade */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contrato Novo</p>
+            <p className="text-sm sm:text-base font-black text-foreground tracking-tight" data-testid="text-meta-geral-novo">
+              R$ {totalNovo.toLocaleString("pt-BR")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
+            <p className="text-sm sm:text-base font-black text-foreground tracking-tight" data-testid="text-meta-geral-portabilidade">
+              R$ {totalPortabilidade.toLocaleString("pt-BR")}
+            </p>
+          </div>
+        </div>
+
         <div className="flex justify-between items-center gap-2 text-[9px] sm:text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider">
           <span>Início: 01 {mesNome?.substring(0, 3).toUpperCase()}</span>
-          <span>Meta consolidada de todos os contratos</span>
+          <span>Novo + Portabilidade (e outros, exceto Cartão)</span>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp, posicaoRanking, totalVendedores }: {
-  performance: CategoriaPerformance | undefined;
+function MetaCartaoCard({ totalCartao, mesNome, metaCartao, posicaoRanking }: {
+  totalCartao: number;
   mesNome: string;
   metaCartao: number;
   posicaoRanking?: number;
-  totalVendedores?: number;
 }) {
-  if (!performance) return null;
-  const nivel = performance.nivelAtual;
-  const metaCartao = metaCartaoProp > 0 ? metaCartaoProp : (performance.meta || 0);
-  const percentCartao = metaCartao > 0 ? Math.round((performance.produzido / metaCartao) * 100) : 0;
+  const percentCartao = metaCartao > 0 ? Math.round((totalCartao / metaCartao) * 100) : 0;
 
   return (
     <div className="rounded-2xl bg-[#1a1a2e] dark:bg-[#111122] p-4 sm:p-5 flex flex-col justify-between min-w-0 flex-1 w-full" data-testid="card-meta-cartao">
@@ -186,7 +196,7 @@ function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp, posi
           <div className="min-w-0">
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="text-xl sm:text-2xl lg:text-3xl font-black text-purple-400 tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-cartao-produzido">
-                R$ {performance.produzido.toLocaleString("pt-BR")}
+                R$ {totalCartao.toLocaleString("pt-BR")}
               </span>
               <span className="text-sm sm:text-base font-bold text-gray-500">
                 / {metaCartao.toLocaleString("pt-BR")}
@@ -200,27 +210,16 @@ function MetaCartaoCard({ performance, mesNome, metaCartao: metaCartaoProp, posi
           </div>
         </div>
 
-        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-4">
+        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-3">
           <div
             className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-purple-600 to-purple-400"
             style={{ width: `${Math.min(percentCartao, 100)}%` }}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-center">
-            <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Nível Cartão</p>
-            <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-nivel-cartao">
-              {nivel?.nome || "Sem Nível"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-center">
-            <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Prêmio Atual</p>
-            <p className="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-wide" data-testid="text-premio-cartao">
-              R$ {(nivel?.premio || 0).toLocaleString("pt-BR")}
-            </p>
-          </div>
-        </div>
+        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">
+          Acompanhamento separado da Meta Geral
+        </p>
       </div>
     </div>
   );
@@ -475,15 +474,27 @@ export default function DashboardVendedorPage() {
     <div className="space-y-5 sm:space-y-6 relative" style={{ zIndex: 5 }} data-testid="dashboard-vendedor">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch">
         <div className="lg:col-span-3 flex">
-          <MetaGeralCard performance={perfData?.geral} mesNome={mesNome} metaMensal={data?.metaMensal || 0} posicaoRanking={data?.posicaoRankingGeral} totalVendedores={data?.totalVendedores} />
+          <MetaGeralCard
+            totalGeral={data?.totalGeral ?? 0}
+            totalNovo={data?.totalNovo ?? 0}
+            totalPortabilidade={data?.totalPortabilidade ?? 0}
+            mesNome={mesNome}
+            metaMensal={data?.metaMensal || 0}
+            posicaoRanking={data?.posicaoRankingGeral}
+          />
         </div>
         <div className="lg:col-span-2 flex">
-          <MetaCartaoCard performance={perfData?.cartao} mesNome={mesNome} metaCartao={data?.metaCartao || 0} posicaoRanking={data?.posicaoRankingCartao} totalVendedores={data?.totalVendedores} />
+          <MetaCartaoCard
+            totalCartao={data?.totalCartao ?? 0}
+            mesNome={mesNome}
+            metaCartao={data?.metaCartao || 0}
+            posicaoRanking={data?.posicaoRankingCartao}
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-12">
           <Card className="rounded-2xl">
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
@@ -565,23 +576,6 @@ export default function DashboardVendedorPage() {
           </Card>
         </div>
 
-        <div className="lg:col-span-4">
-          <Card className="rounded-2xl border-primary/10 h-full" data-testid="card-niveis">
-            <CardContent className="p-4 sm:p-5 h-full flex flex-col">
-              <NivelSection
-                performance={perfData?.geral}
-                label="Nível Geral"
-                icon={Target}
-              />
-              <div className="border-t border-border my-4" />
-              <NivelSection
-                performance={perfData?.cartao}
-                label="Nível Cartão"
-                icon={CreditCard}
-              />
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
@@ -679,7 +673,7 @@ export default function DashboardVendedorPage() {
             {data?.vendedorNome || user.name}
           </h1>
           <p className="text-[9px] sm:text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5 sm:mt-1 text-left ml-[8px] mr-[8px]">
-            {mesNome} {data?.mesAno?.split("/")[1]} {nivelGeral ? `\u2022 ${nivelGeral.nome}` : ""}
+            {mesNome} {data?.mesAno?.split("/")[1]}
           </p>
         </div>
 
@@ -695,17 +689,21 @@ export default function DashboardVendedorPage() {
           >
             Dashboard
           </button>
-          <button
-            onClick={() => setView("premiacao")}
-            className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
-              view === "premiacao"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid="button-view-premiacao"
-          >
-            Premiação
-          </button>
+          {/* Aba Premiação desativada — sistema de níveis/pontuação em stand-by
+              (será reformulado em etapa futura). Mantida no código para reativação fácil. */}
+          {false && (
+            <button
+              onClick={() => setView("premiacao")}
+              className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${
+                view === "premiacao"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid="button-view-premiacao"
+            >
+              Premiação
+            </button>
+          )}
           <button
             onClick={() => setView("regulamento")}
             className={`px-3 sm:px-5 py-2 rounded-md text-[10px] sm:text-[11px] font-bold uppercase transition-all tracking-wider ${

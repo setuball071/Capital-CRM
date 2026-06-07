@@ -22259,12 +22259,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         ORDER BY dia ASC
       `);
 
-      // Merge production totals from both sources
+      // Merge production totals from both sources.
+      // Breakdown por tipo:
+      //   Cartão        = is_cartao = true (independente de tipo_contrato)
+      //   Portabilidade = NÃO cartão E tipo_contrato contém "port"
+      //   Novo          = NÃO cartão E tipo_contrato contém "novo" ou "consig"
+      // Meta Geral = total_valor - total_cartao
       const prodTotaisResult = await db.execute(sql`
-        SELECT 
+        SELECT
           COUNT(*)::int as total_contratos,
           COALESCE(SUM(valor_base), 0)::numeric as total_valor,
-          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
+          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao,
+          COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as total_portabilidade,
+          COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as total_novo
         FROM producoes_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -22274,10 +22281,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       `);
 
       const vendTotaisResult = await db.execute(sql`
-        SELECT 
+        SELECT
           COUNT(*)::int as total_contratos,
           COALESCE(SUM(valor_contrato), 0)::numeric as total_valor,
-          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_cartao
+          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_cartao,
+          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_portabilidade,
+          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as total_novo
         FROM vendedor_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -22294,6 +22303,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const totalCartao =
         (parseFloat(prodTotaisResult.rows[0]?.total_cartao as string) || 0) +
         (parseFloat(vendTotaisResult.rows[0]?.total_cartao as string) || 0);
+      const totalNovo =
+        (parseFloat(prodTotaisResult.rows[0]?.total_novo as string) || 0) +
+        (parseFloat(vendTotaisResult.rows[0]?.total_novo as string) || 0);
+      const totalPortabilidade =
+        (parseFloat(prodTotaisResult.rows[0]?.total_portabilidade as string) || 0) +
+        (parseFloat(vendTotaisResult.rows[0]?.total_portabilidade as string) || 0);
+      // Meta Geral = produção sem cartão (Novo + Portabilidade + Refin + Outro)
+      const totalGeral = totalValor - totalCartao;
 
       const metaDiariaOriginal =
         diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
@@ -22425,6 +22442,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         metaCartao,
         totalValor: Math.round(totalValor * 100) / 100,
         totalCartao: Math.round(totalCartao * 100) / 100,
+        totalGeral: Math.round(totalGeral * 100) / 100,
+        totalNovo: Math.round(totalNovo * 100) / 100,
+        totalPortabilidade: Math.round(totalPortabilidade * 100) / 100,
         totalContratos,
         percentualMeta: Math.round(percentualMeta * 100) / 100,
         projecaoMensal: Math.round(projecaoMensal * 100) / 100,
