@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -265,7 +270,9 @@ export default function ContratosPropostaPage() {
   const [extratoData,        setExtratoData]        = useState<ExtratoConsignacaoParsed | null>(null);
   const [isParsingExtrato,   setIsParsingExtrato]   = useState(false);
   // índice da conta selecionada do contracheque (0, 1) ou "manual"
-  const [selectedContaIdx,   setSelectedContaIdx]   = useState<number | "manual" | null>(null);
+  const [selectedContaIdx,      setSelectedContaIdx]      = useState<number | "manual" | null>(null);
+  const [contaError,             setContaError]             = useState(false);
+  const [showManualConfirm,      setShowManualConfirm]      = useState(false);
   const [extratoError,       setExtratoError]       = useState<string | null>(null);
   const [extratoDrag,        setExtratoDrag]        = useState(false);
 
@@ -1249,9 +1256,12 @@ export default function ContratosPropostaPage() {
                   )}
                   {/* ── Seleção de conta bancária para crédito ── */}
                   {(parsedData.contas?.length > 0 || parsedData.bancoSalario) && (
-                    <div className="col-span-2 md:col-span-3 lg:col-span-4 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">
+                    <div id="conta-selecao" className={`col-span-2 md:col-span-3 lg:col-span-4 space-y-2 rounded-lg p-3 transition-colors ${
+                      contaError ? "bg-destructive/5 ring-2 ring-destructive/40" : ""
+                    }`}>
+                      <p className={`text-xs font-medium ${contaError ? "text-destructive" : "text-muted-foreground"}`}>
                         Conta para Crédito
+                        {contaError && <span className="ml-1 font-semibold">— selecione uma das opções abaixo para continuar</span>}
                       </p>
 
                       {/* Lista de contas do contracheque */}
@@ -1263,7 +1273,7 @@ export default function ContratosPropostaPage() {
                           <button
                             key={i}
                             type="button"
-                            onClick={() => setSelectedContaIdx(i)}
+                            onClick={() => { setSelectedContaIdx(i); setContaError(false); }}
                             className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-colors ${
                               selectedContaIdx === i
                                 ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
@@ -1295,7 +1305,7 @@ export default function ContratosPropostaPage() {
                         {/* Opção manual */}
                         <button
                           type="button"
-                          onClick={() => setSelectedContaIdx("manual")}
+                          onClick={() => { setSelectedContaIdx("manual"); setContaError(false); }}
                           className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-colors ${
                             selectedContaIdx === "manual"
                               ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
@@ -1506,7 +1516,25 @@ export default function ContratosPropostaPage() {
               type="button"
               onClick={async () => {
                 const valid = await form.trigger(["clientName", "clientCpf"]);
-                if (valid) setStep("tipo-contrato");
+                if (!valid) return;
+
+                // Barreira: conta bancária obrigatória para SIAPE
+                const hasContaData = isSiape && parsedData &&
+                  (parsedData.contas?.length > 0 || !!parsedData.bancoSalario);
+                if (hasContaData && selectedContaIdx === null) {
+                  setContaError(true);
+                  // Rola até a seção de conta
+                  document.getElementById("conta-selecao")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  return;
+                }
+
+                // Confirmação extra para conta manual
+                if (selectedContaIdx === "manual") {
+                  setShowManualConfirm(true);
+                  return;
+                }
+
+                setStep("tipo-contrato");
               }}
             >
               Próximo →
@@ -1514,6 +1542,41 @@ export default function ContratosPropostaPage() {
           </div>
         </form>
       </Form>
+
+      {/* ── Popup de confirmação para conta manual ── */}
+      <AlertDialog open={showManualConfirm} onOpenChange={setShowManualConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <TriangleAlert className="h-5 w-5 text-amber-500" />
+              Conta informada manualmente
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  A conta bancária que você digitou <strong>não consta no contracheque</strong> do cliente.
+                  Usar uma conta diferente pode gerar problemas no crédito da operação.
+                </p>
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-300">
+                  Você confirmou esses dados diretamente com o cliente?
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar e corrigir</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={() => {
+                setShowManualConfirm(false);
+                setStep("tipo-contrato");
+              }}
+            >
+              Sim, confirmei com o cliente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
   } // end dados-cadastrais
