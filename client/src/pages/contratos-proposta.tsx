@@ -430,6 +430,24 @@ export default function ContratosPropostaPage() {
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
     });
 
+    // Adiciona todos os arquivos carregados à seção de Documentos
+    setAttachments((prev) => {
+      // Remove eventuais duplicatas de upload anterior
+      let updated = prev.filter(
+        (a) => a.documentType !== "RG_CNH" && a.documentType !== "CONTRACHEQUE"
+      );
+      if (siapeFile) {
+        updated = [{ file: siapeFile, documentType: "CONTRACHEQUE" }, ...updated];
+      }
+      if (docFrenteFile) {
+        updated = [...updated, { file: docFrenteFile, documentType: "RG_CNH" }];
+      }
+      if (docVersoFile) {
+        updated = [...updated, { file: docVersoFile, documentType: "RG_CNH" }];
+      }
+      return updated;
+    });
+
     setStep("form");
   }
 
@@ -1336,23 +1354,14 @@ export default function ContratosPropostaPage() {
               <CardTitle className="text-base flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 Documentos
-                {isSiape && siapeFile && (
+                {attachments.length > 0 && (
                   <span className="text-xs font-normal text-muted-foreground">
-                    — contracheque já carregado
+                    — {attachments.length} arquivo{attachments.length !== 1 ? "s" : ""} anexado{attachments.length !== 1 ? "s" : ""}
                   </span>
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Arquivo SIAPE já carregado */}
-              {isSiape && siapeFile && (
-                <div className="flex items-center gap-3 p-3 rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/20">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                  <span className="text-sm flex-1 truncate">{siapeFile.name}</span>
-                  <Badge variant="secondary">Contracheque SIAPE</Badge>
-                </div>
-              )}
-
               {/* Drop zone para documentos adicionais */}
               <div
                 className={`border-2 border-dashed rounded-md p-5 text-center cursor-pointer transition-colors ${
