@@ -1,60 +1,66 @@
 /**
  * siape-pdf-parser.ts
- * Extrai dados de um contracheque SIAPE a partir de um arquivo PDF.
- * Usa pdfjs-dist para extrair o texto preservando a estrutura de linhas.
+ *
+ * Extrai dados de um contracheque SIAPE (SIGEPE) a partir de um arquivo PDF.
+ *
+ * Estrutura real do documento (pdfjs agrupa por coordenada Y):
+ *
+ *   "COMPROVANTE DE RENDIMENTOS - FOLHA NORMAL"
+ *   "UNIVERSIDADE FEDERAL DO RIO DE JANEIRO"          ← órgão
+ *
+ *   "SIGLA DA UPAG  UF  REG. JURÍDICO  SITUAÇÃO FUNCIONAL  SIGLA DA UORG  UF"
+ *   "HUCFF          RJ  EST            ATIVO PERMANENTE    DEN-HU         RJ"
+ *
+ *   "NOME DO SERVIDOR                    MAT. SIAPE  IDENT. ÚNICA"
+ *   "LINDALVA GONCALVES ARAUJO           1449208     014492083"
+ *
+ *   "DEPENDENTE S.F.  DEPENDENTE IR  A.T.S.(%)  CPF           MÊS/ANO PAGAMENTO"
+ *   "00               01             00         03422750703   MAI 2026"
+ *
+ *   "BANCO  AGÊNCIA  CONTA SALÁRIO  ..."
+ *   "033    022840   0000710177973  ..."
  */
 
 import * as pdfjsLib from "pdfjs-dist";
 
-// Worker via CDN para evitar config do Vite com arquivos binários
 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://unpkg.com/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs";
 }
 
+// ─── Interface pública ────────────────────────────────────────────────────────
+
 export interface SiapeParsedData {
-  /** Nome completo do servidor */
   nome: string;
-  /** CPF (apenas dígitos, 11 chars) */
   cpf: string;
-  /** Matrícula funcional */
+  /** Matrícula SIAPE (MAT. SIAPE) */
   matricula: string;
-  /** Identidade única SIAPE */
+  /** Identidade Única SIAPE (IDENT. ÚNICA) */
   identSiape: string;
   /** UF do órgão de lotação */
   uf: string;
-  /** Nome do órgão / secretaria */
+  /** Nome completo do órgão / entidade */
   orgao: string;
-  /** Banco do salário (código + nome) */
+  /** Situação funcional (ex: "Ativo Permanente") */
+  vinculo: string;
+  /** Regime jurídico (EST, CLT, MIL…) */
+  regJuridico: string;
+  /** Código do banco de salário (ex: "033") */
   bancoSalario: string;
   /** Agência do banco salário */
   agencia: string;
-  /** Conta do banco salário */
+  /** Conta salário */
   conta: string;
-  /** Mês/ano da competência (ex: ABR/2026) */
+  /** Competência no formato ABR/2026 */
   mesAno: string;
-  /** Situação funcional */
-  vinculo: string;
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-function norm(s: string): string {
-  return (s || "")
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// ─── Extração de linhas do PDF ────────────────────────────────────────────────
 
 interface PdfLine {
   text: string;
   items: Array<{ text: string; x: number; y: number }>;
 }
-
-// ─── Extração de linhas do PDF ──────────────────────────────────────────────
 
 async function pdfToLines(arrayBuffer: ArrayBuffer): Promise<PdfLine[]> {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -70,7 +76,6 @@ async function pdfToLines(arrayBuffer: ArrayBuffer): Promise<PdfLine[]> {
       y: Math.round(it.transform[5] as number),
     }));
 
-    // Ordena: Y decrescente (topo primeiro), X crescente
     items.sort((a, b) => b.y - a.y || a.x - b.x);
 
     let currentY: number | null = null;
@@ -81,18 +86,20 @@ async function pdfToLines(arrayBuffer: ArrayBuffer): Promise<PdfLine[]> {
         currentGroup.push(it);
         currentY = it.y;
       } else {
-        if (currentGroup.length) allLines.push(groupToLine(currentGroup));
+        if (currentGroup.length) allLines.push(buildLine(currentGroup));
         currentGroup = [it];
         currentY = it.y;
       }
     }
-    if (currentGroup.length) allLines.push(groupToLine(currentGroup));
+    if (currentGroup.length) allLines.push(buildLine(currentGroup));
   }
 
-  return allLines.filter((l) => l.text.length > 0);
+  return allLines.filter((l) => l.text.trim().length > 0);
 }
 
-function groupToLine(items: Array<{ text: string; x: number; y: number }>): PdfLine {
+function buildLine(
+  items: Array<{ text: string; x: number; y: number }>
+): PdfLine {
   items.sort((a, b) => a.x - b.x);
   const text = items
     .map((i) => i.text)
@@ -102,19 +109,31 @@ function groupToLine(items: Array<{ text: string; x: number; y: number }>): PdfL
   return { text, items };
 }
 
-// ─── Parsing dos campos SIAPE ───────────────────────────────────────────────
+// ─── Normalização ─────────────────────────────────────────────────────────────
 
-function extractAfterLabel(
-  text: string,
-  labelPattern: RegExp,
-  valuePattern: RegExp = /(.+)/
-): string | null {
-  const labelMatch = text.match(labelPattern);
-  if (!labelMatch) return null;
-  const after = text.slice(labelMatch.index! + labelMatch[0].length);
-  const valueMatch = after.match(valuePattern);
-  return valueMatch ? valueMatch[1].trim() : null;
+/** Remove acentos, maiúscula, deixa só letras/números/espaços */
+function norm(s: string): string {
+  return (s || "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
+
+// ─── Mapa de vínculo ──────────────────────────────────────────────────────────
+
+const VINCULOS: [string, string][] = [
+  ["ATIVO PERMANENTE", "Ativo Permanente"],
+  ["APOSENTADO", "Aposentado"],
+  ["PENSIONISTA", "Pensionista"],
+  ["RESERVA", "Reserva"],
+  ["REFORMA", "Reforma"],
+  ["ATIVO", "Ativo"],
+];
+
+// ─── Parser principal ─────────────────────────────────────────────────────────
 
 export async function parseSiapeContracheque(
   file: File
@@ -129,186 +148,155 @@ export async function parseSiapeContracheque(
     identSiape: "",
     uf: "",
     orgao: "",
+    vinculo: "",
+    regJuridico: "",
     bancoSalario: "",
     agencia: "",
     conta: "",
     mesAno: "",
-    vinculo: "",
   };
 
+  // ── CPF e mês/ano — fallback via regex em todo o texto ──────────────────────
   const allText = lines.map((l) => l.text).join("\n");
 
-  // ── CPF ─────────────────────────────────────────────────────────────────
-  // Formato: 123.456.789-00 ou 12345678900
-  const cpfMatch = allText.match(/\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/);
-  if (cpfMatch) {
-    result.cpf = cpfMatch[1].replace(/\D/g, "");
-  }
+  const cpfRaw = allText.match(/\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/);
+  if (cpfRaw) result.cpf = cpfRaw[1].replace(/\D/g, "");
 
-  // ── Mês/Ano ─────────────────────────────────────────────────────────────
   const mesMatch = allText.match(
-    /\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[\/\s]+(\d{4})\b/i
+    /\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(\d{4})\b/i
   );
-  if (mesMatch) {
+  if (mesMatch)
     result.mesAno = mesMatch[1].toUpperCase() + "/" + mesMatch[2];
-  }
 
-  // ── Percorre linhas ──────────────────────────────────────────────────────
+  // ── Percorre linha a linha ───────────────────────────────────────────────────
+
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].text;
     const u = norm(t);
 
-    // ── Nome ──────────────────────────────────────────────────────────────
-    if (!result.nome && u.includes("NOME DO SERVIDOR")) {
-      // Caso 1: nome na mesma linha — "NOME DO SERVIDOR: FULANO..."
-      const afterLabel = t
-        .replace(/NOME DO SERVIDOR\s*[:\/]?\s*/i, "")
-        .trim();
-      if (
-        afterLabel.length > 3 &&
-        !/^\d/.test(afterLabel) &&
-        !norm(afterLabel).includes("MAT")
-      ) {
-        // Remove matrícula que pode aparecer no final da linha
-        result.nome = afterLabel
-          .replace(/\s+\d[\d\s\-\/]*$/, "")
-          .trim();
-      } else {
-        // Caso 2: nome na linha seguinte
-        for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-          const nxt = lines[j].text.trim();
-          const nxtU = norm(nxt);
-          if (
-            nxt.length > 3 &&
-            !/^\d/.test(nxt) &&
-            !nxtU.includes("MAT") &&
-            !nxtU.includes("CPF") &&
-            !nxtU.includes("SITUACAO") &&
-            !nxtU.includes("SIAPE")
-          ) {
-            result.nome = nxt.replace(/\s+\d[\d\s\-\/]*$/, "").trim();
-            break;
-          }
+    // ────────────────────────────────────────────────────────────────────────
+    // 1. ÓRGÃO
+    // Header: "COMPROVANTE DE RENDIMENTOS - FOLHA NORMAL"
+    // Próxima linha: "UNIVERSIDADE FEDERAL DO RIO DE JANEIRO"
+    // ────────────────────────────────────────────────────────────────────────
+    if (!result.orgao && u.includes("COMPROVANTE DE RENDIMENTOS")) {
+      const next = lines[i + 1]?.text.trim() ?? "";
+      if (next.length > 4 && !/^\d/.test(next)) {
+        result.orgao = next;
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 2. UF / REGIME JURÍDICO / SITUAÇÃO FUNCIONAL
+    // Header: "SIGLA DA UPAG  UF  REG. JURÍDICO  SITUAÇÃO FUNCIONAL  SIGLA DA UORG  UF"
+    // Values: "HUCFF          RJ  EST            ATIVO PERMANENTE    DEN-HU         RJ"
+    // ────────────────────────────────────────────────────────────────────────
+    if (
+      u.includes("SIGLA DA UPAG") &&
+      (u.includes("REG JURIDICO") || u.includes("REG") && u.includes("JURIDICO"))
+    ) {
+      const vt = lines[i + 1]?.text.trim() ?? "";
+      const tokens = vt.split(/\s+/).filter(Boolean);
+      // tokens: [SIGLA_UPAG, UF, REG_JUR, SITUACAO..., SIGLA_UORG, UF]
+      // ex:     [HUCFF,      RJ, EST,     ATIVO, PERMANENTE, DEN-HU, RJ]
+
+      if (!result.uf && tokens[1] && /^[A-Z]{2}$/.test(tokens[1])) {
+        result.uf = tokens[1];
+      }
+      if (!result.regJuridico && tokens[2] && /^[A-Z]{2,5}$/.test(tokens[2])) {
+        result.regJuridico = tokens[2]; // EST, CLT, MIL, RJE…
+      }
+
+      // Situação funcional: procura no texto normalizado
+      if (!result.vinculo) {
+        const vu = norm(vt);
+        const found = VINCULOS.find(([k]) => vu.includes(k));
+        if (found) result.vinculo = found[1];
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 3. NOME / MAT. SIAPE / IDENT. ÚNICA
+    // Header: "NOME DO SERVIDOR    MAT. SIAPE    IDENT. ÚNICA"
+    // Values: "LINDALVA GONCALVES ARAUJO    1449208    014492083"
+    // ────────────────────────────────────────────────────────────────────────
+    if (
+      u.includes("NOME DO SERVIDOR") &&
+      u.includes("SIAPE") &&
+      u.includes("IDENT")
+    ) {
+      const vt = lines[i + 1]?.text.trim() ?? "";
+      if (vt && !/NOME DO SERVIDOR/i.test(vt)) {
+        // Extrai todos os blocos numéricos de 6–10 dígitos (matrícula, ident)
+        const nums = [...vt.matchAll(/\b(\d{6,10})\b/g)].map((m) => m[1]);
+        if (nums[0]) result.matricula = nums[0];   // ex: 1449208
+        if (nums[1]) result.identSiape = nums[1];  // ex: 014492083
+
+        // Nome = tudo antes do primeiro número de 6+ dígitos
+        const firstNumIdx = vt.search(/\b\d{6,10}\b/);
+        if (!result.nome) {
+          result.nome =
+            firstNumIdx > 0
+              ? vt.slice(0, firstNumIdx).replace(/\s+/g, " ").trim()
+              : vt.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
         }
       }
-
-      // Também tenta extrair matrícula da mesma linha do nome
-      const matSameLine = t.match(
-        /MAT[RÍ]*[^A-Z]*[:\s]+([\d][\d\-\/]+)/i
-      );
-      if (matSameLine && !result.matricula) {
-        result.matricula = matSameLine[1].trim();
-      }
-      const identSameLine = t.match(
-        /IDENT[^:]*[:\s]+([\d][\d\-\/]+)/i
-      );
-      if (identSameLine && !result.identSiape) {
-        result.identSiape = identSameLine[1].trim();
-      }
     }
 
-    // ── Matrícula ────────────────────────────────────────────────────────
-    if (!result.matricula && (u.includes("MATRICULA") || u.match(/\bMAT\b/))) {
-      const v =
-        extractAfterLabel(t, /MATRI[CÇ]ULA\s*[:]/i, /([\d][\d\-\/]+)/) ||
-        extractAfterLabel(t, /\bMAT\.?\s*[:]/i, /([\d][\d\-\/]+)/);
-      if (v) result.matricula = v;
-    }
-
-    // ── Identidade Única SIAPE ────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // 4. CPF / MÊS/ANO  (extração mais precisa via linha de cabeçalho)
+    // Header: "DEPENDENTE S.F.  DEPENDENTE IR  A.T.S.(%)  CPF  MÊS/ANO PAGAMENTO"
+    // Values: "00  01  00  03422750703  MAI 2026"
+    // ────────────────────────────────────────────────────────────────────────
     if (
-      !result.identSiape &&
-      u.includes("IDENT") &&
-      (u.includes("UNICA") || u.includes("FUNCIONAL") || u.includes("SIAPE"))
+      u.includes("CPF") &&
+      (u.includes("MES ANO") || u.includes("PAGAMENTO")) &&
+      u.includes("DEPENDENTE")
     ) {
-      const v = extractAfterLabel(t, /IDENT[^:]*:/i, /([\d][\d\-\/]+)/);
-      if (v) result.identSiape = v;
-    }
+      const vt = lines[i + 1]?.text ?? "";
+      const cpfM = vt.match(/\b(\d{11})\b/);
+      if (cpfM && !result.cpf) result.cpf = cpfM[1];
 
-    // ── UF ───────────────────────────────────────────────────────────────
-    if (!result.uf) {
-      const ufMatch = t.match(/\bUF\s*[:\-]?\s*([A-Z]{2})\b/i);
-      if (ufMatch) result.uf = ufMatch[1].toUpperCase();
-    }
-
-    // ── Órgão / Secretaria ────────────────────────────────────────────────
-    if (!result.orgao && (u.includes("ORGAO") || u.includes("ORGAO ENTIDADE"))) {
-      // "ÓRGÃO/ENTIDADE: 26000 - MINISTÉRIO DA EDUCAÇÃO"
-      const orgMatch = t.match(
-        /ORGAO[^:]*:\s*(?:\d+\s*[-–]\s*)?([\wÀ-ÿ\s\-]+)/i
+      const mesM = vt.match(
+        /\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(\d{4})\b/i
       );
-      if (orgMatch) {
-        const candidate = orgMatch[1].replace(/\s+/g, " ").trim();
-        if (candidate.length > 2) result.orgao = candidate;
-      }
+      if (mesM && !result.mesAno)
+        result.mesAno = mesM[1].toUpperCase() + "/" + mesM[2];
     }
 
-    // ── Vínculo ──────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // 5. DADOS BANCÁRIOS
+    // Há uma linha intermediária: "CONTA PARA RECEBIMENTO DE SALÁRIO ..."
+    // Header: "BANCO  AGÊNCIA  CONTA SALÁRIO  BANCO  AGÊNCIA  CONTA"
+    // Values: "033    022840   0000710177973  104    002160   0000000224831"
+    // ────────────────────────────────────────────────────────────────────────
     if (
-      !result.vinculo &&
-      (u.includes("SITUACAO FUNCIONAL") || u.includes("SITUACAO"))
+      !result.bancoSalario &&
+      u.includes("BANCO") &&
+      u.includes("AGENCIA") &&
+      u.includes("CONTA")
     ) {
-      const VINCULOS: [string, string][] = [
-        ["ATIVO PERMANENTE", "Ativo Permanente"],
-        ["APOSENTADO", "Aposentado"],
-        ["PENSIONISTA", "Pensionista"],
-        ["RESERVA", "Reserva"],
-        ["REFORMA", "Reforma"],
-        ["ATIVO", "Ativo"],
-      ];
-      // Verificar na linha atual e nas próximas 3
-      for (let j = i; j < Math.min(i + 4, lines.length); j++) {
-        const lu = norm(lines[j].text);
-        const found = VINCULOS.find(([k]) => lu.includes(k));
-        if (found) {
-          result.vinculo = found[1];
+      // Próxima linha com valores numéricos (pode estar em i+1 ou i+2)
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        const vt = lines[j].text.trim();
+        // Padrão: "033  022840  0000710177973  ..."
+        const m = vt.match(/(\d{3})\s+(\d{4,8})\s+(\d{8,17})/);
+        if (m) {
+          result.bancoSalario = m[1]; // código do banco (033 = Santander)
+          result.agencia      = m[2]; // agência
+          result.conta        = m[3]; // conta salário
           break;
         }
       }
     }
-
-    // ── Dados Bancários ───────────────────────────────────────────────────
-    // Pode estar tudo na mesma linha: "BANCO: 001 AGÊNCIA: 1234-5 CONTA: 12345678-9"
-    if (u.includes("BANCO")) {
-      if (!result.bancoSalario) {
-        // Código + nome: "001 - BANCO DO BRASIL" ou só "001"
-        const bMatch =
-          t.match(/BANCO\s*(?:SAL[AÁ]RIO)?[:\s]*([\d]+(?:\s*[-–]\s*[\wÀ-ÿ\s]+?)?)\s*(?=AG[ÊE]|CONTA|$)/i) ||
-          t.match(/BANCO\s*[:\s]*([\d]+)/i);
-        if (bMatch) result.bancoSalario = bMatch[1].replace(/\s+/g, " ").trim();
-      }
-      if (!result.agencia) {
-        const aMatch = t.match(/AG[ÊE]NCIA\s*[:\-]?\s*([\d\-X]+)/i);
-        if (aMatch) result.agencia = aMatch[1].trim();
-      }
-      if (!result.conta) {
-        const cMatch = t.match(/CONTA\s*[:\-]?\s*([\d\-X]+)/i);
-        if (cMatch) result.conta = cMatch[1].trim();
-      }
-    }
-
-    if (!result.agencia && u.includes("AGENCIA")) {
-      const aMatch = t.match(/AG[ÊE]NCIA\s*[:\-]?\s*([\d\-X]+)/i);
-      if (aMatch) result.agencia = aMatch[1].trim();
-    }
-
-    if (
-      !result.conta &&
-      u.includes("CONTA") &&
-      !u.includes("DESCONTO") &&
-      !u.includes("CONTABILIDADE")
-    ) {
-      const cMatch = t.match(/CONTA\s*[:\-]?\s*([\d\-X]+)/i);
-      if (cMatch) result.conta = cMatch[1].trim();
-    }
   }
 
-  // ── Pós-processamento ────────────────────────────────────────────────────
+  // ── Pós-processamento ────────────────────────────────────────────────────────
 
-  // Garantir CPF formatado com 11 dígitos
+  // Garante que o CPF tenha exatamente 11 dígitos
   if (result.cpf.length !== 11) result.cpf = "";
 
-  // Limpar nome — remover caracteres de controle e espaços extras
+  // Remove espaços extras do nome
   result.nome = result.nome.replace(/\s+/g, " ").trim();
 
   return result;

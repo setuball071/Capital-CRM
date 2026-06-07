@@ -191,6 +191,7 @@ export default function ContratosPropostaPage() {
             identSiape: parsedData.identSiape || undefined,
             uf: parsedData.uf || undefined,
             orgao: parsedData.orgao || undefined,
+            regJuridico: parsedData.regJuridico || undefined,
             bancoSalario: parsedData.bancoSalario || undefined,
             agencia: parsedData.agencia || undefined,
             conta: parsedData.conta || undefined,
@@ -560,6 +561,9 @@ export default function ContratosPropostaPage() {
                   )}
                   {parsedData.vinculo && (
                     <InfoField label="Vínculo" value={parsedData.vinculo} />
+                  )}
+                  {parsedData.regJuridico && (
+                    <InfoField label="Regime Jurídico" value={parsedData.regJuridico} />
                   )}
                   {parsedData.mesAno && (
                     <InfoField label="Competência" value={parsedData.mesAno} />
