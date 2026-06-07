@@ -176,7 +176,7 @@ function LeadCard({ lead, onCardClick, onDragStart }: LeadCardProps) {
         <div className="flex items-start gap-2">
           <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5 cursor-grab" />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate" data-testid={`text-lead-nome-${lead.id}`}>
+            <p className="font-medium text-sm leading-tight break-words line-clamp-2" data-testid={`text-lead-nome-${lead.id}`}>
               {lead.nome}
             </p>
             <p className={`text-xs flex items-center gap-1 mt-0.5 ${lead.telefone1 ? 'text-primary font-medium' : 'text-muted-foreground italic'}`}>
@@ -218,7 +218,7 @@ interface KanbanColumnProps {
 function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDragOver, onDrop }: KanbanColumnProps) {
   return (
     <div 
-      className="flex-shrink-0 w-72 flex flex-col bg-muted/30 rounded-lg"
+      className="flex-shrink-0 w-80 flex flex-col bg-muted/30 rounded-lg"
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, marker)}
       data-testid={`column-${marker}`}
