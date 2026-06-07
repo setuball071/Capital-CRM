@@ -413,8 +413,14 @@ export default function ContratosPropostaPage() {
   });
 
   const watchedContractValue = form.watch("contractValue");
-  const watchedCommPerc = form.watch("commissionPercentage");
-  const watchedCorretorPerc = form.watch("corretorCommissionPercentage");
+  const watchedCommPerc      = form.watch("commissionPercentage");
+  const watchedCorretorPerc  = form.watch("corretorCommissionPercentage");
+  const watchedBank          = form.watch("bank");
+
+  // Filtra tabelas pelo banco selecionado (para Contrato Novo)
+  const filteredTables: any[] = contractType === "NOVO" && watchedBank
+    ? tables.filter((t: any) => t.bank === watchedBank)
+    : tables;
 
   const contractValNum = parseBrNumber(watchedContractValue) || 0;
   const commPercNum = parseBrNumber(watchedCommPerc) || 0;
@@ -1451,67 +1457,33 @@ export default function ContratosPropostaPage() {
                 </button>
               </div>
 
-              {/* ── Contrato Novo: exibe margem líquida global ── */}
-              {contractType === "NOVO" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {extratoData.margemLiquidaFacultativaGlobal !== null && (
-                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Disponível</p>
-                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
-                        {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
-                          style: "currency", currency: "BRL",
-                        })}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Parcela máxima permitida</p>
-                    </div>
-                  )}
-                  {extratoData.margemBrutaFacultativaGlobal !== null && (
-                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Margem Bruta Global</p>
-                      <p className="text-lg font-semibold">
-                        {extratoData.margemBrutaFacultativaGlobal.toLocaleString("pt-BR", {
-                          style: "currency", currency: "BRL",
-                        })}
-                      </p>
-                    </div>
-                  )}
-                  {extratoData.margemUtilizadaFacultativa !== null && (
-                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Já Comprometido</p>
-                      <p className="text-lg font-semibold text-destructive">
-                        {extratoData.margemUtilizadaFacultativa.toLocaleString("pt-BR", {
-                          style: "currency", currency: "BRL",
-                        })}
-                      </p>
-                    </div>
-                  )}
+              {/* ── Contrato Novo: margem líquida disponível (1 linha) ── */}
+              {contractType === "NOVO" && extratoData.margemLiquidaFacultativaGlobal !== null && (
+                <div className="flex items-center gap-3 rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-900 px-4 py-3">
+                  <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Margem disponível (Líquida Facult. Global)</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 leading-tight">
+                      {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
+                        style: "currency", currency: "BRL",
+                      })}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* ── Cartão com Saque: exibe margem de cartão ── */}
-              {contractType === "CARTAO" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {extratoData.margemLiquidaCartao !== null && (
-                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Cartão</p>
-                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
-                        {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
-                          style: "currency", currency: "BRL",
-                        })}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Limite de saque consignado</p>
-                    </div>
-                  )}
-                  {extratoData.margemLiquidaCartaoBeneficio !== null && (
-                    <div className="rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-800 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Margem Líquida Cartão Benefício</p>
-                      <p className="text-lg font-semibold">
-                        {extratoData.margemLiquidaCartaoBeneficio.toLocaleString("pt-BR", {
-                          style: "currency", currency: "BRL",
-                        })}
-                      </p>
-                    </div>
-                  )}
+              {/* ── Cartão com Saque: margem de cartão (1 linha) ── */}
+              {contractType === "CARTAO" && extratoData.margemLiquidaCartao !== null && (
+                <div className="flex items-center gap-3 rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-900 px-4 py-3">
+                  <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Margem disponível (Cartão)</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 leading-tight">
+                      {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
+                        style: "currency", currency: "BRL",
+                      })}
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -1608,7 +1580,8 @@ export default function ContratosPropostaPage() {
       )}
 
       {/* ── Campos específicos por tipo ── */}
-      {contractType && (
+      {/* Campos só aparecem se: não for NOVO+SIAPE OU extrato já foi carregado */}
+      {contractType && (selectedConvenio?.id !== "SIAPE" || contractType !== "NOVO" || extratoData !== null) && (
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
@@ -1672,7 +1645,7 @@ export default function ContratosPropostaPage() {
                   />
                 )}
 
-                {/* ── Banco destino / credor (todos exceto portabilidade sem banco) ── */}
+                {/* ── Banco credor / destino / emissor ── */}
                 <FormField
                   control={form.control}
                   name="bank"
@@ -1690,7 +1663,11 @@ export default function ContratosPropostaPage() {
                           value={field.value}
                           onValueChange={(v) => {
                             if (v === "_outro_") { setBankMode("text"); field.onChange(""); }
-                            else field.onChange(v);
+                            else {
+                              field.onChange(v);
+                              // Limpa tabela ao trocar banco
+                              if (contractType === "NOVO") form.setValue("tableId", "");
+                            }
                           }}
                         >
                           <FormControl>
@@ -1718,26 +1695,77 @@ export default function ContratosPropostaPage() {
                   )}
                 />
 
-                {/* ── Tabela (não aparece em cartão) ── */}
+                {/* ── Tabela (filtrada por banco para NOVO; oculta em cartão) ── */}
                 {contractType !== "CARTAO" && (
                   <FormField
                     control={form.control}
                     name="tableId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tabela</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <FormLabel>
+                          Tabela
+                          {contractType === "NOVO" && !watchedBank && (
+                            <span className="text-xs font-normal text-muted-foreground ml-1">(selecione o banco primeiro)</span>
+                          )}
+                        </FormLabel>
+                        <Select
+                          value={field.value}
+                          disabled={contractType === "NOVO" && !watchedBank}
+                          onValueChange={(v) => {
+                            field.onChange(v);
+                            // Auto-preenche prazo da tabela selecionada
+                            if (contractType === "NOVO") {
+                              const tbl = filteredTables.find((t: any) => String(t.id) === v);
+                              if (tbl?.termMonths) form.setValue("term", String(tbl.termMonths));
+                            }
+                          }}
+                        >
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                            <SelectTrigger>
+                              <SelectValue placeholder={
+                                contractType === "NOVO" && watchedBank && filteredTables.length === 0
+                                  ? "Nenhuma tabela para este banco"
+                                  : "Selecione..."
+                              } />
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {tables.map((t: any) => (
+                            {filteredTables.map((t: any) => (
                               <SelectItem key={t.id} value={String(t.id)}>
                                 {t.tableName || t.name || `Tabela ${t.id}`}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Prazo: auto-preenchido pela tabela no NOVO; editável nos demais ── */}
+                {contractType === "NOVO" ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Prazo</label>
+                    <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm">
+                      {form.watch("term")
+                        ? `${form.watch("term")} meses`
+                        : <span className="text-muted-foreground">preenchido ao selecionar a tabela</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="term"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
+                            ? "Novo Prazo (meses)"
+                            : "Prazo (meses)"}
+                        </FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" placeholder="Ex: 60" min={1} />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -1771,20 +1799,14 @@ export default function ContratosPropostaPage() {
                         {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                           ? "Nova Parcela (R$)"
                           : "Valor da Parcela (R$)"}
-                        {/* Hint de margem para Contrato Novo */}
                         {contractType === "NOVO" && extratoData?.margemLiquidaFacultativaGlobal != null && (
                           <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                            máx. {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
-                              style: "currency", currency: "BRL",
-                            })}
+                            máx. {fmtBRL(extratoData.margemLiquidaFacultativaGlobal)}
                           </span>
                         )}
-                        {/* Hint de margem para Cartão */}
                         {contractType === "CARTAO" && extratoData?.margemLiquidaCartao != null && (
                           <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                            máx. {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
-                              style: "currency", currency: "BRL",
-                            })}
+                            máx. {fmtBRL(extratoData.margemLiquidaCartao)}
                           </span>
                         )}
                       </FormLabel>
@@ -1795,37 +1817,21 @@ export default function ContratosPropostaPage() {
                   )}
                 />
 
-                {/* ── Prazo novo ── */}
-                <FormField
-                  control={form.control}
-                  name="term"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
-                          ? "Novo Prazo (meses)"
-                          : "Prazo (meses)"}
-                      </FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" placeholder="Ex: 60" min={1} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                {/* ── ADE ── */}
-                <FormField
-                  control={form.control}
-                  name="ade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ADE / Nº Protocolo</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Número do banco (opcional)" />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                {/* ── ADE — somente para operações que precisam (não no Contrato Novo) ── */}
+                {contractType !== "NOVO" && (
+                  <FormField
+                    control={form.control}
+                    name="ade"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ADE / Nº Protocolo</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Número do banco (opcional)" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
               </CardContent>
             </Card>
 
