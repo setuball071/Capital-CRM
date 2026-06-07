@@ -282,57 +282,63 @@ export async function parseExtratoConsignacao(
     }
 
     // ── 2. Cabeçalho da tabela de margens ────────────────────────────────
-    // Estratégia A: linha de header com "Bruta Compulsória" → lê próxima linha
-    // com todos os valores em sequência (8 colunas numa só linha).
-    // Estratégia B (fallback): cabeçalho e valores em linhas separadas por coluna.
+    // Detecta a linha de header ("Bruta Compulsória Líquida Comp. Bruta Facult…")
+    // e extrai os valores das células usando posição X dos itens — isso resolve
+    // PDFs onde os valores de colunas diferentes ficam em linhas (Y) distintas.
     if (
       !result.margemBrutaCompulsoria &&
       (u.includes("BRUTA COMPULSORIA") || (u.includes("BRUTA") && u.includes("COMPULSORIA")))
     ) {
-      // Varre as próximas até 4 linhas acumulando todos os BRL encontrados
-      const accVals: number[] = [];
-      for (let k = 1; k <= 4 && i + k < lines.length; k++) {
-        const kVals = extractAllBRL(lines[i + k].text);
-        accVals.push(...kVals);
-        if (accVals.length >= 8) break;
+      // Coleta itens com valores BRL das próximas 5 linhas,
+      // preservando a posição X de cada item para ordenar por coluna.
+      interface ValItem { val: number; x: number }
+      const valItems: ValItem[] = [];
+
+      for (let k = 1; k <= 5 && i + k < lines.length; k++) {
+        const kLine = lines[i + k];
+        const ku = norm(kLine.text);
+        // Para se encontrar nova seção
+        if (ku.startsWith("DEMONSTRATIVO") || ku.startsWith("NUMERO DO CONTRATO")) break;
+
+        for (const item of kLine.items) {
+          // Tenta extrair valor BRL do item (com ou sem prefixo R$)
+          const v = firstBRL(item.text);
+          if (v !== null) {
+            valItems.push({ val: v, x: item.x });
+          } else {
+            // Item pode ser só o número sem "R$" (ex: "4.514,91")
+            const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
+            if (numM) {
+              const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
+              if (!isNaN(n) && n > 0) valItems.push({ val: n, x: item.x });
+            }
+          }
+        }
       }
-      // Fallback: valores na própria linha do header
-      if (accVals.length === 0) accVals.push(...extractAllBRL(t));
 
-      // Ordem das 8 colunas: BrutaComp, LiqComp, BrutaFacGlobal, LiqFacGlobal,
-      //                       BrutaCartao, LiqCartao, BrutaBen, LiqBen
-      if (accVals[0] !== undefined) result.margemBrutaCompulsoria        = accVals[0];
-      if (accVals[1] !== undefined) result.margemLiquidaCompulsoria       = accVals[1];
-      if (accVals[2] !== undefined) result.margemBrutaFacultativaGlobal   = accVals[2];
-      if (accVals[3] !== undefined) result.margemLiquidaFacultativaGlobal = accVals[3];
-      if (accVals[4] !== undefined) result.margemBrutaCartao              = accVals[4];
-      if (accVals[5] !== undefined) result.margemLiquidaCartao            = accVals[5];
-      if (accVals[6] !== undefined) result.margemBrutaCartaoBeneficio     = accVals[6];
-      if (accVals[7] !== undefined) result.margemLiquidaCartaoBeneficio   = accVals[7];
+      // Ordena por X (esquerda → direita = ordem das colunas na tabela)
+      valItems.sort((a, b) => a.x - b.x);
+
+      // Deduplica: para cada região de X (±20px) mantém apenas o primeiro valor
+      // (mais próximo do header = linha de margem disponível, não utilizada)
+      const deduped: ValItem[] = [];
+      for (const vi of valItems) {
+        const last = deduped[deduped.length - 1];
+        if (!last || Math.abs(vi.x - last.x) > 20) deduped.push(vi);
+      }
+
+      // Mapeamento posicional: colunas 0–7 em ordem da esquerda
+      // 0: Bruta Comp · 1: Líq Comp · 2: Bruta Facult G · 3: Líq Facult G
+      // 4: Bruta Cartão · 5: Líq Cartão · 6: Bruta Cartão Ben · 7: Líq Cartão Ben
+      if (deduped[0]) result.margemBrutaCompulsoria        = deduped[0].val;
+      if (deduped[1]) result.margemLiquidaCompulsoria       = deduped[1].val;
+      if (deduped[2]) result.margemBrutaFacultativaGlobal   = deduped[2].val;
+      if (deduped[3]) result.margemLiquidaFacultativaGlobal = deduped[3].val;
+      if (deduped[4]) result.margemBrutaCartao              = deduped[4].val;
+      if (deduped[5]) result.margemLiquidaCartao            = deduped[5].val;
+      if (deduped[6]) result.margemBrutaCartaoBeneficio     = deduped[6].val;
+      if (deduped[7]) result.margemLiquidaCartaoBeneficio   = deduped[7].val;
       continue;
-    }
-
-    // ── 2b. Detecção direta por rótulo de coluna ──────────────────────────
-    // Alguns PDFs têm o cabeçalho de cada coluna em linhas independentes,
-    // com o valor logo abaixo. Capturamos cada campo individualmente.
-    if (u.includes("LIQUIDA FACULT") || (u.includes("LIQ") && u.includes("FACULT") && u.includes("GLOBAL"))) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null && result.margemLiquidaFacultativaGlobal === null)
-        result.margemLiquidaFacultativaGlobal = v;
-    }
-    if (u.includes("BRUTA FACULT") || (u.includes("BRUTA") && u.includes("FACULT") && u.includes("GLOBAL"))) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null && result.margemBrutaFacultativaGlobal === null)
-        result.margemBrutaFacultativaGlobal = v;
-    }
-    if ((u.includes("LIQUIDA COMPULSORIA") || u.includes("LIQ COMPULSORIA")) && !u.includes("FACULT")) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null && result.margemLiquidaCompulsoria === null)
-        result.margemLiquidaCompulsoria = v;
-    }
-    if (u.includes("BRUTA COMPULSORIA") && !u.includes("FACULT") && result.margemBrutaCompulsoria === null) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null) result.margemBrutaCompulsoria = v;
     }
 
     // ── 3. Valores "Utilizada" ────────────────────────────────────────────
@@ -410,16 +416,18 @@ export async function parseExtratoConsignacao(
   }
 
   // ── Pós-loop: varredura de segurança para Líquida Facult. Global ────────────
-  // Se ainda não foi encontrada pela varredura linha-a-linha, percorre todo o
-  // texto procurando o rótulo "(*)" que identifica especificamente esse campo.
+  // Só entra se a estratégia principal falhou (valor ainda null).
+  // Procura linhas que contenham SOMENTE o rótulo da coluna líquida
+  // (sem "Bruta" — para não confundir com o header completo da tabela
+  //  que tem Bruta e Líquida juntos e levaria ao valor errado).
   if (result.margemLiquidaFacultativaGlobal === null) {
     for (let i = 0; i < lines.length; i++) {
       const u2 = norm(lines[i].text);
-      // Rótulo: "Líquida Facult. Global (*)" — o (*) é marcador único
       if (
         u2.includes("FACULT") &&
         u2.includes("GLOBAL") &&
-        (lines[i].text.includes("(*)") || u2.includes("LIQUIDA"))
+        u2.includes("LIQUIDA") &&
+        !u2.includes("BRUTA")   // exclui header completo e rótulo de Bruta Facult.
       ) {
         const v = firstBRL(lines[i].text)
           ?? firstBRL(lines[i + 1]?.text ?? "")
