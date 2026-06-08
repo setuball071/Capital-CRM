@@ -227,100 +227,75 @@ function parseContractLine(
   };
 }
 
-// ─── Extração de margens via posição X/Y (independente de cabeçalho) ──────────
+// ─── Extração de margens via cabeçalho da tabela ─────────────────────────────
 //
-// Estratégia robusta que NÃO depende do texto do cabeçalho da tabela.
-// Coleta todos os itens BRL do documento antes da primeira seção DEMONSTRATIVO,
-// agrupa por faixa de Y (±8px = mesma linha visual), e assume que a primeira
-// faixa com 4+ valores é a linha de margens disponíveis.
-// Ordena por X para mapear colunas (esquerda → direita):
+// Localiza a linha de cabeçalho "Bruta Compulsória ... Facult. Global ..."
+// e lê os valores numéricos das linhas imediatamente seguintes.
+// Mapeamento de colunas (esquerda → direita):
 //   col 0: Bruta Comp  · col 1: Líq Comp
-//   col 2: Bruta Facult Global · col 3: Líq Facult Global  ← KEY
+//   col 2: Bruta Facult Global · col 3: Líq Facult Global  ← KEY (244,52)
 //   col 4: Bruta Cartão · col 5: Líq Cartão
 //   col 6: Bruta Cartão Ben · col 7: Líq Cartão Ben
 
-interface RawValItem { val: number; x: number; y: number }
-
 function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoParsed> {
-  // Limita a varredura ao que precede o primeiro DEMONSTRATIVO
-  const demoIdx = lines.findIndex((l) =>
-    norm(l.text).startsWith("DEMONSTRATIVO") && norm(l.text).includes("MARGEM")
+  // Encontra o cabeçalho da tabela de margens:
+  // "Bruta Compulsória  Líquida Comp.  Bruta Facult. Global (*)  Líquida Facult. Global (*) ..."
+  const headerIdx = lines.findIndex((l) => {
+    const u = norm(l.text);
+    return u.includes("COMPULSORIA") && (u.includes("FACULT") || u.includes("GLOBAL"));
+  });
+
+  console.log(
+    "[extrato] headerIdx:", headerIdx,
+    headerIdx >= 0 ? `| "${lines[headerIdx].text.substring(0, 80)}"` : "NAO ENCONTRADO"
   );
-  console.log("[extrato] total lines:", lines.length, "| demoIdx:", demoIdx);
-  if (demoIdx >= 0) {
-    console.log("[extrato] DEMONSTRATIVO line text:", lines[demoIdx].text);
-  } else {
-    console.log("[extrato] DEMONSTRATIVO NAO ENCONTRADO — varredura em todo documento");
-  }
 
-  const scanLines = demoIdx === -1 ? lines : lines.slice(0, demoIdx);
+  if (headerIdx === -1) return {};
 
-  // Coleta todos os itens com valor BRL (com ou sem prefixo "R$")
-  const brlItems: RawValItem[] = [];
-  for (const line of scanLines) {
+  // Coleta valores de cada linha após o cabeçalho até achar ≥4 valores BRL
+  for (let i = headerIdx + 1; i <= Math.min(headerIdx + 5, lines.length - 1); i++) {
+    const line = lines[i];
+    const values: number[] = [];
+
     for (const item of line.items) {
+      // "R$4.514,91" ou "R$ 4.514,91"
       const v = firstBRL(item.text);
-      if (v !== null) {
-        brlItems.push({ val: v, x: item.x, y: item.y });
-      } else {
-        const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
-        if (numM) {
-          const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
-          if (!isNaN(n) && n > 0) brlItems.push({ val: n, x: item.x, y: item.y });
-        }
+      if (v !== null) { values.push(v); continue; }
+      // número puro "4.514,91" (item separado do prefixo "R$")
+      const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
+      if (numM) {
+        const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(n) && n > 0) values.push(n);
       }
     }
-  }
 
-  console.log("[extrato] brlItems coletados:", brlItems.map(i => `val=${i.val} x=${i.x.toFixed(0)} y=${i.y}`));
+    console.log(
+      `[extrato] linha ${i}: "${line.text.substring(0, 80)}" | valores:`,
+      values
+    );
 
-  // Agrupa itens por faixa de Y (±8px) — acumula vizinhos próximos
-  const yBands: { repY: number; items: RawValItem[] }[] = [];
-  for (const vi of brlItems) {
-    const band = yBands.find((b) => Math.abs(b.repY - vi.y) <= 8);
-    if (band) {
-      band.items.push(vi);
-    } else {
-      yBands.push({ repY: vi.y, items: [vi] });
+    if (values.length >= 4) {
+      console.log(
+        "[extrato] => MARGENS col0:", values[0],
+        "col1:", values[1],
+        "col2:", values[2],
+        "col3 (LiqFacultGlobal):", values[3]
+      );
+      return {
+        margemBrutaCompulsoria:        values[0] ?? null,
+        margemLiquidaCompulsoria:       values[1] ?? null,
+        margemBrutaFacultativaGlobal:   values[2] ?? null,
+        margemLiquidaFacultativaGlobal: values[3] ?? null,
+        margemBrutaCartao:              values[4] ?? null,
+        margemLiquidaCartao:            values[5] ?? null,
+        margemBrutaCartaoBeneficio:     values[6] ?? null,
+        margemLiquidaCartaoBeneficio:   values[7] ?? null,
+      };
     }
   }
 
-  // Ordena faixas por Y decrescente (topo da página = maior Y em PDF coords)
-  yBands.sort((a, b) => b.repY - a.repY);
-  console.log("[extrato] yBands (desc):", yBands.map(b => `repY=${b.repY} items=${b.items.length} vals=[${b.items.map(i=>i.val).join(",")}]`));
-
-  // A PRIMEIRA faixa com 4+ valores BRL é a linha de margens disponíveis
-  const marginBand = yBands.find((b) => b.items.length >= 4);
-  if (!marginBand) {
-    console.log("[extrato] NENHUMA FAIXA COM 4+ ITENS — retornando vazio");
-    return {};
-  }
-  console.log("[extrato] marginBand escolhida: repY=", marginBand.repY, "items=", marginBand.items.length);
-
-  // Ordena itens da faixa por X (esquerda → direita = ordem das colunas)
-  marginBand.items.sort((a, b) => a.x - b.x);
-
-  // Deduplica por X (±20px): valores muito próximos em X são da mesma coluna,
-  // mantemos apenas o primeiro (= linha de disponível, não o "Utilizada" abaixo)
-  const deduped: RawValItem[] = [];
-  for (const vi of marginBand.items) {
-    const last = deduped[deduped.length - 1];
-    if (!last || Math.abs(vi.x - last.x) > 20) deduped.push(vi);
-  }
-
-  console.log("[extrato] deduped:", deduped.map((d,i) => `[${i}] val=${d.val} x=${d.x.toFixed(0)}`));
-  console.log("[extrato] => margemLiquidaFacultativaGlobal (col3):", deduped[3]?.val ?? null);
-
-  return {
-    margemBrutaCompulsoria:         deduped[0]?.val ?? null,
-    margemLiquidaCompulsoria:        deduped[1]?.val ?? null,
-    margemBrutaFacultativaGlobal:    deduped[2]?.val ?? null,
-    margemLiquidaFacultativaGlobal:  deduped[3]?.val ?? null,
-    margemBrutaCartao:               deduped[4]?.val ?? null,
-    margemLiquidaCartao:             deduped[5]?.val ?? null,
-    margemBrutaCartaoBeneficio:      deduped[6]?.val ?? null,
-    margemLiquidaCartaoBeneficio:    deduped[7]?.val ?? null,
-  };
+  console.log("[extrato] nenhuma linha com ≥4 valores encontrada após o cabeçalho");
+  return {};
 }
 
 // ─── Parser principal ─────────────────────────────────────────────────────────
