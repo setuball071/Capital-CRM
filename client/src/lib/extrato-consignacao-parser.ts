@@ -227,6 +227,85 @@ function parseContractLine(
   };
 }
 
+// ─── Extração de margens via posição X/Y (independente de cabeçalho) ──────────
+//
+// Estratégia robusta que NÃO depende do texto do cabeçalho da tabela.
+// Coleta todos os itens BRL do documento antes da primeira seção DEMONSTRATIVO,
+// agrupa por faixa de Y (±8px = mesma linha visual), e assume que a primeira
+// faixa com 4+ valores é a linha de margens disponíveis.
+// Ordena por X para mapear colunas (esquerda → direita):
+//   col 0: Bruta Comp  · col 1: Líq Comp
+//   col 2: Bruta Facult Global · col 3: Líq Facult Global  ← KEY
+//   col 4: Bruta Cartão · col 5: Líq Cartão
+//   col 6: Bruta Cartão Ben · col 7: Líq Cartão Ben
+
+interface RawValItem { val: number; x: number; y: number }
+
+function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoParsed> {
+  // Limita a varredura ao que precede o primeiro DEMONSTRATIVO
+  const demoIdx = lines.findIndex((l) =>
+    norm(l.text).startsWith("DEMONSTRATIVO") && norm(l.text).includes("MARGEM")
+  );
+  const scanLines = demoIdx === -1 ? lines : lines.slice(0, demoIdx);
+
+  // Coleta todos os itens com valor BRL (com ou sem prefixo "R$")
+  const brlItems: RawValItem[] = [];
+  for (const line of scanLines) {
+    for (const item of line.items) {
+      const v = firstBRL(item.text);
+      if (v !== null) {
+        brlItems.push({ val: v, x: item.x, y: item.y });
+      } else {
+        const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
+        if (numM) {
+          const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
+          if (!isNaN(n) && n > 0) brlItems.push({ val: n, x: item.x, y: item.y });
+        }
+      }
+    }
+  }
+
+  // Agrupa itens por faixa de Y (±8px) — acumula vizinhos próximos
+  const yBands: { repY: number; items: RawValItem[] }[] = [];
+  for (const vi of brlItems) {
+    const band = yBands.find((b) => Math.abs(b.repY - vi.y) <= 8);
+    if (band) {
+      band.items.push(vi);
+    } else {
+      yBands.push({ repY: vi.y, items: [vi] });
+    }
+  }
+
+  // Ordena faixas por Y decrescente (topo da página = maior Y em PDF coords)
+  yBands.sort((a, b) => b.repY - a.repY);
+
+  // A PRIMEIRA faixa com 4+ valores BRL é a linha de margens disponíveis
+  const marginBand = yBands.find((b) => b.items.length >= 4);
+  if (!marginBand) return {};
+
+  // Ordena itens da faixa por X (esquerda → direita = ordem das colunas)
+  marginBand.items.sort((a, b) => a.x - b.x);
+
+  // Deduplica por X (±20px): valores muito próximos em X são da mesma coluna,
+  // mantemos apenas o primeiro (= linha de disponível, não o "Utilizada" abaixo)
+  const deduped: RawValItem[] = [];
+  for (const vi of marginBand.items) {
+    const last = deduped[deduped.length - 1];
+    if (!last || Math.abs(vi.x - last.x) > 20) deduped.push(vi);
+  }
+
+  return {
+    margemBrutaCompulsoria:         deduped[0]?.val ?? null,
+    margemLiquidaCompulsoria:        deduped[1]?.val ?? null,
+    margemBrutaFacultativaGlobal:    deduped[2]?.val ?? null,
+    margemLiquidaFacultativaGlobal:  deduped[3]?.val ?? null,
+    margemBrutaCartao:               deduped[4]?.val ?? null,
+    margemLiquidaCartao:             deduped[5]?.val ?? null,
+    margemBrutaCartaoBeneficio:      deduped[6]?.val ?? null,
+    margemLiquidaCartaoBeneficio:    deduped[7]?.val ?? null,
+  };
+}
+
 // ─── Parser principal ─────────────────────────────────────────────────────────
 
 export async function parseExtratoConsignacao(
@@ -250,6 +329,10 @@ export async function parseExtratoConsignacao(
     margemUtilizadaCartaoBeneficio: null,
     contratos: [],
   };
+
+  // ── Extração de margens via posição X/Y (antes do loop principal) ─────────
+  const margens = extractMargensFromItems(lines);
+  Object.assign(result, margens);
 
   // Controla em qual seção de demonstrativo estamos
   let currentSection: ExtratoContrato["tipoContrato"] = "EMPRESTIMO";
@@ -278,66 +361,6 @@ export async function parseExtratoConsignacao(
           result.nome      = matM[2].trim();
         }
       }
-      continue;
-    }
-
-    // ── 2. Cabeçalho da tabela de margens ────────────────────────────────
-    // Detecta a linha de header ("Bruta Compulsória Líquida Comp. Bruta Facult…")
-    // e extrai os valores das células usando posição X dos itens — isso resolve
-    // PDFs onde os valores de colunas diferentes ficam em linhas (Y) distintas.
-    if (
-      !result.margemBrutaCompulsoria &&
-      (u.includes("BRUTA COMPULSORIA") || (u.includes("BRUTA") && u.includes("COMPULSORIA")))
-    ) {
-      // Coleta itens com valores BRL das próximas 5 linhas,
-      // preservando a posição X de cada item para ordenar por coluna.
-      interface ValItem { val: number; x: number }
-      const valItems: ValItem[] = [];
-
-      for (let k = 1; k <= 5 && i + k < lines.length; k++) {
-        const kLine = lines[i + k];
-        const ku = norm(kLine.text);
-        // Para se encontrar nova seção
-        if (ku.startsWith("DEMONSTRATIVO") || ku.startsWith("NUMERO DO CONTRATO")) break;
-
-        for (const item of kLine.items) {
-          // Tenta extrair valor BRL do item (com ou sem prefixo R$)
-          const v = firstBRL(item.text);
-          if (v !== null) {
-            valItems.push({ val: v, x: item.x });
-          } else {
-            // Item pode ser só o número sem "R$" (ex: "4.514,91")
-            const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
-            if (numM) {
-              const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
-              if (!isNaN(n) && n > 0) valItems.push({ val: n, x: item.x });
-            }
-          }
-        }
-      }
-
-      // Ordena por X (esquerda → direita = ordem das colunas na tabela)
-      valItems.sort((a, b) => a.x - b.x);
-
-      // Deduplica: para cada região de X (±20px) mantém apenas o primeiro valor
-      // (mais próximo do header = linha de margem disponível, não utilizada)
-      const deduped: ValItem[] = [];
-      for (const vi of valItems) {
-        const last = deduped[deduped.length - 1];
-        if (!last || Math.abs(vi.x - last.x) > 20) deduped.push(vi);
-      }
-
-      // Mapeamento posicional: colunas 0–7 em ordem da esquerda
-      // 0: Bruta Comp · 1: Líq Comp · 2: Bruta Facult G · 3: Líq Facult G
-      // 4: Bruta Cartão · 5: Líq Cartão · 6: Bruta Cartão Ben · 7: Líq Cartão Ben
-      if (deduped[0]) result.margemBrutaCompulsoria        = deduped[0].val;
-      if (deduped[1]) result.margemLiquidaCompulsoria       = deduped[1].val;
-      if (deduped[2]) result.margemBrutaFacultativaGlobal   = deduped[2].val;
-      if (deduped[3]) result.margemLiquidaFacultativaGlobal = deduped[3].val;
-      if (deduped[4]) result.margemBrutaCartao              = deduped[4].val;
-      if (deduped[5]) result.margemLiquidaCartao            = deduped[5].val;
-      if (deduped[6]) result.margemBrutaCartaoBeneficio     = deduped[6].val;
-      if (deduped[7]) result.margemLiquidaCartaoBeneficio   = deduped[7].val;
       continue;
     }
 
@@ -412,31 +435,6 @@ export async function parseExtratoConsignacao(
     if (u.includes("EMITIDO EM")) {
       const dateM = t.match(/(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}:\d{2}/);
       if (dateM) result.emitidoEm = dateM[1];
-    }
-  }
-
-  // ── Pós-loop: varredura de segurança para Líquida Facult. Global ────────────
-  // Só entra se a estratégia principal falhou (valor ainda null).
-  // Procura linhas que contenham SOMENTE o rótulo da coluna líquida
-  // (sem "Bruta" — para não confundir com o header completo da tabela
-  //  que tem Bruta e Líquida juntos e levaria ao valor errado).
-  if (result.margemLiquidaFacultativaGlobal === null) {
-    for (let i = 0; i < lines.length; i++) {
-      const u2 = norm(lines[i].text);
-      if (
-        u2.includes("FACULT") &&
-        u2.includes("GLOBAL") &&
-        u2.includes("LIQUIDA") &&
-        !u2.includes("BRUTA")   // exclui header completo e rótulo de Bruta Facult.
-      ) {
-        const v = firstBRL(lines[i].text)
-          ?? firstBRL(lines[i + 1]?.text ?? "")
-          ?? firstBRL(lines[i + 2]?.text ?? "");
-        if (v !== null) {
-          result.margemLiquidaFacultativaGlobal = v;
-          break;
-        }
-      }
     }
   }
 
