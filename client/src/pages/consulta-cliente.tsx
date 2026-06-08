@@ -280,6 +280,32 @@ function safeSaldo(
   return saldo ?? null;
 }
 
+/**
+ * Saldo de margem 5% (Cartão Crédito ou Cartão Benefício) limitado pela margem global (35%).
+ * Regra: o saldo disponível de cartão 5% nunca pode ser maior que o saldo disponível
+ * da margem global, pois consome do mesmo espaço.
+ * Ex: se mg5 = R$ 226,03 e mgGlobal = R$ 220,69, o teto efetivo do cartão é R$ 220,69.
+ * Retorna { saldo, limitadoPorGlobal: true } quando o limite global foi aplicado,
+ * para que a UI possa indicar visualmente o porquê.
+ */
+function saldoCartao5Limitado(
+  saldo5: number | null | undefined,
+  bruta5: number | null | undefined,
+  utilizada5: number | null | undefined,
+  saldo35: number | null | undefined,
+  bruta35: number | null | undefined,
+  utilizada35: number | null | undefined,
+): { saldo: number | null; limitadoPorGlobal: boolean; saldoOriginal: number | null } {
+  const saldo5Calc = safeSaldo(saldo5, bruta5, utilizada5);
+  const saldo35Calc = safeSaldo(saldo35, bruta35, utilizada35);
+  if (saldo5Calc == null) return { saldo: null, limitadoPorGlobal: false, saldoOriginal: null };
+  if (saldo35Calc == null) return { saldo: saldo5Calc, limitadoPorGlobal: false, saldoOriginal: saldo5Calc };
+  if (saldo5Calc > saldo35Calc) {
+    return { saldo: saldo35Calc, limitadoPorGlobal: true, saldoOriginal: saldo5Calc };
+  }
+  return { saldo: saldo5Calc, limitadoPorGlobal: false, saldoOriginal: saldo5Calc };
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
   try {
@@ -1358,51 +1384,77 @@ export default function ConsultaCliente() {
                           </CardContent>
                         </Card>
 
-                        {/* Margem 5% — Cartão Crédito */}
-                        <Card className="bg-muted/50" data-testid="card-margem-5">
-                          <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Margem 5%</p>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_bruta_5)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_utilizada_5)}</span>
-                              </div>
-                              <div className="flex justify-between font-medium">
-                                <span>Saldo:</span>
-                                <span className={(safeSaldo(folhaAtual.margem_saldo_5, folhaAtual.margem_bruta_5, folhaAtual.margem_utilizada_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(safeSaldo(folhaAtual.margem_saldo_5, folhaAtual.margem_bruta_5, folhaAtual.margem_utilizada_5))}
-                                </span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        {/* Margem 5% — Cartão Crédito (limitada pela margem global) */}
+                        {(() => {
+                          const r = saldoCartao5Limitado(
+                            folhaAtual.margem_saldo_5, folhaAtual.margem_bruta_5, folhaAtual.margem_utilizada_5,
+                            folhaAtual.margem_saldo_35, folhaAtual.margem_bruta_35, folhaAtual.margem_utilizada_35,
+                          );
+                          return (
+                            <Card className="bg-muted/50" data-testid="card-margem-5">
+                              <CardContent className="p-4">
+                                <p className="text-sm font-medium mb-2">Margem 5%</p>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruta:</span>
+                                    <span>{formatCurrency(folhaAtual.margem_bruta_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Utilizada:</span>
+                                    <span>{formatCurrency(folhaAtual.margem_utilizada_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span>Saldo:</span>
+                                    <span className={(r.saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(r.saldo)}
+                                    </span>
+                                  </div>
+                                  {r.limitadoPorGlobal && (
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1" title={`Saldo bruto do cartão seria ${formatCurrency(r.saldoOriginal)}, mas está limitado pela margem global.`}>
+                                      ⚠ Limitado pela margem global
+                                    </p>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })()}
 
-                        {/* Margem 5% — Cartão Benefício */}
-                        <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
-                          <CardContent className="p-4">
-                            <p className="text-sm font-medium mb-2">Benefício 5%</p>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Bruta:</span>
-                                <span>{formatCurrency(folhaAtual.margem_beneficio_bruta_5)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Utilizada:</span>
-                                <span>{formatCurrency(folhaAtual.margem_beneficio_utilizada_5)}</span>
-                              </div>
-                              <div className="flex justify-between font-medium">
-                                <span>Saldo:</span>
-                                <span className={(safeSaldo(folhaAtual.margem_beneficio_saldo_5, folhaAtual.margem_beneficio_bruta_5, folhaAtual.margem_beneficio_utilizada_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {formatCurrency(safeSaldo(folhaAtual.margem_beneficio_saldo_5, folhaAtual.margem_beneficio_bruta_5, folhaAtual.margem_beneficio_utilizada_5))}
-                                </span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        {/* Margem 5% — Cartão Benefício (limitada pela margem global) */}
+                        {(() => {
+                          const r = saldoCartao5Limitado(
+                            folhaAtual.margem_beneficio_saldo_5, folhaAtual.margem_beneficio_bruta_5, folhaAtual.margem_beneficio_utilizada_5,
+                            folhaAtual.margem_saldo_35, folhaAtual.margem_bruta_35, folhaAtual.margem_utilizada_35,
+                          );
+                          return (
+                            <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
+                              <CardContent className="p-4">
+                                <p className="text-sm font-medium mb-2">Benefício 5%</p>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Bruta:</span>
+                                    <span>{formatCurrency(folhaAtual.margem_beneficio_bruta_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Utilizada:</span>
+                                    <span>{formatCurrency(folhaAtual.margem_beneficio_utilizada_5)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span>Saldo:</span>
+                                    <span className={(r.saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                      {formatCurrency(r.saldo)}
+                                    </span>
+                                  </div>
+                                  {r.limitadoPorGlobal && (
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1" title={`Saldo bruto do cartão seria ${formatCurrency(r.saldoOriginal)}, mas está limitado pela margem global.`}>
+                                      ⚠ Limitado pela margem global
+                                    </p>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })()}
                       </div>
 
 
@@ -2032,45 +2084,67 @@ export default function ConsultaCliente() {
                         </div>
                       </div>
 
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Margem 5%</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Bruta:</span>
-                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_bruta_5)}</span>
+                      {(() => {
+                        const r = saldoCartao5Limitado(
+                          selectedHistoricoCompetencia.margem_saldo_5, selectedHistoricoCompetencia.margem_bruta_5, selectedHistoricoCompetencia.margem_utilizada_5,
+                          selectedHistoricoCompetencia.margem_saldo_35, selectedHistoricoCompetencia.margem_bruta_35, selectedHistoricoCompetencia.margem_utilizada_35,
+                        );
+                        return (
+                          <div className="p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Margem 5%</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bruta:</span>
+                                <span>{formatCurrency(selectedHistoricoCompetencia.margem_bruta_5)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Utilizada:</span>
+                                <span>{formatCurrency(selectedHistoricoCompetencia.margem_utilizada_5)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Saldo:</span>
+                                <span className={(r.saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(r.saldo)}
+                                </span>
+                              </div>
+                              {r.limitadoPorGlobal && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">⚠ Limitado pela margem global</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Utilizada:</span>
-                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_utilizada_5)}</span>
-                          </div>
-                          <div className="flex justify-between font-medium">
-                            <span>Saldo:</span>
-                            <span className={(safeSaldo(selectedHistoricoCompetencia.margem_saldo_5, selectedHistoricoCompetencia.margem_bruta_5, selectedHistoricoCompetencia.margem_utilizada_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(safeSaldo(selectedHistoricoCompetencia.margem_saldo_5, selectedHistoricoCompetencia.margem_bruta_5, selectedHistoricoCompetencia.margem_utilizada_5))}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Benefício 5%</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Bruta:</span>
-                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_bruta_5)}</span>
+                      {(() => {
+                        const r = saldoCartao5Limitado(
+                          selectedHistoricoCompetencia.margem_beneficio_saldo_5, selectedHistoricoCompetencia.margem_beneficio_bruta_5, selectedHistoricoCompetencia.margem_beneficio_utilizada_5,
+                          selectedHistoricoCompetencia.margem_saldo_35, selectedHistoricoCompetencia.margem_bruta_35, selectedHistoricoCompetencia.margem_utilizada_35,
+                        );
+                        return (
+                          <div className="p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Benefício 5%</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bruta:</span>
+                                <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_bruta_5)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Utilizada:</span>
+                                <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_utilizada_5)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Saldo:</span>
+                                <span className={(r.saldo ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {formatCurrency(r.saldo)}
+                                </span>
+                              </div>
+                              {r.limitadoPorGlobal && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">⚠ Limitado pela margem global</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Utilizada:</span>
-                            <span>{formatCurrency(selectedHistoricoCompetencia.margem_beneficio_utilizada_5)}</span>
-                          </div>
-                          <div className="flex justify-between font-medium">
-                            <span>Saldo:</span>
-                            <span className={(safeSaldo(selectedHistoricoCompetencia.margem_beneficio_saldo_5, selectedHistoricoCompetencia.margem_beneficio_bruta_5, selectedHistoricoCompetencia.margem_beneficio_utilizada_5) ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                              {formatCurrency(safeSaldo(selectedHistoricoCompetencia.margem_beneficio_saldo_5, selectedHistoricoCompetencia.margem_beneficio_bruta_5, selectedHistoricoCompetencia.margem_beneficio_utilizada_5))}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
                     </div>
                     
                     <Separator />
