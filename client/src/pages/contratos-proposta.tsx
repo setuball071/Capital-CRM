@@ -23,10 +23,6 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
-import {
-  parseExtratoConsignacao,
-  type ExtratoConsignacaoParsed,
-} from "@/lib/extrato-consignacao-parser";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -267,14 +263,12 @@ export default function ContratosPropostaPage() {
 
   // ── Extrato de Consignações ─────────────────────────────────────────────────
   const [extratoFile,        setExtratoFile]        = useState<File | null>(null);
-  const [extratoData,        setExtratoData]        = useState<ExtratoConsignacaoParsed | null>(null);
-  const [isParsingExtrato,   setIsParsingExtrato]   = useState(false);
+  const [extratoError,       setExtratoError]       = useState<string | null>(null);
+  const [extratoDrag,        setExtratoDrag]        = useState(false);
   // índice da conta selecionada do contracheque (0, 1) ou "manual"
   const [selectedContaIdx,      setSelectedContaIdx]      = useState<number | "manual" | null>(null);
   const [contaError,             setContaError]             = useState(false);
   const [showManualConfirm,      setShowManualConfirm]      = useState(false);
-  const [extratoError,       setExtratoError]       = useState<string | null>(null);
-  const [extratoDrag,        setExtratoDrag]        = useState(false);
 
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
@@ -495,16 +489,10 @@ export default function ContratosPropostaPage() {
           ...(data.bancoOrigem ? { bancoOrigem: data.bancoOrigem } : {}),
           ...(data.saldoDevedor ? { saldoDevedor: data.saldoDevedor } : {}),
           ...(data.prazoAtual ? { prazoAtual: data.prazoAtual } : {}),
-          ...(extratoData ? {
+          ...(extratoFile ? {
             extrato: {
-              emitidoEm:                        extratoData.emitidoEm,
-              margemLiquidaFacultativaGlobal:   extratoData.margemLiquidaFacultativaGlobal,
-              margemLiquidaCompulsoria:          extratoData.margemLiquidaCompulsoria,
-              margemLiquidaCartao:               extratoData.margemLiquidaCartao,
-              margemLiquidaCartaoBeneficio:      extratoData.margemLiquidaCartaoBeneficio,
-              margemUtilizadaFacultativa:        extratoData.margemUtilizadaFacultativa,
-              margemUtilizadaCartao:             extratoData.margemUtilizadaCartao,
-              contratos:                         extratoData.contratos,
+              anexado: true,
+              nomeArquivo: extratoFile.name,
             },
           } : {}),
           // Conta bancária selecionada para crédito
@@ -638,7 +626,7 @@ export default function ContratosPropostaPage() {
     });
   }
 
-  async function handleExtratoFile(file: File) {
+  function handleExtratoFile(file: File) {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       setExtratoError("Por favor selecione um arquivo PDF.");
       return;
@@ -648,22 +636,12 @@ export default function ContratosPropostaPage() {
       return;
     }
     setExtratoFile(file);
-    setIsParsingExtrato(true);
     setExtratoError(null);
-    setExtratoData(null);
-    try {
-      const data = await parseExtratoConsignacao(file);
-      setExtratoData(data);
-      // Adiciona aos documentos automaticamente
-      setAttachments((prev) => {
-        const filtered = prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES");
-        return [...filtered, { file, documentType: "EXTRATO_CONSIGNACOES" }];
-      });
-    } catch {
-      setExtratoError("Não foi possível ler o extrato. Verifique se é um PDF válido do SIAPE.");
-    } finally {
-      setIsParsingExtrato(false);
-    }
+    // Adiciona aos documentos automaticamente
+    setAttachments((prev) => {
+      const filtered = prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES");
+      return [...filtered, { file, documentType: "EXTRATO_CONSIGNACOES" }];
+    });
   }
 
   // ─── STEP 1 — Seleção de Convênio ─────────────────────────────────────────
@@ -1671,21 +1649,23 @@ export default function ContratosPropostaPage() {
             <Badge variant="outline" className="text-xs">SIAPE obrigatório</Badge>
           </div>
 
-          {extratoFile && extratoData && !isParsingExtrato ? (
-            /* ── Estado: extrato lido com sucesso ── */
-            <div className="rounded-xl border-2 border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4 space-y-3">
+          {extratoFile ? (
+            /* ── Estado: arquivo anexado ── */
+            <div className="rounded-xl border-2 border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-                    Extrato lido — {extratoFile.name}
-                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                      Extrato anexado
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate max-w-xs">{extratoFile.name}</p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setExtratoFile(null);
-                    setExtratoData(null);
                     setAttachments((prev) => prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES"));
                   }}
                   className="text-xs text-destructive hover:underline"
@@ -1693,76 +1673,6 @@ export default function ContratosPropostaPage() {
                   Remover
                 </button>
               </div>
-
-              {/* ── Contrato Novo: margem líquida disponível (1 linha) ── */}
-              {contractType === "NOVO" && extratoData.margemLiquidaFacultativaGlobal !== null && (
-                <div className="flex items-center gap-3 rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-900 px-4 py-3">
-                  <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Margem disponível (Líquida Facult. Global)</p>
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 leading-tight">
-                      {extratoData.margemLiquidaFacultativaGlobal.toLocaleString("pt-BR", {
-                        style: "currency", currency: "BRL",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Cartão com Saque: margem de cartão (1 linha) ── */}
-              {contractType === "CARTAO" && extratoData.margemLiquidaCartao !== null && (
-                <div className="flex items-center gap-3 rounded-lg bg-white dark:bg-black/30 border border-blue-200 dark:border-blue-900 px-4 py-3">
-                  <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Margem disponível (Cartão)</p>
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 leading-tight">
-                      {extratoData.margemLiquidaCartao.toLocaleString("pt-BR", {
-                        style: "currency", currency: "BRL",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Portabilidade / Refinanciamento / Compra: exibe contratos ── */}
-              {(contractType === "PORTABILIDADE" ||
-                contractType === "PORTABILIDADE_REFIN" ||
-                contractType === "COMPRA_DIVIDA" ||
-                contractType === "REFINANCIAMENTO") &&
-                extratoData.contratos.filter((c) => c.tipoContrato === "EMPRESTIMO").length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Contratos ativos no extrato
-                  </p>
-                  <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                    {extratoData.contratos
-                      .filter((c) => c.tipoContrato === "EMPRESTIMO")
-                      .map((c, idx) => (
-                        <div
-                          key={idx}
-                          className="flex flex-wrap items-center gap-x-4 gap-y-1 p-2 rounded-md border bg-white dark:bg-black/20 text-xs"
-                        >
-                          <span className="font-mono font-semibold text-foreground">{c.numeroContrato}</span>
-                          <span className="text-muted-foreground flex-1 min-w-0 truncate">{c.nomeRubrica}</span>
-                          <span className="font-medium">
-                            {c.valorParcela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {c.prazoAtual}/{c.prazoTotal} parc.
-                          </span>
-                          <span className="text-muted-foreground">até {c.fim}</span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Emissão */}
-              {extratoData.emitidoEm && (
-                <p className="text-xs text-muted-foreground">
-                  Extrato emitido em {extratoData.emitidoEm}
-                </p>
-              )}
             </div>
           ) : (
             /* ── Estado: drop zone ── */
@@ -1770,20 +1680,18 @@ export default function ContratosPropostaPage() {
               className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
                 extratoDrag
                   ? "border-primary bg-primary/5"
-                  : isParsingExtrato
-                  ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
                   : extratoError
                   ? "border-red-400 bg-red-50 dark:bg-red-950/20"
                   : "border-border hover:border-primary hover:bg-primary/5"
               }`}
-              onDragOver={(e) => { e.preventDefault(); if (!isParsingExtrato) setExtratoDrag(true); }}
+              onDragOver={(e) => { e.preventDefault(); setExtratoDrag(true); }}
               onDragLeave={() => setExtratoDrag(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setExtratoDrag(false);
-                if (!isParsingExtrato && e.dataTransfer.files[0]) handleExtratoFile(e.dataTransfer.files[0]);
+                if (e.dataTransfer.files[0]) handleExtratoFile(e.dataTransfer.files[0]);
               }}
-              onClick={() => !isParsingExtrato && extratoRef.current?.click()}
+              onClick={() => extratoRef.current?.click()}
             >
               <input
                 ref={extratoRef}
@@ -1792,13 +1700,7 @@ export default function ContratosPropostaPage() {
                 className="hidden"
                 onChange={(e) => { if (e.target.files?.[0]) handleExtratoFile(e.target.files[0]); }}
               />
-              {isParsingExtrato ? (
-                <>
-                  <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Lendo extrato...</p>
-                  <p className="text-xs text-muted-foreground mt-1">Extraindo margens e contratos</p>
-                </>
-              ) : extratoError ? (
+              {extratoError ? (
                 <>
                   <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
                   <p className="text-sm font-medium text-red-600 dark:text-red-400">{extratoError}</p>
@@ -1817,8 +1719,8 @@ export default function ContratosPropostaPage() {
       )}
 
       {/* ── Campos específicos por tipo ── */}
-      {/* Campos só aparecem se: não for NOVO+SIAPE OU extrato já foi carregado */}
-      {contractType && (selectedConvenio?.id !== "SIAPE" || contractType !== "NOVO" || extratoData !== null) && (
+      {/* Campos só aparecem se: não for NOVO+SIAPE OU extrato já foi anexado */}
+      {contractType && (selectedConvenio?.id !== "SIAPE" || contractType !== "NOVO" || extratoFile !== null) && (
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
@@ -2036,16 +1938,6 @@ export default function ContratosPropostaPage() {
                         {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                           ? "Nova Parcela (R$)"
                           : "Valor da Parcela (R$)"}
-                        {contractType === "NOVO" && extratoData?.margemLiquidaFacultativaGlobal != null && (
-                          <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                            máx. {fmtBRL(extratoData.margemLiquidaFacultativaGlobal)}
-                          </span>
-                        )}
-                        {contractType === "CARTAO" && extratoData?.margemLiquidaCartao != null && (
-                          <span className="text-xs font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                            máx. {fmtBRL(extratoData.margemLiquidaCartao)}
-                          </span>
-                        )}
                       </FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="0,00" />
