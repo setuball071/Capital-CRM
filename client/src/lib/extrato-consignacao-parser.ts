@@ -246,6 +246,13 @@ function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoPa
   const demoIdx = lines.findIndex((l) =>
     norm(l.text).startsWith("DEMONSTRATIVO") && norm(l.text).includes("MARGEM")
   );
+  console.log("[extrato] total lines:", lines.length, "| demoIdx:", demoIdx);
+  if (demoIdx >= 0) {
+    console.log("[extrato] DEMONSTRATIVO line text:", lines[demoIdx].text);
+  } else {
+    console.log("[extrato] DEMONSTRATIVO NAO ENCONTRADO — varredura em todo documento");
+  }
+
   const scanLines = demoIdx === -1 ? lines : lines.slice(0, demoIdx);
 
   // Coleta todos os itens com valor BRL (com ou sem prefixo "R$")
@@ -265,6 +272,8 @@ function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoPa
     }
   }
 
+  console.log("[extrato] brlItems coletados:", brlItems.map(i => `val=${i.val} x=${i.x.toFixed(0)} y=${i.y}`));
+
   // Agrupa itens por faixa de Y (±8px) — acumula vizinhos próximos
   const yBands: { repY: number; items: RawValItem[] }[] = [];
   for (const vi of brlItems) {
@@ -278,10 +287,15 @@ function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoPa
 
   // Ordena faixas por Y decrescente (topo da página = maior Y em PDF coords)
   yBands.sort((a, b) => b.repY - a.repY);
+  console.log("[extrato] yBands (desc):", yBands.map(b => `repY=${b.repY} items=${b.items.length} vals=[${b.items.map(i=>i.val).join(",")}]`));
 
   // A PRIMEIRA faixa com 4+ valores BRL é a linha de margens disponíveis
   const marginBand = yBands.find((b) => b.items.length >= 4);
-  if (!marginBand) return {};
+  if (!marginBand) {
+    console.log("[extrato] NENHUMA FAIXA COM 4+ ITENS — retornando vazio");
+    return {};
+  }
+  console.log("[extrato] marginBand escolhida: repY=", marginBand.repY, "items=", marginBand.items.length);
 
   // Ordena itens da faixa por X (esquerda → direita = ordem das colunas)
   marginBand.items.sort((a, b) => a.x - b.x);
@@ -293,6 +307,9 @@ function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoPa
     const last = deduped[deduped.length - 1];
     if (!last || Math.abs(vi.x - last.x) > 20) deduped.push(vi);
   }
+
+  console.log("[extrato] deduped:", deduped.map((d,i) => `[${i}] val=${d.val} x=${d.x.toFixed(0)}`));
+  console.log("[extrato] => margemLiquidaFacultativaGlobal (col3):", deduped[3]?.val ?? null);
 
   return {
     margemBrutaCompulsoria:         deduped[0]?.val ?? null,
