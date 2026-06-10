@@ -164,15 +164,9 @@ function RankingTable({ title, icon: Icon, data, type }: {
                 <TableRow>
                   <TableHead className="w-12 text-center">#</TableHead>
                   <TableHead>Corretor</TableHead>
-                  {!isCartao && (
-                    <>
-                      <TableHead className="text-right hidden md:table-cell">Novo</TableHead>
-                      <TableHead className="text-right hidden md:table-cell">Port.</TableHead>
-                    </>
-                  )}
-                  <TableHead className="text-right">{isCartao ? "Prod. Cartão" : "Total Geral"}</TableHead>
+                  <TableHead className="text-right">{isCartao ? "Cartão" : "Produção"}</TableHead>
                   <TableHead className="text-right">% Meta</TableHead>
-                  <TableHead className="text-right">Contratos</TableHead>
+                  <TableHead className="text-right w-20">Ctts</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -183,7 +177,7 @@ function RankingTable({ title, icon: Icon, data, type }: {
 
                   return (
                     <TableRow key={v.userId} data-testid={`row-ranking-${type}-${v.userId}`}>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center align-top pt-3">
                         {v.posicao <= 3 ? (
                           <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
                             v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
@@ -199,23 +193,22 @@ function RankingTable({ title, icon: Icon, data, type }: {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <RankingAvatar nome={v.nome} posicao={v.posicao} />
-                          <span className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</div>
+                            {!isCartao && (
+                              <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5">
+                                <span data-testid={`text-ranking-novo-${v.userId}`}>Novo: {formatBRL(v.producaoNovo || 0)}</span>
+                                <span>·</span>
+                                <span data-testid={`text-ranking-portabilidade-${v.userId}`}>Port: {formatBRL(v.producaoPortabilidade || 0)}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
-                      {!isCartao && (
-                        <>
-                          <TableCell className="text-right font-mono text-xs text-muted-foreground hidden md:table-cell" data-testid={`text-ranking-novo-${v.userId}`}>
-                            {formatBRL(v.producaoNovo || 0)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs text-muted-foreground hidden md:table-cell" data-testid={`text-ranking-portabilidade-${v.userId}`}>
-                            {formatBRL(v.producaoPortabilidade || 0)}
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell className="text-right font-mono text-sm" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
+                      <TableCell className="text-right font-mono text-sm align-top pt-3" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
                         {formatBRL(prod)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top pt-3">
                         <Badge
                           variant={pct >= 100 ? "default" : "outline"}
                           className={pct >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
@@ -224,7 +217,7 @@ function RankingTable({ title, icon: Icon, data, type }: {
                           {pct}%
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
+                      <TableCell className="text-right text-sm text-muted-foreground align-top pt-3" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
                         {contratos}
                       </TableCell>
                     </TableRow>
