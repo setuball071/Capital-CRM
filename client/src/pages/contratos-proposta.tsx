@@ -187,6 +187,12 @@ function formatPercent(value: string) {
   return value.replace(/[^0-9,\.]/g, "").slice(0, 6);
 }
 
+/** Formata número (com casas decimais) para "1.234,56" — só pra exibir nos inputs sincronizados */
+function formatBRNumber(n: number): string {
+  if (!isFinite(n) || n <= 0) return "";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function formatPhone(value: string) {
   const d = value.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 10)
@@ -2465,25 +2471,45 @@ export default function ContratosPropostaPage() {
                   />
                 )}
 
-                {/* ── Valor Liberado / Valor Saque / Troco ── */}
+                {/* ── Valor Liberado / Valor Saque / Troco ── (cálculo bidirecional com coef) */}
                 <FormField
                   control={form.control}
                   name="contractValue"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
+                      <FormLabel className="flex items-center gap-2">
                         {contractType === "CARTAO" ? "Valor do Saque (R$)"
                           : contractType === "PORTABILIDADE_REFIN" ? "Troco / Refinanciamento (R$)"
                           : "Valor Liberado (R$)"}
+                        {selectedTabela?.coef > 0 && (
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            coef {Number(selectedTabela.coef).toFixed(5).replace(".", ",")}
+                          </span>
+                        )}
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="0,00" />
+                        <Input
+                          {...field}
+                          placeholder="0,00"
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                            const coef = selectedTabela?.coef;
+                            if (coef && coef > 0) {
+                              const val = parseBrNumber(e.target.value);
+                              if (val && val > 0) {
+                                form.setValue("installmentValue", formatBRNumber(val * coef));
+                              } else {
+                                form.setValue("installmentValue", "");
+                              }
+                            }
+                          }}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
                 />
 
-                {/* ── Parcela ── */}
+                {/* ── Parcela ── (cálculo bidirecional com coef) */}
                 <FormField
                   control={form.control}
                   name="installmentValue"
@@ -2495,7 +2521,22 @@ export default function ContratosPropostaPage() {
                           : "Valor da Parcela (R$)"}
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="0,00" />
+                        <Input
+                          {...field}
+                          placeholder="0,00"
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                            const coef = selectedTabela?.coef;
+                            if (coef && coef > 0) {
+                              const parc = parseBrNumber(e.target.value);
+                              if (parc && parc > 0) {
+                                form.setValue("contractValue", formatBRNumber(parc / coef));
+                              } else {
+                                form.setValue("contractValue", "");
+                              }
+                            }
+                          }}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -2520,21 +2561,39 @@ export default function ContratosPropostaPage() {
             </Card>
 
             {/* ── Comissão Esperada (expansível) ── */}
-            {/* ── Repasse esperado do corretor (apenas líquido, sem expor pctEmpresa) ── */}
-            {selectedTabela && contractValNum > 0 && (
-              <Card className="border-green-200 dark:border-green-900 bg-green-50/40 dark:bg-green-950/10">
-                <CardContent className="py-3 flex items-center gap-3">
-                  <BadgePercent className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground leading-tight">Seu repasse esperado nesta proposta</p>
-                    <p className="text-xl font-bold text-green-700 dark:text-green-400 leading-tight">
-                      {fmtBRL(valCorretor)}
-                    </p>
-                  </div>
-                  {!myGrupo && (
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40 px-2 py-1 rounded">
-                      Cadastre seu corretor no Financeiro p/ ver o valor exato
-                    </span>
+            {/* ── Comissão do corretor (apenas % e R$ líquidos — sem expor pctEmpresa) ── */}
+            {selectedTabela && (
+              <Card className="border-green-200 dark:border-green-900">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
+                    <BadgePercent className="h-4 w-4" />
+                    Sua Comissão
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {myGrupo ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">% Repasse Corretor</p>
+                        <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
+                          {pctCorretor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">R$ Comissão Corretor</p>
+                        <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
+                          {fmtBRL(valCorretor)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-3 text-sm text-amber-800 dark:text-amber-300">
+                      <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>
+                        Seu usuário ainda não está vinculado a um grupo de comissão.
+                        Peça ao administrador para cadastrá-lo em <strong>Financeiro → Configurações</strong>.
+                      </span>
+                    </div>
                   )}
                 </CardContent>
               </Card>
