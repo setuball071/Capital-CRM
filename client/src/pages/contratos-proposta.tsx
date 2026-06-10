@@ -131,6 +131,17 @@ const formSchema = z.object({
   clientName: z.string().min(1, "Nome obrigatório"),
   clientCpf: z.string().min(11, "CPF inválido"),
   clientMatricula: z.string().optional(),
+  // Contato
+  clientPhone: z.string().min(10, "Telefone obrigatório"),
+  clientEmail: z.string().email("E-mail inválido"),
+  // Endereço
+  clientCep: z.string().min(8, "CEP obrigatório"),
+  clientLogradouro: z.string().min(1, "Logradouro obrigatório"),
+  clientNumero: z.string().min(1, "Número obrigatório"),
+  clientComplemento: z.string().optional(),
+  clientBairro: z.string().min(1, "Bairro obrigatório"),
+  clientCidade: z.string().min(1, "Cidade obrigatória"),
+  clientEstado: z.string().min(2, "Estado obrigatório"),
   bank: z.string().optional(),
   product: z.string().optional(),
   tableId: z.string().optional(),
@@ -170,6 +181,17 @@ function formatCpf(value: string) {
 
 function formatPercent(value: string) {
   return value.replace(/[^0-9,\.]/g, "").slice(0, 6);
+}
+
+function formatPhone(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 10)
+    return d.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+  return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+}
+
+function formatCep(value: string) {
+  return value.replace(/\D/g, "").slice(0, 8).replace(/(\d{5})(\d{0,3})/, "$1-$2").replace(/-$/, "");
 }
 
 function fmtBRL(v: number) {
@@ -424,6 +446,26 @@ export default function ContratosPropostaPage() {
   const [showComercial, setShowComercial] = useState(false);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [docDragOver, setDocDragOver] = useState(false);
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+
+  async function fetchCep(cepRaw: string) {
+    const digits = cepRaw.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setIsFetchingCep(true);
+    try {
+      const res  = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        if (data.logradouro) form.setValue("clientLogradouro", data.logradouro);
+        if (data.bairro)     form.setValue("clientBairro",     data.bairro);
+        if (data.localidade) form.setValue("clientCidade",     data.localidade);
+        if (data.uf)         form.setValue("clientEstado",     data.uf);
+        // Foca o campo Número após autopreenchimento
+        setTimeout(() => document.getElementById("field-numero")?.focus(), 50);
+      }
+    } catch { /* ignora falha silenciosa */ }
+    finally  { setIsFetchingCep(false); }
+  }
 
   // ── Dados auxiliares ────────────────────────────────────────────────────────
   const { data: banks = [] } = useQuery<any[]>({
@@ -438,6 +480,9 @@ export default function ContratosPropostaPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       clientName: "", clientCpf: "", clientMatricula: "",
+      clientPhone: "", clientEmail: "",
+      clientCep: "", clientLogradouro: "", clientNumero: "",
+      clientComplemento: "", clientBairro: "", clientCidade: "", clientEstado: "",
       bank: "", product: "", tableId: "",
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
@@ -512,6 +557,21 @@ export default function ContratosPropostaPage() {
         clientMeta: {
           ...(clientMeta || {}),
           ...(contractType ? { tipoContrato: contractType } : {}),
+          // Contato
+          ...(data.clientPhone ? { telefone: data.clientPhone } : {}),
+          ...(data.clientEmail ? { email:    data.clientEmail } : {}),
+          // Endereço
+          ...(data.clientCep ? {
+            endereco: {
+              cep:         data.clientCep,
+              logradouro:  data.clientLogradouro,
+              numero:      data.clientNumero,
+              complemento: data.clientComplemento || undefined,
+              bairro:      data.clientBairro,
+              cidade:      data.clientCidade,
+              estado:      data.clientEstado,
+            },
+          } : {}),
           ...(data.bancoOrigem ? { bancoOrigem: data.bancoOrigem } : {}),
           ...(data.saldoDevedor ? { saldoDevedor: data.saldoDevedor } : {}),
           ...(data.prazoAtual ? { prazoAtual: data.prazoAtual } : {}),
@@ -610,11 +670,24 @@ export default function ContratosPropostaPage() {
 
     const nome      = parsedData.nome      || existing?.clientName      || "";
     const matricula = parsedData.matricula || existing?.clientMatricula || "";
+    const meta      = existing?.clientMeta ?? {};
+    const end       = meta.endereco ?? {};
 
     form.reset({
-      clientName: nome,
-      clientCpf: parsedData.cpf ? formatCpf(parsedData.cpf) : "",
-      clientMatricula: matricula,
+      clientName:       nome,
+      clientCpf:        parsedData.cpf ? formatCpf(parsedData.cpf) : "",
+      clientMatricula:  matricula,
+      // Contato — reutiliza do cadastro anterior se disponível
+      clientPhone:      meta.telefone ?? "",
+      clientEmail:      meta.email    ?? "",
+      // Endereço — reutiliza do cadastro anterior se disponível
+      clientCep:        end.cep         ?? "",
+      clientLogradouro: end.logradouro  ?? "",
+      clientNumero:     end.numero      ?? "",
+      clientComplemento:end.complemento ?? "",
+      clientBairro:     end.bairro      ?? "",
+      clientCidade:     end.cidade      ?? "",
+      clientEstado:     end.estado      ?? "",
       bank: "", product: "", tableId: "",
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
@@ -1133,23 +1206,22 @@ export default function ContratosPropostaPage() {
         >
           {/* ── Dados do Cliente ── */}
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <User className="h-4 w-4" />
                 Dados do Cliente
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Nome — linha inteira */}
               <FormField
                 control={form.control}
                 name="clientName"
                 render={({ field }) => (
-                  <FormItem className="md:col-span-2">
+                  <FormItem className="sm:col-span-2 lg:col-span-4">
                     <FormLabel>
                       Nome completo *
-                      {hasExtracted && parsedData?.nome && (
-                        <CheckIcon />
-                      )}
+                      {hasExtracted && parsedData?.nome && <CheckIcon />}
                     </FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Nome do cliente" />
@@ -1158,6 +1230,7 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+              {/* CPF */}
               <FormField
                 control={form.control}
                 name="clientCpf"
@@ -1174,16 +1247,27 @@ export default function ContratosPropostaPage() {
                         onChange={(e) => field.onChange(formatCpf(e.target.value))}
                         onBlur={async (e) => {
                           field.onBlur();
-                          // Para entrada manual: lookup ao sair do campo
                           if (!hasExtracted) {
                             const found = await lookupByCpf(e.target.value);
                             if (found) {
-                              // Preenche nome e matrícula apenas se estiverem vazios
-                              if (!form.getValues("clientName") && found.clientName) {
+                              if (!form.getValues("clientName") && found.clientName)
                                 form.setValue("clientName", found.clientName);
-                              }
-                              if (!form.getValues("clientMatricula") && found.clientMatricula) {
+                              if (!form.getValues("clientMatricula") && found.clientMatricula)
                                 form.setValue("clientMatricula", found.clientMatricula);
+                              const m = found.clientMeta ?? {};
+                              const en = m.endereco ?? {};
+                              if (!form.getValues("clientPhone") && m.telefone)
+                                form.setValue("clientPhone", m.telefone);
+                              if (!form.getValues("clientEmail") && m.email)
+                                form.setValue("clientEmail", m.email);
+                              if (!form.getValues("clientCep") && en.cep) {
+                                form.setValue("clientCep",         en.cep);
+                                form.setValue("clientLogradouro",  en.logradouro  ?? "");
+                                form.setValue("clientNumero",      en.numero      ?? "");
+                                form.setValue("clientComplemento", en.complemento ?? "");
+                                form.setValue("clientBairro",      en.bairro      ?? "");
+                                form.setValue("clientCidade",      en.cidade      ?? "");
+                                form.setValue("clientEstado",      en.estado      ?? "");
                               }
                             }
                           }
@@ -1194,6 +1278,7 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+              {/* Matrícula */}
               <FormField
                 control={form.control}
                 name="clientMatricula"
@@ -1204,8 +1289,159 @@ export default function ContratosPropostaPage() {
                       {hasExtracted && parsedData?.matricula && <CheckIcon />}
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Número de matrícula" />
+                      <Input {...field} placeholder="Nº de matrícula" />
                     </FormControl>
+                  </FormItem>
+                )}
+              />
+              {/* Telefone */}
+              <FormField
+                control={form.control}
+                name="clientPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone *</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="(11) 99999-9999"
+                        onChange={(e) => field.onChange(formatPhone(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* E-mail */}
+              <FormField
+                control={form.control}
+                name="clientEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-mail *</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="email" placeholder="cliente@email.com" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ── Endereço ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Endereço
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* CEP */}
+              <FormField
+                control={form.control}
+                name="clientCep"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CEP *</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          {...field}
+                          placeholder="00000-000"
+                          onChange={(e) => field.onChange(formatCep(e.target.value))}
+                          onBlur={(e) => { field.onBlur(); fetchCep(e.target.value); }}
+                        />
+                        {isFetchingCep && (
+                          <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Logradouro — 2 cols */}
+              <FormField
+                control={form.control}
+                name="clientLogradouro"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-1 lg:col-span-2">
+                    <FormLabel>Logradouro *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Rua, Av., Trav..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Número */}
+              <FormField
+                control={form.control}
+                name="clientNumero"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número *</FormLabel>
+                    <FormControl>
+                      <Input id="field-numero" {...field} placeholder="123" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Complemento */}
+              <FormField
+                control={form.control}
+                name="clientComplemento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Complemento</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Apto, Bloco..." />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              {/* Bairro */}
+              <FormField
+                control={form.control}
+                name="clientBairro"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bairro *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Bairro" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Cidade */}
+              <FormField
+                control={form.control}
+                name="clientCidade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cidade *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Cidade" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Estado */}
+              <FormField
+                control={form.control}
+                name="clientEstado"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>UF *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="RJ" maxLength={2} className="uppercase" onChange={(e) => field.onChange(e.target.value.toUpperCase())} />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
