@@ -317,15 +317,15 @@ export default function SimCriadorProposta() {
     }
     y += 3;
 
-    // RESULTADO
+    // RESULTADO — só adiciona itens com valor positivo (vantagens reais)
     const resItems: [string, string, "green" | "blue"][] = [];
-    if (tAt && tNv) resItems.push(["Economia mensal", fmtR(tAt - tNv), "green"]);
+    if (tAt && tNv && tAt - tNv > 0) resItems.push(["Economia mensal", fmtR(tAt - tNv), "green"]);
     if (tTroco > 0) resItems.push(["Troco total disponível", fmtR(tTroco), "blue"]);
     const prazosAt = proposta.contratos.filter(c => parseInt(c.prazo)).map(c => parseInt(c.prazo));
     const prazosNv = proposta.novas.filter(n => parseInt(n.prazo)).map(n => parseInt(n.prazo));
     if (prazosAt.length && prazosNv.length && tAt && tNv) {
       const diff = tAt * Math.min(...prazosAt) - tNv * Math.min(...prazosNv);
-      resItems.push(["Economia total estimada", fmtR(diff), "green"]);
+      if (diff > 0) resItems.push(["Economia total estimada", fmtR(diff), "green"]);
     }
     if (resItems.length > 0) {
       doc.setFillColor(248, 248, 248); doc.roundedRect(ml, y, cw, resItems.length * 8 + 14, 2, 2, "F");
@@ -753,37 +753,43 @@ function PropostaVisual({
           </table>
         </div>
 
-        {/* Resultado */}
-        {(economia !== null || totalTroco > 0 || econTotal !== null) && (
-          <div className="rounded-lg border border-border overflow-hidden">
-            <div className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-muted/30 border-b border-border">
-              Resultado para o cliente
+        {/* Resultado — mostra apenas valores positivos (vantagens reais ao cliente) */}
+        {((economia !== null && economia > 0) || totalTroco > 0 || (econTotal !== null && econTotal > 0)) && (() => {
+          const mostraEconomia = economia !== null && economia > 0;
+          const mostraTroco = totalTroco > 0;
+          const mostraEconTotal = econTotal !== null && econTotal > 0;
+          const qtdCols = [mostraEconomia, mostraTroco, mostraEconTotal].filter(Boolean).length;
+          return (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-muted/30 border-b border-border">
+                Resultado para o cliente
+              </div>
+              <div className="grid divide-x divide-border" style={{ gridTemplateColumns: `repeat(${qtdCols}, 1fr)` }}>
+                {mostraEconomia && (
+                  <div className="text-center p-4">
+                    <div className="text-[10px] text-muted-foreground mb-1">Economia mensal</div>
+                    <div className="text-base font-semibold text-green-600 dark:text-green-400">{fmtR(economia!)}</div>
+                    <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">Por mês</div>
+                  </div>
+                )}
+                {mostraTroco && (
+                  <div className="text-center p-4">
+                    <div className="text-[10px] text-muted-foreground mb-1">Troco disponível</div>
+                    <div className="text-base font-semibold text-blue-600 dark:text-blue-400">{fmtR(totalTroco)}</div>
+                    <div className="inline-block text-[9px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full mt-1">Disponível</div>
+                  </div>
+                )}
+                {mostraEconTotal && (
+                  <div className="text-center p-4">
+                    <div className="text-[10px] text-muted-foreground mb-1">Economia total est.</div>
+                    <div className="text-base font-semibold text-green-600 dark:text-green-400">{fmtR(econTotal!)}</div>
+                    <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">No período</div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="grid divide-x divide-border" style={{ gridTemplateColumns: `repeat(${[economia, totalTroco > 0, econTotal].filter(v => v !== null && v !== false).length}, 1fr)` }}>
-              {economia !== null && (
-                <div className="text-center p-4">
-                  <div className="text-[10px] text-muted-foreground mb-1">Economia mensal</div>
-                  <div className="text-base font-semibold text-green-600 dark:text-green-400">{fmtR(economia)}</div>
-                  <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">Por mês</div>
-                </div>
-              )}
-              {totalTroco > 0 && (
-                <div className="text-center p-4">
-                  <div className="text-[10px] text-muted-foreground mb-1">Troco disponível</div>
-                  <div className="text-base font-semibold text-blue-600 dark:text-blue-400">{fmtR(totalTroco)}</div>
-                  <div className="inline-block text-[9px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full mt-1">Disponível</div>
-                </div>
-              )}
-              {econTotal !== null && (
-                <div className="text-center p-4">
-                  <div className="text-[10px] text-muted-foreground mb-1">Economia total est.</div>
-                  <div className="text-base font-semibold text-green-600 dark:text-green-400">{fmtR(econTotal)}</div>
-                  <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">No período</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Obs */}
         {proposta.obs && (
