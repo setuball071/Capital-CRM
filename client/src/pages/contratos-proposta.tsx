@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
 
@@ -532,12 +533,42 @@ export default function ContratosPropostaPage() {
   }
 
   // ── Dados auxiliares ────────────────────────────────────────────────────────
-  const { data: banks = [] } = useQuery<any[]>({
-    queryKey: ["/api/banks"],
+  const { user } = useAuth();
+
+  // Fonte real das tabelas/bancos: Financeiro → Tabelas (mesmo store usado em /financeiro/tabelas)
+  const { data: financeiroConfig } = useQuery<{ dados: any } | null>({
+    queryKey: ["/api/financeiro/config"],
   });
-  const { data: tables = [] } = useQuery<any[]>({
-    queryKey: ["/api/coefficient-tables"],
-  });
+  const financeiroTabelas: any[] = financeiroConfig?.dados?.tabelas ?? [];
+  const financeiroGrupos: any[]  = financeiroConfig?.dados?.grupos   ?? [];
+  const financeiroCorretores: any[] = financeiroConfig?.dados?.corretores ?? [];
+
+  /** Mapeia contractType → "tipo" usado nas tabelas de Financeiro */
+  function mapTipoContrato(t: string | null): string | null {
+    switch (t) {
+      case "NOVO": return "Novo";
+      case "PORTABILIDADE":
+      case "PORTABILIDADE_REFIN": return "Portabilidade";
+      case "REFINANCIAMENTO": return "Refinanciamento";
+      case "COMPRA_DIVIDA": return "Compra de Dívida";
+      case "CARTAO": return "Cartão";
+      default: return null;
+    }
+  }
+
+  /** Tabelas filtradas por convênio + tipo de contrato */
+  const tabelasDoTipo = (() => {
+    const tipoAlvo = mapTipoContrato(contractType);
+    const conv = selectedConvenio?.id || "";
+    return financeiroTabelas.filter((t: any) => {
+      const okConv = !conv || (t.convenio || "").toUpperCase() === conv.toUpperCase();
+      const okTipo = !tipoAlvo || (t.tipo || "") === tipoAlvo;
+      return okConv && okTipo;
+    });
+  })();
+
+  /** Lista de bancos disponíveis dentro das tabelas filtradas */
+  const banks: string[] = Array.from(new Set(tabelasDoTipo.map((t: any) => t.banco))).filter(Boolean).sort();
 
   // ── Form ────────────────────────────────────────────────────────────────────
   const form = useForm<FormValues>({
@@ -559,16 +590,39 @@ export default function ContratosPropostaPage() {
   const watchedCorretorPerc  = form.watch("corretorCommissionPercentage");
   const watchedBank          = form.watch("bank");
 
-  // Filtra tabelas pelo banco selecionado (para Contrato Novo)
-  const filteredTables: any[] = contractType === "NOVO" && watchedBank
-    ? tables.filter((t: any) => t.bank === watchedBank)
-    : tables;
+  // Filtra tabelas pelo banco selecionado (já filtrado por convênio + tipo acima)
+  const filteredTables: any[] = watchedBank
+    ? tabelasDoTipo.filter((t: any) => t.banco === watchedBank)
+    : tabelasDoTipo;
 
   const contractValNum = parseBrNumber(watchedContractValue) || 0;
-  const commPercNum = parseBrNumber(watchedCommPerc) || 0;
-  const corretorPercNum = parseBrNumber(watchedCorretorPerc) || 0;
-  const companyCommCalc = commPercNum > 0 ? contractValNum * commPercNum / 100 : 0;
-  const corretorCommCalc = corretorPercNum > 0 ? companyCommCalc * corretorPercNum / 100 : 0;
+
+  // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
+  const watchedTableId = form.watch("tableId");
+  const selectedTabela = financeiroTabelas.find((t: any) => String(t.id) === String(watchedTableId));
+
+  /** Grupo do usuário logado — busca por email no array de corretores */
+  const myCorretor = financeiroCorretores.find(
+    (c: any) => c.email && user?.email && c.email.toLowerCase() === user.email.toLowerCase()
+  );
+  const myGrupo = myCorretor
+    ? financeiroGrupos.find((g: any) => g.id === myCorretor.grupoId)
+    : null;
+
+  /** Percentual de repasse: usa regra por tipo de produto se houver, senão o padrão do grupo */
+  function getMyRepasseGrupo(tipo: string | null): number {
+    if (!myGrupo) return 0;
+    const rules = Array.isArray(myGrupo.repasseRules) ? myGrupo.repasseRules : [];
+    if (tipo) {
+      const rule = rules.find((r: any) => r.tipo === tipo);
+      if (rule && typeof rule.repasse === "number") return rule.repasse;
+    }
+    return typeof myGrupo.repasse === "number" ? myGrupo.repasse : 0;
+  }
+
+  const myRepassePerc = getMyRepasseGrupo(mapTipoContrato(contractType));
+  const pctCorretor   = selectedTabela ? (selectedTabela.pctEmpresa * myRepassePerc) / 100 : 0;
+  const valCorretor   = (contractValNum * pctCorretor) / 100;
 
   // ── Mutation ────────────────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -612,11 +666,12 @@ export default function ContratosPropostaPage() {
         tableId: data.tableId || undefined,
         term: data.term || undefined,
         ade: data.ade || undefined,
-        commissionPercentage: data.commissionPercentage
-          ? (parseBrNumber(data.commissionPercentage) || 0) / 100
+        // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
+        commissionPercentage: selectedTabela?.pctEmpresa
+          ? selectedTabela.pctEmpresa / 100
           : undefined,
-        corretorCommissionPercentage: data.corretorCommissionPercentage
-          ? (parseBrNumber(data.corretorCommissionPercentage) || 0) / 100
+        corretorCommissionPercentage: myRepassePerc
+          ? myRepassePerc / 100
           : undefined,
         clientMeta: {
           ...(clientMeta || {}),
@@ -2306,8 +2361,7 @@ export default function ContratosPropostaPage() {
                             if (v === "_outro_") { setBankMode("text"); field.onChange(""); }
                             else {
                               field.onChange(v);
-                              // Limpa tabela ao trocar banco
-                              if (contractType === "NOVO") form.setValue("tableId", "");
+                              form.setValue("tableId", "");
                             }
                           }}
                         >
@@ -2315,8 +2369,8 @@ export default function ContratosPropostaPage() {
                             <SelectTrigger><SelectValue placeholder="Selecione o banco..." /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {banks.map((b: any) => (
-                              <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
+                            {banks.map((b) => (
+                              <SelectItem key={b} value={b}>{b}</SelectItem>
                             ))}
                             <SelectItem value="_outro_">Outro banco...</SelectItem>
                           </SelectContent>
@@ -2336,7 +2390,7 @@ export default function ContratosPropostaPage() {
                   )}
                 />
 
-                {/* ── Tabela (filtrada por banco para NOVO; oculta em cartão) ── */}
+                {/* ── Tabela (filtrada por convênio + tipo + banco; oculta em cartão) ── */}
                 {contractType !== "CARTAO" && (
                   <FormField
                     control={form.control}
@@ -2345,26 +2399,23 @@ export default function ContratosPropostaPage() {
                       <FormItem>
                         <FormLabel>
                           Tabela
-                          {contractType === "NOVO" && !watchedBank && (
+                          {!watchedBank && (
                             <span className="text-xs font-normal text-muted-foreground ml-1">(selecione o banco primeiro)</span>
                           )}
                         </FormLabel>
                         <Select
                           value={field.value}
-                          disabled={contractType === "NOVO" && !watchedBank}
+                          disabled={!watchedBank}
                           onValueChange={(v) => {
                             field.onChange(v);
-                            // Auto-preenche prazo da tabela selecionada
-                            if (contractType === "NOVO") {
-                              const tbl = filteredTables.find((t: any) => String(t.id) === v);
-                              if (tbl?.termMonths) form.setValue("term", String(tbl.termMonths));
-                            }
+                            const tbl = filteredTables.find((t: any) => String(t.id) === v);
+                            if (tbl?.prazo) form.setValue("term", String(tbl.prazo));
                           }}
                         >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder={
-                                contractType === "NOVO" && watchedBank && filteredTables.length === 0
+                                watchedBank && filteredTables.length === 0
                                   ? "Nenhuma tabela para este banco"
                                   : "Selecione..."
                               } />
@@ -2373,7 +2424,9 @@ export default function ContratosPropostaPage() {
                           <SelectContent>
                             {filteredTables.map((t: any) => (
                               <SelectItem key={t.id} value={String(t.id)}>
-                                {t.tableName || t.name || `Tabela ${t.id}`}
+                                {t.nome}
+                                {t.prazo ? ` · ${t.prazo}m` : ""}
+                                {t.coef ? ` · coef ${Number(t.coef).toFixed(5).replace(".", ",")}` : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -2467,79 +2520,25 @@ export default function ContratosPropostaPage() {
             </Card>
 
             {/* ── Comissão Esperada (expansível) ── */}
-            <Card>
-              <CardHeader className="pb-2">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full"
-                  onClick={() => setShowComercial((v) => !v)}
-                >
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <BadgePercent className="h-4 w-4" />
-                    Comissão Esperada
-                    <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
-                  </CardTitle>
-                  {showComercial ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
-              </CardHeader>
-              {showComercial && (
-                <CardContent className="space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Preencha para acompanhar a comissão esperada. Serão pré-carregados ao marcar como PAGO.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="commissionPercentage"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>% Comissão Empresa</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input {...field} placeholder="Ex: 7,5"
-                                onChange={(e) => field.onChange(formatPercent(e.target.value))} />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                            </div>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-muted-foreground">R$ Empresa</label>
-                      <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm font-medium">
-                        {fmtBRL(companyCommCalc)}
-                      </div>
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="corretorCommissionPercentage"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>% Repasse Corretor</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input {...field} placeholder="Ex: 50"
-                                onChange={(e) => field.onChange(formatPercent(e.target.value))} />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                            </div>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-muted-foreground">R$ Corretor</label>
-                      <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
-                        {fmtBRL(corretorCommCalc)}
-                      </div>
-                    </div>
+            {/* ── Repasse esperado do corretor (apenas líquido, sem expor pctEmpresa) ── */}
+            {selectedTabela && contractValNum > 0 && (
+              <Card className="border-green-200 dark:border-green-900 bg-green-50/40 dark:bg-green-950/10">
+                <CardContent className="py-3 flex items-center gap-3">
+                  <BadgePercent className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <div className="flex-1">
+                    <p className="text-xs text-muted-foreground leading-tight">Seu repasse esperado nesta proposta</p>
+                    <p className="text-xl font-bold text-green-700 dark:text-green-400 leading-tight">
+                      {fmtBRL(valCorretor)}
+                    </p>
                   </div>
+                  {!myGrupo && (
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40 px-2 py-1 rounded">
+                      Cadastre seu corretor no Financeiro p/ ver o valor exato
+                    </span>
+                  )}
                 </CardContent>
-              )}
-            </Card>
+              </Card>
+            )}
 
             <div className="flex justify-end gap-3 pb-4">
               <Button type="button" variant="outline" onClick={() => setStep("dados-cadastrais")}>
