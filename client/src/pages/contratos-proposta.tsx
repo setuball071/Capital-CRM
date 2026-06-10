@@ -1866,25 +1866,50 @@ export default function ContratosPropostaPage() {
 
       {/* ── Preview de anexo ── */}
       <Dialog open={!!previewAttachment} onOpenChange={(open) => { if (!open) closeAttachmentPreview(); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
-          <DialogHeader className="p-4 pb-2 shrink-0 border-b">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4" />
+        <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="p-3 pb-2 shrink-0 border-b flex-row items-center justify-between gap-2">
+            <DialogTitle className="flex items-center gap-2 text-base flex-1 min-w-0">
+              <FileText className="h-4 w-4 shrink-0" />
               <span className="truncate">{previewAttachment?.file.name}</span>
             </DialogTitle>
+            {previewAttachment && (
+              <a
+                href={previewAttachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline shrink-0 mr-6"
+              >
+                Abrir em nova aba ↗
+              </a>
+            )}
           </DialogHeader>
-          <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center p-2 min-h-[50vh]">
+          <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center p-2 min-h-[60vh]">
             {previewAttachment && (() => {
               const f = previewAttachment.file;
               const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
               const isImg = f.type.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name);
               if (isPdf) {
                 return (
-                  <iframe
-                    src={previewAttachment.url}
-                    title={f.name}
-                    className="w-full h-[75vh] border-0 bg-white"
-                  />
+                  <object
+                    data={previewAttachment.url}
+                    type="application/pdf"
+                    className="w-full h-[78vh] bg-white"
+                  >
+                    <div className="text-center p-8">
+                      <FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Seu navegador bloqueou a visualização inline.
+                      </p>
+                      <a
+                        href={previewAttachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+                      >
+                        Abrir PDF em nova aba ↗
+                      </a>
+                    </div>
+                  </object>
                 );
               }
               if (isImg) {
@@ -1892,7 +1917,7 @@ export default function ContratosPropostaPage() {
                   <img
                     src={previewAttachment.url}
                     alt={f.name}
-                    className="max-w-full max-h-[75vh] object-contain"
+                    className="max-w-full max-h-[78vh] object-contain"
                   />
                 );
               }
