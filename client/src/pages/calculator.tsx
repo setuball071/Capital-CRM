@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { apiRequest } from "@/lib/queryClient";
-import { Calculator, Download, ChevronDown } from "lucide-react";
+import { Calculator, Download, ChevronDown, Sparkles, Wallet, TrendingDown, TrendingUp, Gift, Lock, ArrowDown, ArrowUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -466,7 +466,21 @@ export default function CalculatorPage() {
           pdf.setFontSize(9);
           pdf.setFont('helvetica', 'bold');
           pdf.setTextColor(30, 100, 200);
-          pdf.text(`🎁 E ainda libera ${formatCurrency(trocoVal)} de troco`, pageWidth / 2, y + 6, { align: 'center' });
+          pdf.text(`E ainda libera ${formatCurrency(trocoVal)} de troco`, pageWidth / 2, y + 6, { align: 'center' });
+          y += 14;
+        }
+
+        // === DÍVIDA QUITADA NA OPERAÇÃO ===
+        if (formData.operation.outstandingBalance > 0) {
+          pdf.setFillColor(245, 245, 247);
+          pdf.roundedRect(ml, y, cw, 10, 2, 2, 'F');
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(100, 100, 100);
+          pdf.text('Dívida a ser quitada:', ml + 4, y + 6);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(40, 40, 40);
+          pdf.text(formatCurrency(formData.operation.outstandingBalance), pageWidth - mr - 4, y + 6, { align: 'right' });
           y += 14;
         }
 
@@ -520,13 +534,23 @@ export default function CalculatorPage() {
         }
         y += 24;
 
-        // === Selo de segurança ===
+        // === Selo de segurança === (cadeado desenhado com vetor)
         pdf.setFillColor(245, 250, 245);
         pdf.roundedRect(ml, y, cw, 10, 2, 2, 'F');
+        // Cadeado mini desenhado
+        const padX = ml + 6, padY = y + 3.5;
+        pdf.setDrawColor(22, 100, 60);
+        pdf.setLineWidth(0.4);
+        pdf.roundedRect(padX, padY + 1, 3, 2.5, 0.3, 0.3, 'S');
+        pdf.setFillColor(245, 250, 245);
+        pdf.line(padX + 0.5, padY + 1, padX + 0.5, padY);
+        pdf.line(padX + 2.5, padY + 1, padX + 2.5, padY);
+        pdf.line(padX + 0.5, padY, padX + 2.5, padY);
+        pdf.setLineWidth(0.2);
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(22, 100, 60);
-        pdf.text('🔒 Operação 100% segura', pageWidth / 2, y + 4, { align: 'center' });
+        pdf.text('Operação 100% segura', pageWidth / 2, y + 4, { align: 'center' });
         pdf.setFontSize(7);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(80, 100, 80);
@@ -837,26 +861,28 @@ export default function CalculatorPage() {
                       <button
                         type="button"
                         onClick={() => setModoCalculo('troco')}
-                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all ${
+                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                           modoCalculo === 'troco'
                             ? 'bg-primary text-primary-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                         data-testid="button-modo-troco"
                       >
-                        💰 Receber troco
+                        <Wallet className="h-4 w-4" />
+                        Receber troco
                       </button>
                       <button
                         type="button"
                         onClick={() => setModoCalculo('reducao')}
-                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all ${
+                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                           modoCalculo === 'reducao'
                             ? 'bg-primary text-primary-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                         data-testid="button-modo-reducao"
                       >
-                        📉 Reduzir parcela
+                        <TrendingDown className="h-4 w-4" />
+                        Reduzir parcela
                       </button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1.5">
@@ -1065,6 +1091,7 @@ export default function CalculatorPage() {
               <div>
                 {(() => {
                   const parcelaAtual = form.getValues("operation.monthlyPayment") || 0;
+                  const saldoDevedorAtual = form.getValues("operation.outstandingBalance") || 0;
                   const novaParcela = liquidPayment;
                   const bancoNome = form.getValues("operation.bank") || "—";
                   const troco = result?.clientRefund ?? 0;
@@ -1080,8 +1107,9 @@ export default function CalculatorPage() {
                     <>
                       <div className="flex items-center gap-2 mb-4">
                         <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-border" />
-                        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground px-2">
-                          ✨ Oportunidade pro Cliente
+                        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground px-2 flex items-center gap-1.5">
+                          <Sparkles className="h-3 w-3 text-primary" />
+                          Oportunidade pro Cliente
                         </h2>
                         <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-border" />
                       </div>
@@ -1091,8 +1119,9 @@ export default function CalculatorPage() {
                         <CardContent className="p-6 text-center text-white">
                           {isModoReducao ? (
                             <>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
-                                📉 Nova parcela mensal
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2 flex items-center justify-center gap-1.5">
+                                <TrendingDown className="h-3.5 w-3.5" />
+                                Nova parcela mensal
                               </p>
                               <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-nova-parcela-destaque" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                                 {temResultado ? formatCurrency(novaParcela) : "R$ 0,00"}
@@ -1107,8 +1136,9 @@ export default function CalculatorPage() {
                             </>
                           ) : (
                             <>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
-                                💰 Dinheiro na sua conta
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2 flex items-center justify-center gap-1.5">
+                                <Wallet className="h-3.5 w-3.5" />
+                                Dinheiro na sua conta
                               </p>
                               <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-client-refund" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                                 {temResultado ? formatCurrency(troco) : "R$ 0,00"}
@@ -1120,6 +1150,18 @@ export default function CalculatorPage() {
                           )}
                         </CardContent>
                       </Card>
+
+                      {/* DÍVIDA QUITADA NA OPERAÇÃO */}
+                      {saldoDevedorAtual > 0 && (
+                        <div className="flex items-center justify-between gap-3 mb-4 bg-muted/40 border border-border rounded-lg px-4 py-2.5">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Dívida a ser quitada
+                          </span>
+                          <span className="text-base font-bold text-foreground font-mono">
+                            {formatCurrency(saldoDevedorAtual)}
+                          </span>
+                        </div>
+                      )}
 
                       {/* COMPARATIVO — só PARCELA Antes/Agora (mais honesto e direto) */}
                       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1145,12 +1187,20 @@ export default function CalculatorPage() {
                             <p className="text-2xl font-bold text-green-700 dark:text-green-400 font-mono" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                               {temResultado ? formatCurrency(novaParcela) : "—"}
                             </p>
-                            <p className="text-[10px] text-green-700/80 dark:text-green-400/80 mt-0.5">
-                              {parcelaReduziu && temResultado
-                                ? `↓ ${formatCurrency(diffParcela)} de economia`
-                                : parcelaAumentou && temResultado
-                                  ? `↑ ${formatCurrency(Math.abs(diffParcela))} a mais`
-                                  : "por mês"}
+                            <p className="text-[10px] text-green-700/80 dark:text-green-400/80 mt-0.5 flex items-center justify-center gap-1">
+                              {parcelaReduziu && temResultado ? (
+                                <>
+                                  <ArrowDown className="h-3 w-3" />
+                                  {formatCurrency(diffParcela)} de economia
+                                </>
+                              ) : parcelaAumentou && temResultado ? (
+                                <>
+                                  <ArrowUp className="h-3 w-3" />
+                                  {formatCurrency(Math.abs(diffParcela))} a mais
+                                </>
+                              ) : (
+                                "por mês"
+                              )}
                             </p>
                           </CardContent>
                         </Card>
@@ -1159,7 +1209,7 @@ export default function CalculatorPage() {
                       {/* TROCO COMO ADICIONAL — só aparece no modo redução (no modo troco, já é o destaque) */}
                       {temResultado && trocoPositivo && isModoReducao && (
                         <div className="flex items-center justify-center gap-2 mb-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg py-2 px-3">
-                          <span className="text-sm">🎁</span>
+                          <Gift className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                           <span className="text-xs text-blue-700 dark:text-blue-300">
                             E ainda libera <strong className="font-mono">{formatCurrency(troco)}</strong> de troco
                           </span>
@@ -1192,10 +1242,7 @@ export default function CalculatorPage() {
 
                       {/* SELO DE SEGURANÇA */}
                       <div className="flex items-center justify-center gap-2 text-[10px] font-medium text-muted-foreground py-2">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <rect x="3" y="11" width="18" height="11" rx="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
+                        <Lock className="h-3 w-3" />
                         Operação 100% segura · Crédito Consignado regulamentado pelo Banco Central
                       </div>
                     </>
