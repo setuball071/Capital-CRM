@@ -1747,8 +1747,20 @@ export default function ContratosPropostaPage() {
             <Button
               type="button"
               onClick={async () => {
-                const valid = await form.trigger(["clientName", "clientCpf"]);
-                if (!valid) return;
+                const valid = await form.trigger([
+                  "clientName", "clientCpf",
+                  "clientPhone", "clientEmail",
+                  "clientCep", "clientLogradouro", "clientNumero",
+                  "clientBairro", "clientCidade", "clientEstado",
+                ]);
+                if (!valid) {
+                  // Foca o primeiro campo com erro para ajudar o usuário
+                  const firstError = Object.keys(form.formState.errors)[0];
+                  if (firstError) {
+                    document.querySelector<HTMLInputElement>(`input[name="${firstError}"]`)?.focus();
+                  }
+                  return;
+                }
 
                 // Barreira: conta bancária sempre obrigatória para SIAPE
                 if (isSiape && parsedData && selectedContaIdx === null) {
