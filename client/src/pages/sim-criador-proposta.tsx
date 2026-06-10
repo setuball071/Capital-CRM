@@ -201,10 +201,8 @@ export default function SimCriadorProposta() {
     const cw = W - ml - mr;
     let y = 0;
 
-    // barra de cor no topo
-    doc.setFillColor(108, 43, 217); doc.rect(0, 0, 70, 5, "F");
-    doc.setFillColor(30, 136, 229);  doc.rect(70, 0, 70, 5, "F");
-    doc.setFillColor(233, 30, 99);   doc.rect(140, 0, 70, 5, "F");
+    // barra de cor no topo — única faixa roxa (cor primária Capital Go)
+    doc.setFillColor(108, 43, 217); doc.rect(0, 0, W, 4, "F");
     y = 14;
 
     // Logo ou nome da empresa — usa dimensões pré-carregadas (logoDims) para aspect ratio correto
