@@ -1412,7 +1412,13 @@ export default function ContratosPropostaPage() {
                         <Input
                           {...field}
                           placeholder="00000-000"
-                          onChange={(e) => field.onChange(formatCep(e.target.value))}
+                          onChange={(e) => {
+                            const v = formatCep(e.target.value);
+                            field.onChange(v);
+                            // Dispara busca automática assim que tem 8 dígitos
+                            const digits = v.replace(/\D/g, "");
+                            if (digits.length === 8) fetchCep(v);
+                          }}
                           onBlur={(e) => { field.onBlur(); fetchCep(e.target.value); }}
                         />
                         {isFetchingCep && (
