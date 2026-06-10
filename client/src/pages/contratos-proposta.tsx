@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
-  User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search,
+  User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -450,6 +450,18 @@ export default function ContratosPropostaPage() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [docDragOver, setDocDragOver] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
+
+  // ── Preview de anexo (visualizar arquivo em popup) ─────────────────────────
+  const [previewAttachment, setPreviewAttachment] = useState<{ file: File; url: string } | null>(null);
+
+  function openAttachmentPreview(file: File) {
+    const url = URL.createObjectURL(file);
+    setPreviewAttachment({ file, url });
+  }
+  function closeAttachmentPreview() {
+    if (previewAttachment) URL.revokeObjectURL(previewAttachment.url);
+    setPreviewAttachment(null);
+  }
 
   // ── Buscador de CEP (busca reversa por endereço) ───────────────────────────
   const [cepSearchOpen, setCepSearchOpen] = useState(false);
@@ -1381,140 +1393,40 @@ export default function ContratosPropostaPage() {
             </CardContent>
           </Card>
 
-          {/* ── Endereço ── */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Endereço
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* CEP */}
-              <FormField
-                control={form.control}
-                name="clientCep"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <FormLabel>CEP *</FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => setCepSearchOpen(true)}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                      >
-                        <Search className="h-3 w-3" />
-                        Não sei o CEP
-                      </button>
-                    </div>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          placeholder="00000-000"
-                          onChange={(e) => {
-                            const v = formatCep(e.target.value);
-                            field.onChange(v);
-                            // Dispara busca automática assim que tem 8 dígitos
-                            const digits = v.replace(/\D/g, "");
-                            if (digits.length === 8) fetchCep(v);
-                          }}
-                          onBlur={(e) => { field.onBlur(); fetchCep(e.target.value); }}
-                        />
-                        {isFetchingCep && (
-                          <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
-                        )}
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Logradouro — 2 cols */}
-              <FormField
-                control={form.control}
-                name="clientLogradouro"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-1 lg:col-span-2">
-                    <FormLabel>Logradouro *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Rua, Av., Trav..." />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Número */}
-              <FormField
-                control={form.control}
-                name="clientNumero"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número *</FormLabel>
-                    <FormControl>
-                      <Input id="field-numero" {...field} placeholder="123" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Complemento */}
-              <FormField
-                control={form.control}
-                name="clientComplemento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Complemento</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Apto, Bloco..." />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              {/* Bairro */}
-              <FormField
-                control={form.control}
-                name="clientBairro"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bairro *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Bairro" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Cidade */}
-              <FormField
-                control={form.control}
-                name="clientCidade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cidade *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Cidade" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Estado */}
-              <FormField
-                control={form.control}
-                name="clientEstado"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>UF *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="RJ" maxLength={2} className="uppercase" onChange={(e) => field.onChange(e.target.value.toUpperCase())} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+          {/* ── Dados do Documento com Foto (somente leitura) ── */}
+          {docPhotoData && (
+            <Card className="border-purple-200 dark:border-purple-900">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                  <CreditCard className="h-4 w-4" />
+                  {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
+                  <span className="text-xs font-normal text-muted-foreground">(apenas informação)</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+                  {docPhotoData.numeroRegistro && (
+                    <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />
+                  )}
+                  {docPhotoData.dataNascimento && (
+                    <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />
+                  )}
+                  {docPhotoData.dataExpedicao && (
+                    <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />
+                  )}
+                  {docPhotoData.orgaoEmissor && (
+                    <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
+                  )}
+                  {docPhotoData.filiacao?.[0] && (
+                    <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />
+                  )}
+                  {docPhotoData.filiacao?.[1] && (
+                    <InfoField label="Filiação — Mãe" value={docPhotoData.filiacao[1]} wide />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* ── Info SIAPE extraída (somente leitura) ── */}
           {hasExtracted && parsedData && (
@@ -1687,40 +1599,132 @@ export default function ContratosPropostaPage() {
             </Card>
           )}
 
-          {/* ── Dados do Documento com Foto (somente leitura) ── */}
-          {docPhotoData && (
-            <Card className="border-purple-200 dark:border-purple-900">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
-                  <CreditCard className="h-4 w-4" />
-                  {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
-                  <span className="text-xs font-normal text-muted-foreground">(apenas informação)</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-                  {docPhotoData.numeroRegistro && (
-                    <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />
-                  )}
-                  {docPhotoData.dataNascimento && (
-                    <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />
-                  )}
-                  {docPhotoData.dataExpedicao && (
-                    <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />
-                  )}
-                  {docPhotoData.orgaoEmissor && (
-                    <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
-                  )}
-                  {docPhotoData.filiacao?.[0] && (
-                    <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />
-                  )}
-                  {docPhotoData.filiacao?.[1] && (
-                    <InfoField label="Filiação — Mãe" value={docPhotoData.filiacao[1]} wide />
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* ── Endereço ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Endereço
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <FormField
+                control={form.control}
+                name="clientCep"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <FormLabel>CEP *</FormLabel>
+                      <button
+                        type="button"
+                        onClick={() => setCepSearchOpen(true)}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                      >
+                        <Search className="h-3 w-3" />
+                        Não sei o CEP
+                      </button>
+                    </div>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          {...field}
+                          placeholder="00000-000"
+                          onChange={(e) => {
+                            const v = formatCep(e.target.value);
+                            field.onChange(v);
+                            const digits = v.replace(/\D/g, "");
+                            if (digits.length === 8) fetchCep(v);
+                          }}
+                          onBlur={(e) => { field.onBlur(); fetchCep(e.target.value); }}
+                        />
+                        {isFetchingCep && (
+                          <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientLogradouro"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-1 lg:col-span-2">
+                    <FormLabel>Logradouro *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Rua, Av., Trav..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientNumero"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número *</FormLabel>
+                    <FormControl>
+                      <Input id="field-numero" {...field} placeholder="123" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientComplemento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Complemento</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Apto, Bloco..." />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientBairro"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bairro *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Bairro" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientCidade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cidade *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Cidade" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientEstado"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>UF *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="RJ" maxLength={2} className="uppercase" onChange={(e) => field.onChange(e.target.value.toUpperCase())} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
           {/* ── Documentos ── */}
           <Card>
@@ -1793,6 +1797,14 @@ export default function ContratosPropostaPage() {
                       </Select>
                       <Button
                         size="icon" variant="ghost" type="button"
+                        title="Visualizar"
+                        onClick={() => openAttachmentPreview(att.file)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon" variant="ghost" type="button"
+                        title="Remover"
                         onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
                       >
                         <X className="h-4 w-4" />
@@ -1851,6 +1863,56 @@ export default function ContratosPropostaPage() {
           </div>
         </form>
       </Form>
+
+      {/* ── Preview de anexo ── */}
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => { if (!open) closeAttachmentPreview(); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="p-4 pb-2 shrink-0 border-b">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4" />
+              <span className="truncate">{previewAttachment?.file.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center p-2 min-h-[50vh]">
+            {previewAttachment && (() => {
+              const f = previewAttachment.file;
+              const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+              const isImg = f.type.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name);
+              if (isPdf) {
+                return (
+                  <iframe
+                    src={previewAttachment.url}
+                    title={f.name}
+                    className="w-full h-[75vh] border-0 bg-white"
+                  />
+                );
+              }
+              if (isImg) {
+                return (
+                  <img
+                    src={previewAttachment.url}
+                    alt={f.name}
+                    className="max-w-full max-h-[75vh] object-contain"
+                  />
+                );
+              }
+              return (
+                <div className="text-center p-8">
+                  <FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-3">Pré-visualização não disponível para este tipo de arquivo.</p>
+                  <a
+                    href={previewAttachment.url}
+                    download={f.name}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    Baixar arquivo
+                  </a>
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Buscador de CEP por endereço ── */}
       <Dialog open={cepSearchOpen} onOpenChange={setCepSearchOpen}>
