@@ -323,10 +323,12 @@ export default function ContratosPropostaPage() {
   const [docVersoPreview,  setDocVersoPreview]  = useState<string | null>(null);
   const [docFrenteDrag, setDocFrenteDrag] = useState(false);
   const [docVersoDrag,  setDocVersoDrag]  = useState(false);
-  const [isOcring,    setIsOcring]    = useState(false);
-  const [ocrError,    setOcrError]    = useState<string | null>(null);
-  const [docPhotoData, setDocPhotoData] = useState<DocPhotoData | null>(null);
-  const [nameAlert,    setNameAlert]    = useState<string | null>(null);
+  const [isOcring,      setIsOcring]      = useState(false);
+  const [ocrError,      setOcrError]      = useState<string | null>(null);
+  const [docPhotoData,  setDocPhotoData]  = useState<DocPhotoData | null>(null);
+  /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior */
+  const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | null>(null);
+  const [nameAlert,     setNameAlert]     = useState<string | null>(null);
 
   // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
   async function resizeImageToBlob(file: File, maxPx = 1600): Promise<Blob> {
@@ -376,6 +378,30 @@ export default function ContratosPropostaPage() {
     } finally {
       setIsOcring(false);
     }
+  }
+
+  // Chamado quando frente+verso estão prontos: verifica cache ANTES de gastar IA
+  async function handleBothImagesReady(frente: File, verso: File | null) {
+    setDocPhotoData(null);
+    setDocPhotoSource(null);
+    setOcrError(null);
+
+    // Se CPF do contracheque está disponível, tenta reusar docFoto de proposta anterior
+    const cpf = parsedData?.cpf?.replace(/\D/g, "");
+    if (cpf && cpf.length === 11) {
+      const existing = clientLookup ?? (await lookupByCpf(cpf));
+      const savedDoc = (existing as ClientLookup | null)?.clientMeta?.docFoto;
+      if (savedDoc?.tipo) {
+        // ✅ Dados já existem — usa sem chamar IA
+        setDocPhotoData(savedDoc as DocPhotoData);
+        setDocPhotoSource("cached");
+        return;
+      }
+    }
+
+    // Sem cache ou sem CPF → OCR com IA
+    setDocPhotoSource("ocr");
+    runDocOcr(frente, verso);
   }
 
   // Verifica divergência entre nomes (contracheque x documento)
@@ -572,9 +598,9 @@ export default function ContratosPropostaPage() {
   async function handleContinue() {
     if (!parsedData) return;
 
-    // Lookup por CPF para dados anteriores
-    let existing: ClientLookup | null = null;
-    if (parsedData.cpf) {
+    // Lookup por CPF — reutiliza se já foi feito no upload do documento
+    let existing: ClientLookup | null = clientLookup;
+    if (!existing && parsedData.cpf) {
       existing = await lookupByCpf(parsedData.cpf);
     }
 
@@ -694,9 +720,10 @@ export default function ContratosPropostaPage() {
       setDocFrenteFile(file);
       setDocFrentePreview(preview);
       setDocPhotoData(null);
+      setDocPhotoSource(null);
       setOcrError(null);
-      // Dispara OCR se verso já estiver carregado
-      if (docVersoFile) runDocOcr(file, docVersoFile);
+      // Verifica cache / dispara IA se verso já estiver carregado
+      if (docVersoFile) handleBothImagesReady(file, docVersoFile);
     }
 
     function handleVersoFile(file: File) {
@@ -708,9 +735,10 @@ export default function ContratosPropostaPage() {
       setDocVersoFile(file);
       setDocVersoPreview(preview);
       setDocPhotoData(null);
+      setDocPhotoSource(null);
       setOcrError(null);
-      // Dispara OCR se frente já estiver carregada
-      if (docFrenteFile) runDocOcr(docFrenteFile, file);
+      // Verifica cache / dispara IA se frente já estiver carregada
+      if (docFrenteFile) handleBothImagesReady(docFrenteFile, file);
     }
 
     // Miniatura de imagem carregada
@@ -910,7 +938,7 @@ export default function ContratosPropostaPage() {
                 onDrop={handleFrenteFile}
                 inputRef={docFrenteRef}
                 onFileChange={handleFrenteFile}
-                onRemove={() => { setDocFrenteFile(null); setDocFrentePreview(null); setDocPhotoData(null); setOcrError(null); }}
+                onRemove={() => { setDocFrenteFile(null); setDocFrentePreview(null); setDocPhotoData(null); setDocPhotoSource(null); setOcrError(null); }}
               />
               <ImageSlot
                 label="Verso"
@@ -922,7 +950,7 @@ export default function ContratosPropostaPage() {
                 onDrop={handleVersoFile}
                 inputRef={docVersoRef}
                 onFileChange={handleVersoFile}
-                onRemove={() => { setDocVersoFile(null); setDocVersoPreview(null); setDocPhotoData(null); setOcrError(null); }}
+                onRemove={() => { setDocVersoFile(null); setDocVersoPreview(null); setDocPhotoData(null); setDocPhotoSource(null); setOcrError(null); }}
               />
             </div>
 
@@ -940,13 +968,28 @@ export default function ContratosPropostaPage() {
               </div>
             )}
 
-            {/* Dados extraídos pelo OCR */}
+            {/* Dados do documento (OCR ou cache de proposta anterior) */}
             {docPhotoData && !isOcring && (
               <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 p-3 space-y-2">
-                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento"} lido
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento"}
+                    {docPhotoSource === "cached" ? " — dados do cadastro anterior" : " lido"}
+                  </p>
+                  {docPhotoSource === "cached" && docFrenteFile && (
+                    <button
+                      type="button"
+                      className="text-xs text-purple-600 dark:text-purple-400 underline underline-offset-2 hover:opacity-70 shrink-0"
+                      onClick={() => {
+                        setDocPhotoSource("ocr");
+                        runDocOcr(docFrenteFile, docVersoFile);
+                      }}
+                    >
+                      Ler novamente com IA
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   {docPhotoData.nome && (
                     <div className="col-span-2">
@@ -1088,10 +1131,10 @@ export default function ContratosPropostaPage() {
           </div>
           <button
             type="button"
-            onClick={() => setLocation(`/contratos/${clientLookup.lastProposalId}`)}
+            onClick={() => window.open(`/contratos/${clientLookup.lastProposalId}`, "_blank")}
             className="flex items-center gap-1 shrink-0 underline underline-offset-2 hover:opacity-70"
           >
-            Ver última <ExternalLink className="h-3 w-3" />
+            Ver histórico <ExternalLink className="h-3 w-3" />
           </button>
         </div>
       )}
