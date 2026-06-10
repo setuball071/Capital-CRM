@@ -37,6 +37,11 @@ export default function CalculatorPage() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [liquidPayment, setLiquidPayment] = useState<number>(0);
   const [ajusteSaldoPercentual, setAjusteSaldoPercentual] = useState<number>(0);
+  // Modo de cálculo: 'troco' (parcela mantém igual e gera troco) ou
+  // 'reducao' (cliente quer parcela menor, sem troco necessariamente).
+  const [modoCalculo, setModoCalculo] = useState<'troco' | 'reducao'>('troco');
+  // Quando modo = 'reducao', o consultor digita a parcela nova desejada.
+  const [parcelaDesejada, setParcelaDesejada] = useState<number>(0);
   const simulatorRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const propostaCtx = useProposta();
@@ -217,34 +222,48 @@ export default function CalculatorPage() {
     fetchBankAdjustment();
   }, [watchBank]);
 
-  // Calculate liquid payment when monthly payment or selected table changes
+  // Calculate liquid payment when monthly payment or selected table changes.
+  // No modo "reducao", usa parcelaDesejada como base em vez de monthlyPayment.
   useEffect(() => {
     const subscription = form.watch((value) => {
       const monthlyPayment = typeof value.operation?.monthlyPayment === 'number' ? value.operation.monthlyPayment : 0;
       const coefficientTableId = typeof value.operation?.coefficientTableId === 'number' ? value.operation.coefficientTableId : 0;
-      
-      if (monthlyPayment > 0 && coefficientTableId > 0) {
+      const parcelaBase = modoCalculo === 'reducao' && parcelaDesejada > 0 ? parcelaDesejada : monthlyPayment;
+
+      if (parcelaBase > 0 && coefficientTableId > 0) {
         const selectedTable = availableTables.find(t => t.id === coefficientTableId);
-        
         if (selectedTable) {
           const safetyMargin = parseFloat(selectedTable.safetyMargin || "0");
           const marginType = (selectedTable.marginType as 'percentual' | 'fixo') || 'percentual';
-          const liquid = calcularParcelaComMargem(monthlyPayment, marginType, safetyMargin);
+          const liquid = calcularParcelaComMargem(parcelaBase, marginType, safetyMargin);
           setLiquidPayment(liquid);
         } else if (availableTables.length === 0) {
-          // Don't reset if tables haven't loaded yet
           return;
         } else {
           setLiquidPayment(0);
         }
-      } else if (monthlyPayment > 0 && coefficientTableId === 0) {
-        // Monthly payment is set but no table selected - keep previous liquid payment or set to 0
+      } else if (parcelaBase > 0 && coefficientTableId === 0) {
         setLiquidPayment(0);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form, availableTables]);
+  }, [form, availableTables, modoCalculo, parcelaDesejada]);
+
+  // Recalcula liquidPayment quando muda modo ou parcelaDesejada (sem precisar mexer no form)
+  useEffect(() => {
+    const monthlyPayment = form.getValues("operation.monthlyPayment") || 0;
+    const coefficientTableId = form.getValues("operation.coefficientTableId") || 0;
+    const parcelaBase = modoCalculo === 'reducao' && parcelaDesejada > 0 ? parcelaDesejada : monthlyPayment;
+    if (parcelaBase > 0 && coefficientTableId > 0) {
+      const selectedTable = availableTables.find(t => t.id === coefficientTableId);
+      if (selectedTable) {
+        const safetyMargin = parseFloat(selectedTable.safetyMargin || "0");
+        const marginType = (selectedTable.marginType as 'percentual' | 'fixo') || 'percentual';
+        setLiquidPayment(calcularParcelaComMargem(parcelaBase, marginType, safetyMargin));
+      }
+    }
+  }, [modoCalculo, parcelaDesejada, availableTables, form]);
 
   // Auto-calculate when all fields are filled
   useEffect(() => {
@@ -360,76 +379,98 @@ export default function CalculatorPage() {
         pdf.text('Olha a oportunidade que separamos para você:', ml + 4, y + 11);
         y += 20;
 
-        // === DESTAQUE TROCO ===
+        // === DESTAQUE PRINCIPAL — muda conforme o modo ===
         const trocoVal = result.clientRefund;
+        const parcAtual = formData.operation.monthlyPayment;
+        const diffParc = parcAtual - liquidPayment;
+        const isReducao = modoCalculo === 'reducao';
+
         pdf.setFillColor(124, 58, 237);
         pdf.roundedRect(ml, y, cw, 32, 3, 3, 'F');
         pdf.setTextColor(220, 200, 255);
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('DINHEIRO NA SUA CONTA', pageWidth / 2, y + 7, { align: 'center' });
-        pdf.setFontSize(28);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(formatCurrency(trocoVal), pageWidth / 2, y + 19, { align: 'center' });
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(220, 200, 255);
-        pdf.text('Liberado em até 5 dias úteis', pageWidth / 2, y + 27, { align: 'center' });
+        if (isReducao) {
+          pdf.text('SUA NOVA PARCELA MENSAL', pageWidth / 2, y + 7, { align: 'center' });
+          pdf.setFontSize(28);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(formatCurrency(liquidPayment), pageWidth / 2, y + 19, { align: 'center' });
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(220, 200, 255);
+          if (diffParc > 0.01) {
+            pdf.text(`Economia de ${formatCurrency(diffParc)} por mês`, pageWidth / 2, y + 27, { align: 'center' });
+          }
+        } else {
+          pdf.text('DINHEIRO NA SUA CONTA', pageWidth / 2, y + 7, { align: 'center' });
+          pdf.setFontSize(28);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(formatCurrency(trocoVal), pageWidth / 2, y + 19, { align: 'center' });
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(220, 200, 255);
+          pdf.text('Liberado em até 5 dias úteis', pageWidth / 2, y + 27, { align: 'center' });
+        }
         y += 38;
 
-        // === Como vai funcionar ===
+        // === Comparativo PARCELA Antes/Agora ===
         pdf.setTextColor(80, 80, 80);
         pdf.setFontSize(9);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('COMO VAI FUNCIONAR:', ml, y);
+        pdf.text('A MUDANÇA NA SUA PARCELA:', ml, y);
         y += 6;
 
         const colW = (cw - 4) / 2;
-        const boxH = 36;
-        // HOJE (esquerda)
+        const boxH = 28;
+        // ANTES (esquerda)
         pdf.setFillColor(245, 245, 247);
         pdf.roundedRect(ml, y, colW, boxH, 2, 2, 'F');
         pdf.setFontSize(7);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(120, 120, 120);
-        pdf.text('HOJE', ml + 4, y + 6);
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(80, 80, 80);
-        pdf.text('Dívida atual:', ml + 4, y + 13);
-        pdf.setFont('helvetica', 'bold');
+        pdf.text('PARCELA ANTES', ml + 4, y + 7);
+        pdf.setFontSize(18);
         pdf.setTextColor(40, 40, 40);
-        pdf.text(formatCurrency(formData.operation.outstandingBalance), ml + 4, y + 18);
+        pdf.text(formatCurrency(parcAtual), ml + 4, y + 18);
+        pdf.setFontSize(7);
         pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(80, 80, 80);
-        pdf.text('Parcela atual:', ml + 4, y + 26);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(40, 40, 40);
-        pdf.text(`${formatCurrency(formData.operation.monthlyPayment)} / mês`, ml + 4, y + 31);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text('por mês', ml + 4, y + 24);
 
-        // DEPOIS (direita)
+        // AGORA (direita)
         pdf.setFillColor(232, 250, 240);
         pdf.roundedRect(ml + colW + 4, y, colW, boxH, 2, 2, 'F');
         pdf.setFontSize(7);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(22, 100, 60);
-        pdf.text('COM A CAPITAL GO', ml + colW + 8, y + 6);
-        pdf.setFontSize(8);
+        pdf.text('PARCELA AGORA', ml + colW + 8, y + 7);
+        pdf.setFontSize(18);
+        pdf.setTextColor(22, 163, 74);
+        pdf.text(formatCurrency(liquidPayment), ml + colW + 8, y + 18);
+        pdf.setFontSize(7);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(50, 100, 70);
-        pdf.text('Dívida atual:', ml + colW + 8, y + 13);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(22, 163, 74);
-        pdf.text('✓ QUITADA', ml + colW + 8, y + 18);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(50, 100, 70);
-        pdf.text('Nova parcela:', ml + colW + 8, y + 26);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(22, 163, 74);
-        pdf.text(`${formatCurrency(liquidPayment)} / mês`, ml + colW + 8, y + 31);
-        y += boxH + 8;
+        if (diffParc > 0.01) {
+          pdf.text(`Economia de ${formatCurrency(diffParc)}/mês`, ml + colW + 8, y + 24);
+        } else if (diffParc < -0.01) {
+          pdf.text(`+ ${formatCurrency(Math.abs(diffParc))}/mês`, ml + colW + 8, y + 24);
+        } else {
+          pdf.text('por mês', ml + colW + 8, y + 24);
+        }
+        y += boxH + 6;
 
-        // === Detalhes técnicos ===
+        // Troco extra no modo redução (quando houver)
+        if (isReducao && trocoVal > 0.01) {
+          pdf.setFillColor(235, 245, 255);
+          pdf.roundedRect(ml, y, cw, 10, 2, 2, 'F');
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(30, 100, 200);
+          pdf.text(`🎁 E ainda libera ${formatCurrency(trocoVal)} de troco`, pageWidth / 2, y + 6, { align: 'center' });
+          y += 14;
+        }
+
+        // === Detalhes técnicos — sem Prazo ===
         pdf.setFontSize(9);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(80, 80, 80);
@@ -437,19 +478,17 @@ export default function CalculatorPage() {
         y += 5;
         pdf.setFillColor(250, 250, 252);
         pdf.roundedRect(ml, y, cw, 16, 2, 2, 'F');
-        const det1x = ml + 4, det2x = ml + cw / 3 + 4, det3x = ml + (2 * cw) / 3 + 4;
+        const det1x = ml + 4, det2x = ml + cw / 2 + 4;
         pdf.setFontSize(7);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(130, 130, 130);
         pdf.text('Banco', det1x, y + 5);
-        pdf.text('Prazo', det2x, y + 5);
-        pdf.text('Total do contrato', det3x, y + 5);
+        pdf.text('Total do contrato', det2x, y + 5);
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(40, 40, 40);
         pdf.text(formData.operation.bank || '—', det1x, y + 11);
-        pdf.text(`${formData.operation.termMonths} meses`, det2x, y + 11);
-        pdf.text(formatCurrency(result.totalContractValue), det3x, y + 11);
+        pdf.text(formatCurrency(result.totalContractValue), det2x, y + 11);
         y += 22;
 
         // === Bloco do Consultor ===
@@ -789,6 +828,44 @@ export default function CalculatorPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {/* Toggle: modo de cálculo (troco ou reduzir parcela) */}
+                  <div className="mb-5">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      O que o cliente quer?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1 rounded-lg" data-testid="modo-calculo-toggle">
+                      <button
+                        type="button"
+                        onClick={() => setModoCalculo('troco')}
+                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all ${
+                          modoCalculo === 'troco'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        data-testid="button-modo-troco"
+                      >
+                        💰 Receber troco
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModoCalculo('reducao')}
+                        className={`px-3 py-2 rounded-md text-sm font-semibold transition-all ${
+                          modoCalculo === 'reducao'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        data-testid="button-modo-reducao"
+                      >
+                        📉 Reduzir parcela
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {modoCalculo === 'troco'
+                        ? 'Mantém a parcela atual e libera o valor que sobra após quitar a dívida'
+                        : 'Diminui a parcela mensal. O cliente paga menos por mês, sem foco em troco'}
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-[2fr,3fr] gap-6">
                     {/* Left Column - Valores */}
                     <div className="space-y-4">
@@ -820,11 +897,32 @@ export default function CalculatorPage() {
                         )}
                       />
 
+                      {/* Input "Parcela desejada" — só no modo redução */}
+                      {modoCalculo === 'reducao' && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-primary">
+                            Nova parcela desejada (R$)
+                          </label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Ex: 300,00"
+                            className="h-10 border-primary/40"
+                            data-testid="input-parcela-desejada"
+                            value={parcelaDesejada || ''}
+                            onChange={(e) => setParcelaDesejada(parseFloat(e.target.value) || 0)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Quanto o cliente quer pagar por mês a partir de agora
+                          </p>
+                        </div>
+                      )}
+
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-muted-foreground">
                           Parcela Líquida (R$)
                         </label>
-                        <div 
+                        <div
                           className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm items-center"
                           data-testid="text-liquid-payment"
                         >
@@ -963,19 +1061,20 @@ export default function CalculatorPage() {
                 </CardContent>
               </Card>
 
-              {/* Results Section — Apresentação reformulada (foco: vantagem pro cliente) */}
+              {/* Results Section — foco no que muda pro cliente (parcela + troco) */}
               <div>
                 {(() => {
                   const parcelaAtual = form.getValues("operation.monthlyPayment") || 0;
-                  const saldoDevedorAtual = form.getValues("operation.outstandingBalance") || 0;
                   const novaParcela = liquidPayment;
-                  const prazo = form.getValues("operation.termMonths") || 0;
                   const bancoNome = form.getValues("operation.bank") || "—";
                   const troco = result?.clientRefund ?? 0;
                   const totalNovo = result?.totalContractValue ?? 0;
-                  const diffParcela = novaParcela - parcelaAtual;
+                  const diffParcela = parcelaAtual - novaParcela; // positivo = parcela reduzida
                   const temResultado = !!result;
                   const trocoPositivo = troco > 0;
+                  const parcelaReduziu = diffParcela > 0.01;
+                  const parcelaAumentou = diffParcela < -0.01;
+                  const isModoReducao = modoCalculo === 'reducao';
 
                   return (
                     <>
@@ -987,83 +1086,96 @@ export default function CalculatorPage() {
                         <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-border" />
                       </div>
 
-                      {/* DESTAQUE TROCO */}
+                      {/* DESTAQUE PRINCIPAL: muda conforme o modo */}
                       <Card className="mb-4 overflow-hidden border-0 shadow-xl" style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}>
                         <CardContent className="p-6 text-center text-white">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
-                            💰 Dinheiro na sua conta
-                          </p>
-                          <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-client-refund" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            {temResultado ? formatCurrency(troco) : "R$ 0,00"}
-                          </p>
-                          <p className="text-xs text-purple-200">
-                            {trocoPositivo ? "Liberado em até 5 dias úteis" : temResultado ? "Operação sem troco" : "Preencha os dados acima"}
-                          </p>
+                          {isModoReducao ? (
+                            <>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
+                                📉 Nova parcela mensal
+                              </p>
+                              <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-nova-parcela-destaque" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                {temResultado ? formatCurrency(novaParcela) : "R$ 0,00"}
+                              </p>
+                              <p className="text-xs text-purple-200">
+                                {parcelaReduziu
+                                  ? `Você economiza ${formatCurrency(diffParcela)} por mês`
+                                  : temResultado
+                                    ? "Preencha a parcela desejada"
+                                    : "Preencha os dados acima"}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
+                                💰 Dinheiro na sua conta
+                              </p>
+                              <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-client-refund" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                {temResultado ? formatCurrency(troco) : "R$ 0,00"}
+                              </p>
+                              <p className="text-xs text-purple-200">
+                                {trocoPositivo ? "Liberado em até 5 dias úteis" : temResultado ? "Operação sem troco" : "Preencha os dados acima"}
+                              </p>
+                            </>
+                          )}
                         </CardContent>
                       </Card>
 
-                      {/* COMPARATIVO HOJE × DEPOIS */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                        {/* HOJE */}
+                      {/* COMPARATIVO — só PARCELA Antes/Agora (mais honesto e direto) */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        {/* ANTES */}
                         <Card className="border-muted bg-muted/30">
-                          <CardContent className="p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" /> Como está hoje
+                          <CardContent className="p-4 text-center">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                              Parcela antes
                             </p>
-                            <div className="space-y-2.5">
-                              <div>
-                                <p className="text-[10px] text-muted-foreground">Dívida atual</p>
-                                <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(saldoDevedorAtual)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground">Parcela atual</p>
-                                <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(parcelaAtual)}<span className="text-xs text-muted-foreground font-normal">/mês</span></p>
-                              </div>
-                            </div>
+                            <p className="text-2xl font-bold text-foreground font-mono" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {formatCurrency(parcelaAtual)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">por mês</p>
                           </CardContent>
                         </Card>
 
-                        {/* DEPOIS */}
+                        {/* AGORA */}
                         <Card className="border-green-500/30 bg-green-50 dark:bg-green-950/20">
-                          <CardContent className="p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-400 mb-3 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Com a Capital Go
+                          <CardContent className="p-4 text-center">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-400 mb-2">
+                              Parcela agora
                             </p>
-                            <div className="space-y-2.5">
-                              <div>
-                                <p className="text-[10px] text-green-700/80 dark:text-green-400/80">Dívida</p>
-                                <p className="text-lg font-bold text-green-700 dark:text-green-400">✓ Quitada</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-green-700/80 dark:text-green-400/80">Nova parcela</p>
-                                <p className="text-lg font-bold text-green-700 dark:text-green-400 font-mono">
-                                  {formatCurrency(novaParcela)}<span className="text-xs font-normal">/mês</span>
-                                  {temResultado && Math.abs(diffParcela) > 0.01 && (
-                                    <span className={`ml-2 text-[10px] font-semibold ${diffParcela < 0 ? "text-green-600" : "text-amber-600"}`}>
-                                      {diffParcela < 0 ? "↓" : "↑"} {formatCurrency(Math.abs(diffParcela))}
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
+                            <p className="text-2xl font-bold text-green-700 dark:text-green-400 font-mono" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {temResultado ? formatCurrency(novaParcela) : "—"}
+                            </p>
+                            <p className="text-[10px] text-green-700/80 dark:text-green-400/80 mt-0.5">
+                              {parcelaReduziu && temResultado
+                                ? `↓ ${formatCurrency(diffParcela)} de economia`
+                                : parcelaAumentou && temResultado
+                                  ? `↑ ${formatCurrency(Math.abs(diffParcela))} a mais`
+                                  : "por mês"}
+                            </p>
                           </CardContent>
                         </Card>
                       </div>
 
-                      {/* DETALHES TÉCNICOS */}
+                      {/* TROCO COMO ADICIONAL — só aparece no modo redução (no modo troco, já é o destaque) */}
+                      {temResultado && trocoPositivo && isModoReducao && (
+                        <div className="flex items-center justify-center gap-2 mb-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg py-2 px-3">
+                          <span className="text-sm">🎁</span>
+                          <span className="text-xs text-blue-700 dark:text-blue-300">
+                            E ainda libera <strong className="font-mono">{formatCurrency(troco)}</strong> de troco
+                          </span>
+                        </div>
+                      )}
+
+                      {/* DETALHES — sem Prazo */}
                       <Card className="bg-muted/30 mb-3">
                         <CardContent className="p-3">
-                          <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="grid grid-cols-2 gap-2 text-center">
                             <div>
                               <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Banco</p>
                               <p className="text-xs font-semibold text-foreground truncate">{bancoNome}</p>
                             </div>
-                            <div className="border-x border-border">
-                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Prazo</p>
-                              <p className="text-xs font-semibold text-foreground">{prazo} meses</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Total do novo</p>
+                            <div className="border-l border-border">
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Total do novo contrato</p>
                               <p className="text-xs font-semibold text-foreground font-mono" data-testid="text-total-contract">{temResultado ? formatCurrency(totalNovo) : "—"}</p>
                             </div>
                           </div>
