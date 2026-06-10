@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
-  User, MapPin, History, ExternalLink, CreditCard, ImageIcon, TriangleAlert,
+  User, MapPin, CreditCard, ImageIcon, TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1117,35 +1117,6 @@ export default function ContratosPropostaPage() {
         </div>
       )}
 
-      {/* Banner de cliente recorrente */}
-      {clientLookup && (
-        <div className="flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-3 text-sm text-blue-700 dark:text-blue-400">
-          <History className="h-4 w-4 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <span className="font-medium">Cliente já cadastrado</span>
-            {" — "}
-            <span>
-              {clientLookup.proposalCount} proposta{clientLookup.proposalCount !== 1 ? "s" : ""} anterior{clientLookup.proposalCount !== 1 ? "es" : ""}.
-              {" "}Dados do último cadastro pré-carregados automaticamente.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => window.open(`/contratos/${clientLookup.lastProposalId}`, "_blank")}
-            className="flex items-center gap-1 shrink-0 underline underline-offset-2 hover:opacity-70"
-          >
-            Ver histórico <ExternalLink className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Indicador de lookup em andamento */}
-      {isLookingUp && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Verificando cadastro anterior...
-        </div>
-      )}
 
       {/* Alerta de divergência de nome entre contracheque e documento */}
       {nameAlert && (
