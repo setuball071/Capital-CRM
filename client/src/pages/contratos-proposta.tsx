@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
-  User, MapPin, CreditCard, ImageIcon, TriangleAlert,
+  User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,9 @@ import {
   AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -447,6 +450,55 @@ export default function ContratosPropostaPage() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [docDragOver, setDocDragOver] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
+
+  // ── Buscador de CEP (busca reversa por endereço) ───────────────────────────
+  const [cepSearchOpen, setCepSearchOpen] = useState(false);
+  const [cepSearchUf,        setCepSearchUf]        = useState("");
+  const [cepSearchCidade,    setCepSearchCidade]    = useState("");
+  const [cepSearchLogradouro, setCepSearchLogradouro] = useState("");
+  const [cepSearchResults, setCepSearchResults] = useState<any[]>([]);
+  const [cepSearchLoading, setCepSearchLoading] = useState(false);
+  const [cepSearchError, setCepSearchError] = useState<string | null>(null);
+
+  async function searchCepByAddress() {
+    const uf  = cepSearchUf.trim().toUpperCase();
+    const cid = cepSearchCidade.trim();
+    const log = cepSearchLogradouro.trim();
+    if (uf.length !== 2 || cid.length < 3 || log.length < 3) {
+      setCepSearchError("Preencha UF (2 letras), cidade (mín 3) e logradouro (mín 3).");
+      return;
+    }
+    setCepSearchError(null);
+    setCepSearchLoading(true);
+    setCepSearchResults([]);
+    try {
+      const res = await fetch(
+        `https://viacep.com.br/ws/${uf}/${encodeURIComponent(cid)}/${encodeURIComponent(log)}/json/`
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setCepSearchResults(data);
+      } else {
+        setCepSearchError("Nenhum endereço encontrado. Tente ajustar os termos.");
+      }
+    } catch {
+      setCepSearchError("Falha na busca. Verifique sua conexão.");
+    } finally {
+      setCepSearchLoading(false);
+    }
+  }
+
+  function pickCepResult(r: any) {
+    form.setValue("clientCep",        formatCep(r.cep || ""));
+    form.setValue("clientLogradouro", r.logradouro || "");
+    form.setValue("clientBairro",     r.bairro || "");
+    form.setValue("clientCidade",     r.localidade || "");
+    form.setValue("clientEstado",     r.uf || "");
+    setCepSearchOpen(false);
+    setCepSearchResults([]);
+    setCepSearchError(null);
+    setTimeout(() => document.getElementById("field-numero")?.focus(), 50);
+  }
 
   async function fetchCep(cepRaw: string) {
     const digits = cepRaw.replace(/\D/g, "");
@@ -1344,7 +1396,17 @@ export default function ContratosPropostaPage() {
                 name="clientCep"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CEP *</FormLabel>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <FormLabel>CEP *</FormLabel>
+                      <button
+                        type="button"
+                        onClick={() => setCepSearchOpen(true)}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                      >
+                        <Search className="h-3 w-3" />
+                        Não sei o CEP
+                      </button>
+                    </div>
                     <FormControl>
                       <div className="relative">
                         <Input
@@ -1783,6 +1845,91 @@ export default function ContratosPropostaPage() {
           </div>
         </form>
       </Form>
+
+      {/* ── Buscador de CEP por endereço ── */}
+      <Dialog open={cepSearchOpen} onOpenChange={setCepSearchOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5 text-blue-600" />
+              Buscar CEP pelo endereço
+            </DialogTitle>
+            <DialogDescription>
+              Informe UF, cidade e parte do nome da rua para localizar o CEP.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="sm:col-span-1">
+                <label className="text-xs font-medium block mb-1">UF</label>
+                <Input
+                  value={cepSearchUf}
+                  onChange={(e) => setCepSearchUf(e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="RJ"
+                  maxLength={2}
+                  className="uppercase"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="text-xs font-medium block mb-1">Cidade</label>
+                <Input
+                  value={cepSearchCidade}
+                  onChange={(e) => setCepSearchCidade(e.target.value)}
+                  placeholder="Rio de Janeiro"
+                />
+              </div>
+              <div className="sm:col-span-4">
+                <label className="text-xs font-medium block mb-1">Logradouro (parte do nome)</label>
+                <Input
+                  value={cepSearchLogradouro}
+                  onChange={(e) => setCepSearchLogradouro(e.target.value)}
+                  placeholder="Av. das Américas"
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); searchCepByAddress(); } }}
+                />
+              </div>
+            </div>
+
+            {cepSearchError && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                {cepSearchError}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button onClick={searchCepByAddress} disabled={cepSearchLoading}>
+                {cepSearchLoading ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Buscando...</>
+                ) : (
+                  <><Search className="h-4 w-4 mr-2" /> Buscar</>
+                )}
+              </Button>
+            </div>
+
+            {cepSearchResults.length > 0 && (
+              <div className="space-y-2 max-h-72 overflow-y-auto rounded-lg border bg-card p-1">
+                <p className="text-xs text-muted-foreground px-2 pt-1">
+                  {cepSearchResults.length} resultado{cepSearchResults.length !== 1 ? "s" : ""} — clique para selecionar:
+                </p>
+                {cepSearchResults.map((r, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => pickCepResult(r)}
+                    className="w-full text-left rounded-md p-2 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                  >
+                    <p className="text-sm font-medium">{r.logradouro}{r.complemento ? ` — ${r.complemento}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.bairro} · {r.localidade}/{r.uf} · <span className="font-mono">{r.cep}</span>
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Popup de confirmação de conta bancária ── */}
       <AlertDialog open={showManualConfirm} onOpenChange={setShowManualConfirm}>
