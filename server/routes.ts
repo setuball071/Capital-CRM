@@ -22541,10 +22541,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const vendedorUser = await storage.getUser(vendedorId);
         if (!vendedorUser || vendedorUser.isDemo) continue;
 
+        // Breakdown por tipo (mesma lógica do /api/dashboard-vendedor):
+        //   Cartão       = is_cartao=true OU tipo contém "cart"
+        //   Portabilidade= NÃO cartão E tipo contém "port"
+        //   Novo         = NÃO cartão E tipo contém "novo" ou "consig"
+        //   prod_geral (Meta Geral) = prod_total - prod_cartao
         const prodResult = await db.execute(sql`
           SELECT
-            COALESCE(SUM(valor_base), 0)::numeric as prod_geral,
+            COALESCE(SUM(valor_base), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
@@ -22557,8 +22564,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const vendResult = await db.execute(sql`
           SELECT
-            COALESCE(SUM(valor_contrato), 0)::numeric as prod_geral,
+            COALESCE(SUM(valor_contrato), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
           FROM vendedor_contratos
@@ -22568,8 +22577,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND data_contrato <= ${lastDayOfMonth.toISOString()}
         `);
 
-        const prodGeral = (parseFloat(prodResult.rows[0]?.prod_geral as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_geral as string) || 0);
+        const prodTotalValor = (parseFloat(prodResult.rows[0]?.prod_total as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_total as string) || 0);
         const prodCartao = (parseFloat(prodResult.rows[0]?.prod_cartao as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_cartao as string) || 0);
+        const prodNovo = (parseFloat(prodResult.rows[0]?.prod_novo as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_novo as string) || 0);
+        const prodPortabilidade = (parseFloat(prodResult.rows[0]?.prod_portabilidade as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_portabilidade as string) || 0);
+        // Meta Geral = produção SEM cartão (Novo + Port + Refin + Outro)
+        const prodGeral = prodTotalValor - prodCartao;
         const contratosTotal = (parseInt(prodResult.rows[0]?.contratos_total as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_total as string) || 0);
         const contratosCartao = (parseInt(prodResult.rows[0]?.contratos_cartao as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_cartao as string) || 0);
 
@@ -22593,6 +22606,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           nome: vendedorUser.name,
           foto: vendedorUser.avatarUrl || null,
           producaoGeral: Math.round(prodGeral * 100) / 100,
+          producaoNovo: Math.round(prodNovo * 100) / 100,
+          producaoPortabilidade: Math.round(prodPortabilidade * 100) / 100,
           producaoCartao: Math.round(prodCartao * 100) / 100,
           contratos: contratosTotal,
           contratosCartao: contratosCartao,
@@ -22605,6 +22620,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const totalProduzidoGeral = vendedoresData.reduce((s, v) => s + v.producaoGeral, 0);
       const totalProduzidoCartao = vendedoresData.reduce((s, v) => s + v.producaoCartao, 0);
+      const totalProduzidoNovo = vendedoresData.reduce((s, v) => s + v.producaoNovo, 0);
+      const totalProduzidoPortabilidade = vendedoresData.reduce((s, v) => s + v.producaoPortabilidade, 0);
 
       const rankingGeral = [...vendedoresData].sort((a, b) => b.producaoGeral - a.producaoGeral).map((v, i) => ({ ...v, posicao: i + 1 }));
       const rankingCartao = [...vendedoresData].sort((a, b) => b.producaoCartao - a.producaoCartao).map((v, i) => ({ ...v, posicao: i + 1 }));
@@ -22615,6 +22632,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           metaCartao: metaCartaoEquipe,
           totalProduzidoGeral: Math.round(totalProduzidoGeral * 100) / 100,
           totalProduzidoCartao: Math.round(totalProduzidoCartao * 100) / 100,
+          totalProduzidoNovo: Math.round(totalProduzidoNovo * 100) / 100,
+          totalProduzidoPortabilidade: Math.round(totalProduzidoPortabilidade * 100) / 100,
           percentualGeral: metaGeralEquipe > 0 ? Math.round((totalProduzidoGeral / metaGeralEquipe) * 100) : 0,
           percentualCartao: metaCartaoEquipe > 0 ? Math.round((totalProduzidoCartao / metaCartaoEquipe) * 100) : 0,
         },
@@ -22714,10 +22733,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const vendedorUser = await storage.getUser(vendedorId);
         if (!vendedorUser || vendedorUser.isDemo) continue;
 
+        // Breakdown por tipo (mesma lógica do /api/dashboard-vendedor):
+        //   Cartão       = is_cartao=true OU tipo contém "cart"
+        //   Portabilidade= NÃO cartão E tipo contém "port"
+        //   Novo         = NÃO cartão E tipo contém "novo" ou "consig"
+        //   prod_geral (Meta Geral) = prod_total - prod_cartao
         const prodResult = await db.execute(sql`
           SELECT
-            COALESCE(SUM(valor_base), 0)::numeric as prod_geral,
+            COALESCE(SUM(valor_base), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
@@ -22730,8 +22756,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const vendResult = await db.execute(sql`
           SELECT
-            COALESCE(SUM(valor_contrato), 0)::numeric as prod_geral,
+            COALESCE(SUM(valor_contrato), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
           FROM vendedor_contratos
@@ -22741,8 +22769,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND data_contrato <= ${lastDayOfMonth.toISOString()}
         `);
 
-        const prodGeral = (parseFloat(prodResult.rows[0]?.prod_geral as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_geral as string) || 0);
+        const prodTotalValor = (parseFloat(prodResult.rows[0]?.prod_total as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_total as string) || 0);
         const prodCartao = (parseFloat(prodResult.rows[0]?.prod_cartao as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_cartao as string) || 0);
+        const prodNovo = (parseFloat(prodResult.rows[0]?.prod_novo as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_novo as string) || 0);
+        const prodPortabilidade = (parseFloat(prodResult.rows[0]?.prod_portabilidade as string) || 0) + (parseFloat(vendResult.rows[0]?.prod_portabilidade as string) || 0);
+        // Meta Geral = produção SEM cartão (Novo + Port + Refin + Outro)
+        const prodGeral = prodTotalValor - prodCartao;
         const contratosTotal = (parseInt(prodResult.rows[0]?.contratos_total as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_total as string) || 0);
         const contratosCartao = (parseInt(prodResult.rows[0]?.contratos_cartao as string) || 0) + (parseInt(vendResult.rows[0]?.contratos_cartao as string) || 0);
 
@@ -22764,6 +22796,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           nome: vendedorUser.name,
           foto: vendedorUser.avatarUrl || null,
           producaoGeral: Math.round(prodGeral * 100) / 100,
+          producaoNovo: Math.round(prodNovo * 100) / 100,
+          producaoPortabilidade: Math.round(prodPortabilidade * 100) / 100,
           producaoCartao: Math.round(prodCartao * 100) / 100,
           contratos: contratosTotal,
           contratosCartao: contratosCartao,

@@ -9,7 +9,9 @@ interface VendedorRanking {
   userId: number;
   nome: string;
   foto: string | null;
-  producaoGeral: number;
+  producaoGeral: number;         // soma sem cartão (Novo + Port + Refin + Outro)
+  producaoNovo: number;          // breakdown da produção geral
+  producaoPortabilidade: number; // breakdown da produção geral
   producaoCartao: number;
   contratos: number;
   contratosCartao: number;
@@ -24,8 +26,10 @@ interface GestorDashboardData {
   equipe: {
     metaGeral: number;
     metaCartao: number;
-    totalProduzidoGeral: number;
+    totalProduzidoGeral: number;         // sem cartão
     totalProduzidoCartao: number;
+    totalProduzidoNovo: number;          // breakdown
+    totalProduzidoPortabilidade: number; // breakdown
     percentualGeral: number;
     percentualCartao: number;
   };
@@ -48,13 +52,15 @@ function formatBRL(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 }
 
-function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, variant }: {
+function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, variant, novo, portabilidade }: {
   label: string;
   icon: typeof Target;
   produzido: number;
   meta: number;
   percentual: number;
   variant: "geral" | "cartao";
+  novo?: number;
+  portabilidade?: number;
 }) {
   const isCartao = variant === "cartao";
 
@@ -84,12 +90,32 @@ function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, varian
           </div>
         </div>
 
-        <div className={`w-full h-2.5 rounded-full overflow-hidden ${isCartao ? "bg-gray-700" : "bg-muted"}`}>
+        <div className={`w-full h-2.5 rounded-full overflow-hidden ${isCartao ? "bg-gray-700" : "bg-muted"} mb-3`}>
           <div
             className={`h-full rounded-full transition-all duration-1000 ${isCartao ? "bg-gradient-to-r from-purple-600 to-purple-400" : "bg-gradient-to-r from-primary to-chart-2"}`}
             style={{ width: `${Math.min(percentual, 100)}%` }}
           />
         </div>
+
+        {/* Breakdown Contrato Novo + Portabilidade (só na Meta Geral) */}
+        {!isCartao && (novo !== undefined || portabilidade !== undefined) && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md border bg-muted/40 px-3 py-2">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contrato Novo</p>
+              <p className="text-sm font-bold" data-testid="text-equipe-novo">{formatBRL(novo || 0)}</p>
+            </div>
+            <div className="rounded-md border bg-muted/40 px-3 py-2">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
+              <p className="text-sm font-bold" data-testid="text-equipe-portabilidade">{formatBRL(portabilidade || 0)}</p>
+            </div>
+          </div>
+        )}
+
+        {isCartao && (
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">
+            Acompanhamento separado da Meta Geral
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -138,7 +164,13 @@ function RankingTable({ title, icon: Icon, data, type }: {
                 <TableRow>
                   <TableHead className="w-12 text-center">#</TableHead>
                   <TableHead>Corretor</TableHead>
-                  <TableHead className="text-right">{isCartao ? "Prod. Cartão" : "Produção"}</TableHead>
+                  {!isCartao && (
+                    <>
+                      <TableHead className="text-right hidden md:table-cell">Novo</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">Port.</TableHead>
+                    </>
+                  )}
+                  <TableHead className="text-right">{isCartao ? "Prod. Cartão" : "Total Geral"}</TableHead>
                   <TableHead className="text-right">% Meta</TableHead>
                   <TableHead className="text-right">Contratos</TableHead>
                 </TableRow>
@@ -170,6 +202,16 @@ function RankingTable({ title, icon: Icon, data, type }: {
                           <span className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</span>
                         </div>
                       </TableCell>
+                      {!isCartao && (
+                        <>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground hidden md:table-cell" data-testid={`text-ranking-novo-${v.userId}`}>
+                            {formatBRL(v.producaoNovo || 0)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground hidden md:table-cell" data-testid={`text-ranking-portabilidade-${v.userId}`}>
+                            {formatBRL(v.producaoPortabilidade || 0)}
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell className="text-right font-mono text-sm" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
                         {formatBRL(prod)}
                       </TableCell>
@@ -242,6 +284,8 @@ function GestorDashboard() {
               meta={data.equipe.metaGeral}
               percentual={data.equipe.percentualGeral}
               variant="geral"
+              novo={data.equipe.totalProduzidoNovo}
+              portabilidade={data.equipe.totalProduzidoPortabilidade}
             />
             <EquipeMetaCard
               label="Meta Cartão da Equipe"
