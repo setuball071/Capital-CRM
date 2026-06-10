@@ -217,7 +217,7 @@ interface FileAttachment {
 
 // ─── Tipos de step ────────────────────────────────────────────────────────────
 
-type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato";
+type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato" | "conferencia";
 
 // ─── Wizard progress indicator ────────────────────────────────────────────────
 
@@ -2160,7 +2160,7 @@ export default function ContratosPropostaPage() {
 
   // ─── STEP 4 — Tipo de Contrato ────────────────────────────────────────────
 
-  return (
+  if (step === "tipo-contrato") return (
     <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-3">
         <Button size="icon" variant="ghost" onClick={() => setStep("dados-cadastrais")}>
@@ -2603,8 +2603,29 @@ export default function ContratosPropostaPage() {
               <Button type="button" variant="outline" onClick={() => setStep("dados-cadastrais")}>
                 Voltar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Cadastrando..." : "Cadastrar Proposta"}
+              <Button
+                type="button"
+                onClick={async () => {
+                  // Validações mínimas antes de avançar para conferência
+                  const okBank = !!form.getValues("bank");
+                  const okValor = parseBrNumber(form.getValues("contractValue") || "") > 0;
+                  const okParc  = parseBrNumber(form.getValues("installmentValue") || "") > 0;
+                  if (!okBank) {
+                    toast({ title: "Selecione o banco", variant: "destructive" });
+                    return;
+                  }
+                  if (contractType !== "CARTAO" && !form.getValues("tableId")) {
+                    toast({ title: "Selecione a tabela", variant: "destructive" });
+                    return;
+                  }
+                  if (!okValor || !okParc) {
+                    toast({ title: "Informe os valores (liberado e parcela)", variant: "destructive" });
+                    return;
+                  }
+                  setStep("conferencia");
+                }}
+              >
+                Conferência →
               </Button>
             </div>
           </form>
@@ -2621,6 +2642,214 @@ export default function ContratosPropostaPage() {
       )}
     </div>
   );
+
+  // ─── STEP 5 — Conferência ────────────────────────────────────────────────
+  if (step === "conferencia") {
+    const v = form.getValues();
+    const contractTypeLabel = CONTRACT_TYPES.find((c) => c.id === contractType)?.label ?? contractType;
+    const valorContrato     = parseBrNumber(v.contractValue) || 0;
+    const valorParcela      = parseBrNumber(v.installmentValue) || 0;
+
+    // Conta selecionada
+    const contas = parsedData?.contas?.length
+      ? parsedData.contas
+      : parsedData?.bancoSalario
+        ? [{ banco: parsedData.bancoSalario, agencia: parsedData.agencia, conta: parsedData.conta, tipo: "salario" as const, label: "Conta Salário" }]
+        : [];
+    const contaSel = selectedContaIdx === "manual"
+      ? { banco: v.contaBanco, agencia: v.contaAgencia, conta: v.contaConta, label: "Conta informada manualmente" }
+      : (typeof selectedContaIdx === "number" ? contas[selectedContaIdx] : null);
+
+    return (
+      <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button size="icon" variant="ghost" onClick={() => setStep("tipo-contrato")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Conferência da Proposta</h1>
+              {selectedConvenio && <Badge variant="outline">{selectedConvenio.label}</Badge>}
+            </div>
+            <p className="text-sm text-muted-foreground">Revise todos os dados antes de cadastrar</p>
+          </div>
+        </div>
+
+        <StepIndicator current="conferencia" />
+
+        {/* Card: Cliente */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <User className="h-4 w-4" /> Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            <InfoField label="Nome" value={v.clientName} wide />
+            <InfoField label="CPF" value={v.clientCpf} />
+            <InfoField label="Matrícula" value={v.clientMatricula || "—"} />
+            <InfoField label="Telefone" value={v.clientPhone} />
+            <InfoField label="E-mail" value={v.clientEmail} wide />
+          </CardContent>
+        </Card>
+
+        {/* Card: Documento com foto */}
+        {docPhotoData && (
+          <Card className="border-purple-200 dark:border-purple-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                <CreditCard className="h-4 w-4" />
+                {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+              {docPhotoData.numeroRegistro && <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />}
+              {docPhotoData.dataNascimento && <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />}
+              {docPhotoData.dataExpedicao && <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />}
+              {docPhotoData.orgaoEmissor && <InfoField label="Emissor" value={docPhotoData.orgaoEmissor} />}
+              {docPhotoData.filiacao?.[0] && <InfoField label="Pai" value={docPhotoData.filiacao[0]} wide />}
+              {docPhotoData.filiacao?.[1] && <InfoField label="Mãe" value={docPhotoData.filiacao[1]} wide />}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Card: SIAPE */}
+        {parsedData && (
+          <Card className="border-green-200 dark:border-green-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
+                <MapPin className="h-4 w-4" /> Dados SIAPE
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+              {parsedData.identSiape && <InfoField label="Ident. SIAPE" value={parsedData.identSiape} />}
+              {parsedData.uf && <InfoField label="UF" value={parsedData.uf} />}
+              {parsedData.vinculo && <InfoField label="Vínculo" value={parsedData.vinculo} />}
+              {parsedData.regJuridico && <InfoField label="Regime" value={parsedData.regJuridico} />}
+              {parsedData.mesAno && <InfoField label="Competência" value={parsedData.mesAno} />}
+              {parsedData.orgao && <InfoField label="Órgão" value={parsedData.orgao} wide />}
+              {contaSel && (
+                <div className="col-span-2 md:col-span-3 lg:col-span-4 rounded-md border bg-blue-50/40 dark:bg-blue-950/20 p-3 mt-1">
+                  <p className="text-xs text-muted-foreground">Conta para crédito · {contaSel.label}</p>
+                  <p className="text-sm font-mono mt-1">
+                    Banco <strong>{contaSel.banco}</strong>
+                    {" · "}Ag <strong>{contaSel.agencia}</strong>
+                    {" · "}Conta <strong>{contaSel.conta}</strong>
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Card: Endereço */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MapPin className="h-4 w-4" /> Endereço
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            <InfoField label="CEP" value={v.clientCep} />
+            <InfoField label="Logradouro" value={`${v.clientLogradouro}, ${v.clientNumero}${v.clientComplemento ? ` — ${v.clientComplemento}` : ""}`} wide />
+            <InfoField label="Bairro" value={v.clientBairro} />
+            <InfoField label="Cidade" value={v.clientCidade} />
+            <InfoField label="UF" value={v.clientEstado} />
+          </CardContent>
+        </Card>
+
+        {/* Card: Operação */}
+        <Card className="border-blue-200 dark:border-blue-900">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+              <Building2 className="h-4 w-4" />
+              {contractTypeLabel}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+            <InfoField label="Banco" value={v.bank || "—"} />
+            {selectedTabela && <InfoField label="Tabela" value={selectedTabela.nome} wide />}
+            {selectedTabela?.prazo && <InfoField label="Prazo" value={`${selectedTabela.prazo} meses`} />}
+            <InfoField
+              label={contractType === "CARTAO" ? "Valor do Saque" : contractType === "PORTABILIDADE_REFIN" ? "Troco" : "Valor Liberado"}
+              value={fmtBRL(valorContrato)}
+            />
+            <InfoField
+              label={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Nova Parcela" : "Parcela"}
+              value={fmtBRL(valorParcela)}
+            />
+            {v.bancoOrigem && <InfoField label="Banco de Origem" value={v.bancoOrigem} />}
+            {v.saldoDevedor && <InfoField label="Saldo Devedor" value={`R$ ${v.saldoDevedor}`} />}
+            {v.prazoAtual && <InfoField label="Prazo Restante" value={`${v.prazoAtual} meses`} />}
+            {v.ade && <InfoField label="ADE" value={v.ade} />}
+          </CardContent>
+        </Card>
+
+        {/* Card: Comissão (líquido do corretor) */}
+        {selectedTabela && myGrupo && (
+          <Card className="border-green-200 dark:border-green-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
+                <BadgePercent className="h-4 w-4" /> Sua Comissão
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4 text-sm">
+              <InfoField label="% Repasse Corretor" value={`${pctCorretor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`} />
+              <InfoField label="R$ Comissão Corretor" value={fmtBRL(valCorretor)} />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Card: Documentos anexados */}
+        {attachments.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Upload className="h-4 w-4" /> Documentos Anexados
+                <span className="text-xs font-normal text-muted-foreground">— {attachments.length}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {attachments.map((att, i) => (
+                <div key={i} className="flex items-center gap-3 p-2 rounded-md border bg-card text-sm">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1 truncate">{att.file.name}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {DOCUMENT_TYPES.find((d) => d.value === att.documentType)?.label || att.documentType}
+                  </Badge>
+                  <button
+                    type="button"
+                    onClick={() => openAttachmentPreview(att.file)}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Visualizar
+                  </button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Footer: confirmar e cadastrar */}
+        <div className="flex justify-end gap-3 pb-4">
+          <Button type="button" variant="outline" onClick={() => setStep("tipo-contrato")}>
+            ← Voltar e editar
+          </Button>
+          <Button
+            type="button"
+            disabled={createMutation.isPending}
+            className="bg-green-600 hover:bg-green-700 text-white"
+            onClick={() => createMutation.mutate(form.getValues())}
+          >
+            {createMutation.isPending ? "Cadastrando..." : "✓ Confirmar e Cadastrar Proposta"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback impossível
+  return null;
 }
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
