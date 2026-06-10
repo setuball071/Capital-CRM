@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useProposta } from "@/contexts/proposta-context";
+import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -31,6 +32,7 @@ const OPERATION_TYPES = [
 ] as const;
 
 export default function CalculatorPage() {
+  const { user } = useAuth();
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number; saldoFinal: number } | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [liquidPayment, setLiquidPayment] = useState<number>(0);
@@ -314,147 +316,196 @@ export default function CalculatorPage() {
       }
 
       if (format === 'pdf') {
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: 'a4',
-        });
+        // PDF reformulado: A4 RETRATO (mais natural pra WhatsApp), foco no troco
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const ml = 16, mr = 16;
+        const cw = pageWidth - ml - mr;
+        let y = 0;
 
-        const pageWidth = 297;
-        const pageHeight = 210;
-        let yPos = 20;
+        // === Faixa roxa Capital Go ===
+        pdf.setFillColor(124, 58, 237); // #7C3AED
+        pdf.rect(0, 0, pageWidth, 4, 'F');
+        y = 16;
 
-        pdf.setFillColor(37, 99, 235);
-        pdf.rect(0, 0, pageWidth, 15, 'F');
+        // === Logo / Header ===
+        pdf.setTextColor(124, 58, 237);
+        pdf.setFontSize(20);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Capital Go', ml, y);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(120, 120, 120);
+        pdf.text('Crédito Consignado', ml, y + 4);
+        // Data e nº proposta no canto direito
+        const dt = new Date();
+        const dataStr = dt.toLocaleDateString('pt-BR');
+        const propNum = 'CG-' + String(Date.now()).slice(-6);
+        pdf.text(`Proposta nº ${propNum}`, pageWidth - mr, y, { align: 'right' });
+        pdf.text(dataStr, pageWidth - mr, y + 4, { align: 'right' });
+        y += 12;
 
+        // === Saudação ===
+        pdf.setFillColor(248, 247, 255);
+        pdf.rect(ml, y, cw, 14, 'F');
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const nomeCli = (formData.client.name || 'Cliente').split(' ')[0];
+        pdf.text(`Olá, ${nomeCli}!`, ml + 4, y + 6);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Olha a oportunidade que separamos para você:', ml + 4, y + 11);
+        y += 20;
+
+        // === DESTAQUE TROCO ===
+        const trocoVal = result.clientRefund;
+        pdf.setFillColor(124, 58, 237);
+        pdf.roundedRect(ml, y, cw, 32, 3, 3, 'F');
+        pdf.setTextColor(220, 200, 255);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('DINHEIRO NA SUA CONTA', pageWidth / 2, y + 7, { align: 'center' });
+        pdf.setFontSize(28);
         pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(18);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Simulador de Compra', pageWidth / 2, 9, { align: 'center' });
-
-        pdf.setTextColor(0, 0, 0);
-        yPos = 25;
-
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Dados do Cliente', 15, yPos);
-        yPos += 8;
-
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Nome', 15, yPos);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(formData.client.name, 15, yPos + 5);
-        yPos += 12;
-
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Convênio', 15, yPos);
-        pdf.text('Tipo de Operação', 150, yPos);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(selectedAgreement?.name || '', 15, yPos + 5);
-        pdf.text(operationTypeLabel, 150, yPos + 5);
-        yPos += 15;
-
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Dados da Operação', 15, yPos);
-        yPos += 8;
-
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Parcela Atual (R$)', 15, yPos);
-        pdf.text('Banco', 150, yPos);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(formatCurrency(formData.operation.monthlyPayment), 15, yPos + 5);
-        pdf.text(formData.operation.bank, 150, yPos + 5);
-        yPos += 12;
-
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Parcela Líquida (R$)', 15, yPos);
-        pdf.text('Prazo', 150, yPos);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(formatCurrency(liquidPayment), 15, yPos + 5);
-        pdf.text(`${formData.operation.termMonths} meses`, 150, yPos + 5);
-        yPos += 12;
-
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Saldo Devedor (R$)', 15, yPos);
-        pdf.text('Tabela (Coeficiente)', 150, yPos);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(formatCurrency(formData.operation.outstandingBalance), 15, yPos + 5);
+        pdf.text(formatCurrency(trocoVal), pageWidth / 2, y + 19, { align: 'center' });
         pdf.setFontSize(8);
-        pdf.text(selectedTable?.tableName || '', 150, yPos + 5);
-        yPos += 15;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(220, 200, 255);
+        pdf.text('Liberado em até 5 dias úteis', pageWidth / 2, y + 27, { align: 'center' });
+        y += 38;
 
-        // Add Saldo Final if there's an adjustment
-        if (ajusteSaldoPercentual !== 0) {
-          pdf.setFontSize(10);
+        // === Como vai funcionar ===
+        pdf.setTextColor(80, 80, 80);
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('COMO VAI FUNCIONAR:', ml, y);
+        y += 6;
+
+        const colW = (cw - 4) / 2;
+        const boxH = 36;
+        // HOJE (esquerda)
+        pdf.setFillColor(245, 245, 247);
+        pdf.roundedRect(ml, y, colW, boxH, 2, 2, 'F');
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(120, 120, 120);
+        pdf.text('HOJE', ml + 4, y + 6);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(80, 80, 80);
+        pdf.text('Dívida atual:', ml + 4, y + 13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(formatCurrency(formData.operation.outstandingBalance), ml + 4, y + 18);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(80, 80, 80);
+        pdf.text('Parcela atual:', ml + 4, y + 26);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(`${formatCurrency(formData.operation.monthlyPayment)} / mês`, ml + 4, y + 31);
+
+        // DEPOIS (direita)
+        pdf.setFillColor(232, 250, 240);
+        pdf.roundedRect(ml + colW + 4, y, colW, boxH, 2, 2, 'F');
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(22, 100, 60);
+        pdf.text('COM A CAPITAL GO', ml + colW + 8, y + 6);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(50, 100, 70);
+        pdf.text('Dívida atual:', ml + colW + 8, y + 13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(22, 163, 74);
+        pdf.text('✓ QUITADA', ml + colW + 8, y + 18);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(50, 100, 70);
+        pdf.text('Nova parcela:', ml + colW + 8, y + 26);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(22, 163, 74);
+        pdf.text(`${formatCurrency(liquidPayment)} / mês`, ml + colW + 8, y + 31);
+        y += boxH + 8;
+
+        // === Detalhes técnicos ===
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(80, 80, 80);
+        pdf.text('DETALHES DA OPERAÇÃO:', ml, y);
+        y += 5;
+        pdf.setFillColor(250, 250, 252);
+        pdf.roundedRect(ml, y, cw, 16, 2, 2, 'F');
+        const det1x = ml + 4, det2x = ml + cw / 3 + 4, det3x = ml + (2 * cw) / 3 + 4;
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(130, 130, 130);
+        pdf.text('Banco', det1x, y + 5);
+        pdf.text('Prazo', det2x, y + 5);
+        pdf.text('Total do contrato', det3x, y + 5);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(formData.operation.bank || '—', det1x, y + 11);
+        pdf.text(`${formData.operation.termMonths} meses`, det2x, y + 11);
+        pdf.text(formatCurrency(result.totalContractValue), det3x, y + 11);
+        y += 22;
+
+        // === Bloco do Consultor ===
+        const consNome = user?.name || 'Consultor';
+        const consPhoneRaw = (user as any)?.phone || (user as any)?.whatsapp || '';
+        const consPhoneDigits = String(consPhoneRaw).replace(/\D/g, '');
+        const consPhoneFmt = consPhoneDigits.length >= 10
+          ? `(${consPhoneDigits.slice(0, 2)}) ${consPhoneDigits.slice(2, -4)}-${consPhoneDigits.slice(-4)}`
+          : consPhoneRaw;
+        pdf.setFillColor(248, 247, 255);
+        pdf.roundedRect(ml, y, cw, 18, 2, 2, 'F');
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(124, 58, 237);
+        pdf.text('SEU CONSULTOR', ml + 4, y + 5);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(consNome, ml + 4, y + 11);
+        if (consPhoneFmt) {
+          pdf.setFontSize(9);
           pdf.setFont('helvetica', 'normal');
-          pdf.setTextColor(100, 116, 139);
-          pdf.text('Saldo Final', 15, yPos);
-          pdf.setFontSize(8);
-          pdf.text('Ajuste aplicado conforme regras do banco', 15, yPos + 4);
-          pdf.setFontSize(10);
-          pdf.setTextColor(0, 0, 0);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(formatCurrency(result.saldoFinal), 15, yPos + 9);
-          yPos += 16;
+          pdf.setTextColor(80, 80, 80);
+          const waText = `WhatsApp: ${consPhoneFmt}`;
+          pdf.text(waText, ml + 4, y + 16);
+          // Link clicável no número
+          const waUrl = `https://wa.me/55${consPhoneDigits}`;
+          pdf.link(ml + 4, y + 12, 60, 5, { url: waUrl });
         }
+        y += 24;
 
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Resultados da Simulação', 15, yPos);
-        yPos += 8;
-
-        pdf.setFillColor(240, 249, 255);
-        pdf.rect(15, yPos, 120, 30, 'F');
-        pdf.rect(150, yPos, 120, 30, 'F');
-
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('Valor Total do Contrato', 75, yPos + 8, { align: 'center' });
-        pdf.text('Troco do Cliente', 210, yPos + 8, { align: 'center' });
-
-        pdf.setFontSize(16);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(0, 0, 0);
-        pdf.text(formatCurrency(result.totalContractValue), 75, yPos + 18, { align: 'center' });
-
-        if (result.clientRefund >= 0) {
-          pdf.setTextColor(22, 163, 74);
-        } else {
-          pdf.setTextColor(220, 38, 38);
-        }
-        pdf.text(formatCurrency(result.clientRefund), 210, yPos + 18, { align: 'center' });
-
+        // === Selo de segurança ===
+        pdf.setFillColor(245, 250, 245);
+        pdf.roundedRect(ml, y, cw, 10, 2, 2, 'F');
         pdf.setFontSize(8);
-        pdf.setTextColor(148, 163, 184);
-        const dateStr = new Date().toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        pdf.text(`Documento gerado em ${dateStr}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(22, 100, 60);
+        pdf.text('🔒 Operação 100% segura', pageWidth / 2, y + 4, { align: 'center' });
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(80, 100, 80);
+        pdf.text('Crédito Consignado regulamentado pelo Banco Central · Seus dados protegidos', pageWidth / 2, y + 8, { align: 'center' });
 
-        const timestamp = Date.now();
-        pdf.save(`simulacao-crmpro-${timestamp}.pdf`);
+        // === Rodapé ===
+        pdf.setFontSize(7);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(
+          `Documento gerado em ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+          pageWidth / 2, pageHeight - 10, { align: 'center' }
+        );
+
+        pdf.save(`proposta-capital-go-${Date.now()}.pdf`);
 
         toast({
-          title: "PDF salvo!",
-          description: "O recibo foi salvo com sucesso.",
+          title: "Proposta gerada!",
+          description: "PDF pronto para enviar ao cliente.",
         });
       } else {
         const canvas = document.createElement('canvas');
@@ -912,59 +963,132 @@ export default function CalculatorPage() {
                 </CardContent>
               </Card>
 
-              {/* Results Section */}
+              {/* Results Section — Apresentação reformulada (foco: vantagem pro cliente) */}
               <div>
-                <h2 className="text-base font-semibold text-foreground mb-3">
-                  Resultados da Simulação
-                </h2>
-                
-                {/* Show Saldo Final when there's an adjustment */}
-                {result && ajusteSaldoPercentual !== 0 && (
-                  <Card className="mb-4">
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Saldo Final
-                          </p>
-                          <p className="text-xs text-muted-foreground/70">
-                            Ajuste aplicado conforme regras do banco
-                          </p>
-                        </div>
-                        <p className="text-lg font-semibold font-mono text-foreground" data-testid="text-saldo-final">
-                          {formatCurrency(result.saldoFinal)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card>
-                    <CardContent className="pt-5 pb-6 text-center">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Valor Total do Contrato
-                      </p>
-                      <p className="text-2xl font-bold font-mono text-foreground" data-testid="text-total-contract">
-                        {result ? formatCurrency(result.totalContractValue) : "R$ 0,00"}
-                      </p>
-                    </CardContent>
-                  </Card>
+                {(() => {
+                  const parcelaAtual = form.getValues("operation.monthlyPayment") || 0;
+                  const saldoDevedorAtual = form.getValues("operation.outstandingBalance") || 0;
+                  const novaParcela = liquidPayment;
+                  const prazo = form.getValues("operation.termMonths") || 0;
+                  const bancoNome = form.getValues("operation.bank") || "—";
+                  const troco = result?.clientRefund ?? 0;
+                  const totalNovo = result?.totalContractValue ?? 0;
+                  const diffParcela = novaParcela - parcelaAtual;
+                  const temResultado = !!result;
+                  const trocoPositivo = troco > 0;
 
-                  <Card>
-                    <CardContent className="pt-5 pb-6 text-center">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Troco do Cliente
-                      </p>
-                      <p 
-                        className={`text-2xl font-bold font-mono ${result && result.clientRefund < 0 ? 'text-destructive' : 'text-chart-2'}`}
-                        data-testid="text-client-refund"
-                      >
-                        {result ? formatCurrency(result.clientRefund) : "R$ 0,00"}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-border" />
+                        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground px-2">
+                          ✨ Oportunidade pro Cliente
+                        </h2>
+                        <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-border" />
+                      </div>
+
+                      {/* DESTAQUE TROCO */}
+                      <Card className="mb-4 overflow-hidden border-0 shadow-xl" style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}>
+                        <CardContent className="p-6 text-center text-white">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2">
+                            💰 Dinheiro na sua conta
+                          </p>
+                          <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-client-refund" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            {temResultado ? formatCurrency(troco) : "R$ 0,00"}
+                          </p>
+                          <p className="text-xs text-purple-200">
+                            {trocoPositivo ? "Liberado em até 5 dias úteis" : temResultado ? "Operação sem troco" : "Preencha os dados acima"}
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* COMPARATIVO HOJE × DEPOIS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                        {/* HOJE */}
+                        <Card className="border-muted bg-muted/30">
+                          <CardContent className="p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" /> Como está hoje
+                            </p>
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Dívida atual</p>
+                                <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(saldoDevedorAtual)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Parcela atual</p>
+                                <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(parcelaAtual)}<span className="text-xs text-muted-foreground font-normal">/mês</span></p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* DEPOIS */}
+                        <Card className="border-green-500/30 bg-green-50 dark:bg-green-950/20">
+                          <CardContent className="p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-400 mb-3 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Com a Capital Go
+                            </p>
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="text-[10px] text-green-700/80 dark:text-green-400/80">Dívida</p>
+                                <p className="text-lg font-bold text-green-700 dark:text-green-400">✓ Quitada</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-green-700/80 dark:text-green-400/80">Nova parcela</p>
+                                <p className="text-lg font-bold text-green-700 dark:text-green-400 font-mono">
+                                  {formatCurrency(novaParcela)}<span className="text-xs font-normal">/mês</span>
+                                  {temResultado && Math.abs(diffParcela) > 0.01 && (
+                                    <span className={`ml-2 text-[10px] font-semibold ${diffParcela < 0 ? "text-green-600" : "text-amber-600"}`}>
+                                      {diffParcela < 0 ? "↓" : "↑"} {formatCurrency(Math.abs(diffParcela))}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* DETALHES TÉCNICOS */}
+                      <Card className="bg-muted/30 mb-3">
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Banco</p>
+                              <p className="text-xs font-semibold text-foreground truncate">{bancoNome}</p>
+                            </div>
+                            <div className="border-x border-border">
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Prazo</p>
+                              <p className="text-xs font-semibold text-foreground">{prazo} meses</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Total do novo</p>
+                              <p className="text-xs font-semibold text-foreground font-mono" data-testid="text-total-contract">{temResultado ? formatCurrency(totalNovo) : "—"}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SALDO FINAL (quando tem ajuste) */}
+                      {result && ajusteSaldoPercentual !== 0 && (
+                        <div className="text-[10px] text-muted-foreground text-center mb-3">
+                          Saldo final ajustado: <span className="font-mono font-semibold text-foreground" data-testid="text-saldo-final">{formatCurrency(result.saldoFinal)}</span>
+                          <span className="text-muted-foreground/70"> · regras do banco</span>
+                        </div>
+                      )}
+
+                      {/* SELO DE SEGURANÇA */}
+                      <div className="flex items-center justify-center gap-2 text-[10px] font-medium text-muted-foreground py-2">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <rect x="3" y="11" width="18" height="11" rx="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        Operação 100% segura · Crédito Consignado regulamentado pelo Banco Central
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
