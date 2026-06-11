@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle } from "lucide-react";
 import type { Tenant, TenantTheme } from "@shared/schema";
 import { GradientEditor, GradientConfig, generateGradientCSS, parseGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
+import { LogoCropperDialog } from "@/components/logo-cropper-dialog";
 
 const FONT_OPTIONS = [
   { value: "Inter", label: "Inter" },
@@ -92,6 +93,28 @@ export default function AdminBrandingPage() {
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoLoginFile, setLogoLoginFile] = useState<File | null>(null);
+  // Estado do cropper: qual logo está sendo editada e o arquivo cru antes do ajuste
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [cropperTarget, setCropperTarget] = useState<"sidebar" | "login" | "favicon" | null>(null);
+  const [cropperRawFile, setCropperRawFile] = useState<File | null>(null);
+
+  // Abre o editor de crop com o arquivo selecionado pelo input
+  const openCropper = (target: "sidebar" | "login" | "favicon", file: File | null) => {
+    if (!file) return;
+    setCropperRawFile(file);
+    setCropperTarget(target);
+    setCropperOpen(true);
+  };
+
+  // Recebe o arquivo já recortado e coloca no state correspondente
+  const handleCropperConfirm = (file: File) => {
+    if (cropperTarget === "sidebar") setLogoFile(file);
+    else if (cropperTarget === "login") setLogoLoginFile(file);
+    else if (cropperTarget === "favicon") setFaviconFile(file);
+    setCropperOpen(false);
+    setCropperTarget(null);
+    setCropperRawFile(null);
+  };
   const [faviconFile, setFaviconFile] = useState<File | null>(null);
 
   const { data: tenantData, isLoading } = useQuery<Tenant>({
@@ -359,7 +382,19 @@ export default function AdminBrandingPage() {
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
-                  <Input type="file" accept="image/png,image/svg+xml" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} data-testid="input-logo-sidebar" />
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (!f) return;
+                      // SVG vai direto (vetor, sem necessidade de crop). Demais formatos passam pelo cropper.
+                      if (f.type === "image/svg+xml") setLogoFile(f);
+                      else openCropper("sidebar", f);
+                      e.target.value = ""; // permite re-selecionar o mesmo arquivo
+                    }}
+                    data-testid="input-logo-sidebar"
+                  />
                   <Button onClick={() => handleLogoUpload("sidebar")} disabled={!logoFile || uploadLogoMutation.isPending} size="sm" data-testid="button-upload-logo-sidebar">
                     {uploadLogoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   </Button>
@@ -385,7 +420,18 @@ export default function AdminBrandingPage() {
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
-                  <Input type="file" accept="image/png,image/svg+xml" onChange={(e) => setLogoLoginFile(e.target.files?.[0] || null)} data-testid="input-logo-login" />
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (!f) return;
+                      if (f.type === "image/svg+xml") setLogoLoginFile(f);
+                      else openCropper("login", f);
+                      e.target.value = "";
+                    }}
+                    data-testid="input-logo-login"
+                  />
                   <Button onClick={() => handleLogoUpload("login")} disabled={!logoLoginFile || uploadLogoMutation.isPending} size="sm" data-testid="button-upload-logo-login">
                     {uploadLogoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   </Button>
@@ -411,7 +457,19 @@ export default function AdminBrandingPage() {
                   </div>
                 )}
                 <div className="flex-1 flex gap-2">
-                  <Input type="file" accept="image/png,image/svg+xml,.ico" onChange={(e) => setFaviconFile(e.target.files?.[0] || null)} data-testid="input-favicon" />
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,.ico"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (!f) return;
+                      // SVG/ICO vão direto; PNG/JPG passam pelo cropper quadrado
+                      if (f.type === "image/svg+xml" || f.name.endsWith(".ico")) setFaviconFile(f);
+                      else openCropper("favicon", f);
+                      e.target.value = "";
+                    }}
+                    data-testid="input-favicon"
+                  />
                   <Button onClick={() => handleLogoUpload("favicon")} disabled={!faviconFile || uploadLogoMutation.isPending} size="sm" data-testid="button-upload-favicon">
                     {uploadLogoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   </Button>
@@ -823,6 +881,25 @@ export default function AdminBrandingPage() {
           </Button>
         </div>
       </div>
+
+      {/* Editor de logo estilo WhatsApp — abre quando um arquivo de imagem (não-SVG) é selecionado */}
+      <LogoCropperDialog
+        open={cropperOpen}
+        onOpenChange={setCropperOpen}
+        file={cropperRawFile}
+        // Logo do menu lateral e da tela de login: aspecto retangular largo (4:1)
+        // Favicon: quadrado (1:1)
+        aspectRatio={cropperTarget === "favicon" ? 1 : 4}
+        outputWidth={cropperTarget === "favicon" ? 256 : 1024}
+        outputHeight={cropperTarget === "favicon" ? 256 : undefined}
+        title={
+          cropperTarget === "sidebar" ? "Ajustar Logo do Menu Lateral" :
+          cropperTarget === "login" ? "Ajustar Logo da Tela de Login" :
+          cropperTarget === "favicon" ? "Ajustar Favicon" :
+          "Ajustar imagem"
+        }
+        onConfirm={handleCropperConfirm}
+      />
     </div>
   );
 }
