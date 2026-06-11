@@ -2494,6 +2494,7 @@ function salvarTabela(){
 function excluirTabela(id){
   if(!confirm('Excluir esta tabela?'))return;
   TABELAS_REF=TABELAS_REF.filter(t=>t.id!==id);
+  salvarDados();
   toast('Excluída.');renderTabelas();
 }
 function abrirSimulador(){
