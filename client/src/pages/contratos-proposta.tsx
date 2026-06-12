@@ -8,6 +8,7 @@ import {
   ArrowLeft, FileText, Upload, X, ChevronDown, ChevronUp,
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
+  Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,35 +36,40 @@ const CONVENIOS = [
     id: "SIAPE",
     label: "SIAPE",
     description: "Servidores Federais",
-    icon: "🏛️",
+    Icon: Landmark,
+    iconColor: "text-blue-600 dark:text-blue-400",
     hasPdfUpload: true,
   },
   {
     id: "INSS",
     label: "INSS",
     description: "Aposentados e Pensionistas",
-    icon: "👴",
+    Icon: Users,
+    iconColor: "text-amber-600 dark:text-amber-400",
     hasPdfUpload: false,
   },
   {
     id: "GOV_MA",
     label: "Governo do Maranhão",
     description: "Estado do Maranhão",
-    icon: "📍",
+    Icon: Flag,
+    iconColor: "text-emerald-600 dark:text-emerald-400",
     hasPdfUpload: false,
   },
   {
     id: "GOV_SC",
     label: "Governo de Santa Catarina",
     description: "Estado de Santa Catarina",
-    icon: "📍",
+    Icon: Flag,
+    iconColor: "text-indigo-600 dark:text-indigo-400",
     hasPdfUpload: false,
   },
   {
     id: "GOV_SP",
     label: "Governo de São Paulo",
     description: "Estado de São Paulo",
-    icon: "📍",
+    Icon: Flag,
+    iconColor: "text-rose-600 dark:text-rose-400",
     hasPdfUpload: false,
   },
 ];
@@ -80,42 +86,48 @@ const CONTRACT_TYPES = [
     id: "NOVO",
     label: "Contrato Novo",
     description: "Empréstimo consignado novo",
-    icon: "✨",
+    Icon: Sparkles,
+    iconColor: "text-violet-600 dark:text-violet-400",
     product: "NOVO",
   },
   {
     id: "CARTAO",
     label: "Cartão com Saque",
     description: "Cartão consignado com saque",
-    icon: "💳",
+    Icon: CreditCard,
+    iconColor: "text-blue-600 dark:text-blue-400",
     product: "CARTAO",
   },
   {
     id: "PORTABILIDADE",
     label: "Portabilidade",
     description: "Portabilidade simples sem refinanciamento",
-    icon: "🔄",
+    Icon: ArrowLeftRight,
+    iconColor: "text-cyan-600 dark:text-cyan-400",
     product: "PORTABILIDADE",
   },
   {
     id: "PORTABILIDADE_REFIN",
     label: "Portabilidade + Refinanciamento",
     description: "Portabilidade com troco refinanciado",
-    icon: "🔄📋",
+    Icon: ArrowLeftRight,
+    iconColor: "text-teal-600 dark:text-teal-400",
     product: "PORTABILIDADE",
   },
   {
     id: "COMPRA_DIVIDA",
     label: "Compra de Dívida",
     description: "Quitação de dívida externa com consignado",
-    icon: "💰",
+    Icon: Coins,
+    iconColor: "text-amber-600 dark:text-amber-400",
     product: "PORTABILIDADE",
   },
   {
     id: "REFINANCIAMENTO",
     label: "Refinanciamento",
     description: "Refin de contrato existente na mesma instituição",
-    icon: "📋",
+    Icon: RotateCw,
+    iconColor: "text-indigo-600 dark:text-indigo-400",
     product: "REFINANCIAMENTO",
   },
 ];
@@ -893,7 +905,9 @@ export default function ContratosPropostaPage() {
               }}
               className="text-left p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all group focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
-              <div className="text-3xl mb-3">{conv.icon}</div>
+              <div className={`mb-3 inline-flex items-center justify-center h-10 w-10 rounded-lg bg-muted ${conv.iconColor}`}>
+                <conv.Icon className="h-5 w-5" strokeWidth={1.75} />
+              </div>
               <div className="font-semibold text-sm group-hover:text-primary transition-colors">
                 {conv.label}
               </div>
@@ -2194,7 +2208,9 @@ export default function ContratosPropostaPage() {
                 : "border-border hover:border-primary hover:bg-primary/5"
             }`}
           >
-            <div className="text-2xl mb-2">{ct.icon}</div>
+            <div className={`mb-2 inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted ${ct.iconColor}`}>
+              <ct.Icon className="h-5 w-5" strokeWidth={1.75} />
+            </div>
             <div className={`font-semibold text-sm ${contractType === ct.id ? "text-primary" : ""}`}>
               {ct.label}
             </div>
