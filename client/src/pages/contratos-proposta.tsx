@@ -2816,35 +2816,93 @@ export default function ContratosPropostaPage() {
           </Card>
         )}
 
-        {/* Card: Documentos anexados */}
-        {attachments.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Upload className="h-4 w-4" /> Documentos Anexados
+        {/* Card: Documentos anexados (com possibilidade de adicionar/remover) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Upload className="h-4 w-4" /> Documentos Anexados
+              {attachments.length > 0 && (
                 <span className="text-xs font-normal text-muted-foreground">— {attachments.length}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {attachments.map((att, i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-md border bg-card text-sm">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 truncate">{att.file.name}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {DOCUMENT_TYPES.find((d) => d.value === att.documentType)?.label || att.documentType}
-                  </Badge>
-                  <button
-                    type="button"
-                    onClick={() => openAttachmentPreview(att.file)}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Visualizar
-                  </button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {/* Lista de anexos */}
+            {attachments.length > 0 && (
+              <div className="space-y-1.5">
+                {attachments.map((att, i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-md border bg-card text-sm">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 truncate">{att.file.name}</span>
+                    <Select
+                      value={att.documentType}
+                      onValueChange={(v) =>
+                        setAttachments((prev) =>
+                          prev.map((a, idx) => (idx === i ? { ...a, documentType: v } : a))
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-44 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DOCUMENT_TYPES.map((d) => (
+                          <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() => openAttachmentPreview(att.file)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Visualizar
+                    </button>
+                    <Button
+                      size="icon" variant="ghost" type="button"
+                      title="Remover"
+                      onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="h-7 w-7"
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Drop zone para adicionar mais arquivos */}
+            <div
+              className={`border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-colors ${
+                docDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDocDragOver(true); }}
+              onDragLeave={() => setDocDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDocDragOver(false);
+                handleDocFiles(e.dataTransfer.files);
+              }}
+              onClick={() => document.getElementById("conf-doc-upload")?.click()}
+            >
+              <Upload className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">
+                {attachments.length > 0
+                  ? "Arraste mais documentos aqui ou clique para selecionar"
+                  : "Arraste documentos aqui ou clique para selecionar"}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Máx. 5MB por arquivo</p>
+              <input
+                id="conf-doc-upload"
+                type="file"
+                multiple
+                className="hidden"
+                accept="image/*,.pdf"
+                onChange={(e) => handleDocFiles(e.target.files)}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Footer: confirmar e cadastrar */}
         <div className="flex justify-end gap-3 pb-4">
