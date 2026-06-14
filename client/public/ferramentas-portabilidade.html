@@ -3492,6 +3492,7 @@ function renderContratos() {
           const cont = contratos.find(x => x.id === num(e.target.dataset.id));
           if (cont) cont.portar = e.target.checked;
           renderConfigSeparado();
+          renderRefimContratos();
           calcSimples();
           calcRefim();
         });
@@ -3502,7 +3503,7 @@ function renderContratos() {
             cont[e.target.dataset.k] = num(e.target.value);
             e.target.value = cont[e.target.dataset.k] ? fmt(cont[e.target.dataset.k]) : '';
             updateContratoCalc(cont.id);
-            calcSimples();
+            atualizarSimuladorRefim();
           }
         });
       } else if (el.dataset.k === 'taxa') {
@@ -3518,7 +3519,7 @@ function renderContratos() {
           if (cont) {
             updateContratoCalc(cont.id);
             renderConfigSeparado();
-            calcSimples();
+            atualizarSimuladorRefim();
             if (cont.taxa) {
               e.target.value = fmtPct(cont.taxa);
             }
@@ -3537,6 +3538,7 @@ function renderContratos() {
           if (cont) {
             updateContratoCalc(cont.id);
             renderConfigSeparado();
+            atualizarSimuladorRefim();
           }
         });
       } else if (el.dataset.k === 'acao') {
@@ -3550,7 +3552,7 @@ function renderContratos() {
               cont.amort = 0;
               amortInput.value = '';
             }
-            calcSimples(); calcRefim();
+            atualizarSimuladorRefim();
           }
         });
       } else {
@@ -3572,6 +3574,9 @@ function renderContratos() {
 function delContrato(id) {
   contratos = contratos.filter(c => c.id !== id);
   renderContratos();
+  renderRefimContratos(); // conjunto mudou → repinta status + recalcula
+  calcSimples();
+  calcRefim();
 }
 
 // Modo
@@ -5621,11 +5626,27 @@ function onBancoChange() {
   calcRefim();
 }
 
+// Chamar quando o CONJUNTO de contratos marcados muda (checkbox, excluir, trocar banco):
+// reseta os trocos/prazos por contrato porque os índices deixam de fazer sentido.
 function renderRefimContratos() {
   prazosSeparado = {}; // reset ao trocar banco/contratos
   trocosSeparado = {};
   prazosSimpSeparado = {};
   _refimResult = null; // limpa resultado anterior ao mudar seleção
+  pintarRefimContratos();
+}
+
+// Atualiza o simulador após editar VALORES de um contrato (parcela/taxa/prazo/ação),
+// sem resetar os trocos já digitados por contrato — o conjunto marcado não mudou.
+function atualizarSimuladorRefim() {
+  pintarRefimContratos();
+  calcSimples();
+  calcRefim();
+}
+
+// Apenas repinta a tabela "Contratos Selecionados para Portar" + saldo elegível.
+// Não mexe em trocosSeparado/_refimResult, então é seguro chamar a cada edição.
+function pintarRefimContratos() {
   const nome  = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nome);
   const marcados = getContratosMarcados();
