@@ -1593,6 +1593,16 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <label>Parcela Total Desejada (R$)</label>
             <input id="refimParcelaInput" placeholder="Ex: 900" oninput="calcRefim()">
           </div>
+          <div class="field" style="max-width:200px;">
+            <label>Margem negativa atual (R$) <span style="font-weight:400;color:#9CA3AF;">opcional</span></label>
+            <input id="refimMargemNeg" placeholder="Ex: 150,00" oninput="calcRefim()"
+              style="border-color:#F59E0B;">
+          </div>
+        </div>
+        <div style="margin-top:10px;text-align:right;">
+          <button onclick="atualizarSimuladorRefim()" style="padding:7px 18px;background:#EDE9FE;border:1px solid #DDD6FE;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#6C2BD9;font-family:inherit;">
+            🔄 Recalcular
+          </button>
         </div>
       </div>
 
@@ -1634,6 +1644,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <div style="font-size:17px;font-weight:700;color:#1a0030;" id="rTaxaRefim">-</div>
           </div>
         </div>
+        <div id="rMargemNegBlock" style="display:none;margin-top:12px;padding:12px 16px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;font-size:13px;"></div>
       </div>
 
       <!-- RESULTADO SEPARADO POR CONTRATO -->
@@ -1660,14 +1671,19 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           </table>
         </div>
         <div id="refimSeparadoAviso" style="margin-top:8px;font-size:12px;"></div>
+        <div id="rMargemNegBlockSep" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;font-size:12px;"></div>
       </div>
     </div>
 
-    <!-- BOTÃO FINAL -->
-    <div style="margin-top:20px;">
+    <!-- BOTÕES FINAIS -->
+    <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
       <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Enviar para Criador de Proposta
+      </button>
+      <button onclick="salvarParaDigitacao()" style="width:100%;padding:12px;font-size:13px;background:#fff;border:2px solid #6C2BD9;color:#6C2BD9;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Salvar para Digitação
       </button>
     </div>
   </div>
@@ -5739,6 +5755,69 @@ function mkPrice(taxa, prazo) {
   };
 }
 
+function mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  if (!margemNeg || margemNeg <= 0) { el.style.display = 'none'; return; }
+  const economia = somaParcelasOrig - parcelaTotal;
+  const coberto  = economia >= margemNeg - 0.01;
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="font-weight:700;margin-bottom:6px;color:#92400E;">⚠️ Margem Negativa Detectada</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      <span>Valor do negativo: <strong style="color:#DC2626;">${fmtBRL(margemNeg)}</strong></span>
+      <span>Economia com refim: <strong style="color:#6C2BD9;">${fmtBRL(economia)}</strong></span>
+      <span>Status: ${coberto
+        ? '<strong style="color:#16A34A;">✅ Coberto — refim elimina o negativo</strong>'
+        : '<strong style="color:#DC2626;">❌ Não coberto — economia insuficiente para cobrir o negativo</strong>'}</span>
+    </div>`;
+}
+
+function salvarParaDigitacao() {
+  if (!_refimResult) {
+    alert('Calcule o refinanciamento antes de salvar.');
+    return;
+  }
+  const banco = document.getElementById('refimBanco').value;
+  const regra = regrasBancos.find(r => r.banco === banco);
+  const nomeCliente = document.getElementById('nomeCliente')?.value?.trim() || 'cliente';
+  const cpf  = document.getElementById('cpfCliente')?.value?.trim() || '';
+  const conv = document.getElementById('convenio')?.value?.trim() || '';
+  const marcados = getContratosMarcados();
+
+  const dados = {
+    versao: '1.0',
+    tipo: 'simulacao-portabilidade-refim',
+    nomeCliente, cpf, convenio: conv,
+    banco_destino: banco,
+    taxa_refim: regra
+      ? (regra.taxaLivre
+          ? parseBR(document.getElementById('refimTaxaLivre')?.value || '0')
+          : regra.taxaRefim)
+      : null,
+    contratos_originais: contratos.map(c => ({
+      banco: c.banco, parcela: c.parcela, prazo: c.prazo,
+      taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar
+    })),
+    contratos_selecionados: marcados.map(c => ({
+      banco: c.banco, parcela: c.parcela, prazo: c.prazo,
+      taxa: c.taxa, saldo: c.saldo
+    })),
+    resultado: _refimResult,
+    margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null
+  };
+
+  const json = JSON.stringify(dados, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  const data = new Date().toISOString().slice(0, 10);
+  a.download = `simulacao-${nomeCliente.replace(/\s+/g, '-')}-${data}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function calcRefim() {
   const nomeBanco = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nomeBanco);
@@ -5746,8 +5825,11 @@ function calcRefim() {
 
   document.getElementById('refimResultado').style.display = 'none';
   document.getElementById('refimResultadoSeparado').style.display = 'none';
+  document.getElementById('rMargemNegBlock').style.display = 'none';
+  document.getElementById('rMargemNegBlockSep').style.display = 'none';
 
   if (!regra) return;
+  const margemNeg = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
 
   // Campo taxa livre (Caixa)
   const taxaLivreWrap = document.getElementById('wrapTaxaLivre');
@@ -5827,6 +5909,7 @@ function calcRefim() {
     const valorBruto = parcelaTotal * prazo;
     if (!validarUnif(trocoBruto, parcelaTotal, trocoLiquido)) return;
     renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto);
+    mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, 'rMargemNegBlock');
 
   } else {
     // ── MODO SEPARADO — cada contrato no seu prazo restante ──
@@ -5962,6 +6045,9 @@ function calcRefim() {
       modo: 'separado',
       linhas: linhas.map(l => ({ banco: l.banco, parcela: l.parcelaTotal, troco: l.trocoLiquido, prazo: l.prazo })),
     };
+
+    const somaOrigSep = marcados.reduce((acc, c) => acc + parseBR(c.parcela), 0);
+    mostrarCoberturaMargem(margemNeg, somaOrigSep, totalParcela, 'rMargemNegBlockSep');
 
     document.getElementById('refimResultadoSeparado').style.display = '';
   }
