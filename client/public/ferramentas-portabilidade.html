@@ -1468,6 +1468,11 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <option value="junto">Junto (parcela consolidada)</option>
           </select>
         </div>
+        <div class="field" style="max-width:200px;">
+          <label>Margem negativa atual (R$) <span style="font-weight:400;color:#9CA3AF;">opcional</span></label>
+          <input id="simpMargemNeg" placeholder="Ex: 150,00" oninput="calcSimples()"
+            style="border-color:#F59E0B;">
+        </div>
       </div>
 
       <!-- Tabela de contratos selecionados -->
@@ -1495,6 +1500,8 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           <div id="wrapSimpConsolidada" style="display:none;"><span style="font-size:12px;color:#6B7280;">Parcela Única (Junto)</span><br><strong id="simpParcelaConsolidada" style="font-size:18px;color:#6C2BD9;">-</strong></div>
         </div>
       </div>
+
+      <div id="rMargemNegSimpBlock" style="display:none;margin-top:12px;padding:12px 16px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:13px;"></div>
 
       <p id="simpVazio" class="muted" style="font-size:13px;margin-top:12px;">
         ℹ️ Marque os contratos para portar na tabela acima e defina taxa e prazo.
@@ -5550,21 +5557,52 @@ function calcSimples() {
     </tr>`;
   } else {
     // Modo separado: linha por contrato com prazo editável individual
+    const simpMargemNeg = parseBR(document.getElementById('simpMargemNeg')?.value || '0');
+
+    // Pré-computa linhas para identificar quais cobrem a margem negativa individualmente
+    const linhasSimp = [];
+    const linhasSimpMarcadoIdx = [];
+    marcados.forEach((c, idx) => {
+      let saldoEfetivo = parseBR(c.saldo);
+      if (c.acao === 'quitar') saldoEfetivo = 0;
+      else if (c.acao === 'amortizar') saldoEfetivo = Math.max(0, saldoEfetivo - (c.amort || 0));
+      if (saldoEfetivo <= 0) return;
+      const parcelaAtual = parseBR(c.parcela);
+      const prazoInd = prazosSimpSeparado[idx] ?? prazo;
+      const parcelaNova = taxa > 0 ? calcParcela(saldoEfetivo, taxa, prazoInd) : 0;
+      linhasSimp.push({ banco: c.banco || '-', parcelaOriginal: parcelaAtual, parcelaTotal: parcelaNova });
+      linhasSimpMarcadoIdx.push(idx);
+    });
+    const linhasCobremSimp = simpMargemNeg > 0
+      ? linhasSimp.filter(l => (l.parcelaOriginal - l.parcelaTotal) >= simpMargemNeg - 0.01)
+      : [];
+
     let totalParcelaNovaSep = 0;
     tb.innerHTML = marcados.map((c, idx) => {
-      // Aplica quitar/amortizar no saldo efetivo
       let saldoEfetivo = parseBR(c.saldo);
       if (c.acao === 'quitar') saldoEfetivo = 0;
       else if (c.acao === 'amortizar') saldoEfetivo = Math.max(0, saldoEfetivo - (c.amort || 0));
       if (saldoEfetivo <= 0) return ''; // quitado — sem linha
       const saldo = saldoEfetivo;
       const parcelaAtual = parseBR(c.parcela);
-      const prazoInd = prazosSimpSeparado[idx] ?? prazo; // prazo individual ou padrão
+      const prazoInd = prazosSimpSeparado[idx] ?? prazo;
       const parcelaNova = taxa > 0 ? calcParcela(saldo, taxa, prazoInd) : 0;
       const economia = parcelaAtual - parcelaNova;
       totalParcelaNovaSep += parcelaNova;
-      return `<tr>
-        <td>${c.banco || '-'}</td>
+
+      const linhaIdx = linhasSimpMarcadoIdx.indexOf(idx);
+      const linha = linhaIdx >= 0 ? linhasSimp[linhaIdx] : null;
+      const esCobre = linha && linhasCobremSimp.includes(linha);
+      const rowBg = esCobre ? 'background:#FFFBEB;' : '';
+      const bancoBadge = esCobre
+        ? ' <span style="font-size:10px;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;border-radius:3px;padding:1px 5px;font-weight:700;white-space:nowrap;">★ Cobre o negativo</span>'
+        : '';
+      const economiaExtra = esCobre
+        ? `<br><span style="font-size:10px;color:#D97706;font-weight:700;">⭐ Cadastrar 2 dias antes</span>`
+        : '';
+
+      return `<tr style="${rowBg}">
+        <td>${c.banco || '-'}${bancoBadge}</td>
         <td class="text-right">${fmtBRL(saldo)}</td>
         <td>${fmtPct(parseBR(c.taxa))}</td>
         <td>${fmtBRL(parcelaAtual)}</td>
@@ -5574,11 +5612,13 @@ function calcSimples() {
             onchange="prazosSimpSeparado[${idx}]=parseInt(this.value)||prazo;calcSimples()">
         </td>
         <td class="text-right" style="color:#16A34A;font-weight:600;">${taxa > 0 ? fmtBRL(parcelaNova) : '-'}</td>
-        <td class="text-right" style="color:${economia > 0 ? '#6C2BD9' : '#EF4444'};font-weight:600;">${taxa > 0 ? fmtBRL(economia) : '-'}</td>
+        <td class="text-right" style="color:${economia > 0 ? '#6C2BD9' : '#EF4444'};font-weight:600;">${taxa > 0 ? fmtBRL(economia) : '-'}${economiaExtra}</td>
       </tr>`;
     }).join('');
     // Atualiza totalParcelaNova para os totais abaixo
     totalParcelaNova = totalParcelaNovaSep;
+
+    mostrarCoberturaMargem_sep(simpMargemNeg, linhasSimp, 'rMargemNegSimpBlock');
   }
 
   if (taxa > 0) {
