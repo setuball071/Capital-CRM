@@ -548,8 +548,19 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const tenantId = req.tenantId!;
 
       const history = await db
-        .select()
+        .select({
+          id: proposalHistory.id,
+          proposalId: proposalHistory.proposalId,
+          fromStatus: proposalHistory.fromStatus,
+          toStatus: proposalHistory.toStatus,
+          action: proposalHistory.action,
+          notes: proposalHistory.notes,
+          performedBy: proposalHistory.performedBy,
+          userName: users.name,
+          createdAt: proposalHistory.createdAt,
+        })
         .from(proposalHistory)
+        .leftJoin(users, eq(proposalHistory.performedBy, users.id))
         .where(eq(proposalHistory.proposalId, id))
         .orderBy(desc(proposalHistory.createdAt));
 

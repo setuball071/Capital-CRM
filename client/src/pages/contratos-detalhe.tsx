@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import {
-  ArrowLeft, Send, AlertTriangle, CheckCircle2, Clock, ChevronRight,
-  SkipForward, Pause, Play, XCircle, FileText, AlertCircle, Hash
+  ArrowLeft, Send, AlertTriangle, CheckCircle2, Clock,
+  SkipForward, Pause, Play, XCircle, FileText, AlertCircle, ExternalLink, Paperclip
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,16 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDENTE_BANCO:    { label: "Pend. Banco",       className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300" },
   PAGO:              { label: "Pago",              className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
   CANCELADA:         { label: "Cancelada",         className: "bg-red-200 text-red-900 dark:bg-red-950/60 dark:text-red-400" },
+  PERDIDA:           { label: "Perdida",           className: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" },
+};
+
+const DOC_TYPE_LABEL: Record<string, string> = {
+  RG_CNH: "RG / CNH",
+  CONTRACHEQUE: "Contracheque",
+  EXTRATO_CONSIGNACOES: "Extrato de Consignações",
+  SELFIE: "Selfie c/ Documento",
+  COMPROVANTE_RESIDENCIA: "Comprovante de Residência",
+  OUTRO: "Outro",
 };
 
 const ACTION_ICONS: Record<string, any> = {
@@ -206,7 +216,7 @@ export default function ContratosDetalhePage() {
   }
 
   const STATUSES_OPERACIONAL = [
-    "CADASTRADA", "EM_ANALISE", "DIGITADA", "EM_ANDAMENTO", "PAGO", "CANCELADA"
+    "CADASTRADA", "EM_ANALISE", "DIGITADA", "EM_ANDAMENTO", "PAGO", "CANCELADA", "PERDIDA"
   ];
 
   return (
@@ -326,8 +336,49 @@ export default function ContratosDetalhePage() {
             </Card>
           )}
 
-          {/* Operacional Actions */}
-          {isOperacional && !["PAGO", "CANCELADA"].includes(proposal.status) && (
+          {/* Documentos Anexados */}
+          {chat?.documents && chat.documents.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Documentos Anexados
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {chat.documents.map((doc: any) => (
+                    <div key={doc.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{doc.fileName || "Documento"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {DOC_TYPE_LABEL[doc.documentType] || doc.documentType || "Arquivo"}
+                          </p>
+                        </div>
+                      </div>
+                      {doc.fileUrl && (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-xs text-primary hover:underline flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Abrir
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ações Operacionais */}
+          {isOperacional && !["PAGO", "CANCELADA", "PERDIDA"].includes(proposal.status) && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Ações Operacionais</CardTitle>
@@ -433,7 +484,7 @@ export default function ContratosDetalhePage() {
                         status: nextStatus || undefined,
                         ade: adeValue || undefined,
                         notes: actionNotes,
-                        action: nextStatus === "PAGO" ? "PAGAMENTO" : nextStatus === "CANCELADA" ? "CANCELAMENTO" : "AVANCO",
+                        action: nextStatus === "PAGO" ? "PAGAMENTO" : ["CANCELADA", "PERDIDA"].includes(nextStatus) ? "CANCELAMENTO" : "AVANCO",
                         ...(nextStatus === "PAGO" && commPercNum > 0 ? {
                           contractValue: contractValNum || undefined,
                           commissionPercentage: commPercNum / 100,
@@ -567,6 +618,9 @@ export default function ContratosDetalhePage() {
                               {format(new Date(h.createdAt), "dd/MM HH:mm", { locale: ptBR })}
                             </span>
                           </div>
+                          {h.userName && (
+                            <p className="text-xs text-muted-foreground mt-0.5">por {h.userName}</p>
+                          )}
                           {h.notes && (
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{h.notes}</p>
                           )}
