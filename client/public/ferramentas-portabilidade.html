@@ -5784,9 +5784,9 @@ function mostrarCoberturaMargem_sep(margemNeg, linhas, elementId) {
   const coberto = linhasCobrem.length > 0;
   el.style.display = '';
   if (coberto) {
-    // Usa a maior redução individual como referência para a margem líquida
-    const melhorReducao = Math.max(...linhasCobrem.map(l => l.parcelaOriginal - l.parcelaTotal));
-    const margemLiq = melhorReducao - margemNeg;
+    // Soma todas as reduções de parcela de todos os contratos do refin
+    const somaReducoes = linhas.reduce((sum, l) => sum + (l.parcelaOriginal - l.parcelaTotal), 0);
+    const margemLiq = somaReducoes - margemNeg;
     const nomesBancos = linhasCobrem.map(l => `<strong>${l.banco}</strong>`).join(' e ');
     const plural = linhasCobrem.length > 1;
     el.innerHTML = `
