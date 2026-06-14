@@ -484,6 +484,8 @@ import {
   lemitJobs,
   pagamentosConsultor,
   pagamentosConsultorItens,
+  apiKeys,
+  type ApiKey,
 } from "@shared/schema";
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
@@ -496,6 +498,7 @@ import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
 import { registerOcrRoutes } from "./ocr";
+import { requireApiKey, hashApiKey } from "./api-key-middleware";
 import {
   addToPortfolio,
   checkPortfolioBlock,
@@ -29173,6 +29176,211 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ message: "Erro", error: err.message });
+    }
+  });
+
+  // =========================================================================
+  // ADMIN: Gestão de API Keys (acesso interno, requer login master)
+  // =========================================================================
+
+  // Gera token aleatório de 32 bytes em hex (64 chars)
+  function generateRawKey(): string {
+    const { randomBytes } = require("crypto");
+    return randomBytes(32).toString("hex");
+  }
+
+  // GET /api/admin/api-keys — lista chaves do tenant atual
+  app.get("/api/admin/api-keys", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const keys = await storage.listApiKeys(tenantId);
+      return res.json(keys);
+    } catch (err: any) {
+      console.error("[API Keys] list error:", err);
+      return res.status(500).json({ message: "Erro ao listar API keys" });
+    }
+  });
+
+  // POST /api/admin/api-keys — cria nova chave (retorna a chave em texto puro UMA VEZ)
+  app.post("/api/admin/api-keys", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const { nome } = req.body;
+      if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
+        return res.status(400).json({ message: "Informe o nome do sistema parceiro" });
+      }
+
+      const raw = generateRawKey();
+      const hash = hashApiKey(raw);
+      const prefixo = `ck_${raw.slice(0, 8)}`;
+
+      const key = await storage.createApiKey({
+        tenantId,
+        nome: nome.trim(),
+        chaveHash: hash,
+        prefixo,
+        ativo: true,
+        criadoPor: req.user?.id ?? null,
+      });
+
+      // Retorna a chave completa apenas nesta resposta
+      return res.json({ ...key, chave_completa: raw });
+    } catch (err: any) {
+      console.error("[API Keys] create error:", err);
+      return res.status(500).json({ message: "Erro ao criar API key" });
+    }
+  });
+
+  // PATCH /api/admin/api-keys/:id/toggle — ativa ou desativa uma chave
+  app.patch("/api/admin/api-keys/:id/toggle", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      const { ativo } = req.body;
+      if (isNaN(id) || typeof ativo !== "boolean") {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+      const key = await storage.toggleApiKey(id, tenantId, ativo);
+      if (!key) return res.status(404).json({ message: "API key não encontrada" });
+      return res.json(key);
+    } catch (err: any) {
+      console.error("[API Keys] toggle error:", err);
+      return res.status(500).json({ message: "Erro ao atualizar API key" });
+    }
+  });
+
+  // =========================================================================
+  // API EXTERNA v1 — acesso por API Key, sem sessão de login
+  // =========================================================================
+
+  // Helpers de margem replicados do frontend (server-side)
+  function safeSaldoServer(
+    saldo: string | null,
+    bruta: string | null,
+    utilizada: string | null,
+  ): number | null {
+    const b = bruta != null ? parseFloat(bruta) : null;
+    const u = utilizada != null ? parseFloat(utilizada) : null;
+    const s = saldo != null ? parseFloat(saldo) : null;
+    if (b != null && u != null) {
+      const calc = b - u;
+      if (s == null) return calc;
+      return Math.min(s, calc);
+    }
+    return s;
+  }
+
+  function saldoCartao5LimitadoServer(
+    saldo5: string | null, bruta5: string | null, utilizada5: string | null,
+    saldo35: string | null, bruta35: string | null, utilizada35: string | null,
+  ): { saldo: number | null; limitadoPorGlobal: boolean } {
+    const s5 = safeSaldoServer(saldo5, bruta5, utilizada5);
+    const s35 = safeSaldoServer(saldo35, bruta35, utilizada35);
+    if (s5 == null) return { saldo: null, limitadoPorGlobal: false };
+    if (s35 == null) return { saldo: s5, limitadoPorGlobal: false };
+    if (s5 > s35) return { saldo: s35, limitadoPorGlobal: true };
+    return { saldo: s5, limitadoPorGlobal: false };
+  }
+
+  // GET /api/external/v1/clientes/:cpf
+  app.get("/api/external/v1/clientes/:cpf", requireApiKey, async (req: any, res) => {
+    try {
+      const tenantId: number = req.apiTenantId;
+      const rawCpf = String(req.params.cpf).replace(/\D/g, "").padStart(11, "0");
+
+      if (rawCpf.length !== 11) {
+        return res.status(400).json({ error: "CPF inválido." });
+      }
+
+      // Busca a pessoa globalmente por CPF
+      const pessoas = await storage.getClientesByCpf(rawCpf);
+      if (pessoas.length === 0) {
+        return res.status(404).json({ error: "Cliente não encontrado." });
+      }
+      const pessoa = pessoas[0];
+
+      // Busca vínculos do tenant desta API key
+      const todosVinculos = await storage.getVinculosByPessoaId(pessoa.id);
+      const vinculos = todosVinculos.filter((v) => v.tenantId === tenantId);
+
+      if (vinculos.length === 0) {
+        return res.status(404).json({ error: "Cliente não encontrado." });
+      }
+
+      // Usa o vínculo com folha mais recente
+      const vinculoIds = vinculos.map((v) => v.id);
+      let vinculoIdEfetivo = await storage.getVinculoIdWithLatestFolha(vinculoIds);
+      if (!vinculoIdEfetivo) vinculoIdEfetivo = vinculos[0].id;
+
+      const folhaRegistros = await storage.getFolhaMesByVinculoId(vinculoIdEfetivo);
+      const contratos = await storage.getContratosByVinculoId(vinculoIdEfetivo);
+      const folhaAtual = folhaRegistros.length > 0 ? folhaRegistros[0] : null;
+
+      const vinculoSelecionado = vinculos.find((v) => v.id === vinculoIdEfetivo) ?? vinculos[0];
+
+      // Margens com regras aplicadas
+      let margens = null;
+      if (folhaAtual) {
+        const credito5 = saldoCartao5LimitadoServer(
+          folhaAtual.margemSaldo5, folhaAtual.margemBruta5, folhaAtual.margemUtilizada5,
+          folhaAtual.margemSaldo35, folhaAtual.margemBruta35, folhaAtual.margemUtilizada35,
+        );
+        const beneficio5 = saldoCartao5LimitadoServer(
+          folhaAtual.margemBeneficioSaldo5, folhaAtual.margemBeneficioBruta5, folhaAtual.margemBeneficioUtilizada5,
+          folhaAtual.margemSaldo35, folhaAtual.margemBruta35, folhaAtual.margemUtilizada35,
+        );
+        margens = {
+          competencia: folhaAtual.competencia,
+          global_35: {
+            bruta: folhaAtual.margemBruta35 != null ? parseFloat(folhaAtual.margemBruta35) : null,
+            utilizada: folhaAtual.margemUtilizada35 != null ? parseFloat(folhaAtual.margemUtilizada35) : null,
+            saldo: safeSaldoServer(folhaAtual.margemSaldo35, folhaAtual.margemBruta35, folhaAtual.margemUtilizada35),
+          },
+          cartao_credito_5: {
+            bruta: folhaAtual.margemBruta5 != null ? parseFloat(folhaAtual.margemBruta5) : null,
+            utilizada: folhaAtual.margemUtilizada5 != null ? parseFloat(folhaAtual.margemUtilizada5) : null,
+            saldo: credito5.saldo,
+            limitado_por_global: credito5.limitadoPorGlobal,
+          },
+          cartao_beneficio_5: {
+            bruta: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(folhaAtual.margemBeneficioBruta5) : null,
+            utilizada: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(folhaAtual.margemBeneficioUtilizada5) : null,
+            saldo: beneficio5.saldo,
+            limitado_por_global: beneficio5.limitadoPorGlobal,
+          },
+          total_70: {
+            bruta: folhaAtual.margemBruta70 != null ? parseFloat(folhaAtual.margemBruta70) : null,
+            utilizada: folhaAtual.margemUtilizada70 != null ? parseFloat(folhaAtual.margemUtilizada70) : null,
+            saldo: safeSaldoServer(folhaAtual.margemSaldo70, folhaAtual.margemBruta70, folhaAtual.margemUtilizada70),
+          },
+          salario_bruto: folhaAtual.salarioBruto != null ? parseFloat(folhaAtual.salarioBruto) : null,
+          salario_liquido: folhaAtual.salarioLiquido != null ? parseFloat(folhaAtual.salarioLiquido) : null,
+        };
+      }
+
+      return res.json({
+        cpf: pessoa.cpf,
+        nome: pessoa.nome,
+        convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
+        orgao: pessoa.orgaodesc,
+        sit_func: vinculoSelecionado.sitFunc,
+        margens,
+        contratos: contratos.map((c) => ({
+          tipo: c.tipoContrato,
+          banco: c.banco,
+          valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
+          saldo_devedor: c.saldoDevedor ? parseFloat(c.saldoDevedor) : null,
+          parcelas_restantes: c.parcelasRestantes ?? null,
+          numero_contrato: c.numeroContrato ?? null,
+          competencia: c.competencia,
+        })),
+      });
+    } catch (err: any) {
+      console.error("[External API] clientes/:cpf error:", err);
+      return res.status(500).json({ error: "Erro interno." });
     }
   });
 

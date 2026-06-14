@@ -3919,3 +3919,21 @@ export const insertPortabilityBankRuleSchema = createInsertSchema(portabilityBan
 
 export type PortabilityBankRule = typeof portabilityBankRules.$inferSelect;
 export type InsertPortabilityBankRule = z.infer<typeof insertPortabilityBankRuleSchema>;
+
+// ===== API EXTERNA — CHAVES DE ACESSO =====
+
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  chaveHash: varchar("chave_hash", { length: 64 }).notNull().unique(),
+  prefixo: varchar("prefixo", { length: 12 }),
+  ativo: boolean("ativo").notNull().default(true),
+  ultimoUso: timestamp("ultimo_uso"),
+  totalRequisicoes: integer("total_requisicoes").notNull().default(0),
+  criadoPor: integer("criado_por").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = typeof apiKeys.$inferInsert;

@@ -155,6 +155,9 @@ import {
   type InsertCompany,
   type PromissoryNote,
   type InsertPromissoryNote,
+  apiKeys,
+  type ApiKey,
+  type InsertApiKey,
 } from "@shared/schema";
 
 // Use neon-http for serverless/edge environments
@@ -470,6 +473,12 @@ export interface IStorage {
     emitidoPorNome: string;
   }): Promise<PromissoryNote>;
   getNextNpNumber(tenantId: number): Promise<string>;
+
+  // ===== API KEYS =====
+  createApiKey(data: InsertApiKey): Promise<ApiKey>;
+  listApiKeys(tenantId: number): Promise<ApiKey[]>;
+  getApiKeyByHash(hash: string): Promise<ApiKey | undefined>;
+  toggleApiKey(id: number, tenantId: number, ativo: boolean): Promise<ApiKey | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -3833,6 +3842,39 @@ REGRAS:
       ));
     const nextSeq = (result?.maxSeq ? parseInt(result.maxSeq, 10) : 0) + 1;
     return `${prefix}${String(nextSeq).padStart(5, '0')}`;
+  }
+
+  // ===== API KEYS =====
+
+  async createApiKey(data: InsertApiKey): Promise<ApiKey> {
+    const [key] = await db.insert(apiKeys).values(data).returning();
+    return key;
+  }
+
+  async listApiKeys(tenantId: number): Promise<ApiKey[]> {
+    return db
+      .select()
+      .from(apiKeys)
+      .where(eq(apiKeys.tenantId, tenantId))
+      .orderBy(apiKeys.createdAt);
+  }
+
+  async getApiKeyByHash(hash: string): Promise<ApiKey | undefined> {
+    const [key] = await db
+      .select()
+      .from(apiKeys)
+      .where(eq(apiKeys.chaveHash, hash))
+      .limit(1);
+    return key;
+  }
+
+  async toggleApiKey(id: number, tenantId: number, ativo: boolean): Promise<ApiKey | undefined> {
+    const [key] = await db
+      .update(apiKeys)
+      .set({ ativo })
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .returning();
+    return key;
   }
 }
 

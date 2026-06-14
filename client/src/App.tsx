@@ -50,6 +50,7 @@ import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import ConfigPromptsPage from "@/pages/config-prompts";
 import ConfigDadosPage from "@/pages/config-dados";
 import AdminTenantsPage from "@/pages/admin-tenants";
+import ApiKeysPage from "@/pages/api-keys";
 import AdminBrandingPage from "@/pages/admin-branding";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
@@ -507,6 +508,9 @@ function Router() {
               </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
+              </Route>
+              <Route path="/admin/api-keys">
+                {() => <MasterRoute component={ApiKeysPage} />}
               </Route>
               <Route path="/admin/assinaturas">
                 {() => <MasterRoute component={AdminAssinaturasPage} />}
