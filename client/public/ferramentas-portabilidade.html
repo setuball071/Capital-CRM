@@ -5775,25 +5775,31 @@ function mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, eleme
     </div>`;
 }
 
-// Modo separado: a cobertura deve vir de UM único contrato individual
+// Modo separado: a cobertura deve vir de pelo menos um contrato individual
 function mostrarCoberturaMargem_sep(margemNeg, linhas, elementId) {
   const el = document.getElementById(elementId);
   if (!el) return;
   if (!margemNeg || margemNeg <= 0) { el.style.display = 'none'; return; }
-  const linhaCobre = linhas.find(l => (l.parcelaOriginal - l.parcelaTotal) >= margemNeg - 0.01);
-  const coberto = linhaCobre != null;
+  const linhasCobrem = linhas.filter(l => (l.parcelaOriginal - l.parcelaTotal) >= margemNeg - 0.01);
+  const coberto = linhasCobrem.length > 0;
   el.style.display = '';
   if (coberto) {
-    const reducao  = linhaCobre.parcelaOriginal - linhaCobre.parcelaTotal;
-    const margemLiq = reducao - margemNeg;
+    // Usa a maior redução individual como referência para a margem líquida
+    const melhorReducao = Math.max(...linhasCobrem.map(l => l.parcelaOriginal - l.parcelaTotal));
+    const margemLiq = melhorReducao - margemNeg;
+    const nomesBancos = linhasCobrem.map(l => `<strong>${l.banco}</strong>`).join(' e ');
+    const plural = linhasCobrem.length > 1;
     el.innerHTML = `
       <div style="font-weight:700;margin-bottom:6px;color:#92400E;">⚠️ Margem Negativa Detectada</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
         <span>Valor do negativo: <strong style="color:#DC2626;">${fmtBRL(margemNeg)}</strong></span>
         <span>Margem líquida após o refin: <strong style="color:#6C2BD9;">${fmtBRL(margemLiq)}</strong></span>
-        <span>Status: <strong style="color:#16A34A;">✅ Coberto — contrato ${linhaCobre.banco}</strong></span>
+        <span>Status: <strong style="color:#16A34A;">✅ Coberto — ${plural ? 'contratos' : 'contrato'} ${nomesBancos}</strong></span>
       </div>
-      <div style="margin-top:6px;font-size:12px;color:#D97706;font-weight:600;">⭐ O contrato do <strong>${linhaCobre.banco}</strong> deve ser cadastrado 2 dias antes dos demais</div>`;
+      <div style="margin-top:6px;font-size:12px;color:#D97706;font-weight:600;">⭐ ${plural
+        ? `Os contratos do ${nomesBancos} cobrem o negativo individualmente — cadastre-os juntos, 2 dias antes dos demais`
+        : `O contrato do ${nomesBancos} deve ser cadastrado 2 dias antes dos demais`
+      }</div>`;
   } else {
     const melhor = linhas.length > 0
       ? linhas.reduce((best, l) => (l.parcelaOriginal - l.parcelaTotal) > (best.parcelaOriginal - best.parcelaTotal) ? l : best, linhas[0])
@@ -6025,16 +6031,16 @@ function calcRefim() {
     // Renderizar tabela separada
     const tbody = document.getElementById('tbRefimSeparado');
     if(!tbody) return;
-    // Identifica qual linha cobre individualmente a margem negativa
-    const linhaCobre = margemNeg > 0
-      ? linhas.find(l => (l.parcelaOriginal - l.parcelaTotal) >= margemNeg - 0.01)
-      : null;
+    // Identifica todas as linhas que cobrem individualmente a margem negativa
+    const linhasCobrem = margemNeg > 0
+      ? linhas.filter(l => (l.parcelaOriginal - l.parcelaTotal) >= margemNeg - 0.01)
+      : [];
   tbody.innerHTML = linhas.map((l, idx) => {
     const diff = l.parcelaOriginal - l.parcelaTotal;
     const diffColor = diff >= 0 ? '#16A34A' : '#EF4444';
     const diffSign  = diff >= 0 ? '▼ ' : '▲ ';
     const diffLabel = diffSign + fmtBRL(Math.abs(diff));
-    const esCobre   = linhaCobre && l === linhaCobre;
+    const esCobre   = linhasCobrem.includes(l);
     const rowBg     = esCobre ? 'background:#FFFBEB;' : '';
     const bancoBadge = esCobre
       ? ' <span style="font-size:10px;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;border-radius:3px;padding:1px 5px;font-weight:700;white-space:nowrap;">★ Cobre o negativo</span>'
