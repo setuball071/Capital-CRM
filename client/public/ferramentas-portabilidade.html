@@ -2157,6 +2157,8 @@ function gerar(){
   // Economia total: soma (parcela × prazo) de cada contrato individualmente
   const totalPagoAt=dadosAt.reduce((acc,c)=>acc+(c.parc*(c.prazo||0)),0);
   const totalPagoNv=dadosNv.reduce((acc,n)=>acc+(n.parc*(n.prazo||0)),0);
+  console.log('[economia total] dadosAt='+JSON.stringify(dadosAt.map(c=>({p:c.parc,pz:c.prazo})))+' totalPagoAt='+totalPagoAt);
+  console.log('[economia total] dadosNv='+JSON.stringify(dadosNv.map(n=>({p:n.parc,pz:n.prazo})))+' totalPagoNv='+totalPagoNv+' diff='+(totalPagoAt-totalPagoNv));
   if(totalPagoAt>0&&totalPagoNv>0){
     const diff=totalPagoAt-totalPagoNv;
     if(diff>0) items.push({label:'Economia total estimada',val:'R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">No período</span>'});
