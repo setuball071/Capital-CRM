@@ -331,7 +331,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       return res.status(201).json(proposal);
     } catch (e: any) {
       console.error("POST /api/contracts/proposals error:", e);
-      return res.status(500).json({ message: "Erro ao criar proposta" });
+      return res.status(500).json({ message: `Erro ao criar proposta: ${String(e?.message || e)}` });
     }
   });
 

@@ -681,7 +681,7 @@ export default function ContratosPropostaPage() {
         clientConvenio: selectedConvenio?.id,
         contractValue: parseBrNumber(data.contractValue),
         installmentValue: parseBrNumber(data.installmentValue),
-        tableId: data.tableId || undefined,
+        tableId: undefined, // FK aponta para coefficient_tables (legado) — não enviar; ID real fica em clientMeta
         term: data.term || undefined,
         ade: data.ade || undefined,
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
@@ -694,6 +694,8 @@ export default function ContratosPropostaPage() {
         clientMeta: {
           ...(clientMeta || {}),
           ...(contractType ? { tipoContrato: contractType } : {}),
+          // Referência à tabela do financeiro config (ID do JSONB, não FK do banco)
+          ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
           // Contato
           ...(data.clientPhone ? { telefone: data.clientPhone } : {}),
           ...(data.clientEmail ? { email:    data.clientEmail } : {}),
