@@ -1,25 +1,9 @@
 /**
  * extrato-consignacao-parser.ts
  *
- * Extrai dados do Extrato de Consignações Vigentes (SIAPE/SIGEPE).
- *
- * Estrutura do documento:
- *
- * ┌─────────────────────────────────────────────────────────────┐
- * │ Extrato de Consignações Vigentes                            │
- * ├────────────────────────────────────────────────────────────┤
- * │ Órgão │ CPF │ Matrícula │ Nome                            │
- * │ 26245 - UFRJ │ 034.227.507-03 │ 1449208 │ LINDALVA...    │
- * ├──────────────────────────────────────────────────────────── ┤
- * │ Bruta Comp. │ Líq. Comp. │ Bruta Facult. G │ Líq. Facult. G │ ... │
- * │ R$ 4.514,91 │ R$ 495,78  │ R$ 2.579,95    │ R$ 244,52      │ ... │
- * │             │            │ Utilizada Facult│                │     │
- * │             │            │ R$ 2.100,82     │                │     │
- * ├──────────────────────────────────────────────────────────── ┤
- * │ Demonstrativo / Novo Contrato e Renovação                  │
- * │ Nº Contrato │ Rubrica │ Seq │ Prio │ Data │ Parc │ Val │ In │ Fim │
- * │ 37-867054321/21 │ 34943 - EMPREST INBURSA │ 1 │ 10 │ ... │ ...
- * └──────────────────────────────────────────────────────────── ┘
+ * Parser do Extrato de Consignações Vigentes (SIAPE/SIGEPE).
+ * Usa state machine lendo cada item do PDF individualmente (sem agrupamento por Y),
+ * mesma abordagem do Simulador de Portabilidade que já funciona.
  */
 
 import * as pdfjsLib from "pdfjs-dist";
@@ -37,7 +21,7 @@ export interface ExtratoContrato {
   nomeRubrica: string;         // "EMPREST BCO PRIVADOS - INBURSA"
   sequencia: number;
   prioridade: number;
-  dataTransacao: string;       // "26/07/2021"
+  dataTransacao: string;       // "26/07/2021 11:26:48"
   prazoAtual: number;          // numerador de "58/96" → 58
   prazoTotal: number;          // denominador de "58/96" → 96
   valorParcela: number;        // 132.78
@@ -47,102 +31,49 @@ export interface ExtratoContrato {
 }
 
 export interface ExtratoConsignacaoParsed {
-  // Identificação
   orgao: string;
   cpf: string;
   matricula: string;
   nome: string;
   emitidoEm: string;
 
-  // ── Margens disponíveis (campos mais importantes) ─────────────────────────
-  /** Margem líquida disponível para novos empréstimos — KEY para Contrato Novo */
   margemLiquidaFacultativaGlobal: number | null;
-  /** Margem líquida disponível para compulsórios */
   margemLiquidaCompulsoria: number | null;
-  /** Margem líquida de cartão consignado */
   margemLiquidaCartao: number | null;
-  /** Margem líquida de cartão benefício */
   margemLiquidaCartaoBeneficio: number | null;
 
-  // ── Margens brutas ────────────────────────────────────────────────────────
   margemBrutaCompulsoria: number | null;
   margemBrutaFacultativaGlobal: number | null;
   margemBrutaCartao: number | null;
   margemBrutaCartaoBeneficio: number | null;
 
-  // ── Já utilizado ──────────────────────────────────────────────────────────
   margemUtilizadaFacultativa: number | null;
   margemUtilizadaCartao: number | null;
   margemUtilizadaCartaoBeneficio: number | null;
 
-  // ── Contratos vigentes ────────────────────────────────────────────────────
   contratos: ExtratoContrato[];
 }
 
-// ─── Tipos internos ───────────────────────────────────────────────────────────
+// ─── Extração de itens brutos do PDF ─────────────────────────────────────────
 
-interface PdfItem {
-  text: string;
-  x: number;
-  y: number;
-}
-
-interface PdfLine {
-  text: string;
-  items: PdfItem[];
-}
-
-// ─── Extração de linhas do PDF ────────────────────────────────────────────────
-
-async function pdfToLines(arrayBuffer: ArrayBuffer): Promise<PdfLine[]> {
+async function pdfRawItems(arrayBuffer: ArrayBuffer): Promise<string[]> {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const allLines: PdfLine[] = [];
-
+  const out: string[] = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-
-    const items: PdfItem[] = (content.items as any[]).map((it) => ({
-      text: it.str as string,
-      x: it.transform[4] as number,
-      y: Math.round(it.transform[5] as number),
-    }));
-
-    items.sort((a, b) => b.y - a.y || a.x - b.x);
-
-    let curY: number | null = null;
-    let curGroup: PdfItem[] = [];
-
-    for (const it of items) {
-      if (curY === null || Math.abs(it.y - curY) <= 4) {
-        curGroup.push(it);
-        curY = it.y;
-      } else {
-        if (curGroup.length) allLines.push(buildLine(curGroup));
-        curGroup = [it];
-        curY = it.y;
-      }
+    const tc = await page.getTextContent();
+    for (const it of (tc.items as any[])) {
+      const s = ((it.str as string) || "").trim();
+      if (s) out.push(s);
     }
-    if (curGroup.length) allLines.push(buildLine(curGroup));
   }
-
-  return allLines.filter((l) => l.text.trim().length > 0);
-}
-
-function buildLine(items: PdfItem[]): PdfLine {
-  items.sort((a, b) => a.x - b.x);
-  const text = items
-    .map((i) => i.text)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return { text, items };
+  return out;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function norm(s: string): string {
-  return (s || "")
+function normItem(s: string): string {
+  return s
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toUpperCase()
@@ -151,151 +82,10 @@ function norm(s: string): string {
     .trim();
 }
 
-/** Extrai TODOS os valores BRL de um texto, em ordem de aparição */
-function extractAllBRL(text: string): number[] {
-  return [...text.matchAll(/R\$\s*([\d.]+,\d{2})/g)].map((m) =>
-    parseFloat(m[1].replace(/\./g, "").replace(",", "."))
-  );
-}
-
-/** Extrai o primeiro valor BRL encontrado no texto */
-function firstBRL(text: string): number | null {
-  const vals = extractAllBRL(text);
-  return vals.length > 0 ? vals[0] : null;
-}
-
-// ─── Parser de linha de contrato ──────────────────────────────────────────────
-
-/**
- * Tenta parsear uma linha de contrato do extrato.
- *
- * Formato esperado (pdfjs junta tudo em uma linha):
- *   "37-867054321/21  34943 - EMPREST BCO PRIVADOS - INBURSA  1  10  26/07/2021 11:26:48  58/96  R$ 132,78  08/2021  07/2029"
- */
-function parseContractLine(
-  line: string,
-  tipo: ExtratoContrato["tipoContrato"]
-): ExtratoContrato | null {
-  const u = norm(line);
-
-  // Linha deve conter um código de rubrica (5 dígitos + " - ") e uma data DD/MM/YYYY
-  if (!/\d{5}\s*-/.test(line)) return null;
-  if (!/\d{2}\/\d{2}\/\d{4}/.test(line)) return null;
-  // Deve ter um R$ (valor da parcela)
-  if (!/R\$/.test(line)) return null;
-  // Deve terminar com MM/YYYY (mês/ano fim)
-  if (!/\d{2}\/\d{4}\s*$/.test(line.trim())) return null;
-
-  // Extrai código e nome da rubrica
-  const rubrM = line.match(/(\d{5})\s*-\s*(.+?)(?=\s{2,}\d{1,2}\s{1,3}\d{1,2}\s{1,3}\d{2}\/\d{2}\/\d{4})/);
-  if (!rubrM) return null;
-
-  const codigoRubrica = rubrM[1];
-  const nomeRubrica   = rubrM[2].trim();
-  const numeroContrato = line.slice(0, line.indexOf(rubrM[0])).trim();
-
-  // Extrai sequência e prioridade (dois números antes da data)
-  const seqPrioM = line.match(/\d{5}\s*-\s*.+?\s+(\d{1,2})\s+(\d{1,2})\s+\d{2}\/\d{2}\/\d{4}/);
-
-  // Extrai data (DD/MM/YYYY)
-  const dateM = line.match(/(\d{2}\/\d{2}\/\d{4})/);
-
-  // Extrai parcela N/Total
-  const parcelaM = line.match(/(\d+)\/(\d+)\s+R\$/);
-
-  // Extrai valor da parcela
-  const valM = line.match(/R\$\s*([\d.]+,\d{2})/);
-
-  // Extrai todas as datas MM/YYYY → as duas últimas são Início e Fim
-  const meses = [...line.matchAll(/\b(\d{2}\/\d{4})\b/g)].map((m) => m[1]);
-
-  if (!valM || meses.length < 2) return null;
-
-  return {
-    numeroContrato: numeroContrato || "?",
-    codigoRubrica,
-    nomeRubrica,
-    sequencia:   seqPrioM ? parseInt(seqPrioM[1]) : 0,
-    prioridade:  seqPrioM ? parseInt(seqPrioM[2]) : 0,
-    dataTransacao: dateM ? dateM[1] : "",
-    prazoAtual:  parcelaM ? parseInt(parcelaM[1]) : 0,
-    prazoTotal:  parcelaM ? parseInt(parcelaM[2]) : 0,
-    valorParcela: parseFloat(valM[1].replace(/\./g, "").replace(",", ".")),
-    inicio: meses[meses.length - 2],
-    fim:    meses[meses.length - 1],
-    tipoContrato: tipo,
-  };
-}
-
-// ─── Extração de margens via cabeçalho da tabela ─────────────────────────────
-//
-// Localiza a linha de cabeçalho "Bruta Compulsória ... Facult. Global ..."
-// e lê os valores numéricos das linhas imediatamente seguintes.
-// Mapeamento de colunas (esquerda → direita):
-//   col 0: Bruta Comp  · col 1: Líq Comp
-//   col 2: Bruta Facult Global · col 3: Líq Facult Global  ← KEY (244,52)
-//   col 4: Bruta Cartão · col 5: Líq Cartão
-//   col 6: Bruta Cartão Ben · col 7: Líq Cartão Ben
-
-function extractMargensFromItems(lines: PdfLine[]): Partial<ExtratoConsignacaoParsed> {
-  // Encontra o cabeçalho da tabela de margens:
-  // "Bruta Compulsória  Líquida Comp.  Bruta Facult. Global (*)  Líquida Facult. Global (*) ..."
-  const headerIdx = lines.findIndex((l) => {
-    const u = norm(l.text);
-    return u.includes("COMPULSORIA") && (u.includes("FACULT") || u.includes("GLOBAL"));
-  });
-
-  console.log(
-    "[extrato] headerIdx:", headerIdx,
-    headerIdx >= 0 ? `| "${lines[headerIdx].text.substring(0, 80)}"` : "NAO ENCONTRADO"
-  );
-
-  if (headerIdx === -1) return {};
-
-  // Coleta valores de cada linha após o cabeçalho até achar ≥4 valores BRL
-  for (let i = headerIdx + 1; i <= Math.min(headerIdx + 5, lines.length - 1); i++) {
-    const line = lines[i];
-    const values: number[] = [];
-
-    for (const item of line.items) {
-      // "R$4.514,91" ou "R$ 4.514,91"
-      const v = firstBRL(item.text);
-      if (v !== null) { values.push(v); continue; }
-      // número puro "4.514,91" (item separado do prefixo "R$")
-      const numM = item.text.trim().match(/^([\d.]+,\d{2})$/);
-      if (numM) {
-        const n = parseFloat(numM[1].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(n) && n > 0) values.push(n);
-      }
-    }
-
-    console.log(
-      `[extrato] linha ${i}: "${line.text.substring(0, 80)}" | valores:`,
-      values
-    );
-
-    if (values.length >= 4) {
-      console.log(
-        "[extrato] => MARGENS col0:", values[0],
-        "col1:", values[1],
-        "col2:", values[2],
-        "col3 (LiqFacultGlobal):", values[3]
-      );
-      return {
-        margemBrutaCompulsoria:        values[0] ?? null,
-        margemLiquidaCompulsoria:       values[1] ?? null,
-        margemBrutaFacultativaGlobal:   values[2] ?? null,
-        margemLiquidaFacultativaGlobal: values[3] ?? null,
-        margemBrutaCartao:              values[4] ?? null,
-        margemLiquidaCartao:            values[5] ?? null,
-        margemBrutaCartaoBeneficio:     values[6] ?? null,
-        margemLiquidaCartaoBeneficio:   values[7] ?? null,
-      };
-    }
-  }
-
-  console.log("[extrato] nenhuma linha com ≥4 valores encontrada após o cabeçalho");
-  return {};
+function parseBRL(s: string): number | null {
+  const m = /^R\$\s*([\d.,]+)$/.exec(s);
+  if (!m) return null;
+  return parseFloat(m[1].replace(/\./g, "").replace(",", "."));
 }
 
 // ─── Parser principal ─────────────────────────────────────────────────────────
@@ -304,7 +94,8 @@ export async function parseExtratoConsignacao(
   file: File
 ): Promise<ExtratoConsignacaoParsed> {
   const buffer = await file.arrayBuffer();
-  const lines  = await pdfToLines(buffer);
+  const items = await pdfRawItems(buffer);
+  const normed = items.map(normItem);
 
   const result: ExtratoConsignacaoParsed = {
     orgao: "", cpf: "", matricula: "", nome: "", emitidoEm: "",
@@ -322,79 +113,107 @@ export async function parseExtratoConsignacao(
     contratos: [],
   };
 
-  // ── Extração de margens via posição X/Y (antes do loop principal) ─────────
-  const margens = extractMargensFromItems(lines);
-  Object.assign(result, margens);
-
-  // Controla em qual seção de demonstrativo estamos
-  let currentSection: ExtratoContrato["tipoContrato"] = "EMPRESTIMO";
-  let inContractTable = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].text;
-    const u = norm(t);
-
-    // ── 1. Linha de identificação do servidor ─────────────────────────────
-    // Header: "Órgão  CPF  Matrícula  Nome"
-    // Dados:  "26245 - UFRJ  034.227.507-03  1449208  LINDALVA..."
-    if (u.includes("ORGAO") && u.includes("CPF") && u.includes("MATRICULA") && u.includes("NOME")) {
-      const vt = lines[i + 1]?.text ?? "";
-      const cpfM = vt.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-      if (cpfM) {
-        result.cpf = cpfM[1].replace(/\D/g, "");
-        // Órgão: tudo antes do CPF
-        const cpfIdx = vt.indexOf(cpfM[0]);
-        if (cpfIdx > 0) result.orgao = vt.slice(0, cpfIdx).trim();
-        // Matrícula e Nome: após o CPF
-        const afterCpf = vt.slice(cpfIdx + cpfM[0].length).trim();
-        const matM = afterCpf.match(/^(\d{6,8})\s+(.+)/);
-        if (matM) {
-          result.matricula = matM[1];
-          result.nome      = matM[2].trim();
+  // ── Identificação ─────────────────────────────────────────────────────────
+  // Estrutura: [Órgão|CPF|Matrícula|Nome] labels, depois valores na mesma ordem.
+  // CPF value âncora a busca; item anterior = órgão, próximo número = matrícula.
+  for (let i = 0; i < items.length; i++) {
+    const cpfM = /(\d{3}\.\d{3}\.\d{3}-\d{2})/.exec(items[i]);
+    if (cpfM) {
+      result.cpf = cpfM[1].replace(/\D/g, "");
+      if (i > 0) result.orgao = items[i - 1];
+      for (let j = i + 1; j < Math.min(i + 5, items.length); j++) {
+        if (/^\d{6,8}$/.test(items[j])) {
+          result.matricula = items[j];
+          if (j + 1 < items.length) result.nome = items[j + 1];
+          break;
         }
       }
-      continue;
+      break;
     }
+  }
 
-    // ── 3. Valores "Utilizada" ────────────────────────────────────────────
-    // Podem estar na mesma linha da label ou na linha seguinte
-    if (u.includes("UTILIZADA FACULTATIVA")) {
-      const brlInLine = extractAllBRL(t);
-      if (brlInLine.length > 0) {
-        if (brlInLine[0] !== undefined) result.margemUtilizadaFacultativa     = brlInLine[0];
-        if (brlInLine[1] !== undefined) result.margemUtilizadaCartao           = brlInLine[1];
-        if (brlInLine[2] !== undefined) result.margemUtilizadaCartaoBeneficio  = brlInLine[2];
-      } else {
-        // Tenta na próxima linha
-        const nextVals = extractAllBRL(lines[i + 1]?.text ?? "");
-        if (nextVals[0] !== undefined) result.margemUtilizadaFacultativa       = nextVals[0];
-        if (nextVals[1] !== undefined) result.margemUtilizadaCartao             = nextVals[1];
-        if (nextVals[2] !== undefined) result.margemUtilizadaCartaoBeneficio    = nextVals[2];
+  // ── Margens ───────────────────────────────────────────────────────────────
+  // Estrutura: 8 labels (Bruta Comp, Líq Comp, Bruta Facult Global, Líq Facult Global,
+  //            Bruta Cartão, Líq Cartão, Utilizada Facultativa, Utilizada Cartão)
+  // seguidos de 8 valores BRL na mesma ordem.
+  const brutaCompIdx = normed.findIndex(
+    (s) => s === "BRUTA COMPULSORIA" || s.startsWith("BRUTA COMPULSORIA ")
+  );
+  if (brutaCompIdx !== -1) {
+    const brl: number[] = [];
+    for (let i = brutaCompIdx + 1; i < Math.min(brutaCompIdx + 30, items.length); i++) {
+      if (normed[i].includes("EXTRATO DE CONSIGNACOES") || normed[i].startsWith("DEMONSTRATIVO")) break;
+      const v = parseBRL(items[i]);
+      if (v !== null) {
+        brl.push(v);
+        if (brl.length === 8) break;
       }
-      continue;
     }
+    result.margemBrutaCompulsoria         = brl[0] ?? null;
+    result.margemLiquidaCompulsoria       = brl[1] ?? null;
+    result.margemBrutaFacultativaGlobal   = brl[2] ?? null;
+    result.margemLiquidaFacultativaGlobal = brl[3] ?? null;
+    result.margemBrutaCartao              = brl[4] ?? null;
+    result.margemLiquidaCartao            = brl[5] ?? null;
+    result.margemUtilizadaFacultativa     = brl[6] ?? null;
+    result.margemUtilizadaCartao          = brl[7] ?? null;
+  }
 
-    // Fallback: "Utilizada Cartão" em linha própria
-    if (u === "UTILIZADA CARTAO" || (u.startsWith("UTILIZADA CARTAO") && !u.includes("BENEFICIO"))) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null && result.margemUtilizadaCartao === null) result.margemUtilizadaCartao = v;
-      continue;
+  // Cartão Benefício (label seguido imediatamente pelo valor)
+  for (let i = 0; i < normed.length; i++) {
+    const n = normed[i];
+    if (n.includes("BRUTA CARTAO BENEFICIO") || n === "BRUTA CARTAO BEN") {
+      const v = parseBRL(items[i + 1] ?? "");
+      if (v !== null) result.margemBrutaCartaoBeneficio = v;
+    } else if (n.includes("LIQUIDA CARTAO BENEFICIO") || n === "LIQUIDA CARTAO BEN") {
+      const v = parseBRL(items[i + 1] ?? "");
+      if (v !== null) result.margemLiquidaCartaoBeneficio = v;
+    } else if (n.includes("UTILIZADA CARTAO BENEFICIO") || n === "UTILIZADA CARTAO BEN") {
+      const v = parseBRL(items[i + 1] ?? "");
+      if (v !== null) result.margemUtilizadaCartaoBeneficio = v;
     }
+  }
 
-    if (u.includes("UTILIZADA CARTAO BENEFICIO") || u.includes("UTILIZADA CARTAO BEN")) {
-      const v = firstBRL(t) ?? firstBRL(lines[i + 1]?.text ?? "");
-      if (v !== null && result.margemUtilizadaCartaoBeneficio === null) result.margemUtilizadaCartaoBeneficio = v;
-      continue;
-    }
+  // ── Contratos: state machine ───────────────────────────────────────────────
+  // Igual ao Simulador de Portabilidade (ferramentas-portabilidade.html),
+  // mas também captura numeroContrato, prazoAtual/Total, inicio, fim, tipoContrato.
+  //
+  // Formato por item (um campo por item, em ordem):
+  //   [numeroContrato] [rubrica] [seq] [prior] [data/hora] [valor parcela] [parcAtual/parcTotal] [inicio MM/YYYY] [fim MM/YYYY]
 
-    // ── 4. Seções de demonstrativo ────────────────────────────────────────
-    if (u.includes("DEMONSTRATIVO") && u.includes("MARGEM")) {
-      inContractTable = false;
-      if (u.includes("NOVO CONTRATO") || u.includes("RENOVACAO")) {
+  const RE_RUBRICA  = /^\d{5}\s*-\s*(.+)$/;
+  const RE_VALOR    = /^R\$\s*([\d.,]+)$/;
+  const RE_PARCELA  = /^(\d+)\/(\d+)$/;
+  const RE_DATA     = /^\d{2}\/\d{2}\/\d{4}/;
+  const RE_MMYYYY   = /^\d{2}\/\d{4}$/;
+  // Número de contrato: apenas dígitos, traços e barras (sem letras para não capturar labels)
+  const RE_CONTRATO = /^[\d\-\/]+$/;
+
+  const IDLE=0, RUB=1, SEQ=2, PRIOR=3, DATA=4, VALOR=5, PARCELA=6, INICIO=7, FIM=8;
+  let state = IDLE;
+  let cur: {
+    contrato?: string; tipo?: ExtratoContrato["tipoContrato"];
+    codigoRubrica?: string; nomeRubrica?: string;
+    seq?: number; prior?: number; data?: string;
+    valor?: number; parcAtual?: number; parcTotal?: number;
+    inicio?: string;
+  } = {};
+  let currentSection: ExtratoContrato["tipoContrato"] = "EMPRESTIMO";
+
+  for (const raw of items) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const n = normItem(line);
+
+    // Detecta cabeçalho de seção — atualiza tipo e reseta state machine
+    if (n.includes("DEMONSTRATIVO") && n.includes("MARGEM")) {
+      state = IDLE; cur = {};
+      if (n.includes("NOVO CONTRATO") || n.includes("RENOVACAO")) {
         currentSection = "EMPRESTIMO";
-      } else if (u.includes("CARTAO") || u.includes("SAQUE")) {
+      } else if (n.includes("CARTAO") || n.includes("SAQUE")) {
         currentSection = "CARTAO";
-      } else if (u.includes("SINDICATO")) {
+      } else if (n.includes("SINDICATO")) {
         currentSection = "SINDICATO";
       } else {
         currentSection = "OUTRO";
@@ -402,34 +221,77 @@ export async function parseExtratoConsignacao(
       continue;
     }
 
-    // Linha de cabeçalho da tabela de contratos ("Nº CONTRATO" ou "Número do Contrato")
-    if (u.includes("CONTRATO") && u.includes("RUBRICA")) {
-      console.log("[extrato] tabela detectada:", t.slice(0, 80));
-      inContractTable = true;
-      continue;
-    }
-
-    // ── 5. Linhas de contrato ─────────────────────────────────────────────
-    if (inContractTable) {
-      // Para de ler contratos se encontrar nova seção ou rodapé
-      if (u.startsWith("DEMONSTRATIVO") || u.includes("EMITIDO EM") || u.includes("EXTRATO PARA")) {
-        inContractTable = false;
-        // Não dá continue — pode ser a linha de emissão, processada abaixo
-      } else {
-        console.log("[extrato] tentando linha:", t.slice(0, 120));
-        const contrato = parseContractLine(t, currentSection);
-        console.log("[extrato] resultado:", contrato ? `OK (${contrato.banco || contrato.nomeRubrica})` : "null");
-        if (contrato) {
-          result.contratos.push(contrato);
-        }
-        continue;
+    if (state === IDLE) {
+      if (
+        RE_CONTRATO.test(line) &&
+        !RE_MMYYYY.test(line) &&
+        !RE_DATA.test(line) &&
+        line.length >= 6
+      ) {
+        cur = { contrato: line, tipo: currentSection };
+        state = RUB;
       }
+    } else if (state === RUB) {
+      const m = RE_RUBRICA.exec(line);
+      if (m) {
+        cur.codigoRubrica = (line.match(/^(\d{5})/) || [])[1] || "";
+        cur.nomeRubrica   = m[1].trim();
+        state = SEQ;
+      } else { state = IDLE; cur = {}; }
+    } else if (state === SEQ) {
+      if (/^\d+$/.test(line)) { cur.seq = parseInt(line); state = PRIOR; }
+      else { state = IDLE; cur = {}; }
+    } else if (state === PRIOR) {
+      if (/^\d+$/.test(line)) { cur.prior = parseInt(line); state = DATA; }
+      else { state = IDLE; cur = {}; }
+    } else if (state === DATA) {
+      if (RE_DATA.test(line)) { cur.data = line; state = VALOR; }
+      else { state = IDLE; cur = {}; }
+    } else if (state === VALOR) {
+      const m = RE_VALOR.exec(line);
+      if (m) {
+        cur.valor = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
+        state = PARCELA;
+      } else { state = IDLE; cur = {}; }
+    } else if (state === PARCELA) {
+      const m = RE_PARCELA.exec(line);
+      if (m) {
+        cur.parcAtual = parseInt(m[1]);
+        cur.parcTotal = parseInt(m[2]);
+        state = INICIO;
+      } else { state = IDLE; cur = {}; }
+    } else if (state === INICIO) {
+      if (RE_MMYYYY.test(line)) { cur.inicio = line; state = FIM; }
+      else { state = IDLE; cur = {}; }
+    } else if (state === FIM) {
+      if (RE_MMYYYY.test(line)) {
+        result.contratos.push({
+          numeroContrato: cur.contrato  || "?",
+          codigoRubrica:  cur.codigoRubrica || "",
+          nomeRubrica:    cur.nomeRubrica   || "",
+          sequencia:      cur.seq    || 0,
+          prioridade:     cur.prior  || 0,
+          dataTransacao:  cur.data   || "",
+          prazoAtual:     cur.parcAtual || 0,
+          prazoTotal:     cur.parcTotal || 0,
+          valorParcela:   cur.valor  || 0,
+          inicio:         cur.inicio || "",
+          fim:            line,
+          tipoContrato:   cur.tipo   || currentSection,
+        });
+      }
+      state = IDLE; cur = {};
     }
+  }
 
-    // ── 6. Data de emissão ────────────────────────────────────────────────
-    if (u.includes("EMITIDO EM")) {
-      const dateM = t.match(/(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}:\d{2}/);
-      if (dateM) result.emitidoEm = dateM[1];
+  // ── Data de emissão ───────────────────────────────────────────────────────
+  for (let i = 0; i < items.length; i++) {
+    if (normed[i].includes("EMITIDO EM")) {
+      for (let j = i; j < Math.min(i + 3, items.length); j++) {
+        const dm = items[j].match(/(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}:\d{2}/);
+        if (dm) { result.emitidoEm = dm[1]; break; }
+      }
+      break;
     }
   }
 
