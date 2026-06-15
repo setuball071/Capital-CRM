@@ -659,6 +659,11 @@ export default function ContratosPropostaPage() {
                 conta:        parsedData.conta        || undefined,
                 mesAno:       parsedData.mesAno       || undefined,
                 vinculo:      parsedData.vinculo      || undefined,
+                // Campos exclusivos de pensionistas
+                ...(parsedData.nomeInstituidor      ? { nomeInstituidor:      parsedData.nomeInstituidor }      : {}),
+                ...(parsedData.matriculaInstituidor ? { matriculaInstituidor: parsedData.matriculaInstituidor } : {}),
+                ...(parsedData.naturezaPensao       ? { naturezaPensao:       parsedData.naturezaPensao }       : {}),
+                ...(parsedData.inicioPensao         ? { inicioPensao:         parsedData.inicioPensao }         : {}),
               }),
               // ── Documento com foto (RG / CNH) ──
               ...(docPhotoData && {
@@ -1538,6 +1543,18 @@ export default function ContratosPropostaPage() {
                       value={parsedData.orgao}
                       wide
                     />
+                  )}
+                  {parsedData.naturezaPensao && (
+                    <InfoField label="Natureza da Pensão" value={parsedData.naturezaPensao} />
+                  )}
+                  {parsedData.inicioPensao && (
+                    <InfoField label="Início da Pensão" value={parsedData.inicioPensao} />
+                  )}
+                  {parsedData.nomeInstituidor && (
+                    <InfoField label="Instituidor" value={parsedData.nomeInstituidor} wide />
+                  )}
+                  {parsedData.matriculaInstituidor && (
+                    <InfoField label="Matríc. Instituidor" value={parsedData.matriculaInstituidor} />
                   )}
                   {/* ── Seleção de conta bancária para crédito (sempre para SIAPE) ── */}
                   {isSiape && (
@@ -2746,6 +2763,10 @@ export default function ContratosPropostaPage() {
               {parsedData.regJuridico && <InfoField label="Regime" value={parsedData.regJuridico} />}
               {parsedData.mesAno && <InfoField label="Competência" value={parsedData.mesAno} />}
               {parsedData.orgao && <InfoField label="Órgão" value={parsedData.orgao} wide />}
+              {parsedData.naturezaPensao && <InfoField label="Natureza da Pensão" value={parsedData.naturezaPensao} />}
+              {parsedData.inicioPensao && <InfoField label="Início da Pensão" value={parsedData.inicioPensao} />}
+              {parsedData.nomeInstituidor && <InfoField label="Instituidor" value={parsedData.nomeInstituidor} wide />}
+              {parsedData.matriculaInstituidor && <InfoField label="Matríc. Instituidor" value={parsedData.matriculaInstituidor} />}
               {contaSel && (
                 <div className="col-span-2 md:col-span-3 lg:col-span-4 rounded-md border bg-blue-50/40 dark:bg-blue-950/20 p-3 mt-1">
                   <p className="text-xs text-muted-foreground">Conta para crédito · {contaSel.label}</p>
