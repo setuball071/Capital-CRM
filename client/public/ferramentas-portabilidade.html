@@ -2306,10 +2306,10 @@ function exportPDF(){
   const resItems=[];
   if(totalAt&&totalNv&&(totalAt-totalNv)>0) resItems.push(['Economia mensal','R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   if(totalTroco>0) resItems.push(['Troco total disponível',fmt(totalTroco)]);
-  const mPAt=dadosAt.filter(c=>c.prazo>0).map(c=>c.prazo);
-  const mPNv=dadosNv.filter(n=>n.prazo>0).map(n=>n.prazo);
-  if(mPAt.length&&mPNv.length&&totalAt&&totalNv){
-    const diff=(totalAt*Math.min(...mPAt))-(totalNv*Math.min(...mPNv));
+  const totalPagoAtPDF=dadosAt.reduce((acc,c)=>acc+(c.parc*(c.prazo||0)),0);
+  const totalPagoNvPDF=dadosNv.reduce((acc,n)=>acc+(n.parc*(n.prazo||0)),0);
+  if(totalPagoAtPDF>0&&totalPagoNvPDF>0){
+    const diff=totalPagoAtPDF-totalPagoNvPDF;
     if(diff>0) resItems.push(['Economia total estimada','R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   }
   if(resItems.length>0){
