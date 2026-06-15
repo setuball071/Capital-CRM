@@ -402,8 +402,8 @@ export async function parseExtratoConsignacao(
       continue;
     }
 
-    // Linha de cabeçalho da tabela de contratos
-    if (u.includes("NUMERO DO CONTRATO") && u.includes("RUBRICA")) {
+    // Linha de cabeçalho da tabela de contratos ("Nº CONTRATO" ou "Número do Contrato")
+    if (u.includes("CONTRATO") && u.includes("RUBRICA")) {
       inContractTable = true;
       continue;
     }

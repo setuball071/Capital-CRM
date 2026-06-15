@@ -932,7 +932,6 @@ export default function ContratosPropostaPage() {
       const data = await parseExtratoConsignacao(file);
       setExtratoPortFile(file);
       const novos: PortabilidadeContrato[] = data.contratos
-        .filter((c) => c.tipoContrato === "EMPRESTIMO")
         .map((c) => ({
           uid:           makePortUid(),
           source:        "extrato" as const,
