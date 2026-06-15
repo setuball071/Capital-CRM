@@ -335,6 +335,107 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // ─── Cadastro em lote (Portabilidade) ───────────────────────────────────────
+  app.post("/api/contracts/proposals/batch", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      const { proposals: batch } = req.body;
+
+      if (!Array.isArray(batch) || batch.length === 0) {
+        return res.status(400).json({ message: "Nenhuma proposta no lote" });
+      }
+
+      const created = [];
+
+      for (const item of batch) {
+        const {
+          clientName, clientCpf, clientMatricula, clientConvenio,
+          bank, product, contractValue, installmentValue, term,
+          commissionPercentage, corretorCommissionPercentage, clientMeta,
+        } = item;
+
+        if (!clientName || !clientCpf) continue;
+
+        let matchedFlowId: number | null = null;
+        let firstStepId: number | null = null;
+
+        if (bank && product) {
+          const matchedFlows = await db
+            .select()
+            .from(contractFlows)
+            .where(
+              and(
+                eq(contractFlows.tenantId, tenantId),
+                eq(contractFlows.isActive, true),
+                eq(contractFlows.bank, bank),
+                eq(contractFlows.product, product),
+                clientConvenio ? eq(contractFlows.convenio, clientConvenio) : sql`1=1`,
+              )
+            )
+            .limit(1);
+
+          if (matchedFlows.length) {
+            matchedFlowId = matchedFlows[0].id;
+            const firstStep = await db
+              .select()
+              .from(contractFlowSteps)
+              .where(eq(contractFlowSteps.flowId, matchedFlowId))
+              .orderBy(asc(contractFlowSteps.stepOrder))
+              .limit(1);
+            firstStepId = firstStep.length ? firstStep[0].id : null;
+          }
+        }
+
+        const vendorId = user.role === "vendedor" ? user.id : (item.vendorId || user.id);
+
+        const [proposal] = await db
+          .insert(proposals)
+          .values({
+            tenantId,
+            clientName,
+            clientCpf,
+            clientMatricula: clientMatricula || null,
+            clientConvenio: clientConvenio || null,
+            bank: bank || null,
+            product: product || null,
+            tableId: null,
+            contractValue: contractValue || null,
+            installmentValue: installmentValue || null,
+            term: term ? parseInt(term) : null,
+            ade: null,
+            commissionPercentage: commissionPercentage != null && commissionPercentage !== ""
+              ? String(commissionPercentage) : null,
+            corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
+              ? String(corretorCommissionPercentage) : null,
+            clientMeta: clientMeta || null,
+            status: "CADASTRADA",
+            isPaused: false,
+            flowId: matchedFlowId,
+            currentStepId: firstStepId,
+            vendorId,
+            createdBy: user.id,
+          })
+          .returning();
+
+        await db.insert(proposalHistory).values({
+          proposalId: proposal.id,
+          toStatus: "CADASTRADA",
+          action: "AVANCO",
+          notes: "Proposta cadastrada em lote",
+          performedBy: user.id,
+        });
+
+        created.push(proposal);
+      }
+
+      return res.status(201).json(created);
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/batch error:", e);
+      return res.status(500).json({ message: `Erro ao criar propostas em lote: ${String(e?.message || e)}` });
+    }
+  });
+
   app.get("/api/contracts/proposals/:id", requireAuth, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);

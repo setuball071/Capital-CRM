@@ -9,6 +9,7 @@ import {
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
   Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
+  Trash2, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
+import { parseExtratoConsignacao } from "@/lib/extrato-consignacao-parser";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -227,23 +229,57 @@ interface FileAttachment {
   documentType: string;
 }
 
+// ─── Portabilidade: tipos internos ───────────────────────────────────────────
+
+interface PortabilidadeContrato {
+  uid: string;
+  source: "extrato" | "manual";
+  banco: string;
+  numeroContrato: string;
+  parcelaAtual: string;
+  prazoAtual: string;
+  prazoTotal: string;
+  inicio: string;
+  fim: string;
+  taxa: string;
+  saldoDevedor: string;
+  bancoDestino: string;
+  novaParcela: string;
+  troco: string;
+  novoPrazo: string;
+}
+
+interface SimulacaoPort {
+  banco_destino?: string;
+  taxa_refim?: number;
+  contratos_selecionados?: Array<{ banco: string; parcela: number; prazo: number; taxa: number; saldo: number }>;
+  resultado?: { linhas: Array<{ banco: string; parcela: number; troco: number; prazo: number }> };
+}
+
 // ─── Tipos de step ────────────────────────────────────────────────────────────
 
-type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato" | "conferencia";
+type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato" | "contratos-portabilidade" | "conferencia";
 
 // ─── Wizard progress indicator ────────────────────────────────────────────────
 
-const WIZARD_STEPS = [
-  { key: "dados-cadastrais", label: "Dados Cadastrais" },
-  { key: "tipo-contrato",    label: "Tipo de Contrato" },
-  { key: "conferencia",      label: "Conferência" },
+const WIZARD_STEPS_DEFAULT = [
+  { key: "dados-cadastrais",        label: "Dados Cadastrais" },
+  { key: "tipo-contrato",           label: "Tipo de Contrato" },
+  { key: "conferencia",             label: "Conferência" },
 ];
 
-function StepIndicator({ current }: { current: string }) {
-  const idx = WIZARD_STEPS.findIndex((s) => s.key === current);
+const WIZARD_STEPS_PORT = [
+  { key: "dados-cadastrais",        label: "Dados Cadastrais" },
+  { key: "tipo-contrato",           label: "Tipo de Contrato" },
+  { key: "contratos-portabilidade", label: "Contratos" },
+  { key: "conferencia",             label: "Conferência" },
+];
+
+function StepIndicator({ current, steps = WIZARD_STEPS_DEFAULT }: { current: string; steps?: typeof WIZARD_STEPS_DEFAULT }) {
+  const idx = steps.findIndex((s) => s.key === current);
   return (
     <div className="flex items-center">
-      {WIZARD_STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const done   = i < idx;
         const active = i === idx;
         return (
@@ -268,7 +304,7 @@ function StepIndicator({ current }: { current: string }) {
                 {s.label}
               </span>
             </div>
-            {i < WIZARD_STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div
                 className={`h-0.5 w-10 sm:w-16 mx-1 mb-4 transition-colors ${
                   done ? "bg-primary" : "bg-border"
@@ -313,6 +349,15 @@ export default function ContratosPropostaPage() {
   const [selectedContaIdx,      setSelectedContaIdx]      = useState<number | "manual" | null>(null);
   const [contaError,             setContaError]             = useState(false);
   const [showManualConfirm,      setShowManualConfirm]      = useState(false);
+
+  // ── Portabilidade em lote ────────────────────────────────────────────────────
+  const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
+  const [extratoPortFile,  setExtratoPortFile]  = useState<File | null>(null);
+  const [extratoPortParsing, setExtratoPortParsing] = useState(false);
+  const [simPortFile,      setSimPortFile]      = useState<File | null>(null);
+  const [simPortData,      setSimPortData]      = useState<SimulacaoPort | null>(null);
+  const extratoPortRef = useRef<HTMLInputElement>(null);
+  const simPortRef     = useRef<HTMLInputElement>(null);
 
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
@@ -767,6 +812,178 @@ export default function ContratosPropostaPage() {
       });
     },
   });
+
+  // ── Mutation em lote (Portabilidade) ────────────────────────────────────────
+  const batchMutation = useMutation({
+    mutationFn: async () => {
+      const v = form.getValues();
+      const sharedMeta: Record<string, any> = {};
+      if (parsedData) {
+        if (parsedData.identSiape)   sharedMeta.identSiape   = parsedData.identSiape;
+        if (parsedData.uf)           sharedMeta.uf           = parsedData.uf;
+        if (parsedData.orgao)        sharedMeta.orgao        = parsedData.orgao;
+        if (parsedData.regJuridico)  sharedMeta.regJuridico  = parsedData.regJuridico;
+        if (parsedData.bancoSalario) sharedMeta.bancoSalario = parsedData.bancoSalario;
+        if (parsedData.agencia)      sharedMeta.agencia      = parsedData.agencia;
+        if (parsedData.conta)        sharedMeta.conta        = parsedData.conta;
+        if (parsedData.mesAno)       sharedMeta.mesAno       = parsedData.mesAno;
+        if (parsedData.vinculo)      sharedMeta.vinculo      = parsedData.vinculo;
+        if (parsedData.nomeInstituidor)      sharedMeta.nomeInstituidor      = parsedData.nomeInstituidor;
+        if (parsedData.matriculaInstituidor) sharedMeta.matriculaInstituidor = parsedData.matriculaInstituidor;
+        if (parsedData.naturezaPensao)       sharedMeta.naturezaPensao       = parsedData.naturezaPensao;
+        if (parsedData.inicioPensao)         sharedMeta.inicioPensao         = parsedData.inicioPensao;
+        if (parsedData.terminoPensao)        sharedMeta.terminoPensao        = parsedData.terminoPensao;
+      }
+      if (docPhotoData) {
+        sharedMeta.docFoto = {
+          tipo:           docPhotoData.tipo,
+          nome:           docPhotoData.nome,
+          numeroRegistro: docPhotoData.numeroRegistro,
+          dataNascimento: docPhotoData.dataNascimento,
+          dataExpedicao:  docPhotoData.dataExpedicao,
+          orgaoEmissor:   docPhotoData.orgaoEmissor,
+          filiacao:       docPhotoData.filiacao,
+          cpf:            docPhotoData.cpf,
+        };
+      }
+      if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
+      if (v.clientEmail) sharedMeta.email    = v.clientEmail;
+      if (v.clientCep) {
+        sharedMeta.endereco = {
+          cep: v.clientCep, logradouro: v.clientLogradouro,
+          numero: v.clientNumero, complemento: v.clientComplemento || undefined,
+          bairro: v.clientBairro, cidade: v.clientCidade, estado: v.clientEstado,
+        };
+      }
+      sharedMeta.tipoContrato = "PORTABILIDADE";
+      if (simPortData?.banco_destino) sharedMeta.bancoDestinoGlobal = simPortData.banco_destino;
+
+      const proposalsBatch = portContratos.map((c) => ({
+        clientName:      v.clientName,
+        clientCpf:       v.clientCpf.replace(/\D/g, ""),
+        clientMatricula: v.clientMatricula || null,
+        clientConvenio:  selectedConvenio?.id,
+        product:         "PORTABILIDADE",
+        bank:            c.bancoDestino || simPortData?.banco_destino || null,
+        installmentValue: parseFloat(c.novaParcela) || null,
+        contractValue:    parseFloat(c.saldoDevedor) || null,
+        term:             parseInt(c.novoPrazo) || null,
+        clientMeta: {
+          ...sharedMeta,
+          ...(c.banco           ? { bancoOrigem:      c.banco }                  : {}),
+          ...(c.numeroContrato  ? { numeroContrato:   c.numeroContrato }         : {}),
+          ...(c.parcelaAtual    ? { parcelaOriginal:  parseFloat(c.parcelaAtual) } : {}),
+          ...(c.prazoAtual      ? { prazoAtual:       parseInt(c.prazoAtual) }   : {}),
+          ...(c.prazoTotal      ? { prazoTotal:       parseInt(c.prazoTotal) }   : {}),
+          ...(c.inicio          ? { inicioContrato:   c.inicio }                 : {}),
+          ...(c.fim             ? { fimContrato:      c.fim }                    : {}),
+          ...(c.taxa            ? { taxa:             parseFloat(c.taxa) }       : {}),
+          ...(c.troco           ? { troco:            parseFloat(c.troco) }      : {}),
+          ...(c.novoPrazo       ? { novoPrazo:        parseInt(c.novoPrazo) }    : {}),
+        },
+      }));
+
+      return apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+    },
+    onSuccess: (data: any[]) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      toast({ title: `${data.length} proposta(s) de portabilidade cadastrada(s)!` });
+      setLocation("/contratos");
+    },
+    onError: (e: any) => {
+      toast({ title: "Erro ao cadastrar propostas", description: e.message, variant: "destructive" });
+    },
+  });
+
+  // ── Helpers de portabilidade ─────────────────────────────────────────────────
+
+  function makePortUid() {
+    return Math.random().toString(36).slice(2, 9);
+  }
+
+  function bancosMatch(a: string, b: string) {
+    const n = (s: string) => s.normalize("NFKD").replace(/[^\w]/g, "").toUpperCase();
+    const na = n(a), nb = n(b);
+    return na.includes(nb) || nb.includes(na);
+  }
+
+  function applySimulacaoToContratos(contratos: PortabilidadeContrato[], sim: SimulacaoPort): PortabilidadeContrato[] {
+    return contratos.map((c) => {
+      const src = sim.contratos_selecionados?.find(
+        (s) => bancosMatch(c.banco, s.banco) && Math.abs(parseFloat(c.parcelaAtual) - s.parcela) < 5
+      );
+      if (!src) return { ...c, bancoDestino: sim.banco_destino || c.bancoDestino };
+      const res = sim.resultado?.linhas?.find((l) => bancosMatch(l.banco, src.banco));
+      return {
+        ...c,
+        taxa:         src.taxa  ? String(src.taxa)             : c.taxa,
+        saldoDevedor: src.saldo ? src.saldo.toFixed(2)         : c.saldoDevedor,
+        bancoDestino: sim.banco_destino                        || c.bancoDestino,
+        novaParcela:  res       ? res.parcela.toFixed(2)       : c.novaParcela,
+        troco:        res       ? String(res.troco)            : c.troco,
+        novoPrazo:    res       ? String(res.prazo)            : c.novoPrazo,
+      };
+    });
+  }
+
+  async function handleExtratoPort(file: File) {
+    setExtratoPortParsing(true);
+    try {
+      const data = await parseExtratoConsignacao(file);
+      setExtratoPortFile(file);
+      const novos: PortabilidadeContrato[] = data.contratos
+        .map((c) => ({
+          uid:           makePortUid(),
+          source:        "extrato" as const,
+          banco:         c.nomeRubrica.replace(/^EMPREST\w*\s+BCO\s+(?:OFICIAL|PRIVAD[OA]S?)\s*-\s*/i, "").trim(),
+          numeroContrato: c.numeroContrato,
+          parcelaAtual:  c.valorParcela.toFixed(2),
+          prazoAtual:    String(c.prazoAtual),
+          prazoTotal:    String(c.prazoTotal),
+          inicio:        c.inicio,
+          fim:           c.fim,
+          taxa:          "",
+          saldoDevedor:  "",
+          bancoDestino:  simPortData?.banco_destino || "",
+          novaParcela:   "",
+          troco:         "",
+          novoPrazo:     simPortData?.resultado?.linhas?.[0]?.prazo
+                           ? String(simPortData.resultado.linhas[0].prazo)
+                           : "",
+        }));
+
+      setPortContratos((prev) => {
+        const manual = prev.filter((c) => c.source === "manual");
+        const merged = [...novos, ...manual];
+        return simPortData ? applySimulacaoToContratos(merged, simPortData) : merged;
+      });
+    } catch {
+      toast({ title: "Erro ao ler extrato de consignações", variant: "destructive" });
+    } finally {
+      setExtratoPortParsing(false);
+    }
+  }
+
+  function handleSimPort(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const sim: SimulacaoPort = JSON.parse(e.target?.result as string);
+        setSimPortFile(file);
+        setSimPortData(sim);
+        if (portContratos.length > 0) {
+          setPortContratos((prev) => applySimulacaoToContratos(prev, sim));
+        }
+      } catch {
+        toast({ title: "Arquivo JSON inválido", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function updatePortContrato(uid: string, field: keyof PortabilidadeContrato, value: string) {
+    setPortContratos((prev) => prev.map((c) => c.uid === uid ? { ...c, [field]: value } : c));
+  }
 
   // ── Handlers SIAPE ──────────────────────────────────────────────────────────
 
@@ -2213,7 +2430,7 @@ export default function ContratosPropostaPage() {
       </div>
 
       {/* Indicador de progresso */}
-      <StepIndicator current="tipo-contrato" />
+      <StepIndicator current="tipo-contrato" steps={contractType === "PORTABILIDADE" ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
 
       {/* ── Seleção do tipo de contrato ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl">
@@ -2242,8 +2459,8 @@ export default function ContratosPropostaPage() {
         ))}
       </div>
 
-      {/* ── Upload do Extrato de Consignações (SIAPE) ── */}
-      {selectedConvenio?.id === "SIAPE" && contractType && (
+      {/* ── Upload do Extrato de Consignações (SIAPE) — não mostra para Portabilidade, que tem step próprio ── */}
+      {selectedConvenio?.id === "SIAPE" && contractType && contractType !== "PORTABILIDADE" && (
         <div className="space-y-3 max-w-4xl">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -2321,8 +2538,8 @@ export default function ContratosPropostaPage() {
       )}
 
       {/* ── Campos específicos por tipo ── */}
-      {/* Campos só aparecem se: não for NOVO+SIAPE OU extrato já foi anexado */}
-      {contractType && (selectedConvenio?.id !== "SIAPE" || contractType !== "NOVO" || extratoFile !== null) && (
+      {/* Campos só aparecem se: não for NOVO+SIAPE sem extrato, e não for PORTABILIDADE (que tem step próprio) */}
+      {contractType && contractType !== "PORTABILIDADE" && (selectedConvenio?.id !== "SIAPE" || contractType !== "NOVO" || extratoFile !== null) && (
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
@@ -2671,6 +2888,35 @@ export default function ContratosPropostaPage() {
         </Form>
       )}
 
+      {/* ── Portabilidade: avançar para step de contratos ── */}
+      {contractType === "PORTABILIDADE" && (
+        <div className="space-y-4 max-w-4xl">
+          <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
+            <div className="flex items-start gap-3">
+              <ArrowLeftRight className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Portabilidade em lote</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  No próximo passo você informa os contratos a portar.
+                  Cada contrato gerará uma proposta separada.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-between pb-4">
+            <Button type="button" variant="outline" onClick={() => setStep("dados-cadastrais")}>
+              Voltar
+            </Button>
+            <Button type="button" onClick={() => setStep("contratos-portabilidade")}>
+              Contratos →
+              {portContratos.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 text-xs">{portContratos.length}</span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Footer sem tipo selecionado */}
       {!contractType && (
         <div className="flex justify-start pb-4">
@@ -2681,6 +2927,248 @@ export default function ContratosPropostaPage() {
       )}
     </div>
   );
+
+  // ─── STEP 4.5 — Contratos de Portabilidade ───────────────────────────────
+  if (step === "contratos-portabilidade") {
+    const isSiapeConv = selectedConvenio?.id === "SIAPE";
+    return (
+      <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button size="icon" variant="ghost" onClick={() => setStep("tipo-contrato")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Contratos para Portabilidade</h1>
+              {selectedConvenio && <Badge variant="outline">{selectedConvenio.label}</Badge>}
+            </div>
+            <p className="text-sm text-muted-foreground">Selecione os contratos a portar</p>
+          </div>
+        </div>
+
+        <StepIndicator current="contratos-portabilidade" steps={WIZARD_STEPS_PORT} />
+
+        {/* ── Uploads ── */}
+        <div className={`grid gap-4 ${isSiapeConv ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 max-w-sm"}`}>
+          {/* Extrato SIAPE */}
+          {isSiapeConv && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  Extrato de Consignações
+                  <Badge variant="outline" className="text-xs ml-auto">PDF</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {extratoPortFile ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                    <span className="flex-1 truncate text-green-700 dark:text-green-400">{extratoPortFile.name}</span>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" type="button"
+                      onClick={() => {
+                        setExtratoPortFile(null);
+                        setPortContratos((prev) => prev.filter((c) => c.source === "manual"));
+                      }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : extratoPortParsing ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Lendo extrato...
+                  </div>
+                ) : (
+                  <div
+                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => extratoPortRef.current?.click()}
+                  >
+                    <input ref={extratoPortRef} type="file" accept="application/pdf" className="hidden"
+                      onChange={(e) => { if (e.target.files?.[0]) handleExtratoPort(e.target.files[0]); e.target.value = ""; }} />
+                    <FileText className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Arraste ou clique para selecionar</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Simulação JSON */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Coins className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                Proposta do Simulador
+                <Badge variant="outline" className="text-xs ml-auto">JSON · opcional</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {simPortFile ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="flex-1 truncate text-green-700 dark:text-green-400">{simPortFile.name}</span>
+                  {simPortData?.banco_destino && (
+                    <span className="text-xs text-muted-foreground shrink-0">→ {simPortData.banco_destino}</span>
+                  )}
+                  <Button size="icon" variant="ghost" className="h-7 w-7" type="button"
+                    onClick={() => { setSimPortFile(null); setSimPortData(null); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => simPortRef.current?.click()}
+                >
+                  <input ref={simPortRef} type="file" accept="application/json,.json" className="hidden"
+                    onChange={(e) => { if (e.target.files?.[0]) handleSimPort(e.target.files[0]); e.target.value = ""; }} />
+                  <Coins className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">JSON exportado pelo simulador de portabilidade</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Tabela de contratos ── */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4" />
+                Contratos
+                {portContratos.length > 0 && (
+                  <span className="text-xs font-normal text-muted-foreground">— {portContratos.length}</span>
+                )}
+              </CardTitle>
+              <Button size="sm" variant="outline" type="button"
+                onClick={() => setPortContratos((prev) => [...prev, {
+                  uid: makePortUid(), source: "manual",
+                  banco: "", numeroContrato: "",
+                  parcelaAtual: "", prazoAtual: "", prazoTotal: "",
+                  inicio: "", fim: "",
+                  taxa: "", saldoDevedor: "",
+                  bancoDestino: simPortData?.banco_destino || "",
+                  novaParcela: "", troco: "",
+                  novoPrazo: simPortData?.resultado?.linhas?.[0]?.prazo
+                    ? String(simPortData.resultado.linhas[0].prazo) : "",
+                }])}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Manual
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {portContratos.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                {isSiapeConv
+                  ? "Faça upload do extrato acima ou adicione contratos manualmente."
+                  : "Adicione os contratos a portar manualmente."}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Origem</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Nº Contrato</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Parc. Atual</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Prazo Rest.</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Saldo Dev.</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Nova Parc.</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Troco</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Dest.</th>
+                      <th className="text-right py-2 pr-2 font-medium text-muted-foreground">N. Prazo</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portContratos.map((c) => (
+                      <tr key={c.uid} className="border-b last:border-0">
+                        <td className="py-1.5 pr-2">
+                          <input className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
+                            value={c.banco} onChange={(e) => updatePortContrato(c.uid, "banco", e.target.value)}
+                            placeholder="ex: AGIBANK" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
+                            value={c.numeroContrato} onChange={(e) => updatePortContrato(c.uid, "numeroContrato", e.target.value)}
+                            placeholder="Nº contrato" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-20 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                            value={c.parcelaAtual} onChange={(e) => updatePortContrato(c.uid, "parcelaAtual", e.target.value)}
+                            placeholder="0.00" />
+                        </td>
+                        <td className="py-1.5 pr-2 text-right">
+                          {c.prazoAtual && c.prazoTotal && c.source === "extrato" ? (
+                            <span className="text-muted-foreground whitespace-nowrap">{c.prazoAtual}/{c.prazoTotal}m</span>
+                          ) : (
+                            <input className="w-16 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                              value={c.prazoAtual} onChange={(e) => updatePortContrato(c.uid, "prazoAtual", e.target.value)}
+                              placeholder="meses" />
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-20 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                            value={c.saldoDevedor} onChange={(e) => updatePortContrato(c.uid, "saldoDevedor", e.target.value)}
+                            placeholder="0.00" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-20 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                            value={c.novaParcela} onChange={(e) => updatePortContrato(c.uid, "novaParcela", e.target.value)}
+                            placeholder="0.00" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-16 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                            value={c.troco} onChange={(e) => updatePortContrato(c.uid, "troco", e.target.value)}
+                            placeholder="0" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-24 border rounded px-1.5 py-0.5 text-xs bg-background"
+                            value={c.bancoDestino} onChange={(e) => updatePortContrato(c.uid, "bancoDestino", e.target.value)}
+                            placeholder="Banco destino" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
+                            value={c.novoPrazo} onChange={(e) => updatePortContrato(c.uid, "novoPrazo", e.target.value)}
+                            placeholder="96" />
+                        </td>
+                        <td className="py-1.5">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" type="button"
+                            onClick={() => setPortContratos((prev) => prev.filter((x) => x.uid !== c.uid))}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-between pb-4">
+          <Button type="button" variant="outline" onClick={() => setStep("tipo-contrato")}>
+            ← Voltar
+          </Button>
+          <Button
+            type="button"
+            disabled={portContratos.length === 0}
+            onClick={() => {
+              if (portContratos.length === 0) {
+                toast({ title: "Adicione ao menos um contrato", variant: "destructive" });
+                return;
+              }
+              setStep("conferencia");
+            }}
+          >
+            Conferência → ({portContratos.length})
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ─── STEP 5 — Conferência ────────────────────────────────────────────────
   if (step === "conferencia") {
@@ -2702,19 +3190,27 @@ export default function ContratosPropostaPage() {
     return (
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
-          <Button size="icon" variant="ghost" onClick={() => setStep("tipo-contrato")}>
+          <Button size="icon" variant="ghost"
+            onClick={() => contractType === "PORTABILIDADE" ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">Conferência da Proposta</h1>
+              <h1 className="text-xl font-bold">
+                {contractType === "PORTABILIDADE" ? "Conferência — Portabilidade em Lote" : "Conferência da Proposta"}
+              </h1>
               {selectedConvenio && <Badge variant="outline">{selectedConvenio.label}</Badge>}
             </div>
-            <p className="text-sm text-muted-foreground">Revise todos os dados antes de cadastrar</p>
+            <p className="text-sm text-muted-foreground">
+              {contractType === "PORTABILIDADE"
+                ? `${portContratos.length} contrato(s) — revise antes de cadastrar`
+                : "Revise todos os dados antes de cadastrar"}
+            </p>
           </div>
         </div>
 
-        <StepIndicator current="conferencia" />
+        <StepIndicator current="conferencia"
+          steps={contractType === "PORTABILIDADE" ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
 
         {/* Card: Cliente */}
         <Card>
@@ -2802,35 +3298,85 @@ export default function ContratosPropostaPage() {
           </CardContent>
         </Card>
 
-        {/* Card: Operação */}
-        <Card className="border-blue-200 dark:border-blue-900">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
-              <Building2 className="h-4 w-4" />
-              {contractTypeLabel}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-            <InfoField label="Banco" value={v.bank || "—"} />
-            {selectedTabela && <InfoField label="Tabela" value={selectedTabela.nome} wide />}
-            {selectedTabela?.prazo && <InfoField label="Prazo" value={`${selectedTabela.prazo} meses`} />}
-            <InfoField
-              label={contractType === "CARTAO" ? "Valor do Saque" : contractType === "PORTABILIDADE_REFIN" ? "Troco" : "Valor Liberado"}
-              value={fmtBRL(valorContrato)}
-            />
-            <InfoField
-              label={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Nova Parcela" : "Parcela"}
-              value={fmtBRL(valorParcela)}
-            />
-            {v.bancoOrigem && <InfoField label="Banco de Origem" value={v.bancoOrigem} />}
-            {v.saldoDevedor && <InfoField label="Saldo Devedor" value={`R$ ${v.saldoDevedor}`} />}
-            {v.prazoAtual && <InfoField label="Prazo Restante" value={`${v.prazoAtual} meses`} />}
-            {v.ade && <InfoField label="ADE" value={v.ade} />}
-          </CardContent>
-        </Card>
+        {/* Card: Contratos de Portabilidade (somente para PORTABILIDADE) */}
+        {contractType === "PORTABILIDADE" && (
+          <Card className="border-blue-200 dark:border-blue-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <ArrowLeftRight className="h-4 w-4" />
+                Contratos a Portar
+                <span className="text-xs font-normal text-muted-foreground ml-1">— {portContratos.length} contrato(s)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {simPortData?.banco_destino && (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Banco destino: <strong>{simPortData.banco_destino}</strong>
+                </p>
+              )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Banco Origem</th>
+                      <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Nº Contrato</th>
+                      <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Parc. Atual</th>
+                      <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Nova Parc.</th>
+                      <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Troco</th>
+                      <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Banco Dest.</th>
+                      <th className="text-right py-1.5 pr-0 font-medium text-muted-foreground">Prazo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portContratos.map((c) => (
+                      <tr key={c.uid} className="border-b last:border-0">
+                        <td className="py-1.5 pr-2 font-medium">{c.banco || "—"}</td>
+                        <td className="py-1.5 pr-2 font-mono text-muted-foreground">{c.numeroContrato || "—"}</td>
+                        <td className="py-1.5 pr-2 text-right">{c.parcelaAtual ? `R$ ${c.parcelaAtual}` : "—"}</td>
+                        <td className="py-1.5 pr-2 text-right text-green-700 dark:text-green-400 font-medium">{c.novaParcela ? `R$ ${c.novaParcela}` : "—"}</td>
+                        <td className="py-1.5 pr-2 text-right">{c.troco ? `R$ ${c.troco}` : "—"}</td>
+                        <td className="py-1.5 pr-2">{c.bancoDestino || simPortData?.banco_destino || "—"}</td>
+                        <td className="py-1.5 pr-0 text-right">{c.novoPrazo ? `${c.novoPrazo}m` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Card: Comissão (líquido do corretor) */}
-        {selectedTabela && myGrupo && (
+        {/* Card: Operação (oculto para PORTABILIDADE — dados já estão nos contratos acima) */}
+        {contractType !== "PORTABILIDADE" && (
+          <Card className="border-blue-200 dark:border-blue-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <Building2 className="h-4 w-4" />
+                {contractTypeLabel}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+              <InfoField label="Banco" value={v.bank || "—"} />
+              {selectedTabela && <InfoField label="Tabela" value={selectedTabela.nome} wide />}
+              {selectedTabela?.prazo && <InfoField label="Prazo" value={`${selectedTabela.prazo} meses`} />}
+              <InfoField
+                label={contractType === "CARTAO" ? "Valor do Saque" : contractType === "PORTABILIDADE_REFIN" ? "Troco" : "Valor Liberado"}
+                value={fmtBRL(valorContrato)}
+              />
+              <InfoField
+                label={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Nova Parcela" : "Parcela"}
+                value={fmtBRL(valorParcela)}
+              />
+              {v.bancoOrigem && <InfoField label="Banco de Origem" value={v.bancoOrigem} />}
+              {v.saldoDevedor && <InfoField label="Saldo Devedor" value={`R$ ${v.saldoDevedor}`} />}
+              {v.prazoAtual && <InfoField label="Prazo Restante" value={`${v.prazoAtual} meses`} />}
+              {v.ade && <InfoField label="ADE" value={v.ade} />}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Card: Comissão (líquido do corretor) — não exibe para PORTABILIDADE pois não há tabela selecionada */}
+        {selectedTabela && myGrupo && contractType !== "PORTABILIDADE" && (
           <Card className="border-green-200 dark:border-green-900">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -2934,17 +3480,31 @@ export default function ContratosPropostaPage() {
 
         {/* Footer: confirmar e cadastrar */}
         <div className="flex justify-end gap-3 pb-4">
-          <Button type="button" variant="outline" onClick={() => setStep("tipo-contrato")}>
+          <Button type="button" variant="outline"
+            onClick={() => contractType === "PORTABILIDADE" ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
             ← Voltar e editar
           </Button>
-          <Button
-            type="button"
-            disabled={createMutation.isPending}
-            className="bg-green-600 hover:bg-green-700 text-white"
-            onClick={() => createMutation.mutate(form.getValues())}
-          >
-            {createMutation.isPending ? "Cadastrando..." : "✓ Confirmar e Cadastrar Proposta"}
-          </Button>
+          {contractType === "PORTABILIDADE" ? (
+            <Button
+              type="button"
+              disabled={batchMutation.isPending || portContratos.length === 0}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => batchMutation.mutate()}
+            >
+              {batchMutation.isPending
+                ? "Cadastrando..."
+                : `✓ Cadastrar ${portContratos.length} Proposta(s)`}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={createMutation.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => createMutation.mutate(form.getValues())}
+            >
+              {createMutation.isPending ? "Cadastrando..." : "✓ Confirmar e Cadastrar Proposta"}
+            </Button>
+          )}
         </div>
       </div>
     );
