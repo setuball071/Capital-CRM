@@ -404,6 +404,7 @@ export async function parseExtratoConsignacao(
 
     // Linha de cabeçalho da tabela de contratos ("Nº CONTRATO" ou "Número do Contrato")
     if (u.includes("CONTRATO") && u.includes("RUBRICA")) {
+      console.log("[extrato] tabela detectada:", t.slice(0, 80));
       inContractTable = true;
       continue;
     }
@@ -415,7 +416,9 @@ export async function parseExtratoConsignacao(
         inContractTable = false;
         // Não dá continue — pode ser a linha de emissão, processada abaixo
       } else {
+        console.log("[extrato] tentando linha:", t.slice(0, 120));
         const contrato = parseContractLine(t, currentSection);
+        console.log("[extrato] resultado:", contrato ? `OK (${contrato.banco || contrato.nomeRubrica})` : "null");
         if (contrato) {
           result.contratos.push(contrato);
         }
