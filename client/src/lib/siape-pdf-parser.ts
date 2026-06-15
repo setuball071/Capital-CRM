@@ -99,6 +99,8 @@ export interface SiapeParsedData {
   naturezaPensao?: string;
   /** Data de início da pensão, ex: "12 OUT 2008" */
   inicioPensao?: string;
+  /** Término da pensão — data ou "***********" quando indeterminado */
+  terminoPensao?: string;
 }
 
 // ─── Extração de linhas do PDF ────────────────────────────────────────────────
@@ -451,6 +453,12 @@ export async function parseSiapeContracheque(
           /(\d{1,2}\s+(?:JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+\d{4})/i
         );
         if (inicioMatch) result.inicioPensao = inicioMatch[1].toUpperCase();
+
+        // Término: vem logo após a data de início — pode ser asteriscos ou data
+        const terminoMatch = vt.match(
+          /\d{1,2}\s+(?:JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+\d{4}\s+(\*+|\d{1,2}\s+(?:JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+\d{4})/i
+        );
+        if (terminoMatch) result.terminoPensao = terminoMatch[1].toUpperCase();
       }
     }
 

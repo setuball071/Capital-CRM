@@ -664,6 +664,7 @@ export default function ContratosPropostaPage() {
                 ...(parsedData.matriculaInstituidor ? { matriculaInstituidor: parsedData.matriculaInstituidor } : {}),
                 ...(parsedData.naturezaPensao       ? { naturezaPensao:       parsedData.naturezaPensao }       : {}),
                 ...(parsedData.inicioPensao         ? { inicioPensao:         parsedData.inicioPensao }         : {}),
+                ...(parsedData.terminoPensao        ? { terminoPensao:        parsedData.terminoPensao }        : {}),
               }),
               // ── Documento com foto (RG / CNH) ──
               ...(docPhotoData && {
@@ -1549,6 +1550,9 @@ export default function ContratosPropostaPage() {
                   )}
                   {parsedData.inicioPensao && (
                     <InfoField label="Início da Pensão" value={parsedData.inicioPensao} />
+                  )}
+                  {parsedData.terminoPensao && (
+                    <InfoField label="Término da Pensão" value={parsedData.terminoPensao} />
                   )}
                   {parsedData.nomeInstituidor && (
                     <InfoField label="Instituidor" value={parsedData.nomeInstituidor} wide />
@@ -2765,6 +2769,7 @@ export default function ContratosPropostaPage() {
               {parsedData.orgao && <InfoField label="Órgão" value={parsedData.orgao} wide />}
               {parsedData.naturezaPensao && <InfoField label="Natureza da Pensão" value={parsedData.naturezaPensao} />}
               {parsedData.inicioPensao && <InfoField label="Início da Pensão" value={parsedData.inicioPensao} />}
+              {parsedData.terminoPensao && <InfoField label="Término da Pensão" value={parsedData.terminoPensao} />}
               {parsedData.nomeInstituidor && <InfoField label="Instituidor" value={parsedData.nomeInstituidor} wide />}
               {parsedData.matriculaInstituidor && <InfoField label="Matríc. Instituidor" value={parsedData.matriculaInstituidor} />}
               {contaSel && (
