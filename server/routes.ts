@@ -29198,7 +29198,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       return res.json(keys);
     } catch (err: any) {
       console.error("[API Keys] list error:", err);
-      return res.status(500).json({ message: "Erro ao listar API keys" });
+      return res.status(500).json({ message: "Erro ao listar API keys", detail: String(err?.message || err) });
     }
   });
 
