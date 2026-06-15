@@ -1459,7 +1459,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         </div>
         <div class="field" style="max-width:120px;">
           <label>Prazo (meses)</label>
-          <input id="simpPrazo" type="number" value="96" placeholder="96" oninput="calcSimples()">
+          <input id="simpPrazo" type="number" value="48" placeholder="48" oninput="calcSimples()">
         </div>
         <div class="field" style="max-width:180px;">
           <label>Resultado</label>
@@ -2567,7 +2567,7 @@ async function importarPDFFile(file) {
         amort: 0,
         portar: false,
         taxaPort: 1.30,
-        prazoPort: 96
+        prazoPort: 48
       });
       if (c.semParcela) semParcela++;
     });
@@ -3108,7 +3108,7 @@ function addContrato() {
     amort: 0,
     portar: false,
     taxaPort: 1.30,
-    prazoPort: 96
+    prazoPort: 48
   });
   renderContratos();
 }
