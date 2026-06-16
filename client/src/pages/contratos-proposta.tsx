@@ -29,7 +29,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
-import { parseExtratoConsignacao } from "@/lib/extrato-consignacao-parser";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -250,10 +249,21 @@ interface PortabilidadeContrato {
 }
 
 interface SimulacaoPort {
+  exportado_em?: string;
   banco_destino?: string;
-  taxa_refim?: number;
-  contratos_selecionados?: Array<{ banco: string; parcela: number; prazo: number; taxa: number; saldo: number }>;
-  resultado?: { linhas: Array<{ banco: string; parcela: number; troco: number; prazo: number }> };
+  contratos?: Array<{
+    banco: string;
+    numero_contrato: string;
+    parcela_atual: number;
+    prazo_restante: number;
+    prazo_total?: number;
+    taxa_atual: number;
+    saldo_devedor: number;
+    taxa_nova: number;
+    prazo_novo: number;
+    nova_parcela: number;
+    troco?: number;
+  }>;
 }
 
 // ─── Tipos de step ────────────────────────────────────────────────────────────
@@ -352,12 +362,9 @@ export default function ContratosPropostaPage() {
 
   // ── Portabilidade em lote ────────────────────────────────────────────────────
   const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
-  const [extratoPortFile,  setExtratoPortFile]  = useState<File | null>(null);
-  const [extratoPortParsing, setExtratoPortParsing] = useState(false);
-  const [simPortFile,      setSimPortFile]      = useState<File | null>(null);
-  const [simPortData,      setSimPortData]      = useState<SimulacaoPort | null>(null);
-  const extratoPortRef = useRef<HTMLInputElement>(null);
-  const simPortRef     = useRef<HTMLInputElement>(null);
+  const [simPortFile,  setSimPortFile]  = useState<File | null>(null);
+  const [simPortData,  setSimPortData]  = useState<SimulacaoPort | null>(null);
+  const simPortRef = useRef<HTMLInputElement>(null);
 
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
@@ -901,69 +908,6 @@ export default function ContratosPropostaPage() {
     return Math.random().toString(36).slice(2, 9);
   }
 
-  function bancosMatch(a: string, b: string) {
-    const n = (s: string) => s.normalize("NFKD").replace(/[^\w]/g, "").toUpperCase();
-    const na = n(a), nb = n(b);
-    return na.includes(nb) || nb.includes(na);
-  }
-
-  function applySimulacaoToContratos(contratos: PortabilidadeContrato[], sim: SimulacaoPort): PortabilidadeContrato[] {
-    return contratos.map((c) => {
-      const src = sim.contratos_selecionados?.find(
-        (s) => bancosMatch(c.banco, s.banco) && Math.abs(parseFloat(c.parcelaAtual) - s.parcela) < 5
-      );
-      if (!src) return { ...c, bancoDestino: sim.banco_destino || c.bancoDestino };
-      const res = sim.resultado?.linhas?.find((l) => bancosMatch(l.banco, src.banco));
-      return {
-        ...c,
-        taxa:         src.taxa  ? String(src.taxa)             : c.taxa,
-        saldoDevedor: src.saldo ? src.saldo.toFixed(2)         : c.saldoDevedor,
-        bancoDestino: sim.banco_destino                        || c.bancoDestino,
-        novaParcela:  res       ? res.parcela.toFixed(2)       : c.novaParcela,
-        troco:        res       ? String(res.troco)            : c.troco,
-        novoPrazo:    res       ? String(res.prazo)            : c.novoPrazo,
-      };
-    });
-  }
-
-  async function handleExtratoPort(file: File) {
-    setExtratoPortParsing(true);
-    try {
-      const data = await parseExtratoConsignacao(file);
-      setExtratoPortFile(file);
-      const novos: PortabilidadeContrato[] = data.contratos
-        .map((c) => ({
-          uid:           makePortUid(),
-          source:        "extrato" as const,
-          banco:         c.nomeRubrica.replace(/^EMPREST\w*\s+BCO\s+(?:OFICIAL|PRIVAD[OA]S?)\s*-\s*/i, "").trim(),
-          numeroContrato: c.numeroContrato,
-          parcelaAtual:  c.valorParcela.toFixed(2),
-          prazoAtual:    String(c.prazoAtual),
-          prazoTotal:    String(c.prazoTotal),
-          inicio:        c.inicio,
-          fim:           c.fim,
-          taxa:          "",
-          saldoDevedor:  "",
-          bancoDestino:  simPortData?.banco_destino || "",
-          novaParcela:   "",
-          troco:         "",
-          novoPrazo:     simPortData?.resultado?.linhas?.[0]?.prazo
-                           ? String(simPortData.resultado.linhas[0].prazo)
-                           : "",
-        }));
-
-      setPortContratos((prev) => {
-        const manual = prev.filter((c) => c.source === "manual");
-        const merged = [...novos, ...manual];
-        return simPortData ? applySimulacaoToContratos(merged, simPortData) : merged;
-      });
-    } catch {
-      toast({ title: "Erro ao ler extrato de consignações", variant: "destructive" });
-    } finally {
-      setExtratoPortParsing(false);
-    }
-  }
-
   function handleSimPort(file: File) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -971,11 +915,31 @@ export default function ContratosPropostaPage() {
         const sim: SimulacaoPort = JSON.parse(e.target?.result as string);
         setSimPortFile(file);
         setSimPortData(sim);
-        if (portContratos.length > 0) {
-          setPortContratos((prev) => applySimulacaoToContratos(prev, sim));
+        if (sim.contratos && sim.contratos.length > 0) {
+          const novos: PortabilidadeContrato[] = sim.contratos.map((c) => ({
+            uid:            makePortUid(),
+            source:         "extrato" as const,
+            banco:          c.banco,
+            numeroContrato: c.numero_contrato || "",
+            parcelaAtual:   c.parcela_atual   ? String(c.parcela_atual)  : "",
+            prazoAtual:     c.prazo_restante  ? String(c.prazo_restante) : "",
+            prazoTotal:     c.prazo_total     ? String(c.prazo_total)    : "",
+            inicio:         "",
+            fim:            "",
+            taxa:           c.taxa_atual      ? String(c.taxa_atual)     : "",
+            saldoDevedor:   c.saldo_devedor   ? String(c.saldo_devedor)  : "",
+            bancoDestino:   sim.banco_destino || "",
+            novaParcela:    c.nova_parcela    ? String(c.nova_parcela)   : "",
+            troco:          c.troco           ? String(c.troco)          : "0",
+            novoPrazo:      c.prazo_novo      ? String(c.prazo_novo)     : "",
+          }));
+          setPortContratos((prev) => {
+            const manual = prev.filter((c) => c.source === "manual");
+            return [...novos, ...manual];
+          });
         }
       } catch {
-        toast({ title: "Arquivo JSON inválido", variant: "destructive" });
+        toast({ title: "Arquivo inválido. Exporte novamente do simulador.", variant: "destructive" });
       }
     };
     reader.readAsText(file);
@@ -2949,57 +2913,50 @@ export default function ContratosPropostaPage() {
         <StepIndicator current="contratos-portabilidade" steps={WIZARD_STEPS_PORT} />
 
         {/* ── Uploads ── */}
-        <div className={`grid gap-4 ${isSiapeConv ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 max-w-sm"}`}>
-          {/* Extrato SIAPE */}
-          {isSiapeConv && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  Extrato de Consignações
-                  <Badge variant="outline" className="text-xs ml-auto">PDF</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {extratoPortFile ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                    <span className="flex-1 truncate text-green-700 dark:text-green-400">{extratoPortFile.name}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" type="button"
-                      onClick={() => {
-                        setExtratoPortFile(null);
-                        setPortContratos((prev) => prev.filter((c) => c.source === "manual"));
-                      }}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : extratoPortParsing ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Lendo extrato...
-                  </div>
-                ) : (
-                  <div
-                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => extratoPortRef.current?.click()}
-                  >
-                    <input ref={extratoPortRef} type="file" accept="application/pdf" className="hidden"
-                      onChange={(e) => { if (e.target.files?.[0]) handleExtratoPort(e.target.files[0]); e.target.value = ""; }} />
-                    <FileText className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">Arraste ou clique para selecionar</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          {/* Extrato de Consignações — apenas como documentação (sem parsing) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Extrato de Consignações
+                <Badge variant="outline" className="text-xs ml-auto">PDF · obrigatório</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {extratoFile ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="flex-1 truncate text-green-700 dark:text-green-400">{extratoFile.name}</span>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" type="button"
+                    onClick={() => {
+                      setExtratoFile(null);
+                      setAttachments((prev) => prev.filter((a) => a.documentType !== "EXTRATO_CONSIGNACOES"));
+                    }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => extratoRef.current?.click()}
+                >
+                  <input ref={extratoRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={(e) => { if (e.target.files?.[0]) handleExtratoFile(e.target.files[0]); e.target.value = ""; }} />
+                  <FileText className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">Necessário para documentação no banco</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Simulação JSON */}
+          {/* Cotação JSON exportada pelo simulador */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Coins className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                Proposta do Simulador
-                <Badge variant="outline" className="text-xs ml-auto">JSON · opcional</Badge>
+                Cotação do Simulador
+                <Badge variant="outline" className="text-xs ml-auto">JSON</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -3023,7 +2980,7 @@ export default function ContratosPropostaPage() {
                   <input ref={simPortRef} type="file" accept="application/json,.json" className="hidden"
                     onChange={(e) => { if (e.target.files?.[0]) handleSimPort(e.target.files[0]); e.target.value = ""; }} />
                   <Coins className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">JSON exportado pelo simulador de portabilidade</p>
+                  <p className="text-xs text-muted-foreground">JSON exportado pelo Simulador de Portabilidade</p>
                 </div>
               )}
             </CardContent>
@@ -3050,8 +3007,8 @@ export default function ContratosPropostaPage() {
                   taxa: "", saldoDevedor: "",
                   bancoDestino: simPortData?.banco_destino || "",
                   novaParcela: "", troco: "",
-                  novoPrazo: simPortData?.resultado?.linhas?.[0]?.prazo
-                    ? String(simPortData.resultado.linhas[0].prazo) : "",
+                  novoPrazo: simPortData?.contratos?.[0]?.prazo_novo
+                    ? String(simPortData.contratos[0].prazo_novo) : "",
                 }])}>
                 <Plus className="h-4 w-4 mr-1" /> Adicionar Manual
               </Button>
@@ -3060,9 +3017,7 @@ export default function ContratosPropostaPage() {
           <CardContent>
             {portContratos.length === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                {isSiapeConv
-                  ? "Faça upload do extrato acima ou adicione contratos manualmente."
-                  : "Adicione os contratos a portar manualmente."}
+                Importe a cotação do simulador ou adicione contratos manualmente.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -3154,8 +3109,12 @@ export default function ContratosPropostaPage() {
           </Button>
           <Button
             type="button"
-            disabled={portContratos.length === 0}
+            disabled={portContratos.length === 0 || !extratoFile}
             onClick={() => {
+              if (!extratoFile) {
+                toast({ title: "Anexe o extrato de consignações antes de prosseguir", variant: "destructive" });
+                return;
+              }
               if (portContratos.length === 0) {
                 toast({ title: "Adicione ao menos um contrato", variant: "destructive" });
                 return;
