@@ -5897,13 +5897,12 @@ function salvarParaDigitacao() {
       numeroContrato: c.numero_contrato || ''
     })),
     contratos_selecionados: marcados.map(c => ({
-      banco:           c.banco,
-      numeroContrato:  c.numero_contrato || '',
-      parcela_atual:   Math.round((c.parcela || 0) * 100) / 100,
-      prazo_restante:  c.prazo  || 0,
-      prazo_total:     c.prazo_total || 0,
-      taxa_atual:      c.taxa   || 0,
-      saldo_devedor:   Math.round((c.saldo || 0) * 100) / 100,
+      banco:          c.banco,
+      parcela:        c.parcela,
+      prazo:          c.prazo,
+      taxa:           c.taxa,
+      saldo:          c.saldo,
+      numeroContrato: c.numero_contrato || '',
     })),
     resultado: _refimResult,
     margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null
