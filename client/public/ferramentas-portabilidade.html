@@ -1462,7 +1462,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         </div>
         <div class="field" style="max-width:120px;">
           <label>Prazo (meses)</label>
-          <input id="simpPrazo" type="number" value="96" placeholder="96" oninput="calcSimples()">
+          <input id="simpPrazo" type="number" value="48" placeholder="48" oninput="calcSimples()">
         </div>
         <div class="field" style="max-width:180px;">
           <label>Resultado</label>
@@ -2160,6 +2160,8 @@ function gerar(){
   // Economia total: soma (parcela × prazo) de cada contrato individualmente
   const totalPagoAt=dadosAt.reduce((acc,c)=>acc+(c.parc*(c.prazo||0)),0);
   const totalPagoNv=dadosNv.reduce((acc,n)=>acc+(n.parc*(n.prazo||0)),0);
+  console.log('[economia total] dadosAt='+JSON.stringify(dadosAt.map(c=>({p:c.parc,pz:c.prazo})))+' totalPagoAt='+totalPagoAt);
+  console.log('[economia total] dadosNv='+JSON.stringify(dadosNv.map(n=>({p:n.parc,pz:n.prazo})))+' totalPagoNv='+totalPagoNv+' diff='+(totalPagoAt-totalPagoNv));
   if(totalPagoAt>0&&totalPagoNv>0){
     const diff=totalPagoAt-totalPagoNv;
     if(diff>0) items.push({label:'Economia total estimada',val:'R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2}),cls:'val-eco',tag:'<span class="res-tag tag-eco">No período</span>'});
@@ -2309,10 +2311,10 @@ function exportPDF(){
   const resItems=[];
   if(totalAt&&totalNv&&(totalAt-totalNv)>0) resItems.push(['Economia mensal','R$ '+(totalAt-totalNv).toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   if(totalTroco>0) resItems.push(['Troco total disponível',fmt(totalTroco)]);
-  const mPAt=dadosAt.filter(c=>c.prazo>0).map(c=>c.prazo);
-  const mPNv=dadosNv.filter(n=>n.prazo>0).map(n=>n.prazo);
-  if(mPAt.length&&mPNv.length&&totalAt&&totalNv){
-    const diff=(totalAt*Math.min(...mPAt))-(totalNv*Math.min(...mPNv));
+  const totalPagoAtPDF=dadosAt.reduce((acc,c)=>acc+(c.parc*(c.prazo||0)),0);
+  const totalPagoNvPDF=dadosNv.reduce((acc,n)=>acc+(n.parc*(n.prazo||0)),0);
+  if(totalPagoAtPDF>0&&totalPagoNvPDF>0){
+    const diff=totalPagoAtPDF-totalPagoNvPDF;
     if(diff>0) resItems.push(['Economia total estimada','R$ '+diff.toLocaleString('pt-BR',{minimumFractionDigits:2})]);
   }
   if(resItems.length>0){
@@ -2570,7 +2572,7 @@ async function importarPDFFile(file) {
         amort:           0,
         portar:          false,
         taxaPort:        1.30,
-        prazoPort:       96
+        prazoPort:       48
       });
       if (c.semParcela) semParcela++;
     });
@@ -3118,7 +3120,7 @@ function addContrato() {
     amort:           0,
     portar:          false,
     taxaPort:        1.30,
-    prazoPort:       96
+    prazoPort:       48
   });
   renderContratos();
 }
