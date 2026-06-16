@@ -2561,6 +2561,7 @@ async function importarPDFFile(file) {
         banco: c.banco,
         parcela: c.parcela || 0,
         prazo: c.prazo || 0,
+        contrato: c.contrato || '',
         taxa: 0,
         saldo: 0,
         acao: 'manter',
@@ -2666,9 +2667,10 @@ function extrairContratos(texto, items) {
       if (RE_MMYYYY.test(line)) {
         if ((cur.prior || 10) < 12 && !RE_SKIP.test(cur.rubrica || '')) {
           results.push({
-            banco:   detectarBanco(cur.rubrica || ''),
-            parcela: Math.round(cur.valor * 100) / 100,
-            prazo:   cur.parcTotal - cur.parcAtual,
+            banco:    detectarBanco(cur.rubrica || ''),
+            parcela:  Math.round(cur.valor * 100) / 100,
+            prazo:    cur.parcTotal - cur.parcAtual,
+            contrato: cur.contrato || '',
           });
         }
       }
@@ -2678,15 +2680,16 @@ function extrairContratos(texto, items) {
 
   // ── FALLBACK: texto concatenado (outros formatos de extrato) ───────
   if (results.length === 0) {
-    const RE_LINHA = /[\d\-/]+\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
+    const RE_LINHA = /([\d\-/]+)\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
     let m;
     while ((m = RE_LINHA.exec(texto)) !== null) {
-      const rub = m[1].trim();
+      const rub = m[2].trim();
       if (RE_SKIP.test(rub)) continue;
       results.push({
-        banco:   detectarBanco(rub),
-        parcela: parseFloat(m[4].replace(/\./g,'').replace(',','.')),
-        prazo:   parseInt(m[3]) - parseInt(m[2]),
+        banco:    detectarBanco(rub),
+        parcela:  parseFloat(m[5].replace(/\./g,'').replace(',','.')),
+        prazo:    parseInt(m[4]) - parseInt(m[3]),
+        contrato: m[1].trim(),
       });
     }
   }
@@ -5881,11 +5884,13 @@ function salvarParaDigitacao() {
       : null,
     contratos_originais: contratos.map(c => ({
       banco: c.banco, parcela: c.parcela, prazo: c.prazo,
-      taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar
+      taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar,
+      numeroContrato: c.contrato || ''
     })),
     contratos_selecionados: marcados.map(c => ({
       banco: c.banco, parcela: c.parcela, prazo: c.prazo,
-      taxa: c.taxa, saldo: c.saldo
+      taxa: c.taxa, saldo: c.saldo,
+      numeroContrato: c.contrato || ''
     })),
     resultado: _refimResult,
     margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null
