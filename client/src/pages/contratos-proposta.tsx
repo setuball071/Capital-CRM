@@ -238,6 +238,7 @@ interface PortabilidadeContrato {
   novaParcela: string;
   troco: string;
   novoPrazo: string;
+  tableId?: string;
 }
 
 interface SimulacaoPort {
@@ -878,30 +879,36 @@ export default function ContratosPropostaPage() {
       sharedMeta.tipoContrato = contractType || "PORTABILIDADE";
       if (simPortData?.banco_destino) sharedMeta.bancoDestinoGlobal = simPortData.banco_destino;
 
-      const proposalsBatch = portContratos.map((c) => ({
-        clientName:      v.clientName,
-        clientCpf:       v.clientCpf.replace(/\D/g, ""),
-        clientMatricula: v.clientMatricula || null,
-        clientConvenio:  selectedConvenio?.id,
-        product:         contractType || "PORTABILIDADE",
-        bank:            c.bancoDestino || simPortData?.banco_destino || null,
-        installmentValue: parseFloat(c.novaParcela) || null,
-        contractValue:    parseFloat(c.saldoDevedor) || null,
-        term:             parseInt(c.novoPrazo) || null,
-        clientMeta: {
-          ...sharedMeta,
-          ...(c.banco           ? { bancoOrigem:      c.banco }                  : {}),
-          ...(c.numeroContrato  ? { numeroContrato:   c.numeroContrato }         : {}),
-          ...(c.parcelaAtual    ? { parcelaOriginal:  parseFloat(c.parcelaAtual) } : {}),
-          ...(c.prazoAtual      ? { prazoAtual:       parseInt(c.prazoAtual) }   : {}),
-          ...(c.prazoTotal      ? { prazoTotal:       parseInt(c.prazoTotal) }   : {}),
-          ...(c.inicio          ? { inicioContrato:   c.inicio }                 : {}),
-          ...(c.fim             ? { fimContrato:      c.fim }                    : {}),
-          ...(c.taxa            ? { taxa:             parseFloat(c.taxa) }       : {}),
-          ...(c.troco           ? { troco:            parseFloat(c.troco) }      : {}),
-          ...(c.novoPrazo       ? { novoPrazo:        parseInt(c.novoPrazo) }    : {}),
-        },
-      }));
+      const proposalsBatch = portContratos.map((c) => {
+        const tabela = c.tableId
+          ? financeiroTabelas.find((t: any) => String(t.id) === c.tableId)
+          : null;
+        return {
+          clientName:      v.clientName,
+          clientCpf:       v.clientCpf.replace(/\D/g, ""),
+          clientMatricula: v.clientMatricula || null,
+          clientConvenio:  selectedConvenio?.id,
+          product:         contractType || "PORTABILIDADE",
+          bank:            c.bancoDestino || simPortData?.banco_destino || null,
+          installmentValue: parseFloat(c.novaParcela) || null,
+          contractValue:    parseFloat(c.saldoDevedor) || null,
+          term:             parseInt(c.novoPrazo) || null,
+          clientMeta: {
+            ...sharedMeta,
+            ...(tabela ? { tabelaFinanceiroId: c.tableId, tabelaNome: tabela.nome } : {}),
+            ...(c.banco           ? { bancoOrigem:      c.banco }                  : {}),
+            ...(c.numeroContrato  ? { numeroContrato:   c.numeroContrato }         : {}),
+            ...(c.parcelaAtual    ? { parcelaOriginal:  parseFloat(c.parcelaAtual) } : {}),
+            ...(c.prazoAtual      ? { prazoAtual:       parseInt(c.prazoAtual) }   : {}),
+            ...(c.prazoTotal      ? { prazoTotal:       parseInt(c.prazoTotal) }   : {}),
+            ...(c.inicio          ? { inicioContrato:   c.inicio }                 : {}),
+            ...(c.fim             ? { fimContrato:      c.fim }                    : {}),
+            ...(c.taxa            ? { taxa:             parseFloat(c.taxa) }       : {}),
+            ...(c.troco           ? { troco:            parseFloat(c.troco) }      : {}),
+            ...(c.novoPrazo       ? { novoPrazo:        parseInt(c.novoPrazo) }    : {}),
+          },
+        };
+      });
 
       const created: any[] = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
 
@@ -3096,6 +3103,7 @@ export default function ContratosPropostaPage() {
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Troco</th>
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Dest.</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">N. Prazo</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Tabela</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -3150,6 +3158,23 @@ export default function ContratosPropostaPage() {
                           <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
                             value={c.novoPrazo} onChange={(e) => updatePortContrato(c.uid, "novoPrazo", e.target.value)}
                             placeholder="96" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <select
+                            className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
+                            value={c.tableId || ""}
+                            onChange={(e) => updatePortContrato(c.uid, "tableId", e.target.value)}
+                          >
+                            <option value="">— tabela —</option>
+                            {financeiroTabelas
+                              .filter((t: any) =>
+                                t.tipo === "Portabilidade" &&
+                                (!t.convenio || t.convenio.toUpperCase() === (selectedConvenio?.id || "").toUpperCase())
+                              )
+                              .map((t: any) => (
+                                <option key={String(t.id)} value={String(t.id)}>{t.nome}</option>
+                              ))}
+                          </select>
                         </td>
                         <td className="py-1.5">
                           <Button size="icon" variant="ghost" className="h-6 w-6" type="button"
