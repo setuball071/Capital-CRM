@@ -883,7 +883,7 @@ export default function ContratosPropostaPage() {
           bairro: v.clientBairro, cidade: v.clientCidade, estado: v.clientEstado,
         };
       }
-      sharedMeta.tipoContrato = "PORTABILIDADE";
+      sharedMeta.tipoContrato = contractType || "PORTABILIDADE";
       if (simPortData?.banco_destino) sharedMeta.bancoDestinoGlobal = simPortData.banco_destino;
 
       const proposalsBatch = portContratos.map((c) => ({
@@ -891,7 +891,7 @@ export default function ContratosPropostaPage() {
         clientCpf:       v.clientCpf.replace(/\D/g, ""),
         clientMatricula: v.clientMatricula || null,
         clientConvenio:  selectedConvenio?.id,
-        product:         "PORTABILIDADE",
+        product:         contractType || "PORTABILIDADE",
         bank:            c.bancoDestino || simPortData?.banco_destino || null,
         installmentValue: parseFloat(c.novaParcela) || null,
         contractValue:    parseFloat(c.saldoDevedor) || null,
@@ -911,7 +911,26 @@ export default function ContratosPropostaPage() {
         },
       }));
 
-      return apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+      const created: any[] = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+
+      // Upload dos anexos para cada proposta criada
+      if (attachments.length > 0 && created.length > 0) {
+        const uploads = created.flatMap((proposal: any) =>
+          attachments.map((att) => {
+            const fd = new FormData();
+            fd.append("file", att.file);
+            fd.append("documentType", att.documentType || "OUTRO");
+            return fetch(`/api/contracts/proposals/${proposal.id}/documents`, {
+              method: "POST",
+              body: fd,
+              credentials: "include",
+            });
+          })
+        );
+        await Promise.allSettled(uploads);
+      }
+
+      return created;
     },
     onSuccess: (data: any[]) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
@@ -2446,7 +2465,7 @@ export default function ContratosPropostaPage() {
       </div>
 
       {/* Indicador de progresso */}
-      <StepIndicator current="tipo-contrato" steps={contractType === "PORTABILIDADE" ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
+      <StepIndicator current="tipo-contrato" steps={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
 
       {/* ── Seleção do tipo de contrato ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl">
@@ -2905,7 +2924,7 @@ export default function ContratosPropostaPage() {
       )}
 
       {/* ── Portabilidade: avançar para step de contratos ── */}
-      {contractType === "PORTABILIDADE" && (
+      {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") && (
         <div className="space-y-4 max-w-4xl">
           <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
             <div className="flex items-start gap-3">
@@ -3202,18 +3221,18 @@ export default function ContratosPropostaPage() {
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
           <Button size="icon" variant="ghost"
-            onClick={() => contractType === "PORTABILIDADE" ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
+            onClick={() => (contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold">
-                {contractType === "PORTABILIDADE" ? "Conferência — Portabilidade em Lote" : "Conferência da Proposta"}
+                {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Conferência — Portabilidade em Lote" : "Conferência da Proposta"}
               </h1>
               {selectedConvenio && <Badge variant="outline">{selectedConvenio.label}</Badge>}
             </div>
             <p className="text-sm text-muted-foreground">
-              {contractType === "PORTABILIDADE"
+              {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                 ? `${portContratos.length} contrato(s) — revise antes de cadastrar`
                 : "Revise todos os dados antes de cadastrar"}
             </p>
@@ -3221,7 +3240,7 @@ export default function ContratosPropostaPage() {
         </div>
 
         <StepIndicator current="conferencia"
-          steps={contractType === "PORTABILIDADE" ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
+          steps={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? WIZARD_STEPS_PORT : WIZARD_STEPS_DEFAULT} />
 
         {/* Card: Cliente */}
         <Card>
@@ -3309,8 +3328,8 @@ export default function ContratosPropostaPage() {
           </CardContent>
         </Card>
 
-        {/* Card: Contratos de Portabilidade (somente para PORTABILIDADE) */}
-        {contractType === "PORTABILIDADE" && (
+        {/* Card: Contratos de Portabilidade */}
+        {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") && (
           <Card className="border-blue-200 dark:border-blue-900">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
@@ -3492,10 +3511,10 @@ export default function ContratosPropostaPage() {
         {/* Footer: confirmar e cadastrar */}
         <div className="flex justify-end gap-3 pb-4">
           <Button type="button" variant="outline"
-            onClick={() => contractType === "PORTABILIDADE" ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
+            onClick={() => (contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? setStep("contratos-portabilidade") : setStep("tipo-contrato")}>
             ← Voltar e editar
           </Button>
-          {contractType === "PORTABILIDADE" ? (
+          {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? (
             <Button
               type="button"
               disabled={batchMutation.isPending || portContratos.length === 0}

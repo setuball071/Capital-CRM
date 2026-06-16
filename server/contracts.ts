@@ -13,6 +13,14 @@ import {
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+
+const uploadDocMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 export function registerContractRoutes(app: Express, requireAuth: Function) {
 
@@ -733,6 +741,57 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       return res.status(500).json({ message: "Erro ao enviar mensagem" });
     }
   });
+
+  // ===================== UPLOAD DE DOCUMENTOS =====================
+
+  app.post(
+    "/api/contracts/proposals/:id/documents",
+    requireAuth,
+    uploadDocMemory.single("file"),
+    async (req: any, res) => {
+      try {
+        const proposalId = parseInt(req.params.id);
+        const tenantId   = req.tenantId!;
+        const user       = req.user!;
+
+        if (!req.file) return res.status(400).json({ message: "Arquivo não enviado" });
+
+        const documentType: string = req.body.documentType || "OUTRO";
+
+        const [proposal] = await db
+          .select({ id: proposals.id })
+          .from(proposals)
+          .where(and(eq(proposals.id, proposalId), eq(proposals.tenantId, tenantId)))
+          .limit(1);
+        if (!proposal) return res.status(404).json({ message: "Proposta não encontrada" });
+
+        const uploadsDir = path.join(process.cwd(), "uploads", "proposals", String(proposalId));
+        fs.mkdirSync(uploadsDir, { recursive: true });
+
+        const ext      = path.extname(req.file.originalname);
+        const fileName = `${documentType}-${Date.now()}${ext}`;
+        fs.writeFileSync(path.join(uploadsDir, fileName), req.file.buffer);
+
+        const fileUrl = `/uploads/proposals/${proposalId}/${fileName}`;
+
+        const [doc] = await db
+          .insert(proposalDocuments)
+          .values({
+            proposalId,
+            documentType,
+            fileUrl,
+            fileName: req.file.originalname,
+            uploadedBy: user.id,
+          })
+          .returning();
+
+        return res.status(201).json(doc);
+      } catch (e: any) {
+        console.error("POST /api/contracts/proposals/:id/documents error:", e);
+        return res.status(500).json({ message: `Erro ao fazer upload: ${e.message}` });
+      }
+    },
+  );
 
   // ===================== BUSCA POR CPF (memória de cadastro) =====================
 
