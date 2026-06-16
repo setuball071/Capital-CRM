@@ -229,8 +229,10 @@ export default function ContratosListaPage() {
                 <TableHead>Nome do Cliente</TableHead>
                 {showCorretorCol && <TableHead>Corretor</TableHead>}
                 <TableHead>Tipo</TableHead>
+                <TableHead>Banco</TableHead>
                 <TableHead className="text-right">Parcela</TableHead>
                 <TableHead className="text-right">Contrato</TableHead>
+                <TableHead>ADE</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -250,8 +252,10 @@ export default function ContratosListaPage() {
                     <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>
                   )}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
+                  <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} />
