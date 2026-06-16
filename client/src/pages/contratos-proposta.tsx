@@ -249,6 +249,7 @@ interface PortabilidadeContrato {
 }
 
 interface SimulacaoPort {
+  // formato novo (exportarParaDigitacao)
   exportado_em?: string;
   banco_destino?: string;
   contratos?: Array<{
@@ -264,6 +265,26 @@ interface SimulacaoPort {
     nova_parcela: number;
     troco?: number;
   }>;
+  // formato antigo (salvarCotacao)
+  tipo?: string;
+  taxa_refim?: number;
+  contratos_selecionados?: Array<{
+    banco: string;
+    parcela: number;
+    prazo: number;
+    taxa: number;
+    saldo: number;
+    numeroContrato?: string;
+  }>;
+  resultado?: {
+    modo?: string;
+    linhas?: Array<{
+      banco?: string;
+      parcela: number;
+      troco?: number;
+      prazo: number;
+    }>;
+  };
 }
 
 // ─── Tipos de step ────────────────────────────────────────────────────────────
@@ -915,8 +936,12 @@ export default function ContratosPropostaPage() {
         const sim: SimulacaoPort = JSON.parse(e.target?.result as string);
         setSimPortFile(file);
         setSimPortData(sim);
+
+        let novos: PortabilidadeContrato[] = [];
+
         if (sim.contratos && sim.contratos.length > 0) {
-          const novos: PortabilidadeContrato[] = sim.contratos.map((c) => ({
+          // Formato novo (exportarParaDigitacao)
+          novos = sim.contratos.map((c) => ({
             uid:            makePortUid(),
             source:         "extrato" as const,
             banco:          c.banco,
@@ -933,10 +958,37 @@ export default function ContratosPropostaPage() {
             troco:          c.troco           ? String(c.troco)          : "0",
             novoPrazo:      c.prazo_novo      ? String(c.prazo_novo)     : "",
           }));
+        } else if (sim.contratos_selecionados && sim.contratos_selecionados.length > 0) {
+          // Formato antigo (salvarCotacao): contratos_selecionados + resultado.linhas
+          novos = sim.contratos_selecionados.map((c, i) => {
+            const linha = sim.resultado?.linhas?.[i];
+            return {
+              uid:            makePortUid(),
+              source:         "extrato" as const,
+              banco:          c.banco,
+              numeroContrato: c.numeroContrato || "",
+              parcelaAtual:   c.parcela ? String(c.parcela) : "",
+              prazoAtual:     c.prazo   ? String(c.prazo)   : "",
+              prazoTotal:     "",
+              inicio:         "",
+              fim:            "",
+              taxa:           c.taxa    ? String(c.taxa)    : "",
+              saldoDevedor:   c.saldo   ? String(Math.round(c.saldo * 100) / 100) : "",
+              bancoDestino:   sim.banco_destino || "",
+              novaParcela:    linha?.parcela ? String(Math.round(linha.parcela * 100) / 100) : "",
+              troco:          linha?.troco   ? String(linha.troco) : "0",
+              novoPrazo:      linha?.prazo   ? String(linha.prazo) : "",
+            };
+          });
+        }
+
+        if (novos.length > 0) {
           setPortContratos((prev) => {
             const manual = prev.filter((c) => c.source === "manual");
             return [...novos, ...manual];
           });
+        } else {
+          toast({ title: "Nenhum contrato encontrado no arquivo.", variant: "destructive" });
         }
       } catch {
         toast({ title: "Arquivo inválido. Exporte novamente do simulador.", variant: "destructive" });
