@@ -911,7 +911,26 @@ export default function ContratosPropostaPage() {
         },
       }));
 
-      return apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+      const created: any[] = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+
+      // Upload dos anexos para cada proposta criada
+      if (attachments.length > 0 && created.length > 0) {
+        const uploads = created.flatMap((proposal: any) =>
+          attachments.map((att) => {
+            const fd = new FormData();
+            fd.append("file", att.file);
+            fd.append("documentType", att.documentType || "OUTRO");
+            return fetch(`/api/contracts/proposals/${proposal.id}/documents`, {
+              method: "POST",
+              body: fd,
+              credentials: "include",
+            });
+          })
+        );
+        await Promise.allSettled(uploads);
+      }
+
+      return created;
     },
     onSuccess: (data: any[]) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
