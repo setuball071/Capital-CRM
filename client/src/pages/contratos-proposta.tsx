@@ -3151,7 +3151,11 @@ export default function ContratosPropostaPage() {
                         </td>
                         <td className="py-1.5 pr-2">
                           <input className="w-24 border rounded px-1.5 py-0.5 text-xs bg-background"
-                            value={c.bancoDestino} onChange={(e) => updatePortContrato(c.uid, "bancoDestino", e.target.value)}
+                            value={c.bancoDestino}
+                            onChange={(e) => {
+                              updatePortContrato(c.uid, "bancoDestino", e.target.value);
+                              updatePortContrato(c.uid, "tableId", "");
+                            }}
                             placeholder="Banco destino" />
                         </td>
                         <td className="py-1.5 pr-2">
@@ -3167,10 +3171,16 @@ export default function ContratosPropostaPage() {
                           >
                             <option value="">— tabela —</option>
                             {financeiroTabelas
-                              .filter((t: any) =>
-                                t.tipo === "Portabilidade" &&
-                                (!t.convenio || t.convenio.toUpperCase() === (selectedConvenio?.id || "").toUpperCase())
-                              )
+                              .filter((t: any) => {
+                                if (t.tipo !== "Portabilidade") return false;
+                                if (t.convenio && t.convenio.toUpperCase() !== (selectedConvenio?.id || "").toUpperCase()) return false;
+                                if (c.bancoDestino && t.banco) {
+                                  const bd = c.bancoDestino.toLowerCase();
+                                  const tb = t.banco.toLowerCase();
+                                  if (!bd.includes(tb) && !tb.includes(bd)) return false;
+                                }
+                                return true;
+                              })
                               .map((t: any) => (
                                 <option key={String(t.id)} value={String(t.id)}>{t.nome}</option>
                               ))}
