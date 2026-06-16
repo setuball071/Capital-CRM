@@ -108,14 +108,6 @@ const CONTRACT_TYPES = [
     product: "PORTABILIDADE",
   },
   {
-    id: "PORTABILIDADE_REFIN",
-    label: "Portabilidade + Refinanciamento",
-    description: "Portabilidade com troco refinanciado",
-    Icon: ArrowLeftRight,
-    iconColor: "text-teal-600 dark:text-teal-400",
-    product: "PORTABILIDADE",
-  },
-  {
     id: "COMPRA_DIVIDA",
     label: "Compra de Dívida",
     description: "Quitação de dívida externa com consignado",
