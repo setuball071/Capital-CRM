@@ -74,9 +74,8 @@ export default function SimCriadorProposta() {
   useEffect(() => {
     if (!logoUrl) { setLogoBase64(""); setLogoDims(null); return; }
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // Sem crossOrigin: imagem é same-origin (/uploads), canvas não fica tainted
     img.onload = () => {
-      // Guarda dimensões reais ANTES de qualquer uso
       setLogoDims({ w: img.naturalWidth, h: img.naturalHeight });
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
