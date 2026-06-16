@@ -1347,10 +1347,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <button onclick="selecionarTodasPortabilidades(false)" style="padding:8px 16px;background:#EF4444;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
         ❌ Desmarcar Todas
       </button>
-      <button onclick="exportarParaDigitacao()" style="padding:8px 16px;background:#2563EB;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-left:auto;">
-        📥 Exportar para Digitação
-      </button>
-      <span style="font-size:12px;color:#6B7280;">
+      <span style="font-size:12px;color:#6B7280;margin-left:8px;">
         Marque os contratos que deseja portar/renegociar
       </span>
     </div>
@@ -3489,61 +3486,6 @@ function selecionarTodasPortabilidades(marcar) {
     feedback.style.transition = 'opacity 0.3s';
     setTimeout(() => document.body.removeChild(feedback), 300);
   }, 2000);
-}
-
-// ===== EXPORTAR PARA DIGITAÇÃO =====
-function exportarParaDigitacao() {
-  const selecionados = contratos.filter(c => c.portar);
-  if (selecionados.length === 0) {
-    alert('Nenhum contrato marcado para portar. Selecione ao menos um contrato.');
-    return;
-  }
-
-  const bancoDest = document.getElementById('simpBancoPort')?.value?.trim()
-    || document.getElementById('refimBancoPort')?.value?.trim()
-    || '';
-
-  const taxaPortGlobal = parseFloat((document.getElementById('simpTaxaPort')?.value || '').replace(',', '.')) || 1.30;
-  const prazoPortGlobal = parseInt(document.getElementById('simpPrazoPort')?.value || '') || 96;
-
-  const exportData = {
-    exportado_em: new Date().toLocaleDateString('pt-BR'),
-    banco_destino: bancoDest,
-    contratos: selecionados.map(c => {
-      const taxaNova   = c.taxaPort   || taxaPortGlobal;
-      const prazoNovo  = c.prazoPort  || prazoPortGlobal;
-      const novaParcela = (c.saldo > 0 && taxaNova > 0 && prazoNovo > 0)
-        ? Math.round(parcelaPrice(c.saldo, taxaNova / 100, prazoNovo) * 100) / 100
-        : 0;
-      const troco = c.amort > 0 ? Math.round(c.amort * 100) / 100 : 0;
-      return {
-        banco:           c.banco           || '',
-        numero_contrato: c.numero_contrato || '',
-        parcela_atual:   Math.round((c.parcela || 0) * 100) / 100,
-        prazo_restante:  c.prazo           || 0,
-        prazo_total:     c.prazo_total     || 0,
-        taxa_atual:      c.taxa            || 0,
-        saldo_devedor:   Math.round((c.saldo || 0) * 100) / 100,
-        taxa_nova:       taxaNova,
-        prazo_novo:      prazoNovo,
-        nova_parcela:    novaParcela,
-        troco:           troco,
-      };
-    }),
-  };
-
-  const nomeEl = document.getElementById('nomeServidor') || document.getElementById('nomeCliente');
-  const nome   = (nomeEl?.value || 'cliente').trim().replace(/\s+/g, '-').toLowerCase();
-  const data   = new Date().toISOString().slice(0, 10);
-  const nome_arquivo = `portabilidade-${nome}-${data}.json`;
-
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = nome_arquivo;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ===== RENDER CONTRATOS =====
@@ -5955,9 +5897,13 @@ function salvarParaDigitacao() {
       numeroContrato: c.numero_contrato || ''
     })),
     contratos_selecionados: marcados.map(c => ({
-      banco: c.banco, parcela: c.parcela, prazo: c.prazo,
-      taxa: c.taxa, saldo: c.saldo,
-      numeroContrato: c.numero_contrato || ''
+      banco:           c.banco,
+      numeroContrato:  c.numero_contrato || '',
+      parcela_atual:   Math.round((c.parcela || 0) * 100) / 100,
+      prazo_restante:  c.prazo  || 0,
+      prazo_total:     c.prazo_total || 0,
+      taxa_atual:      c.taxa   || 0,
+      saldo_devedor:   Math.round((c.saldo || 0) * 100) / 100,
     })),
     resultado: _refimResult,
     margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null
