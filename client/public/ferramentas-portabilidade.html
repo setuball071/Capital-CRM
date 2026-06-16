@@ -1347,7 +1347,10 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <button onclick="selecionarTodasPortabilidades(false)" style="padding:8px 16px;background:#EF4444;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
         ❌ Desmarcar Todas
       </button>
-      <span style="font-size:12px;color:#6B7280;margin-left:8px;">
+      <button onclick="exportarParaDigitacao()" style="padding:8px 16px;background:#2563EB;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-left:auto;">
+        📥 Exportar para Digitação
+      </button>
+      <span style="font-size:12px;color:#6B7280;">
         Marque os contratos que deseja portar/renegociar
       </span>
     </div>
@@ -2557,18 +2560,19 @@ async function importarPDFFile(file) {
     let semParcela = 0;
     contratosDetectados.forEach(c => {
       contratos.push({
-        id: nextContratoId++,
-        banco: c.banco,
-        parcela: c.parcela || 0,
-        prazo: c.prazo || 0,
-        contrato: c.contrato || '',
-        taxa: 0,
-        saldo: 0,
-        acao: 'manter',
-        amort: 0,
-        portar: false,
-        taxaPort: 1.30,
-        prazoPort: 48
+        id:              nextContratoId++,
+        banco:           c.banco,
+        numero_contrato: c.numero_contrato || '',
+        parcela:         c.parcela || 0,
+        prazo:           c.prazo || 0,
+        prazo_total:     c.prazo_total || 0,
+        taxa:            0,
+        saldo:           0,
+        acao:            'manter',
+        amort:           0,
+        portar:          false,
+        taxaPort:        1.30,
+        prazoPort:       48
       });
       if (c.semParcela) semParcela++;
     });
@@ -2667,10 +2671,11 @@ function extrairContratos(texto, items) {
       if (RE_MMYYYY.test(line)) {
         if ((cur.prior || 10) < 12 && !RE_SKIP.test(cur.rubrica || '')) {
           results.push({
-            banco:    detectarBanco(cur.rubrica || ''),
-            parcela:  Math.round(cur.valor * 100) / 100,
-            prazo:    cur.parcTotal - cur.parcAtual,
-            contrato: cur.contrato || '',
+            banco:           detectarBanco(cur.rubrica || ''),
+            numero_contrato: cur.contrato || '',
+            parcela:         Math.round(cur.valor * 100) / 100,
+            prazo:           cur.parcTotal - cur.parcAtual,
+            prazo_total:     cur.parcTotal || 0,
           });
         }
       }
@@ -2685,11 +2690,13 @@ function extrairContratos(texto, items) {
     while ((m = RE_LINHA.exec(texto)) !== null) {
       const rub = m[2].trim();
       if (RE_SKIP.test(rub)) continue;
+      const numContr = (m[0].match(/^[\d\-\/]+/) || [''])[0];
       results.push({
-        banco:    detectarBanco(rub),
-        parcela:  parseFloat(m[5].replace(/\./g,'').replace(',','.')),
-        prazo:    parseInt(m[4]) - parseInt(m[3]),
-        contrato: m[1].trim(),
+        banco:           detectarBanco(rub),
+        numero_contrato: m[1].trim(),
+        parcela:         parseFloat(m[5].replace(/\./g,'').replace(',','.')),
+        prazo:           parseInt(m[4]) - parseInt(m[3]),
+        prazo_total:     parseInt(m[4]),
       });
     }
   }
@@ -3101,17 +3108,19 @@ function delMargem(id) {
 // Contratos
 function addContrato() {
   contratos.push({
-    id: nextContratoId++,
-    banco: '',
-    parcela: 0,
-    prazo: 0,
-    taxa: 0,
-    saldo: 0,
-    acao: 'manter',
-    amort: 0,
-    portar: false,
-    taxaPort: 1.30,
-    prazoPort: 48
+    id:              nextContratoId++,
+    banco:           '',
+    numero_contrato: '',
+    parcela:         0,
+    prazo:           0,
+    prazo_total:     0,
+    taxa:            0,
+    saldo:           0,
+    acao:            'manter',
+    amort:           0,
+    portar:          false,
+    taxaPort:        1.30,
+    prazoPort:       48
   });
   renderContratos();
 }
@@ -3482,6 +3491,61 @@ function selecionarTodasPortabilidades(marcar) {
   }, 2000);
 }
 
+// ===== EXPORTAR PARA DIGITAÇÃO =====
+function exportarParaDigitacao() {
+  const selecionados = contratos.filter(c => c.portar);
+  if (selecionados.length === 0) {
+    alert('Nenhum contrato marcado para portar. Selecione ao menos um contrato.');
+    return;
+  }
+
+  const bancoDest = document.getElementById('simpBancoPort')?.value?.trim()
+    || document.getElementById('refimBancoPort')?.value?.trim()
+    || '';
+
+  const taxaPortGlobal = parseFloat((document.getElementById('simpTaxaPort')?.value || '').replace(',', '.')) || 1.30;
+  const prazoPortGlobal = parseInt(document.getElementById('simpPrazoPort')?.value || '') || 96;
+
+  const exportData = {
+    exportado_em: new Date().toLocaleDateString('pt-BR'),
+    banco_destino: bancoDest,
+    contratos: selecionados.map(c => {
+      const taxaNova   = c.taxaPort   || taxaPortGlobal;
+      const prazoNovo  = c.prazoPort  || prazoPortGlobal;
+      const novaParcela = (c.saldo > 0 && taxaNova > 0 && prazoNovo > 0)
+        ? Math.round(parcelaPrice(c.saldo, taxaNova / 100, prazoNovo) * 100) / 100
+        : 0;
+      const troco = c.amort > 0 ? Math.round(c.amort * 100) / 100 : 0;
+      return {
+        banco:           c.banco           || '',
+        numero_contrato: c.numero_contrato || '',
+        parcela_atual:   Math.round((c.parcela || 0) * 100) / 100,
+        prazo_restante:  c.prazo           || 0,
+        prazo_total:     c.prazo_total     || 0,
+        taxa_atual:      c.taxa            || 0,
+        saldo_devedor:   Math.round((c.saldo || 0) * 100) / 100,
+        taxa_nova:       taxaNova,
+        prazo_novo:      prazoNovo,
+        nova_parcela:    novaParcela,
+        troco:           troco,
+      };
+    }),
+  };
+
+  const nomeEl = document.getElementById('nomeServidor') || document.getElementById('nomeCliente');
+  const nome   = (nomeEl?.value || 'cliente').trim().replace(/\s+/g, '-').toLowerCase();
+  const data   = new Date().toISOString().slice(0, 10);
+  const nome_arquivo = `portabilidade-${nome}-${data}.json`;
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = nome_arquivo;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ===== RENDER CONTRATOS =====
 function renderContratos() {
   const tb = document.getElementById('tbContratos');
@@ -3496,7 +3560,10 @@ function renderContratos() {
     const tr = document.createElement('tr');
     tr.dataset.id = c.id;
     tr.innerHTML = `
-      <td><input data-id="${c.id}" data-k="banco" value="${c.banco || ''}" placeholder="Ex: BMG"></td>
+      <td>
+        <input data-id="${c.id}" data-k="banco" value="${c.banco || ''}" placeholder="Ex: BMG">
+        ${c.numero_contrato ? `<small style="display:block;color:#888;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.numero_contrato}</small>` : ''}
+      </td>
       <td><input data-id="${c.id}" data-k="parcela" value="${c.parcela ? fmt(c.parcela) : ''}" placeholder="0,00"></td>
       <td><input data-id="${c.id}" data-k="prazo" type="number" value="${c.prazo || ''}" placeholder="0"></td>
       <td><input data-id="${c.id}" data-k="taxa" value="${c.taxa ? fmtPct(c.taxa) : ''}" placeholder="1,80"></td>
@@ -5885,12 +5952,12 @@ function salvarParaDigitacao() {
     contratos_originais: contratos.map(c => ({
       banco: c.banco, parcela: c.parcela, prazo: c.prazo,
       taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar,
-      numeroContrato: c.contrato || ''
+      numeroContrato: c.numero_contrato || ''
     })),
     contratos_selecionados: marcados.map(c => ({
       banco: c.banco, parcela: c.parcela, prazo: c.prazo,
       taxa: c.taxa, saldo: c.saldo,
-      numeroContrato: c.contrato || ''
+      numeroContrato: c.numero_contrato || ''
     })),
     resultado: _refimResult,
     margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null
