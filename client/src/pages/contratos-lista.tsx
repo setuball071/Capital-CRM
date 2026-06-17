@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -532,10 +532,24 @@ export default function ContratosListaPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState(() => sessionStorage.getItem("contratos_filterStatus") || "all");
   const [filterProduct, setFilterProduct] = useState("all");
-  const [activePhase, setActivePhase] = useState<number | null>(null);
+  // Fase ativa persiste na sessão: ao abrir um contrato e voltar, mantém o filtro
+  const [activePhase, setActivePhase] = useState<number | null>(() => {
+    const s = sessionStorage.getItem("contratos_activePhase");
+    return s ? Number(s) : null;
+  });
   const [showPhaseManager, setShowPhaseManager] = useState(false);
+
+  useEffect(() => {
+    if (activePhase == null) sessionStorage.removeItem("contratos_activePhase");
+    else sessionStorage.setItem("contratos_activePhase", String(activePhase));
+  }, [activePhase]);
+
+  useEffect(() => {
+    if (filterStatus === "all") sessionStorage.removeItem("contratos_filterStatus");
+    else sessionStorage.setItem("contratos_filterStatus", filterStatus);
+  }, [filterStatus]);
 
   // Seleção em lote + diálogo de ação rápida
   const [selected, setSelected] = useState<Set<number>>(new Set());

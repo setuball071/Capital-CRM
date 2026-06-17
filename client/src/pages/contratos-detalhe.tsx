@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Clock, SkipForward,
   FileText, AlertCircle, ExternalLink, Download, Paperclip,
   Copy, Check, Pencil, X, User, Landmark, CreditCard, Lock,
+  RefreshCw, Upload, Contact,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +102,8 @@ export default function ContratosDetalhePage() {
 
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const isVendedor = user?.role === "vendedor";
+  // Master, Admin (role master) e Operacional podem anexar documentos pela proposta
+  const canManageContracts = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
 
   const contractValNum  = parseBrNum(contractValComm);
   const commPercNum     = parseBrNum(commPercEmpresa);
@@ -196,6 +202,63 @@ export default function ContratosDetalhePage() {
     },
     onSuccess: () => { toast({ title: "Campo atualizado" }); invalidate(); setEditField(null); setEditVal(""); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  // Upload de documento pela própria proposta (master/admin/operacional)
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const [docType, setDocType] = useState("OUTRO");
+  const uploadDocMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("documentType", docType);
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/documents`, {
+        method: "POST", body: fd, credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals", proposalId, "messages"] });
+      toast({ title: "Documento anexado" });
+    },
+    onError: (e: any) => toast({ title: "Falha ao anexar", description: e.message, variant: "destructive" }),
+  });
+
+  // Clonar proposta (trocar banco e tabela)
+  const [showClone, setShowClone] = useState(false);
+  const [cloneBank, setCloneBank] = useState("");
+  const [cloneTableId, setCloneTableId] = useState("");
+  const cloneMutation = useMutation({
+    mutationFn: async () => {
+      const t = financeiroTabelas.find((x: any) => String(x.id) === cloneTableId);
+      const newMeta = { ...(proposal.clientMeta || {}) };
+      if (cloneTableId) { newMeta.tabelaFinanceiroId = cloneTableId; newMeta.tabelaNome = t?.nome || null; }
+      const body = {
+        clientName: proposal.clientName,
+        clientCpf: proposal.clientCpf,
+        clientMatricula: proposal.clientMatricula,
+        clientConvenio: proposal.clientConvenio,
+        bank: cloneBank || proposal.bank,
+        product: proposal.product,
+        contractValue: proposal.contractValue,
+        installmentValue: proposal.installmentValue,
+        term: proposal.term,
+        clientMeta: newMeta,
+      };
+      const res = await fetch("/api/contracts/proposals", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+      return res.json();
+    },
+    onSuccess: (nova: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      setShowClone(false);
+      toast({ title: "Proposta clonada" });
+      if (nova?.id) setLocation(`/contratos/${nova.id}`);
+    },
+    onError: (e: any) => toast({ title: "Falha ao clonar", description: e.message, variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -352,6 +415,16 @@ export default function ContratosDetalhePage() {
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">Proposta #{proposal.id}</p>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => invalidate()} title="Atualizar dados">
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
+          {canManageContracts && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(proposal.bank || ""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
+              <Copy className="h-4 w-4" /> Clonar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Aviso de edição liberada para corretor */}
@@ -381,22 +454,47 @@ export default function ContratosDetalhePage() {
           {renderField({ fieldKey: "nome", label: "Nome", value: proposal.clientName })}
           {renderField({ fieldKey: "cpf", label: "CPF", value: proposal.clientCpf, mono: true })}
           {renderField({ fieldKey: "matricula", label: "Matrícula", value: proposal.clientMatricula, mono: true })}
-          {m.identSiape && renderField({ fieldKey: "identSiape", label: "Ident. SIAPE", value: m.identSiape, mono: true })}
           {renderField({ fieldKey: "convenio", label: "Convênio", value: proposal.clientConvenio })}
           {m.orgao && renderField({ fieldKey: "orgao", label: "Órgão", value: m.orgao })}
           {m.uf && renderField({ fieldKey: "uf", label: "UF", value: m.uf })}
           {m.regJuridico && renderField({ fieldKey: "regJuridico", label: "Reg. Jurídico", value: m.regJuridico })}
           {m.vinculo && renderField({ fieldKey: "vinculo", label: "Vínculo", value: m.vinculo })}
-          {m.mesAno && renderField({ fieldKey: "mesAno", label: "Mês/Ano Ref.", value: m.mesAno })}
           {m.telefone && renderField({ fieldKey: "telefone", label: "Telefone", value: m.telefone })}
           {m.email && renderField({ fieldKey: "email", label: "Email", value: m.email })}
-          {enderecoStr && <div className="col-span-2 md:col-span-3">{renderField({ fieldKey: "endereco", label: "Endereço", value: enderecoStr })}</div>}
+          {/* Endereço — campos separados para copiar individualmente */}
+          {end.cep && renderField({ fieldKey: "end_cep", label: "CEP", value: end.cep, mono: true })}
+          {end.logradouro && renderField({ fieldKey: "end_log", label: "Logradouro", value: end.logradouro })}
+          {end.numero && renderField({ fieldKey: "end_num", label: "Número", value: String(end.numero) })}
+          {end.complemento && renderField({ fieldKey: "end_compl", label: "Complemento", value: end.complemento })}
+          {end.bairro && renderField({ fieldKey: "end_bairro", label: "Bairro", value: end.bairro })}
+          {end.cidade && renderField({ fieldKey: "end_cidade", label: "Cidade", value: end.cidade })}
+          {end.estado && renderField({ fieldKey: "end_uf", label: "Estado", value: end.estado })}
           {/* Pensão / instituidor */}
           {m.nomeInstituidor && renderField({ fieldKey: "nomeInstituidor", label: "Instituidor", value: m.nomeInstituidor })}
           {m.matriculaInstituidor && renderField({ fieldKey: "matInstituidor", label: "Matr. Instituidor", value: m.matriculaInstituidor, mono: true })}
           {m.naturezaPensao && renderField({ fieldKey: "naturezaPensao", label: "Natureza Pensão", value: m.naturezaPensao })}
         </CardContent>
       </Card>
+
+      {/* Documento (RG/CNH) — dados do OCR */}
+      {m.docFoto && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Contact className="h-4 w-4" /> Documento {m.docFoto.tipo ? `(${m.docFoto.tipo})` : "(RG/CNH)"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            {m.docFoto.dataNascimento && renderField({ fieldKey: "doc_nasc", label: "Nascimento", value: m.docFoto.dataNascimento })}
+            {m.docFoto.naturalidade && renderField({ fieldKey: "doc_natural", label: "Naturalidade", value: m.docFoto.naturalidade })}
+            {m.docFoto.numeroRegistro && renderField({ fieldKey: "doc_rg", label: "Nº RG / Registro", value: m.docFoto.numeroRegistro, mono: true })}
+            {m.docFoto.dataExpedicao && renderField({ fieldKey: "doc_emissao", label: "Data Emissão", value: m.docFoto.dataExpedicao })}
+            {m.docFoto.orgaoEmissor && renderField({ fieldKey: "doc_orgao", label: "Órgão Emissor", value: m.docFoto.orgaoEmissor })}
+            {m.docFoto.filiacao?.[0] && renderField({ fieldKey: "doc_mae", label: "Mãe", value: m.docFoto.filiacao[0] })}
+            {m.docFoto.filiacao?.[1] && renderField({ fieldKey: "doc_pai", label: "Pai", value: m.docFoto.filiacao[1] })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dados bancários de crédito */}
       {(bancoCredito || agencia || conta) && (
@@ -440,10 +538,10 @@ export default function ContratosDetalhePage() {
                 <button className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => setEditField(null)}><X className="h-3.5 w-3.5" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="font-medium text-sm truncate">{m.tabelaNome || "—"}</span>
+              <div className="flex items-start gap-1.5 mt-0.5">
+                <span className="font-medium text-sm break-words">{m.tabelaNome || "—"}</span>
                 {canEditFields && (
-                  <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer hover:text-primary" onClick={() => setEditField("tabela")} />
+                  <Pencil className="h-3 w-3 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer hover:text-primary" onClick={() => setEditField("tabela")} />
                 )}
               </div>
             )}
@@ -461,9 +559,13 @@ export default function ContratosDetalhePage() {
           ) : (
             renderField({ fieldKey: "ade", label: "ADE", value: proposal.ade, mono: true, editable: true, isAde: true })
           )}
-          {/* Portabilidade — origem */}
+          {/* Portabilidade — origem e simulação */}
           {m.bancoOrigem && renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
           {m.numeroContrato && renderField({ fieldKey: "numContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true })}
+          {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
+          {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
+          {m.saldoDevedor != null && renderField({ fieldKey: "saldoDev", label: "Saldo Devedor", value: m.saldoDevedor, money: true })}
+          {m.troco != null && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true })}
         </CardContent>
       </Card>
 
@@ -498,6 +600,34 @@ export default function ContratosDetalhePage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Anexar documento (master / admin / operacional) */}
+          {canManageContracts && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+              <Select value={docType} onValueChange={setDocType}>
+                <SelectTrigger className="w-52 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DOC_TYPE_LABEL).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input
+                ref={docInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadDocMutation.mutate(f);
+                  if (docInputRef.current) docInputRef.current.value = "";
+                }}
+              />
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadDocMutation.isPending} onClick={() => docInputRef.current?.click()}>
+                <Upload className="h-4 w-4" /> {uploadDocMutation.isPending ? "Enviando..." : "Anexar documento"}
+              </Button>
             </div>
           )}
         </CardContent>
@@ -643,6 +773,43 @@ export default function ContratosDetalhePage() {
 
         </div>{/* fim coluna direita */}
       </div>{/* fim grid */}
+
+      {/* Diálogo: Clonar proposta */}
+      <Dialog open={showClone} onOpenChange={setShowClone}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clonar proposta</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Cria uma nova proposta para <span className="font-medium">{proposal.clientName}</span> com os mesmos dados, alterando banco e tabela.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Banco</p>
+              <Input value={cloneBank} onChange={(e) => setCloneBank(e.target.value)} placeholder="Banco" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Tabela</p>
+              <Select value={cloneTableId} onValueChange={setCloneTableId}>
+                <SelectTrigger><SelectValue placeholder="Manter atual / selecionar..." /></SelectTrigger>
+                <SelectContent>
+                  {financeiroTabelas
+                    .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+                    .map((t: any) => (
+                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.nome}{t.banco ? ` — ${t.banco}` : ""}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowClone(false)}>Cancelar</Button>
+            <Button disabled={cloneMutation.isPending} onClick={() => cloneMutation.mutate()}>
+              {cloneMutation.isPending ? "Clonando..." : "Clonar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
