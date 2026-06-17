@@ -1078,7 +1078,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false } = req.body;
       if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
@@ -1095,7 +1095,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.patch("/api/contracts/statuses/:id", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
       const { label, color, allowsVendorEdit } = req.body;
@@ -1117,7 +1117,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.delete("/api/contracts/statuses/:id", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
       const [existing] = await db
@@ -1153,7 +1153,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.post("/api/contracts/phases", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const { name, color = "blue", statuses = [], ordem = 0 } = req.body;
       if (!name) return res.status(400).json({ message: "Nome é obrigatório" });
@@ -1169,7 +1169,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.patch("/api/contracts/phases/:id", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
       const { name, color, statuses, ordem } = req.body;
@@ -1192,7 +1192,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   });
 
   app.delete("/api/contracts/phases/:id", requireAuth, async (req: any, res) => {
-    if (!req.user?.isMaster && req.user?.role !== "master") return res.status(403).json({ message: "Acesso negado" });
+    if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
       await db

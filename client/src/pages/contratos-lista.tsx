@@ -545,6 +545,8 @@ export default function ContratosListaPage() {
   const [quickValue, setQuickValue] = useState("");
 
   const isMaster = !!(user?.isMaster || user?.role === "master");
+  // Operacional e Administrador (role master) têm a MESMA visão/gestão do master em contratos
+  const canManageContracts = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
   const isVendedor = user?.role === "vendedor";
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const [viewMode, setViewMode] = useState<ViewMode>(isVendedor ? "corretor" : "operacional");
@@ -775,7 +777,7 @@ export default function ContratosListaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isMaster && (
+          {canManageContracts && (
             <div className="flex rounded-md border border-border overflow-hidden text-xs">
               <button
                 onClick={() => setViewMode("operacional")}
@@ -795,7 +797,7 @@ export default function ContratosListaPage() {
               </button>
             </div>
           )}
-          {isMaster && (
+          {canManageContracts && (
             <Button variant="outline" size="sm" onClick={() => setShowPhaseManager(true)} className="gap-1.5">
               <Settings className="h-4 w-4" />Fases
             </Button>
