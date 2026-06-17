@@ -9,6 +9,7 @@ import {
   contractFlowSteps,
   commissionGroups,
   financialDebits,
+  contractPhases,
   users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -917,6 +918,75 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("DELETE /api/contracts/commission-groups/:id error:", e);
       return res.status(500).json({ message: "Erro ao remover grupo" });
+    }
+  });
+
+  // ===================== FASES DE CONTRATOS =====================
+
+  app.get("/api/contracts/phases", requireAuth, async (req: any, res) => {
+    try {
+      const phases = await db
+        .select()
+        .from(contractPhases)
+        .where(eq(contractPhases.tenantId, req.tenantId!))
+        .orderBy(asc(contractPhases.ordem), asc(contractPhases.id));
+      return res.json(phases);
+    } catch (e: any) {
+      console.error("GET /api/contracts/phases error:", e);
+      return res.status(500).json({ message: "Erro ao listar fases" });
+    }
+  });
+
+  app.post("/api/contracts/phases", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const { name, color = "blue", statuses = [], ordem = 0 } = req.body;
+      if (!name) return res.status(400).json({ message: "Nome é obrigatório" });
+      const [phase] = await db
+        .insert(contractPhases)
+        .values({ tenantId: req.tenantId!, name, color, statuses, ordem })
+        .returning();
+      return res.status(201).json(phase);
+    } catch (e: any) {
+      console.error("POST /api/contracts/phases error:", e);
+      return res.status(500).json({ message: "Erro ao criar fase" });
+    }
+  });
+
+  app.patch("/api/contracts/phases/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      const { name, color, statuses, ordem } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (color !== undefined) updates.color = color;
+      if (statuses !== undefined) updates.statuses = statuses;
+      if (ordem !== undefined) updates.ordem = ordem;
+      const [phase] = await db
+        .update(contractPhases)
+        .set(updates)
+        .where(and(eq(contractPhases.id, id), eq(contractPhases.tenantId, req.tenantId!)))
+        .returning();
+      if (!phase) return res.status(404).json({ message: "Fase não encontrada" });
+      return res.json(phase);
+    } catch (e: any) {
+      console.error("PATCH /api/contracts/phases/:id error:", e);
+      return res.status(500).json({ message: "Erro ao atualizar fase" });
+    }
+  });
+
+  app.delete("/api/contracts/phases/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      await db
+        .delete(contractPhases)
+        .where(and(eq(contractPhases.id, id), eq(contractPhases.tenantId, req.tenantId!)));
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/phases/:id error:", e);
+      return res.status(500).json({ message: "Erro ao excluir fase" });
     }
   });
 }
