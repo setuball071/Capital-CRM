@@ -709,6 +709,43 @@ export default function ContratosPropostaPage() {
   const valCorretor   = (contractValNum * pctCorretor) / 100;
 
   // ── Mutation ────────────────────────────────────────────────────────────────
+  // Faz upload dos anexos para uma proposta; surfaça falhas (não engole silenciosamente)
+  async function uploadAttachments(proposalIdToUpload: number, atts: FileAttachment[]) {
+    const results = await Promise.allSettled(
+      atts.map((att) => {
+        const fd = new FormData();
+        fd.append("file", att.file);
+        fd.append("documentType", att.documentType || "OUTRO");
+        return fetch(`/api/contracts/proposals/${proposalIdToUpload}/documents`, {
+          method: "POST",
+          body: fd,
+          credentials: "include",
+        });
+      })
+    );
+    let failed = 0;
+    let firstErr = "";
+    for (const r of results) {
+      if (r.status === "rejected") {
+        failed++;
+        if (!firstErr) firstErr = String(r.reason?.message || r.reason || "falha de rede");
+      } else if (!r.value.ok) {
+        failed++;
+        if (!firstErr) {
+          try { firstErr = (await r.value.json())?.message || `HTTP ${r.value.status}`; }
+          catch { firstErr = `HTTP ${r.value.status}`; }
+        }
+      }
+    }
+    if (failed > 0) {
+      toast({
+        title: `${failed} anexo(s) não enviado(s)`,
+        description: firstErr || "Tente reanexar pela proposta.",
+        variant: "destructive",
+      });
+    }
+  }
+
   const createMutation = useMutation({
     mutationFn: async (data: FormValues) => {
       const clientMeta =
@@ -822,18 +859,7 @@ export default function ContratosPropostaPage() {
 
       // Upload dos anexos para a proposta criada
       if (attachments.length > 0 && proposal?.id) {
-        await Promise.allSettled(
-          attachments.map((att) => {
-            const fd = new FormData();
-            fd.append("file", att.file);
-            fd.append("documentType", att.documentType || "OUTRO");
-            return fetch(`/api/contracts/proposals/${proposal.id}/documents`, {
-              method: "POST",
-              body: fd,
-              credentials: "include",
-            });
-          })
-        );
+        await uploadAttachments(proposal.id, attachments);
       }
 
       return proposal;
@@ -932,19 +958,9 @@ export default function ContratosPropostaPage() {
 
       // Upload dos anexos para cada proposta criada
       if (attachments.length > 0 && created.length > 0) {
-        const uploads = created.flatMap((proposal: any) =>
-          attachments.map((att) => {
-            const fd = new FormData();
-            fd.append("file", att.file);
-            fd.append("documentType", att.documentType || "OUTRO");
-            return fetch(`/api/contracts/proposals/${proposal.id}/documents`, {
-              method: "POST",
-              body: fd,
-              credentials: "include",
-            });
-          })
-        );
-        await Promise.allSettled(uploads);
+        for (const proposal of created) {
+          await uploadAttachments(proposal.id, attachments);
+        }
       }
 
       return created;
