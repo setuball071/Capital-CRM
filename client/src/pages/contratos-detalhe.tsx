@@ -337,7 +337,7 @@ export default function ContratosDetalhePage() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
+    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-start gap-3">
         <Button size="icon" variant="ghost" onClick={() => setLocation("/contratos")} data-testid="button-back">
@@ -353,6 +353,24 @@ export default function ContratosDetalhePage() {
           <p className="text-sm text-muted-foreground mt-0.5">Proposta #{proposal.id}</p>
         </div>
       </div>
+
+      {/* Aviso de edição liberada para corretor */}
+      {isVendedor && (
+        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
+          currentStatusDef?.allowsVendorEdit
+            ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+            : "border-border bg-muted/40 text-muted-foreground"
+        }`}>
+          {currentStatusDef?.allowsVendorEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
+          {currentStatusDef?.allowsVendorEdit
+            ? "Edição liberada — você pode ajustar os campos da operação enquanto a proposta estiver neste status."
+            : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
+        </div>
+      )}
+
+      {/* Layout 2 colunas: ficha à esquerda · ações + histórico à direita */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-2 space-y-4">
 
       {/* 1 ─ DADOS DA PROPOSTA (ficha completa) */}
       <Card>
@@ -485,6 +503,11 @@ export default function ContratosDetalhePage() {
         </CardContent>
       </Card>
 
+        </div>{/* fim coluna esquerda */}
+
+        {/* Coluna direita: Ações Operacionais + Histórico */}
+        <div className="space-y-4">
+
       {/* 3 ─ AÇÕES OPERACIONAIS */}
       {isOperacional && (
         <Card>
@@ -573,20 +596,6 @@ export default function ContratosDetalhePage() {
         </Card>
       )}
 
-      {/* Aviso de edição liberada para corretor */}
-      {isVendedor && (
-        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
-          currentStatusDef?.allowsVendorEdit
-            ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
-            : "border-border bg-muted/40 text-muted-foreground"
-        }`}>
-          {currentStatusDef?.allowsVendorEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
-          {currentStatusDef?.allowsVendorEdit
-            ? "Edição liberada — você pode ajustar os campos da operação enquanto a proposta estiver neste status."
-            : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
-        </div>
-      )}
-
       {/* 4 ─ HISTÓRICO */}
       <Card>
         <CardHeader className="pb-3">
@@ -631,6 +640,9 @@ export default function ContratosDetalhePage() {
           )}
         </CardContent>
       </Card>
+
+        </div>{/* fim coluna direita */}
+      </div>{/* fim grid */}
     </div>
   );
 }

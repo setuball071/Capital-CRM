@@ -541,7 +541,7 @@ export default function ContratosListaPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkNotes, setBulkNotes] = useState("");
-  const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" } | null>(null);
+  const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status"; status?: string } | null>(null);
   const [quickValue, setQuickValue] = useState("");
 
   const isMaster = !!(user?.isMaster || user?.role === "master");
@@ -665,15 +665,15 @@ export default function ContratosListaPage() {
   // ── Mutations de movimentação (rápida + lote) ──────────────────────────────
 
   const quickStatusMut = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+    mutationFn: async ({ id, status, notes }: { id: number; status: string; notes?: string }) => {
       const action = ["CANCELADA", "PERDIDA"].includes(status) ? "CANCELAMENTO" : status === "PAGO" ? "PAGAMENTO" : "AVANCO";
       const res = await fetch(`/api/contracts/proposals/${id}/status`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ status, action, notes: "Alterado via ação rápida" }),
+        body: JSON.stringify({ status, action, notes: notes || "Alterado via ação rápida" }),
       });
       if (!res.ok) throw new Error((await res.json()).message || "Erro");
     },
-    onSuccess: () => { invalidateProposals(); toast({ title: "Status atualizado" }); },
+    onSuccess: () => { invalidateProposals(); setQuick(null); setQuickValue(""); toast({ title: "Status atualizado" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
@@ -1022,7 +1022,7 @@ export default function ContratosListaPage() {
                           {statusList.filter((s) => s.key !== p.status).map((s) => (
                             <DropdownMenuItem
                               key={s.key}
-                              onClick={() => quickStatusMut.mutate({ id: p.id, status: s.key })}
+                              onClick={() => { setQuick({ id: p.id, mode: "status", status: s.key }); setQuickValue(""); }}
                             >
                               <span className={`mr-2 h-2 w-2 rounded-full ${PHASE_COLORS[s.color]?.swatch ?? "bg-zinc-400"}`} />
                               {s.label}
@@ -1052,28 +1052,61 @@ export default function ContratosListaPage() {
         </p>
       )}
 
-      {/* ── Diálogo de ação rápida (ADE / observação) ──────────────────────── */}
+      {/* ── Diálogo de ação rápida (status+observação / ADE / observação) ──── */}
       <Dialog open={!!quick} onOpenChange={(v) => { if (!v) { setQuick(null); setQuickValue(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{quick?.mode === "ade" ? "Registrar ADE" : "Adicionar observação"}</DialogTitle>
+            <DialogTitle>
+              {quick?.mode === "status" ? "Alterar status" : quick?.mode === "ade" ? "Registrar ADE" : "Adicionar observação"}
+            </DialogTitle>
           </DialogHeader>
-          {quick?.mode === "ade" ? (
+
+          {quick?.mode === "status" && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Status</p>
+                <Select value={quick.status} onValueChange={(v) => setQuick((q) => q ? { ...q, status: v } : q)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o status..." /></SelectTrigger>
+                  <SelectContent>
+                    {statusList.map((s) => (
+                      <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Observação (opcional)</p>
+                <Textarea value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Observação sobre a movimentação..." rows={3} />
+              </div>
+            </div>
+          )}
+
+          {quick?.mode === "ade" && (
             <Input value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Número do ADE" autoFocus />
-          ) : (
+          )}
+
+          {quick?.mode === "obs" && (
             <Textarea value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Observação..." rows={3} autoFocus />
           )}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setQuick(null); setQuickValue(""); }}>Cancelar</Button>
             <Button
-              disabled={!quickValue.trim() || quickPatchMut.isPending}
+              disabled={
+                (quick?.mode === "status" ? (!quick?.status || quickStatusMut.isPending) : (!quickValue.trim() || quickPatchMut.isPending))
+              }
               onClick={() => {
                 if (!quick) return;
-                const body = quick.mode === "ade" ? { ade: quickValue.trim() } : { notes: quickValue.trim() };
-                quickPatchMut.mutate({ id: quick.id, body });
+                if (quick.mode === "status") {
+                  if (!quick.status) return;
+                  quickStatusMut.mutate({ id: quick.id, status: quick.status, notes: quickValue.trim() || undefined });
+                } else {
+                  const body = quick.mode === "ade" ? { ade: quickValue.trim() } : { notes: quickValue.trim() };
+                  quickPatchMut.mutate({ id: quick.id, body });
+                }
               }}
             >
-              {quickPatchMut.isPending ? "Salvando..." : "Salvar"}
+              {(quick?.mode === "status" ? quickStatusMut.isPending : quickPatchMut.isPending) ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
