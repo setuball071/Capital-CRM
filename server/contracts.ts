@@ -574,6 +574,123 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // Edição operacional de campos da proposta (valor, parcela, banco, tabela, prazo, taxa, ADE)
+  app.patch("/api/contracts/proposals/:id", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+
+      const [current] = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      const isOper = user.isMaster || ["operacional", "coordenacao", "master"].includes(user.role || "");
+
+      // Corretor só edita se o status atual permitir (flag allowsVendorEdit) e for dono da proposta
+      let canEdit = isOper;
+      if (!canEdit && user.role === "vendedor" && current.vendorId === user.id) {
+        const [st] = await db
+          .select()
+          .from(contractStatuses)
+          .where(and(eq(contractStatuses.tenantId, tenantId), eq(contractStatuses.key, current.status)))
+          .limit(1);
+        canEdit = !!st?.allowsVendorEdit;
+      }
+      if (!canEdit) return res.status(403).json({ message: "Sem permissão para editar esta proposta" });
+
+      const { bank, contractValue, installmentValue, term, ade, adeRefin, clientMetaPatch, notes } = req.body;
+
+      const updateData: any = { updatedAt: new Date() };
+      if (bank !== undefined) updateData.bank = bank || null;
+      if (contractValue !== undefined) updateData.contractValue = (contractValue === null || contractValue === "") ? null : String(contractValue);
+      if (installmentValue !== undefined) updateData.installmentValue = (installmentValue === null || installmentValue === "") ? null : String(installmentValue);
+      if (term !== undefined) updateData.term = (term === null || term === "") ? null : parseInt(term);
+
+      // ADE só operacional/master pode registrar/alterar
+      if (ade !== undefined || adeRefin !== undefined) {
+        if (!isOper) return res.status(403).json({ message: "Apenas o operacional pode gerenciar o ADE" });
+        if (ade !== undefined) updateData.ade = ade || null;
+        if (adeRefin !== undefined) updateData.adeRefin = adeRefin || null;
+      }
+
+      // Merge raso em clientMeta (taxa, tabelaFinanceiroId, tabelaNome, etc.)
+      if (clientMetaPatch && typeof clientMetaPatch === "object") {
+        updateData.clientMeta = { ...(current.clientMeta as any || {}), ...clientMetaPatch };
+      }
+
+      const [updated] = await db
+        .update(proposals)
+        .set(updateData)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .returning();
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        fromStatus: current.status,
+        toStatus: current.status,
+        action: "EDICAO",
+        notes: notes || "Dados da proposta editados",
+        performedBy: user.id,
+      });
+
+      return res.json(updated);
+    } catch (e: any) {
+      console.error("PATCH /api/contracts/proposals/:id error:", e);
+      return res.status(500).json({ message: "Erro ao editar proposta" });
+    }
+  });
+
+  // Alteração de status em lote
+  app.post("/api/contracts/proposals/bulk-status", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+
+      if (!["operacional", "coordenacao", "master"].includes(user.role || "") && !user.isMaster) {
+        return res.status(403).json({ message: "Sem permissão para alteração em lote" });
+      }
+
+      const { ids, status, notes } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "Nenhuma proposta selecionada" });
+      if (!status) return res.status(400).json({ message: "Status é obrigatório" });
+
+      const numericIds = ids.map((n: any) => parseInt(n)).filter((n: number) => !isNaN(n));
+
+      const rows = await db
+        .select()
+        .from(proposals)
+        .where(and(inArray(proposals.id, numericIds), eq(proposals.tenantId, tenantId)));
+
+      if (rows.length === 0) return res.status(404).json({ message: "Nenhuma proposta encontrada" });
+
+      const okIds = rows.map((r) => r.id);
+      await db
+        .update(proposals)
+        .set({ status, updatedAt: new Date() })
+        .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
+
+      for (const r of rows) {
+        await db.insert(proposalHistory).values({
+          proposalId: r.id,
+          fromStatus: r.status,
+          toStatus: status,
+          action: ["CANCELADA", "PERDIDA"].includes(status) ? "CANCELAMENTO" : status === "PAGO" ? "PAGAMENTO" : "AVANCO",
+          notes: notes || "Alteração em lote",
+          performedBy: user.id,
+        });
+      }
+
+      return res.json({ updated: rows.length });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/bulk-status error:", e);
+      return res.status(500).json({ message: "Erro na alteração em lote" });
+    }
+  });
+
   app.post("/api/contracts/proposals/:id/pause", requireAuth, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -963,11 +1080,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
     try {
-      const { key, label, color = "zinc", ordem = 99 } = req.body;
+      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false } = req.body;
       if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
       const [row] = await db
         .insert(contractStatuses)
-        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false })
+        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit })
         .returning();
       return res.status(201).json(row);
     } catch (e: any) {
@@ -981,10 +1098,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
-      const { label, color } = req.body;
+      const { label, color, allowsVendorEdit } = req.body;
       const updates: any = {};
       if (label !== undefined) updates.label = label;
       if (color !== undefined) updates.color = color;
+      if (allowsVendorEdit !== undefined) updates.allowsVendorEdit = allowsVendorEdit;
       const [row] = await db
         .update(contractStatuses)
         .set(updates)

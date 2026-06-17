@@ -3,11 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
-  Settings, Trash2, Pencil, Check, X, Lock,
+  Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
+  ListChecks, Hash, MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,8 +19,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -96,6 +104,7 @@ interface StatusDef {
   color: string;
   ordem: number;
   isDefault: boolean;
+  allowsVendorEdit: boolean;
 }
 
 interface Phase {
@@ -106,10 +115,10 @@ interface Phase {
   ordem: number;
 }
 
-type PhaseForm = { name: string; color: string; statuses: string[] };
-type StatusForm = { label: string; color: string };
-const EMPTY_PHASE: PhaseForm = { name: "", color: "blue", statuses: [] };
-const EMPTY_STATUS: StatusForm = { label: "", color: "zinc" };
+type PhaseFormT = { name: string; color: string; statuses: string[] };
+type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean };
+const EMPTY_PHASE: PhaseFormT = { name: "", color: "blue", statuses: [] };
+const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -155,7 +164,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
-// ─── StatusBadge (usa mapa dinâmico) ─────────────────────────────────────────
+// ─── StatusBadge (mapa dinâmico) ─────────────────────────────────────────────
 
 function StatusBadge({
   status,
@@ -175,28 +184,20 @@ function StatusBadge({
 // ─── Dialog de gestão (Fases + Status) ───────────────────────────────────────
 
 function PhaseManagerDialog({
-  open,
-  onClose,
-  phases,
-  statusList,
-  statusConfigMap,
-  onCreatedPhase,
-  onUpdatedPhase,
-  onDeletedPhase,
-  onCreatedStatus,
-  onUpdatedStatus,
-  onDeletedStatus,
+  open, onClose, phases, statusList, statusConfigMap,
+  onCreatedPhase, onUpdatedPhase, onDeletedPhase,
+  onCreatedStatus, onUpdatedStatus, onDeletedStatus,
 }: {
   open: boolean;
   onClose: () => void;
   phases: Phase[];
   statusList: StatusDef[];
   statusConfigMap: Record<string, { label: string; className: string }>;
-  onCreatedPhase: (f: PhaseForm) => void;
-  onUpdatedPhase: (id: number, f: PhaseForm) => void;
+  onCreatedPhase: (f: PhaseFormT) => void;
+  onUpdatedPhase: (id: number, f: PhaseFormT) => void;
   onDeletedPhase: (id: number) => void;
-  onCreatedStatus: (f: StatusForm & { key: string }) => void;
-  onUpdatedStatus: (id: number, f: StatusForm) => void;
+  onCreatedStatus: (f: StatusFormT & { key: string }) => void;
+  onUpdatedStatus: (id: number, f: StatusFormT) => void;
   onDeletedStatus: (id: number) => void;
 }) {
   const [tab, setTab] = useState<"phases" | "statuses">("phases");
@@ -208,16 +209,13 @@ function PhaseManagerDialog({
           <DialogTitle>Gerenciar Contratos</DialogTitle>
         </DialogHeader>
 
-        {/* Tabs */}
         <div className="flex border-b mb-4">
           {(["phases", "statuses"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                tab === t
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                tab === t ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               {t === "phases" ? "Fases" : "Status"}
@@ -239,7 +237,6 @@ function PhaseManagerDialog({
         {tab === "statuses" && (
           <StatusesTab
             statusList={statusList}
-            statusConfigMap={statusConfigMap}
             onCreated={onCreatedStatus}
             onUpdated={onUpdatedStatus}
             onDeleted={onDeletedStatus}
@@ -253,21 +250,16 @@ function PhaseManagerDialog({
 // ─── Aba Fases ────────────────────────────────────────────────────────────────
 
 function PhasesTab({
-  phases,
-  statusList,
-  statusConfigMap,
-  onCreated,
-  onUpdated,
-  onDeleted,
+  phases, statusList, statusConfigMap, onCreated, onUpdated, onDeleted,
 }: {
   phases: Phase[];
   statusList: StatusDef[];
   statusConfigMap: Record<string, { label: string; className: string }>;
-  onCreated: (f: PhaseForm) => void;
-  onUpdated: (id: number, f: PhaseForm) => void;
+  onCreated: (f: PhaseFormT) => void;
+  onUpdated: (id: number, f: PhaseFormT) => void;
   onDeleted: (id: number) => void;
 }) {
-  const [form, setForm] = useState<PhaseForm>(EMPTY_PHASE);
+  const [form, setForm] = useState<PhaseFormT>(EMPTY_PHASE);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
@@ -299,19 +291,11 @@ function PhasesTab({
         const clr = PHASE_COLORS[phase.color] ?? PHASE_COLORS.blue;
         const isEditThis = editingId === phase.id;
         return (
-          <div
-            key={phase.id}
-            className={`rounded-lg border p-3 transition-colors ${isEditThis ? clr.activeBox : "border-border bg-card"}`}
-          >
+          <div key={phase.id} className={`rounded-lg border p-3 transition-colors ${isEditThis ? clr.activeBox : "border-border bg-card"}`}>
             {isEditThis ? (
               <PhaseFormFields
-                form={form}
-                setForm={setForm}
-                statusList={statusList}
-                onToggleStatus={toggleStatus}
-                onSubmit={handleSubmit}
-                onCancel={cancelEdit}
-                submitLabel="Salvar"
+                form={form} setForm={setForm} statusList={statusList}
+                onToggleStatus={toggleStatus} onSubmit={handleSubmit} onCancel={cancelEdit} submitLabel="Salvar"
               />
             ) : (
               <div className="flex items-start gap-2">
@@ -332,15 +316,15 @@ function PhasesTab({
                   </button>
                   {deleteConfirm === phase.id ? (
                     <div className="flex items-center gap-1">
-                      <button className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => { onDeleted(phase.id); setDeleteConfirm(null); }} title="Confirmar">
+                      <button className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => { onDeleted(phase.id); setDeleteConfirm(null); }}>
                         <Check className="h-3.5 w-3.5" />
                       </button>
-                      <button className="rounded p-1 text-muted-foreground hover:bg-muted transition-colors" onClick={() => setDeleteConfirm(null)} title="Cancelar">
+                      <button className="rounded p-1 text-muted-foreground hover:bg-muted transition-colors" onClick={() => setDeleteConfirm(null)}>
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <button className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => setDeleteConfirm(phase.id)} title="Excluir">
+                    <button className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => setDeleteConfirm(phase.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
@@ -355,13 +339,8 @@ function PhasesTab({
         <div className="border-t pt-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Nova Fase</p>
           <PhaseFormFields
-            form={form}
-            setForm={setForm}
-            statusList={statusList}
-            onToggleStatus={toggleStatus}
-            onSubmit={handleSubmit}
-            onCancel={() => setForm(EMPTY_PHASE)}
-            submitLabel="Criar Fase"
+            form={form} setForm={setForm} statusList={statusList}
+            onToggleStatus={toggleStatus} onSubmit={handleSubmit} onCancel={() => setForm(EMPTY_PHASE)} submitLabel="Criar Fase"
           />
         </div>
       )}
@@ -372,8 +351,8 @@ function PhasesTab({
 function PhaseFormFields({
   form, setForm, statusList, onToggleStatus, onSubmit, onCancel, submitLabel,
 }: {
-  form: PhaseForm;
-  setForm: React.Dispatch<React.SetStateAction<PhaseForm>>;
+  form: PhaseFormT;
+  setForm: React.Dispatch<React.SetStateAction<PhaseFormT>>;
   statusList: StatusDef[];
   onToggleStatus: (key: string) => void;
   onSubmit: () => void;
@@ -382,12 +361,7 @@ function PhaseFormFields({
 }) {
   return (
     <div className="space-y-3">
-      <Input
-        placeholder="Nome da fase"
-        value={form.name}
-        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="h-8 text-sm"
-      />
+      <Input placeholder="Nome da fase" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="h-8 text-sm" />
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
         <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
@@ -425,19 +399,14 @@ function PhaseFormFields({
 // ─── Aba Status ───────────────────────────────────────────────────────────────
 
 function StatusesTab({
-  statusList,
-  statusConfigMap,
-  onCreated,
-  onUpdated,
-  onDeleted,
+  statusList, onCreated, onUpdated, onDeleted,
 }: {
   statusList: StatusDef[];
-  statusConfigMap: Record<string, { label: string; className: string }>;
-  onCreated: (f: StatusForm & { key: string }) => void;
-  onUpdated: (id: number, f: StatusForm) => void;
+  onCreated: (f: StatusFormT & { key: string }) => void;
+  onUpdated: (id: number, f: StatusFormT) => void;
   onDeleted: (id: number) => void;
 }) {
-  const [form, setForm] = useState<StatusForm>(EMPTY_STATUS);
+  const [form, setForm] = useState<StatusFormT>(EMPTY_STATUS);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
@@ -445,20 +414,25 @@ function StatusesTab({
 
   function startEdit(s: StatusDef) {
     setEditingId(s.id);
-    setForm({ label: s.label, color: s.color });
+    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit });
   }
   function cancelEdit() { setEditingId(null); setForm(EMPTY_STATUS); }
 
   function handleSubmit() {
     if (!form.label.trim()) return;
-    if (editingId !== null) {
-      onUpdated(editingId, form);
-      cancelEdit();
-    } else {
-      onCreated({ ...form, key: derivedKey });
-      setForm(EMPTY_STATUS);
-    }
+    if (editingId !== null) { onUpdated(editingId, form); cancelEdit(); }
+    else { onCreated({ ...form, key: derivedKey }); setForm(EMPTY_STATUS); }
   }
+
+  const VendorEditToggle = (
+    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">Permite edição do corretor</p>
+        <p className="text-xs text-muted-foreground">Neste status o corretor volta a poder editar a proposta.</p>
+      </div>
+      <Switch checked={form.allowsVendorEdit} onCheckedChange={(v) => setForm((f) => ({ ...f, allowsVendorEdit: v }))} />
+    </div>
+  );
 
   return (
     <div className="space-y-2">
@@ -466,22 +440,15 @@ function StatusesTab({
         const badgeCls = BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc;
         const isEditThis = editingId === s.id;
         return (
-          <div
-            key={s.id}
-            className={`rounded-lg border p-3 transition-colors ${isEditThis ? "border-border bg-muted/30" : "border-border bg-card"}`}
-          >
+          <div key={s.id} className={`rounded-lg border p-3 transition-colors ${isEditThis ? "border-border bg-muted/30" : "border-border bg-card"}`}>
             {isEditThis ? (
               <div className="space-y-3">
-                <Input
-                  placeholder="Nome do status"
-                  value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                  className="h-8 text-sm"
-                />
+                <Input placeholder="Nome do status" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} className="h-8 text-sm" />
                 <div>
                   <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
                   <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
                 </div>
+                {VendorEditToggle}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" type="button" onClick={cancelEdit}>Cancelar</Button>
                   <Button size="sm" type="button" disabled={!form.label.trim()} onClick={handleSubmit}>Salvar</Button>
@@ -489,16 +456,17 @@ function StatusesTab({
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${badgeCls}`}>
-                  {s.label}
-                </span>
+                <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${badgeCls}`}>{s.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{s.key}</span>
-                {s.isDefault && (
-                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                    <Lock className="h-3 w-3" /> padrão
+                {s.allowsVendorEdit && (
+                  <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400" title="Corretor pode editar neste status">
+                    <Pencil className="h-3 w-3" /> corretor
                   </span>
                 )}
-                {!s.isDefault && (
+                {s.isDefault && (
+                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground"><Lock className="h-3 w-3" /> padrão</span>
+                )}
+                {!s.isDefault ? (
                   <div className="ml-auto flex gap-1">
                     <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(s)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -518,9 +486,8 @@ function StatusesTab({
                       </button>
                     )}
                   </div>
-                )}
-                {s.isDefault && (
-                  <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(s)} title="Editar nome/cor">
+                ) : (
+                  <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(s)} title="Editar">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -534,26 +501,18 @@ function StatusesTab({
         <div className="border-t pt-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Novo Status</p>
           <div className="space-y-3">
-            <Input
-              placeholder="Nome do status (ex: Em Produção)"
-              value={form.label}
-              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-              className="h-8 text-sm"
-            />
+            <Input placeholder="Nome do status (ex: Em Produção)" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} className="h-8 text-sm" />
             {form.label && (
-              <p className="text-xs text-muted-foreground">
-                Código: <span className="font-mono">{derivedKey || "—"}</span>
-              </p>
+              <p className="text-xs text-muted-foreground">Código: <span className="font-mono">{derivedKey || "—"}</span></p>
             )}
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
               <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
             </div>
+            {VendorEditToggle}
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" size="sm" type="button" onClick={() => setForm(EMPTY_STATUS)}>Limpar</Button>
-              <Button size="sm" type="button" disabled={!form.label.trim() || !derivedKey} onClick={handleSubmit}>
-                Criar Status
-              </Button>
+              <Button size="sm" type="button" disabled={!form.label.trim() || !derivedKey} onClick={handleSubmit}>Criar Status</Button>
             </div>
           </div>
         </div>
@@ -578,8 +537,16 @@ export default function ContratosListaPage() {
   const [activePhase, setActivePhase] = useState<number | null>(null);
   const [showPhaseManager, setShowPhaseManager] = useState(false);
 
+  // Seleção em lote + diálogo de ação rápida
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" } | null>(null);
+  const [quickValue, setQuickValue] = useState("");
+
   const isMaster = !!(user?.isMaster || user?.role === "master");
   const isVendedor = user?.role === "vendedor";
+  const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const [viewMode, setViewMode] = useState<ViewMode>(isVendedor ? "corretor" : "operacional");
   const canCreate = !!(user?.isMaster || ["coordenacao", "vendedor"].includes(user?.role || ""));
 
@@ -614,8 +581,6 @@ export default function ContratosListaPage() {
     },
   });
 
-  // ── Status config map dinâmico ────────────────────────────────────────────
-
   const statusConfigMap = useMemo(() => {
     const map: Record<string, { label: string; className: string }> = {};
     statusList.forEach((s) => {
@@ -624,10 +589,12 @@ export default function ContratosListaPage() {
     return map;
   }, [statusList]);
 
+  const invalidateProposals = () => queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+
   // ── Mutations fases ────────────────────────────────────────────────────────
 
   const createPhase = useMutation({
-    mutationFn: async (data: PhaseForm) => {
+    mutationFn: async (data: PhaseFormT) => {
       const res = await fetch("/api/contracts/phases", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ ...data, ordem: phases.length }),
@@ -639,7 +606,7 @@ export default function ContratosListaPage() {
   });
 
   const updatePhase = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: PhaseForm }) => {
+    mutationFn: async ({ id, data }: { id: number; data: PhaseFormT }) => {
       const res = await fetch(`/api/contracts/phases/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(data),
@@ -651,9 +618,7 @@ export default function ContratosListaPage() {
   });
 
   const deletePhase = useMutation({
-    mutationFn: async (id: number) => {
-      await fetch(`/api/contracts/phases/${id}`, { method: "DELETE", credentials: "include" });
-    },
+    mutationFn: async (id: number) => { await fetch(`/api/contracts/phases/${id}`, { method: "DELETE", credentials: "include" }); },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
       if (activePhase === id) setActivePhase(null);
@@ -665,7 +630,7 @@ export default function ContratosListaPage() {
   // ── Mutations status ───────────────────────────────────────────────────────
 
   const createStatus = useMutation({
-    mutationFn: async (data: StatusForm & { key: string }) => {
+    mutationFn: async (data: StatusFormT & { key: string }) => {
       const res = await fetch("/api/contracts/statuses", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(data),
@@ -677,7 +642,7 @@ export default function ContratosListaPage() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: StatusForm }) => {
+    mutationFn: async ({ id, data }: { id: number; data: StatusFormT }) => {
       const res = await fetch(`/api/contracts/statuses/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(data),
@@ -697,13 +662,56 @@ export default function ContratosListaPage() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  // ── Mutations de movimentação (rápida + lote) ──────────────────────────────
+
+  const quickStatusMut = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const action = ["CANCELADA", "PERDIDA"].includes(status) ? "CANCELAMENTO" : status === "PAGO" ? "PAGAMENTO" : "AVANCO";
+      const res = await fetch(`/api/contracts/proposals/${id}/status`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ status, action, notes: "Alterado via ação rápida" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+    },
+    onSuccess: () => { invalidateProposals(); toast({ title: "Status atualizado" }); },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const quickPatchMut = useMutation({
+    mutationFn: async ({ id, body }: { id: number; body: any }) => {
+      const res = await fetch(`/api/contracts/proposals/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+    },
+    onSuccess: () => { invalidateProposals(); setQuick(null); setQuickValue(""); toast({ title: "Proposta atualizada" }); },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const bulkStatusMut = useMutation({
+    mutationFn: async ({ ids, status, notes }: { ids: number[]; status: string; notes?: string }) => {
+      const res = await fetch("/api/contracts/proposals/bulk-status", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ ids, status, notes }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      invalidateProposals();
+      setSelected(new Set());
+      setBulkStatus("");
+      setBulkNotes("");
+      toast({ title: `${data?.updated ?? 0} proposta(s) atualizada(s)` });
+    },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
   // ── Contagens ──────────────────────────────────────────────────────────────
 
   const countByStatus: Record<string, number> = {};
-  proposals.forEach((p) => {
-    countByStatus[p.status] = (countByStatus[p.status] || 0) + 1;
-  });
-
+  proposals.forEach((p) => { countByStatus[p.status] = (countByStatus[p.status] || 0) + 1; });
   function countForPhase(phase: Phase) {
     return phase.statuses.reduce((acc, s) => acc + (countByStatus[s] || 0), 0);
   }
@@ -732,6 +740,29 @@ export default function ContratosListaPage() {
   });
 
   const showCorretorCol = viewMode === "operacional";
+  const showSelectCol = isOperacional;
+
+  // ── Seleção ─────────────────────────────────────────────────────────────────
+
+  const filteredIds = filtered.map((p) => p.id);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+  const someSelected = filteredIds.some((id) => selected.has(id));
+
+  function toggleAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) filteredIds.forEach((id) => next.delete(id));
+      else filteredIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+  function toggleOne(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
@@ -793,16 +824,14 @@ export default function ContratosListaPage() {
               >
                 <span className={`block text-2xl font-bold leading-none ${clr.count}`}>{count}</span>
                 <span className={`block text-xs font-medium mt-1.5 leading-tight ${clr.label}`}>{phase.name}</span>
-                <span className={`block text-[10px] mt-0.5 opacity-60 ${clr.label}`}>
-                  Contrato{count !== 1 ? "s" : ""}
-                </span>
+                <span className={`block text-[10px] mt-0.5 opacity-60 ${clr.label}`}>Contrato{count !== 1 ? "s" : ""}</span>
               </button>
             );
           })}
         </div>
       )}
 
-      {/* ── Pills de status (quando nenhuma fase ativa) ───────────────────── */}
+      {/* ── Pills de status ───────────────────────────────────────────────── */}
       {!activePhaseDef && !isLoading && proposals.length > 0 && statusList.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button
@@ -833,7 +862,6 @@ export default function ContratosListaPage() {
         </div>
       )}
 
-      {/* indicador de fase ativa */}
       {activePhaseDef && (
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${PHASE_COLORS[activePhaseDef.color]?.swatch ?? "bg-blue-500"}`} />
@@ -869,6 +897,40 @@ export default function ContratosListaPage() {
         </Select>
       </div>
 
+      {/* ── Barra de ações em lote ─────────────────────────────────────────── */}
+      {showSelectCol && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+          <span className="flex items-center gap-1.5 text-sm font-medium px-1">
+            <ListChecks className="h-4 w-4" />
+            {selected.size} selecionada(s)
+          </span>
+          <Select value={bulkStatus} onValueChange={setBulkStatus}>
+            <SelectTrigger className="w-48 h-8 text-xs">
+              <SelectValue placeholder="Alterar status para..." />
+            </SelectTrigger>
+            <SelectContent>
+              {statusList.map((s) => (
+                <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={bulkNotes}
+            onChange={(e) => setBulkNotes(e.target.value)}
+            placeholder="Observação (opcional)"
+            className="h-8 text-xs w-56"
+          />
+          <Button
+            size="sm"
+            disabled={!bulkStatus || bulkStatusMut.isPending}
+            onClick={() => bulkStatusMut.mutate({ ids: Array.from(selected), status: bulkStatus, notes: bulkNotes || undefined })}
+          >
+            {bulkStatusMut.isPending ? "Aplicando..." : "Aplicar"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar seleção</Button>
+        </div>
+      )}
+
       {/* ── Tabela ────────────────────────────────────────────────────────── */}
       {isLoading ? (
         <div className="space-y-2">
@@ -889,6 +951,15 @@ export default function ContratosListaPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
+                {showSelectCol && (
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todas"
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="w-14">#</TableHead>
                 <TableHead>Órgão</TableHead>
                 <TableHead>CPF</TableHead>
@@ -900,6 +971,7 @@ export default function ContratosListaPage() {
                 <TableHead className="text-right">Contrato</TableHead>
                 <TableHead>ADE</TableHead>
                 <TableHead>Status</TableHead>
+                {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -910,6 +982,15 @@ export default function ContratosListaPage() {
                   onClick={() => setLocation(`/contratos/${p.id}`)}
                   data-testid={`row-proposal-${p.id}`}
                 >
+                  {showSelectCol && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected.has(p.id)}
+                        onCheckedChange={() => toggleOne(p.id)}
+                        aria-label={`Selecionar proposta ${p.id}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="text-xs text-muted-foreground font-mono">{p.id}</TableCell>
                   <TableCell className="text-sm">{p.clientConvenio || "—"}</TableCell>
                   <TableCell className="text-sm font-mono text-xs">{formatCpfMask(p.clientCpf || "")}</TableCell>
@@ -924,12 +1005,40 @@ export default function ContratosListaPage() {
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
                       {p.isPaused && (
-                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                          Pend.
-                        </span>
+                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Pend.</span>
                       )}
                     </div>
                   </TableCell>
+                  {showSelectCol && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-7 w-7">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel>Alterar status</DropdownMenuLabel>
+                          {statusList.filter((s) => s.key !== p.status).map((s) => (
+                            <DropdownMenuItem
+                              key={s.key}
+                              onClick={() => quickStatusMut.mutate({ id: p.id, status: s.key })}
+                            >
+                              <span className={`mr-2 h-2 w-2 rounded-full ${PHASE_COLORS[s.color]?.swatch ?? "bg-zinc-400"}`} />
+                              {s.label}
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => { setQuick({ id: p.id, mode: "ade" }); setQuickValue(p.ade || ""); }}>
+                            <Hash className="h-3.5 w-3.5 mr-2" /> Registrar ADE…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setQuick({ id: p.id, mode: "obs" }); setQuickValue(""); }}>
+                            <MessageSquare className="h-3.5 w-3.5 mr-2" /> Adicionar observação…
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -942,6 +1051,33 @@ export default function ContratosListaPage() {
           Mostrando {filtered.length} de {proposals.length} propostas
         </p>
       )}
+
+      {/* ── Diálogo de ação rápida (ADE / observação) ──────────────────────── */}
+      <Dialog open={!!quick} onOpenChange={(v) => { if (!v) { setQuick(null); setQuickValue(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{quick?.mode === "ade" ? "Registrar ADE" : "Adicionar observação"}</DialogTitle>
+          </DialogHeader>
+          {quick?.mode === "ade" ? (
+            <Input value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Número do ADE" autoFocus />
+          ) : (
+            <Textarea value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Observação..." rows={3} autoFocus />
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setQuick(null); setQuickValue(""); }}>Cancelar</Button>
+            <Button
+              disabled={!quickValue.trim() || quickPatchMut.isPending}
+              onClick={() => {
+                if (!quick) return;
+                const body = quick.mode === "ade" ? { ade: quickValue.trim() } : { notes: quickValue.trim() };
+                quickPatchMut.mutate({ id: quick.id, body });
+              }}
+            >
+              {quickPatchMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog de gestão ──────────────────────────────────────────────── */}
       <PhaseManagerDialog

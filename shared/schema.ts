@@ -3473,6 +3473,7 @@ export const proposals = pgTable("proposals", {
   isPaused: boolean("is_paused").notNull().default(false),
   pausedAtStepId: integer("paused_at_step_id").references(() => contractFlowSteps.id),
   ade: varchar("ade", { length: 100 }),
+  adeRefin: varchar("ade_refin", { length: 100 }),
   commissionPercentage: decimal("commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionPercentage: decimal("corretor_commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionValue: decimal("corretor_commission_value", { precision: 12, scale: 2 }),
@@ -3585,6 +3586,7 @@ export const contractStatuses = pgTable("contract_statuses", {
   color: varchar("color", { length: 50 }).notNull().default("zinc"),
   ordem: integer("ordem").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
+  allowsVendorEdit: boolean("allows_vendor_edit").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
