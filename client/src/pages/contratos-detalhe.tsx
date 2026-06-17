@@ -17,8 +17,16 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { cipInfo, type CipState } from "@/lib/cip";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+// Classes da tag de contagem de dias CIP por estado
+const CIP_BADGE: Record<CipState, string> = {
+  ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+};
 
 // Paleta dos badges de status (mesma da listagem)
 const BADGE_COLORS: Record<string, string> = {
@@ -261,6 +269,31 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao clonar", description: e.message, variant: "destructive" }),
   });
 
+  // Transferir contrato para outro usuário
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferTo, setTransferTo] = useState("");
+  const { data: assignableUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/assignable-users"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/assignable-users", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: canManageContracts,
+  });
+  const transferMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ vendorId: transferTo, notes: "Contrato transferido" }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => { invalidate(); setShowTransfer(false); toast({ title: "Contrato transferido" }); },
+    onError: (e: any) => toast({ title: "Falha ao transferir", description: e.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex-1 p-6 space-y-4">
@@ -285,6 +318,8 @@ export default function ContratosDetalhePage() {
   const currentStatusDef = statusList.find((s) => s.key === proposal.status);
   const isTerminal = TERMINAL.includes(proposal.status);
   const isPortabilidade = proposal.product === "PORTABILIDADE";
+  const cip = isPortabilidade ? cipInfo(m.dataCip) : null;
+  const canSetCip = isOperacional && !isTerminal;
 
   // permissões de edição de campos
   const canEditFields = !isTerminal && (isOperacional || (isVendedor && !!currentStatusDef?.allowsVendorEdit));
@@ -326,6 +361,8 @@ export default function ContratosDetalhePage() {
       case "taxa":             body = { clientMetaPatch: { taxa: parseBrNum(editVal) } }; break;
       case "ade":              body = { ade: editVal.trim() }; break;
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
+      case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
+      case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       default: return;
     }
     editMutation.mutate(body);
@@ -419,6 +456,11 @@ export default function ContratosDetalhePage() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => invalidate()} title="Atualizar dados">
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
+          {canManageContracts && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setTransferTo(proposal.vendorId ? String(proposal.vendorId) : ""); setShowTransfer(true); }} title="Transferir contrato">
+              <User className="h-4 w-4" /> Transferir
+            </Button>
+          )}
           {canManageContracts && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(proposal.bank || ""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
@@ -561,11 +603,32 @@ export default function ContratosDetalhePage() {
           )}
           {/* Portabilidade — origem e simulação */}
           {m.bancoOrigem && renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
-          {m.numeroContrato && renderField({ fieldKey: "numContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true })}
+          {isPortabilidade && renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
           {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
           {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
           {m.saldoDevedor != null && renderField({ fieldKey: "saldoDev", label: "Saldo Devedor", value: m.saldoDevedor, money: true })}
           {m.troco != null && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true })}
+          {/* Data CIP + contador de dias úteis (portabilidade) */}
+          {isPortabilidade && (
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Data CIP</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {canSetCip ? (
+                  <input
+                    type="date"
+                    className="border rounded px-1.5 py-0.5 text-xs bg-background"
+                    value={m.dataCip || ""}
+                    onChange={(e) => editMutation.mutate({ clientMetaPatch: { dataCip: e.target.value || null } })}
+                  />
+                ) : (
+                  <span className="font-medium text-sm">{m.dataCip || "—"}</span>
+                )}
+                {cip && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${CIP_BADGE[cip.state]}`}>{cip.label}</span>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -773,6 +836,40 @@ export default function ContratosDetalhePage() {
 
         </div>{/* fim coluna direita */}
       </div>{/* fim grid */}
+
+      {/* Diálogo: Transferir contrato */}
+      <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transferir contrato</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Transfere a proposta para outro usuário (corretor responsável).
+          </p>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Transferir para</p>
+            <Select value={transferTo} onValueChange={setTransferTo}>
+              <SelectTrigger><SelectValue placeholder="Selecione o usuário..." /></SelectTrigger>
+              <SelectContent>
+                {assignableUsers.map((u: any) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.name} {u.role ? `· ${u.role}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowTransfer(false)}>Cancelar</Button>
+            <Button
+              disabled={!transferTo || transferTo === String(proposal.vendorId) || transferMutation.isPending}
+              onClick={() => transferMutation.mutate()}
+            >
+              {transferMutation.isPending ? "Transferindo..." : "Transferir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo: Clonar proposta */}
       <Dialog open={showClone} onOpenChange={setShowClone}>

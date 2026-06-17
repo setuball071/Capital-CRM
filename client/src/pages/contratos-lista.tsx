@@ -27,6 +27,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { cipInfo, type CipState } from "@/lib/cip";
+
+// Tag e cor de linha do contador CIP (portabilidade)
+const CIP_BADGE: Record<CipState, string> = {
+  ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+};
+const CIP_ROW: Record<CipState, string> = {
+  ok:   "",
+  near: "bg-amber-50 dark:bg-amber-950/20 animate-pulse",
+  due:  "bg-amber-100 dark:bg-amber-900/30 animate-pulse",
+};
 
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
 
@@ -991,10 +1004,13 @@ export default function ContratosListaPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
+              {filtered.map((p) => {
+                const cip = p.product === "PORTABILIDADE" ? cipInfo(p.clientMeta?.dataCip) : null;
+                const cipActive = cip && cip.state !== "ok";
+                return (
                 <TableRow
                   key={p.id}
-                  className="cursor-pointer hover:bg-muted/40 transition-colors"
+                  className={`cursor-pointer transition-colors ${cipActive ? CIP_ROW[cip!.state] : "hover:bg-muted/40"}`}
                   onClick={() => setLocation(`/contratos/${p.id}`)}
                   data-testid={`row-proposal-${p.id}`}
                 >
@@ -1022,6 +1038,9 @@ export default function ContratosListaPage() {
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
                       {p.isPaused && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Pend.</span>
+                      )}
+                      {cip && (
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${CIP_BADGE[cip.state]}`}>{cip.label}</span>
                       )}
                     </div>
                   </TableCell>
@@ -1056,7 +1075,8 @@ export default function ContratosListaPage() {
                     </TableCell>
                   )}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

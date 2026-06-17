@@ -602,7 +602,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
       if (!canEdit) return res.status(403).json({ message: "Sem permissão para editar esta proposta" });
 
-      const { bank, contractValue, installmentValue, term, ade, adeRefin, clientMetaPatch, notes } = req.body;
+      const { bank, contractValue, installmentValue, term, ade, adeRefin, vendorId, clientMetaPatch, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
       if (bank !== undefined) updateData.bank = bank || null;
@@ -615,6 +615,14 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         if (!isOper) return res.status(403).json({ message: "Apenas o operacional pode gerenciar o ADE" });
         if (ade !== undefined) updateData.ade = ade || null;
         if (adeRefin !== undefined) updateData.adeRefin = adeRefin || null;
+      }
+
+      // Transferir contrato (mudar corretor responsável) — só master/admin/operacional
+      if (vendorId !== undefined) {
+        if (!user.isMaster && !["master", "operacional"].includes(user.role || "")) {
+          return res.status(403).json({ message: "Sem permissão para transferir o contrato" });
+        }
+        updateData.vendorId = vendorId ? parseInt(vendorId) : null;
       }
 
       // Merge raso em clientMeta (taxa, tabelaFinanceiroId, tabelaNome, etc.)
@@ -641,6 +649,27 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("PATCH /api/contracts/proposals/:id error:", e);
       return res.status(500).json({ message: "Erro ao editar proposta" });
+    }
+  });
+
+  // Usuários para os quais um contrato pode ser transferido (master/admin/operacional)
+  app.get("/api/contracts/assignable-users", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      if (!user.isMaster && !["master", "operacional"].includes(user.role || "")) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      const result = await db.execute(sql`
+        SELECT u.id, u.name, u.role
+        FROM users u
+        JOIN user_tenants ut ON ut.user_id = u.id
+        WHERE ut.tenant_id = ${req.tenantId!} AND u.is_active = true
+        ORDER BY u.name ASC
+      `);
+      return res.json(result.rows);
+    } catch (e: any) {
+      console.error("GET /api/contracts/assignable-users error:", e);
+      return res.status(500).json({ message: "Erro ao listar usuários" });
     }
   });
 
