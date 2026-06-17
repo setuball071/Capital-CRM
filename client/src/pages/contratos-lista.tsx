@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
-  Settings, Trash2, Pencil, Check, X,
+  Settings, Trash2, Pencil, Check, X, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,19 +20,65 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  CADASTRADA:        { label: "Cadastrada",      className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
-  EM_ANALISE:        { label: "Em Análise",      className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  DIGITADA:          { label: "Digitada",        className: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
-  EM_ANDAMENTO:      { label: "Em Andamento",    className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
-  PENDENTE_CORRETOR: { label: "Pend. Corretor",  className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-  PENDENTE_BANCO:    { label: "Pend. Banco",     className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300" },
-  PAGO:              { label: "Pago",            className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
-  CANCELADA:         { label: "Cancelada",       className: "bg-red-200 text-red-900 dark:bg-red-950/60 dark:text-red-400" },
-  PERDIDA:           { label: "Perdida",         className: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" },
+const BADGE_COLORS: Record<string, string> = {
+  zinc:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  violet: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  red:    "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
+  green:  "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  rose:   "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
 };
+
+const PHASE_COLORS: Record<string, {
+  box: string; activeBox: string; count: string; label: string; swatch: string;
+}> = {
+  zinc:   {
+    box:       "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/60 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500",
+    activeBox: "bg-zinc-100 border-zinc-500 dark:bg-zinc-800 dark:border-zinc-400 ring-2 ring-zinc-400/40",
+    count: "text-zinc-900 dark:text-zinc-50", label: "text-zinc-600 dark:text-zinc-400", swatch: "bg-zinc-400",
+  },
+  blue:   {
+    box:       "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600",
+    activeBox: "bg-blue-100 border-blue-500 dark:bg-blue-900/60 dark:border-blue-500 ring-2 ring-blue-400/40",
+    count: "text-blue-900 dark:text-blue-50", label: "text-blue-600 dark:text-blue-400", swatch: "bg-blue-500",
+  },
+  violet: {
+    box:       "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600",
+    activeBox: "bg-violet-100 border-violet-500 dark:bg-violet-900/60 dark:border-violet-500 ring-2 ring-violet-400/40",
+    count: "text-violet-900 dark:text-violet-50", label: "text-violet-600 dark:text-violet-400", swatch: "bg-violet-500",
+  },
+  orange: {
+    box:       "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600",
+    activeBox: "bg-orange-100 border-orange-500 dark:bg-orange-900/60 dark:border-orange-500 ring-2 ring-orange-400/40",
+    count: "text-orange-900 dark:text-orange-50", label: "text-orange-600 dark:text-orange-400", swatch: "bg-orange-500",
+  },
+  red:    {
+    box:       "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800 hover:border-red-400 dark:hover:border-red-600",
+    activeBox: "bg-red-100 border-red-500 dark:bg-red-900/60 dark:border-red-500 ring-2 ring-red-400/40",
+    count: "text-red-900 dark:text-red-50", label: "text-red-600 dark:text-red-400", swatch: "bg-red-500",
+  },
+  yellow: {
+    box:       "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-800 hover:border-yellow-400 dark:hover:border-yellow-600",
+    activeBox: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/60 dark:border-yellow-500 ring-2 ring-yellow-400/40",
+    count: "text-yellow-900 dark:text-yellow-50", label: "text-yellow-700 dark:text-yellow-400", swatch: "bg-yellow-400",
+  },
+  green:  {
+    box:       "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600",
+    activeBox: "bg-green-100 border-green-500 dark:bg-green-900/60 dark:border-green-500 ring-2 ring-green-400/40",
+    count: "text-green-900 dark:text-green-50", label: "text-green-600 dark:text-green-400", swatch: "bg-green-500",
+  },
+  rose:   {
+    box:       "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600",
+    activeBox: "bg-rose-100 border-rose-500 dark:bg-rose-900/60 dark:border-rose-500 ring-2 ring-rose-400/40",
+    count: "text-rose-900 dark:text-rose-50", label: "text-rose-600 dark:text-rose-400", swatch: "bg-rose-500",
+  },
+};
+
+const COLOR_OPTIONS = Object.keys(PHASE_COLORS);
 
 const PRODUCT_LABEL: Record<string, string> = {
   NOVO: "Novo",
@@ -41,80 +87,40 @@ const PRODUCT_LABEL: Record<string, string> = {
   CARTAO: "Cartão",
 };
 
-// ─── Cores das fases ──────────────────────────────────────────────────────────
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
-const PHASE_COLORS: Record<string, {
-  box: string; activeBox: string; count: string; label: string; swatch: string;
-}> = {
-  zinc:   {
-    box:       "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/60 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500",
-    activeBox: "bg-zinc-100 border-zinc-500 dark:bg-zinc-800 dark:border-zinc-400 ring-2 ring-zinc-400/40",
-    count:     "text-zinc-900 dark:text-zinc-50",
-    label:     "text-zinc-600 dark:text-zinc-400",
-    swatch:    "bg-zinc-400",
-  },
-  blue:   {
-    box:       "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600",
-    activeBox: "bg-blue-100 border-blue-500 dark:bg-blue-900/60 dark:border-blue-500 ring-2 ring-blue-400/40",
-    count:     "text-blue-900 dark:text-blue-50",
-    label:     "text-blue-600 dark:text-blue-400",
-    swatch:    "bg-blue-500",
-  },
-  violet: {
-    box:       "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600",
-    activeBox: "bg-violet-100 border-violet-500 dark:bg-violet-900/60 dark:border-violet-500 ring-2 ring-violet-400/40",
-    count:     "text-violet-900 dark:text-violet-50",
-    label:     "text-violet-600 dark:text-violet-400",
-    swatch:    "bg-violet-500",
-  },
-  orange: {
-    box:       "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600",
-    activeBox: "bg-orange-100 border-orange-500 dark:bg-orange-900/60 dark:border-orange-500 ring-2 ring-orange-400/40",
-    count:     "text-orange-900 dark:text-orange-50",
-    label:     "text-orange-600 dark:text-orange-400",
-    swatch:    "bg-orange-500",
-  },
-  red:    {
-    box:       "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800 hover:border-red-400 dark:hover:border-red-600",
-    activeBox: "bg-red-100 border-red-500 dark:bg-red-900/60 dark:border-red-500 ring-2 ring-red-400/40",
-    count:     "text-red-900 dark:text-red-50",
-    label:     "text-red-600 dark:text-red-400",
-    swatch:    "bg-red-500",
-  },
-  yellow: {
-    box:       "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-800 hover:border-yellow-400 dark:hover:border-yellow-600",
-    activeBox: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/60 dark:border-yellow-500 ring-2 ring-yellow-400/40",
-    count:     "text-yellow-900 dark:text-yellow-50",
-    label:     "text-yellow-700 dark:text-yellow-400",
-    swatch:    "bg-yellow-400",
-  },
-  green:  {
-    box:       "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600",
-    activeBox: "bg-green-100 border-green-500 dark:bg-green-900/60 dark:border-green-500 ring-2 ring-green-400/40",
-    count:     "text-green-900 dark:text-green-50",
-    label:     "text-green-600 dark:text-green-400",
-    swatch:    "bg-green-500",
-  },
-  rose:   {
-    box:       "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600",
-    activeBox: "bg-rose-100 border-rose-500 dark:bg-rose-900/60 dark:border-rose-500 ring-2 ring-rose-400/40",
-    count:     "text-rose-900 dark:text-rose-50",
-    label:     "text-rose-600 dark:text-rose-400",
-    swatch:    "bg-rose-500",
-  },
-};
+interface StatusDef {
+  id: number;
+  key: string;
+  label: string;
+  color: string;
+  ordem: number;
+  isDefault: boolean;
+}
 
-const COLOR_OPTIONS = Object.keys(PHASE_COLORS);
+interface Phase {
+  id: number;
+  name: string;
+  color: string;
+  statuses: string[];
+  ordem: number;
+}
 
-// ─── Subcomponents ────────────────────────────────────────────────────────────
+type PhaseForm = { name: string; color: string; statuses: string[] };
+type StatusForm = { label: string; color: string };
+const EMPTY_PHASE: PhaseForm = { name: "", color: "blue", statuses: [] };
+const EMPTY_STATUS: StatusForm = { label: "", color: "zinc" };
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" };
-  return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${cfg.className}`}>
-      {cfg.label}
-    </span>
-  );
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function generateKey(label: string): string {
+  return label
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z0-9\s]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
 }
 
 function formatCpfMask(cpf: string) {
@@ -129,184 +135,247 @@ function formatMoney(v: string | null | undefined) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// ─── Tipo de fase ─────────────────────────────────────────────────────────────
+// ─── ColorPicker ─────────────────────────────────────────────────────────────
 
-interface Phase {
-  id: number;
-  name: string;
-  color: string;
-  statuses: string[];
-  ordem: number;
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {COLOR_OPTIONS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          title={c}
+          onClick={() => onChange(c)}
+          className={`h-6 w-6 rounded-full transition-all border-2 ${PHASE_COLORS[c].swatch} ${
+            value === c ? "border-foreground scale-110 shadow" : "border-transparent opacity-60 hover:opacity-100"
+          }`}
+        />
+      ))}
+    </div>
+  );
 }
 
-type FormState = { name: string; color: string; statuses: string[] };
-const EMPTY_FORM: FormState = { name: "", color: "blue", statuses: [] };
+// ─── StatusBadge (usa mapa dinâmico) ─────────────────────────────────────────
 
-// ─── Modal de gestão de fases ─────────────────────────────────────────────────
+function StatusBadge({
+  status,
+  configMap,
+}: {
+  status: string;
+  configMap: Record<string, { label: string; className: string }>;
+}) {
+  const cfg = configMap[status] ?? { label: status, className: BADGE_COLORS.zinc };
+  return (
+    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${cfg.className}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Dialog de gestão (Fases + Status) ───────────────────────────────────────
 
 function PhaseManagerDialog({
   open,
   onClose,
   phases,
-  onCreated,
-  onUpdated,
-  onDeleted,
+  statusList,
+  statusConfigMap,
+  onCreatedPhase,
+  onUpdatedPhase,
+  onDeletedPhase,
+  onCreatedStatus,
+  onUpdatedStatus,
+  onDeletedStatus,
 }: {
   open: boolean;
   onClose: () => void;
   phases: Phase[];
-  onCreated: (p: FormState) => void;
-  onUpdated: (id: number, p: FormState) => void;
-  onDeleted: (id: number) => void;
+  statusList: StatusDef[];
+  statusConfigMap: Record<string, { label: string; className: string }>;
+  onCreatedPhase: (f: PhaseForm) => void;
+  onUpdatedPhase: (id: number, f: PhaseForm) => void;
+  onDeletedPhase: (id: number) => void;
+  onCreatedStatus: (f: StatusForm & { key: string }) => void;
+  onUpdatedStatus: (id: number, f: StatusForm) => void;
+  onDeletedStatus: (id: number) => void;
 }) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-
-  function startEdit(phase: Phase) {
-    setEditingId(phase.id);
-    setForm({ name: phase.name, color: phase.color, statuses: phase.statuses });
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setForm(EMPTY_FORM);
-  }
-
-  function handleSubmit() {
-    if (!form.name.trim()) return;
-    if (editingId !== null) {
-      onUpdated(editingId, form);
-      cancelEdit();
-    } else {
-      onCreated(form);
-      setForm(EMPTY_FORM);
-    }
-  }
-
-  function toggleStatus(s: string) {
-    setForm((f) => ({
-      ...f,
-      statuses: f.statuses.includes(s) ? f.statuses.filter((x) => x !== s) : [...f.statuses, s],
-    }));
-  }
-
-  const isEditing = editingId !== null;
+  const [tab, setTab] = useState<"phases" | "statuses">("phases");
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Gerenciar Fases</DialogTitle>
+          <DialogTitle>Gerenciar Contratos</DialogTitle>
         </DialogHeader>
 
-        {/* Lista de fases existentes */}
-        <div className="space-y-2">
-          {phases.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma fase cadastrada.</p>
-          )}
-          {phases.map((phase) => {
-            const clr = PHASE_COLORS[phase.color] ?? PHASE_COLORS.blue;
-            const isEditThis = editingId === phase.id;
-            return (
-              <div
-                key={phase.id}
-                className={`rounded-lg border p-3 transition-colors ${isEditThis ? clr.activeBox : "border-border bg-card"}`}
-              >
-                {isEditThis ? (
-                  <PhaseForm
-                    form={form}
-                    setForm={setForm}
-                    onToggleStatus={toggleStatus}
-                    onSubmit={handleSubmit}
-                    onCancel={cancelEdit}
-                    submitLabel="Salvar"
-                  />
-                ) : (
-                  <div className="flex items-start gap-2">
-                    <span className={`mt-1 h-3 w-3 rounded-full shrink-0 ${clr.swatch}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{phase.name}</p>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {phase.statuses.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">Nenhum status vinculado</span>
-                        ) : phase.statuses.map((s) => (
-                          <StatusBadge key={s} status={s} />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        onClick={() => startEdit(phase)}
-                        title="Editar"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      {deleteConfirm === phase.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                            onClick={() => { onDeleted(phase.id); setDeleteConfirm(null); }}
-                            title="Confirmar exclusão"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            className="rounded p-1 text-muted-foreground hover:bg-muted transition-colors"
-                            onClick={() => setDeleteConfirm(null)}
-                            title="Cancelar"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                          onClick={() => setDeleteConfirm(phase.id)}
-                          title="Excluir"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {/* Tabs */}
+        <div className="flex border-b mb-4">
+          {(["phases", "statuses"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === t
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "phases" ? "Fases" : "Status"}
+            </button>
+          ))}
         </div>
 
-        {/* Formulário de nova fase (escondido quando editando uma existente) */}
-        {!isEditing && (
-          <div className="border-t pt-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Nova Fase</p>
-            <PhaseForm
-              form={form}
-              setForm={setForm}
-              onToggleStatus={toggleStatus}
-              onSubmit={handleSubmit}
-              onCancel={() => setForm(EMPTY_FORM)}
-              submitLabel="Criar Fase"
-            />
-          </div>
+        {tab === "phases" && (
+          <PhasesTab
+            phases={phases}
+            statusList={statusList}
+            statusConfigMap={statusConfigMap}
+            onCreated={onCreatedPhase}
+            onUpdated={onUpdatedPhase}
+            onDeleted={onDeletedPhase}
+          />
+        )}
+
+        {tab === "statuses" && (
+          <StatusesTab
+            statusList={statusList}
+            statusConfigMap={statusConfigMap}
+            onCreated={onCreatedStatus}
+            onUpdated={onUpdatedStatus}
+            onDeleted={onDeletedStatus}
+          />
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function PhaseForm({
-  form,
-  setForm,
-  onToggleStatus,
-  onSubmit,
-  onCancel,
-  submitLabel,
+// ─── Aba Fases ────────────────────────────────────────────────────────────────
+
+function PhasesTab({
+  phases,
+  statusList,
+  statusConfigMap,
+  onCreated,
+  onUpdated,
+  onDeleted,
 }: {
-  form: FormState;
-  setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  onToggleStatus: (s: string) => void;
+  phases: Phase[];
+  statusList: StatusDef[];
+  statusConfigMap: Record<string, { label: string; className: string }>;
+  onCreated: (f: PhaseForm) => void;
+  onUpdated: (id: number, f: PhaseForm) => void;
+  onDeleted: (id: number) => void;
+}) {
+  const [form, setForm] = useState<PhaseForm>(EMPTY_PHASE);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  function startEdit(p: Phase) {
+    setEditingId(p.id);
+    setForm({ name: p.name, color: p.color, statuses: p.statuses });
+  }
+  function cancelEdit() { setEditingId(null); setForm(EMPTY_PHASE); }
+
+  function handleSubmit() {
+    if (!form.name.trim()) return;
+    if (editingId !== null) { onUpdated(editingId, form); cancelEdit(); }
+    else { onCreated(form); setForm(EMPTY_PHASE); }
+  }
+
+  function toggleStatus(key: string) {
+    setForm((f) => ({
+      ...f,
+      statuses: f.statuses.includes(key) ? f.statuses.filter((s) => s !== key) : [...f.statuses, key],
+    }));
+  }
+
+  return (
+    <div className="space-y-2">
+      {phases.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-4">Nenhuma fase cadastrada.</p>
+      )}
+      {phases.map((phase) => {
+        const clr = PHASE_COLORS[phase.color] ?? PHASE_COLORS.blue;
+        const isEditThis = editingId === phase.id;
+        return (
+          <div
+            key={phase.id}
+            className={`rounded-lg border p-3 transition-colors ${isEditThis ? clr.activeBox : "border-border bg-card"}`}
+          >
+            {isEditThis ? (
+              <PhaseFormFields
+                form={form}
+                setForm={setForm}
+                statusList={statusList}
+                onToggleStatus={toggleStatus}
+                onSubmit={handleSubmit}
+                onCancel={cancelEdit}
+                submitLabel="Salvar"
+              />
+            ) : (
+              <div className="flex items-start gap-2">
+                <span className={`mt-1 h-3 w-3 rounded-full shrink-0 ${clr.swatch}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{phase.name}</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {phase.statuses.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Nenhum status vinculado</span>
+                    ) : phase.statuses.map((s) => (
+                      <StatusBadge key={s} status={s} configMap={statusConfigMap} />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(phase)} title="Editar">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  {deleteConfirm === phase.id ? (
+                    <div className="flex items-center gap-1">
+                      <button className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => { onDeleted(phase.id); setDeleteConfirm(null); }} title="Confirmar">
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button className="rounded p-1 text-muted-foreground hover:bg-muted transition-colors" onClick={() => setDeleteConfirm(null)} title="Cancelar">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => setDeleteConfirm(phase.id)} title="Excluir">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {editingId === null && (
+        <div className="border-t pt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Nova Fase</p>
+          <PhaseFormFields
+            form={form}
+            setForm={setForm}
+            statusList={statusList}
+            onToggleStatus={toggleStatus}
+            onSubmit={handleSubmit}
+            onCancel={() => setForm(EMPTY_PHASE)}
+            submitLabel="Criar Fase"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhaseFormFields({
+  form, setForm, statusList, onToggleStatus, onSubmit, onCancel, submitLabel,
+}: {
+  form: PhaseForm;
+  setForm: React.Dispatch<React.SetStateAction<PhaseForm>>;
+  statusList: StatusDef[];
+  onToggleStatus: (key: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
   submitLabel: string;
@@ -319,61 +388,176 @@ function PhaseForm({
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         className="h-8 text-sm"
       />
-
-      {/* Seletor de cor */}
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
-        <div className="flex gap-2 flex-wrap">
-          {COLOR_OPTIONS.map((c) => {
-            const clr = PHASE_COLORS[c];
-            return (
-              <button
-                key={c}
-                type="button"
-                title={c}
-                onClick={() => setForm((f) => ({ ...f, color: c }))}
-                className={`h-6 w-6 rounded-full transition-all border-2 ${clr.swatch} ${
-                  form.color === c
-                    ? "border-foreground scale-110 shadow"
-                    : "border-transparent opacity-70 hover:opacity-100"
-                }`}
-              />
-            );
-          })}
-        </div>
+        <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
       </div>
-
-      {/* Status vinculados */}
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">Status vinculados</p>
         <div className="flex flex-wrap gap-1.5">
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-            const active = form.statuses.includes(key);
+          {statusList.map((s) => {
+            const active = form.statuses.includes(s.key);
+            const badgeCls = BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc;
             return (
               <button
-                key={key}
+                key={s.key}
                 type="button"
-                onClick={() => onToggleStatus(key)}
-                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border transition-all ${cfg.className} ${
-                  active
-                    ? "border-current opacity-100"
-                    : "border-transparent opacity-40 hover:opacity-70"
+                onClick={() => onToggleStatus(s.key)}
+                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border transition-all ${badgeCls} ${
+                  active ? "border-current opacity-100" : "border-transparent opacity-40 hover:opacity-70"
                 }`}
               >
                 {active && <Check className="h-3 w-3 mr-1" />}
-                {cfg.label}
+                {s.label}
               </button>
             );
           })}
         </div>
       </div>
-
       <div className="flex gap-2 justify-end pt-1">
         <Button variant="ghost" size="sm" type="button" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" type="button" disabled={!form.name.trim()} onClick={onSubmit}>
-          {submitLabel}
-        </Button>
+        <Button size="sm" type="button" disabled={!form.name.trim()} onClick={onSubmit}>{submitLabel}</Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Aba Status ───────────────────────────────────────────────────────────────
+
+function StatusesTab({
+  statusList,
+  statusConfigMap,
+  onCreated,
+  onUpdated,
+  onDeleted,
+}: {
+  statusList: StatusDef[];
+  statusConfigMap: Record<string, { label: string; className: string }>;
+  onCreated: (f: StatusForm & { key: string }) => void;
+  onUpdated: (id: number, f: StatusForm) => void;
+  onDeleted: (id: number) => void;
+}) {
+  const [form, setForm] = useState<StatusForm>(EMPTY_STATUS);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  const derivedKey = generateKey(form.label);
+
+  function startEdit(s: StatusDef) {
+    setEditingId(s.id);
+    setForm({ label: s.label, color: s.color });
+  }
+  function cancelEdit() { setEditingId(null); setForm(EMPTY_STATUS); }
+
+  function handleSubmit() {
+    if (!form.label.trim()) return;
+    if (editingId !== null) {
+      onUpdated(editingId, form);
+      cancelEdit();
+    } else {
+      onCreated({ ...form, key: derivedKey });
+      setForm(EMPTY_STATUS);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {statusList.map((s) => {
+        const badgeCls = BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc;
+        const isEditThis = editingId === s.id;
+        return (
+          <div
+            key={s.id}
+            className={`rounded-lg border p-3 transition-colors ${isEditThis ? "border-border bg-muted/30" : "border-border bg-card"}`}
+          >
+            {isEditThis ? (
+              <div className="space-y-3">
+                <Input
+                  placeholder="Nome do status"
+                  value={form.label}
+                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
+                  <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="ghost" size="sm" type="button" onClick={cancelEdit}>Cancelar</Button>
+                  <Button size="sm" type="button" disabled={!form.label.trim()} onClick={handleSubmit}>Salvar</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${badgeCls}`}>
+                  {s.label}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono">{s.key}</span>
+                {s.isDefault && (
+                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                    <Lock className="h-3 w-3" /> padrão
+                  </span>
+                )}
+                {!s.isDefault && (
+                  <div className="ml-auto flex gap-1">
+                    <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(s)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    {deleteConfirm === s.id ? (
+                      <div className="flex items-center gap-1">
+                        <button className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => { onDeleted(s.id); setDeleteConfirm(null); }}>
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button className="rounded p-1 text-muted-foreground hover:bg-muted transition-colors" onClick={() => setDeleteConfirm(null)}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" onClick={() => setDeleteConfirm(s.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                {s.isDefault && (
+                  <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" onClick={() => startEdit(s)} title="Editar nome/cor">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {editingId === null && (
+        <div className="border-t pt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Novo Status</p>
+          <div className="space-y-3">
+            <Input
+              placeholder="Nome do status (ex: Em Produção)"
+              value={form.label}
+              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              className="h-8 text-sm"
+            />
+            {form.label && (
+              <p className="text-xs text-muted-foreground">
+                Código: <span className="font-mono">{derivedKey || "—"}</span>
+              </p>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Cor</p>
+              <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" type="button" onClick={() => setForm(EMPTY_STATUS)}>Limpar</Button>
+              <Button size="sm" type="button" disabled={!form.label.trim() || !derivedKey} onClick={handleSubmit}>
+                Criar Status
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -410,66 +594,106 @@ export default function ContratosListaPage() {
     },
   });
 
+  const { data: statusList = [] } = useQuery<StatusDef[]>({
+    queryKey: ["/api/contracts/statuses"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/statuses", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+
   const { data: phases = [] } = useQuery<Phase[]>({
     queryKey: ["/api/contracts/phases"],
     queryFn: async () => {
       const res = await fetch("/api/contracts/phases", { credentials: "include" });
-      if (!res.ok) throw new Error("Erro ao carregar fases");
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
-  // ── Mutations ──────────────────────────────────────────────────────────────
+  // ── Status config map dinâmico ────────────────────────────────────────────
+
+  const statusConfigMap = useMemo(() => {
+    const map: Record<string, { label: string; className: string }> = {};
+    statusList.forEach((s) => {
+      map[s.key] = { label: s.label, className: BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc };
+    });
+    return map;
+  }, [statusList]);
+
+  // ── Mutations fases ────────────────────────────────────────────────────────
 
   const createPhase = useMutation({
-    mutationFn: async (data: FormState) => {
+    mutationFn: async (data: PhaseForm) => {
       const res = await fetch("/api/contracts/phases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ ...data, ordem: phases.length }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
-      return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
-      toast({ title: "Fase criada com sucesso" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] }); toast({ title: "Fase criada" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
   const updatePhase = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: FormState }) => {
+    mutationFn: async ({ id, data }: { id: number; data: PhaseForm }) => {
       const res = await fetch(`/api/contracts/phases/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error((await res.json()).message);
-      return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
-      toast({ title: "Fase atualizada" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] }); toast({ title: "Fase atualizada" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
   const deletePhase = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/contracts/phases/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok && res.status !== 204) throw new Error("Erro ao excluir fase");
+      await fetch(`/api/contracts/phases/${id}`, { method: "DELETE", credentials: "include" });
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
       if (activePhase === id) setActivePhase(null);
       toast({ title: "Fase excluída" });
     },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  // ── Mutations status ───────────────────────────────────────────────────────
+
+  const createStatus = useMutation({
+    mutationFn: async (data: StatusForm & { key: string }) => {
+      const res = await fetch("/api/contracts/statuses", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts/statuses"] }); toast({ title: "Status criado" }); },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: StatusForm }) => {
+      const res = await fetch(`/api/contracts/statuses/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts/statuses"] }); toast({ title: "Status atualizado" }); },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const deleteStatus = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/contracts/statuses/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok && res.status !== 204) throw new Error((await res.json()).message);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts/statuses"] }); toast({ title: "Status excluído" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
@@ -490,13 +714,11 @@ export default function ContratosListaPage() {
 
   const filtered = proposals.filter((p) => {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
-
     if (activePhaseDef) {
       if (!activePhaseDef.statuses.includes(p.status)) return false;
     } else if (filterStatus !== "all") {
       if (p.status !== filterStatus) return false;
     }
-
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
@@ -527,42 +749,29 @@ export default function ContratosListaPage() {
               <button
                 onClick={() => setViewMode("operacional")}
                 className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
-                  viewMode === "operacional"
-                    ? "bg-foreground text-background"
-                    : "bg-background text-muted-foreground hover:bg-muted"
+                  viewMode === "operacional" ? "bg-foreground text-background" : "bg-background text-muted-foreground hover:bg-muted"
                 }`}
               >
-                <Briefcase className="h-3.5 w-3.5" />
-                Operacional
+                <Briefcase className="h-3.5 w-3.5" />Operacional
               </button>
               <button
                 onClick={() => setViewMode("corretor")}
                 className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
-                  viewMode === "corretor"
-                    ? "bg-foreground text-background"
-                    : "bg-background text-muted-foreground hover:bg-muted"
+                  viewMode === "corretor" ? "bg-foreground text-background" : "bg-background text-muted-foreground hover:bg-muted"
                 }`}
               >
-                <Eye className="h-3.5 w-3.5" />
-                Corretor
+                <Eye className="h-3.5 w-3.5" />Corretor
               </button>
             </div>
           )}
           {isMaster && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowPhaseManager(true)}
-              className="gap-1.5"
-            >
-              <Settings className="h-4 w-4" />
-              Fases
+            <Button variant="outline" size="sm" onClick={() => setShowPhaseManager(true)} className="gap-1.5">
+              <Settings className="h-4 w-4" />Fases
             </Button>
           )}
           {canCreate && (
             <Button onClick={() => setLocation("/contratos/nova")} data-testid="button-new-proposal">
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Proposta
+              <Plus className="h-4 w-4 mr-2" />Nova Proposta
             </Button>
           )}
         </div>
@@ -580,16 +789,10 @@ export default function ContratosListaPage() {
                 key={phase.id}
                 type="button"
                 onClick={() => setActivePhase(isActive ? null : phase.id)}
-                className={`rounded-lg border-2 p-3 text-left transition-all ${
-                  isActive ? clr.activeBox : clr.box
-                }`}
+                className={`rounded-lg border-2 p-3 text-left transition-all ${isActive ? clr.activeBox : clr.box}`}
               >
-                <span className={`block text-2xl font-bold leading-none ${clr.count}`}>
-                  {count}
-                </span>
-                <span className={`block text-xs font-medium mt-1.5 leading-tight ${clr.label}`}>
-                  {phase.name}
-                </span>
+                <span className={`block text-2xl font-bold leading-none ${clr.count}`}>{count}</span>
+                <span className={`block text-xs font-medium mt-1.5 leading-tight ${clr.label}`}>{phase.name}</span>
                 <span className={`block text-[10px] mt-0.5 opacity-60 ${clr.label}`}>
                   Contrato{count !== 1 ? "s" : ""}
                 </span>
@@ -600,31 +803,30 @@ export default function ContratosListaPage() {
       )}
 
       {/* ── Pills de status (quando nenhuma fase ativa) ───────────────────── */}
-      {!activePhaseDef && !isLoading && proposals.length > 0 && (
+      {!activePhaseDef && !isLoading && proposals.length > 0 && statusList.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterStatus("all")}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filterStatus === "all"
-                ? "bg-foreground text-background"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
+              filterStatus === "all" ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             Todos ({proposals.length})
           </button>
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-            const count = countByStatus[key] || 0;
+          {statusList.map((s) => {
+            const count = countByStatus[s.key] || 0;
             if (count === 0) return null;
-            const isActive = filterStatus === key;
+            const isActive = filterStatus === s.key;
+            const badgeCls = BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc;
             return (
               <button
-                key={key}
-                onClick={() => setFilterStatus(isActive ? "all" : key)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${cfg.className} ${
+                key={s.key}
+                onClick={() => setFilterStatus(isActive ? "all" : s.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${badgeCls} ${
                   isActive ? "ring-2 ring-current ring-offset-1" : "opacity-80 hover:opacity-100"
                 }`}
               >
-                {cfg.label} {count}
+                {s.label} {count}
               </button>
             );
           })}
@@ -636,10 +838,7 @@ export default function ContratosListaPage() {
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${PHASE_COLORS[activePhaseDef.color]?.swatch ?? "bg-blue-500"}`} />
           <span className="text-sm font-medium">{activePhaseDef.name}</span>
-          <button
-            onClick={() => setActivePhase(null)}
-            className="ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
+          <button onClick={() => setActivePhase(null)} className="ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -673,9 +872,7 @@ export default function ContratosListaPage() {
       {/* ── Tabela ────────────────────────────────────────────────────────── */}
       {isLoading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
-          ))}
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -717,9 +914,7 @@ export default function ContratosListaPage() {
                   <TableCell className="text-sm">{p.clientConvenio || "—"}</TableCell>
                   <TableCell className="text-sm font-mono text-xs">{formatCpfMask(p.clientCpf || "")}</TableCell>
                   <TableCell className="text-sm font-medium">{p.clientName}</TableCell>
-                  {showCorretorCol && (
-                    <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>
-                  )}
+                  {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
@@ -727,7 +922,7 @@ export default function ContratosListaPage() {
                   <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <StatusBadge status={p.status} />
+                      <StatusBadge status={p.status} configMap={statusConfigMap} />
                       {p.isPaused && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                           Pend.
@@ -748,14 +943,19 @@ export default function ContratosListaPage() {
         </p>
       )}
 
-      {/* ── Modal gestão de fases ─────────────────────────────────────────── */}
+      {/* ── Dialog de gestão ──────────────────────────────────────────────── */}
       <PhaseManagerDialog
         open={showPhaseManager}
         onClose={() => setShowPhaseManager(false)}
         phases={phases}
-        onCreated={(data) => createPhase.mutate(data)}
-        onUpdated={(id, data) => updatePhase.mutate({ id, data })}
-        onDeleted={(id) => deletePhase.mutate(id)}
+        statusList={statusList}
+        statusConfigMap={statusConfigMap}
+        onCreatedPhase={(data) => createPhase.mutate(data)}
+        onUpdatedPhase={(id, data) => updatePhase.mutate({ id, data })}
+        onDeletedPhase={(id) => deletePhase.mutate(id)}
+        onCreatedStatus={(data) => createStatus.mutate(data)}
+        onUpdatedStatus={(id, data) => updateStatus.mutate({ id, data })}
+        onDeletedStatus={(id) => deleteStatus.mutate(id)}
       />
     </div>
   );

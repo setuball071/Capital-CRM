@@ -3575,7 +3575,20 @@ export const insertFinancialDebitSchema = createInsertSchema(financialDebits, {
 export type FinancialDebit = typeof financialDebits.$inferSelect;
 export type InsertFinancialDebit = z.infer<typeof insertFinancialDebitSchema>;
 
-// ===== FASES DE CONTRATOS =====
+// ===== FASES E STATUS DE CONTRATOS =====
+
+export const contractStatuses = pgTable("contract_statuses", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  key: varchar("key", { length: 100 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  color: varchar("color", { length: 50 }).notNull().default("zinc"),
+  ordem: integer("ordem").notNull().default(0),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type ContractStatus = typeof contractStatuses.$inferSelect;
 
 export const contractPhases = pgTable("contract_phases", {
   id: serial("id").primaryKey(),

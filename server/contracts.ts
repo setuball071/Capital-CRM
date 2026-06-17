@@ -10,6 +10,7 @@ import {
   commissionGroups,
   financialDebits,
   contractPhases,
+  contractStatuses,
   users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -918,6 +919,102 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("DELETE /api/contracts/commission-groups/:id error:", e);
       return res.status(500).json({ message: "Erro ao remover grupo" });
+    }
+  });
+
+  // ===================== STATUS DE CONTRATOS =====================
+
+  const DEFAULT_STATUSES = [
+    { key: "CADASTRADA",        label: "Cadastrada",     color: "zinc",   ordem: 0 },
+    { key: "EM_ANALISE",        label: "Em Análise",     color: "blue",   ordem: 1 },
+    { key: "DIGITADA",          label: "Digitada",       color: "violet", ordem: 2 },
+    { key: "EM_ANDAMENTO",      label: "Em Andamento",   color: "orange", ordem: 3 },
+    { key: "PENDENTE_CORRETOR", label: "Pend. Corretor", color: "red",    ordem: 4 },
+    { key: "PENDENTE_BANCO",    label: "Pend. Banco",    color: "yellow", ordem: 5 },
+    { key: "PAGO",              label: "Pago",           color: "green",  ordem: 6 },
+    { key: "CANCELADA",         label: "Cancelada",      color: "red",    ordem: 7 },
+    { key: "PERDIDA",           label: "Perdida",        color: "rose",   ordem: 8 },
+  ];
+
+  app.get("/api/contracts/statuses", requireAuth, async (req: any, res) => {
+    try {
+      let list = await db
+        .select()
+        .from(contractStatuses)
+        .where(eq(contractStatuses.tenantId, req.tenantId!))
+        .orderBy(asc(contractStatuses.ordem), asc(contractStatuses.id));
+
+      if (list.length === 0) {
+        const rows = DEFAULT_STATUSES.map((s) => ({
+          tenantId: req.tenantId!,
+          ...s,
+          isDefault: true,
+        }));
+        list = await db.insert(contractStatuses).values(rows).returning();
+      }
+
+      return res.json(list);
+    } catch (e: any) {
+      console.error("GET /api/contracts/statuses error:", e);
+      return res.status(500).json({ message: "Erro ao listar status" });
+    }
+  });
+
+  app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const { key, label, color = "zinc", ordem = 99 } = req.body;
+      if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
+      const [row] = await db
+        .insert(contractStatuses)
+        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false })
+        .returning();
+      return res.status(201).json(row);
+    } catch (e: any) {
+      if (e.code === "23505") return res.status(409).json({ message: "Já existe um status com este código" });
+      console.error("POST /api/contracts/statuses error:", e);
+      return res.status(500).json({ message: "Erro ao criar status" });
+    }
+  });
+
+  app.patch("/api/contracts/statuses/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      const { label, color } = req.body;
+      const updates: any = {};
+      if (label !== undefined) updates.label = label;
+      if (color !== undefined) updates.color = color;
+      const [row] = await db
+        .update(contractStatuses)
+        .set(updates)
+        .where(and(eq(contractStatuses.id, id), eq(contractStatuses.tenantId, req.tenantId!)))
+        .returning();
+      if (!row) return res.status(404).json({ message: "Status não encontrado" });
+      return res.json(row);
+    } catch (e: any) {
+      console.error("PATCH /api/contracts/statuses/:id error:", e);
+      return res.status(500).json({ message: "Erro ao atualizar status" });
+    }
+  });
+
+  app.delete("/api/contracts/statuses/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db
+        .select()
+        .from(contractStatuses)
+        .where(and(eq(contractStatuses.id, id), eq(contractStatuses.tenantId, req.tenantId!)));
+      if (!existing) return res.status(404).json({ message: "Status não encontrado" });
+      if (existing.isDefault) return res.status(400).json({ message: "Status padrão não pode ser excluído" });
+      await db
+        .delete(contractStatuses)
+        .where(and(eq(contractStatuses.id, id), eq(contractStatuses.tenantId, req.tenantId!)));
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/statuses/:id error:", e);
+      return res.status(500).json({ message: "Erro ao excluir status" });
     }
   });
 
