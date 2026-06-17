@@ -122,14 +122,10 @@ app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 import nodePath from "path";
 
-// /uploads protegido — requer sessão válida
-// O middleware de sessão é registrado depois (dentro do IIFE),
-// mas o requireSessionForUploads usa req.session que já estará disponível
-// porque app.use é lazy-evaluated no momento da requisição.
-app.use("/uploads", requireSessionForUploads);
-app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
-
+// Static público (logos etc.) — não exige sessão
 app.use(express.static(nodePath.join(process.cwd(), "public")));
+// NOTA: /uploads (protegido) é registrado DEPOIS do middleware de sessão,
+// dentro do IIFE — caso contrário req.session ainda não existe e tudo cai em 401.
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -186,6 +182,11 @@ app.use((req, res, next) => {
   app.use((req, res, next) => {
     sessionMiddleware(req, res, next);
   });
+
+  // /uploads protegido — registrado AQUI (após a sessão) para que req.session exista.
+  // Arquivos públicos (logos) passam pelo bypass dentro de requireSessionForUploads.
+  app.use("/uploads", requireSessionForUploads);
+  app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
 
   if (!isProduction) {
     log("Using memory session store for development");
