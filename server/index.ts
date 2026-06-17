@@ -286,6 +286,49 @@ app.use((req, res, next) => {
           console.error("Lemit migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — Contratos (status configuráveis, fases, ADE refin)
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+
+          await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS ade_refin VARCHAR(100)
+          `);
+
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS contract_statuses (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              key                VARCHAR(100) NOT NULL,
+              label              VARCHAR(255) NOT NULL,
+              color              VARCHAR(50) NOT NULL DEFAULT 'zinc',
+              ordem              INTEGER NOT NULL DEFAULT 0,
+              is_default         BOOLEAN NOT NULL DEFAULT false,
+              allows_vendor_edit BOOLEAN NOT NULL DEFAULT false,
+              created_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE(tenant_id, key)
+            )
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE contract_statuses ADD COLUMN IF NOT EXISTS allows_vendor_edit BOOLEAN NOT NULL DEFAULT false
+          `);
+
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS contract_phases (
+              id         SERIAL PRIMARY KEY,
+              tenant_id  INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              name       VARCHAR(255) NOT NULL,
+              color      VARCHAR(50) NOT NULL DEFAULT 'blue',
+              statuses   TEXT[] NOT NULL DEFAULT '{}',
+              ordem      INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          log("Contratos migration OK");
+        } catch (migErr) {
+          console.error("Contratos migration error (non-fatal):", migErr);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");
