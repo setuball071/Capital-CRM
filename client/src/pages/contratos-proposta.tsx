@@ -710,7 +710,7 @@ export default function ContratosPropostaPage() {
 
   // ── Mutation ────────────────────────────────────────────────────────────────
   const createMutation = useMutation({
-    mutationFn: (data: FormValues) => {
+    mutationFn: async (data: FormValues) => {
       const clientMeta =
         parsedData || docPhotoData
           ? {
@@ -748,7 +748,7 @@ export default function ContratosPropostaPage() {
             }
           : undefined;
 
-      return apiRequest("POST", "/api/contracts/proposals", {
+      const proposal: any = await apiRequest("POST", "/api/contracts/proposals", {
         ...data,
         clientConvenio: selectedConvenio?.id,
         contractValue: parseBrNumber(data.contractValue),
@@ -819,6 +819,24 @@ export default function ContratosPropostaPage() {
           })(),
         } || undefined,
       });
+
+      // Upload dos anexos para a proposta criada
+      if (attachments.length > 0 && proposal?.id) {
+        await Promise.allSettled(
+          attachments.map((att) => {
+            const fd = new FormData();
+            fd.append("file", att.file);
+            fd.append("documentType", att.documentType || "OUTRO");
+            return fetch(`/api/contracts/proposals/${proposal.id}/documents`, {
+              method: "POST",
+              body: fd,
+              credentials: "include",
+            });
+          })
+        );
+      }
+
+      return proposal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
