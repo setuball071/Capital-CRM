@@ -3237,6 +3237,11 @@ export default function ContratosPropostaPage() {
                 toast({ title: "Adicione ao menos um contrato", variant: "destructive" });
                 return;
               }
+              const semTabela = portContratos.filter((c) => !c.tableId);
+              if (semTabela.length > 0) {
+                toast({ title: `Selecione a tabela em todos os contratos (${semTabela.length} sem tabela)`, variant: "destructive" });
+                return;
+              }
               setStep("conferencia");
             }}
           >
