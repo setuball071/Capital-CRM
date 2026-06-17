@@ -548,7 +548,7 @@ export default function ContratosListaPage() {
   const isVendedor = user?.role === "vendedor";
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const [viewMode, setViewMode] = useState<ViewMode>(isVendedor ? "corretor" : "operacional");
-  const canCreate = !!(user?.isMaster || ["coordenacao", "vendedor"].includes(user?.role || ""));
+  const canCreate = !!(user?.isMaster || ["master", "coordenacao", "operacional", "vendedor"].includes(user?.role || ""));
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
