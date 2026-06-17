@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, Clock, SkipForward,
   FileText, AlertCircle, ExternalLink, Download, Paperclip,
   Copy, Check, Pencil, X, User, Landmark, CreditCard, Lock,
-  RefreshCw, Upload, Contact,
+  Upload, Contact,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -453,9 +453,6 @@ export default function ContratosDetalhePage() {
           <p className="text-sm text-muted-foreground mt-0.5">Proposta #{proposal.id}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => invalidate()} title="Atualizar dados">
-            <RefreshCw className="h-4 w-4" /> Atualizar
-          </Button>
           {canManageContracts && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setTransferTo(proposal.vendorId ? String(proposal.vendorId) : ""); setShowTransfer(true); }} title="Transferir contrato">
               <User className="h-4 w-4" /> Transferir

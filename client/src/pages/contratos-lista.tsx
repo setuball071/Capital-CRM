@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
   Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
-  ListChecks, Hash, MessageSquare,
+  ListChecks, Hash, MessageSquare, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -804,6 +804,19 @@ export default function ContratosListaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            title="Atualizar lista"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/contracts/statuses"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
+            }}
+          >
+            <RefreshCw className="h-4 w-4" />Atualizar
+          </Button>
           {canManageContracts && (
             <div className="flex rounded-md border border-border overflow-hidden text-xs">
               <button
