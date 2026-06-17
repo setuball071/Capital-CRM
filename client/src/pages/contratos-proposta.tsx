@@ -955,6 +955,18 @@ export default function ContratosPropostaPage() {
         setSimPortFile(file);
         setSimPortData(sim);
 
+        // Bancos disponíveis nas tabelas de Portabilidade para este convênio
+        const conv = selectedConvenio?.id || "";
+        const availBanks = new Set<string>(
+          financeiroTabelas
+            .filter((t: any) => t.tipo === "Portabilidade" &&
+              (!t.convenio || t.convenio.toUpperCase() === conv.toUpperCase()))
+            .map((t: any) => t.banco as string)
+            .filter(Boolean)
+        );
+        const rawBd = sim.banco_destino || "";
+        const bdPort = availBanks.has(rawBd) ? rawBd : "";
+
         let novos: PortabilidadeContrato[] = [];
 
         if (sim.contratos && sim.contratos.length > 0) {
@@ -971,7 +983,7 @@ export default function ContratosPropostaPage() {
             fim:            "",
             taxa:           c.taxa_atual      ? String(c.taxa_atual)     : "",
             saldoDevedor:   c.saldo_devedor   ? String(c.saldo_devedor)  : "",
-            bancoDestino:   sim.banco_destino || "",
+            bancoDestino:   bdPort,
             novaParcela:    c.nova_parcela    ? String(c.nova_parcela)   : "",
             troco:          c.troco           ? String(c.troco)          : "0",
             novoPrazo:      c.prazo_novo      ? String(c.prazo_novo)     : "",
@@ -992,7 +1004,7 @@ export default function ContratosPropostaPage() {
               fim:            "",
               taxa:           c.taxa    ? String(c.taxa)    : "",
               saldoDevedor:   c.saldo   ? String(Math.round(c.saldo * 100) / 100) : "",
-              bancoDestino:   sim.banco_destino || "",
+              bancoDestino:   bdPort,
               novaParcela:    linha?.parcela ? String(Math.round(linha.parcela * 100) / 100) : "",
               troco:          linha?.troco   ? String(linha.troco) : "0",
               novoPrazo:      linha?.prazo   ? String(linha.prazo) : "",
@@ -3150,13 +3162,25 @@ export default function ContratosPropostaPage() {
                             placeholder="0" />
                         </td>
                         <td className="py-1.5 pr-2">
-                          <input className="w-24 border rounded px-1.5 py-0.5 text-xs bg-background"
+                          <select
+                            className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
                             value={c.bancoDestino}
                             onChange={(e) => {
                               updatePortContrato(c.uid, "bancoDestino", e.target.value);
                               updatePortContrato(c.uid, "tableId", "");
                             }}
-                            placeholder="Banco destino" />
+                          >
+                            <option value="">— banco —</option>
+                            {Array.from(new Set(
+                              financeiroTabelas
+                                .filter((t: any) => t.tipo === "Portabilidade" &&
+                                  (!t.convenio || t.convenio.toUpperCase() === (selectedConvenio?.id || "").toUpperCase()))
+                                .map((t: any) => t.banco as string)
+                                .filter(Boolean)
+                            )).map((banco) => (
+                              <option key={banco} value={banco}>{banco}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="py-1.5 pr-2">
                           <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background text-right"
@@ -3174,11 +3198,7 @@ export default function ContratosPropostaPage() {
                               .filter((t: any) => {
                                 if (t.tipo !== "Portabilidade") return false;
                                 if (t.convenio && t.convenio.toUpperCase() !== (selectedConvenio?.id || "").toUpperCase()) return false;
-                                if (c.bancoDestino && t.banco) {
-                                  const bd = c.bancoDestino.toLowerCase();
-                                  const tb = t.banco.toLowerCase();
-                                  if (!bd.includes(tb) && !tb.includes(bd)) return false;
-                                }
+                                if (c.bancoDestino && t.banco !== c.bancoDestino) return false;
                                 return true;
                               })
                               .map((t: any) => (
