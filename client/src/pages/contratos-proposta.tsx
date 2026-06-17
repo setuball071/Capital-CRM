@@ -785,7 +785,7 @@ export default function ContratosPropostaPage() {
             }
           : undefined;
 
-      const proposal: any = await apiRequest("POST", "/api/contracts/proposals", {
+      const _res = await apiRequest("POST", "/api/contracts/proposals", {
         ...data,
         clientConvenio: selectedConvenio?.id,
         contractValue: parseBrNumber(data.contractValue),
@@ -856,6 +856,7 @@ export default function ContratosPropostaPage() {
           })(),
         } || undefined,
       });
+      const proposal: any = await _res.json();
 
       // Upload dos anexos para a proposta criada
       if (attachments.length > 0 && proposal?.id) {
@@ -954,7 +955,8 @@ export default function ContratosPropostaPage() {
         };
       });
 
-      const created: any[] = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+      const _batchRes = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+      const created: any[] = await _batchRes.json();
 
       // Upload dos anexos para cada proposta criada
       if (attachments.length > 0 && created.length > 0) {
