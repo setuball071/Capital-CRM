@@ -852,6 +852,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="tb-preview">Informe o % da empresa para ver o flat calculado por grupo.</div>
       </div>
+      <div id="tab-historico" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:2px"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharModal('modal-tabela')">Cancelar</button>
@@ -1205,6 +1206,7 @@ function flatPct(c){
 function tagConvenio(v){const m={SIAPE:'tag-siape',INSS:'tag-inss',Militar:'tag-militar',Privado:'tag-privado'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao',Refinanciamento:'tag-refin','Compra de Dívida':'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function fmtCoef(v){return Number(v).toFixed(5).replace('.',',');}
+function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
 function badgesFlags(t){let h=t.srcc?`<span class="badge-srcc">SRCC</span>`:`<span class="badge-fora-srcc">Fora da SRCC</span>`;if(t.tipo==='Portabilidade'&&t.remuneraMenos12)h+=`<span class="badge-rem12">Rem. &lt;12</span>`;return h;}
 function pctCorretorGrupo(pctEmpresa,repasse){return(pctEmpresa*repasse)/100;}
 function chipSemana(d){if(!d)return'';const dt=new Date(d+'T12:00:00');const wk=getISOWeek(dt);return`<span class="semana-chip">S${wk}</span>`;}
@@ -2350,6 +2352,7 @@ function renderTabelas(){
       if(c==='coef')return t.coef;
       if(c==='empresa')return t.pctEmpresa;
       if(c==='flat')return pctCorretorGrupo(t.pctEmpresa,getMyRepasse(t.tipo));
+      if(c==='vigencia')return t.vigenciaInicio||t.criadoEm||'';
       return 0;
     });
   }
@@ -2365,6 +2368,7 @@ function renderTabelas(){
       ${sTh('% Empresa','empresa',sn,'toggleSortNorm','r')}
       <th>Flags</th>
       ${sTh('% Corretor','flat',sn,'toggleSortNorm')}
+      ${sTh('Vigência','vigencia',sn,'toggleSortNorm')}
       <th>Ações</th>
     </tr>`;
   } else {
@@ -2380,7 +2384,7 @@ function renderTabelas(){
     </tr>`;
   }
   if(!list.length){
-    const cols=isMaster?11:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
+    const cols=isMaster?12:8;tbody.innerHTML=`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela encontrada</td></tr>`;return;
   }
   tbody.innerHTML=list.map(t=>{
     const myRep=getMyRepasse(t.tipo);
@@ -2395,6 +2399,7 @@ function renderTabelas(){
       <td class="r"><span class="pct-empresa">${t.pctEmpresa}%</span></td>
       <td>${badgesFlags(t)}</td>
       <td><span class="pct-corretor">${Number(pctCorr).toFixed(2).replace('.',',')}%</span> <span style="font-size:11px;color:var(--muted)">(${myRep}% repasse)</span></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtData(t.vigenciaInicio||t.criadoEm)}${(t.historico&&t.historico.length)?` <span title="${t.historico.length} alteração(ões)" style="color:var(--accent);cursor:default">●</span>`:''}</td>
       <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button></td>
     </tr>`;}
     else{return`<tr>
@@ -2433,6 +2438,7 @@ function simularContrato(){
 function abrirModalTabela(id){
   _editTabelaId=id||null;
   document.getElementById('tab-modal-title').textContent=id?'Editar Tabela':'Nova Tabela';
+  const histSec=document.getElementById('tab-historico');
   if(id){
     const t=tabelaById(id);if(!t)return;
     document.getElementById('t-banco').value=t.banco;
@@ -2444,11 +2450,35 @@ function abrirModalTabela(id){
     document.getElementById('t-pct').value=t.pctEmpresa;
     document.getElementById('t-srcc').checked=t.srcc;
     document.getElementById('t-rem12').checked=t.remuneraMenos12;
+    const hist=t.historico||[];
+    if(histSec){
+      if(hist.length>0){
+        histSec.style.display='';
+        histSec.innerHTML=`<div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;font-weight:600">📋 Histórico de alterações (${hist.length})</div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead><tr style="color:var(--muted)">
+            <th style="text-align:left;padding:4px 6px">Período</th>
+            <th style="text-align:right;padding:4px 6px">Coef</th>
+            <th style="text-align:right;padding:4px 6px">% Emp</th>
+            <th style="text-align:left;padding:4px 6px">Banco / Nome</th>
+          </tr></thead>
+          <tbody>${[...hist].reverse().map(h=>`<tr style="border-top:1px solid var(--border)">
+            <td style="padding:5px 6px;color:var(--muted);white-space:nowrap">${fmtData(h.vigenciaInicio)} → ${fmtData(h.vigenciaFim)}</td>
+            <td style="padding:5px 6px;text-align:right;font-family:monospace">${fmtCoef(h.coef)}</td>
+            <td style="padding:5px 6px;text-align:right">${h.pctEmpresa}%</td>
+            <td style="padding:5px 6px;color:var(--muted)">${h.banco} — ${h.nome}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } else {
+        histSec.style.display='none';
+      }
+    }
   } else {
     ['t-banco','t-nome','t-prazo','t-coef','t-pct'].forEach(i=>document.getElementById(i).value='');
     document.getElementById('t-pct-preview').value='';
     document.getElementById('t-srcc').checked=false;
     document.getElementById('t-rem12').checked=false;
+    if(histSec)histSec.style.display='none';
   }
   atualizarPreviewTabela();
   abrirModal('modal-tabela');
@@ -2483,12 +2513,18 @@ function salvarTabela(){
   const srcc=document.getElementById('t-srcc').checked;
   const remuneraMenos12=document.getElementById('t-rem12').checked;
   if(!banco||!nome||!prazo||!coef){toast('Preencha banco, nome, prazo e coeficiente.',true);return;}
+  const agora=new Date().toISOString();
   if(_editTabelaId){
     const t=tabelaById(_editTabelaId);
-    if(t)Object.assign(t,{banco,nome,convenio,tipo,prazo,coef,pctEmpresa,srcc,remuneraMenos12});
+    if(t){
+      if(!t.historico)t.historico=[];
+      t.historico.push({vigenciaInicio:t.vigenciaInicio||t.criadoEm||agora,vigenciaFim:agora,banco:t.banco,nome:t.nome,convenio:t.convenio,tipo:t.tipo,prazo:t.prazo,coef:t.coef,pctEmpresa:t.pctEmpresa,srcc:t.srcc,remuneraMenos12:t.remuneraMenos12});
+      Object.assign(t,{banco,nome,convenio,tipo,prazo,coef,pctEmpresa,srcc,remuneraMenos12,vigenciaInicio:agora});
+    }
   } else {
-    TABELAS_REF.push({id:uid(),banco,nome,convenio,tipo,prazo,coef,pctEmpresa,srcc,remuneraMenos12});
+    TABELAS_REF.push({id:uid(),banco,nome,convenio,tipo,prazo,coef,pctEmpresa,srcc,remuneraMenos12,criadoEm:agora,vigenciaInicio:agora,historico:[]});
   }
+  salvarDados();
   fecharModal('modal-tabela');toast('Tabela salva!');renderTabelas();
 }
 function excluirTabela(id){
