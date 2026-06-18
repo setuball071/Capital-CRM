@@ -75,7 +75,6 @@ import FinanceiroComissoesPage from "@/pages/financeiro-comissoes";
 import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
-import ContratosClientePage from "@/pages/contratos-cliente";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
@@ -623,9 +622,6 @@ function Router() {
               </Route>
               <Route path="/contratos/fluxos">
                 {() => <ProtectedRoute component={ContratosFluxosPage} />}
-              </Route>
-              <Route path="/contratos/cliente/:cpf">
-                {() => <ProtectedRoute component={ContratosClientePage} />}
               </Route>
               <Route path="/contratos/:id">
                 {() => <ProtectedRoute component={ContratosDetalhePage} />}

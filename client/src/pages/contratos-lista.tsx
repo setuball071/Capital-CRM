@@ -812,32 +812,6 @@ export default function ContratosListaPage() {
   const showCorretorCol = viewMode === "operacional";
   const showSelectCol = isOperacional;
 
-  // ── Agrupamento: portabilidade com +1 parcela (mesmo CPF) vira um grupo ──────
-  type DisplayItem = { type: "single"; p: any } | { type: "group"; cpf: string; list: any[] };
-  const displayItems: DisplayItem[] = useMemo(() => {
-    const portByCpf = new Map<string, any[]>();
-    const rest: any[] = [];
-    for (const p of filtered) {
-      const cpf = (p.clientCpf || "").replace(/\D/g, "");
-      if (p.product === "PORTABILIDADE" && cpf) {
-        const arr = portByCpf.get(cpf) || [];
-        arr.push(p);
-        portByCpf.set(cpf, arr);
-      } else {
-        rest.push(p);
-      }
-    }
-    const items: DisplayItem[] = [];
-    for (const [cpf, list] of portByCpf) {
-      if (list.length >= 2) items.push({ type: "group", cpf, list });
-      else items.push({ type: "single", p: list[0] });
-    }
-    for (const p of rest) items.push({ type: "single", p });
-    // ordena pelo id mais recente de cada item (desc)
-    const itemMaxId = (it: DisplayItem) => it.type === "single" ? it.p.id : Math.max(...it.list.map((x) => x.id));
-    return items.sort((a, b) => itemMaxId(b) - itemMaxId(a));
-  }, [filtered]);
-
   // ── Seleção ─────────────────────────────────────────────────────────────────
 
   const filteredIds = filtered.map((p) => p.id);
@@ -1084,51 +1058,7 @@ export default function ContratosListaPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayItems.map((item) => {
-                // ── Linha de GRUPO (portabilidade multi-parcela do mesmo cliente) ──
-                if (item.type === "group") {
-                  const g = item.list;
-                  const first = g[0];
-                  const totalContrato = g.reduce((s, x) => s + (parseFloat(x.contractValue) || 0), 0);
-                  const totalParcela = g.reduce((s, x) => s + (parseFloat(x.installmentValue) || 0), 0);
-                  const bancos = Array.from(new Set(g.map((x) => x.bank).filter(Boolean)));
-                  const statusSet = Array.from(new Set(g.map((x) => x.status)));
-                  return (
-                    <TableRow
-                      key={`grp-${item.cpf}`}
-                      className="cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors font-medium"
-                      onClick={() => setLocation(`/contratos/cliente/${item.cpf}`)}
-                      data-testid={`row-group-${item.cpf}`}
-                    >
-                      {showSelectCol && <TableCell />}
-                      <TableCell><span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold h-6 min-w-6 px-1.5">{g.length}</span></TableCell>
-                      <TableCell className="text-sm">{first.clientConvenio || "—"}</TableCell>
-                      <TableCell className="text-sm font-mono text-xs">{formatCpfMask(first.clientCpf || "")}</TableCell>
-                      <TableCell className="text-sm">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">▶</span>
-                          <span className="font-medium">{first.clientName}</span>
-                          <span className="text-xs text-muted-foreground font-normal">· {g.length} parcelas</span>
-                        </span>
-                      </TableCell>
-                      {showCorretorCol && <TableCell className="text-sm text-muted-foreground font-normal">{first.vendorName || "—"}</TableCell>}
-                      <TableCell className="text-sm font-normal">Portabilidade</TableCell>
-                      <TableCell className="text-sm text-muted-foreground font-normal">{bancos.length === 1 ? bancos[0] : `${bancos.length} bancos`}</TableCell>
-                      <TableCell className="text-right text-sm font-normal">{formatMoney(totalParcela)}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">{formatMoney(totalContrato)}</TableCell>
-                      <TableCell className="text-sm">—</TableCell>
-                      <TableCell>
-                        {statusSet.length === 1
-                          ? <StatusBadge status={statusSet[0]} configMap={statusConfigMap} />
-                          : <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Vários</span>}
-                      </TableCell>
-                      {showSelectCol && <TableCell />}
-                    </TableRow>
-                  );
-                }
-
-                // ── Linha individual (comportamento de sempre) ──
-                const p = item.p;
+              {filtered.map((p) => {
                 const pStatusDef = statusList.find((s) => s.key === p.status);
                 const pIsFinal = pStatusDef?.isFinal || FINAL_FALLBACK.includes(p.status);
                 const cip = (p.product === "PORTABILIDADE" && !pIsFinal) ? cipInfo(p.clientMeta?.dataCip) : null;
