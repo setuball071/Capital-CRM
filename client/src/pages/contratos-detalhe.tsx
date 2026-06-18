@@ -241,7 +241,14 @@ export default function ContratosDetalhePage() {
     mutationFn: async () => {
       const t = financeiroTabelas.find((x: any) => String(x.id) === cloneTableId);
       const newMeta = { ...(proposal.clientMeta || {}) };
-      if (cloneTableId) { newMeta.tabelaFinanceiroId = cloneTableId; newMeta.tabelaNome = t?.nome || null; }
+      if (cloneTableId) {
+        newMeta.tabelaFinanceiroId = cloneTableId;
+        newMeta.tabelaNome = t?.nome || null;
+      } else {
+        // Trocou de banco sem escolher tabela → não carrega a tabela antiga (de outro banco)
+        delete newMeta.tabelaFinanceiroId;
+        delete newMeta.tabelaNome;
+      }
       const body = {
         clientName: proposal.clientName,
         clientCpf: proposal.clientCpf,
@@ -252,6 +259,7 @@ export default function ContratosDetalhePage() {
         contractValue: proposal.contractValue,
         installmentValue: proposal.installmentValue,
         term: proposal.term,
+        vendorId: proposal.vendorId,
         clientMeta: newMeta,
       };
       const res = await fetch("/api/contracts/proposals", {
@@ -336,6 +344,15 @@ export default function ContratosDetalhePage() {
   // CIP só acompanha enquanto a operação não foi finalizada
   const cip = (isPortabilidade && !isFinalStatus) ? cipInfo(m.dataCip) : null;
   const canSetCip = isOperacional && !isTerminal;
+
+  // Clonar: bancos cadastrados (do convênio) + permissão (consultor só clona as próprias)
+  const cloneBanks = Array.from(new Set(
+    financeiroTabelas
+      .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+      .map((t: any) => t.banco as string)
+      .filter(Boolean)
+  ));
+  const canClone = canManageContracts || (isVendedor && proposal.vendorId === user?.id);
 
   // permissões de edição de campos
   const canEditFields = !isTerminal && (isOperacional || (isVendedor && !!currentStatusDef?.allowsVendorEdit));
@@ -474,8 +491,8 @@ export default function ContratosDetalhePage() {
               <User className="h-4 w-4" /> Transferir
             </Button>
           )}
-          {canManageContracts && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(proposal.bank || ""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
+          {canClone && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
             </Button>
           )}
@@ -909,17 +926,27 @@ export default function ContratosDetalhePage() {
           <div className="space-y-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Banco</p>
-              <Input value={cloneBank} onChange={(e) => setCloneBank(e.target.value)} placeholder="Banco" />
+              <Select value={cloneBank} onValueChange={(v) => { setCloneBank(v); setCloneTableId(""); }}>
+                <SelectTrigger><SelectValue placeholder="Selecione o banco..." /></SelectTrigger>
+                <SelectContent>
+                  {cloneBanks.map((b) => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Tabela</p>
-              <Select value={cloneTableId} onValueChange={setCloneTableId}>
-                <SelectTrigger><SelectValue placeholder="Manter atual / selecionar..." /></SelectTrigger>
+              <Select value={cloneTableId} onValueChange={setCloneTableId} disabled={!cloneBank}>
+                <SelectTrigger><SelectValue placeholder={cloneBank ? "Selecione a tabela..." : "Selecione o banco primeiro"} /></SelectTrigger>
                 <SelectContent>
                   {financeiroTabelas
-                    .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+                    .filter((t: any) =>
+                      (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
+                      t.banco === cloneBank
+                    )
                     .map((t: any) => (
-                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.nome}{t.banco ? ` — ${t.banco}` : ""}</SelectItem>
+                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.nome}</SelectItem>
                     ))}
                 </SelectContent>
               </Select>
@@ -927,7 +954,7 @@ export default function ContratosDetalhePage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowClone(false)}>Cancelar</Button>
-            <Button disabled={cloneMutation.isPending} onClick={() => cloneMutation.mutate()}>
+            <Button disabled={!cloneBank || cloneMutation.isPending} onClick={() => cloneMutation.mutate()}>
               {cloneMutation.isPending ? "Clonando..." : "Clonar"}
             </Button>
           </DialogFooter>
