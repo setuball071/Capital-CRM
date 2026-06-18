@@ -523,49 +523,63 @@ export default function ContratosDetalhePage() {
         </div>
       </div>
 
-      {/* Aviso para o corretor — pendência (com ou sem edição) */}
-      {isVendedor && (() => {
+      {/* Pendência: banner de regularização (corretor, operacional e master) */}
+      {(() => {
         const isPendencia = !!currentStatusDef?.returnStatusKey;
         const canEdit = !!currentStatusDef?.allowsVendorEdit;
-        // Banner só aparece quando há pendência ou edição liberada
-        if (!isPendencia && !canEdit) {
+
+        // Status de pendência → banner com observação + botão "Pendência regularizada"
+        if (isPendencia) {
           return (
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <Lock className="h-4 w-4 shrink-0" />
-              <span>Proposta em conferência pelo operacional. Edição bloqueada.</span>
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                <span>
+                  {canEdit
+                    ? "Pendência aberta — ajuste os campos, escreva a observação e clique em \"Pendência regularizada\"."
+                    : "Pendência aberta — escreva a observação e clique em \"Pendência regularizada\" para devolver ao operacional."}
+                </span>
+              </div>
+              <Textarea
+                value={regularizeNote}
+                onChange={(e) => setRegularizeNote(e.target.value)}
+                placeholder="Observação (o que foi corrigido / informação para o operacional)..."
+                rows={2}
+                className="resize-none bg-background"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={!regularizeNote.trim() || regularizeMutation.isPending}
+                  onClick={() => regularizeMutation.mutate()}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
+                </Button>
+              </div>
             </div>
           );
         }
-        return (
-          <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-2">
-            <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
-              {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+
+        // Corretor em status comum: aviso de edição liberada/bloqueada
+        if (isVendedor) {
+          return (
+            <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
+              canEdit
+                ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}>
+              {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
               <span>
                 {canEdit
-                  ? "Edição liberada — ajuste os campos, escreva uma observação e clique em \"Pendência regularizada\"."
-                  : "Pendência aberta — escreva a observação e clique em \"Pendência regularizada\" para devolver ao operacional. (Edição dos campos bloqueada neste status.)"}
+                  ? "Edição liberada — você pode ajustar os campos da operação neste status."
+                  : "Proposta em conferência pelo operacional. Edição bloqueada."}
               </span>
             </div>
-            <Textarea
-              value={regularizeNote}
-              onChange={(e) => setRegularizeNote(e.target.value)}
-              placeholder="Observação para o operacional (o que foi corrigido / informação)..."
-              rows={2}
-              className="resize-none bg-background"
-            />
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={!regularizeNote.trim() || regularizeMutation.isPending}
-                onClick={() => regularizeMutation.mutate()}
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
-              </Button>
-            </div>
-          </div>
-        );
+          );
+        }
+        return null;
       })()}
 
       {/* Layout 2 colunas: ficha à esquerda · ações + histórico à direita */}
