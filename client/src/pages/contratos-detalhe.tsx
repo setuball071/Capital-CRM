@@ -373,6 +373,15 @@ export default function ContratosDetalhePage() {
   ));
   const canClone = canManageContracts || (isVendedor && proposal.vendorId === user?.id);
 
+  // Financeiro da operação: Valor Total = Saldo Devedor + Troco
+  const saldoDevedorNum = parseFloat(m.saldoDevedor) || 0;
+  const trocoNum = parseFloat(m.troco) || 0;
+  const valorTotalOperacao = saldoDevedorNum + trocoNum;
+
+  // Corretor pode anexar documentos quando a proposta é dele e está em pendência
+  const canCorretorAnexar = isVendedor && proposal.vendorId === user?.id &&
+    (!!currentStatusDef?.returnStatusKey || !!currentStatusDef?.allowsVendorEdit);
+
   // permissões de edição de campos
   const canEditFields = !isTerminal && (isOperacional || (isVendedor && !!currentStatusDef?.allowsVendorEdit));
   const canEditAde = !isTerminal && isOperacional;
@@ -415,6 +424,8 @@ export default function ContratosDetalhePage() {
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
+      case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
+      case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
       default: return;
     }
     editMutation.mutate(body);
@@ -705,8 +716,10 @@ export default function ContratosDetalhePage() {
           {isPortabilidade && renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
           {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
           {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
-          {m.saldoDevedor != null && renderField({ fieldKey: "saldoDev", label: "Saldo Devedor", value: m.saldoDevedor, money: true })}
-          {m.troco != null && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true })}
+          {/* Financeiro da operação (portabilidade) */}
+          {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor", value: m.saldoDevedor, money: true, editable: true })}
+          {isPortabilidade && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
+          {isPortabilidade && renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
           {/* Data CIP + contador de dias úteis (portabilidade) */}
           {isPortabilidade && (
             <div className="min-w-0">
@@ -763,8 +776,8 @@ export default function ContratosDetalhePage() {
             </div>
           )}
 
-          {/* Anexar documento (master / admin / operacional) */}
-          {canManageContracts && (
+          {/* Anexar documento (master/admin/operacional; e o corretor em pendência) */}
+          {(canManageContracts || canCorretorAnexar) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
               <Select value={docType} onValueChange={setDocType}>
                 <SelectTrigger className="w-52 h-8 text-xs"><SelectValue /></SelectTrigger>

@@ -115,6 +115,17 @@ export function AppSidebar() {
 
   const menuSections: MenuSection[] = [
     {
+      title: "Operacional",
+      icon: Wrench,
+      items: [
+        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
+        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
+        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
+        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
+      ],
+    },
+    {
       title: "Vendas",
       icon: Kanban,
       items: [
@@ -126,18 +137,6 @@ export function AppSidebar() {
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
         { title: "Minha Carteira", url: "/vendas/minha-carteira", icon: Upload, module: "modulo_alpha", subItem: "minha_carteira" },
-      ],
-    },
-    {
-      title: "Operacional",
-      icon: Wrench,
-      items: [
-        { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
-        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
-        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
-        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
-        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
       ],
     },
     {
