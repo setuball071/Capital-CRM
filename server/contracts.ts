@@ -1077,9 +1077,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     { key: "EM_ANDAMENTO",      label: "Em Andamento",   color: "orange", ordem: 3 },
     { key: "PENDENTE_CORRETOR", label: "Pend. Corretor", color: "red",    ordem: 4 },
     { key: "PENDENTE_BANCO",    label: "Pend. Banco",    color: "yellow", ordem: 5 },
-    { key: "PAGO",              label: "Pago",           color: "green",  ordem: 6 },
-    { key: "CANCELADA",         label: "Cancelada",      color: "red",    ordem: 7 },
-    { key: "PERDIDA",           label: "Perdida",        color: "rose",   ordem: 8 },
+    { key: "PAGO",              label: "Pago",           color: "green",  ordem: 6, isFinal: true },
+    { key: "CANCELADA",         label: "Cancelada",      color: "red",    ordem: 7, isFinal: true },
+    { key: "PERDIDA",           label: "Perdida",        color: "rose",   ordem: 8, isFinal: true },
   ];
 
   app.get("/api/contracts/statuses", requireAuth, async (req: any, res) => {
@@ -1109,11 +1109,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
-      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false } = req.body;
+      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false, isFinal = false } = req.body;
       if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
       const [row] = await db
         .insert(contractStatuses)
-        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit })
+        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit, isFinal })
         .returning();
       return res.status(201).json(row);
     } catch (e: any) {
@@ -1127,11 +1127,12 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
-      const { label, color, allowsVendorEdit } = req.body;
+      const { label, color, allowsVendorEdit, isFinal } = req.body;
       const updates: any = {};
       if (label !== undefined) updates.label = label;
       if (color !== undefined) updates.color = color;
       if (allowsVendorEdit !== undefined) updates.allowsVendorEdit = allowsVendorEdit;
+      if (isFinal !== undefined) updates.isFinal = isFinal;
       const [row] = await db
         .update(contractStatuses)
         .set(updates)

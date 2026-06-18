@@ -3587,6 +3587,7 @@ export const contractStatuses = pgTable("contract_statuses", {
   ordem: integer("ordem").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
   allowsVendorEdit: boolean("allows_vendor_edit").notNull().default(false),
+  isFinal: boolean("is_final").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -313,6 +313,9 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE contract_statuses ADD COLUMN IF NOT EXISTS allows_vendor_edit BOOLEAN NOT NULL DEFAULT false
           `);
+          await migDb.execute(migSql`
+            ALTER TABLE contract_statuses ADD COLUMN IF NOT EXISTS is_final BOOLEAN NOT NULL DEFAULT false
+          `);
 
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS contract_phases (

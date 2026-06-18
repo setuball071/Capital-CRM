@@ -32,13 +32,13 @@ import { cipInfo, type CipState } from "@/lib/cip";
 // Tag e cor de linha do contador CIP (portabilidade)
 const CIP_BADGE: Record<CipState, string> = {
   ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
-  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold",
 };
 const CIP_ROW: Record<CipState, string> = {
   ok:   "",
-  near: "bg-amber-50 dark:bg-amber-950/20 animate-pulse",
-  due:  "bg-amber-100 dark:bg-amber-900/30 animate-pulse",
+  near: "bg-amber-50 dark:bg-amber-950/20",
+  due:  "bg-amber-100 dark:bg-amber-900/30",
 };
 
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
@@ -118,6 +118,7 @@ interface StatusDef {
   ordem: number;
   isDefault: boolean;
   allowsVendorEdit: boolean;
+  isFinal: boolean;
 }
 
 interface Phase {
@@ -129,9 +130,12 @@ interface Phase {
 }
 
 type PhaseFormT = { name: string; color: string; statuses: string[] };
-type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean };
+type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean };
 const EMPTY_PHASE: PhaseFormT = { name: "", color: "blue", statuses: [] };
-const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false };
+const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false, isFinal: false };
+
+// Status que encerram a operação (fallback p/ padrões, além da flag isFinal)
+const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -427,7 +431,7 @@ function StatusesTab({
 
   function startEdit(s: StatusDef) {
     setEditingId(s.id);
-    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit });
+    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit, isFinal: s.isFinal });
   }
   function cancelEdit() { setEditingId(null); setForm(EMPTY_STATUS); }
 
@@ -447,6 +451,16 @@ function StatusesTab({
     </div>
   );
 
+  const FinalToggle = (
+    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">Finaliza a operação</p>
+        <p className="text-xs text-muted-foreground">Encerra o acompanhamento (ex.: contador CIP para de alertar).</p>
+      </div>
+      <Switch checked={form.isFinal} onCheckedChange={(v) => setForm((f) => ({ ...f, isFinal: v }))} />
+    </div>
+  );
+
   return (
     <div className="space-y-2">
       {statusList.map((s) => {
@@ -462,6 +476,7 @@ function StatusesTab({
                   <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
                 </div>
                 {VendorEditToggle}
+                {FinalToggle}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" type="button" onClick={cancelEdit}>Cancelar</Button>
                   <Button size="sm" type="button" disabled={!form.label.trim()} onClick={handleSubmit}>Salvar</Button>
@@ -474,6 +489,11 @@ function StatusesTab({
                 {s.allowsVendorEdit && (
                   <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400" title="Corretor pode editar neste status">
                     <Pencil className="h-3 w-3" /> corretor
+                  </span>
+                )}
+                {(s.isFinal || FINAL_FALLBACK.includes(s.key)) && (
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400" title="Finaliza a operação — para o acompanhamento">
+                    <Check className="h-3 w-3" /> final
                   </span>
                 )}
                 {s.isDefault && (
@@ -1018,7 +1038,9 @@ export default function ContratosListaPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((p) => {
-                const cip = p.product === "PORTABILIDADE" ? cipInfo(p.clientMeta?.dataCip) : null;
+                const pStatusDef = statusList.find((s) => s.key === p.status);
+                const pIsFinal = pStatusDef?.isFinal || FINAL_FALLBACK.includes(p.status);
+                const cip = (p.product === "PORTABILIDADE" && !pIsFinal) ? cipInfo(p.clientMeta?.dataCip) : null;
                 const cipActive = cip && cip.state !== "ok";
                 return (
                 <TableRow

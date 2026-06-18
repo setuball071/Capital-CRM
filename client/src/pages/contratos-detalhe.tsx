@@ -24,8 +24,8 @@ import { ptBR } from "date-fns/locale";
 // Classes da tag de contagem de dias CIP por estado
 const CIP_BADGE: Record<CipState, string> = {
   ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
-  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold",
 };
 
 // Paleta dos badges de status (mesma da listagem)
@@ -61,7 +61,8 @@ const ACTION_ICONS: Record<string, any> = {
 
 const TERMINAL = ["PAGO", "CANCELADA", "PERDIDA"];
 
-interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; }
+interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; }
+const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
 
 function formatMoney(v: string | number | null | undefined) {
   if (v === null || v === undefined || v === "") return "—";
@@ -318,7 +319,9 @@ export default function ContratosDetalhePage() {
   const currentStatusDef = statusList.find((s) => s.key === proposal.status);
   const isTerminal = TERMINAL.includes(proposal.status);
   const isPortabilidade = proposal.product === "PORTABILIDADE";
-  const cip = isPortabilidade ? cipInfo(m.dataCip) : null;
+  const isFinalStatus = !!currentStatusDef?.isFinal || FINAL_FALLBACK.includes(proposal.status);
+  // CIP só acompanha enquanto a operação não foi finalizada
+  const cip = (isPortabilidade && !isFinalStatus) ? cipInfo(m.dataCip) : null;
   const canSetCip = isOperacional && !isTerminal;
 
   // permissões de edição de campos
