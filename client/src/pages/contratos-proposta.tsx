@@ -9,7 +9,7 @@ import {
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
   Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
-  Trash2, Plus,
+  Trash2, Plus, Pencil, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -440,6 +440,9 @@ export default function ContratosPropostaPage() {
   const [docPhotoData,  setDocPhotoData]  = useState<DocPhotoData | null>(null);
   /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior */
   const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | null>(null);
+  // Edição inline dos campos do documento de identidade
+  const [docEditField, setDocEditField] = useState<string | null>(null);
+  const [docEditVal,   setDocEditVal]   = useState("");
   const [nameAlert,     setNameAlert]     = useState<string | null>(null);
 
   // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
@@ -536,6 +539,51 @@ export default function ContratosPropostaPage() {
     if (shared / Math.max(w1.size, w2.size) >= 0.65) return null;
     return `⚠️ Nome divergente: contracheque "${siapeName}" × documento "${docName}". Verifique antes de continuar (pode ser casamento, emancipação ou erro de cadastro).`;
   }
+
+  // Salva edição manual de um campo do documento de identidade
+  function saveDocField(key: string) {
+    const v = docEditVal.trim();
+    setDocPhotoData((prev) => {
+      if (!prev) return prev;
+      if (key === "filiacaoPai") return { ...prev, filiacao: [v || null, prev.filiacao?.[1] ?? null] };
+      if (key === "filiacaoMae") return { ...prev, filiacao: [prev.filiacao?.[0] ?? null, v || null] };
+      return { ...prev, [key]: v || null } as DocPhotoData;
+    });
+    setDocEditField(null);
+    setDocEditVal("");
+  }
+
+  // Campo do documento de identidade com edição inline (lápis). Função (não componente)
+  // para o input não perder o foco a cada tecla.
+  const renderDocField = (key: string, label: string, value: any, wide = false) => {
+    const isEditing = docEditField === key;
+    return (
+      <div className={`group ${wide ? "col-span-2" : ""}`}>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {isEditing ? (
+          <div className="flex items-center gap-1 mt-0.5">
+            <input
+              className="flex-1 border rounded px-1.5 py-0.5 text-sm bg-background"
+              value={docEditVal}
+              onChange={(e) => setDocEditVal(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") saveDocField(key); if (e.key === "Escape") { setDocEditField(null); setDocEditVal(""); } }}
+            />
+            <button type="button" className="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => saveDocField(key)}><Check className="h-3.5 w-3.5" /></button>
+            <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => { setDocEditField(null); setDocEditVal(""); }}><X className="h-3.5 w-3.5" /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`font-medium ${value ? "" : "text-muted-foreground italic"}`}>{value || "—"}</span>
+            <Pencil
+              className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-primary shrink-0"
+              onClick={() => { setDocEditField(key); setDocEditVal(value || ""); }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
@@ -1795,39 +1843,25 @@ export default function ContratosPropostaPage() {
             </CardContent>
           </Card>
 
-          {/* ── Dados do Documento com Foto (somente leitura) ── */}
+          {/* ── Dados do Documento com Foto (editáveis — lápis em cada campo) ── */}
           {docPhotoData && (
             <Card className="border-purple-200 dark:border-purple-900">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
                   <CreditCard className="h-4 w-4" />
                   {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
-                  <span className="text-xs font-normal text-muted-foreground">(apenas informação)</span>
+                  <span className="text-xs font-normal text-muted-foreground">(corrija se necessário)</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-                  {docPhotoData.numeroRegistro && (
-                    <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />
-                  )}
-                  {docPhotoData.dataNascimento && (
-                    <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />
-                  )}
-                  {docPhotoData.dataExpedicao && (
-                    <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />
-                  )}
-                  {docPhotoData.orgaoEmissor && (
-                    <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
-                  )}
-                  {docPhotoData.naturalidade && (
-                    <InfoField label="Naturalidade" value={docPhotoData.naturalidade} />
-                  )}
-                  {docPhotoData.filiacao?.[0] && (
-                    <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />
-                  )}
-                  {docPhotoData.filiacao?.[1] && (
-                    <InfoField label="Filiação — Mãe" value={docPhotoData.filiacao[1]} wide />
-                  )}
+                  {renderDocField("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
+                  {renderDocField("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
+                  {renderDocField("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
+                  {renderDocField("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
+                  {renderDocField("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
+                  {renderDocField("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
+                  {renderDocField("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
                 </div>
               </CardContent>
             </Card>
