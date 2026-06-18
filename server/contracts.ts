@@ -738,6 +738,32 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // Excluir proposta — SOMENTE master (super-admin)
+  app.delete("/api/contracts/proposals/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Apenas o master pode excluir propostas" });
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+
+      const [current] = await db
+        .select({ id: proposals.id })
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Remove débitos financeiros vinculados (sem cascade) para não travar a exclusão
+      await db.delete(financialDebits).where(eq(financialDebits.proposalId, id));
+      // Histórico, mensagens e documentos saem por ON DELETE CASCADE
+      await db.delete(proposals).where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)));
+
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/proposals/:id error:", e);
+      return res.status(500).json({ message: `Erro ao excluir proposta: ${String(e?.message || e)}` });
+    }
+  });
+
   // Alteração de status em lote
   app.post("/api/contracts/proposals/bulk-status", requireAuth, async (req: any, res) => {
     try {

@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, Clock, SkipForward,
   FileText, AlertCircle, ExternalLink, Download, Paperclip,
   Copy, Check, Pencil, X, User, Landmark, CreditCard, Lock,
-  Upload, Contact,
+  Upload, Contact, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -316,6 +316,24 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao regularizar", description: e.message, variant: "destructive" }),
   });
 
+  // Excluir proposta — somente master (super-admin)
+  const isSuperMaster = !!user?.isMaster;
+  const [showDelete, setShowDelete] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      toast({ title: "Proposta excluída" });
+      setLocation("/contratos");
+    },
+    onError: (e: any) => toast({ title: "Falha ao excluir", description: e.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex-1 p-6 space-y-4">
@@ -494,6 +512,11 @@ export default function ContratosDetalhePage() {
           {canClone && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
+            </Button>
+          )}
+          {isSuperMaster && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10" onClick={() => setShowDelete(true)} title="Excluir proposta">
+              <Trash2 className="h-4 w-4" /> Excluir
             </Button>
           )}
         </div>
@@ -909,6 +932,30 @@ export default function ContratosDetalhePage() {
               onClick={() => transferMutation.mutate()}
             >
               {transferMutation.isPending ? "Transferindo..." : "Transferir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Excluir proposta (somente master) */}
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir proposta</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir a proposta <span className="font-medium">#{proposal.id}</span> de{" "}
+            <span className="font-medium">{proposal.clientName}</span>? Esta ação é permanente e remove também o histórico e os documentos anexados.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowDelete(false)}>Cancelar</Button>
+            <Button
+              className="bg-destructive hover:bg-destructive/90 text-white gap-1.5"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir definitivamente"}
             </Button>
           </DialogFooter>
         </DialogContent>
