@@ -169,6 +169,18 @@ export default function ContratosDetalhePage() {
   });
   const financeiroTabelas: any[] = financeiroConfig?.dados?.tabelas ?? [];
 
+  // Parceiros (uso interno) — só carrega para quem pode gerenciar contratos
+  const { data: partnersList = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/partners"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/partners", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: canManageContracts,
+  });
+
   const statusConfigMap: Record<string, { label: string; className: string }> = {};
   statusList.forEach((s) => { statusConfigMap[s.key] = { label: s.label, className: BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc }; });
 
@@ -217,18 +229,21 @@ export default function ContratosDetalhePage() {
   const docInputRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState("OUTRO");
   const uploadDocMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("documentType", docType);
-      const res = await fetch(`/api/contracts/proposals/${proposalId}/documents`, {
-        method: "POST", body: fd, credentials: "include",
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    mutationFn: async (files: File[]) => {
+      const results = await Promise.allSettled(files.map((file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("documentType", docType);
+        return fetch(`/api/contracts/proposals/${proposalId}/documents`, { method: "POST", body: fd, credentials: "include" })
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); });
+      }));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { total: files.length, failed };
     },
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals", proposalId, "messages"] });
-      toast({ title: "Documento anexado" });
+      if (r.failed > 0) toast({ title: `${r.total - r.failed} anexado(s), ${r.failed} falharam`, variant: "destructive" });
+      else toast({ title: r.total > 1 ? `${r.total} documentos anexados` : "Documento anexado" });
     },
     onError: (e: any) => toast({ title: "Falha ao anexar", description: e.message, variant: "destructive" }),
   });
@@ -670,6 +685,28 @@ export default function ContratosDetalhePage() {
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product, copyable: false })}
           {renderField({ fieldKey: "bank", label: "Banco", value: proposal.bank, editable: true })}
+          {/* Parceiro (interno — só operacional/master; corretor não vê) */}
+          {canManageContracts && (
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Parceiro <span className="text-[10px]">(interno)</span></p>
+              <div className="mt-0.5">
+                <Select
+                  value={proposal.parceiroId ? String(proposal.parceiroId) : "none"}
+                  onValueChange={(v) => editMutation.mutate({ parceiroId: v === "none" ? null : v })}
+                >
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— nenhum —</SelectItem>
+                    {partnersList
+                      .filter((p: any) => p.isActive || String(p.id) === String(proposal.parceiroId))
+                      .map((p: any) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           {/* Tabela — edição via select */}
           <div className="group min-w-0">
             <p className="text-xs text-muted-foreground">Tabela</p>
@@ -790,16 +827,17 @@ export default function ContratosDetalhePage() {
               <input
                 ref={docInputRef}
                 type="file"
+                multiple
                 className="hidden"
                 accept="image/*,.pdf"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadDocMutation.mutate(f);
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  if (files.length) uploadDocMutation.mutate(files);
                   if (docInputRef.current) docInputRef.current.value = "";
                 }}
               />
               <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadDocMutation.isPending} onClick={() => docInputRef.current?.click()}>
-                <Upload className="h-4 w-4" /> {uploadDocMutation.isPending ? "Enviando..." : "Anexar documento"}
+                <Upload className="h-4 w-4" /> {uploadDocMutation.isPending ? "Enviando..." : "Anexar documento(s)"}
               </Button>
             </div>
           )}

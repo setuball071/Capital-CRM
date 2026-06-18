@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
   Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
-  ListChecks, Hash, MessageSquare, RefreshCw,
+  ListChecks, Hash, MessageSquare, RefreshCw, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -611,6 +611,13 @@ export default function ContratosListaPage() {
   const [bulkNotes, setBulkNotes] = useState("");
   const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status"; status?: string } | null>(null);
   const [quickValue, setQuickValue] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  function copyText(key: string, text: string) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1200);
+  }
 
   const isMaster = !!(user?.isMaster || user?.role === "master");
   // Operacional e Administrador (role master) têm a MESMA visão/gestão do master em contratos
@@ -1081,8 +1088,26 @@ export default function ContratosListaPage() {
                   )}
                   <TableCell className="text-xs text-muted-foreground font-mono">{p.id}</TableCell>
                   <TableCell className="text-sm">{p.clientConvenio || "—"}</TableCell>
-                  <TableCell className="text-sm font-mono text-xs">{formatCpfMask(p.clientCpf || "")}</TableCell>
-                  <TableCell className="text-sm font-medium">{p.clientName}</TableCell>
+                  <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
+                    <span className="group inline-flex items-center gap-1">
+                      {formatCpfMask(p.clientCpf || "")}
+                      {p.clientCpf && (
+                        <button title="Copiar CPF" onClick={() => copyText(`cpf-${p.id}`, (p.clientCpf || "").replace(/\D/g, ""))} className="text-muted-foreground hover:text-primary">
+                          {copiedKey === `cpf-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                    <span className="group inline-flex items-center gap-1">
+                      {p.clientName}
+                      {p.clientName && (
+                        <button title="Copiar nome" onClick={() => copyText(`nome-${p.id}`, p.clientName)} className="text-muted-foreground hover:text-primary">
+                          {copiedKey === `nome-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      )}
+                    </span>
+                  </TableCell>
                   {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
