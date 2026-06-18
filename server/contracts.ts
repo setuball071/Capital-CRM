@@ -673,6 +673,71 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // Pendência regularizada — volta a proposta para o status anterior à pendência (corretor ou operacional)
+  app.post("/api/contracts/proposals/:id/regularize", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+
+      const [current] = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Permissão: operacional/master, OU o corretor dono enquanto o status permitir edição
+      const isOper = user.isMaster || ["operacional", "coordenacao", "master"].includes(user.role || "");
+      let allowed = isOper;
+      if (!allowed && user.role === "vendedor" && current.vendorId === user.id) {
+        const [st] = await db
+          .select()
+          .from(contractStatuses)
+          .where(and(eq(contractStatuses.tenantId, tenantId), eq(contractStatuses.key, current.status)))
+          .limit(1);
+        allowed = !!st?.allowsVendorEdit;
+      }
+      if (!allowed) return res.status(403).json({ message: "Sem permissão para regularizar a pendência" });
+
+      // Descobre o status anterior à pendência: última transição que ENTROU no status atual
+      const hist = await db
+        .select()
+        .from(proposalHistory)
+        .where(eq(proposalHistory.proposalId, id))
+        .orderBy(desc(proposalHistory.createdAt));
+      let target: string | null = null;
+      for (const h of hist) {
+        if (h.toStatus === current.status && h.fromStatus && h.fromStatus !== current.status) {
+          target = h.fromStatus;
+          break;
+        }
+      }
+      if (!target) target = req.body?.fallbackStatus || null;
+      if (!target) return res.status(400).json({ message: "Não foi possível identificar a fase de retorno" });
+
+      const [updated] = await db
+        .update(proposals)
+        .set({ status: target, updatedAt: new Date() })
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .returning();
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        fromStatus: current.status,
+        toStatus: target,
+        action: "RESOLUCAO",
+        notes: req.body?.notes || "Pendência regularizada",
+        performedBy: user.id,
+      });
+
+      return res.json(updated);
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/regularize error:", e);
+      return res.status(500).json({ message: "Erro ao regularizar pendência" });
+    }
+  });
+
   // Alteração de status em lote
   app.post("/api/contracts/proposals/bulk-status", requireAuth, async (req: any, res) => {
     try {

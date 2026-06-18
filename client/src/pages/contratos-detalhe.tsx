@@ -295,6 +295,19 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao transferir", description: e.message, variant: "destructive" }),
   });
 
+  // Pendência regularizada — devolve a proposta ao operacional (status anterior à pendência)
+  const regularizeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/regularize`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => { invalidate(); toast({ title: "Pendência regularizada — proposta devolvida ao operacional" }); },
+    onError: (e: any) => toast({ title: "Falha ao regularizar", description: e.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex-1 p-6 space-y-4">
@@ -477,9 +490,22 @@ export default function ContratosDetalhePage() {
             : "border-border bg-muted/40 text-muted-foreground"
         }`}>
           {currentStatusDef?.allowsVendorEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
-          {currentStatusDef?.allowsVendorEdit
-            ? "Edição liberada — você pode ajustar os campos da operação enquanto a proposta estiver neste status."
-            : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
+          <span className="flex-1">
+            {currentStatusDef?.allowsVendorEdit
+              ? "Edição liberada — ajuste os campos e clique em \"Pendência regularizada\" para devolver ao operacional."
+              : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
+          </span>
+          {currentStatusDef?.allowsVendorEdit && (
+            <Button
+              size="sm"
+              className="gap-1.5 shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={regularizeMutation.isPending}
+              onClick={() => regularizeMutation.mutate()}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
+            </Button>
+          )}
         </div>
       )}
 
