@@ -316,6 +316,9 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE contract_statuses ADD COLUMN IF NOT EXISTS is_final BOOLEAN NOT NULL DEFAULT false
           `);
+          await migDb.execute(migSql`
+            ALTER TABLE contract_statuses ADD COLUMN IF NOT EXISTS return_status_key VARCHAR(100)
+          `);
 
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS contract_phases (

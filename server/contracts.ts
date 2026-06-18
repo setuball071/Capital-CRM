@@ -687,30 +687,35 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .limit(1);
       if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
 
-      // Permissão: operacional/master, OU o corretor dono enquanto o status permitir edição
+      // Definição do status atual (regra de retorno configurada)
+      const [st] = await db
+        .select()
+        .from(contractStatuses)
+        .where(and(eq(contractStatuses.tenantId, tenantId), eq(contractStatuses.key, current.status)))
+        .limit(1);
+
+      // Permissão: operacional/master, OU o corretor dono quando o status é uma pendência
+      // (tem returnStatusKey definido) ou permite edição.
       const isOper = user.isMaster || ["operacional", "coordenacao", "master"].includes(user.role || "");
       let allowed = isOper;
       if (!allowed && user.role === "vendedor" && current.vendorId === user.id) {
-        const [st] = await db
-          .select()
-          .from(contractStatuses)
-          .where(and(eq(contractStatuses.tenantId, tenantId), eq(contractStatuses.key, current.status)))
-          .limit(1);
-        allowed = !!st?.allowsVendorEdit;
+        allowed = !!st?.returnStatusKey || !!st?.allowsVendorEdit;
       }
       if (!allowed) return res.status(403).json({ message: "Sem permissão para regularizar a pendência" });
 
-      // Descobre o status anterior à pendência: última transição que ENTROU no status atual
-      const hist = await db
-        .select()
-        .from(proposalHistory)
-        .where(eq(proposalHistory.proposalId, id))
-        .orderBy(desc(proposalHistory.createdAt));
-      let target: string | null = null;
-      for (const h of hist) {
-        if (h.toStatus === current.status && h.fromStatus && h.fromStatus !== current.status) {
-          target = h.fromStatus;
-          break;
+      // Status de retorno: o configurado no status atual; senão o anterior à pendência (histórico)
+      let target: string | null = st?.returnStatusKey || null;
+      if (!target) {
+        const hist = await db
+          .select()
+          .from(proposalHistory)
+          .where(eq(proposalHistory.proposalId, id))
+          .orderBy(desc(proposalHistory.createdAt));
+        for (const h of hist) {
+          if (h.toStatus === current.status && h.fromStatus && h.fromStatus !== current.status) {
+            target = h.fromStatus;
+            break;
+          }
         }
       }
       if (!target) target = req.body?.fallbackStatus || null;
@@ -1200,11 +1205,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
-      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false, isFinal = false } = req.body;
+      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false, isFinal = false, returnStatusKey = null } = req.body;
       if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
       const [row] = await db
         .insert(contractStatuses)
-        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit, isFinal })
+        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit, isFinal, returnStatusKey: returnStatusKey || null })
         .returning();
       return res.status(201).json(row);
     } catch (e: any) {
@@ -1218,12 +1223,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
-      const { label, color, allowsVendorEdit, isFinal } = req.body;
+      const { label, color, allowsVendorEdit, isFinal, returnStatusKey } = req.body;
       const updates: any = {};
       if (label !== undefined) updates.label = label;
       if (color !== undefined) updates.color = color;
       if (allowsVendorEdit !== undefined) updates.allowsVendorEdit = allowsVendorEdit;
       if (isFinal !== undefined) updates.isFinal = isFinal;
+      if (returnStatusKey !== undefined) updates.returnStatusKey = returnStatusKey || null;
       const [row] = await db
         .update(contractStatuses)
         .set(updates)

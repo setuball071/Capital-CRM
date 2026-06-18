@@ -3588,6 +3588,9 @@ export const contractStatuses = pgTable("contract_statuses", {
   isDefault: boolean("is_default").notNull().default(false),
   allowsVendorEdit: boolean("allows_vendor_edit").notNull().default(false),
   isFinal: boolean("is_final").notNull().default(false),
+  // Se definido, este status é uma "pendência do corretor": ele vê o botão
+  // "Pendência regularizada" e, ao clicar, a proposta vai para este status.
+  returnStatusKey: varchar("return_status_key", { length: 100 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

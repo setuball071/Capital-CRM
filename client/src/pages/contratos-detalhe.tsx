@@ -61,7 +61,7 @@ const ACTION_ICONS: Record<string, any> = {
 
 const TERMINAL = ["PAGO", "CANCELADA", "PERDIDA"];
 
-interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; }
+interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; returnStatusKey: string | null; }
 const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
 
 function formatMoney(v: string | number | null | undefined) {
@@ -303,16 +303,17 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao transferir", description: e.message, variant: "destructive" }),
   });
 
-  // Pendência regularizada — devolve a proposta ao operacional (status anterior à pendência)
+  // Pendência regularizada — devolve a proposta ao operacional (status configurado no retorno)
+  const [regularizeNote, setRegularizeNote] = useState("");
   const regularizeMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/contracts/proposals/${proposalId}/regularize`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ notes: regularizeNote.trim() || "Pendência regularizada" }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
     },
-    onSuccess: () => { invalidate(); toast({ title: "Pendência regularizada — proposta devolvida ao operacional" }); },
+    onSuccess: () => { invalidate(); setRegularizeNote(""); toast({ title: "Pendência regularizada — proposta devolvida ao operacional" }); },
     onError: (e: any) => toast({ title: "Falha ao regularizar", description: e.message, variant: "destructive" }),
   });
 
@@ -522,32 +523,50 @@ export default function ContratosDetalhePage() {
         </div>
       </div>
 
-      {/* Aviso de edição liberada para corretor */}
-      {isVendedor && (
-        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
-          currentStatusDef?.allowsVendorEdit
-            ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
-            : "border-border bg-muted/40 text-muted-foreground"
-        }`}>
-          {currentStatusDef?.allowsVendorEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
-          <span className="flex-1">
-            {currentStatusDef?.allowsVendorEdit
-              ? "Edição liberada — ajuste os campos e clique em \"Pendência regularizada\" para devolver ao operacional."
-              : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
-          </span>
-          {currentStatusDef?.allowsVendorEdit && (
-            <Button
-              size="sm"
-              className="gap-1.5 shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={regularizeMutation.isPending}
-              onClick={() => regularizeMutation.mutate()}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
-            </Button>
-          )}
-        </div>
-      )}
+      {/* Aviso para o corretor — pendência (com ou sem edição) */}
+      {isVendedor && (() => {
+        const isPendencia = !!currentStatusDef?.returnStatusKey;
+        const canEdit = !!currentStatusDef?.allowsVendorEdit;
+        // Banner só aparece quando há pendência ou edição liberada
+        if (!isPendencia && !canEdit) {
+          return (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <Lock className="h-4 w-4 shrink-0" />
+              <span>Proposta em conferência pelo operacional. Edição bloqueada.</span>
+            </div>
+          );
+        }
+        return (
+          <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+              {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+              <span>
+                {canEdit
+                  ? "Edição liberada — ajuste os campos, escreva uma observação e clique em \"Pendência regularizada\"."
+                  : "Pendência aberta — escreva a observação e clique em \"Pendência regularizada\" para devolver ao operacional. (Edição dos campos bloqueada neste status.)"}
+              </span>
+            </div>
+            <Textarea
+              value={regularizeNote}
+              onChange={(e) => setRegularizeNote(e.target.value)}
+              placeholder="Observação para o operacional (o que foi corrigido / informação)..."
+              rows={2}
+              className="resize-none bg-background"
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={!regularizeNote.trim() || regularizeMutation.isPending}
+                onClick={() => regularizeMutation.mutate()}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Layout 2 colunas: ficha à esquerda · ações + histórico à direita */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">

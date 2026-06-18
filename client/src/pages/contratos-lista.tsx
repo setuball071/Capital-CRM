@@ -119,6 +119,7 @@ interface StatusDef {
   isDefault: boolean;
   allowsVendorEdit: boolean;
   isFinal: boolean;
+  returnStatusKey: string | null;
 }
 
 interface Phase {
@@ -130,9 +131,9 @@ interface Phase {
 }
 
 type PhaseFormT = { name: string; color: string; statuses: string[] };
-type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean };
+type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; returnStatusKey: string };
 const EMPTY_PHASE: PhaseFormT = { name: "", color: "blue", statuses: [] };
-const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false, isFinal: false };
+const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false, isFinal: false, returnStatusKey: "" };
 
 // Status que encerram a operação (fallback p/ padrões, além da flag isFinal)
 const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
@@ -431,7 +432,7 @@ function StatusesTab({
 
   function startEdit(s: StatusDef) {
     setEditingId(s.id);
-    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit, isFinal: s.isFinal });
+    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit, isFinal: s.isFinal, returnStatusKey: s.returnStatusKey || "" });
   }
   function cancelEdit() { setEditingId(null); setForm(EMPTY_STATUS); }
 
@@ -461,6 +462,25 @@ function StatusesTab({
     </div>
   );
 
+  const ReturnSelect = (
+    <div className="rounded-md border border-border px-3 py-2">
+      <p className="text-sm font-medium">Pendência do corretor — ao regularizar, mover para</p>
+      <p className="text-xs text-muted-foreground mb-2">
+        Defina para tornar este status uma pendência: o corretor verá o botão "Pendência regularizada" e, ao clicar, a proposta vai para o status escolhido.
+      </p>
+      <select
+        className="w-full border rounded px-2 py-1 text-sm bg-background"
+        value={form.returnStatusKey}
+        onChange={(e) => setForm((f) => ({ ...f, returnStatusKey: e.target.value }))}
+      >
+        <option value="">— não é pendência do corretor —</option>
+        {statusList.map((s) => (
+          <option key={s.key} value={s.key}>{s.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <div className="space-y-2">
       {statusList.map((s) => {
@@ -477,6 +497,7 @@ function StatusesTab({
                 </div>
                 {VendorEditToggle}
                 {FinalToggle}
+                {ReturnSelect}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" type="button" onClick={cancelEdit}>Cancelar</Button>
                   <Button size="sm" type="button" disabled={!form.label.trim()} onClick={handleSubmit}>Salvar</Button>
