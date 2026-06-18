@@ -27,7 +27,8 @@ export async function renderPdfFirstPageToBlob(file: File, maxPx = 1600): Promis
   // Fundo branco (PDFs podem ter transparência)
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport } as any).promise;
+  // pdfjs v5: o parâmetro principal é `canvas` (canvasContext virou legado)
+  await page.render({ canvas, viewport } as any).promise;
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Falha ao renderizar PDF"))),
