@@ -13,12 +13,13 @@ export function isPdf(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
-export async function renderPdfFirstPageToBlob(file: File, maxPx = 1600): Promise<Blob> {
+export async function renderPdfFirstPageToBlob(file: File, maxPx = 2048): Promise<Blob> {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const page = await pdf.getPage(1);
   const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(2, maxPx / Math.max(base.width, base.height)) || 1;
+  // Renderiza grande o suficiente para o OCR ler textos pequenos (ex.: filiação na CNH-e)
+  const scale = Math.min(4, maxPx / Math.max(base.width, base.height)) || 1;
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);

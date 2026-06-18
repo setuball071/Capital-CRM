@@ -85,10 +85,11 @@ export function registerOcrRoutes(app: Express, requireAuth: Function) {
           });
         }
 
-        const systemPrompt = `Você é um especialista em leitura de documentos de identidade brasileiros.
+        const systemPrompt = `Você é um especialista em leitura de documentos de identidade brasileiros (RG, CNH e CNH-e digital).
 Analise as imagens fornecidas (frente e, se disponível, verso do documento) e extraia os dados.
 Seja preciso: transcreva exatamente o que está escrito, sem corrigir ou inferir.
-Para campos não legíveis ou ausentes, use null.`;
+ATENÇÃO à FILIAÇÃO (nomes do PAI e da MÃE): costuma aparecer em letras menores, em uma seção "FILIAÇÃO" — examine com cuidado e extraia os dois nomes quando existirem. Em CNH-e o documento pode estar embutido como imagem na página; leia mesmo assim.
+Para campos realmente não legíveis ou ausentes, use null.`;
 
         const userPrompt = `Extraia os dados deste documento de identidade brasileiro e retorne SOMENTE um JSON válido, sem markdown, sem explicações.
 
