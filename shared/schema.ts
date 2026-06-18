@@ -3540,6 +3540,7 @@ export const proposalDocuments = pgTable("proposal_documents", {
   documentType: varchar("document_type", { length: 50 }).notNull(),
   fileUrl: text("file_url").notNull(),
   fileName: varchar("file_name", { length: 255 }).notNull(),
+  storageKey: text("storage_key"), // chave no Replit Object Storage (null = legado em disco)
   uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
   messageId: integer("message_id").references(() => proposalMessages.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),

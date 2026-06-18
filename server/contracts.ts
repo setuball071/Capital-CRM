@@ -18,11 +18,35 @@ import { addToPortfolio } from "./portfolio";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import { Client as ObjectStorageClient } from "@replit/object-storage";
 
 const uploadDocMemory = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+
+// Replit Object Storage — instanciado sob demanda (evita derrubar o boot se o bucket
+// ainda não estiver ativado). Persiste anexos entre deploys (disco do Replit é efêmero).
+let _objStore: ObjectStorageClient | null = null;
+function getObjectStore(): ObjectStorageClient {
+  if (!_objStore) _objStore = new ObjectStorageClient();
+  return _objStore;
+}
+
+// Content-Type simples por extensão (para servir o anexo com o tipo certo)
+function contentTypeFor(name: string): string {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+  };
+  return map[ext] || "application/octet-stream";
+}
 
 export function registerContractRoutes(app: Express, requireAuth: Function) {
 
@@ -1009,21 +1033,26 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           .limit(1);
         if (!proposal) return res.status(404).json({ message: "Proposta não encontrada" });
 
-        const uploadsDir = path.join(process.cwd(), "uploads", "proposals", String(proposalId));
-        fs.mkdirSync(uploadsDir, { recursive: true });
-
-        const ext      = path.extname(req.file.originalname);
-        const fileName = `${documentType}-${Date.now()}${ext}`;
-        fs.writeFileSync(path.join(uploadsDir, fileName), req.file.buffer);
-
-        const fileUrl = `/uploads/proposals/${proposalId}/${fileName}`;
+        // Grava no Replit Object Storage (persistente entre deploys)
+        const ext = path.extname(req.file.originalname);
+        const storageKey = `proposals/${proposalId}/${documentType}-${Date.now()}${ext}`;
+        try {
+          const result: any = await getObjectStore().uploadFromBytes(storageKey, req.file.buffer);
+          if (result && result.ok === false) throw new Error(result.error?.message || "upload falhou");
+        } catch (storErr: any) {
+          console.error("[Object Storage] upload error:", storErr);
+          return res.status(500).json({
+            message: "Falha ao salvar no Object Storage. Verifique se o Object Storage está ativado no Repl.",
+          });
+        }
 
         const [doc] = await db
           .insert(proposalDocuments)
           .values({
             proposalId,
             documentType,
-            fileUrl,
+            fileUrl: storageKey,        // referência (a leitura é via /documents/:id/file)
+            storageKey,
             fileName: req.file.originalname,
             uploadedBy: user.id,
           })
@@ -1036,6 +1065,46 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
     },
   );
+
+  // Servir/baixar um documento (lê do Object Storage) — autenticado e por tenant
+  app.get("/api/contracts/documents/:docId/file", requireAuth, async (req: any, res) => {
+    try {
+      const docId = parseInt(req.params.docId);
+      const tenantId = req.tenantId!;
+
+      // Garante que o documento pertence a uma proposta do tenant
+      const [doc] = await db
+        .select({
+          id: proposalDocuments.id,
+          fileName: proposalDocuments.fileName,
+          storageKey: proposalDocuments.storageKey,
+          fileUrl: proposalDocuments.fileUrl,
+        })
+        .from(proposalDocuments)
+        .innerJoin(proposals, eq(proposalDocuments.proposalId, proposals.id))
+        .where(and(eq(proposalDocuments.id, docId), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!doc) return res.status(404).json({ message: "Documento não encontrado" });
+      if (!doc.storageKey) {
+        return res.status(410).json({ message: "Arquivo legado indisponível (enviado antes do armazenamento permanente). Reenvie o documento." });
+      }
+
+      const result: any = await getObjectStore().downloadAsBytes(doc.storageKey);
+      if (!result || result.ok === false) {
+        return res.status(404).json({ message: "Arquivo não encontrado no armazenamento" });
+      }
+      const buffer: Buffer = Array.isArray(result.value) ? result.value[0] : result.value;
+
+      res.setHeader("Content-Type", contentTypeFor(doc.fileName));
+      const disposition = req.query.download ? "attachment" : "inline";
+      res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(doc.fileName)}"`);
+      return res.send(buffer);
+    } catch (e: any) {
+      console.error("GET /api/contracts/documents/:docId/file error:", e);
+      return res.status(500).json({ message: "Erro ao carregar documento" });
+    }
+  });
 
   // ===================== BUSCA POR CPF (memória de cadastro) =====================
 

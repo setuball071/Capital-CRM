@@ -736,16 +736,14 @@ export default function ContratosDetalhePage() {
                       <p className="text-xs text-muted-foreground">{DOC_TYPE_LABEL[doc.documentType] || doc.documentType || "Arquivo"}</p>
                     </div>
                   </div>
-                  {doc.fileUrl && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Abrir">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                      <a href={doc.fileUrl} download={doc.fileName || ""} className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Baixar">
-                        <Download className="h-4 w-4" />
-                      </a>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a href={`/api/contracts/documents/${doc.id}/file`} target="_blank" rel="noopener noreferrer" className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Abrir">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <a href={`/api/contracts/documents/${doc.id}/file?download=1`} className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Baixar">
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
