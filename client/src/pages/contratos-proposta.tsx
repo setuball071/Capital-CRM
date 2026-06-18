@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
+import { renderPdfFirstPageToBlob, isPdf } from "@/lib/pdf-render";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -426,6 +427,7 @@ export default function ContratosPropostaPage() {
     dataNascimento: string | null;
     dataExpedicao: string | null;
     orgaoEmissor: string | null;
+    naturalidade: string | null;
   }
   const [docFrenteFile, setDocFrenteFile] = useState<File | null>(null);
   const [docVersoFile,  setDocVersoFile]  = useState<File | null>(null);
@@ -463,16 +465,22 @@ export default function ContratosPropostaPage() {
     });
   }
 
+  // Converte arquivo (imagem OU PDF) em imagem JPEG para o OCR
+  async function fileToImageBlob(file: File): Promise<Blob> {
+    if (isPdf(file)) return renderPdfFirstPageToBlob(file);
+    return resizeImageToBlob(file);
+  }
+
   // Chama o endpoint OCR com as imagens da frente e verso
   async function runDocOcr(frente: File, verso: File | null) {
     setIsOcring(true);
     setOcrError(null);
     try {
       const formData = new FormData();
-      const frenteBlob = await resizeImageToBlob(frente);
+      const frenteBlob = await fileToImageBlob(frente);
       formData.append("frente", new File([frenteBlob], "frente.jpg", { type: "image/jpeg" }));
       if (verso) {
-        const versoBlob = await resizeImageToBlob(verso);
+        const versoBlob = await fileToImageBlob(verso);
         formData.append("verso", new File([versoBlob], "verso.jpg", { type: "image/jpeg" }));
       }
       const res = await fetch("/api/ocr/document", {
@@ -780,6 +788,7 @@ export default function ContratosPropostaPage() {
                   orgaoEmissor:    docPhotoData.orgaoEmissor,
                   filiacao:        docPhotoData.filiacao,
                   cpf:             docPhotoData.cpf,
+                  naturalidade:    docPhotoData.naturalidade,
                 },
               }),
             }
@@ -910,6 +919,7 @@ export default function ContratosPropostaPage() {
           orgaoEmissor:   docPhotoData.orgaoEmissor,
           filiacao:       docPhotoData.filiacao,
           cpf:            docPhotoData.cpf,
+          naturalidade:   docPhotoData.naturalidade,
         };
       }
       if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
@@ -1229,13 +1239,21 @@ export default function ContratosPropostaPage() {
   // ─── STEP 2 — Upload Contracheque + Documento com Foto ──────────────────────
 
   if (step === "siape-upload") {
-    // Handler para frente do documento com foto
-    function handleFrenteFile(file: File) {
-      if (!file.type.startsWith("image/")) {
-        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+    // Gera URL de preview (imagem direta; PDF → renderiza 1ª página)
+    async function makePreview(file: File): Promise<string> {
+      if (isPdf(file)) return URL.createObjectURL(await renderPdfFirstPageToBlob(file));
+      return URL.createObjectURL(file);
+    }
+
+    // Handler para frente do documento com foto (imagem ou PDF)
+    async function handleFrenteFile(file: File) {
+      if (!file.type.startsWith("image/") && !isPdf(file)) {
+        setOcrError("Por favor selecione uma imagem ou PDF.");
         return;
       }
-      const preview = URL.createObjectURL(file);
+      let preview: string;
+      try { preview = await makePreview(file); }
+      catch { setOcrError("Não foi possível ler o PDF. Tente outro arquivo."); return; }
       setDocFrenteFile(file);
       setDocFrentePreview(preview);
       setDocPhotoData(null);
@@ -1245,12 +1263,14 @@ export default function ContratosPropostaPage() {
       if (docVersoFile) handleBothImagesReady(file, docVersoFile);
     }
 
-    function handleVersoFile(file: File) {
-      if (!file.type.startsWith("image/")) {
-        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+    async function handleVersoFile(file: File) {
+      if (!file.type.startsWith("image/") && !isPdf(file)) {
+        setOcrError("Por favor selecione uma imagem ou PDF.");
         return;
       }
-      const preview = URL.createObjectURL(file);
+      let preview: string;
+      try { preview = await makePreview(file); }
+      catch { setOcrError("Não foi possível ler o PDF. Tente outro arquivo."); return; }
       setDocVersoFile(file);
       setDocVersoPreview(preview);
       setDocPhotoData(null);
@@ -1322,7 +1342,7 @@ export default function ContratosPropostaPage() {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             className="hidden"
             onChange={(e) => { if (e.target.files?.[0]) onFileChange(e.target.files[0]); }}
           />
@@ -1798,6 +1818,9 @@ export default function ContratosPropostaPage() {
                   )}
                   {docPhotoData.orgaoEmissor && (
                     <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
+                  )}
+                  {docPhotoData.naturalidade && (
+                    <InfoField label="Naturalidade" value={docPhotoData.naturalidade} />
                   )}
                   {docPhotoData.filiacao?.[0] && (
                     <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />

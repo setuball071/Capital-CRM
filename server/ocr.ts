@@ -9,9 +9,11 @@
  *     frente: File (imagem)
  *     verso:  File (imagem, opcional mas recomendado)
  *
+ * Aceita imagem (o cliente converte PDF → imagem antes de enviar).
+ *
  * Retorna JSON com:
  *   tipo, nome, numeroRegistro, cpf, filiacao, dataNascimento,
- *   dataExpedicao, orgaoEmissor
+ *   dataExpedicao, orgaoEmissor, naturalidade
  */
 
 import type { Express } from "express";
@@ -39,6 +41,7 @@ export interface DocPhotoExtracted {
   dataNascimento: string | null;
   dataExpedicao: string | null;
   orgaoEmissor: string | null;
+  naturalidade: string | null;
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
@@ -98,7 +101,8 @@ Formato exato:
   "filiacao": ["NOME DO PAI ou null", "NOME DA MAE ou null"],
   "dataNascimento": "DD/MM/AAAA",
   "dataExpedicao": "DD/MM/AAAA",
-  "orgaoEmissor": "ex: SSP/RJ, DETRAN/RJ, COREN/RJ"
+  "orgaoEmissor": "ex: SSP/RJ, DETRAN/RJ, COREN/RJ",
+  "naturalidade": "cidade/UF de nascimento (ex: RIO DE JANEIRO/RJ), ou null se não constar"
 }`;
 
         const response = await openai.chat.completions.create({
