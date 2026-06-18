@@ -322,6 +322,18 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE proposal_documents ADD COLUMN IF NOT EXISTS storage_key TEXT
           `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS partners (
+              id         SERIAL PRIMARY KEY,
+              tenant_id  INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              name       VARCHAR(255) NOT NULL,
+              is_active  BOOLEAN NOT NULL DEFAULT true,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS parceiro_id INTEGER
+          `);
 
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS contract_phases (

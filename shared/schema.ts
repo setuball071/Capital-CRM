@@ -3474,6 +3474,7 @@ export const proposals = pgTable("proposals", {
   pausedAtStepId: integer("paused_at_step_id").references(() => contractFlowSteps.id),
   ade: varchar("ade", { length: 100 }),
   adeRefin: varchar("ade_refin", { length: 100 }),
+  parceiroId: integer("parceiro_id"), // origem de cadastro (uso interno; corretor não vê)
   commissionPercentage: decimal("commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionPercentage: decimal("corretor_commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionValue: decimal("corretor_commission_value", { precision: 12, scale: 2 }),
@@ -3608,6 +3609,18 @@ export const contractPhases = pgTable("contract_phases", {
 });
 
 export type ContractPhase = typeof contractPhases.$inferSelect;
+
+// ===== PARCEIROS (origem de cadastro — uso interno) =====
+
+export const partners = pgTable("partners", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Partner = typeof partners.$inferSelect;
 
 
 // ===== CRIADOR DE CRIATIVOS =====

@@ -76,6 +76,7 @@ import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
+import ContratosConfigPage from "@/pages/contratos-config";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
 import ImportarObservacoesPage from "@/pages/importar-observacoes";
@@ -622,6 +623,9 @@ function Router() {
               </Route>
               <Route path="/contratos/fluxos">
                 {() => <ProtectedRoute component={ContratosFluxosPage} />}
+              </Route>
+              <Route path="/contratos/configuracoes">
+                {() => <RoleRoute component={ContratosConfigPage} allowedRoles={["master", "operacional"]} />}
               </Route>
               <Route path="/contratos/:id">
                 {() => <ProtectedRoute component={ContratosDetalhePage} />}

@@ -11,6 +11,7 @@ import {
   financialDebits,
   contractPhases,
   contractStatuses,
+  partners,
   users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -258,6 +259,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           commissionPaidAt: proposals.commissionPaidAt,
           vendorId: proposals.vendorId,
           vendorName: users.name,
+          parceiroId: proposals.parceiroId,
+          parceiroNome: partners.name,
           clientMeta: proposals.clientMeta,
           flowId: proposals.flowId,
           currentStepId: proposals.currentStepId,
@@ -266,6 +269,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))
+        .leftJoin(partners, eq(proposals.parceiroId, partners.id))
         .where(and(...conditions))
         .orderBy(desc(proposals.createdAt));
 
@@ -284,7 +288,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
-        clientMeta,
+        clientMeta, parceiroId,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -344,6 +348,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
             ? String(corretorCommissionPercentage) : null,
           clientMeta: clientMeta || null,
+          parceiroId: parceiroId ? parseInt(parceiroId) : null,
           status: "CADASTRADA",
           isPaused: false,
           flowId: matchedFlowId,
@@ -386,7 +391,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         const {
           clientName, clientCpf, clientMatricula, clientConvenio,
           bank, product, contractValue, installmentValue, term,
-          commissionPercentage, corretorCommissionPercentage, clientMeta,
+          commissionPercentage, corretorCommissionPercentage, clientMeta, parceiroId,
         } = item;
 
         if (!clientName || !clientCpf) continue;
@@ -443,6 +448,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
               ? String(corretorCommissionPercentage) : null,
             clientMeta: clientMeta || null,
+            parceiroId: parceiroId ? parseInt(parceiroId) : null,
             status: "CADASTRADA",
             isPaused: false,
             flowId: matchedFlowId,
@@ -626,9 +632,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
       if (!canEdit) return res.status(403).json({ message: "Sem permissão para editar esta proposta" });
 
-      const { bank, contractValue, installmentValue, term, ade, adeRefin, vendorId, clientMetaPatch, notes } = req.body;
+      const { bank, contractValue, installmentValue, term, ade, adeRefin, vendorId, parceiroId, clientMetaPatch, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
+
+      // Parceiro (uso interno) — só operacional/master
+      if (parceiroId !== undefined) {
+        if (!isOper) return res.status(403).json({ message: "Sem permissão para alterar o parceiro" });
+        updateData.parceiroId = parceiroId ? parseInt(parceiroId) : null;
+      }
       if (bank !== undefined) updateData.bank = bank || null;
       if (contractValue !== undefined) updateData.contractValue = (contractValue === null || contractValue === "") ? null : String(contractValue);
       if (installmentValue !== undefined) updateData.installmentValue = (installmentValue === null || installmentValue === "") ? null : String(installmentValue);
@@ -1398,6 +1410,102 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("DELETE /api/contracts/phases/:id error:", e);
       return res.status(500).json({ message: "Erro ao excluir fase" });
+    }
+  });
+
+  // ===================== PARCEIROS (uso interno) =====================
+
+  const isOperOrMaster = (u: any) => u?.isMaster || ["master", "operacional"].includes(u?.role || "");
+
+  app.get("/api/contracts/partners", requireAuth, async (req: any, res) => {
+    try {
+      const list = await db
+        .select()
+        .from(partners)
+        .where(eq(partners.tenantId, req.tenantId!))
+        .orderBy(asc(partners.name));
+      return res.json(list);
+    } catch (e: any) {
+      console.error("GET /api/contracts/partners error:", e);
+      return res.status(500).json({ message: "Erro ao listar parceiros" });
+    }
+  });
+
+  app.post("/api/contracts/partners", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const { name } = req.body;
+      if (!name || !String(name).trim()) return res.status(400).json({ message: "Nome é obrigatório" });
+      const [row] = await db
+        .insert(partners)
+        .values({ tenantId: req.tenantId!, name: String(name).trim(), isActive: true })
+        .returning();
+      return res.status(201).json(row);
+    } catch (e: any) {
+      console.error("POST /api/contracts/partners error:", e);
+      return res.status(500).json({ message: "Erro ao criar parceiro" });
+    }
+  });
+
+  app.patch("/api/contracts/partners/:id", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      const { name, isActive } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = String(name).trim();
+      if (isActive !== undefined) updates.isActive = isActive;
+      const [row] = await db
+        .update(partners)
+        .set(updates)
+        .where(and(eq(partners.id, id), eq(partners.tenantId, req.tenantId!)))
+        .returning();
+      if (!row) return res.status(404).json({ message: "Parceiro não encontrado" });
+      return res.json(row);
+    } catch (e: any) {
+      console.error("PATCH /api/contracts/partners/:id error:", e);
+      return res.status(500).json({ message: "Erro ao atualizar parceiro" });
+    }
+  });
+
+  app.delete("/api/contracts/partners/:id", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(partners).where(and(eq(partners.id, id), eq(partners.tenantId, req.tenantId!)));
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/partners/:id error:", e);
+      return res.status(500).json({ message: "Erro ao excluir parceiro" });
+    }
+  });
+
+  // Contagem de pendências do corretor (para o badge da sidebar)
+  app.get("/api/contracts/pending-count", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      // "Pendência do corretor" = status com returnStatusKey definido
+      const allStatuses = await db
+        .select()
+        .from(contractStatuses)
+        .where(eq(contractStatuses.tenantId, tenantId));
+      const keys = allStatuses.filter((s: any) => !!s.returnStatusKey).map((s: any) => s.key);
+      if (keys.length === 0) return res.json({ count: 0 });
+
+      // Badge é pessoal: conta as propostas do próprio usuário (corretor) nesses status
+      const rows = await db
+        .select({ id: proposals.id })
+        .from(proposals)
+        .where(and(
+          eq(proposals.tenantId, tenantId),
+          eq(proposals.vendorId, user.id),
+          inArray(proposals.status, keys),
+        ));
+      return res.json({ count: rows.length });
+    } catch (e: any) {
+      console.error("GET /api/contracts/pending-count error:", e);
+      return res.json({ count: 0 });
     }
   });
 }
