@@ -23369,20 +23369,33 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .where(and(...conditions))
         .orderBy(desc(producoesContratos.dataPagamento));
 
-      // Parceiro (interno): casa o ADE da produção (contratoId) com proposals.ade
-      const adeList = Array.from(new Set(contratos.map((c: any) => c.contratoId).filter(Boolean))) as string[];
+      // Parceiro (interno): preferir o vínculo direto (proposalId); fallback por ADE
+      const parceiroByPropId: Record<number, string> = {};
       const parceiroByAde: Record<string, string> = {};
-      if (adeList.length) {
-        try {
+      try {
+        const propIdList = Array.from(new Set(contratos.map((c: any) => c.proposalId).filter(Boolean))) as number[];
+        if (propIdList.length) {
+          const r = await db
+            .select({ pid: proposals.id, parceiro: partners.name })
+            .from(proposals)
+            .innerJoin(partners, eq(proposals.parceiroId, partners.id))
+            .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.id, propIdList)));
+          for (const p of r) parceiroByPropId[p.pid] = p.parceiro as string;
+        }
+        const adeList = Array.from(new Set(contratos.map((c: any) => c.contratoId).filter(Boolean))) as string[];
+        if (adeList.length) {
           const props = await db
             .select({ ade: proposals.ade, parceiro: partners.name })
             .from(proposals)
             .innerJoin(partners, eq(proposals.parceiroId, partners.id))
             .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
           for (const p of props) if (p.ade) parceiroByAde[p.ade] = p.parceiro as string;
-        } catch (e) { /* não bloqueia a listagem se falhar */ }
-      }
-      const contratosComParceiro = contratos.map((c: any) => ({ ...c, parceiro: parceiroByAde[c.contratoId || ""] || null }));
+        }
+      } catch (e) { /* não bloqueia a listagem se falhar */ }
+      const contratosComParceiro = contratos.map((c: any) => ({
+        ...c,
+        parceiro: (c.proposalId && parceiroByPropId[c.proposalId]) || parceiroByAde[c.contratoId || ""] || null,
+      }));
 
       // Totais
       const totValorBase = contratos.reduce((s, c) => s + parseFloat(c.valorBase || "0"), 0);

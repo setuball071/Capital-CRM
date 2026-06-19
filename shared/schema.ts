@@ -2889,6 +2889,8 @@ export const producoesContratos = pgTable(
       "0",
     ),
     telefoneCliente: varchar("telefone_cliente", { length: 30 }),
+    // Vínculo com a proposta do operacional (quando o contrato veio do fluxo operacional)
+    proposalId: integer("proposal_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [

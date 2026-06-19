@@ -12,6 +12,7 @@ import {
   contractPhases,
   contractStatuses,
   partners,
+  producoesContratos,
   users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -594,6 +595,55 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           );
         } catch (portfolioErr) {
           console.error("[PORTFOLIO] addToPortfolio (contracts) error (non-fatal):", portfolioErr);
+        }
+      }
+
+      // Integração operacional → financeiro: ao marcar PAGO, cria/atualiza o contrato
+      // na produção (recebimento/repasse), vinculado por proposalId. Dedupe por ADE.
+      if (status === "PAGO") {
+        try {
+          const ade = (updated.ade || current.ade) || null;
+          const contratoIdVal = ade || `PROP-${id}`;
+          let vendedorNome: string | null = null;
+          if (updated.vendorId) {
+            const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
+            vendedorNome = v?.name || null;
+          }
+          const mesRef = new Date().toISOString().slice(0, 7);
+          const dataPag = new Date().toISOString().slice(0, 10);
+          const valBruto = updated.contractValue ? String(updated.contractValue) : null;
+          const compEmp = updated.companyCommissionValue ? String(updated.companyCommissionValue) : null;
+          const compRep = updated.corretorCommissionValue ? String(updated.corretorCommissionValue) : null;
+          const percEmp = updated.commissionPercentage ? String(parseFloat(updated.commissionPercentage) * 100) : null;
+          const percRep = updated.corretorCommissionPercentage ? String(parseFloat(updated.corretorCommissionPercentage) * 100) : null;
+
+          const payload: any = {
+            tenantId, proposalId: id, contratoId: contratoIdVal,
+            nomeCliente: current.clientName, cpfCliente: current.clientCpf,
+            banco: updated.bank, tipoContrato: updated.product, convenio: current.clientConvenio,
+            prazo: updated.term ? String(updated.term) : null,
+            vendedorId: updated.vendorId || null, vendedorNome,
+            nomeCorretor: vendedorNome,
+            valorBase: valBruto, valorBruto: valBruto,
+            comissaoEmpresaValor: compEmp, comissaoRepasseValor: compRep,
+            comissaoEmpresaPerc: percEmp, comissaoRepassePerc: percRep,
+            mesReferencia: mesRef, dataPagamento: dataPag,
+          };
+
+          // Dedupe: já existe pelo vínculo (proposalId) ou pelo ADE (vindo do CSV)?
+          let [existing] = await db.select({ id: producoesContratos.id }).from(producoesContratos)
+            .where(and(eq(producoesContratos.tenantId, tenantId), eq(producoesContratos.proposalId, id))).limit(1);
+          if (!existing && ade) {
+            [existing] = await db.select({ id: producoesContratos.id }).from(producoesContratos)
+              .where(and(eq(producoesContratos.tenantId, tenantId), eq(producoesContratos.contratoId, ade))).limit(1);
+          }
+          if (existing) {
+            await db.update(producoesContratos).set(payload).where(eq(producoesContratos.id, existing.id));
+          } else {
+            await db.insert(producoesContratos).values(payload);
+          }
+        } catch (finErr) {
+          console.error("[FINANCEIRO auto] erro ao alimentar produção (não bloqueia):", finErr);
         }
       }
 
