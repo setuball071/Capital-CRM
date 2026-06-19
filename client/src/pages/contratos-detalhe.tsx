@@ -1066,7 +1066,7 @@ export default function ContratosDetalhePage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowClone(false)}>Cancelar</Button>
-            <Button disabled={!cloneBank || cloneMutation.isPending} onClick={() => cloneMutation.mutate()}>
+            <Button disabled={cloneMutation.isPending} onClick={() => cloneMutation.mutate()}>
               {cloneMutation.isPending ? "Clonando..." : "Clonar"}
             </Button>
           </DialogFooter>
