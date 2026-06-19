@@ -375,6 +375,110 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // ─── Clonar proposta (copia dados + anexos de documentação) ────────────────
+  app.post("/api/contracts/proposals/:id/clone", requireAuth, async (req: any, res) => {
+    try {
+      const sourceId = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      const { bank, tableId, tableName } = req.body;
+
+      // Busca proposta origem
+      const [src] = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, sourceId), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!src) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Permissão: operacional/master vê qualquer; vendedor só as próprias
+      if (user.role === "vendedor" && src.vendorId !== user.id) {
+        return res.status(403).json({ message: "Sem permissão para clonar esta proposta" });
+      }
+
+      // Monta clientMeta com nova tabela (ou sem tabela se não informou)
+      const newMeta = { ...(src.clientMeta as Record<string, any> || {}) };
+      if (tableId) {
+        newMeta.tabelaFinanceiroId = tableId;
+        newMeta.tabelaNome = tableName || null;
+      } else {
+        delete newMeta.tabelaFinanceiroId;
+        delete newMeta.tabelaNome;
+      }
+
+      // Cria proposta nova
+      const [nova] = await db
+        .insert(proposals)
+        .values({
+          tenantId,
+          clientName: src.clientName,
+          clientCpf: src.clientCpf,
+          clientMatricula: src.clientMatricula,
+          clientConvenio: src.clientConvenio,
+          bank: bank || src.bank,
+          product: src.product,
+          tableId: tableId ? parseInt(tableId) : null,
+          contractValue: src.contractValue,
+          installmentValue: src.installmentValue,
+          term: src.term,
+          ade: src.ade,
+          adeRefin: (src as any).adeRefin || null,
+          commissionPercentage: src.commissionPercentage,
+          corretorCommissionPercentage: src.corretorCommissionPercentage,
+          clientMeta: newMeta,
+          parceiroId: src.parceiroId,
+          vendorId: src.vendorId,
+          status: "CADASTRADA",
+          isPaused: false,
+          createdBy: user.id,
+        })
+        .returning();
+
+      await db.insert(proposalHistory).values({
+        proposalId: nova.id,
+        toStatus: "CADASTRADA",
+        action: "AVANCO",
+        notes: `Clonada da proposta #${sourceId}`,
+        performedBy: user.id,
+      });
+
+      // Copia documentos de documentação (excluindo mensagens/outros sem storageKey)
+      const docs = await db
+        .select()
+        .from(proposalDocuments)
+        .where(eq(proposalDocuments.proposalId, sourceId));
+
+      for (const doc of docs) {
+        if (!doc.storageKey) continue; // legado sem arquivo no Object Storage
+        try {
+          const dl: any = await getObjectStore().downloadAsBytes(doc.storageKey);
+          if (!dl || dl.ok === false) continue;
+          const bytes: Uint8Array = dl.value ?? dl;
+          const ext = path.extname(doc.fileName || doc.storageKey);
+          const newKey = `proposals/${nova.id}/${doc.documentType}-${Date.now()}${ext}`;
+          const ul: any = await getObjectStore().uploadFromBytes(newKey, bytes);
+          if (ul && ul.ok === false) continue;
+          await db.insert(proposalDocuments).values({
+            proposalId: nova.id,
+            documentType: doc.documentType,
+            fileUrl: newKey,
+            storageKey: newKey,
+            fileName: doc.fileName,
+            uploadedBy: user.id,
+          });
+        } catch (docErr) {
+          console.error(`[clone] falha ao copiar doc ${doc.id}:`, docErr);
+          // não aborta o clone, só pula o arquivo
+        }
+      }
+
+      return res.status(201).json(nova);
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/clone error:", e);
+      return res.status(500).json({ message: `Erro ao clonar proposta: ${e?.message || e}` });
+    }
+  });
+
   // ─── Cadastro em lote (Portabilidade) ───────────────────────────────────────
   app.post("/api/contracts/proposals/batch", requireAuth, async (req: any, res) => {
     try {

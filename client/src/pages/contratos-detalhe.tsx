@@ -255,29 +255,12 @@ export default function ContratosDetalhePage() {
   const cloneMutation = useMutation({
     mutationFn: async () => {
       const t = financeiroTabelas.find((x: any) => String(x.id) === cloneTableId);
-      const newMeta = { ...(proposal.clientMeta || {}) };
-      if (cloneTableId) {
-        newMeta.tabelaFinanceiroId = cloneTableId;
-        newMeta.tabelaNome = t?.nome || null;
-      } else {
-        // Trocou de banco sem escolher tabela → não carrega a tabela antiga (de outro banco)
-        delete newMeta.tabelaFinanceiroId;
-        delete newMeta.tabelaNome;
-      }
       const body = {
-        clientName: proposal.clientName,
-        clientCpf: proposal.clientCpf,
-        clientMatricula: proposal.clientMatricula,
-        clientConvenio: proposal.clientConvenio,
         bank: cloneBank || proposal.bank,
-        product: proposal.product,
-        contractValue: proposal.contractValue,
-        installmentValue: proposal.installmentValue,
-        term: proposal.term,
-        vendorId: proposal.vendorId,
-        clientMeta: newMeta,
+        tableId: cloneTableId || null,
+        tableName: t?.nome || null,
       };
-      const res = await fetch("/api/contracts/proposals", {
+      const res = await fetch(`/api/contracts/proposals/${proposal.id}/clone`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
