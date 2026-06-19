@@ -683,6 +683,20 @@ export default function ContratosPropostaPage() {
   const financeiroGrupos: any[]  = financeiroConfig?.dados?.grupos   ?? [];
   const financeiroCorretores: any[] = financeiroConfig?.dados?.corretores ?? [];
 
+  // Parceiro (interno) — só operacional/master define no cadastro; corretor não vê
+  const canSetParceiro = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
+  const [parceiroId, setParceiroId] = useState<string>("");
+  const { data: partnersList = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/partners"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/partners", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: canSetParceiro,
+  });
+
   /** Mapeia contractType → "tipo" usado nas tabelas de Financeiro */
   function mapTipoContrato(t: string | null): string | null {
     switch (t) {
@@ -850,6 +864,7 @@ export default function ContratosPropostaPage() {
         tableId: undefined, // FK aponta para coefficient_tables (legado) — não enviar; ID real fica em clientMeta
         term: data.term || undefined,
         ade: data.ade || undefined,
+        parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
           ? selectedTabela.pctEmpresa / 100
@@ -996,6 +1011,7 @@ export default function ContratosPropostaPage() {
           installmentValue: parseFloat(c.novaParcela) || null,
           contractValue:    parseFloat(c.saldoDevedor) || null,
           term:             parseInt(c.novoPrazo) || null,
+          parceiroId:      canSetParceiro && parceiroId ? parceiroId : undefined,
           clientMeta: {
             ...sharedMeta,
             ...(tabela ? { tabelaFinanceiroId: c.tableId, tabelaNome: tabela.nome } : {}),
@@ -1711,6 +1727,24 @@ export default function ContratosPropostaPage() {
           <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
           <span>{nameAlert}</span>
         </div>
+      )}
+
+      {/* Parceiro (interno — só operacional/master; corretor não vê) */}
+      {canSetParceiro && (
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm font-medium mb-1.5">Parceiro <span className="text-xs font-normal text-muted-foreground">(interno — por onde foi cadastrado)</span></p>
+            <Select value={parceiroId || "none"} onValueChange={(v) => setParceiroId(v === "none" ? "" : v)}>
+              <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Selecionar parceiro..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— nenhum —</SelectItem>
+                {partnersList.filter((p: any) => p.isActive).map((p: any) => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
       )}
 
       <Form {...form}>
