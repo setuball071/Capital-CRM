@@ -465,6 +465,8 @@ import {
   type PricingSettings,
   producoesContratos,
   producoesImportacoes,
+  proposals,
+  partners,
   financeiroConfig,
   leadTags,
   leadTagAssignments,
@@ -23367,6 +23369,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .where(and(...conditions))
         .orderBy(desc(producoesContratos.dataPagamento));
 
+      // Parceiro (interno): casa o ADE da produção (contratoId) com proposals.ade
+      const adeList = Array.from(new Set(contratos.map((c: any) => c.contratoId).filter(Boolean))) as string[];
+      const parceiroByAde: Record<string, string> = {};
+      if (adeList.length) {
+        try {
+          const props = await db
+            .select({ ade: proposals.ade, parceiro: partners.name })
+            .from(proposals)
+            .innerJoin(partners, eq(proposals.parceiroId, partners.id))
+            .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
+          for (const p of props) if (p.ade) parceiroByAde[p.ade] = p.parceiro as string;
+        } catch (e) { /* não bloqueia a listagem se falhar */ }
+      }
+      const contratosComParceiro = contratos.map((c: any) => ({ ...c, parceiro: parceiroByAde[c.contratoId || ""] || null }));
+
       // Totais
       const totValorBase = contratos.reduce((s, c) => s + parseFloat(c.valorBase || "0"), 0);
       const totValorBruto = contratos.reduce((s, c) => s + parseFloat(c.valorBruto || "0"), 0);
@@ -23387,7 +23404,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const corretores = [...new Set(todos.map(c => c.nomeCorretor).filter(Boolean))].sort();
 
       return res.json({
-        contratos,
+        contratos: contratosComParceiro,
         totais: { totValorBase, totValorBruto, totComissao, count: contratos.length },
         filtros: { meses, bancos, corretores },
       });
