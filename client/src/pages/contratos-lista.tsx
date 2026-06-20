@@ -817,6 +817,7 @@ export default function ContratosListaPage() {
   });
 
   const showCorretorCol = viewMode === "operacional";
+  const showParceiroCol = canManageContracts;
   const showSelectCol = isOperacional;
 
   // ── Seleção ─────────────────────────────────────────────────────────────────
@@ -1060,6 +1061,7 @@ export default function ContratosListaPage() {
                 <TableHead className="text-right">Parcela</TableHead>
                 <TableHead className="text-right">Contrato</TableHead>
                 <TableHead>ADE</TableHead>
+                {showParceiroCol && <TableHead>Parceiro</TableHead>}
                 <TableHead>Status</TableHead>
                 {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
@@ -1114,6 +1116,7 @@ export default function ContratosListaPage() {
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
                   <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
+                  {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
