@@ -3539,6 +3539,9 @@ export const proposalDocuments = pgTable("proposal_documents", {
   proposalId: integer("proposal_id").notNull().references(() => proposals.id, { onDelete: "cascade" }),
   documentType: varchar("document_type", { length: 50 }).notNull(),
   fileUrl: text("file_url").notNull(),
+  // Chave do objeto no storage (Supabase Storage ou disco). Null em anexos antigos
+  // servidos direto via /uploads.
+  storageKey: text("storage_key"),
   fileName: varchar("file_name", { length: 255 }).notNull(),
   uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
   messageId: integer("message_id").references(() => proposalMessages.id),

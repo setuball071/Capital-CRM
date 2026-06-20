@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, or, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
 
 // Neon connection caching is enabled by default for better connection handling
@@ -160,9 +160,39 @@ import {
   type InsertApiKey,
 } from "@shared/schema";
 
-// Use neon-http for serverless/edge environments
-const queryClient = neon(process.env.DATABASE_URL!);
-export const db = drizzle(queryClient);
+// Postgres via node-postgres (pg) — fala com qualquer Postgres TCP
+// (Supabase self-hosted, Neon, etc.). SSL configurável por variável de ambiente:
+//   DATABASE_SSL=disable                  → sem SSL (ex.: rede interna do Cloudfy)
+//   DATABASE_SSL_REJECT_UNAUTHORIZED=true → valida o certificado (CA confiável)
+// Padrão: SSL ligado SEM validar o certificado (aceita o cert próprio do Supabase).
+function buildDbSsl(): false | { rejectUnauthorized: boolean } {
+  const mode = (process.env.DATABASE_SSL || "").toLowerCase();
+  if (mode === "disable" || mode === "off" || mode === "false") return false;
+  return { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" };
+}
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL!,
+  ssl: buildDbSsl(),
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+const _db = drizzle(pool);
+
+// Compatibilidade com o driver antigo (neon-http): lá `db.execute(sql`...`)`
+// devolvia direto o array de linhas; o node-postgres devolve um QueryResult
+// ({ rows, rowCount, ... }). Para não reescrever as ~300 chamadas existentes
+// (nenhuma usa .rows/.rowCount), normalizamos db.execute() para devolver as
+// linhas, preservando exatamente o comportamento anterior.
+const _rawExecute = _db.execute.bind(_db);
+(_db as any).execute = async (query: any) => {
+  const res: any = await _rawExecute(query);
+  return Array.isArray(res) ? res : (res?.rows ?? res);
+};
+
+export const db = _db;
 
 export interface IStorage {
   // Users

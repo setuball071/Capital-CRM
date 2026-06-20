@@ -15,6 +15,7 @@ import {
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
+import { saveDocument, getDocument } from "./document-storage";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -913,25 +914,37 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           .limit(1);
         if (!proposal) return res.status(404).json({ message: "Proposta não encontrada" });
 
-        const uploadsDir = path.join(process.cwd(), "uploads", "proposals", String(proposalId));
-        fs.mkdirSync(uploadsDir, { recursive: true });
+        const ext        = path.extname(req.file.originalname);
+        const fileName   = `${documentType}-${Date.now()}${ext}`;
+        const objectPath = `proposals/${proposalId}/${fileName}`;
 
-        const ext      = path.extname(req.file.originalname);
-        const fileName = `${documentType}-${Date.now()}${ext}`;
-        fs.writeFileSync(path.join(uploadsDir, fileName), req.file.buffer);
+        // Grava no storage (Supabase em produção, disco como fallback)
+        await saveDocument(
+          objectPath,
+          req.file.buffer,
+          req.file.mimetype || "application/octet-stream",
+        );
 
-        const fileUrl = `/uploads/proposals/${proposalId}/${fileName}`;
-
+        // Insere o registro e, com o id em mãos, define a URL pública
+        // (endpoint protegido que resolve o storage por baixo).
         const [doc] = await db
           .insert(proposalDocuments)
           .values({
             proposalId,
             documentType,
-            fileUrl,
+            fileUrl: "",
+            storageKey: objectPath,
             fileName: req.file.originalname,
             uploadedBy: user.id,
           })
           .returning();
+
+        const fileUrl = `/api/contracts/documents/${doc.id}/file`;
+        await db
+          .update(proposalDocuments)
+          .set({ fileUrl })
+          .where(eq(proposalDocuments.id, doc.id));
+        doc.fileUrl = fileUrl;
 
         return res.status(201).json(doc);
       } catch (e: any) {
@@ -940,6 +953,47 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
     },
   );
+
+  // ===================== DOWNLOAD DE DOCUMENTOS =====================
+
+  // Serve o anexo a partir do storage (Supabase ou disco), com checagem de
+  // sessão e de tenant. Anexos antigos (sem storageKey) caem no /uploads.
+  app.get("/api/contracts/documents/:id/file", requireAuth, async (req: any, res) => {
+    try {
+      const docId    = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+
+      const [row] = await db
+        .select({
+          storageKey: proposalDocuments.storageKey,
+          fileUrl: proposalDocuments.fileUrl,
+          fileName: proposalDocuments.fileName,
+        })
+        .from(proposalDocuments)
+        .innerJoin(proposals, eq(proposals.id, proposalDocuments.proposalId))
+        .where(and(eq(proposalDocuments.id, docId), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!row) return res.status(404).json({ message: "Documento não encontrado" });
+
+      // Anexos antigos sem storageKey eram servidos direto via /uploads.
+      if (!row.storageKey) {
+        if (row.fileUrl?.startsWith("/uploads/")) return res.redirect(row.fileUrl);
+        return res.status(404).json({ message: "Arquivo indisponível" });
+      }
+
+      const { buffer, contentType } = await getDocument(row.storageKey);
+      res.setHeader("Content-Type", contentType || "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(row.fileName || "documento")}"`,
+      );
+      return res.send(buffer);
+    } catch (e: any) {
+      console.error("GET /api/contracts/documents/:id/file error:", e);
+      return res.status(500).json({ message: "Erro ao baixar documento" });
+    }
+  });
 
   // ===================== BUSCA POR CPF (memória de cadastro) =====================
 

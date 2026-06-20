@@ -230,16 +230,10 @@ app.use((req, res, next) => {
         if (isProduction && process.env.DATABASE_URL) {
           try {
             const pgSession = (await import("connect-pg-simple")).default;
-            const pg = (await import("pg")).default;
+            // Reaproveita o pool compartilhado do storage (SSL configurável por env),
+            // em vez de criar um segundo pool com SSL fixo.
+            const { pool } = await import("./storage");
             const PgStore = pgSession(session);
-            const pool = new pg.Pool({
-              connectionString: process.env.DATABASE_URL,
-              // SSL com validação de certificado em produção
-              ssl: { rejectUnauthorized: true },
-              max: 5,
-              idleTimeoutMillis: 30000,
-              connectionTimeoutMillis: 10000,
-            });
             const pgStore = new PgStore({
               pool,
               tableName: "session",
@@ -282,6 +276,11 @@ app.use((req, res, next) => {
           `);
           await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_status ON lemit_jobs(status)`);
           await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_cpf ON lemit_jobs(cpf)`);
+          // Storage de anexos no Supabase: chave do objeto por documento
+          await migDb.execute(migSql`
+            ALTER TABLE proposal_documents
+              ADD COLUMN IF NOT EXISTS storage_key TEXT
+          `);
           log("Lemit migration OK");
         } catch (migErr) {
           console.error("Lemit migration error (non-fatal):", migErr);
