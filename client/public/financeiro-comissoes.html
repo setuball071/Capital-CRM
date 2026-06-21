@@ -276,6 +276,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <th>ADE</th><th>Data Pgto</th><th>Cliente / CPF</th><th>Consultor</th><th>Banco</th>
           <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
           <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Flat</th><th>Data Pag.</th><th></th>
+          <th class="col-parceiro">Parceiro</th>
         </tr></thead>
         <tbody id="cm-tbody"></tbody>
         <tfoot id="cm-tfoot"></tfoot>
@@ -1370,10 +1371,12 @@ async function renderMasterContratos(){
       <td>${bFlat}</td>
       <td>${stFlat==='Pago'?fmtData(c.dataPagComissao):'—'}</td>
       <td>${stFlat==='A Pagar'?`<button class="btn btn-ghost btn-sm" onclick="voltarContratoParaAguardando(${c.id})" title="Voltar para Aguardando">↩</button>`:''}</td>
+      <td class="col-parceiro">${escHtml(c.parceiro||'—')}</td>
     </tr>`;
   }).join('');
-  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato marcado para pagamento. Vá em Produção e marque os contratos.</td></tr>`;
-  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="3"></td></tr>`;
+  document.getElementById('cm-tbody').innerHTML=rows||`<tr><td colspan="16" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato marcado para pagamento. Vá em Produção e marque os contratos.</td></tr>`;
+  document.getElementById('cm-tfoot').innerHTML=`<tr><td colspan="8" style="padding:10px 14px">Totais (${list.length})</td><td class="r">${fmtBRL(totVal)}</td><td class="r">${fmtBRL(totEmp)}</td><td></td><td class="r">${fmtBRL(totFlat)}</td><td colspan="4"></td></tr>`;
+  document.querySelectorAll('.col-parceiro').forEach(el=>{el.style.display=_isMaster?'':'none';});
   document.getElementById('cm-kpis').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Produção</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>

@@ -2889,6 +2889,8 @@ export const producoesContratos = pgTable(
       "0",
     ),
     telefoneCliente: varchar("telefone_cliente", { length: 30 }),
+    // Vínculo com a proposta do operacional (quando o contrato veio do fluxo operacional)
+    proposalId: integer("proposal_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -3474,6 +3476,7 @@ export const proposals = pgTable("proposals", {
   pausedAtStepId: integer("paused_at_step_id").references(() => contractFlowSteps.id),
   ade: varchar("ade", { length: 100 }),
   adeRefin: varchar("ade_refin", { length: 100 }),
+  parceiroId: integer("parceiro_id"), // origem de cadastro (uso interno; corretor não vê)
   commissionPercentage: decimal("commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionPercentage: decimal("corretor_commission_percentage", { precision: 5, scale: 4 }),
   corretorCommissionValue: decimal("corretor_commission_value", { precision: 12, scale: 2 }),
@@ -3543,6 +3546,7 @@ export const proposalDocuments = pgTable("proposal_documents", {
   // servidos direto via /uploads.
   storageKey: text("storage_key"),
   fileName: varchar("file_name", { length: 255 }).notNull(),
+  storageKey: text("storage_key"), // chave no Replit Object Storage (null = legado em disco)
   uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
   messageId: integer("message_id").references(() => proposalMessages.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -3590,6 +3594,10 @@ export const contractStatuses = pgTable("contract_statuses", {
   ordem: integer("ordem").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
   allowsVendorEdit: boolean("allows_vendor_edit").notNull().default(false),
+  isFinal: boolean("is_final").notNull().default(false),
+  // Se definido, este status é uma "pendência do corretor": ele vê o botão
+  // "Pendência regularizada" e, ao clicar, a proposta vai para este status.
+  returnStatusKey: varchar("return_status_key", { length: 100 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -3606,6 +3614,18 @@ export const contractPhases = pgTable("contract_phases", {
 });
 
 export type ContractPhase = typeof contractPhases.$inferSelect;
+
+// ===== PARCEIROS (origem de cadastro — uso interno) =====
+
+export const partners = pgTable("partners", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Partner = typeof partners.$inferSelect;
 
 
 // ===== CRIADOR DE CRIATIVOS =====

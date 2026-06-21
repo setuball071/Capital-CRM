@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, Clock, SkipForward,
   FileText, AlertCircle, ExternalLink, Download, Paperclip,
   Copy, Check, Pencil, X, User, Landmark, CreditCard, Lock,
-  Upload, Contact,
+  Upload, Contact, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,8 +24,8 @@ import { ptBR } from "date-fns/locale";
 // Classes da tag de contagem de dias CIP por estado
 const CIP_BADGE: Record<CipState, string> = {
   ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
-  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold",
 };
 
 // Paleta dos badges de status (mesma da listagem)
@@ -61,7 +61,8 @@ const ACTION_ICONS: Record<string, any> = {
 
 const TERMINAL = ["PAGO", "CANCELADA", "PERDIDA"];
 
-interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; }
+interface StatusDef { id: number; key: string; label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; returnStatusKey: string | null; }
+const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
 
 function formatMoney(v: string | number | null | undefined) {
   if (v === null || v === undefined || v === "") return "—";
@@ -168,6 +169,18 @@ export default function ContratosDetalhePage() {
   });
   const financeiroTabelas: any[] = financeiroConfig?.dados?.tabelas ?? [];
 
+  // Parceiros (uso interno) — só carrega para quem pode gerenciar contratos
+  const { data: partnersList = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/partners"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/partners", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: canManageContracts,
+  });
+
   const statusConfigMap: Record<string, { label: string; className: string }> = {};
   statusList.forEach((s) => { statusConfigMap[s.key] = { label: s.label, className: BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc }; });
 
@@ -216,18 +229,21 @@ export default function ContratosDetalhePage() {
   const docInputRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState("OUTRO");
   const uploadDocMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("documentType", docType);
-      const res = await fetch(`/api/contracts/proposals/${proposalId}/documents`, {
-        method: "POST", body: fd, credentials: "include",
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    mutationFn: async (files: File[]) => {
+      const results = await Promise.allSettled(files.map((file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("documentType", docType);
+        return fetch(`/api/contracts/proposals/${proposalId}/documents`, { method: "POST", body: fd, credentials: "include" })
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); });
+      }));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { total: files.length, failed };
     },
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals", proposalId, "messages"] });
-      toast({ title: "Documento anexado" });
+      if (r.failed > 0) toast({ title: `${r.total - r.failed} anexado(s), ${r.failed} falharam`, variant: "destructive" });
+      else toast({ title: r.total > 1 ? `${r.total} documentos anexados` : "Documento anexado" });
     },
     onError: (e: any) => toast({ title: "Falha ao anexar", description: e.message, variant: "destructive" }),
   });
@@ -239,21 +255,12 @@ export default function ContratosDetalhePage() {
   const cloneMutation = useMutation({
     mutationFn: async () => {
       const t = financeiroTabelas.find((x: any) => String(x.id) === cloneTableId);
-      const newMeta = { ...(proposal.clientMeta || {}) };
-      if (cloneTableId) { newMeta.tabelaFinanceiroId = cloneTableId; newMeta.tabelaNome = t?.nome || null; }
       const body = {
-        clientName: proposal.clientName,
-        clientCpf: proposal.clientCpf,
-        clientMatricula: proposal.clientMatricula,
-        clientConvenio: proposal.clientConvenio,
         bank: cloneBank || proposal.bank,
-        product: proposal.product,
-        contractValue: proposal.contractValue,
-        installmentValue: proposal.installmentValue,
-        term: proposal.term,
-        clientMeta: newMeta,
+        tableId: cloneTableId || null,
+        tableName: t?.nome || null,
       };
-      const res = await fetch("/api/contracts/proposals", {
+      const res = await fetch(`/api/contracts/proposals/${proposal.id}/clone`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
@@ -294,6 +301,38 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao transferir", description: e.message, variant: "destructive" }),
   });
 
+  // Pendência regularizada — devolve a proposta ao operacional (status configurado no retorno)
+  const [regularizeNote, setRegularizeNote] = useState("");
+  const regularizeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/regularize`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ notes: regularizeNote.trim() || "Pendência regularizada" }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => { invalidate(); setRegularizeNote(""); toast({ title: "Pendência regularizada — proposta devolvida ao operacional" }); },
+    onError: (e: any) => toast({ title: "Falha ao regularizar", description: e.message, variant: "destructive" }),
+  });
+
+  // Excluir proposta — somente master (super-admin)
+  const isSuperMaster = !!user?.isMaster;
+  const [showDelete, setShowDelete] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      toast({ title: "Proposta excluída" });
+      setLocation("/contratos");
+    },
+    onError: (e: any) => toast({ title: "Falha ao excluir", description: e.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex-1 p-6 space-y-4">
@@ -318,8 +357,28 @@ export default function ContratosDetalhePage() {
   const currentStatusDef = statusList.find((s) => s.key === proposal.status);
   const isTerminal = TERMINAL.includes(proposal.status);
   const isPortabilidade = proposal.product === "PORTABILIDADE";
-  const cip = isPortabilidade ? cipInfo(m.dataCip) : null;
+  const isFinalStatus = !!currentStatusDef?.isFinal || FINAL_FALLBACK.includes(proposal.status);
+  // CIP só acompanha enquanto a operação não foi finalizada
+  const cip = (isPortabilidade && !isFinalStatus) ? cipInfo(m.dataCip) : null;
   const canSetCip = isOperacional && !isTerminal;
+
+  // Clonar: bancos cadastrados (do convênio) + permissão (consultor só clona as próprias)
+  const cloneBanks = Array.from(new Set(
+    financeiroTabelas
+      .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+      .map((t: any) => t.banco as string)
+      .filter(Boolean)
+  ));
+  const canClone = canManageContracts || (isVendedor && proposal.vendorId === user?.id);
+
+  // Financeiro da operação: Valor Total = Saldo Devedor + Troco
+  const saldoDevedorNum = parseFloat(m.saldoDevedor) || 0;
+  const trocoNum = parseFloat(m.troco) || 0;
+  const valorTotalOperacao = saldoDevedorNum + trocoNum;
+
+  // Corretor pode anexar documentos quando a proposta é dele e está em pendência
+  const canCorretorAnexar = isVendedor && proposal.vendorId === user?.id &&
+    (!!currentStatusDef?.returnStatusKey || !!currentStatusDef?.allowsVendorEdit);
 
   // permissões de edição de campos
   const canEditFields = !isTerminal && (isOperacional || (isVendedor && !!currentStatusDef?.allowsVendorEdit));
@@ -363,6 +422,8 @@ export default function ContratosDetalhePage() {
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
+      case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
+      case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
       default: return;
     }
     editMutation.mutate(body);
@@ -458,27 +519,77 @@ export default function ContratosDetalhePage() {
               <User className="h-4 w-4" /> Transferir
             </Button>
           )}
-          {canManageContracts && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(proposal.bank || ""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
+          {canClone && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
+            </Button>
+          )}
+          {isSuperMaster && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10" onClick={() => setShowDelete(true)} title="Excluir proposta">
+              <Trash2 className="h-4 w-4" /> Excluir
             </Button>
           )}
         </div>
       </div>
 
-      {/* Aviso de edição liberada para corretor */}
-      {isVendedor && (
-        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
-          currentStatusDef?.allowsVendorEdit
-            ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
-            : "border-border bg-muted/40 text-muted-foreground"
-        }`}>
-          {currentStatusDef?.allowsVendorEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
-          {currentStatusDef?.allowsVendorEdit
-            ? "Edição liberada — você pode ajustar os campos da operação enquanto a proposta estiver neste status."
-            : "Proposta em conferência pelo operacional. Edição bloqueada até liberação."}
-        </div>
-      )}
+      {/* Pendência: banner de regularização (corretor, operacional e master) */}
+      {(() => {
+        const isPendencia = !!currentStatusDef?.returnStatusKey;
+        const canEdit = !!currentStatusDef?.allowsVendorEdit;
+
+        // Status de pendência → banner com observação + botão "Pendência regularizada"
+        if (isPendencia) {
+          return (
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                <span>
+                  {canEdit
+                    ? "Pendência aberta — ajuste os campos, escreva a observação e clique em \"Pendência regularizada\"."
+                    : "Pendência aberta — escreva a observação e clique em \"Pendência regularizada\" para devolver ao operacional."}
+                </span>
+              </div>
+              <Textarea
+                value={regularizeNote}
+                onChange={(e) => setRegularizeNote(e.target.value)}
+                placeholder="Observação (o que foi corrigido / informação para o operacional)..."
+                rows={2}
+                className="resize-none bg-background"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={!regularizeNote.trim() || regularizeMutation.isPending}
+                  onClick={() => regularizeMutation.mutate()}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {regularizeMutation.isPending ? "Enviando..." : "Pendência regularizada"}
+                </Button>
+              </div>
+            </div>
+          );
+        }
+
+        // Corretor em status comum: aviso de edição liberada/bloqueada
+        if (isVendedor) {
+          return (
+            <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
+              canEdit
+                ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}>
+              {canEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
+              <span>
+                {canEdit
+                  ? "Edição liberada — você pode ajustar os campos da operação neste status."
+                  : "Proposta em conferência pelo operacional. Edição bloqueada."}
+              </span>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Layout 2 colunas: ficha à esquerda · ações + histórico à direita */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
@@ -557,6 +668,28 @@ export default function ContratosDetalhePage() {
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product, copyable: false })}
           {renderField({ fieldKey: "bank", label: "Banco", value: proposal.bank, editable: true })}
+          {/* Parceiro (interno — só operacional/master; corretor não vê) */}
+          {canManageContracts && (
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Parceiro <span className="text-[10px]">(interno)</span></p>
+              <div className="mt-0.5">
+                <Select
+                  value={proposal.parceiroId ? String(proposal.parceiroId) : "none"}
+                  onValueChange={(v) => editMutation.mutate({ parceiroId: v === "none" ? null : v })}
+                >
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— nenhum —</SelectItem>
+                    {partnersList
+                      .filter((p: any) => p.isActive || String(p.id) === String(proposal.parceiroId))
+                      .map((p: any) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           {/* Tabela — edição via select */}
           <div className="group min-w-0">
             <p className="text-xs text-muted-foreground">Tabela</p>
@@ -603,8 +736,10 @@ export default function ContratosDetalhePage() {
           {isPortabilidade && renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
           {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
           {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
-          {m.saldoDevedor != null && renderField({ fieldKey: "saldoDev", label: "Saldo Devedor", value: m.saldoDevedor, money: true })}
-          {m.troco != null && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true })}
+          {/* Financeiro da operação (portabilidade) */}
+          {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor", value: m.saldoDevedor, money: true, editable: true })}
+          {isPortabilidade && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
+          {isPortabilidade && renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
           {/* Data CIP + contador de dias úteis (portabilidade) */}
           {isPortabilidade && (
             <div className="min-w-0">
@@ -648,23 +783,21 @@ export default function ContratosDetalhePage() {
                       <p className="text-xs text-muted-foreground">{DOC_TYPE_LABEL[doc.documentType] || doc.documentType || "Arquivo"}</p>
                     </div>
                   </div>
-                  {doc.fileUrl && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Abrir">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                      <a href={doc.fileUrl} download={doc.fileName || ""} className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Baixar">
-                        <Download className="h-4 w-4" />
-                      </a>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a href={`/api/contracts/documents/${doc.id}/file`} target="_blank" rel="noopener noreferrer" className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Abrir">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <a href={`/api/contracts/documents/${doc.id}/file?download=1`} className="rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Baixar">
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Anexar documento (master / admin / operacional) */}
-          {canManageContracts && (
+          {/* Anexar documento (master/admin/operacional; e o corretor em pendência) */}
+          {(canManageContracts || canCorretorAnexar) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
               <Select value={docType} onValueChange={setDocType}>
                 <SelectTrigger className="w-52 h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -677,16 +810,17 @@ export default function ContratosDetalhePage() {
               <input
                 ref={docInputRef}
                 type="file"
+                multiple
                 className="hidden"
                 accept="image/*,.pdf"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadDocMutation.mutate(f);
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  if (files.length) uploadDocMutation.mutate(files);
                   if (docInputRef.current) docInputRef.current.value = "";
                 }}
               />
               <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadDocMutation.isPending} onClick={() => docInputRef.current?.click()}>
-                <Upload className="h-4 w-4" /> {uploadDocMutation.isPending ? "Enviando..." : "Anexar documento"}
+                <Upload className="h-4 w-4" /> {uploadDocMutation.isPending ? "Enviando..." : "Anexar documento(s)"}
               </Button>
             </div>
           )}
@@ -868,6 +1002,30 @@ export default function ContratosDetalhePage() {
         </DialogContent>
       </Dialog>
 
+      {/* Diálogo: Excluir proposta (somente master) */}
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir proposta</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir a proposta <span className="font-medium">#{proposal.id}</span> de{" "}
+            <span className="font-medium">{proposal.clientName}</span>? Esta ação é permanente e remove também o histórico e os documentos anexados.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowDelete(false)}>Cancelar</Button>
+            <Button
+              className="bg-destructive hover:bg-destructive/90 text-white gap-1.5"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Diálogo: Clonar proposta */}
       <Dialog open={showClone} onOpenChange={setShowClone}>
         <DialogContent className="max-w-md">
@@ -880,17 +1038,27 @@ export default function ContratosDetalhePage() {
           <div className="space-y-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Banco</p>
-              <Input value={cloneBank} onChange={(e) => setCloneBank(e.target.value)} placeholder="Banco" />
+              <Select value={cloneBank} onValueChange={(v) => { setCloneBank(v); setCloneTableId(""); }}>
+                <SelectTrigger><SelectValue placeholder="Selecione o banco..." /></SelectTrigger>
+                <SelectContent>
+                  {cloneBanks.map((b) => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Tabela</p>
-              <Select value={cloneTableId} onValueChange={setCloneTableId}>
-                <SelectTrigger><SelectValue placeholder="Manter atual / selecionar..." /></SelectTrigger>
+              <Select value={cloneTableId} onValueChange={setCloneTableId} disabled={!cloneBank}>
+                <SelectTrigger><SelectValue placeholder={cloneBank ? "Selecione a tabela..." : "Selecione o banco primeiro"} /></SelectTrigger>
                 <SelectContent>
                   {financeiroTabelas
-                    .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+                    .filter((t: any) =>
+                      (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
+                      t.banco === cloneBank
+                    )
                     .map((t: any) => (
-                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.nome}{t.banco ? ` — ${t.banco}` : ""}</SelectItem>
+                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.nome}</SelectItem>
                     ))}
                 </SelectContent>
               </Select>

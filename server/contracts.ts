@@ -11,6 +11,8 @@ import {
   financialDebits,
   contractPhases,
   contractStatuses,
+  partners,
+  producoesContratos,
   users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -24,6 +26,21 @@ const uploadDocMemory = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+
+// Content-Type simples por extensão (para servir o anexo com o tipo certo)
+function contentTypeFor(name: string): string {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+  };
+  return map[ext] || "application/octet-stream";
+}
 
 export function registerContractRoutes(app: Express, requireAuth: Function) {
 
@@ -235,6 +252,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           commissionPaidAt: proposals.commissionPaidAt,
           vendorId: proposals.vendorId,
           vendorName: users.name,
+          parceiroId: proposals.parceiroId,
+          parceiroNome: partners.name,
           clientMeta: proposals.clientMeta,
           flowId: proposals.flowId,
           currentStepId: proposals.currentStepId,
@@ -243,6 +262,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))
+        .leftJoin(partners, eq(proposals.parceiroId, partners.id))
         .where(and(...conditions))
         .orderBy(desc(proposals.createdAt));
 
@@ -261,7 +281,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
-        clientMeta,
+        clientMeta, parceiroId,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -321,6 +341,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
             ? String(corretorCommissionPercentage) : null,
           clientMeta: clientMeta || null,
+          parceiroId: parceiroId ? parseInt(parceiroId) : null,
           status: "CADASTRADA",
           isPaused: false,
           flowId: matchedFlowId,
@@ -346,6 +367,110 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // ─── Clonar proposta (copia dados + anexos de documentação) ────────────────
+  app.post("/api/contracts/proposals/:id/clone", requireAuth, async (req: any, res) => {
+    try {
+      const sourceId = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      const { bank, tableId, tableName } = req.body;
+
+      // Busca proposta origem
+      const [src] = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, sourceId), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!src) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Permissão: operacional/master vê qualquer; vendedor só as próprias
+      if (user.role === "vendedor" && src.vendorId !== user.id) {
+        return res.status(403).json({ message: "Sem permissão para clonar esta proposta" });
+      }
+
+      // Monta clientMeta com nova tabela (ou sem tabela se não informou)
+      const newMeta = { ...(src.clientMeta as Record<string, any> || {}) };
+      if (tableId) {
+        newMeta.tabelaFinanceiroId = tableId;
+        newMeta.tabelaNome = tableName || null;
+      } else {
+        delete newMeta.tabelaFinanceiroId;
+        delete newMeta.tabelaNome;
+      }
+
+      // Cria proposta nova
+      const [nova] = await db
+        .insert(proposals)
+        .values({
+          tenantId,
+          clientName: src.clientName,
+          clientCpf: src.clientCpf,
+          clientMatricula: src.clientMatricula,
+          clientConvenio: src.clientConvenio,
+          bank: bank || src.bank,
+          product: src.product,
+          tableId: tableId ? parseInt(tableId) : null,
+          contractValue: src.contractValue,
+          installmentValue: src.installmentValue,
+          term: src.term,
+          ade: src.ade,
+          adeRefin: (src as any).adeRefin || null,
+          commissionPercentage: src.commissionPercentage,
+          corretorCommissionPercentage: src.corretorCommissionPercentage,
+          clientMeta: newMeta,
+          parceiroId: src.parceiroId,
+          vendorId: src.vendorId,
+          status: "CADASTRADA",
+          isPaused: false,
+          createdBy: user.id,
+        })
+        .returning();
+
+      await db.insert(proposalHistory).values({
+        proposalId: nova.id,
+        toStatus: "CADASTRADA",
+        action: "AVANCO",
+        notes: `Clonada da proposta #${sourceId}`,
+        performedBy: user.id,
+      });
+
+      // Copia documentos de documentação (excluindo mensagens/outros sem storageKey)
+      const docs = await db
+        .select()
+        .from(proposalDocuments)
+        .where(eq(proposalDocuments.proposalId, sourceId));
+
+      for (const doc of docs) {
+        if (!doc.storageKey) continue; // legado sem arquivo no storage
+        try {
+          const { buffer, contentType } = await getDocument(doc.storageKey);
+          const ext = path.extname(doc.fileName || doc.storageKey);
+          const newKey = `proposals/${nova.id}/${doc.documentType}-${Date.now()}${ext}`;
+          await saveDocument(newKey, buffer, contentType || contentTypeFor(doc.fileName || newKey));
+          const [novoDoc] = await db.insert(proposalDocuments).values({
+            proposalId: nova.id,
+            documentType: doc.documentType,
+            fileUrl: "",
+            storageKey: newKey,
+            fileName: doc.fileName,
+            uploadedBy: user.id,
+          }).returning();
+          await db.update(proposalDocuments)
+            .set({ fileUrl: `/api/contracts/documents/${novoDoc.id}/file` })
+            .where(eq(proposalDocuments.id, novoDoc.id));
+        } catch (docErr) {
+          console.error(`[clone] falha ao copiar doc ${doc.id}:`, docErr);
+          // não aborta o clone, só pula o arquivo
+        }
+      }
+
+      return res.status(201).json(nova);
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/clone error:", e);
+      return res.status(500).json({ message: `Erro ao clonar proposta: ${e?.message || e}` });
+    }
+  });
+
   // ─── Cadastro em lote (Portabilidade) ───────────────────────────────────────
   app.post("/api/contracts/proposals/batch", requireAuth, async (req: any, res) => {
     try {
@@ -363,7 +488,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         const {
           clientName, clientCpf, clientMatricula, clientConvenio,
           bank, product, contractValue, installmentValue, term,
-          commissionPercentage, corretorCommissionPercentage, clientMeta,
+          commissionPercentage, corretorCommissionPercentage, clientMeta, parceiroId,
         } = item;
 
         if (!clientName || !clientCpf) continue;
@@ -420,6 +545,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
               ? String(corretorCommissionPercentage) : null,
             clientMeta: clientMeta || null,
+            parceiroId: parceiroId ? parseInt(parceiroId) : null,
             status: "CADASTRADA",
             isPaused: false,
             flowId: matchedFlowId,
@@ -568,6 +694,55 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         }
       }
 
+      // Integração operacional → financeiro: ao marcar PAGO, cria/atualiza o contrato
+      // na produção (recebimento/repasse), vinculado por proposalId. Dedupe por ADE.
+      if (status === "PAGO") {
+        try {
+          const ade = (updated.ade || current.ade) || null;
+          const contratoIdVal = ade || `PROP-${id}`;
+          let vendedorNome: string | null = null;
+          if (updated.vendorId) {
+            const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
+            vendedorNome = v?.name || null;
+          }
+          const mesRef = new Date().toISOString().slice(0, 7);
+          const dataPag = new Date().toISOString().slice(0, 10);
+          const valBruto = updated.contractValue ? String(updated.contractValue) : null;
+          const compEmp = updated.companyCommissionValue ? String(updated.companyCommissionValue) : null;
+          const compRep = updated.corretorCommissionValue ? String(updated.corretorCommissionValue) : null;
+          const percEmp = updated.commissionPercentage ? String(parseFloat(updated.commissionPercentage) * 100) : null;
+          const percRep = updated.corretorCommissionPercentage ? String(parseFloat(updated.corretorCommissionPercentage) * 100) : null;
+
+          const payload: any = {
+            tenantId, proposalId: id, contratoId: contratoIdVal,
+            nomeCliente: current.clientName, cpfCliente: current.clientCpf,
+            banco: updated.bank, tipoContrato: updated.product, convenio: current.clientConvenio,
+            prazo: updated.term ? String(updated.term) : null,
+            vendedorId: updated.vendorId || null, vendedorNome,
+            nomeCorretor: vendedorNome,
+            valorBase: valBruto, valorBruto: valBruto,
+            comissaoEmpresaValor: compEmp, comissaoRepasseValor: compRep,
+            comissaoEmpresaPerc: percEmp, comissaoRepassePerc: percRep,
+            mesReferencia: mesRef, dataPagamento: dataPag,
+          };
+
+          // Dedupe: já existe pelo vínculo (proposalId) ou pelo ADE (vindo do CSV)?
+          let [existing] = await db.select({ id: producoesContratos.id }).from(producoesContratos)
+            .where(and(eq(producoesContratos.tenantId, tenantId), eq(producoesContratos.proposalId, id))).limit(1);
+          if (!existing && ade) {
+            [existing] = await db.select({ id: producoesContratos.id }).from(producoesContratos)
+              .where(and(eq(producoesContratos.tenantId, tenantId), eq(producoesContratos.contratoId, ade))).limit(1);
+          }
+          if (existing) {
+            await db.update(producoesContratos).set(payload).where(eq(producoesContratos.id, existing.id));
+          } else {
+            await db.insert(producoesContratos).values(payload);
+          }
+        } catch (finErr) {
+          console.error("[FINANCEIRO auto] erro ao alimentar produção (não bloqueia):", finErr);
+        }
+      }
+
       return res.json(updated);
     } catch (e: any) {
       console.error("PUT /api/contracts/proposals/:id/status error:", e);
@@ -603,9 +778,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
       if (!canEdit) return res.status(403).json({ message: "Sem permissão para editar esta proposta" });
 
-      const { bank, contractValue, installmentValue, term, ade, adeRefin, vendorId, clientMetaPatch, notes } = req.body;
+      const { bank, contractValue, installmentValue, term, ade, adeRefin, vendorId, parceiroId, clientMetaPatch, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
+
+      // Parceiro (uso interno) — só operacional/master
+      if (parceiroId !== undefined) {
+        if (!isOper) return res.status(403).json({ message: "Sem permissão para alterar o parceiro" });
+        updateData.parceiroId = parceiroId ? parseInt(parceiroId) : null;
+      }
       if (bank !== undefined) updateData.bank = bank || null;
       if (contractValue !== undefined) updateData.contractValue = (contractValue === null || contractValue === "") ? null : String(contractValue);
       if (installmentValue !== undefined) updateData.installmentValue = (installmentValue === null || installmentValue === "") ? null : String(installmentValue);
@@ -671,6 +852,102 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("GET /api/contracts/assignable-users error:", e);
       return res.status(500).json({ message: "Erro ao listar usuários" });
+    }
+  });
+
+  // Pendência regularizada — volta a proposta para o status anterior à pendência (corretor ou operacional)
+  app.post("/api/contracts/proposals/:id/regularize", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+
+      const [current] = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Definição do status atual (regra de retorno configurada)
+      const [st] = await db
+        .select()
+        .from(contractStatuses)
+        .where(and(eq(contractStatuses.tenantId, tenantId), eq(contractStatuses.key, current.status)))
+        .limit(1);
+
+      // Permissão: operacional/master, OU o corretor dono quando o status é uma pendência
+      // (tem returnStatusKey definido) ou permite edição.
+      const isOper = user.isMaster || ["operacional", "coordenacao", "master"].includes(user.role || "");
+      let allowed = isOper;
+      if (!allowed && user.role === "vendedor" && current.vendorId === user.id) {
+        allowed = !!st?.returnStatusKey || !!st?.allowsVendorEdit;
+      }
+      if (!allowed) return res.status(403).json({ message: "Sem permissão para regularizar a pendência" });
+
+      // Status de retorno: o configurado no status atual; senão o anterior à pendência (histórico)
+      let target: string | null = st?.returnStatusKey || null;
+      if (!target) {
+        const hist = await db
+          .select()
+          .from(proposalHistory)
+          .where(eq(proposalHistory.proposalId, id))
+          .orderBy(desc(proposalHistory.createdAt));
+        for (const h of hist) {
+          if (h.toStatus === current.status && h.fromStatus && h.fromStatus !== current.status) {
+            target = h.fromStatus;
+            break;
+          }
+        }
+      }
+      if (!target) target = req.body?.fallbackStatus || null;
+      if (!target) return res.status(400).json({ message: "Não foi possível identificar a fase de retorno" });
+
+      const [updated] = await db
+        .update(proposals)
+        .set({ status: target, updatedAt: new Date() })
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .returning();
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        fromStatus: current.status,
+        toStatus: target,
+        action: "RESOLUCAO",
+        notes: req.body?.notes || "Pendência regularizada",
+        performedBy: user.id,
+      });
+
+      return res.json(updated);
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/regularize error:", e);
+      return res.status(500).json({ message: "Erro ao regularizar pendência" });
+    }
+  });
+
+  // Excluir proposta — SOMENTE master (super-admin)
+  app.delete("/api/contracts/proposals/:id", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Apenas o master pode excluir propostas" });
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+
+      const [current] = await db
+        .select({ id: proposals.id })
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      // Remove débitos financeiros vinculados (sem cascade) para não travar a exclusão
+      await db.delete(financialDebits).where(eq(financialDebits.proposalId, id));
+      // Histórico, mensagens e documentos saem por ON DELETE CASCADE
+      await db.delete(proposals).where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)));
+
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/proposals/:id error:", e);
+      return res.status(500).json({ message: `Erro ao excluir proposta: ${String(e?.message || e)}` });
     }
   });
 
@@ -983,10 +1260,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
 
       const { buffer, contentType } = await getDocument(row.storageKey);
-      res.setHeader("Content-Type", contentType || "application/octet-stream");
+      res.setHeader("Content-Type", contentType || contentTypeFor(row.fileName || ""));
+      const disposition = req.query.download ? "attachment" : "inline";
       res.setHeader(
         "Content-Disposition",
-        `inline; filename="${encodeURIComponent(row.fileName || "documento")}"`,
+        `${disposition}; filename="${encodeURIComponent(row.fileName || "documento")}"`,
       );
       return res.send(buffer);
     } catch (e: any) {
@@ -1131,9 +1409,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     { key: "EM_ANDAMENTO",      label: "Em Andamento",   color: "orange", ordem: 3 },
     { key: "PENDENTE_CORRETOR", label: "Pend. Corretor", color: "red",    ordem: 4 },
     { key: "PENDENTE_BANCO",    label: "Pend. Banco",    color: "yellow", ordem: 5 },
-    { key: "PAGO",              label: "Pago",           color: "green",  ordem: 6 },
-    { key: "CANCELADA",         label: "Cancelada",      color: "red",    ordem: 7 },
-    { key: "PERDIDA",           label: "Perdida",        color: "rose",   ordem: 8 },
+    { key: "PAGO",              label: "Pago",           color: "green",  ordem: 6, isFinal: true },
+    { key: "CANCELADA",         label: "Cancelada",      color: "red",    ordem: 7, isFinal: true },
+    { key: "PERDIDA",           label: "Perdida",        color: "rose",   ordem: 8, isFinal: true },
   ];
 
   app.get("/api/contracts/statuses", requireAuth, async (req: any, res) => {
@@ -1163,11 +1441,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
   app.post("/api/contracts/statuses", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
-      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false } = req.body;
+      const { key, label, color = "zinc", ordem = 99, allowsVendorEdit = false, isFinal = false, returnStatusKey = null } = req.body;
       if (!key || !label) return res.status(400).json({ message: "key e label são obrigatórios" });
       const [row] = await db
         .insert(contractStatuses)
-        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit })
+        .values({ tenantId: req.tenantId!, key, label, color, ordem, isDefault: false, allowsVendorEdit, isFinal, returnStatusKey: returnStatusKey || null })
         .returning();
       return res.status(201).json(row);
     } catch (e: any) {
@@ -1181,11 +1459,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     if (!req.user?.isMaster && !["master", "operacional"].includes(req.user?.role)) return res.status(403).json({ message: "Acesso negado" });
     try {
       const id = parseInt(req.params.id);
-      const { label, color, allowsVendorEdit } = req.body;
+      const { label, color, allowsVendorEdit, isFinal, returnStatusKey } = req.body;
       const updates: any = {};
       if (label !== undefined) updates.label = label;
       if (color !== undefined) updates.color = color;
       if (allowsVendorEdit !== undefined) updates.allowsVendorEdit = allowsVendorEdit;
+      if (isFinal !== undefined) updates.isFinal = isFinal;
+      if (returnStatusKey !== undefined) updates.returnStatusKey = returnStatusKey || null;
       const [row] = await db
         .update(contractStatuses)
         .set(updates)
@@ -1285,6 +1565,102 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("DELETE /api/contracts/phases/:id error:", e);
       return res.status(500).json({ message: "Erro ao excluir fase" });
+    }
+  });
+
+  // ===================== PARCEIROS (uso interno) =====================
+
+  const isOperOrMaster = (u: any) => u?.isMaster || ["master", "operacional"].includes(u?.role || "");
+
+  app.get("/api/contracts/partners", requireAuth, async (req: any, res) => {
+    try {
+      const list = await db
+        .select()
+        .from(partners)
+        .where(eq(partners.tenantId, req.tenantId!))
+        .orderBy(asc(partners.name));
+      return res.json(list);
+    } catch (e: any) {
+      console.error("GET /api/contracts/partners error:", e);
+      return res.status(500).json({ message: "Erro ao listar parceiros" });
+    }
+  });
+
+  app.post("/api/contracts/partners", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const { name } = req.body;
+      if (!name || !String(name).trim()) return res.status(400).json({ message: "Nome é obrigatório" });
+      const [row] = await db
+        .insert(partners)
+        .values({ tenantId: req.tenantId!, name: String(name).trim(), isActive: true })
+        .returning();
+      return res.status(201).json(row);
+    } catch (e: any) {
+      console.error("POST /api/contracts/partners error:", e);
+      return res.status(500).json({ message: "Erro ao criar parceiro" });
+    }
+  });
+
+  app.patch("/api/contracts/partners/:id", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      const { name, isActive } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = String(name).trim();
+      if (isActive !== undefined) updates.isActive = isActive;
+      const [row] = await db
+        .update(partners)
+        .set(updates)
+        .where(and(eq(partners.id, id), eq(partners.tenantId, req.tenantId!)))
+        .returning();
+      if (!row) return res.status(404).json({ message: "Parceiro não encontrado" });
+      return res.json(row);
+    } catch (e: any) {
+      console.error("PATCH /api/contracts/partners/:id error:", e);
+      return res.status(500).json({ message: "Erro ao atualizar parceiro" });
+    }
+  });
+
+  app.delete("/api/contracts/partners/:id", requireAuth, async (req: any, res) => {
+    if (!isOperOrMaster(req.user)) return res.status(403).json({ message: "Acesso negado" });
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(partners).where(and(eq(partners.id, id), eq(partners.tenantId, req.tenantId!)));
+      return res.status(204).send();
+    } catch (e: any) {
+      console.error("DELETE /api/contracts/partners/:id error:", e);
+      return res.status(500).json({ message: "Erro ao excluir parceiro" });
+    }
+  });
+
+  // Contagem de pendências do corretor (para o badge da sidebar)
+  app.get("/api/contracts/pending-count", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      // "Pendência do corretor" = status com returnStatusKey definido
+      const allStatuses = await db
+        .select()
+        .from(contractStatuses)
+        .where(eq(contractStatuses.tenantId, tenantId));
+      const keys = allStatuses.filter((s: any) => !!s.returnStatusKey).map((s: any) => s.key);
+      if (keys.length === 0) return res.json({ count: 0 });
+
+      // Badge é pessoal: conta as propostas do próprio usuário (corretor) nesses status
+      const rows = await db
+        .select({ id: proposals.id })
+        .from(proposals)
+        .where(and(
+          eq(proposals.tenantId, tenantId),
+          eq(proposals.vendorId, user.id),
+          inArray(proposals.status, keys),
+        ));
+      return res.json({ count: rows.length });
+    } catch (e: any) {
+      console.error("GET /api/contracts/pending-count error:", e);
+      return res.json({ count: 0 });
     }
   });
 }

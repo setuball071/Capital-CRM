@@ -9,7 +9,7 @@ import {
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
   Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
-  Trash2, Plus,
+  Trash2, Plus, Pencil, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
+import { renderPdfFirstPageToBlob, isPdf } from "@/lib/pdf-render";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -426,6 +427,7 @@ export default function ContratosPropostaPage() {
     dataNascimento: string | null;
     dataExpedicao: string | null;
     orgaoEmissor: string | null;
+    naturalidade: string | null;
   }
   const [docFrenteFile, setDocFrenteFile] = useState<File | null>(null);
   const [docVersoFile,  setDocVersoFile]  = useState<File | null>(null);
@@ -438,6 +440,9 @@ export default function ContratosPropostaPage() {
   const [docPhotoData,  setDocPhotoData]  = useState<DocPhotoData | null>(null);
   /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior */
   const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | null>(null);
+  // Edição inline dos campos do documento de identidade
+  const [docEditField, setDocEditField] = useState<string | null>(null);
+  const [docEditVal,   setDocEditVal]   = useState("");
   const [nameAlert,     setNameAlert]     = useState<string | null>(null);
 
   // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
@@ -463,16 +468,22 @@ export default function ContratosPropostaPage() {
     });
   }
 
+  // Converte arquivo (imagem OU PDF) em imagem JPEG para o OCR
+  async function fileToImageBlob(file: File): Promise<Blob> {
+    if (isPdf(file)) return renderPdfFirstPageToBlob(file);
+    return resizeImageToBlob(file);
+  }
+
   // Chama o endpoint OCR com as imagens da frente e verso
   async function runDocOcr(frente: File, verso: File | null) {
     setIsOcring(true);
     setOcrError(null);
     try {
       const formData = new FormData();
-      const frenteBlob = await resizeImageToBlob(frente);
+      const frenteBlob = await fileToImageBlob(frente);
       formData.append("frente", new File([frenteBlob], "frente.jpg", { type: "image/jpeg" }));
       if (verso) {
-        const versoBlob = await resizeImageToBlob(verso);
+        const versoBlob = await fileToImageBlob(verso);
         formData.append("verso", new File([versoBlob], "verso.jpg", { type: "image/jpeg" }));
       }
       const res = await fetch("/api/ocr/document", {
@@ -528,6 +539,51 @@ export default function ContratosPropostaPage() {
     if (shared / Math.max(w1.size, w2.size) >= 0.65) return null;
     return `⚠️ Nome divergente: contracheque "${siapeName}" × documento "${docName}". Verifique antes de continuar (pode ser casamento, emancipação ou erro de cadastro).`;
   }
+
+  // Salva edição manual de um campo do documento de identidade
+  function saveDocField(key: string) {
+    const v = docEditVal.trim();
+    setDocPhotoData((prev) => {
+      if (!prev) return prev;
+      if (key === "filiacaoPai") return { ...prev, filiacao: [v || null, prev.filiacao?.[1] ?? null] };
+      if (key === "filiacaoMae") return { ...prev, filiacao: [prev.filiacao?.[0] ?? null, v || null] };
+      return { ...prev, [key]: v || null } as DocPhotoData;
+    });
+    setDocEditField(null);
+    setDocEditVal("");
+  }
+
+  // Campo do documento de identidade com edição inline (lápis). Função (não componente)
+  // para o input não perder o foco a cada tecla.
+  const renderDocField = (key: string, label: string, value: any, wide = false) => {
+    const isEditing = docEditField === key;
+    return (
+      <div className={`group ${wide ? "col-span-2" : ""}`}>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {isEditing ? (
+          <div className="flex items-center gap-1 mt-0.5">
+            <input
+              className="flex-1 border rounded px-1.5 py-0.5 text-sm bg-background"
+              value={docEditVal}
+              onChange={(e) => setDocEditVal(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") saveDocField(key); if (e.key === "Escape") { setDocEditField(null); setDocEditVal(""); } }}
+            />
+            <button type="button" className="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => saveDocField(key)}><Check className="h-3.5 w-3.5" /></button>
+            <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => { setDocEditField(null); setDocEditVal(""); }}><X className="h-3.5 w-3.5" /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`font-medium ${value ? "" : "text-muted-foreground italic"}`}>{value || "—"}</span>
+            <Pencil
+              className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-primary shrink-0"
+              onClick={() => { setDocEditField(key); setDocEditVal(value || ""); }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
@@ -626,6 +682,20 @@ export default function ContratosPropostaPage() {
   const financeiroTabelas: any[] = financeiroConfig?.dados?.tabelas ?? [];
   const financeiroGrupos: any[]  = financeiroConfig?.dados?.grupos   ?? [];
   const financeiroCorretores: any[] = financeiroConfig?.dados?.corretores ?? [];
+
+  // Parceiro (interno) — só operacional/master define no cadastro; corretor não vê
+  const canSetParceiro = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
+  const [parceiroId, setParceiroId] = useState<string>("");
+  const { data: partnersList = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/partners"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/partners", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: canSetParceiro,
+  });
 
   /** Mapeia contractType → "tipo" usado nas tabelas de Financeiro */
   function mapTipoContrato(t: string | null): string | null {
@@ -780,6 +850,7 @@ export default function ContratosPropostaPage() {
                   orgaoEmissor:    docPhotoData.orgaoEmissor,
                   filiacao:        docPhotoData.filiacao,
                   cpf:             docPhotoData.cpf,
+                  naturalidade:    docPhotoData.naturalidade,
                 },
               }),
             }
@@ -793,6 +864,7 @@ export default function ContratosPropostaPage() {
         tableId: undefined, // FK aponta para coefficient_tables (legado) — não enviar; ID real fica em clientMeta
         term: data.term || undefined,
         ade: data.ade || undefined,
+        parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
           ? selectedTabela.pctEmpresa / 100
@@ -910,6 +982,7 @@ export default function ContratosPropostaPage() {
           orgaoEmissor:   docPhotoData.orgaoEmissor,
           filiacao:       docPhotoData.filiacao,
           cpf:            docPhotoData.cpf,
+          naturalidade:   docPhotoData.naturalidade,
         };
       }
       if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
@@ -938,6 +1011,7 @@ export default function ContratosPropostaPage() {
           installmentValue: parseFloat(c.novaParcela) || null,
           contractValue:    parseFloat(c.saldoDevedor) || null,
           term:             parseInt(c.novoPrazo) || null,
+          parceiroId:      canSetParceiro && parceiroId ? parceiroId : undefined,
           clientMeta: {
             ...sharedMeta,
             ...(tabela ? { tabelaFinanceiroId: c.tableId, tabelaNome: tabela.nome } : {}),
@@ -1229,13 +1303,21 @@ export default function ContratosPropostaPage() {
   // ─── STEP 2 — Upload Contracheque + Documento com Foto ──────────────────────
 
   if (step === "siape-upload") {
-    // Handler para frente do documento com foto
-    function handleFrenteFile(file: File) {
-      if (!file.type.startsWith("image/")) {
-        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+    // Gera URL de preview (imagem direta; PDF → renderiza 1ª página)
+    async function makePreview(file: File): Promise<string> {
+      if (isPdf(file)) return URL.createObjectURL(await renderPdfFirstPageToBlob(file));
+      return URL.createObjectURL(file);
+    }
+
+    // Handler para frente do documento com foto (imagem ou PDF)
+    async function handleFrenteFile(file: File) {
+      if (!file.type.startsWith("image/") && !isPdf(file)) {
+        setOcrError("Por favor selecione uma imagem ou PDF.");
         return;
       }
-      const preview = URL.createObjectURL(file);
+      let preview: string;
+      try { preview = await makePreview(file); }
+      catch { setOcrError("Não foi possível ler o PDF. Tente outro arquivo."); return; }
       setDocFrenteFile(file);
       setDocFrentePreview(preview);
       setDocPhotoData(null);
@@ -1245,12 +1327,14 @@ export default function ContratosPropostaPage() {
       if (docVersoFile) handleBothImagesReady(file, docVersoFile);
     }
 
-    function handleVersoFile(file: File) {
-      if (!file.type.startsWith("image/")) {
-        setOcrError("Por favor selecione uma imagem (JPG, PNG, etc.).");
+    async function handleVersoFile(file: File) {
+      if (!file.type.startsWith("image/") && !isPdf(file)) {
+        setOcrError("Por favor selecione uma imagem ou PDF.");
         return;
       }
-      const preview = URL.createObjectURL(file);
+      let preview: string;
+      try { preview = await makePreview(file); }
+      catch { setOcrError("Não foi possível ler o PDF. Tente outro arquivo."); return; }
       setDocVersoFile(file);
       setDocVersoPreview(preview);
       setDocPhotoData(null);
@@ -1322,7 +1406,7 @@ export default function ContratosPropostaPage() {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             className="hidden"
             onChange={(e) => { if (e.target.files?.[0]) onFileChange(e.target.files[0]); }}
           />
@@ -1645,6 +1729,24 @@ export default function ContratosPropostaPage() {
         </div>
       )}
 
+      {/* Parceiro (interno — só operacional/master; corretor não vê) */}
+      {canSetParceiro && (
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm font-medium mb-1.5">Parceiro <span className="text-xs font-normal text-muted-foreground">(interno — por onde foi cadastrado)</span></p>
+            <Select value={parceiroId || "none"} onValueChange={(v) => setParceiroId(v === "none" ? "" : v)}>
+              <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Selecionar parceiro..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— nenhum —</SelectItem>
+                {partnersList.filter((p: any) => p.isActive).map((p: any) => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
+
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((d) => createMutation.mutate(d))}
@@ -1775,36 +1877,25 @@ export default function ContratosPropostaPage() {
             </CardContent>
           </Card>
 
-          {/* ── Dados do Documento com Foto (somente leitura) ── */}
+          {/* ── Dados do Documento com Foto (editáveis — lápis em cada campo) ── */}
           {docPhotoData && (
             <Card className="border-purple-200 dark:border-purple-900">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
                   <CreditCard className="h-4 w-4" />
                   {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
-                  <span className="text-xs font-normal text-muted-foreground">(apenas informação)</span>
+                  <span className="text-xs font-normal text-muted-foreground">(corrija se necessário)</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-                  {docPhotoData.numeroRegistro && (
-                    <InfoField label="Nº Registro" value={docPhotoData.numeroRegistro} />
-                  )}
-                  {docPhotoData.dataNascimento && (
-                    <InfoField label="Nascimento" value={docPhotoData.dataNascimento} />
-                  )}
-                  {docPhotoData.dataExpedicao && (
-                    <InfoField label="Expedição" value={docPhotoData.dataExpedicao} />
-                  )}
-                  {docPhotoData.orgaoEmissor && (
-                    <InfoField label="Órgão Emissor" value={docPhotoData.orgaoEmissor} />
-                  )}
-                  {docPhotoData.filiacao?.[0] && (
-                    <InfoField label="Filiação — Pai" value={docPhotoData.filiacao[0]} wide />
-                  )}
-                  {docPhotoData.filiacao?.[1] && (
-                    <InfoField label="Filiação — Mãe" value={docPhotoData.filiacao[1]} wide />
-                  )}
+                  {renderDocField("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
+                  {renderDocField("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
+                  {renderDocField("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
+                  {renderDocField("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
+                  {renderDocField("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
+                  {renderDocField("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
+                  {renderDocField("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
                 </div>
               </CardContent>
             </Card>

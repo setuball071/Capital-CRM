@@ -76,6 +76,7 @@ import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
 import ContratosDetalhePage from "@/pages/contratos-detalhe";
 import ContratosFluxosPage from "@/pages/contratos-fluxos";
+import ContratosConfigPage from "@/pages/contratos-config";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
 import ImportarObservacoesPage from "@/pages/importar-observacoes";
@@ -88,7 +89,7 @@ import PrivacidadePage from "@/pages/privacidade";
 import AdminAssinaturasPage from "@/pages/admin-assinaturas";
 import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
-import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle } from "lucide-react";
+import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle, Table, PlusCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 import ProducaoFinanceiraPage from "@/pages/producao-financeira";
 import { NotificationBell } from "@/components/notification-bell";
@@ -344,15 +345,17 @@ function Router() {
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-1">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
               {[
-                { key: "criativos", label: "Criativos", Icon: Smartphone },
-                { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap },
+                { key: "tabelas", label: "Tabelas", Icon: Table, onClick: () => navigate("/financeiro/tabelas") },
+                { key: "nova-proposta", label: "Nova Proposta", Icon: PlusCircle, onClick: () => navigate("/contratos/nova") },
+                { key: "criativos", label: "Criativos", Icon: Smartphone, onClick: () => handleAtalho("criativos") },
+                { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap, onClick: () => handleAtalho("tutoriais") },
               ].map((s) => (
                 <button
                   key={s.key}
-                  onClick={() => handleAtalho(s.key)}
+                  onClick={s.onClick}
                   className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
                   style={{ color: "#6B7280", fontFamily: "Inter, sans-serif" }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "#6C2BD9"; e.currentTarget.style.backgroundColor = "rgba(108,43,217,0.07)"; }}
@@ -622,6 +625,9 @@ function Router() {
               </Route>
               <Route path="/contratos/fluxos">
                 {() => <ProtectedRoute component={ContratosFluxosPage} />}
+              </Route>
+              <Route path="/contratos/configuracoes">
+                {() => <RoleRoute component={ContratosConfigPage} allowedRoles={["master", "operacional"]} />}
               </Route>
               <Route path="/contratos/:id">
                 {() => <ProtectedRoute component={ContratosDetalhePage} />}

@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
   Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
-  ListChecks, Hash, MessageSquare, RefreshCw,
+  ListChecks, Hash, MessageSquare, RefreshCw, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,13 +32,13 @@ import { cipInfo, type CipState } from "@/lib/cip";
 // Tag e cor de linha do contador CIP (portabilidade)
 const CIP_BADGE: Record<CipState, string> = {
   ok:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse",
-  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold animate-pulse",
+  near: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  due:  "bg-amber-300 text-amber-950 dark:bg-amber-600/60 dark:text-amber-50 font-semibold",
 };
 const CIP_ROW: Record<CipState, string> = {
   ok:   "",
-  near: "bg-amber-50 dark:bg-amber-950/20 animate-pulse",
-  due:  "bg-amber-100 dark:bg-amber-900/30 animate-pulse",
+  near: "bg-amber-50 dark:bg-amber-950/20",
+  due:  "bg-amber-100 dark:bg-amber-900/30",
 };
 
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
@@ -118,6 +118,8 @@ interface StatusDef {
   ordem: number;
   isDefault: boolean;
   allowsVendorEdit: boolean;
+  isFinal: boolean;
+  returnStatusKey: string | null;
 }
 
 interface Phase {
@@ -129,9 +131,12 @@ interface Phase {
 }
 
 type PhaseFormT = { name: string; color: string; statuses: string[] };
-type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean };
+type StatusFormT = { label: string; color: string; allowsVendorEdit: boolean; isFinal: boolean; returnStatusKey: string };
 const EMPTY_PHASE: PhaseFormT = { name: "", color: "blue", statuses: [] };
-const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false };
+const EMPTY_STATUS: StatusFormT = { label: "", color: "zinc", allowsVendorEdit: false, isFinal: false, returnStatusKey: "" };
+
+// Status que encerram a operação (fallback p/ padrões, além da flag isFinal)
+const FINAL_FALLBACK = ["PAGO", "CANCELADA", "PERDIDA"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,7 +222,7 @@ function PhaseManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Gerenciar Contratos</DialogTitle>
         </DialogHeader>
@@ -427,7 +432,7 @@ function StatusesTab({
 
   function startEdit(s: StatusDef) {
     setEditingId(s.id);
-    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit });
+    setForm({ label: s.label, color: s.color, allowsVendorEdit: s.allowsVendorEdit, isFinal: s.isFinal, returnStatusKey: s.returnStatusKey || "" });
   }
   function cancelEdit() { setEditingId(null); setForm(EMPTY_STATUS); }
 
@@ -447,6 +452,35 @@ function StatusesTab({
     </div>
   );
 
+  const FinalToggle = (
+    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">Finaliza a operação</p>
+        <p className="text-xs text-muted-foreground">Encerra o acompanhamento (ex.: contador CIP para de alertar).</p>
+      </div>
+      <Switch checked={form.isFinal} onCheckedChange={(v) => setForm((f) => ({ ...f, isFinal: v }))} />
+    </div>
+  );
+
+  const ReturnSelect = (
+    <div className="rounded-md border border-border px-3 py-2">
+      <p className="text-sm font-medium">Pendência do corretor — ao regularizar, mover para</p>
+      <p className="text-xs text-muted-foreground mb-2">
+        Defina para tornar este status uma pendência: o corretor verá o botão "Pendência regularizada" e, ao clicar, a proposta vai para o status escolhido.
+      </p>
+      <select
+        className="w-full border rounded px-2 py-1 text-sm bg-background"
+        value={form.returnStatusKey}
+        onChange={(e) => setForm((f) => ({ ...f, returnStatusKey: e.target.value }))}
+      >
+        <option value="">— não é pendência do corretor —</option>
+        {statusList.map((s) => (
+          <option key={s.key} value={s.key}>{s.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <div className="space-y-2">
       {statusList.map((s) => {
@@ -462,6 +496,8 @@ function StatusesTab({
                   <ColorPicker value={form.color} onChange={(c) => setForm((f) => ({ ...f, color: c }))} />
                 </div>
                 {VendorEditToggle}
+                {FinalToggle}
+                {ReturnSelect}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" type="button" onClick={cancelEdit}>Cancelar</Button>
                   <Button size="sm" type="button" disabled={!form.label.trim()} onClick={handleSubmit}>Salvar</Button>
@@ -474,6 +510,11 @@ function StatusesTab({
                 {s.allowsVendorEdit && (
                   <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400" title="Corretor pode editar neste status">
                     <Pencil className="h-3 w-3" /> corretor
+                  </span>
+                )}
+                {(s.isFinal || FINAL_FALLBACK.includes(s.key)) && (
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400" title="Finaliza a operação — para o acompanhamento">
+                    <Check className="h-3 w-3" /> final
                   </span>
                 )}
                 {s.isDefault && (
@@ -570,6 +611,13 @@ export default function ContratosListaPage() {
   const [bulkNotes, setBulkNotes] = useState("");
   const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status"; status?: string } | null>(null);
   const [quickValue, setQuickValue] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  function copyText(key: string, text: string) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1200);
+  }
 
   const isMaster = !!(user?.isMaster || user?.role === "master");
   // Operacional e Administrador (role master) têm a MESMA visão/gestão do master em contratos
@@ -769,6 +817,7 @@ export default function ContratosListaPage() {
   });
 
   const showCorretorCol = viewMode === "operacional";
+  const showParceiroCol = canManageContracts;
   const showSelectCol = isOperacional;
 
   // ── Seleção ─────────────────────────────────────────────────────────────────
@@ -1012,13 +1061,16 @@ export default function ContratosListaPage() {
                 <TableHead className="text-right">Parcela</TableHead>
                 <TableHead className="text-right">Contrato</TableHead>
                 <TableHead>ADE</TableHead>
+                {showParceiroCol && <TableHead>Parceiro</TableHead>}
                 <TableHead>Status</TableHead>
                 {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p) => {
-                const cip = p.product === "PORTABILIDADE" ? cipInfo(p.clientMeta?.dataCip) : null;
+                const pStatusDef = statusList.find((s) => s.key === p.status);
+                const pIsFinal = pStatusDef?.isFinal || FINAL_FALLBACK.includes(p.status);
+                const cip = (p.product === "PORTABILIDADE" && !pIsFinal) ? cipInfo(p.clientMeta?.dataCip) : null;
                 const cipActive = cip && cip.state !== "ok";
                 return (
                 <TableRow
@@ -1038,14 +1090,33 @@ export default function ContratosListaPage() {
                   )}
                   <TableCell className="text-xs text-muted-foreground font-mono">{p.id}</TableCell>
                   <TableCell className="text-sm">{p.clientConvenio || "—"}</TableCell>
-                  <TableCell className="text-sm font-mono text-xs">{formatCpfMask(p.clientCpf || "")}</TableCell>
-                  <TableCell className="text-sm font-medium">{p.clientName}</TableCell>
+                  <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
+                    <span className="group inline-flex items-center gap-1">
+                      {formatCpfMask(p.clientCpf || "")}
+                      {p.clientCpf && (
+                        <button title="Copiar CPF" onClick={() => copyText(`cpf-${p.id}`, (p.clientCpf || "").replace(/\D/g, ""))} className="text-muted-foreground hover:text-primary">
+                          {copiedKey === `cpf-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                    <span className="group inline-flex items-center gap-1">
+                      {p.clientName}
+                      {p.clientName && (
+                        <button title="Copiar nome" onClick={() => copyText(`nome-${p.id}`, p.clientName)} className="text-muted-foreground hover:text-primary">
+                          {copiedKey === `nome-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      )}
+                    </span>
+                  </TableCell>
                   {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
                   <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
+                  {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />

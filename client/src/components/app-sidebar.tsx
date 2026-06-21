@@ -1,8 +1,9 @@
 import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
 
 import { useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useTheme } from "@/components/theme-provider";
@@ -81,6 +82,27 @@ export function AppSidebar() {
     refetchInterval: 60000,
   });
 
+  // Pendências do corretor — badge em "Minhas Propostas" + toast
+  const { toast } = useToast();
+  const { data: pendingData } = useQuery<{ count: number }>({
+    queryKey: ["/api/contracts/pending-count"],
+    refetchInterval: 60000,
+  });
+  const pendingCount = pendingData?.count || 0;
+  const prevPendingRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingData == null) return;
+    const prev = prevPendingRef.current;
+    // 1º carregamento com pendência, ou aumento de pendências → toast
+    if (pendingCount > 0 && (prev === null || pendingCount > prev)) {
+      toast({
+        title: "Você tem contratos que precisam da sua atenção",
+        description: `${pendingCount} contrato(s) pendente(s) em "Minhas Propostas".`,
+      });
+    }
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount, pendingData, toast]);
+
   if (!user) return null;
 
   const userRole = user.role as UserRole;
@@ -115,6 +137,17 @@ export function AppSidebar() {
 
   const menuSections: MenuSection[] = [
     {
+      title: "Operacional",
+      icon: Wrench,
+      items: [
+        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
+        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
+        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
+        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Configurações", url: "/contratos/configuracoes", icon: Settings, rolesAllowed: ["master", "operacional"] },
+      ],
+    },
+    {
       title: "Vendas",
       icon: Kanban,
       items: [
@@ -126,18 +159,6 @@ export function AppSidebar() {
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
         { title: "Minha Carteira", url: "/vendas/minha-carteira", icon: Upload, module: "modulo_alpha", subItem: "minha_carteira" },
-      ],
-    },
-    {
-      title: "Operacional",
-      icon: Wrench,
-      items: [
-        { title: "Nova Proposta", url: "/contratos/nova", icon: PlusCircle, rolesAllowed: ["master", "coordenacao", "vendedor"] },
-        { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
-        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
-        { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
-        { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Gestão de Fluxos", url: "/contratos/fluxos", icon: GitBranch, masterOnly: true },
       ],
     },
     {
@@ -390,6 +411,11 @@ export function AppSidebar() {
                                       {item.url === "/desenvolvimento/feedbacks" && (feedbackUnread?.count || 0) > 0 && (
                                         <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-feedbacks-unread">
                                           {feedbackUnread!.count}
+                                        </Badge>
+                                      )}
+                                      {item.url === "/contratos" && pendingCount > 0 && (
+                                        <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-pendencias-corretor">
+                                          {pendingCount > 9 ? "9+" : pendingCount}
                                         </Badge>
                                       )}
                                     </button>
