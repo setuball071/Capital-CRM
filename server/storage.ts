@@ -179,20 +179,10 @@ export const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-const _db = drizzle(pool);
-
-// Compatibilidade com o driver antigo (neon-http): lá `db.execute(sql`...`)`
-// devolvia direto o array de linhas; o node-postgres devolve um QueryResult
-// ({ rows, rowCount, ... }). Para não reescrever as ~300 chamadas existentes
-// (nenhuma usa .rows/.rowCount), normalizamos db.execute() para devolver as
-// linhas, preservando exatamente o comportamento anterior.
-const _rawExecute = _db.execute.bind(_db);
-(_db as any).execute = async (query: any) => {
-  const res: any = await _rawExecute(query);
-  return Array.isArray(res) ? res : (res?.rows ?? res);
-};
-
-export const db = _db;
+// neon-http e node-postgres retornam o MESMO formato em db.execute():
+// um QueryResult com `.rows` (e .rowCount). O código consome via `result.rows`
+// (273 usos). Por isso NÃO há wrapper — o retorno nativo do pg já é compatível.
+export const db = drizzle(pool);
 
 export interface IStorage {
   // Users
