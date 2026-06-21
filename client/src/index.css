@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+:root { --build-id: "railway-supabase-20260621"; }
+
 /* LIGHT MODE - mais contraste em bordas e fundo levemente acinzentado
    para reduzir brilho e dar melhor separação visual entre cards e o canvas */
 :root {
