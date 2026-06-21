@@ -124,6 +124,22 @@ import nodePath from "path";
 
 // Static público (logos etc.) — não exige sessão
 app.use(express.static(nodePath.join(process.cwd(), "public")));
+
+// Assets do cliente buildado (JS/CSS hasheados) — servidos AQUI, ANTES do
+// middleware de sessão. Arquivos estáticos não precisam de sessão; passar pela
+// sessão fazia uma query no banco por request e, sob a rajada concorrente do
+// carregamento da página (js+css+favicon juntos) + jobs em background, o pool
+// esgotava e a query de sessão falhava → 500 em /assets/* → tela branca.
+// `index: false` mantém o "/" passando pelo fluxo normal (check de tenant).
+if (isProduction) {
+  app.use(
+    express.static(nodePath.join(import.meta.dirname, "public"), {
+      index: false,
+      maxAge: "1y",
+      immutable: true,
+    }),
+  );
+}
 // NOTA: /uploads (protegido) é registrado DEPOIS do middleware de sessão,
 // dentro do IIFE — caso contrário req.session ainda não existe e tudo cai em 401.
 
