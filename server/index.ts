@@ -70,10 +70,15 @@ app.use(
       // Sem origin (ex: chamadas server-to-server, curl): só bloqueia em prod se não vier de origens conhecidas
       if (!origin) return callback(null, false);
 
-      // Sempre permite o próprio domínio Replit e dominios configurados
+      // Sempre permite o próprio domínio Replit/Railway e dominios configurados.
+      // OBS: os assets buildados são servidos com <script crossorigin>, o que faz
+      // o navegador mandar Origin (mesmo same-origin) e EXIGIR Access-Control-Allow-Origin.
+      // Sem liberar o domínio do Railway aqui, o CORS bloqueava o JS → tela branca.
       const replitPattern = /\.replit\.app$/;
+      const railwayPattern = /\.up\.railway\.app$/;
       if (
         replitPattern.test(origin) ||
+        railwayPattern.test(origin) ||
         allowedOrigins.some((allowed) => origin.includes(allowed))
       ) {
         return callback(null, true);
