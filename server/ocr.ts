@@ -18,7 +18,7 @@
 
 import type { Express } from "express";
 import multer from "multer";
-import { openai, ocrModel } from "./openaiClient";
+import { openai, ocrModel, aiProvider } from "./openaiClient";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,6 +45,31 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
+  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — remover depois de confirmar o Gemini.
+  app.get("/api/ocr/_diag", async (req, res) => {
+    if (req.query.diag !== "capitalgo") return res.status(404).end();
+    const info: any = {
+      provider: aiProvider,
+      model: ocrModel,
+      geminiKeyPresent: !!process.env.GEMINI_API_KEY,
+    };
+    try {
+      const r = await openai.chat.completions.create({
+        model: ocrModel,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      info.ok = true;
+      info.respModel = r.model;
+    } catch (e: any) {
+      info.ok = false;
+      info.status = e?.status ?? e?.response?.status ?? null;
+      info.errorType = e?.code || e?.type || e?.error?.type || null;
+      info.errorMessage = String(e?.message || "").slice(0, 300);
+    }
+    return res.json(info);
+  });
+
   app.post(
     "/api/ocr/document",
     requireAuth,
