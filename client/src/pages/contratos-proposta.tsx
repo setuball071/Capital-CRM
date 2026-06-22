@@ -9,7 +9,7 @@ import {
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
   Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
-  Trash2, Plus, Pencil, Check,
+  Trash2, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -441,8 +441,6 @@ export default function ContratosPropostaPage() {
   /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior | "manual" = digitado à mão */
   const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | "manual" | null>(null);
   // Edição inline dos campos do documento de identidade
-  const [docEditField, setDocEditField] = useState<string | null>(null);
-  const [docEditVal,   setDocEditVal]   = useState("");
   const [nameAlert,     setNameAlert]     = useState<string | null>(null);
 
   // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
@@ -502,14 +500,16 @@ export default function ContratosPropostaPage() {
     } catch (err: any) {
       setOcrError(
         err?.message ||
-          "Não foi possível ler o documento automaticamente. Você pode preencher os dados manualmente."
+          "Não foi possível ler o documento automaticamente. Preencha os dados abaixo."
       );
+      // Libera os campos para preenchimento manual automaticamente (não trava o cadastro)
+      startManualDoc();
     } finally {
       setIsOcring(false);
     }
   }
 
-  // Fallback do OCR: abre os campos do documento em branco para preenchimento manual
+  // Abre os campos do documento em branco para preenchimento manual
   function startManualDoc() {
     setDocPhotoData({
       tipo: "RG",
@@ -523,7 +523,6 @@ export default function ContratosPropostaPage() {
       naturalidade: null,
     });
     setDocPhotoSource("manual");
-    setOcrError(null);
   }
 
   // Chamado quando frente+verso estão prontos: verifica cache ANTES de gastar IA
@@ -565,50 +564,30 @@ export default function ContratosPropostaPage() {
     return `⚠️ Nome divergente: contracheque "${siapeName}" × documento "${docName}". Verifique antes de continuar (pode ser casamento, emancipação ou erro de cadastro).`;
   }
 
-  // Salva edição manual de um campo do documento de identidade
-  function saveDocField(key: string) {
-    const v = docEditVal.trim();
+
+  // Atualiza um campo do documento direto (sem modo de edição) — preenchimento manual
+  function setDocField(key: string, raw: string) {
+    const v = raw;
     setDocPhotoData((prev) => {
       if (!prev) return prev;
       if (key === "filiacaoPai") return { ...prev, filiacao: [v || null, prev.filiacao?.[1] ?? null] };
       if (key === "filiacaoMae") return { ...prev, filiacao: [prev.filiacao?.[0] ?? null, v || null] };
       return { ...prev, [key]: v || null } as DocPhotoData;
     });
-    setDocEditField(null);
-    setDocEditVal("");
   }
 
-  // Campo do documento de identidade com edição inline (lápis). Função (não componente)
-  // para o input não perder o foco a cada tecla.
-  const renderDocField = (key: string, label: string, value: any, wide = false) => {
-    const isEditing = docEditField === key;
-    return (
-      <div className={`group ${wide ? "col-span-2" : ""}`}>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        {isEditing ? (
-          <div className="flex items-center gap-1 mt-0.5">
-            <input
-              className="flex-1 border rounded px-1.5 py-0.5 text-sm bg-background"
-              value={docEditVal}
-              onChange={(e) => setDocEditVal(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") saveDocField(key); if (e.key === "Escape") { setDocEditField(null); setDocEditVal(""); } }}
-            />
-            <button type="button" className="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => saveDocField(key)}><Check className="h-3.5 w-3.5" /></button>
-            <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => { setDocEditField(null); setDocEditVal(""); }}><X className="h-3.5 w-3.5" /></button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`font-medium ${value ? "" : "text-muted-foreground italic"}`}>{value || "—"}</span>
-            <Pencil
-              className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-primary shrink-0"
-              onClick={() => { setDocEditField(key); setDocEditVal(value || ""); }}
-            />
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Campo de input SEMPRE editável (borda roxa) p/ preenchimento manual do documento.
+  // Função (não componente) para o input não perder o foco a cada tecla.
+  const renderManualInput = (key: string, label: string, value: any, wide = false) => (
+    <div className={wide ? "sm:col-span-2" : ""}>
+      <label className="text-xs text-muted-foreground">{label}</label>
+      <input
+        className="mt-0.5 w-full rounded-md border border-purple-300 dark:border-purple-800 bg-background px-2.5 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
+        value={value ?? ""}
+        onChange={(e) => setDocField(key, e.target.value)}
+      />
+    </div>
+  );
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
@@ -1590,39 +1569,28 @@ export default function ContratosPropostaPage() {
               </div>
             )}
             {ocrError && (
-              <div className="rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400 space-y-2">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{ocrError}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={startManualDoc}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-background border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Preencher dados do documento manualmente
-                </button>
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{ocrError}</span>
               </div>
             )}
 
-            {/* Preenchimento manual do documento (fallback do OCR) */}
+            {/* Preenchimento manual do documento (fallback do OCR) — inputs sempre editáveis */}
             {docPhotoData && docPhotoSource === "manual" && (
-              <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                  <Pencil className="h-3.5 w-3.5" />
-                  Preenchimento manual — clique no lápis de cada campo
+              <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10 p-3 space-y-3">
+                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                  Preencha os dados do documento
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  {renderDocField("nome", "Nome", docPhotoData.nome, true)}
-                  {renderDocField("cpf", "CPF", docPhotoData.cpf)}
-                  {renderDocField("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
-                  {renderDocField("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
-                  {renderDocField("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
-                  {renderDocField("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
-                  {renderDocField("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
-                  {renderDocField("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
-                  {renderDocField("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-2.5">
+                  {renderManualInput("nome", "Nome", docPhotoData.nome, true)}
+                  {renderManualInput("cpf", "CPF", docPhotoData.cpf)}
+                  {renderManualInput("numeroRegistro", "Nº Registro (RG/CNH)", docPhotoData.numeroRegistro)}
+                  {renderManualInput("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
+                  {renderManualInput("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
+                  {renderManualInput("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
+                  {renderManualInput("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
+                  {renderManualInput("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
+                  {renderManualInput("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
                 </div>
               </div>
             )}
@@ -1933,7 +1901,7 @@ export default function ContratosPropostaPage() {
             </CardContent>
           </Card>
 
-          {/* ── Dados do Documento com Foto (editáveis — lápis em cada campo) ── */}
+          {/* ── Dados do Documento com Foto (campos sempre editáveis) ── */}
           {docPhotoData && (
             <Card className="border-purple-200 dark:border-purple-900">
               <CardHeader className="pb-3">
@@ -1944,14 +1912,16 @@ export default function ContratosPropostaPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-                  {renderDocField("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
-                  {renderDocField("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
-                  {renderDocField("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
-                  {renderDocField("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
-                  {renderDocField("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
-                  {renderDocField("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
-                  {renderDocField("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2.5">
+                  {renderManualInput("nome", "Nome", docPhotoData.nome, true)}
+                  {renderManualInput("cpf", "CPF", docPhotoData.cpf)}
+                  {renderManualInput("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
+                  {renderManualInput("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
+                  {renderManualInput("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
+                  {renderManualInput("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
+                  {renderManualInput("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
+                  {renderManualInput("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
+                  {renderManualInput("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
                 </div>
               </CardContent>
             </Card>
