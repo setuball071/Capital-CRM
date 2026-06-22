@@ -18,7 +18,7 @@
 
 import type { Express } from "express";
 import multer from "multer";
-import { openai, ocrModel, aiProvider } from "./openaiClient";
+import { geminiOcr, ocrModel } from "./openaiClient";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,55 +45,6 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
-  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — remover depois de confirmar OCR com imagem.
-  app.get("/api/ocr/_diag", async (req, res) => {
-    if (req.query.diag !== "capitalgo") return res.status(404).end();
-    const m = (req.query.model as string) || ocrModel;
-    const out: any = {
-      provider: aiProvider,
-      defaultModel: ocrModel,
-      testedModel: m,
-      geminiKeyPresent: !!process.env.GEMINI_API_KEY,
-    };
-    // Teste 1: texto simples
-    try {
-      await openai.chat.completions.create({
-        model: m,
-        max_tokens: 1,
-        messages: [{ role: "user", content: "ping" }],
-      });
-      out.text = "ok";
-    } catch (e: any) {
-      out.text = `ERR ${e?.status}: ${String(e?.message || "").slice(0, 140)}`;
-    }
-    // Teste 2: visão com imagem (cenário do OCR) + tokens realistas
-    try {
-      await openai.chat.completions.create({
-        model: m,
-        max_tokens: 600,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Diga a cor predominante em 1 palavra." },
-              {
-                type: "image_url",
-                image_url: {
-                  url: "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png",
-                  detail: "high",
-                },
-              },
-            ],
-          },
-        ],
-      });
-      out.vision = "ok";
-    } catch (e: any) {
-      out.vision = `ERR ${e?.status}: ${String(e?.message || "").slice(0, 140)}`;
-    }
-    return res.json(out);
-  });
-
   app.post(
     "/api/ocr/document",
     requireAuth,
@@ -155,7 +106,7 @@ Formato exato:
   "naturalidade": "cidade/UF de nascimento (ex: RIO DE JANEIRO/RJ), ou null se não constar"
 }`;
 
-        const response = await openai.chat.completions.create({
+        const response = await geminiOcr.chat.completions.create({
           model: ocrModel,
           max_tokens: 600,
           messages: [
