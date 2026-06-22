@@ -29439,13 +29439,16 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       }
       const pessoa = pessoas[0];
 
-      // Busca vínculos do tenant desta API key
+      // A base de clientes é compartilhada entre tenants — a consulta interna logada
+      // (/api/clientes/:pessoaId) usa TODOS os vínculos da pessoa, sem filtrar por tenant.
+      // Seguimos a mesma lógica: preferimos o vínculo do tenant da chave; se o cliente não
+      // tiver vínculo nesse tenant, usamos todos (folha/margens/contratos são da pessoa).
       const todosVinculos = await storage.getVinculosByPessoaId(pessoa.id);
-      const vinculos = todosVinculos.filter((v) => v.tenantId === tenantId);
-
-      if (vinculos.length === 0) {
+      if (todosVinculos.length === 0) {
         return res.status(404).json({ error: "Cliente não encontrado." });
       }
+      const doTenant = todosVinculos.filter((v) => v.tenantId === tenantId);
+      const vinculos = doTenant.length > 0 ? doTenant : todosVinculos;
 
       // Usa o vínculo com folha mais recente
       const vinculoIds = vinculos.map((v) => v.id);
