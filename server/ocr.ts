@@ -152,19 +152,17 @@ Formato exato:
         console.error("POST /api/ocr/document error:", e);
         const status = e?.status ?? e?.response?.status;
         const msg = String(e?.message || "");
-        // Falta de chave / chave inválida → leitura automática indisponível (não é a foto)
+        // TEMP: expõe o detalhe do erro upstream na mensagem p/ diagnóstico (remover depois)
+        const dbg = `[OCR ${status ?? "?"}] ${msg.slice(0, 200)}`;
         if (
           status === 401 ||
           status === 403 ||
           status === 429 ||
           /api[_ ]?key|authentication|invalid_api_key|sk-missing|quota|rate limit/i.test(msg)
         ) {
-          return res.status(503).json({
-            message:
-              "Leitura automática indisponível no momento. Preencha os dados do documento manualmente.",
-          });
+          return res.status(503).json({ message: dbg });
         }
-        return res.status(500).json({ message: "Erro ao processar documento" });
+        return res.status(500).json({ message: dbg });
       }
     }
   );
