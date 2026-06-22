@@ -26,6 +26,15 @@ let _client: any = null;
 let _bucketReady = false;
 async function getClient(): Promise<any> {
   if (_client) return _client;
+  // @supabase/supabase-js >=2.108 instancia o RealtimeClient no construtor, que
+  // exige um WebSocket global. O Node 20 não tem WebSocket nativo, então o
+  // createClient lança "Node.js 20 detected without native WebSocket support" e
+  // derruba upload/download de anexos. Fazemos polyfill com o pacote `ws` (já
+  // é dependência) antes de criar o cliente.
+  if (typeof (globalThis as any).WebSocket === "undefined") {
+    const wsmod: any = await import("ws");
+    (globalThis as any).WebSocket = wsmod.default || wsmod.WebSocket || wsmod;
+  }
   const { createClient } = await import("@supabase/supabase-js");
   _client = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!, {
     auth: { persistSession: false },
