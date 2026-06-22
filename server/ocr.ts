@@ -45,6 +45,40 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
+  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — remover depois de identificar a causa do OCR.
+  // Pinga a OpenAI e devolve o erro exato. NÃO expõe a chave (só prefixo mascarado).
+  app.get("/api/ocr/_diag", async (req, res) => {
+    if (req.query.diag !== "capitalgo") return res.status(404).end();
+    const key =
+      process.env.OPENAI_API_KEY ||
+      process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
+      "";
+    const info: any = {
+      keyEnvPresent: !!process.env.OPENAI_API_KEY,
+      keyPrefix: key ? key.slice(0, 7) : "(vazia)",
+      keyLen: key.length,
+      baseUrl:
+        process.env.OPENAI_BASE_URL ||
+        process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ||
+        "(default api.openai.com)",
+    };
+    try {
+      const r = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      info.ok = true;
+      info.model = r.model;
+    } catch (e: any) {
+      info.ok = false;
+      info.status = e?.status ?? e?.response?.status ?? null;
+      info.errorType = e?.code || e?.type || e?.error?.type || null;
+      info.errorMessage = String(e?.message || "").slice(0, 300);
+    }
+    return res.json(info);
+  });
+
   app.post(
     "/api/ocr/document",
     requireAuth,
