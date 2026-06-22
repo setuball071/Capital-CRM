@@ -29219,6 +29219,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     return randomBytes(32).toString("hex");
   }
 
+  // Escopos válidos que uma chave pode retornar (além dos dados básicos, sempre incluídos)
+  const ESCOPOS_VALIDOS = ["margens", "contratos"];
+  function sanitizeEscopos(input: any): string[] {
+    if (!Array.isArray(input)) return [...ESCOPOS_VALIDOS];
+    return ESCOPOS_VALIDOS.filter((e) => input.includes(e));
+  }
+
   // GET /api/admin/api-keys — lista chaves do tenant atual
   app.get("/api/admin/api-keys", requireAuth, requireMaster, async (req: any, res) => {
     try {
@@ -29237,10 +29244,11 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
-      const { nome } = req.body;
+      const { nome, escopos } = req.body;
       if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
         return res.status(400).json({ message: "Informe o nome do sistema parceiro" });
       }
+      const escoposValidos = sanitizeEscopos(escopos);
 
       const raw = generateRawKey();
       const hash = hashApiKey(raw);
@@ -29252,6 +29260,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         chaveHash: hash,
         prefixo,
         ativo: true,
+        escopos: escoposValidos,
         criadoPor: req.user?.id ?? null,
       });
 
@@ -29279,6 +29288,52 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     } catch (err: any) {
       console.error("[API Keys] toggle error:", err);
       return res.status(500).json({ message: "Erro ao atualizar API key" });
+    }
+  });
+
+  // PATCH /api/admin/api-keys/:id — edita nome e/ou escopos
+  app.patch("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+      const { nome, escopos } = req.body;
+      const patch: { nome?: string; escopos?: string[] } = {};
+      if (nome !== undefined) {
+        if (typeof nome !== "string" || nome.trim().length === 0) {
+          return res.status(400).json({ message: "Nome inválido" });
+        }
+        patch.nome = nome.trim();
+      }
+      if (escopos !== undefined) {
+        patch.escopos = sanitizeEscopos(escopos);
+      }
+
+      const key = await storage.updateApiKey(id, tenantId, patch);
+      if (!key) return res.status(404).json({ message: "API key não encontrada" });
+      return res.json(key);
+    } catch (err: any) {
+      console.error("[API Keys] update error:", err);
+      return res.status(500).json({ message: "Erro ao atualizar API key", detail: String(err?.message || err) });
+    }
+  });
+
+  // DELETE /api/admin/api-keys/:id — exclui permanentemente
+  app.delete("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+      const ok = await storage.deleteApiKey(id, tenantId);
+      if (!ok) return res.status(404).json({ message: "API key não encontrada" });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[API Keys] delete error:", err);
+      return res.status(500).json({ message: "Erro ao excluir API key", detail: String(err?.message || err) });
     }
   });
 
@@ -29319,6 +29374,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.get("/api/external/v1/clientes/:cpf", requireApiKey, async (req: any, res) => {
     try {
       const tenantId: number = req.apiTenantId;
+      const escopos: string[] = req.apiKeyEscopos ?? ["margens", "contratos"];
       const rawCpf = String(req.params.cpf).replace(/\D/g, "").padStart(11, "0");
 
       if (rawCpf.length !== 11) {
@@ -29351,9 +29407,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       const vinculoSelecionado = vinculos.find((v) => v.id === vinculoIdEfetivo) ?? vinculos[0];
 
-      // Margens com regras aplicadas
+      // Margens com regras aplicadas (apenas se a chave tiver o escopo)
       let margens = null;
-      if (folhaAtual) {
+      if (folhaAtual && escopos.includes("margens")) {
         const credito5 = saldoCartao5LimitadoServer(
           folhaAtual.margemSaldo5, folhaAtual.margemBruta5, folhaAtual.margemUtilizada5,
           folhaAtual.margemSaldo35, folhaAtual.margemBruta35, folhaAtual.margemUtilizada35,
@@ -29391,14 +29447,20 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         };
       }
 
-      return res.json({
+      const resposta: Record<string, any> = {
         cpf: pessoa.cpf,
         nome: pessoa.nome,
         convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
         orgao: pessoa.orgaodesc,
         sit_func: vinculoSelecionado.sitFunc,
-        margens,
-        contratos: contratos.map((c) => ({
+      };
+
+      if (escopos.includes("margens")) {
+        resposta.margens = margens;
+      }
+
+      if (escopos.includes("contratos")) {
+        resposta.contratos = contratos.map((c) => ({
           tipo: c.tipoContrato,
           banco: c.banco,
           valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
@@ -29406,8 +29468,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           parcelas_restantes: c.parcelasRestantes ?? null,
           numero_contrato: c.numeroContrato ?? null,
           competencia: c.competencia,
-        })),
-      });
+        }));
+      }
+
+      return res.json(resposta);
     } catch (err: any) {
       console.error("[External API] clientes/:cpf error:", err);
       return res.status(500).json({ error: "Erro interno." });

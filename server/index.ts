@@ -369,6 +369,27 @@ app.use((req, res, next) => {
               created_at TIMESTAMP NOT NULL DEFAULT NOW()
             )
           `);
+          // API Keys externas
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS api_keys (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL,
+              nome               VARCHAR(255) NOT NULL,
+              chave_hash         VARCHAR(64) NOT NULL UNIQUE,
+              prefixo            VARCHAR(12),
+              ativo              BOOLEAN NOT NULL DEFAULT true,
+              escopos            JSONB NOT NULL DEFAULT '["margens","contratos"]'::jsonb,
+              ultimo_uso         TIMESTAMP,
+              total_requisicoes  INTEGER NOT NULL DEFAULT 0,
+              criado_por         INTEGER,
+              created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS escopos JSONB NOT NULL DEFAULT '["margens","contratos"]'::jsonb
+          `);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id)`);
+
           log("Contratos migration OK");
         } catch (migErr) {
           console.error("Contratos migration error (non-fatal):", migErr);

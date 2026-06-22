@@ -3981,6 +3981,7 @@ export const apiKeys = pgTable("api_keys", {
   chaveHash: varchar("chave_hash", { length: 64 }).notNull().unique(),
   prefixo: varchar("prefixo", { length: 12 }),
   ativo: boolean("ativo").notNull().default(true),
+  escopos: jsonb("escopos").$type<string[]>().notNull().default(["margens", "contratos"]), // blocos que a chave pode retornar
   ultimoUso: timestamp("ultimo_uso"),
   totalRequisicoes: integer("total_requisicoes").notNull().default(0),
   criadoPor: integer("criado_por").references(() => users.id),

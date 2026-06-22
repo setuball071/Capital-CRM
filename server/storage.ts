@@ -499,6 +499,8 @@ export interface IStorage {
   listApiKeys(tenantId: number): Promise<ApiKey[]>;
   getApiKeyByHash(hash: string): Promise<ApiKey | undefined>;
   toggleApiKey(id: number, tenantId: number, ativo: boolean): Promise<ApiKey | undefined>;
+  updateApiKey(id: number, tenantId: number, data: { nome?: string; escopos?: string[] }): Promise<ApiKey | undefined>;
+  deleteApiKey(id: number, tenantId: number): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -3895,6 +3897,30 @@ REGRAS:
       .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
       .returning();
     return key;
+  }
+
+  async updateApiKey(id: number, tenantId: number, data: { nome?: string; escopos?: string[] }): Promise<ApiKey | undefined> {
+    const patch: Partial<InsertApiKey> = {};
+    if (data.nome !== undefined) patch.nome = data.nome;
+    if (data.escopos !== undefined) patch.escopos = data.escopos;
+    if (Object.keys(patch).length === 0) {
+      const [key] = await db.select().from(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId))).limit(1);
+      return key;
+    }
+    const [key] = await db
+      .update(apiKeys)
+      .set(patch)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .returning();
+    return key;
+  }
+
+  async deleteApiKey(id: number, tenantId: number): Promise<boolean> {
+    const result = await db
+      .delete(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .returning();
+    return result.length > 0;
   }
 }
 
