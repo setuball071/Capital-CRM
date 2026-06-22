@@ -438,8 +438,8 @@ export default function ContratosPropostaPage() {
   const [isOcring,      setIsOcring]      = useState(false);
   const [ocrError,      setOcrError]      = useState<string | null>(null);
   const [docPhotoData,  setDocPhotoData]  = useState<DocPhotoData | null>(null);
-  /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior */
-  const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | null>(null);
+  /** "ocr" = lido por IA agora | "cached" = vindo de proposta anterior | "manual" = digitado à mão */
+  const [docPhotoSource, setDocPhotoSource] = useState<"ocr" | "cached" | "manual" | null>(null);
   // Edição inline dos campos do documento de identidade
   const [docEditField, setDocEditField] = useState<string | null>(null);
   const [docEditVal,   setDocEditVal]   = useState("");
@@ -491,14 +491,39 @@ export default function ContratosPropostaPage() {
         credentials: "include",
         body: formData,
       });
-      if (!res.ok) throw new Error("OCR falhou");
+      if (!res.ok) {
+        let serverMsg = "";
+        try { serverMsg = (await res.json())?.message || ""; } catch {}
+        throw new Error(serverMsg || "OCR falhou");
+      }
       const data: DocPhotoData = await res.json();
       setDocPhotoData(data);
-    } catch {
-      setOcrError("Não foi possível ler o documento. Tente uma foto mais nítida.");
+      setDocPhotoSource("ocr");
+    } catch (err: any) {
+      setOcrError(
+        err?.message ||
+          "Não foi possível ler o documento automaticamente. Você pode preencher os dados manualmente."
+      );
     } finally {
       setIsOcring(false);
     }
+  }
+
+  // Fallback do OCR: abre os campos do documento em branco para preenchimento manual
+  function startManualDoc() {
+    setDocPhotoData({
+      tipo: "RG",
+      nome: null,
+      numeroRegistro: null,
+      cpf: null,
+      filiacao: [null, null],
+      dataNascimento: null,
+      dataExpedicao: null,
+      orgaoEmissor: null,
+      naturalidade: null,
+    });
+    setDocPhotoSource("manual");
+    setOcrError(null);
   }
 
   // Chamado quando frente+verso estão prontos: verifica cache ANTES de gastar IA
@@ -1565,14 +1590,45 @@ export default function ContratosPropostaPage() {
               </div>
             )}
             {ocrError && (
-              <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                {ocrError}
+              <div className="rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-sm text-red-700 dark:text-red-400 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{ocrError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={startManualDoc}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-background border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Preencher dados do documento manualmente
+                </button>
+              </div>
+            )}
+
+            {/* Preenchimento manual do documento (fallback do OCR) */}
+            {docPhotoData && docPhotoSource === "manual" && (
+              <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Preenchimento manual — clique no lápis de cada campo
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  {renderDocField("nome", "Nome", docPhotoData.nome, true)}
+                  {renderDocField("cpf", "CPF", docPhotoData.cpf)}
+                  {renderDocField("numeroRegistro", "Nº Registro", docPhotoData.numeroRegistro)}
+                  {renderDocField("dataNascimento", "Nascimento", docPhotoData.dataNascimento)}
+                  {renderDocField("dataExpedicao", "Expedição", docPhotoData.dataExpedicao)}
+                  {renderDocField("orgaoEmissor", "Órgão Emissor", docPhotoData.orgaoEmissor)}
+                  {renderDocField("naturalidade", "Naturalidade", docPhotoData.naturalidade)}
+                  {renderDocField("filiacaoPai", "Filiação — Pai", docPhotoData.filiacao?.[0], true)}
+                  {renderDocField("filiacaoMae", "Filiação — Mãe", docPhotoData.filiacao?.[1], true)}
+                </div>
               </div>
             )}
 
             {/* Dados do documento (OCR ou cache de proposta anterior) */}
-            {docPhotoData && !isOcring && (
+            {docPhotoData && docPhotoSource !== "manual" && !isOcring && (
               <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">

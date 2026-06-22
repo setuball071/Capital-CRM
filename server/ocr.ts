@@ -150,6 +150,19 @@ Formato exato:
         return res.json(extracted);
       } catch (e: any) {
         console.error("POST /api/ocr/document error:", e);
+        const status = e?.status ?? e?.response?.status;
+        const msg = String(e?.message || "");
+        // Falta de chave / chave inválida → leitura automática indisponível (não é a foto)
+        if (
+          status === 401 ||
+          status === 403 ||
+          /api[_ ]?key|authentication|invalid_api_key|sk-missing/i.test(msg)
+        ) {
+          return res.status(503).json({
+            message:
+              "Leitura automática indisponível no momento. Preencha os dados do documento manualmente.",
+          });
+        }
         return res.status(500).json({ message: "Erro ao processar documento" });
       }
     }
