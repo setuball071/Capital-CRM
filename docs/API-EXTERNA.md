@@ -16,7 +16,21 @@ ou
 Authorization: Bearer <sua_chave>
 ```
 
-A chave é gerada no painel em **Administração → API Keys Externas** e exibida apenas uma vez no momento da criação. Guarde-a com segurança.
+A chave é gerada no painel em **Administração → API Keys Externas** e exibida apenas uma vez no momento da criação. Guarde-a com segurança — depois disso só fica armazenado o hash.
+
+---
+
+## Escopos da chave
+
+Cada chave tem escopos que definem **quais blocos** ela pode retornar:
+
+| Bloco | Sempre incluído? | Conteúdo |
+|-------|------------------|----------|
+| **Básicos** | ✅ Sim | `cpf`, `nome`, `nascimento`, `situacao_funcional`, `orgao`, `orgao_codigo`, `convenio` |
+| **Margens** | Só se a chave tiver o escopo | objeto `margens` (35%, cartão 5%, benefício 5%, 70%, salário) |
+| **Contratos** | Só se a chave tiver o escopo | array `contratos` (empréstimos ativos) |
+
+Os escopos são definidos na criação e podem ser editados a qualquer momento no painel. Se a chave **não** tiver o escopo `margens` ou `contratos`, o bloco correspondente simplesmente **não aparece** no JSON (a chave não recebe `null` — a chave é omitida).
 
 ---
 
@@ -24,22 +38,26 @@ A chave é gerada no painel em **Administração → API Keys Externas** e exibi
 
 ### `GET /api/external/v1/clientes/:cpf`
 
-Consulta um cliente por CPF e retorna dados básicos, margens e contratos.
+Consulta um cliente por CPF.
 
 **Parâmetro de rota:**
-- `:cpf` — CPF com ou sem máscara (ex: `12345678900` ou `123.456.789-00`)
+- `:cpf` — CPF com ou sem máscara (ex: `12345678900` ou `123.456.789-00`). A API remove a máscara automaticamente.
 
 ---
 
 ### Resposta de sucesso `200`
 
+Exemplo com chave que tem **todos** os escopos:
+
 ```json
 {
   "cpf": "12345678900",
   "nome": "FULANO DE TAL",
+  "nascimento": "1963-01-17",
+  "situacao_funcional": "APOSENTADO",
+  "orgao": "DPRF - DEPTO. DE POLICIA RODOVIARIA FEDERAL",
+  "orgao_codigo": "30802",
   "convenio": "SIAPE",
-  "orgao": "MINISTÉRIO DA EDUCAÇÃO",
-  "sit_func": "ATIVO",
   "margens": {
     "competencia": "2024-12",
     "global_35": {
@@ -81,7 +99,19 @@ Consulta um cliente por CPF e retorna dados básicos, margens e contratos.
 }
 ```
 
-> **Nota sobre margens:** o campo `limitado_por_global: true` indica que o saldo de cartão 5% foi limitado ao saldo disponível da margem global (35%), conforme regra SIAPE. O valor já retornado em `saldo` é o valor efetivo disponível.
+### Campos básicos
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `cpf` | string | CPF com 11 dígitos, sem máscara |
+| `nome` | string | Nome do cliente |
+| `nascimento` | string \| null | Data de nascimento no formato `YYYY-MM-DD` |
+| `situacao_funcional` | string \| null | Ex: `ATIVO`, `APOSENTADO`, `PENSIONISTA` |
+| `orgao` | string \| null | **Nome** do órgão (resolvido via nomenclaturas). Se o nome não estiver cadastrado, retorna o código |
+| `orgao_codigo` | string \| null | Código bruto do órgão (ex: `30802`) |
+| `convenio` | string \| null | Ex: `SIAPE` |
+
+> **Nota sobre margens:** `limitado_por_global: true` indica que o saldo de cartão 5% foi limitado ao saldo disponível da margem global (35%), conforme regra SIAPE. O valor em `saldo` já é o efetivo disponível.
 
 ---
 
@@ -89,10 +119,10 @@ Consulta um cliente por CPF e retorna dados básicos, margens e contratos.
 
 | Código | Descrição |
 |--------|-----------|
-| `400`  | CPF inválido |
+| `400`  | CPF inválido (não tem 11 dígitos) |
 | `401`  | API Key ausente ou inválida/desativada |
-| `404`  | Cliente não encontrado no ambiente desta chave |
-| `429`  | Rate limit excedido (máximo 120 req/minuto por chave) |
+| `404`  | Cliente não encontrado |
+| `429`  | Rate limit excedido (máximo **120 req/minuto** por chave) |
 | `500`  | Erro interno |
 
 Formato das respostas de erro:
@@ -118,11 +148,18 @@ const resp = await fetch(
   "https://sistemacapital.com.br/api/external/v1/clientes/12345678900",
   { headers: { "X-API-Key": "sua_chave_aqui" } }
 );
-const data = await resp.json();
+if (resp.status === 404) {
+  // cliente não encontrado na base
+} else if (resp.ok) {
+  const data = await resp.json();
+  // data.nome, data.orgao, data.margens (se a chave tiver o escopo), ...
+}
 ```
 
 ---
 
-## Isolamento multi-tenant
+## Observação sobre a base de clientes
 
-Cada API Key está vinculada a um ambiente específico do CRM. A consulta retorna somente clientes presentes naquele ambiente — nunca dados de outros clientes/tenants.
+A base de clientes do Capital CRM é **compartilhada**: a consulta retorna o cliente independentemente de qual ambiente o cadastrou, espelhando o comportamento da consulta interna do sistema. Uma chave válida consegue consultar qualquer CPF presente na base.
+
+> Se for necessário restringir cada parceiro a um subconjunto isolado de clientes, isso exige uma mudança no servidor (filtro estrito por tenant) — fale com o time de desenvolvimento.
