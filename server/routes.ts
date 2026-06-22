@@ -29421,6 +29421,31 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     return { saldo: s5, limitadoPorGlobal: false };
   }
 
+  // Resolve o nome a partir do código via nomenclaturas (espelha mapNomenclatura do frontend).
+  function mapNomenclaturaServer(noms: any[], categoria: string, codigo: string | null): string | null {
+    if (!codigo) return null;
+    if (!noms || noms.length === 0) return codigo;
+    const normalizedCodigo = codigo.replace(/^0+/, "") || "0";
+    const codigoUpper = codigo.trim().toUpperCase();
+    const codigoTruncado = /^\d{6,}$/.test(codigo.trim()) ? codigo.trim().substring(0, 5) : null;
+    const codigoTruncadoNorm = codigoTruncado ? (codigoTruncado.replace(/^0+/, "") || "0") : null;
+    const matchPorCodigo = (cat: string) => noms.find((n) => {
+      if (!n.ativo || n.categoria !== cat) return false;
+      const nCodigo = (n.codigo || "").replace(/^0+/, "") || "0";
+      if (n.codigo === codigo || nCodigo === normalizedCodigo || (n.codigo || "").trim().toUpperCase() === codigoUpper) return true;
+      if (codigoTruncado && (n.codigo === codigoTruncado || nCodigo === codigoTruncadoNorm)) return true;
+      return false;
+    });
+    const matchPorNome = (cat: string) => noms.find((n) =>
+      n.ativo && n.categoria === cat && (n.nome || "").trim().toUpperCase() === codigoUpper);
+    const found =
+      matchPorCodigo(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorCodigo("RUBRICA") : null) ||
+      matchPorNome(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorNome("RUBRICA") : null);
+    return found ? found.nome : codigo;
+  }
+
   // GET /api/external/v1/clientes/:cpf
   app.get("/api/external/v1/clientes/:cpf", requireApiKey, async (req: any, res) => {
     try {
@@ -29505,12 +29530,21 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         ? new Date(pessoa.dataNascimento as any).toISOString().slice(0, 10)
         : null;
 
+      // Resolve o NOME do órgão a partir do código, via nomenclaturas (igual à tela interna).
+      const orgaoCodigo =
+        (vinculoSelecionado.orgao && vinculoSelecionado.orgao !== "DESCONHECIDO")
+          ? vinculoSelecionado.orgao
+          : (pessoa.orgaocod || pessoa.orgaodesc || null);
+      const noms = await getCachedNomenclaturas();
+      const orgaoNome = mapNomenclaturaServer(noms, "ORGAO", orgaoCodigo) ?? pessoa.orgaodesc ?? null;
+
       const resposta: Record<string, any> = {
         cpf: pessoa.cpf,
         nome: pessoa.nome,
         nascimento, // YYYY-MM-DD
         situacao_funcional: vinculoSelecionado.sitFunc ?? pessoa.sitFunc ?? null,
-        orgao: pessoa.orgaodesc,
+        orgao: orgaoNome,
+        orgao_codigo: orgaoCodigo,
         convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
       };
 
