@@ -378,6 +378,45 @@ function safeCompetencia(val: any): string | null {
   }
   return String(val);
 }
+
+// Deduplica vínculos que na verdade são o MESMO vínculo, divergindo só pela
+// formatação da matrícula (ex.: "162642" vs "0162642" — zero à esquerda, vindo
+// de importações diferentes). Agrupa por matrícula normalizada (sem zeros à
+// esquerda) e mantém um único representante por grupo, preferindo o vínculo
+// efetivo/selecionado (o que carrega a folha mais recente). Matrícula vazia não
+// é agrupada (cada uma fica separada pelo próprio id). Não altera a lista usada
+// internamente pra buscar folha/contratos — só a lista de EXIBIÇÃO.
+function dedupVinculosPorMatricula<
+  T extends { id: number; matricula?: string | null; ultimaAtualizacao?: any },
+>(vinculos: T[], preferId?: number | null): T[] {
+  const norm = (m: any) => String(m ?? "").trim().replace(/^0+/, "");
+  const grupos = new Map<string, T[]>();
+  for (const v of vinculos) {
+    const chave = norm(v.matricula);
+    const key = chave === "" ? `__id_${v.id}` : chave;
+    const arr = grupos.get(key) || [];
+    arr.push(v);
+    grupos.set(key, arr);
+  }
+  const repr: T[] = [];
+  for (const arr of grupos.values()) {
+    if (arr.length === 1) {
+      repr.push(arr[0]);
+      continue;
+    }
+    const preferido =
+      (preferId != null && arr.find((v) => v.id === preferId)) ||
+      arr
+        .slice()
+        .sort((a, b) => {
+          const ta = a.ultimaAtualizacao ? new Date(a.ultimaAtualizacao).getTime() : 0;
+          const tb = b.ultimaAtualizacao ? new Date(b.ultimaAtualizacao).getTime() : 0;
+          return tb - ta;
+        })[0];
+    repr.push(preferido);
+  }
+  return repr;
+}
 import { z } from "zod";
 import { storage, db } from "./storage";
 import {
@@ -10623,6 +10662,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
         const vinculos = vinculosTodos;
 
+        // Lista de EXIBIÇÃO deduplicada (mesmo vínculo com matrícula divergente
+        // por zero à esquerda vira um só). A lógica interna segue usando todos.
+        const vinculosDisplay = dedupVinculosPorMatricula(
+          vinculos,
+          vinculoIdEfetivo,
+        );
+
         // Get folha data - sempre buscar por vínculo quando disponível, senão por pessoa (fallback para dados legados)
         let folhaRegistros;
         if (vinculoIdEfetivo) {
@@ -10840,7 +10886,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             base_tag: c.baseTag,
             dados_brutos: c.dadosBrutos,
           })),
-          vinculos: vinculos.map((v) => ({
+          vinculos: vinculosDisplay.map((v) => ({
             id: v.id,
             cpf: v.cpf,
             matricula: v.matricula,
@@ -10855,7 +10901,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             extras_vinculo: v.extrasVinculo || null,
           })),
           vinculo_selecionado: vinculoIdEfetivo,
-          tem_multiplos_vinculos: vinculos.length > 1,
+          tem_multiplos_vinculos: vinculosDisplay.length > 1,
           higienizacao: {
             // Combina telefones da tabela clientes_telefones com telefones de client_contacts (dados complementares)
             telefones: [
@@ -15385,6 +15431,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       );
       const vinculosFiltrados =
         vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+      // Deduplica mesma matrícula divergindo só por zero à esquerda (exibição).
+      const vinculosFiltradosDedup = dedupVinculosPorMatricula(
+        vinculosFiltrados,
+        vinculoAtual?.id,
+      );
 
       // Get folha
       let folhaRegistros;
@@ -15653,8 +15704,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           emails: uniqueEmails,
         },
         vinculo: vinculoAtual ? normalizarVinculo(vinculoAtual) : null,
-        vinculos: vinculosFiltrados.map(normalizarVinculo),
-        tem_multiplos_vinculos: vinculosFiltrados.length > 1,
+        vinculos: vinculosFiltradosDedup.map(normalizarVinculo),
+        tem_multiplos_vinculos: vinculosFiltradosDedup.length > 1,
         pessoaId: cliente.id,
         leadId,
         portfolioInfo: portfolioCheck?.portfolioInfo ?? null,
