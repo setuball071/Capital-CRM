@@ -45,6 +45,45 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
+  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — replica a chamada real do OCR p/ ver finish_reason/conteúdo. Remover depois.
+  app.get("/api/ocr/_diag", async (req, res) => {
+    if (req.query.diag !== "capitalgo") return res.status(404).end();
+    const mt = parseInt((req.query.mt as string) || "600", 10);
+    const out: any = { model: ocrModel, maxTokens: mt };
+    try {
+      const imgResp = await fetch(
+        "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png",
+      );
+      const dataUrl = `data:image/png;base64,${Buffer.from(await imgResp.arrayBuffer()).toString("base64")}`;
+      const r = await geminiOcr.chat.completions.create({
+        model: ocrModel,
+        max_tokens: mt,
+        messages: [
+          { role: "system", content: "Você lê documentos de identidade e extrai dados em JSON." },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: 'Retorne SOMENTE JSON: {"tipo":"RG","nome":null,"cpf":null}' },
+              { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+              { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+            ],
+          },
+        ],
+      });
+      const choice = r.choices?.[0];
+      out.ok = true;
+      out.finishReason = choice?.finish_reason;
+      out.contentLen = (choice?.message?.content || "").length;
+      out.contentSample = (choice?.message?.content || "").slice(0, 200);
+      out.usage = r.usage;
+    } catch (e: any) {
+      out.ok = false;
+      out.status = e?.status ?? e?.response?.status ?? null;
+      out.errorMessage = String(e?.message || "").slice(0, 200);
+    }
+    return res.json(out);
+  });
+
   app.post(
     "/api/ocr/document",
     requireAuth,
