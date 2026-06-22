@@ -48,14 +48,15 @@ export function registerOcrRoutes(app: Express, requireAuth: Function) {
   // ⚠️ DIAGNÓSTICO TEMPORÁRIO — remover depois de confirmar o Gemini.
   app.get("/api/ocr/_diag", async (req, res) => {
     if (req.query.diag !== "capitalgo") return res.status(404).end();
+    const tryModel = (req.query.model as string) || ocrModel;
     const info: any = {
       provider: aiProvider,
-      model: ocrModel,
+      model: tryModel,
       geminiKeyPresent: !!process.env.GEMINI_API_KEY,
     };
     try {
       const r = await openai.chat.completions.create({
-        model: ocrModel,
+        model: tryModel,
         max_tokens: 1,
         messages: [{ role: "user", content: "ping" }],
       });
