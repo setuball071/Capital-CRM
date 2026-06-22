@@ -29259,7 +29259,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       return res.json({ ...key, chave_completa: raw });
     } catch (err: any) {
       console.error("[API Keys] create error:", err);
-      return res.status(500).json({ message: "Erro ao criar API key" });
+      return res.status(500).json({ message: "Erro ao criar API key", detail: String(err?.message || err) });
     }
   });
 
