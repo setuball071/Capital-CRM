@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
 import https from "https";
+import { randomBytes } from "crypto";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -29215,7 +29216,6 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // Gera token aleatório de 32 bytes em hex (64 chars)
   function generateRawKey(): string {
-    const { randomBytes } = require("crypto");
     return randomBytes(32).toString("hex");
   }
 
