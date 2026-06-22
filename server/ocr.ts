@@ -18,7 +18,7 @@
 
 import type { Express } from "express";
 import multer from "multer";
-import { openai } from "./openaiClient";
+import { openai, ocrModel } from "./openaiClient";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -107,7 +107,7 @@ Formato exato:
 }`;
 
         const response = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: ocrModel,
           max_tokens: 600,
           messages: [
             { role: "system", content: systemPrompt },
@@ -156,7 +156,8 @@ Formato exato:
         if (
           status === 401 ||
           status === 403 ||
-          /api[_ ]?key|authentication|invalid_api_key|sk-missing/i.test(msg)
+          status === 429 ||
+          /api[_ ]?key|authentication|invalid_api_key|sk-missing|quota|rate limit/i.test(msg)
         ) {
           return res.status(503).json({
             message:
