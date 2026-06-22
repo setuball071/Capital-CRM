@@ -29447,12 +29447,17 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         };
       }
 
+      const nascimento = pessoa.dataNascimento
+        ? new Date(pessoa.dataNascimento as any).toISOString().slice(0, 10)
+        : null;
+
       const resposta: Record<string, any> = {
         cpf: pessoa.cpf,
         nome: pessoa.nome,
-        convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
+        nascimento, // YYYY-MM-DD
+        situacao_funcional: vinculoSelecionado.sitFunc ?? pessoa.sitFunc ?? null,
         orgao: pessoa.orgaodesc,
-        sit_func: vinculoSelecionado.sitFunc,
+        convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
       };
 
       if (escopos.includes("margens")) {
