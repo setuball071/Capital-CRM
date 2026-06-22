@@ -26,4 +26,4 @@ export const openai = new OpenAI({
 // Modelo de visão usado no OCR. Configurável por env (OCR_MODEL); default por provedor.
 export const ocrModel =
   process.env.OCR_MODEL ||
-  (aiProvider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini");
+  (aiProvider === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini");
