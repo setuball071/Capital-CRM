@@ -45,50 +45,6 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
-  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — testa OCR com imagem em BASE64 (igual ao real). Remover depois.
-  app.get("/api/ocr/_diag", async (req, res) => {
-    if (req.query.diag !== "capitalgo") return res.status(404).end();
-    const out: any = {
-      model: ocrModel,
-      geminiKeyPresent: !!process.env.GEMINI_API_KEY,
-    };
-    try {
-      const imgResp = await fetch(
-        "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png",
-      );
-      const b64 = Buffer.from(await imgResp.arrayBuffer()).toString("base64");
-      const r = await geminiOcr.chat.completions.create({
-        model: ocrModel,
-        max_tokens: 600,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Diga a cor predominante em uma palavra." },
-              {
-                type: "image_url",
-                image_url: { url: `data:image/png;base64,${b64}`, detail: "high" },
-              },
-            ],
-          },
-        ],
-      });
-      out.ok = true;
-      out.sample = r.choices?.[0]?.message?.content?.slice(0, 60);
-    } catch (e: any) {
-      out.ok = false;
-      out.status = e?.status ?? e?.response?.status ?? null;
-      out.errorType = e?.code || e?.type || e?.error?.type || null;
-      out.errorMessage = String(e?.message || "");
-      try {
-        out.errorBody = JSON.stringify(
-          e?.error || e?.response?.data || {},
-        ).slice(0, 500);
-      } catch {}
-    }
-    return res.json(out);
-  });
-
   app.post(
     "/api/ocr/document",
     requireAuth,
