@@ -705,11 +705,17 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
             vendedorNome = v?.name || null;
           }
-          const mesRef = new Date().toISOString().slice(0, 7);
-          const dataPag = new Date().toISOString().slice(0, 10);
+          const now = new Date();
+          const mesRef = now.toISOString().slice(0, 7);
+          // Dashboard lê a data via TO_DATE(data_pagamento,'DD/MM/YYYY') — gravar no formato BR
+          const dataPag = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
           const valBruto = updated.contractValue ? String(updated.contractValue) : null;
           const compEmp = updated.companyCommissionValue ? String(updated.companyCommissionValue) : null;
-          const compRep = updated.corretorCommissionValue ? String(updated.corretorCommissionValue) : null;
+          // Repasse efetivo: corretor; se vazio, cai para a comissão da empresa (igual ao import CSV).
+          // Sem isso o filtro "comissao_repasse_valor > 0" das telas de produção esconde o contrato.
+          const compRep = updated.corretorCommissionValue
+            ? String(updated.corretorCommissionValue)
+            : compEmp;
           const percEmp = updated.commissionPercentage ? String(parseFloat(updated.commissionPercentage) * 100) : null;
           const percRep = updated.corretorCommissionPercentage ? String(parseFloat(updated.corretorCommissionPercentage) * 100) : null;
 
@@ -723,6 +729,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             valorBase: valBruto, valorBruto: valBruto,
             comissaoEmpresaValor: compEmp, comissaoRepasseValor: compRep,
             comissaoEmpresaPerc: percEmp, comissaoRepassePerc: percRep,
+            status: "PAGO",
+            confirmado: true,
             mesReferencia: mesRef, dataPagamento: dataPag,
           };
 
