@@ -289,7 +289,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
-        clientMeta, parceiroId,
+        clientMeta, parceiroId, reuseDocsFromProposalId,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -367,6 +367,45 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         notes: "Proposta cadastrada",
         performedBy: user.id,
       });
+
+      // Reaproveitar documentos de um cadastro anterior (mesmo arquivo — só novas linhas,
+      // sem re-upload). Storage-agnóstico: aponta para o mesmo storage_key.
+      if (reuseDocsFromProposalId) {
+        try {
+          const srcId = parseInt(String(reuseDocsFromProposalId), 10);
+          const [srcProp] = await db
+            .select({ id: proposals.id })
+            .from(proposals)
+            .where(and(eq(proposals.id, srcId), eq(proposals.tenantId, tenantId)))
+            .limit(1);
+          if (srcProp) {
+            const srcDocs = await db
+              .select()
+              .from(proposalDocuments)
+              .where(eq(proposalDocuments.proposalId, srcId));
+            for (const d of srcDocs) {
+              if (!d.storageKey) continue;
+              const [nd] = await db
+                .insert(proposalDocuments)
+                .values({
+                  proposalId: proposal.id,
+                  documentType: d.documentType,
+                  fileUrl: "",
+                  storageKey: d.storageKey, // mesmo arquivo (compartilhado)
+                  fileName: d.fileName,
+                  uploadedBy: user.id,
+                })
+                .returning();
+              await db
+                .update(proposalDocuments)
+                .set({ fileUrl: `/api/contracts/documents/${nd.id}/file` })
+                .where(eq(proposalDocuments.id, nd.id));
+            }
+          }
+        } catch (reuseErr) {
+          console.error("[reuse docs] erro (não bloqueia):", reuseErr);
+        }
+      }
 
       return res.status(201).json(proposal);
     } catch (e: any) {
@@ -1326,6 +1365,16 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       const latest = rows[0];
 
+      // Documentos do último cadastro (para reaproveitamento sem novo upload)
+      const lookupDocs = await db
+        .select({
+          id: proposalDocuments.id,
+          documentType: proposalDocuments.documentType,
+          fileName: proposalDocuments.fileName,
+        })
+        .from(proposalDocuments)
+        .where(eq(proposalDocuments.proposalId, latest.id));
+
       return res.json({
         clientName: latest.clientName,
         clientCpf: latest.clientCpf,
@@ -1335,6 +1384,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         proposalCount: rows.length,
         lastProposalId: latest.id,
         lastStatus: latest.status,
+        documents: lookupDocs,
       });
     } catch (e: any) {
       console.error("GET /api/contracts/client-lookup/:cpf error:", e);
