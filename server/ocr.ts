@@ -88,7 +88,7 @@ export function registerOcrRoutes(app: Express, requireAuth: Function) {
         const systemPrompt = `Você é um especialista em leitura de documentos de identidade brasileiros (RG, CNH e CNH-e digital).
 Analise as imagens fornecidas (frente e, se disponível, verso do documento) e extraia os dados.
 Seja preciso: transcreva exatamente o que está escrito, sem corrigir ou inferir.
-ATENÇÃO à FILIAÇÃO (nomes do PAI e da MÃE): costuma aparecer em letras menores, em uma seção "FILIAÇÃO" — examine com cuidado e extraia os dois nomes quando existirem. Em CNH-e o documento pode estar embutido como imagem na página; leia mesmo assim.
+ATENÇÃO à FILIAÇÃO: na seção "FILIAÇÃO" há dois nomes, um ACIMA do outro. Retorne-os EXATAMENTE na ordem em que aparecem, de cima para baixo. NÃO tente deduzir quem é pai ou mãe pelo nome — apenas preserve a ordem impressa. Por convenção do RG, o 1º (de cima) é o PAI e o 2º (de baixo) é a MÃE. Em CNH-e o documento pode estar embutido como imagem na página; leia mesmo assim.
 Para campos realmente não legíveis ou ausentes, use null.`;
 
         const userPrompt = `Extraia os dados deste documento de identidade brasileiro e retorne SOMENTE um JSON válido, sem markdown, sem explicações.
@@ -99,7 +99,7 @@ Formato exato:
   "nome": "NOME COMPLETO COMO NO DOCUMENTO",
   "numeroRegistro": "número do RG (sem pontos/traços) ou nº de registro da CNH",
   "cpf": "11 dígitos sem pontuação, ou null",
-  "filiacao": ["NOME DO PAI ou null", "NOME DA MAE ou null"],
+  "filiacao": ["1º nome da filiação (o de CIMA — normalmente o PAI) ou null", "2º nome da filiação (o de BAIXO — normalmente a MÃE) ou null"],
   "dataNascimento": "DD/MM/AAAA",
   "dataExpedicao": "DD/MM/AAAA",
   "orgaoEmissor": "ex: SSP/RJ, DETRAN/RJ, COREN/RJ",
@@ -152,17 +152,18 @@ Formato exato:
         console.error("POST /api/ocr/document error:", e);
         const status = e?.status ?? e?.response?.status;
         const msg = String(e?.message || "");
-        // TEMP: expõe o detalhe do erro upstream na mensagem p/ diagnóstico (remover depois)
-        const dbg = `[OCR ${status ?? "?"}] ${msg.slice(0, 200)}`;
         if (
           status === 401 ||
           status === 403 ||
           status === 429 ||
           /api[_ ]?key|authentication|invalid_api_key|sk-missing|quota|rate limit/i.test(msg)
         ) {
-          return res.status(503).json({ message: dbg });
+          return res.status(503).json({
+            message:
+              "Leitura automática indisponível no momento. Preencha os dados do documento manualmente.",
+          });
         }
-        return res.status(500).json({ message: dbg });
+        return res.status(500).json({ message: "Erro ao processar documento" });
       }
     }
   );

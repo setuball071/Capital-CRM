@@ -804,14 +804,16 @@ export default function ContratosListaPage() {
     } else if (filterStatus !== "all") {
       if (p.status !== filterStatus) return false;
     }
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
     const matchSearch =
       !q ||
       p.clientName?.toLowerCase().includes(q) ||
-      p.clientCpf?.includes(q) ||
+      (!!qDigits && (p.clientCpf || "").replace(/\D/g, "").includes(qDigits)) ||
       p.bank?.toLowerCase().includes(q) ||
-      p.ade?.toLowerCase().includes(q) ||
-      p.vendorName?.toLowerCase().includes(q);
+      (p.ade || "").toLowerCase().includes(q) ||
+      p.vendorName?.toLowerCase().includes(q) ||
+      (!!qDigits && String(p.id) === qDigits);
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
     return matchSearch && matchProduct;
   });

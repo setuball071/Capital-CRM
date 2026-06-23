@@ -699,7 +699,10 @@ export default function ContratosDetalhePage() {
                   <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
                     {financeiroTabelas
-                      .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+                      .filter((t: any) =>
+                        (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
+                        (!proposal.bank || (t.banco || "").toUpperCase() === (proposal.bank || "").toUpperCase())
+                      )
                       .map((t: any) => (
                         <SelectItem key={String(t.id)} value={String(t.id)}>
                           {t.nome}{t.banco ? ` — ${t.banco}` : ""}
