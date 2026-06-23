@@ -283,7 +283,7 @@ interface SimulacaoPort {
 
 // ─── Tipos de step ────────────────────────────────────────────────────────────
 
-type Step = "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato" | "contratos-portabilidade" | "conferencia";
+type Step = "cpf" | "convenio" | "siape-upload" | "dados-cadastrais" | "tipo-contrato" | "contratos-portabilidade" | "conferencia";
 
 // ─── Wizard progress indicator ────────────────────────────────────────────────
 
@@ -351,7 +351,7 @@ export default function ContratosPropostaPage() {
   const queryClient = useQueryClient();
 
   // ── Step state ──────────────────────────────────────────────────────────────
-  const [step, setStep] = useState<Step>("convenio");
+  const [step, setStep] = useState<Step>("cpf");
   const [selectedConvenio, setSelectedConvenio] = useState<typeof CONVENIOS[0] | null>(null);
   const [contractType, setContractType] = useState<string | null>(null);
 
@@ -384,15 +384,21 @@ export default function ContratosPropostaPage() {
   // ── Memória de cliente (lookup por CPF) ─────────────────────────────────────
   interface ClientLookup {
     clientName: string;
+    clientCpf?: string | null;
     clientMatricula: string | null;
     clientMeta: any;
     clientConvenio: string | null;
     proposalCount: number;
     lastProposalId: number;
     lastStatus: string;
+    documents?: { id: number; documentType: string; fileName: string }[];
   }
   const [clientLookup, setClientLookup] = useState<ClientLookup | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  // Passo CPF (primeiro passo): reaproveitar cadastro/documentos existentes
+  const [cpfInput, setCpfInput] = useState("");
+  const [cpfSearched, setCpfSearched] = useState(false);
+  const [reuseDocsFromProposalId, setReuseDocsFromProposalId] = useState<number | null>(null);
 
   async function lookupByCpf(cpf: string): Promise<ClientLookup | null> {
     const raw = cpf.replace(/\D/g, "");
@@ -869,6 +875,7 @@ export default function ContratosPropostaPage() {
         term: data.term || undefined,
         ade: data.ade || undefined,
         parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
+        reuseDocsFromProposalId: reuseDocsFromProposalId || undefined,
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
           ? selectedTabela.pctEmpresa / 100
@@ -1265,13 +1272,141 @@ export default function ContratosPropostaPage() {
     });
   }
 
+  // ─── STEP 0 — CPF do cliente (primeiro passo: reaproveitar cadastro) ──────────
+  async function doCpfSearch() {
+    const digits = cpfInput.replace(/\D/g, "");
+    if (digits.length !== 11) return;
+    setCpfSearched(true);
+    await lookupByCpf(digits);
+  }
+
+  function goToConvenioFresh() {
+    setReuseDocsFromProposalId(null); // cadastrar do zero — não reaproveita documentos
+    setStep("convenio");
+  }
+
+  function handleReuseClient() {
+    if (!clientLookup) return;
+    const meta = clientLookup.clientMeta ?? {};
+    const end = meta.endereco ?? {};
+    // parsedData sintético do cadastro salvo → o submit reaproveita os dados SIAPE
+    setParsedData({
+      cpf: (clientLookup.clientCpf || cpfInput).replace(/\D/g, ""),
+      nome: clientLookup.clientName || "",
+      matricula: clientLookup.clientMatricula || "",
+      identSiape: meta.identSiape, uf: meta.uf, orgao: meta.orgao,
+      regJuridico: meta.regJuridico, bancoSalario: meta.bancoSalario,
+      agencia: meta.agencia, conta: meta.conta, mesAno: meta.mesAno,
+      vinculo: meta.vinculo, nomeInstituidor: meta.nomeInstituidor,
+      matriculaInstituidor: meta.matriculaInstituidor, naturezaPensao: meta.naturezaPensao,
+      inicioPensao: meta.inicioPensao, terminoPensao: meta.terminoPensao,
+    } as any);
+    if (meta.docFoto?.tipo) {
+      setDocPhotoData(meta.docFoto as DocPhotoData); // dados do documento sem nova IA
+      setDocPhotoSource("cached");
+    }
+    setReuseDocsFromProposalId(clientLookup.lastProposalId); // arquivos linkados no backend
+    const conv = CONVENIOS.find((c) => c.id === clientLookup.clientConvenio) || CONVENIOS.find((c) => c.id === "SIAPE");
+    if (conv) setSelectedConvenio(conv);
+    form.reset({
+      clientName: clientLookup.clientName || "",
+      clientCpf: formatCpf((clientLookup.clientCpf || cpfInput).replace(/\D/g, "")),
+      clientMatricula: clientLookup.clientMatricula || "",
+      clientPhone: meta.telefone ?? "",
+      clientEmail: meta.email ?? "",
+      clientCep: end.cep ?? "", clientLogradouro: end.logradouro ?? "",
+      clientNumero: end.numero ?? "", clientComplemento: end.complemento ?? "",
+      clientBairro: end.bairro ?? "", clientCidade: end.cidade ?? "", clientEstado: end.estado ?? "",
+      bank: "", product: "", tableId: "", contractValue: "", installmentValue: "", term: "",
+      ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
+    });
+    setStep("dados-cadastrais");
+  }
+
+  if (step === "cpf") {
+    const digits = cpfInput.replace(/\D/g, "");
+    return (
+      <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <Button size="icon" variant="ghost" onClick={() => setLocation("/contratos")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold">Nova Proposta</h1>
+            <p className="text-sm text-muted-foreground">Informe o CPF do cliente</p>
+          </div>
+        </div>
+
+        <div className="max-w-md space-y-4">
+          <div>
+            <label className="text-sm font-medium">CPF do cliente</label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={cpfInput}
+                onChange={(e) => { setCpfInput(formatCpf(e.target.value.replace(/\D/g, ""))); setCpfSearched(false); setClientLookup(null); }}
+                placeholder="000.000.000-00"
+                inputMode="numeric"
+                onKeyDown={(e) => { if (e.key === "Enter" && digits.length === 11) doCpfSearch(); }}
+              />
+              <Button disabled={digits.length !== 11 || isLookingUp} onClick={doCpfSearch}>
+                {isLookingUp ? "Buscando..." : "Buscar"}
+              </Button>
+            </div>
+            {!cpfSearched && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Verificamos se o cliente já tem cadastro e documentos no sistema, para reaproveitar e evitar nova leitura por IA e novo upload.
+              </p>
+            )}
+          </div>
+
+          {cpfSearched && !isLookingUp && clientLookup && (
+            <div className="rounded-lg border border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/20 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="font-semibold text-sm">Cliente já cadastrado</span>
+              </div>
+              <div className="text-sm space-y-1">
+                <div><span className="text-muted-foreground">Nome: </span><span className="font-medium">{clientLookup.clientName}</span></div>
+                {clientLookup.clientConvenio && <div><span className="text-muted-foreground">Convênio: </span><span className="font-medium">{clientLookup.clientConvenio}</span></div>}
+                <div><span className="text-muted-foreground">Propostas anteriores: </span><span className="font-medium">{clientLookup.proposalCount}</span></div>
+                {!!clientLookup.documents?.length && (
+                  <div>
+                    <span className="text-muted-foreground">Documentos no cadastro: </span>
+                    <span className="font-medium">{clientLookup.documents.length}</span>
+                    <ul className="mt-1 ml-1 text-xs text-muted-foreground list-disc list-inside">
+                      {clientLookup.documents.slice(0, 6).map((d) => <li key={d.id}>{d.fileName}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button onClick={handleReuseClient} className="gap-1.5">
+                  <CheckCircle2 className="h-4 w-4" /> Reaproveitar dados e documentos
+                </Button>
+                <Button variant="outline" onClick={goToConvenioFresh}>Cadastrar do zero</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Reaproveitar pula a leitura por IA e o novo upload — você confirma/edita os dados na próxima etapa.</p>
+            </div>
+          )}
+
+          {cpfSearched && !isLookingUp && !clientLookup && (
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm">Nenhum cadastro encontrado para este CPF — cliente novo.</p>
+              <Button onClick={goToConvenioFresh}>Continuar →</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ─── STEP 1 — Seleção de Convênio ─────────────────────────────────────────
 
   if (step === "convenio") {
     return (
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
         <div className="flex items-center gap-3">
-          <Button size="icon" variant="ghost" onClick={() => setLocation("/contratos")}>
+          <Button size="icon" variant="ghost" onClick={() => setStep("cpf")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
