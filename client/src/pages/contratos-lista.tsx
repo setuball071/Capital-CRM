@@ -793,6 +793,36 @@ export default function ContratosListaPage() {
     return phase.statuses.reduce((acc, s) => acc + (countByStatus[s] || 0), 0);
   }
 
+  // ── Somatória da produção por caixa ──────────────────────────────────────────
+  // Regra: cancelados não somam; PAGO conta só se pago no mês corrente (paidAt);
+  // demais status somam o valor do contrato integralmente.
+  const CANCEL_STATUSES = ["CANCELADA", "PERDIDA"];
+  const _now = new Date();
+  const isCurrentMonth = (raw: any) => {
+    if (!raw) return false;
+    const d = new Date(raw);
+    return !isNaN(d.getTime()) && d.getFullYear() === _now.getFullYear() && d.getMonth() === _now.getMonth();
+  };
+  function prodValueOf(p: any) {
+    if (CANCEL_STATUSES.includes(p.status)) return 0;
+    const val = parseFloat(p.contractValue || "0") || 0;
+    if (p.status === "PAGO") {
+      return isCurrentMonth(p.paidAt || p.updatedAt) ? val : 0;
+    }
+    return val;
+  }
+  function prodForPhase(phase: Phase) {
+    return proposals.reduce(
+      (acc, p) => acc + (phase.statuses.includes(p.status) ? prodValueOf(p) : 0),
+      0
+    );
+  }
+  // Não exibir soma em caixas puramente de cancelamento
+  function phaseShowsSum(phase: Phase) {
+    return phase.statuses.length > 0 && !phase.statuses.every((s) => CANCEL_STATUSES.includes(s));
+  }
+  const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   // ── Filtro ────────────────────────────────────────────────────────────────
 
   const activePhaseDef = phases.find((p) => p.id === activePhase);
@@ -922,6 +952,12 @@ export default function ContratosListaPage() {
                 <span className={`block text-2xl font-bold leading-none ${clr.count}`}>{count}</span>
                 <span className={`block text-xs font-medium mt-1.5 leading-tight ${clr.label}`}>{phase.name}</span>
                 <span className={`block text-[10px] mt-0.5 opacity-60 ${clr.label}`}>Contrato{count !== 1 ? "s" : ""}</span>
+                {phaseShowsSum(phase) && (
+                  <span className={`block text-xs font-semibold mt-1 ${clr.count}`}>
+                    {fmtBRL(prodForPhase(phase))}
+                    {phase.statuses.includes("PAGO") && <span className={`text-[9px] font-normal ml-1 opacity-60 ${clr.label}`}>no mês</span>}
+                  </span>
+                )}
               </button>
             );
           })}

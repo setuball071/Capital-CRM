@@ -267,6 +267,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           currentStepId: proposals.currentStepId,
           createdAt: proposals.createdAt,
           updatedAt: proposals.updatedAt,
+          paidAt: proposals.paidAt,
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))
@@ -700,6 +701,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         if (corretorPctInput !== undefined) updateData.corretorCommissionPercentage = String(corretorPctInput);
         if (corretorCommInput !== undefined) updateData.corretorCommissionValue = String(corretorCommInput);
         updateData.commissionStatus = "PENDENTE"; // aguarda recebimento do banco
+        updateData.paidAt = new Date(); // data do pagamento (produção paga do mês)
       }
 
       const [updated] = await db
@@ -1035,7 +1037,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const okIds = rows.map((r) => r.id);
       await db
         .update(proposals)
-        .set({ status, updatedAt: new Date() })
+        .set({ status, updatedAt: new Date(), ...(status === "PAGO" ? { paidAt: new Date() } : {}) })
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
       for (const r of rows) {

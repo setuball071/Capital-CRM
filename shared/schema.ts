@@ -3483,6 +3483,8 @@ export const proposals = pgTable("proposals", {
   companyCommissionValue: decimal("company_commission_value", { precision: 12, scale: 2 }),
   commissionStatus: varchar("commission_status", { length: 20 }).default("PENDENTE"),
   commissionPaidAt: timestamp("commission_paid_at"),
+  // Data em que a proposta virou PAGO (para "produção paga do mês")
+  paidAt: timestamp("paid_at"),
   // Dados extras por convênio (UF, órgão, ident SIAPE, conta salário, etc.)
   clientMeta: jsonb("client_meta"),
   vendorId: integer("vendor_id").references(() => users.id),
