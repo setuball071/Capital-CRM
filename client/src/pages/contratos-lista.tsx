@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { cipInfo, type CipState } from "@/lib/cip";
+import { cipInfo, parseCipDate, type CipState } from "@/lib/cip";
 
 // Tag e cor de linha do contador CIP (portabilidade)
 const CIP_BADGE: Record<CipState, string> = {
@@ -852,6 +852,23 @@ export default function ContratosListaPage() {
     return matchSearch && matchProduct;
   });
 
+  // Na caixa "Aguardando retorno CIP": ordena pela data da CIP — a mais antiga
+  // (mais perto de vencer o prazo) no topo; sem data CIP vai pro fim.
+  const activeStatusLabel =
+    filterStatus !== "all" ? (statusList.find((s) => s.key === filterStatus)?.label || "") : "";
+  const isCipBox =
+    (!!activePhaseDef && /cip/i.test(activePhaseDef.name)) || /cip/i.test(activeStatusLabel);
+  const displayed = isCipBox
+    ? [...filtered].sort((a, b) => {
+        const da = parseCipDate(a.clientMeta?.dataCip);
+        const db = parseCipDate(b.clientMeta?.dataCip);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da.getTime() - db.getTime(); // mais antiga primeiro (topo)
+      })
+    : filtered;
+
   const showCorretorCol = viewMode === "operacional";
   const showParceiroCol = canManageContracts;
   const showSelectCol = isOperacional;
@@ -1109,7 +1126,7 @@ export default function ContratosListaPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => {
+              {displayed.map((p) => {
                 const pStatusDef = statusList.find((s) => s.key === p.status);
                 const pIsFinal = pStatusDef?.isFinal || FINAL_FALLBACK.includes(p.status);
                 const cip = (p.product === "PORTABILIDADE" && !pIsFinal) ? cipInfo(p.clientMeta?.dataCip) : null;
