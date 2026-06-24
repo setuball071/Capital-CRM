@@ -799,13 +799,17 @@ export default function ContratosListaPage() {
 
   const filtered = proposals.filter((p) => {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
-    if (activePhaseDef) {
-      if (!activePhaseDef.statuses.includes(p.status)) return false;
-    } else if (filterStatus !== "all") {
-      if (p.status !== filterStatus) return false;
-    }
     const q = search.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "");
+    // Ao pesquisar, a busca varre TUDO (ignora a caixa de fase/status selecionada).
+    // O filtro de caixa só se aplica quando não há texto de busca.
+    if (!q) {
+      if (activePhaseDef) {
+        if (!activePhaseDef.statuses.includes(p.status)) return false;
+      } else if (filterStatus !== "all") {
+        if (p.status !== filterStatus) return false;
+      }
+    }
     const matchSearch =
       !q ||
       p.clientName?.toLowerCase().includes(q) ||
