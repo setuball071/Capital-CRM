@@ -2614,6 +2614,10 @@ function extrairContratos(texto, items) {
     ['FACTA','Facta'],['MASTER','Master'],['MERCANTIL','Mercantil'],
     ['BRB','BRB'],['BANPARA','Banpará'],['VOTORANTIM','Votorantim'],
     ['ORIGINAL','Original'],['SOFISA','Sofisa'],['PINE','Pine'],
+    ['NUBANK','Nubank'],['MERCADO PAGO','Mercado Pago'],['MERCADOPAGO','Mercado Pago'],
+    ['CREFISA','Crefisa'],['OLE','Olé'],['BANESE','Banese'],['BANESTES','Banestes'],
+    ['AMAZONIA','Banco da Amazônia'],['NORDESTE','Banco do Nordeste'],['CCB','CCB'],
+    ['QUERO MAIS','Quero+'],['PARANA','Paraná Banco'],['AGIBANK','Agibank'],
   ];
 
   function detectarBanco(rub) {
@@ -2621,8 +2625,49 @@ function extrairContratos(texto, items) {
     for (const [key, nome] of BANCO_MAP) {
       if (up.includes(key)) return nome;
     }
-    const partes = rub.split('-');
+    // Nome do banco costuma ser o último segmento após " - " da rubrica
+    const partes = up.split(/\s+-\s+/);
     return partes[partes.length - 1].trim().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── PRIMÁRIO: reconstrói as linhas por coordenada Y (mesma altura = mesma
+  // linha) e ordena por X. Robusto à ordem embaralhada que o pdf.js entrega.
+  // O parser antigo (máquina de estados) fica como fallback abaixo.
+  function parseRowLinha(line) {
+    const mRub = /\d{5}\s*-\s*(.+?)(?=\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}|\s+\d{1,3}\/\d{1,4}\s+R\$)/.exec(line);
+    if (!mRub) return null;
+    const rubrica = mRub[1].trim();
+    if (!/EMPREST/i.test(rubrica)) return null;                 // só empréstimos consignados
+    if (/CARTAO|MENSALIDADE|SINDICAL/i.test(rubrica)) return null; // ignora cartão/sindicato
+    const mParc = /(\d{1,3})\/(\d{1,4})(?=\s+R\$)/.exec(line);  // parcela N/N logo antes do R$
+    const mVal  = /R\$\s*([\d.,]+)/.exec(line);
+    const mCon  = /^(\S+)\s+\d{5}\s*-/.exec(line);
+    const pa = mParc ? parseInt(mParc[1], 10) : 0;
+    const pt = mParc ? parseInt(mParc[2], 10) : 0;
+    const val = mVal ? parseFloat(mVal[1].replace(/\./g, '').replace(',', '.')) : 0;
+    return {
+      banco:           detectarBanco(rubrica),
+      numero_contrato: mCon ? mCon[1] : '',
+      parcela:         Math.round(val * 100) / 100,
+      prazo:           (pt && pa) ? (pt - pa) : (pt || 0),
+      prazo_total:     pt || 0,
+    };
+  }
+
+  if (items && items.length) {
+    const rows = {};
+    for (const it of items) {
+      if (!it || !it.str) continue;
+      const key = Math.round(it.y / 2); // agrupa por altura (tolerância de 2px)
+      (rows[key] = rows[key] || []).push(it);
+    }
+    const out = [];
+    for (const k of Object.keys(rows)) {
+      const line = rows[k].slice().sort((a, b) => a.x - b.x).map((i) => i.str).join(' ');
+      const c = parseRowLinha(line);
+      if (c) out.push(c);
+    }
+    if (out.length) return out;
   }
 
   // ── STATE MACHINE: lê campos um por linha (formato PDF.js) ─────────
