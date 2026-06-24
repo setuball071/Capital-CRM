@@ -281,7 +281,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
-        clientMeta, parceiroId, reuseDocsFromProposalId,
+        clientMeta, parceiroId, reuseDocIds,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -362,19 +362,22 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       // Reaproveitar documentos de um cadastro anterior (mesmo arquivo — só novas linhas,
       // sem re-upload). Storage-agnóstico: aponta para o mesmo storage_key.
-      if (reuseDocsFromProposalId) {
+      // reuseDocIds = ids dos proposal_documents a reaproveitar (validados por tenant).
+      if (Array.isArray(reuseDocIds) && reuseDocIds.length) {
         try {
-          const srcId = parseInt(String(reuseDocsFromProposalId), 10);
-          const [srcProp] = await db
-            .select({ id: proposals.id })
-            .from(proposals)
-            .where(and(eq(proposals.id, srcId), eq(proposals.tenantId, tenantId)))
-            .limit(1);
-          if (srcProp) {
+          const ids = reuseDocIds
+            .map((x: any) => parseInt(String(x), 10))
+            .filter((n: number) => !isNaN(n));
+          if (ids.length) {
             const srcDocs = await db
-              .select()
+              .select({
+                documentType: proposalDocuments.documentType,
+                fileName: proposalDocuments.fileName,
+                storageKey: proposalDocuments.storageKey,
+              })
               .from(proposalDocuments)
-              .where(eq(proposalDocuments.proposalId, srcId));
+              .innerJoin(proposals, eq(proposalDocuments.proposalId, proposals.id))
+              .where(and(inArray(proposalDocuments.id, ids), eq(proposals.tenantId, tenantId)));
             for (const d of srcDocs) {
               if (!d.storageKey) continue;
               const [nd] = await db
