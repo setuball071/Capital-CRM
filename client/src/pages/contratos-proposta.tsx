@@ -398,7 +398,8 @@ export default function ContratosPropostaPage() {
   // Passo CPF (primeiro passo): reaproveitar cadastro/documentos existentes
   const [cpfInput, setCpfInput] = useState("");
   const [cpfSearched, setCpfSearched] = useState(false);
-  const [reuseDocsFromProposalId, setReuseDocsFromProposalId] = useState<number | null>(null);
+  // Documentos reaproveitados do cadastro anterior (exibidos no wizard, linkados ao salvar)
+  const [reusedDocs, setReusedDocs] = useState<{ id: number; documentType: string; fileName: string }[]>([]);
 
   async function lookupByCpf(cpf: string): Promise<ClientLookup | null> {
     const raw = cpf.replace(/\D/g, "");
@@ -875,7 +876,7 @@ export default function ContratosPropostaPage() {
         term: data.term || undefined,
         ade: data.ade || undefined,
         parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
-        reuseDocsFromProposalId: reuseDocsFromProposalId || undefined,
+        reuseDocIds: reusedDocs.length ? reusedDocs.map((d) => d.id) : undefined,
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
           ? selectedTabela.pctEmpresa / 100
@@ -1281,7 +1282,7 @@ export default function ContratosPropostaPage() {
   }
 
   function goToConvenioFresh() {
-    setReuseDocsFromProposalId(null); // cadastrar do zero — não reaproveita documentos
+    setReusedDocs([]); // cadastrar do zero — não reaproveita documentos
     setStep("convenio");
   }
 
@@ -1305,7 +1306,7 @@ export default function ContratosPropostaPage() {
       setDocPhotoData(meta.docFoto as DocPhotoData); // dados do documento sem nova IA
       setDocPhotoSource("cached");
     }
-    setReuseDocsFromProposalId(clientLookup.lastProposalId); // arquivos linkados no backend
+    setReusedDocs(clientLookup.documents ?? []); // arquivos exibidos e linkados ao salvar
     const conv = CONVENIOS.find((c) => c.id === clientLookup.clientConvenio) || CONVENIOS.find((c) => c.id === "SIAPE");
     if (conv) setSelectedConvenio(conv);
     form.reset({
@@ -2417,6 +2418,38 @@ export default function ContratosPropostaPage() {
                   onChange={(e) => handleDocFiles(e.target.files)}
                 />
               </div>
+
+              {reusedDocs.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                    Reaproveitados do cadastro anterior ({reusedDocs.length})
+                  </p>
+                  {reusedDocs.map((d) => (
+                    <div
+                      key={`reuse-${d.id}`}
+                      className="flex items-center gap-3 p-3 rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10"
+                    >
+                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span className="text-sm flex-1 truncate">{d.fileName}</span>
+                      <a
+                        href={`/api/contracts/documents/${d.id}/file`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                        title="Visualizar"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </a>
+                      <Button
+                        size="icon" variant="ghost" type="button"
+                        title="Não reaproveitar este"
+                        onClick={() => setReusedDocs((prev) => prev.filter((x) => x.id !== d.id))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {attachments.length > 0 && (
                 <div className="space-y-2">
@@ -3771,6 +3804,35 @@ export default function ContratosPropostaPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {/* Documentos reaproveitados do cadastro anterior */}
+            {reusedDocs.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                  Reaproveitados do cadastro anterior ({reusedDocs.length})
+                </p>
+                {reusedDocs.map((d) => (
+                  <div key={`reuse-${d.id}`} className="flex items-center gap-3 p-2 rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10 text-sm">
+                    <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                    <span className="flex-1 truncate">{d.fileName}</span>
+                    <a
+                      href={`/api/contracts/documents/${d.id}/file`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Visualizar
+                    </a>
+                    <Button
+                      size="icon" variant="ghost" type="button"
+                      title="Não reaproveitar este"
+                      onClick={() => setReusedDocs((prev) => prev.filter((x) => x.id !== d.id))}
+                      className="h-7 w-7"
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* Lista de anexos */}
             {attachments.length > 0 && (
               <div className="space-y-1.5">
