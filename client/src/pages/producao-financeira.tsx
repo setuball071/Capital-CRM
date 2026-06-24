@@ -128,7 +128,9 @@ function ProposalRow({
 export default function ProducaoFinanceiraPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const isMaster = user?.isMaster || user?.role === "coordenacao";
+  // Visão da empresa (totais a receber da empresa, não só repasse do corretor):
+  // super-admin (isMaster), Administrador (role "master") e coordenação.
+  const isMaster = user?.isMaster || user?.role === "master" || user?.role === "coordenacao";
   const [filterVendor, setFilterVendor] = useState("all");
 
   // Busca todos os usuários (para filtro master)
