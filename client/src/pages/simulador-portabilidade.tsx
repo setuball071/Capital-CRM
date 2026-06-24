@@ -153,8 +153,44 @@ function gerarTabelaPrice(parcela: number, taxaPerc: number, n: number): PriceLi
   return lines;
 }
 
+// Exporta o cronograma do PRAZO MÁXIMO (tabela Price) em CSV no formato BR
+// (separador ";", decimais com vírgula, BOM UTF-8 p/ acentos abrirem no Excel).
+function baixarCSVPrazoMaximo(c: { parcMedia: number; taxaImpl: number; meses: number }) {
+  const linhas = gerarTabelaPrice(c.parcMedia, c.taxaImpl, c.meses);
+  const numBR = (v: number) => (+v || 0).toFixed(2).replace(".", ",");
+  const head = ["Mês", "Parcela", "Juros", "Amortização", "Saldo Devedor"].join(";");
+  const corpo = linhas
+    .map((l) =>
+      [
+        String(l.mes).padStart(2, "0"),
+        numBR(l.parcela),
+        numBR(l.juros),
+        numBR(l.amortizacao),
+        numBR(l.saldoDevedor),
+      ].join(";"),
+    )
+    .join("\r\n");
+  const csv = "﻿" + head + "\r\n" + corpo + "\r\n";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `amortizacao-prazo-maximo-${c.meses}meses.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function buildPrazoCards(s: SimState): PrazoCard[] {
-  return PRAZOS.filter((p) => p <= s.prazo).map((meses) => {
+  const mesesList = PRAZOS.filter((p) => p <= s.prazo);
+  // Inclui o próprio prazo máximo do contrato como card, mesmo quando "quebrado"
+  // (ex.: 78, 83) — senão ele cai entre dois prazos fixos e nunca aparece.
+  if (s.prazo > 0 && !mesesList.includes(s.prazo)) {
+    mesesList.push(s.prazo);
+    mesesList.sort((a, b) => a - b);
+  }
+  return mesesList.map((meses) => {
     const comIofCard = meses < 24 ? s.contrato * 1.15 : s.comIof;
     const taxaCard = taxaDeCoef(s.margem / comIofCard, s.prazo);
     const sCard = { ...s, taxa: taxaCard, comIof: comIofCard };
@@ -862,6 +898,11 @@ export default function SimuladorPortabilidadePage() {
                       <polyline points="14 2 14 8 20 8"/>
                     </svg>
                     Enviar para Proposta
+                  </button>
+                )}
+                {cronograma.fluxo.every(l => l.amortsCols.length === 0) && (
+                  <button className="btn-pdf" onClick={() => baixarCSVPrazoMaximo(cronograma)} data-testid="button-exportar-csv">
+                    Exportar CSV
                   </button>
                 )}
                 <button className="btn-pdf" onClick={() => {
