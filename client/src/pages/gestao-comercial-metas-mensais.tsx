@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Target, Users, TrendingUp, TrendingDown, Save, Lock, ChevronLeft, ChevronRight, CreditCard, DollarSign } from "lucide-react";
+import DigitacaoSemanal from "./digitacao-semanal";
 
 interface Team {
   id: number;
@@ -71,6 +72,7 @@ export default function MetasMensaisPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [mesReferencia, setMesReferencia] = useState(getCurrentMonth());
+  const [aba, setAba] = useState<"mensal" | "semanal">("mensal");
   const [equipeId, setEquipeId] = useState<string>("");
   const [metaGeralEquipe, setMetaGeralEquipe] = useState("");
   const [metaCartaoEquipe, setMetaCartaoEquipe] = useState("");
@@ -257,6 +259,23 @@ export default function MetasMensaisPage() {
         )}
       </div>
 
+      {/* Abas: Metas Mensais | Meta de Digitação Semanal */}
+      <div className="flex gap-1 border-b">
+        {([["mensal", "Metas Mensais"], ["semanal", "Meta de Digitação Semanal"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setAba(k)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${aba === k ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {aba === "semanal" && <DigitacaoSemanal />}
+
+      {aba === "mensal" && (<>
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <Button
@@ -487,6 +506,7 @@ export default function MetasMensaisPage() {
           )}
         </CardContent>
       </Card>
+      </>)}
     </div>
   );
 }
