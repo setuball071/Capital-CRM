@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 // Cliente OpenAI COMPARTILHADO — usado por funções de IA legadas (roteiros, Nina,
-// roleplay, abordagens, etc.). Mantém OPENAI_API_KEY / integração Replit.
+// roleplay, abordagens, etc.). Usa OPENAI_API_KEY (ou a integração do Replit como legado).
 // Placeholder evita derrubar o boot quando não há chave (as chamadas só falham).
 const openaiApiKey =
   process.env.OPENAI_API_KEY ||
@@ -16,16 +16,20 @@ export const openai = new OpenAI({
     undefined,
 });
 
-// Cliente DEDICADO ao OCR — Google Gemini (free tier) pelo endpoint COMPATÍVEL com
-// OpenAI (o mesmo SDK funciona). Isolado do cliente acima para garantir o OCR
-// independentemente das demais funções de IA. Configure GEMINI_API_KEY no ambiente.
-const geminiApiKey = process.env.GEMINI_API_KEY || "missing-gemini-key";
+// Cliente do OCR (visão). Provedor flexível:
+//  - Se GEMINI_API_KEY estiver definida → Google Gemini (endpoint compatível com OpenAI, free tier).
+//  - Senão → OpenAI (OPENAI_API_KEY), modelo gpt-4o-mini.
+// Basta trocar a env no Railway para alternar o provedor — sem mexer no código.
+const geminiKey = process.env.GEMINI_API_KEY;
+export const ocrProvider: "gemini" | "openai" = geminiKey ? "gemini" : "openai";
 
-export const geminiOcr = new OpenAI({
-  apiKey: geminiApiKey,
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-});
+export const ocrClient = geminiKey
+  ? new OpenAI({
+      apiKey: geminiKey,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    })
+  : openai;
 
-// Modelo de visão do OCR (configurável por OCR_MODEL).
-// gemini-2.5-flash tem free tier COM visão (confirmado); gemini-2.0-flash não.
-export const ocrModel = process.env.OCR_MODEL || "gemini-2.5-flash";
+// Modelo de visão do OCR (configurável por OCR_MODEL); default por provedor.
+export const ocrModel =
+  process.env.OCR_MODEL || (geminiKey ? "gemini-2.5-flash" : "gpt-4o-mini");
