@@ -416,7 +416,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const sourceId = parseInt(req.params.id);
       const tenantId = req.tenantId!;
       const user = req.user!;
-      const { bank, tableId, tableName } = req.body;
+      const { bank, tableId, tableName, contractValue, installmentValue, term } = req.body;
+      // Normaliza valor: aceita "19788.82" ou BR "20.000,00"
+      const normNum = (v: any): string | null => {
+        if (v == null || v === "") return null;
+        const s = String(v).trim();
+        return /,/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s;
+      };
+      const cloneContractValue = normNum(contractValue);
+      const cloneInstallment = normNum(installmentValue);
 
       // Busca proposta origem
       const [src] = await db
@@ -453,9 +461,10 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           bank: bank || src.bank,
           product: src.product,
           tableId: tableId && /^\d+$/.test(String(tableId)) ? parseInt(String(tableId), 10) : null,
-          contractValue: src.contractValue,
-          installmentValue: src.installmentValue,
-          term: src.term,
+          // Valores editáveis no clone (corretor pode ajustar antes de confirmar); senão copia da origem
+          contractValue: cloneContractValue ?? src.contractValue,
+          installmentValue: cloneInstallment ?? src.installmentValue,
+          term: term != null && term !== "" ? parseInt(String(term), 10) : src.term,
           // Clone = nova digitação: ADE e Parceiro NÃO são reaproveitados (pertencem à proposta anterior)
           ade: null,
           adeRefin: null,

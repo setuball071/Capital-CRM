@@ -262,10 +262,13 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao anexar", description: e.message, variant: "destructive" }),
   });
 
-  // Clonar proposta (trocar banco e tabela)
+  // Clonar proposta (corretor pode editar campos antes de confirmar)
   const [showClone, setShowClone] = useState(false);
   const [cloneBank, setCloneBank] = useState("");
   const [cloneTableId, setCloneTableId] = useState("");
+  const [cloneContractValue, setCloneContractValue] = useState("");
+  const [cloneInstallment, setCloneInstallment] = useState("");
+  const [cloneTerm, setCloneTerm] = useState("");
   const cloneMutation = useMutation({
     mutationFn: async () => {
       const t = financeiroTabelas.find((x: any) => String(x.id) === cloneTableId);
@@ -273,6 +276,9 @@ export default function ContratosDetalhePage() {
         bank: cloneBank || proposal.bank,
         tableId: cloneTableId || null,
         tableName: t?.nome || null,
+        contractValue: cloneContractValue,
+        installmentValue: cloneInstallment,
+        term: cloneTerm,
       };
       const res = await fetch(`/api/contracts/proposals/${proposal.id}/clone`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
@@ -540,7 +546,14 @@ export default function ContratosDetalhePage() {
             </Button>
           )}
           {canClone && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+              setCloneBank(proposal.bank || "");
+              setCloneTableId(m.tabelaFinanceiroId ? String(m.tabelaFinanceiroId) : "");
+              setCloneContractValue(proposal.contractValue != null ? String(proposal.contractValue) : "");
+              setCloneInstallment(proposal.installmentValue != null ? String(proposal.installmentValue) : "");
+              setCloneTerm(proposal.term != null ? String(proposal.term) : "");
+              setShowClone(true);
+            }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
             </Button>
           )}
@@ -1076,7 +1089,7 @@ export default function ContratosDetalhePage() {
             <DialogTitle>Clonar proposta</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            Cria uma nova proposta para <span className="font-medium">{proposal.clientName}</span> com os mesmos dados, alterando banco e tabela.
+            Cria uma nova proposta para <span className="font-medium">{proposal.clientName}</span>. Ajuste os campos abaixo antes de confirmar.
           </p>
           <div className="space-y-3">
             <div>
@@ -1105,6 +1118,20 @@ export default function ContratosDetalhePage() {
                     ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Valor Contrato</p>
+                <Input value={cloneContractValue} onChange={(e) => setCloneContractValue(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Parcela</p>
+                <Input value={cloneInstallment} onChange={(e) => setCloneInstallment(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Prazo</p>
+                <Input value={cloneTerm} onChange={(e) => setCloneTerm(e.target.value)} placeholder="meses" />
+              </div>
             </div>
           </div>
           <DialogFooter>
