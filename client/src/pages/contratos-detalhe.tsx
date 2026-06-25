@@ -108,6 +108,9 @@ export default function ContratosDetalhePage() {
   const [corretorPercRepasse, setCorretorPercRepasse] = useState("");
   const [contractValComm, setContractValComm] = useState("");
   const [commPrefilled, setCommPrefilled] = useState(false);
+  // Data do pagamento (editável — pode ser anterior à data em que se marca no sistema)
+  const hojeISO = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const [dataPagamento, setDataPagamento] = useState(hojeISO);
 
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const isVendedor = user?.role === "vendedor";
@@ -384,6 +387,26 @@ export default function ContratosDetalhePage() {
   // CIP só acompanha enquanto a operação não foi finalizada
   const cip = (isPortabilidade && !isFinalStatus) ? cipInfo(m.dataCip) : null;
   const canSetCip = isOperacional && !isTerminal;
+
+  // Tipo de tabela correspondente ao produto/operação da proposta
+  const tipoAlvoTabela = (() => {
+    switch (proposal.product) {
+      case "NOVO": return "Novo";
+      case "PORTABILIDADE":
+      case "PORTABILIDADE_REFIN": return "Portabilidade";
+      case "REFINANCIAMENTO": return "Refinanciamento";
+      case "COMPRA_DIVIDA": return "Compra de Dívida";
+      case "CARTAO": return "Cartão";
+      default: return null;
+    }
+  })();
+  // Tabelas do TIPO de operação + convênio (base para banco e tabela editáveis)
+  const tabelasDoTipo = financeiroTabelas.filter((t: any) =>
+    (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
+    (!tipoAlvoTabela || (t.tipo || "") === tipoAlvoTabela)
+  );
+  // Bancos disponíveis para esse tipo de operação
+  const banksDoTipo = Array.from(new Set(tabelasDoTipo.map((t: any) => t.banco as string).filter(Boolean))).sort();
 
   // Clonar: bancos cadastrados (do convênio) + permissão (consultor só clona as próprias)
   const cloneBanks = Array.from(new Set(
@@ -711,7 +734,30 @@ export default function ContratosDetalhePage() {
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product, copyable: false })}
-          {renderField({ fieldKey: "bank", label: "Banco", value: proposal.bank, editable: true })}
+          {/* Banco — edição via select (bancos disponíveis para o tipo de operação) */}
+          <div className="group min-w-0">
+            <p className="text-xs text-muted-foreground">Banco</p>
+            {editField === "bank" ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Select value={proposal.bank || ""} onValueChange={(v) => { editMutation.mutate({ bank: v }); setEditField(null); }}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecione o banco..." /></SelectTrigger>
+                  <SelectContent>
+                    {banksDoTipo.map((b) => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => setEditField(null)}><X className="h-3.5 w-3.5" /></button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-1.5 mt-0.5">
+                <span className="font-medium text-sm break-words">{proposal.bank || "—"}</span>
+                {canEditFields && (
+                  <Pencil className="h-3 w-3 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer hover:text-primary" onClick={() => setEditField("bank")} />
+                )}
+              </div>
+            )}
+          </div>
           {/* Parceiro (interno — só operacional/master; corretor não vê) */}
           {canManageContracts && (
             <div className="min-w-0">
@@ -742,11 +788,8 @@ export default function ContratosDetalhePage() {
                 <Select onValueChange={saveTabela}>
                   <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
-                    {financeiroTabelas
-                      .filter((t: any) =>
-                        (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
-                        (!proposal.bank || (t.banco || "").toUpperCase() === (proposal.bank || "").toUpperCase())
-                      )
+                    {tabelasDoTipo
+                      .filter((t: any) => !proposal.bank || (t.banco || "").toUpperCase() === (proposal.bank || "").toUpperCase())
                       .map((t: any) => (
                         <SelectItem key={String(t.id)} value={String(t.id)}>
                           {t.nome}{t.banco ? ` — ${t.banco}` : ""}
@@ -909,8 +952,8 @@ export default function ContratosDetalhePage() {
                 <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Dados de Comissão
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <div className="col-span-2 md:col-span-1">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="col-span-2">
                     <p className="text-xs text-muted-foreground mb-1">Valor Liberado (R$)</p>
                     <Input value={contractValComm} onChange={(e) => setContractValComm(e.target.value)} placeholder="0,00" />
                   </div>
@@ -930,6 +973,10 @@ export default function ContratosDetalhePage() {
                     <p className="text-xs text-muted-foreground mb-1">R$ Corretor</p>
                     <p className="font-semibold text-sm mt-2 text-green-700 dark:text-green-400">{corretorCommVal > 0 ? formatMoney(corretorCommVal) : "—"}</p>
                   </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground mb-1">Data do Pagamento</p>
+                    <Input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+                  </div>
                 </div>
               </div>
             )}
@@ -948,6 +995,7 @@ export default function ContratosDetalhePage() {
                     ade: adeValue || undefined,
                     notes: actionNotes,
                     action: nextStatus === "PAGO" ? "PAGAMENTO" : ["CANCELADA", "PERDIDA"].includes(nextStatus) ? "CANCELAMENTO" : "AVANCO",
+                    ...(nextStatus === "PAGO" ? { dataPagamento } : {}),
                     ...(nextStatus === "PAGO" && commPercNum > 0 ? {
                       contractValue: contractValNum || undefined,
                       commissionPercentage: commPercNum / 100,
