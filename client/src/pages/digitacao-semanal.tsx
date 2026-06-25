@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ChevronLeft, ChevronRight, Trophy, TrendingUp, CalendarDays } from "lucide-react";
@@ -20,6 +21,7 @@ function mondayOf(base: Date) {
 const fmtBRL = (n: number) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface Linha { dia: string; vendorId: number | null; vendorNome: string; total: number; qtd: number; }
+interface Proposta { dia: string; id: number; cliente: string; banco: string | null; status: string; vendorNome: string; total: number; }
 
 export default function DigitacaoSemanal() {
   const { toast } = useToast();
@@ -27,8 +29,9 @@ export default function DigitacaoSemanal() {
   const [semanaBase, setSemanaBase] = useState<Date>(() => mondayOf(new Date()));
   const semana = ymd(semanaBase);
   const [metaInput, setMetaInput] = useState("");
+  const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null);
 
-  const { data } = useQuery<{ semana: string; meta: number; linhas: Linha[] }>({
+  const { data } = useQuery<{ semana: string; meta: number; linhas: Linha[]; propostas: Proposta[] }>({
     queryKey: ["/api/metas/digitacao-semanal", semana],
     queryFn: async () => {
       const res = await fetch(`/api/metas/digitacao-semanal/${semana}`, { credentials: "include" });
@@ -53,6 +56,7 @@ export default function DigitacaoSemanal() {
   });
 
   const linhas = data?.linhas ?? [];
+  const propostas = data?.propostas ?? [];
   const meta = data?.meta ?? 0;
 
   // Produção por dia (Seg..Sáb)
@@ -143,11 +147,19 @@ export default function DigitacaoSemanal() {
 
       {/* Produção por dia */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Produção por dia</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Produção por dia</CardTitle>
+          <p className="text-xs text-muted-foreground">Clique num dia para ver as propostas. Conta a digitação (propostas cadastradas), exceto canceladas/perdidas.</p>
+        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
             {dias.map((d) => (
-              <div key={d.key} className="rounded-lg border p-3">
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setDiaDetalhe(d.key)}
+                className="rounded-lg border p-3 text-left hover:border-primary hover:bg-primary/5 transition-colors"
+              >
                 <p className="text-xs font-semibold">{DIAS[d.date.getDay()]}</p>
                 <p className="text-[10px] text-muted-foreground">{d.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</p>
                 <p className="text-base font-bold mt-1">{fmtBRL(d.valor)}</p>
@@ -157,7 +169,7 @@ export default function DigitacaoSemanal() {
                     <Trophy className="w-3 h-3" /> {d.top.nome.split(" ")[0]}
                   </p>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </CardContent>
@@ -184,6 +196,45 @@ export default function DigitacaoSemanal() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detalhe do dia */}
+      <Dialog open={!!diaDetalhe} onOpenChange={(o) => !o && setDiaDetalhe(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          {(() => {
+            if (!diaDetalhe) return null;
+            const doDia = propostas.filter((p) => p.dia === diaDetalhe);
+            const [y, m, dd] = diaDetalhe.split("-").map(Number);
+            const dt = new Date(y, m - 1, dd);
+            const totalDia = doDia.reduce((s, p) => s + p.total, 0);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
+                    {DIAS[dt.getDay()]}, {dt.toLocaleDateString("pt-BR")} — {fmtBRL(totalDia)} ({doDia.length} proposta{doDia.length !== 1 ? "s" : ""})
+                  </DialogTitle>
+                </DialogHeader>
+                {doDia.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">Nenhuma proposta digitada neste dia.</p>
+                ) : (
+                  <div className="divide-y">
+                    {doDia.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{p.cliente}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            #{p.id} · {p.vendorNome}{p.banco ? ` · ${p.banco}` : ""} · {p.status}
+                          </p>
+                        </div>
+                        <span className="font-semibold shrink-0">{fmtBRL(p.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
