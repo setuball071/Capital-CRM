@@ -360,6 +360,16 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS metas_digitacao_semanal (
+              id                SERIAL PRIMARY KEY,
+              tenant_id         INTEGER NOT NULL,
+              semana_referencia DATE NOT NULL,
+              meta              DECIMAL(14,2) NOT NULL DEFAULT 0,
+              created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE(tenant_id, semana_referencia)
+            )
+          `);
 
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS contract_phases (

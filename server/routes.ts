@@ -24619,6 +24619,86 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ── META DE DIGITAÇÃO SEMANAL ──────────────────────────────────────────────
+  // GET: agregação da digitação (propostas cadastradas por created_at) da semana,
+  // por dia e por vendedor, + a meta semanal salva. semana = segunda-feira YYYY-MM-DD.
+  app.get("/api/metas/digitacao-semanal/:semana", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+      const user = req.user!;
+      if (!user.isMaster && !["master", "coordenacao", "operacional"].includes(user.role)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      const semana = req.params.semana;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(semana)) {
+        return res.status(400).json({ message: "Semana inválida (use YYYY-MM-DD da segunda-feira)" });
+      }
+
+      const linhas = (await db.execute(sql`
+        SELECT to_char(p.created_at, 'YYYY-MM-DD') AS dia,
+               p.vendor_id                          AS vendor_id,
+               COALESCE(u.name, 'Sem vendedor')     AS vendor_name,
+               COALESCE(SUM(p.contract_value::numeric), 0) AS total,
+               COUNT(*)::int                        AS qtd
+        FROM proposals p
+        LEFT JOIN users u ON u.id = p.vendor_id
+        WHERE p.tenant_id = ${tenantId}
+          AND p.created_at >= ${semana}::date
+          AND p.created_at <  (${semana}::date + INTERVAL '7 days')
+        GROUP BY dia, p.vendor_id, u.name
+      `)).rows;
+
+      const metaRow = (await db.execute(sql`
+        SELECT meta FROM metas_digitacao_semanal
+        WHERE tenant_id = ${tenantId} AND semana_referencia = ${semana}::date
+        LIMIT 1
+      `)).rows[0];
+
+      res.json({
+        semana,
+        meta: metaRow ? parseFloat(metaRow.meta as string) || 0 : 0,
+        linhas: linhas.map((r: any) => ({
+          dia: r.dia,
+          vendorId: r.vendor_id,
+          vendorNome: r.vendor_name,
+          total: parseFloat(r.total) || 0,
+          qtd: r.qtd || 0,
+        })),
+      });
+    } catch (error: any) {
+      console.error("[METAS] Error digitacao-semanal:", error);
+      res.status(500).json({ message: "Erro ao buscar digitação semanal" });
+    }
+  });
+
+  // PUT: salva/atualiza a meta semanal de digitação
+  app.put("/api/metas/digitacao-semanal", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(401).json({ message: "Tenant não identificado" });
+      const user = req.user!;
+      if (!user.isMaster && !["master", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      const { semana, meta } = req.body;
+      if (!semana || !/^\d{4}-\d{2}-\d{2}$/.test(semana)) {
+        return res.status(400).json({ message: "Semana inválida" });
+      }
+      const m = parseFloat(meta) || 0;
+      const result = await db.execute(sql`
+        INSERT INTO metas_digitacao_semanal (tenant_id, semana_referencia, meta)
+        VALUES (${tenantId}, ${semana}::date, ${m})
+        ON CONFLICT (tenant_id, semana_referencia) DO UPDATE SET meta = EXCLUDED.meta
+        RETURNING *
+      `);
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[METAS] Error saving digitacao-semanal:", error);
+      res.status(500).json({ message: "Erro ao salvar meta semanal" });
+    }
+  });
+
   // GET /api/metas/individuais/:equipeId/:mesReferencia - Get individual metas for a team/month
   app.get(
     "/api/metas/individuais/:equipeId/:mesReferencia",
