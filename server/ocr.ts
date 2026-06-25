@@ -18,7 +18,7 @@
 
 import type { Express } from "express";
 import multer from "multer";
-import { ocrClient, ocrModel, ocrProvider } from "./openaiClient";
+import { ocrClient, ocrModel } from "./openaiClient";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,36 +45,6 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
-  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — confirma provedor/modelo do OCR com 1 imagem real. Remover depois.
-  app.get("/api/ocr/_diag", async (req, res) => {
-    if (req.query.diag !== "capitalgo") return res.status(404).end();
-    const out: any = {
-      provider: ocrProvider,
-      model: ocrModel,
-      openaiKeyPresent: !!process.env.OPENAI_API_KEY,
-      geminiKeyPresent: !!process.env.GEMINI_API_KEY,
-    };
-    try {
-      const r = await fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png");
-      const b64 = Buffer.from(await r.arrayBuffer()).toString("base64");
-      const resp = await ocrClient.chat.completions.create({
-        model: ocrModel,
-        max_tokens: 50,
-        messages: [{ role: "user", content: [
-          { type: "text", text: "Diga a cor predominante em 1 palavra." },
-          { type: "image_url", image_url: { url: `data:image/png;base64,${b64}`, detail: "high" } },
-        ] }],
-      });
-      out.ok = true;
-      out.sample = resp.choices?.[0]?.message?.content?.slice(0, 40);
-    } catch (e: any) {
-      out.ok = false;
-      out.status = e?.status ?? e?.response?.status ?? null;
-      out.msg = String(e?.message || "").slice(0, 220);
-    }
-    return res.json(out);
-  });
-
   app.post(
     "/api/ocr/document",
     requireAuth,
