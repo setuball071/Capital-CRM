@@ -428,7 +428,8 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <span class="sim-input-label" id="sim-input-label">Valor da parcela (R$)</span>
       <input class="sim-input" type="number" id="sim-input" placeholder="0,00" min="0" oninput="simularContrato()"/>
       <button class="sim-clear" onclick="limparSim()" title="Limpar">✕</button>
-      <div class="sim-mode-wrap" style="margin-left:auto">
+      <span style="width:1px;height:20px;background:var(--border);display:inline-block;margin:0 4px"></span>
+      <div class="sim-mode-wrap">
         <button class="sim-mode-btn" id="srcc-btn-fora" onclick="setSrccFiltro('fora')">Fora da SRCC</button>
         <button class="sim-mode-btn" id="srcc-btn-srcc" onclick="setSrccFiltro('srcc')">Na SRCC</button>
       </div>
