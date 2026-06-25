@@ -24596,6 +24596,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at >= ${semana}::date
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
+          AND p.id NOT IN (
+            SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
+            FROM proposal_history ph
+            WHERE ph.notes ~ 'Clonada da proposta #[0-9]+'
+          )
         GROUP BY dia, p.vendor_id, u.name
       `)).rows;
 
@@ -24611,6 +24616,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at >= ${semana}::date
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
+          AND p.id NOT IN (
+            SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
+            FROM proposal_history ph
+            WHERE ph.notes ~ 'Clonada da proposta #[0-9]+'
+          )
         ORDER BY p.created_at DESC
       `)).rows;
 
