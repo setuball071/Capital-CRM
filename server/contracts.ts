@@ -695,6 +695,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         companyCommissionValue: companyCommInput,
         corretorCommissionPercentage: corretorPctInput,
         corretorCommissionValue: corretorCommInput,
+        dataPagamento: dataPagamentoInput,
       } = req.body;
 
       const updateData: any = {};
@@ -711,7 +712,10 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         if (corretorPctInput !== undefined) updateData.corretorCommissionPercentage = String(corretorPctInput);
         if (corretorCommInput !== undefined) updateData.corretorCommissionValue = String(corretorCommInput);
         updateData.commissionStatus = "PENDENTE"; // aguarda recebimento do banco
-        updateData.paidAt = new Date(); // data do pagamento (produção paga do mês)
+        // Data do pagamento: usa a informada (YYYY-MM-DD, pode ser anterior) ou hoje
+        updateData.paidAt = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
+          ? new Date(`${dataPagamentoInput}T12:00:00`)
+          : new Date();
       }
 
       const [updated] = await db
@@ -767,10 +771,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
             vendedorNome = v?.name || null;
           }
-          const now = new Date();
-          const mesRef = now.toISOString().slice(0, 7);
+          // Data do pagamento: usa a informada (YYYY-MM-DD) ou hoje
+          const dPag = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
+            ? new Date(`${dataPagamentoInput}T12:00:00`)
+            : new Date();
+          const mesRef = `${dPag.getFullYear()}-${String(dPag.getMonth() + 1).padStart(2, "0")}`;
           // Dashboard lê a data via TO_DATE(data_pagamento,'DD/MM/YYYY') — gravar no formato BR
-          const dataPag = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+          const dataPag = `${String(dPag.getDate()).padStart(2, "0")}/${String(dPag.getMonth() + 1).padStart(2, "0")}/${dPag.getFullYear()}`;
           const valBruto = updated.contractValue ? String(updated.contractValue) : null;
           const compEmp = updated.companyCommissionValue ? String(updated.companyCommissionValue) : null;
           // Repasse efetivo: corretor; se vazio, cai para a comissão da empresa (igual ao import CSV).
