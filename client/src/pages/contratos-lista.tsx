@@ -594,9 +594,18 @@ export default function ContratosListaPage() {
     return s ? Number(s) : null;
   });
   const [showPhaseManager, setShowPhaseManager] = useState(false);
-  // Ordenação por coluna (clicar no cabeçalho)
-  const [sortBy, setSortBy] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // Ordenação por coluna (clicar no cabeçalho) — persiste na sessão
+  const [sortBy, setSortBy] = useState<string | null>(() => sessionStorage.getItem("contratos_sortBy") || null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => (sessionStorage.getItem("contratos_sortDir") as "asc" | "desc") || "desc");
+  useEffect(() => {
+    if (sortBy) {
+      sessionStorage.setItem("contratos_sortBy", sortBy);
+      sessionStorage.setItem("contratos_sortDir", sortDir);
+    } else {
+      sessionStorage.removeItem("contratos_sortBy");
+      sessionStorage.removeItem("contratos_sortDir");
+    }
+  }, [sortBy, sortDir]);
 
   useEffect(() => {
     if (activePhase == null) sessionStorage.removeItem("contratos_activePhase");
