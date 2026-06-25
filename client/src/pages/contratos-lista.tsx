@@ -594,6 +594,9 @@ export default function ContratosListaPage() {
     return s ? Number(s) : null;
   });
   const [showPhaseManager, setShowPhaseManager] = useState(false);
+  // Ordenação por coluna (clicar no cabeçalho)
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
     if (activePhase == null) sessionStorage.removeItem("contratos_activePhase");
@@ -869,6 +872,42 @@ export default function ContratosListaPage() {
       })
     : filtered;
 
+  // Ordenação por coluna (cabeçalho clicável). Sobrepõe a ordem padrão quando ativa.
+  const SORT_GET: Record<string, (p: any) => any> = {
+    id: (p) => p.id,
+    convenio: (p) => (p.clientConvenio || "").toLowerCase(),
+    cpf: (p) => (p.clientCpf || "").replace(/\D/g, ""),
+    nome: (p) => (p.clientName || "").toLowerCase(),
+    corretor: (p) => (p.vendorName || "").toLowerCase(),
+    tipo: (p) => (p.product || "").toLowerCase(),
+    banco: (p) => (p.bank || "").toLowerCase(),
+    parcela: (p) => parseFloat(p.installmentValue || "0") || 0,
+    contrato: (p) => parseFloat(p.contractValue || "0") || 0,
+    ade: (p) => (p.ade || "").toLowerCase(),
+    parceiro: (p) => (p.parceiroNome || "").toLowerCase(),
+    status: (p) => new Date(p.updatedAt || p.createdAt || 0).getTime(), // atualização mais recente
+  };
+  const sorted = sortBy && SORT_GET[sortBy]
+    ? [...displayed].sort((a, b) => {
+        const va = SORT_GET[sortBy](a), vb = SORT_GET[sortBy](b);
+        let cmp = 0;
+        if (typeof va === "number" && typeof vb === "number") cmp = va - vb;
+        else cmp = String(va).localeCompare(String(vb), "pt-BR");
+        return sortDir === "desc" ? -cmp : cmp;
+      })
+    : displayed;
+  function toggleSort(key: string) {
+    if (sortBy === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortBy(key); setSortDir("desc"); }
+  }
+  const sortHead = (key: string, label: string, cls = "") => (
+    <TableHead className={`cursor-pointer select-none hover:text-foreground ${cls}`} onClick={() => toggleSort(key)}>
+      <span className={`inline-flex items-center gap-0.5 ${cls.includes("text-right") ? "justify-end w-full" : ""}`}>
+        {label}{sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+      </span>
+    </TableHead>
+  );
+
   const showCorretorCol = viewMode === "operacional";
   const showParceiroCol = canManageContracts;
   const showSelectCol = isOperacional;
@@ -1110,23 +1149,23 @@ export default function ContratosListaPage() {
                     />
                   </TableHead>
                 )}
-                <TableHead className="w-14">#</TableHead>
-                <TableHead>Órgão</TableHead>
-                <TableHead>CPF</TableHead>
-                <TableHead>Nome do Cliente</TableHead>
-                {showCorretorCol && <TableHead>Corretor</TableHead>}
-                <TableHead>Tipo</TableHead>
-                <TableHead>Banco</TableHead>
-                <TableHead className="text-right">Parcela</TableHead>
-                <TableHead className="text-right">Contrato</TableHead>
-                <TableHead>ADE</TableHead>
-                {showParceiroCol && <TableHead>Parceiro</TableHead>}
-                <TableHead>Status</TableHead>
+                {sortHead("id", "#", "w-14")}
+                {sortHead("convenio", "Órgão")}
+                {sortHead("cpf", "CPF")}
+                {sortHead("nome", "Nome do Cliente")}
+                {showCorretorCol && sortHead("corretor", "Corretor")}
+                {sortHead("tipo", "Tipo")}
+                {sortHead("banco", "Banco")}
+                {sortHead("parcela", "Parcela", "text-right")}
+                {sortHead("contrato", "Contrato", "text-right")}
+                {sortHead("ade", "ADE")}
+                {showParceiroCol && sortHead("parceiro", "Parceiro")}
+                {sortHead("status", "Status")}
                 {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayed.map((p) => {
+              {sorted.map((p) => {
                 const pStatusDef = statusList.find((s) => s.key === p.status);
                 const pIsFinal = pStatusDef?.isFinal || FINAL_FALLBACK.includes(p.status);
                 const cip = (p.product === "PORTABILIDADE" && !pIsFinal) ? cipInfo(p.clientMeta?.dataCip) : null;
