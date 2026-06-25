@@ -1331,7 +1331,7 @@ class FastImportService {
         ORDER BY cpf, matricula, orgao, id DESC
       ) s
       WHERE v.cpf = s.cpf
-        AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
+        AND (s.matricula IS NULL OR s.matricula = '' OR regexp_replace(COALESCE(v.matricula,''), '^0+', '') = regexp_replace(s.matricula, '^0+', ''))
         AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
     `);
 
@@ -1374,13 +1374,16 @@ class FastImportService {
         ${baseTag}
       FROM staging_d8 s
       JOIN clientes_pessoa p ON p.cpf = s.cpf
-      LEFT JOIN clientes_vinculo v ON v.cpf = s.cpf 
-        AND (s.matricula IS NULL OR s.matricula = '' OR v.matricula = s.matricula)
+      LEFT JOIN clientes_vinculo v ON v.cpf = s.cpf
+        AND (s.matricula IS NULL OR s.matricula = '' OR regexp_replace(COALESCE(v.matricula,''), '^0+', '') = regexp_replace(s.matricula, '^0+', ''))
         AND (s.orgao IS NULL OR s.orgao = '' OR v.orgao = s.orgao)
+      LEFT JOIN LATERAL (
+        SELECT MAX(competencia) AS ult_folha FROM clientes_folha_mes f WHERE f.vinculo_id = v.id
+      ) fm ON true
       WHERE s.import_run_id = ${run.id}
         AND s.cpf IS NOT NULL AND s.cpf != ''
         AND s.numero_contrato IS NOT NULL AND s.numero_contrato != ''
-      ORDER BY p.id, s.numero_contrato, v.id NULLS LAST
+      ORDER BY p.id, s.numero_contrato, (v.id IS NULL), fm.ult_folha DESC NULLS LAST, v.id
       ON CONFLICT (pessoa_id, numero_contrato) DO UPDATE SET
         vinculo_id = EXCLUDED.vinculo_id,
         banco = EXCLUDED.banco,
