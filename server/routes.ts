@@ -24583,6 +24583,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(400).json({ message: "Semana inválida (use YYYY-MM-DD da segunda-feira)" });
       }
 
+      // Digitação = propostas cadastradas (por created_at), EXCETO canceladas/perdidas
       const linhas = (await db.execute(sql`
         SELECT to_char(p.created_at, 'YYYY-MM-DD') AS dia,
                p.vendor_id                          AS vendor_id,
@@ -24594,7 +24595,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         WHERE p.tenant_id = ${tenantId}
           AND p.created_at >= ${semana}::date
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
+          AND p.status NOT IN ('CANCELADA', 'PERDIDA')
         GROUP BY dia, p.vendor_id, u.name
+      `)).rows;
+
+      // Propostas individuais da semana (para o detalhe ao clicar no dia)
+      const propostas = (await db.execute(sql`
+        SELECT to_char(p.created_at, 'YYYY-MM-DD') AS dia,
+               p.id AS id, p.client_name AS cliente, p.bank AS banco, p.status AS status,
+               COALESCE(u.name, 'Sem vendedor') AS vendor_name,
+               COALESCE(p.contract_value::numeric, 0) AS total
+        FROM proposals p
+        LEFT JOIN users u ON u.id = p.vendor_id
+        WHERE p.tenant_id = ${tenantId}
+          AND p.created_at >= ${semana}::date
+          AND p.created_at <  (${semana}::date + INTERVAL '7 days')
+          AND p.status NOT IN ('CANCELADA', 'PERDIDA')
+        ORDER BY p.created_at DESC
       `)).rows;
 
       const metaRow = (await db.execute(sql`
@@ -24612,6 +24629,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           vendorNome: r.vendor_name,
           total: parseFloat(r.total) || 0,
           qtd: r.qtd || 0,
+        })),
+        propostas: propostas.map((r: any) => ({
+          dia: r.dia,
+          id: r.id,
+          cliente: r.cliente,
+          banco: r.banco,
+          status: r.status,
+          vendorNome: r.vendor_name,
+          total: parseFloat(r.total) || 0,
         })),
       });
     } catch (error: any) {
