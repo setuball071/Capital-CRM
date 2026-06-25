@@ -136,7 +136,7 @@ Formato exato:
 
         const response = await geminiOcr.chat.completions.create({
           model: ocrModel,
-          max_tokens: 600,
+          max_tokens: 1500,
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -150,14 +150,16 @@ Formato exato:
         });
 
         const raw = response.choices[0]?.message?.content ?? "";
+        const finish = response.choices[0]?.finish_reason ?? "?";
 
         // Extrai JSON da resposta (pode vir com markdown ```json ... ```)
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-          console.error("[OCR] resposta sem JSON:", raw);
-          return res
-            .status(422)
-            .json({ message: "Não foi possível extrair os dados do documento" });
+          console.error("[OCR] resposta sem JSON. finish:", finish, "raw:", raw);
+          // TEMP: expõe detalhe p/ diagnóstico
+          return res.status(422).json({
+            message: `[OCR sem JSON | finish=${finish} | len=${raw.length}] ${raw.slice(0, 160) || "(resposta vazia)"}`,
+          });
         }
 
         let extracted: DocPhotoExtracted;
@@ -180,18 +182,8 @@ Formato exato:
         console.error("POST /api/ocr/document error:", e);
         const status = e?.status ?? e?.response?.status;
         const msg = String(e?.message || "");
-        if (
-          status === 401 ||
-          status === 403 ||
-          status === 429 ||
-          /api[_ ]?key|authentication|invalid_api_key|sk-missing|quota|rate limit/i.test(msg)
-        ) {
-          return res.status(503).json({
-            message:
-              "Leitura automática indisponível no momento. Preencha os dados do documento manualmente.",
-          });
-        }
-        return res.status(500).json({ message: "Erro ao processar documento" });
+        // TEMP: expõe o detalhe real do erro upstream p/ diagnóstico
+        return res.status(503).json({ message: `[OCR erro ${status ?? "?"}] ${msg.slice(0, 200)}` });
       }
     }
   );
