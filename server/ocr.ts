@@ -45,6 +45,34 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
+  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — testa OCR real (imagem base64) em 2 modelos. Remover depois.
+  app.get("/api/ocr/_diag", async (req, res) => {
+    if (req.query.diag !== "capitalgo") return res.status(404).end();
+    const out: any = { defaultModel: ocrModel, geminiKeyPresent: !!process.env.GEMINI_API_KEY };
+    let b64 = "";
+    try {
+      const r = await fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png");
+      b64 = Buffer.from(await r.arrayBuffer()).toString("base64");
+    } catch (e: any) { out.fetchErr = String(e?.message || e); }
+    const testar = async (model: string) => {
+      try {
+        const resp = await geminiOcr.chat.completions.create({
+          model, max_tokens: 50,
+          messages: [{ role: "user", content: [
+            { type: "text", text: "Diga a cor em 1 palavra." },
+            { type: "image_url", image_url: { url: `data:image/png;base64,${b64}`, detail: "high" } },
+          ] }],
+        });
+        return { ok: true, sample: resp.choices?.[0]?.message?.content?.slice(0, 40) };
+      } catch (e: any) {
+        return { ok: false, status: e?.status ?? e?.response?.status ?? null, msg: String(e?.message || "").slice(0, 220) };
+      }
+    };
+    out["gemini-2.5-flash"] = await testar("gemini-2.5-flash");
+    out["gemini-2.5-flash-lite"] = await testar("gemini-2.5-flash-lite");
+    return res.json(out);
+  });
+
   app.post(
     "/api/ocr/document",
     requireAuth,
