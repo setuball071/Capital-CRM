@@ -428,6 +428,10 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <span class="sim-input-label" id="sim-input-label">Valor da parcela (R$)</span>
       <input class="sim-input" type="number" id="sim-input" placeholder="0,00" min="0" oninput="simularContrato()"/>
       <button class="sim-clear" onclick="limparSim()" title="Limpar">✕</button>
+      <div class="sim-mode-wrap" style="margin-left:auto">
+        <button class="sim-mode-btn" id="srcc-btn-fora" onclick="setSrccFiltro('fora')">Fora da SRCC</button>
+        <button class="sim-mode-btn" id="srcc-btn-srcc" onclick="setSrccFiltro('srcc')">Na SRCC</button>
+      </div>
     </div>
   </div>
   <div class="table-wrap">
@@ -1039,6 +1043,7 @@ let _importRows=[];
 let _csvRows=[];
 let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
+let _srccFiltro='';
 let _tbSortSim={col:'ganho',dir:'desc'};
 let _tbSortNorm={col:null,dir:'desc'};
 let _grpVigencias=[]; // regras de repasse por tipo de produto do grupo em edição
@@ -2281,6 +2286,8 @@ function renderTabelas(){
     if(conv&&t.convenio!==conv)return false;
     if(tipo&&t.tipo!==tipo)return false;
     if(prazo&&String(t.prazo)!==prazo)return false;
+    if(_srccFiltro==='srcc'&&!t.srcc)return false;
+    if(_srccFiltro==='fora'&&t.srcc)return false;
     return true;
   });
   document.getElementById('tb-count').textContent=list.length+' tabela'+(list.length!==1?'s':'');
@@ -2427,6 +2434,12 @@ function setSimMode(modo){
   document.getElementById('sim-input').value='';
   _simAtivo=false;_simValor=0;
   document.getElementById('tb-sim-header').classList.remove('has-results');
+  renderTabelas();
+}
+function setSrccFiltro(modo){
+  _srccFiltro=(_srccFiltro===modo)?'':modo;
+  document.getElementById('srcc-btn-fora').classList.toggle('active',_srccFiltro==='fora');
+  document.getElementById('srcc-btn-srcc').classList.toggle('active',_srccFiltro==='srcc');
   renderTabelas();
 }
 function limparSim(){
