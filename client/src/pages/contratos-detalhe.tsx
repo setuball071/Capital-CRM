@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, Clock, SkipForward,
   FileText, AlertCircle, ExternalLink, Download, Paperclip,
   Copy, Check, Pencil, X, User, Landmark, CreditCard, Lock,
-  Upload, Contact, Trash2,
+  Upload, Contact, Trash2, MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -212,6 +212,20 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  // Item 4: registrar observação SEM mudar status
+  const addNoteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/status`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ notes: actionNotes, action: "OBSERVACAO" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Observação salva" }); invalidate(); setActionNotes(""); },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
   const editMutation = useMutation({
     mutationFn: async (body: any) => {
       const res = await fetch(`/api/contracts/proposals/${proposalId}`, {
@@ -317,6 +331,9 @@ export default function ContratosDetalhePage() {
 
   // Excluir proposta — somente master (super-admin)
   const isSuperMaster = !!user?.isMaster;
+  // Edição total (item 3): super-admin (isMaster) e Administrador (role master)
+  const isMasterUser = !!user?.isMaster || user?.role === "master";
+  const [masterEditAll, setMasterEditAll] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -381,8 +398,11 @@ export default function ContratosDetalhePage() {
     (!!currentStatusDef?.returnStatusKey || !!currentStatusDef?.allowsVendorEdit);
 
   // permissões de edição de campos
-  const canEditFields = !isTerminal && (isOperacional || (isVendedor && !!currentStatusDef?.allowsVendorEdit));
-  const canEditAde = !isTerminal && isOperacional;
+  // - master "Editar tudo" (item 3): libera qualquer campo em qualquer status
+  // - corretor (item 2): edita os campos da digitação quando a proposta está numa
+  //   pendência de corretor (returnStatusKey) ou status com allowsVendorEdit
+  const canEditFields = masterEditAll || (!isTerminal && (isOperacional || (isVendedor && (!!currentStatusDef?.allowsVendorEdit || !!currentStatusDef?.returnStatusKey))));
+  const canEditAde = masterEditAll || (!isTerminal && isOperacional); // ADE: só operacional/master/admin (item 2)
 
   // dados bancários de crédito
   const cs = m.contaSelecionada || {};
@@ -522,6 +542,17 @@ export default function ContratosDetalhePage() {
           {canClone && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setCloneBank(""); setCloneTableId(""); setShowClone(true); }} title="Clonar proposta">
               <Copy className="h-4 w-4" /> Clonar
+            </Button>
+          )}
+          {isMasterUser && (
+            <Button
+              variant={masterEditAll ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setMasterEditAll((v) => !v)}
+              title="Liberar edição de qualquer campo, em qualquer status (Master)"
+            >
+              <Pencil className="h-4 w-4" /> {masterEditAll ? "Editando tudo" : "Editar tudo"}
             </Button>
           )}
           {isSuperMaster && (
@@ -917,6 +948,15 @@ export default function ContratosDetalhePage() {
               >
                 <SkipForward className="h-4 w-4 mr-2" />
                 {advanceStatusMutation.isPending ? "Salvando..." : "Confirmar"}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!actionNotes.trim() || addNoteMutation.isPending}
+                onClick={() => addNoteMutation.mutate()}
+                title="Registra a observação no histórico sem mudar o status"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                {addNoteMutation.isPending ? "Salvando..." : "Salvar observação"}
               </Button>
             </div>
           </CardContent>
