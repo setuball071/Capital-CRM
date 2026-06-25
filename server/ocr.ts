@@ -18,7 +18,7 @@
 
 import type { Express } from "express";
 import multer from "multer";
-import { geminiOcr, ocrModel } from "./openaiClient";
+import { ocrClient, ocrModel } from "./openaiClient";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,34 +45,6 @@ export interface DocPhotoExtracted {
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
-  // ⚠️ DIAGNÓSTICO TEMPORÁRIO — testa OCR real (imagem base64) em 2 modelos. Remover depois.
-  app.get("/api/ocr/_diag", async (req, res) => {
-    if (req.query.diag !== "capitalgo") return res.status(404).end();
-    const out: any = { defaultModel: ocrModel, geminiKeyPresent: !!process.env.GEMINI_API_KEY };
-    let b64 = "";
-    try {
-      const r = await fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png");
-      b64 = Buffer.from(await r.arrayBuffer()).toString("base64");
-    } catch (e: any) { out.fetchErr = String(e?.message || e); }
-    const testar = async (model: string) => {
-      try {
-        const resp = await geminiOcr.chat.completions.create({
-          model, max_tokens: 50,
-          messages: [{ role: "user", content: [
-            { type: "text", text: "Diga a cor em 1 palavra." },
-            { type: "image_url", image_url: { url: `data:image/png;base64,${b64}`, detail: "high" } },
-          ] }],
-        });
-        return { ok: true, sample: resp.choices?.[0]?.message?.content?.slice(0, 40) };
-      } catch (e: any) {
-        return { ok: false, status: e?.status ?? e?.response?.status ?? null, msg: String(e?.message || "").slice(0, 220) };
-      }
-    };
-    out["gemini-2.5-flash"] = await testar("gemini-2.5-flash");
-    out["gemini-2.5-flash-lite"] = await testar("gemini-2.5-flash-lite");
-    return res.json(out);
-  });
-
   app.post(
     "/api/ocr/document",
     requireAuth,
@@ -134,7 +106,7 @@ Formato exato:
   "naturalidade": "cidade/UF de nascimento (ex: RIO DE JANEIRO/RJ), ou null se não constar"
 }`;
 
-        const response = await geminiOcr.chat.completions.create({
+        const response = await ocrClient.chat.completions.create({
           model: ocrModel,
           max_tokens: 1500,
           messages: [
@@ -156,10 +128,9 @@ Formato exato:
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
           console.error("[OCR] resposta sem JSON. finish:", finish, "raw:", raw);
-          // TEMP: expõe detalhe p/ diagnóstico
-          return res.status(422).json({
-            message: `[OCR sem JSON | finish=${finish} | len=${raw.length}] ${raw.slice(0, 160) || "(resposta vazia)"}`,
-          });
+          return res
+            .status(422)
+            .json({ message: "Não foi possível extrair os dados do documento. Preencha manualmente." });
         }
 
         let extracted: DocPhotoExtracted;
@@ -182,8 +153,15 @@ Formato exato:
         console.error("POST /api/ocr/document error:", e);
         const status = e?.status ?? e?.response?.status;
         const msg = String(e?.message || "");
-        // TEMP: expõe o detalhe real do erro upstream p/ diagnóstico
-        return res.status(503).json({ message: `[OCR erro ${status ?? "?"}] ${msg.slice(0, 200)}` });
+        if (
+          status === 401 || status === 403 || status === 429 ||
+          /api[_ ]?key|authentication|invalid_api_key|sk-missing|quota|rate limit|insufficient/i.test(msg)
+        ) {
+          return res.status(503).json({
+            message: "Leitura automática indisponível no momento. Preencha os dados do documento manualmente.",
+          });
+        }
+        return res.status(500).json({ message: "Erro ao processar documento" });
       }
     }
   );
