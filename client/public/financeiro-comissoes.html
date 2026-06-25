@@ -2304,6 +2304,7 @@ function renderTabelas(){
       if(c==='prazo')return r.t.prazo;
       if(c==='empresa')return r.t.pctEmpresa;
       if(c==='flat')return r.flatPct;
+      if(c==='coef')return r.t.coef;
       if(c==='contrato')return r.valorContrato;
       if(c==='parcela')return r.parcela;
       return r.ganho; // 'ganho' default
@@ -2316,6 +2317,7 @@ function renderTabelas(){
       ${sTh('Convênio','convenio',s,'toggleSortSim')}
       ${sTh('Tipo','tipo',s,'toggleSortSim')}
       ${sTh('Prazo','prazo',s,'toggleSortSim','r')}
+      ${sTh('Coeficiente','coef',s,'toggleSortSim','r')}
       <th>Flags</th>
       ${thEmp}
       ${sTh('Flat %','flat',s,'toggleSortSim','r')}
@@ -2323,7 +2325,7 @@ function renderTabelas(){
       ${sTh('Parcela','parcela',s,'toggleSortSim','r')}
       ${sTh('Comissão','ganho',s,'toggleSortSim','r')}
     </tr>`;
-    if(!resultados.length){tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
+    if(!resultados.length){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
     tbody.innerHTML=resultados.map(({t,flatPct,valorContrato,parcela,ganho,rep},i)=>{
       const rc=['rank-1','rank-2','rank-3'][i]||'rank-n';
       const tdE=isMaster?`<td class="r"><span class="pct-empresa">${t.pctEmpresa}%</span></td>`:'';
@@ -2332,6 +2334,7 @@ function renderTabelas(){
         <td><div style="font-size:11px;color:var(--muted)">${t.banco}</div><div class="td-name">${t.nome}</div></td>
         <td>${tagConvenio(t.convenio)}</td><td>${tagTipo(t.tipo)}</td>
         <td class="r">${t.prazo}m</td>
+        <td class="r" style="font-family:monospace;font-size:12px">${fmtCoef(t.coef)}</td>
         <td>${badgesFlags(t)}</td>
         ${tdE}
         <td class="r"><span class="pct-corretor">${Number(flatPct).toFixed(2).replace('.',',')}%</span></td>
