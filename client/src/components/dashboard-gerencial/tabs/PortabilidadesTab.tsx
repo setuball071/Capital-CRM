@@ -192,8 +192,8 @@ export default function PortabilidadesTab() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard titulo="Saldo informado" valor={k!.saldoInformado} formato="moeda" />
-            <KpiCard titulo="Saldo pago (quitado)" valor={k!.saldoPago} formato="moeda" />
+            <KpiCard titulo="Saldo informado (CRM)" valor={k!.saldoInformado} formato="moeda" />
+            <KpiCard titulo="Saldo pago / quitado" valor={data.producao.valor} formato="moeda" sub="financeiro (inclui importados)" />
             <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Tempo até conclusão</div><div className="text-2xl font-semibold mt-1">{fmtDias(k!.diasAtePago)}</div></CardContent></Card>
             <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Tempo CIP → saldo</div><div className="text-2xl font-semibold mt-1">{fmtDias(k!.diasCipSaldo)}</div></CardContent></Card>
           </div>
