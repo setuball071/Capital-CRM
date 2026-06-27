@@ -11,6 +11,11 @@ function parseList(v: any): string[] {
     .filter(Boolean);
 }
 
+// Lista pra IN (...) — evita o "malformed array literal" do ANY(${jsArray}).
+function inVals(values: (string | number)[]) {
+  return sql.join(values.map((v) => sql`${v}`), sql`, `);
+}
+
 // Filtros do PIPELINE (tabela proposals, alias p). Cada fragmento começa com "AND".
 function buildFiltrosSql(q: any) {
   const frags: any[] = [];
@@ -19,11 +24,11 @@ function buildFiltrosSql(q: any) {
   const convenio = parseList(q.convenio);
   const corretor = parseList(q.corretor).map((n) => parseInt(n)).filter((n) => !isNaN(n));
   const parceiro = parseList(q.parceiro).map((n) => parseInt(n)).filter((n) => !isNaN(n));
-  if (banco.length) frags.push(sql`AND p.bank = ANY(${banco})`);
-  if (produto.length) frags.push(sql`AND p.product = ANY(${produto})`);
-  if (convenio.length) frags.push(sql`AND p.client_convenio = ANY(${convenio})`);
-  if (corretor.length) frags.push(sql`AND p.vendor_id = ANY(${corretor})`);
-  if (parceiro.length) frags.push(sql`AND p.parceiro_id = ANY(${parceiro})`);
+  if (banco.length) frags.push(sql`AND p.bank IN (${inVals(banco)})`);
+  if (produto.length) frags.push(sql`AND p.product IN (${inVals(produto)})`);
+  if (convenio.length) frags.push(sql`AND p.client_convenio IN (${inVals(convenio)})`);
+  if (corretor.length) frags.push(sql`AND p.vendor_id IN (${inVals(corretor)})`);
+  if (parceiro.length) frags.push(sql`AND p.parceiro_id IN (${inVals(parceiro)})`);
   return frags.length ? sql.join(frags, sql` `) : sql``;
 }
 
@@ -34,9 +39,9 @@ function buildFiltrosOficialSql(q: any) {
   const banco = parseList(q.banco);
   const convenio = parseList(q.convenio);
   const corretor = parseList(q.corretor).map((n) => parseInt(n)).filter((n) => !isNaN(n));
-  if (banco.length) frags.push(sql`AND banco = ANY(${banco})`);
-  if (convenio.length) frags.push(sql`AND convenio = ANY(${convenio})`);
-  if (corretor.length) frags.push(sql`AND vendedor_id = ANY(${corretor})`);
+  if (banco.length) frags.push(sql`AND banco IN (${inVals(banco)})`);
+  if (convenio.length) frags.push(sql`AND convenio IN (${inVals(convenio)})`);
+  if (corretor.length) frags.push(sql`AND vendedor_id IN (${inVals(corretor)})`);
   return frags.length ? sql.join(frags, sql` `) : sql``;
 }
 
@@ -179,6 +184,7 @@ export function registerDashboardGerencialRoutes(
         // vendedor_contratos (valor_contrato, por data_contrato). Novo/Port/Cartão
         // por tipo. "geral" = total - cartão (como a Meta Geral da equipe).
         const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00"); // guarda: nunca IN () vazio
         const filtrosOf = buildFiltrosOficialSql(req.query);
         const [prodR, vendR] = await Promise.all([
           db.execute(sql`
@@ -190,7 +196,7 @@ export function registerDashboardGerencialRoutes(
               COUNT(*) AS qtd
             FROM producoes_contratos
             WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
-              AND mes_referencia = ANY(${meses}) ${filtrosOf}
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
           `),
           db.execute(sql`
             SELECT
