@@ -305,6 +305,80 @@ export function registerDashboardGerencialRoutes(
     },
   );
 
+  // ── Aba 2 (Performance Comercial): top dimensões c/ ticket + perfil por cliente ─
+  app.get(
+    "/api/gestao-comercial/dashboard/performance",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const filtros = buildFiltrosSql(req.query);
+        const pagoCond = sql`p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr}`;
+
+        // top por dimensão, com qtd, valor e ticket médio (base: propostas pagas)
+        const topDim = async (col: any) => {
+          const r = await db.execute(sql`
+            SELECT COALESCE(NULLIF(${col}, ''), 'Não informado') AS chave,
+                   COUNT(*) AS qtd,
+                   COALESCE(SUM(p.contract_value), 0) AS valor,
+                   CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(p.contract_value),0) / COUNT(*) ELSE 0 END AS ticket
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId} AND ${pagoCond} ${filtros}
+            GROUP BY 1 ORDER BY valor DESC LIMIT 15
+          `);
+          return r.rows.map((x: any) => ({
+            chave: x.chave,
+            qtd: Number(x.qtd) || 0,
+            valor: Number(x.valor) || 0,
+            ticket: Number(x.ticket) || 0,
+          }));
+        };
+        const [produto, banco, convenio] = await Promise.all([
+          topDim(sql`p.product`),
+          topDim(sql`p.bank`),
+          topDim(sql`p.client_convenio`),
+        ]);
+
+        // perfil por cliente: média de contratos, % com 1 produto vs 2+
+        const cliR = await db.execute(sql`
+          WITH c AS (
+            SELECT p.client_cpf,
+                   COUNT(*) AS contratos,
+                   COUNT(DISTINCT p.product) AS produtos
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId} AND ${pagoCond} ${filtros}
+              AND p.client_cpf IS NOT NULL AND p.client_cpf <> ''
+            GROUP BY p.client_cpf
+          )
+          SELECT COUNT(*) AS clientes,
+                 COALESCE(AVG(contratos), 0) AS media_contratos,
+                 COUNT(*) FILTER (WHERE produtos = 1) AS um_produto,
+                 COUNT(*) FILTER (WHERE produtos >= 2) AS multi_produto
+          FROM c
+        `);
+        const cr: any = cliR.rows[0] || {};
+        const clientes = Number(cr.clientes) || 0;
+        const porCliente = {
+          clientes,
+          mediaContratos: Number(cr.media_contratos) || 0,
+          pctUmProduto: clientes ? (Number(cr.um_produto) || 0) / clientes : 0,
+          pctMultiProduto: clientes ? (Number(cr.multi_produto) || 0) / clientes : 0,
+        };
+
+        return res.json({ produto, banco, convenio, porCliente });
+      } catch (e: any) {
+        console.error("dashboard performance error:", e);
+        return res.status(500).json({ message: "Erro ao carregar performance" });
+      }
+    },
+  );
+
   // ── Opções pros filtros (bancos/convênios/corretores/parceiros do tenant) ──
   app.get(
     "/api/gestao-comercial/dashboard/opcoes",

@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import VisaoGeralTab from "@/components/dashboard-gerencial/tabs/VisaoGeralTab";
+import PerformanceTab from "@/components/dashboard-gerencial/tabs/PerformanceTab";
 
 function EmBreve({ nome }: { nome: string }) {
   return (
@@ -32,7 +33,7 @@ export default function GestaoComercialDashboardPage() {
         <TabsContent value="visao-geral" className="mt-4">
           <VisaoGeralTab />
         </TabsContent>
-        <TabsContent value="performance" className="mt-4"><EmBreve nome="Performance Comercial" /></TabsContent>
+        <TabsContent value="performance" className="mt-4"><PerformanceTab /></TabsContent>
         <TabsContent value="portabilidades" className="mt-4"><EmBreve nome="Portabilidades" /></TabsContent>
         <TabsContent value="perfil" className="mt-4"><EmBreve nome="Perfil dos Clientes" /></TabsContent>
         <TabsContent value="operacional" className="mt-4"><EmBreve nome="Gestão Operacional" /></TabsContent>
