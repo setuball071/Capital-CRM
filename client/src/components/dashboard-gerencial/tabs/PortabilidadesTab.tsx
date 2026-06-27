@@ -88,8 +88,25 @@ export default function PortabilidadesTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          <div className="text-xs text-muted-foreground">
-            Base: propostas de <strong>Portabilidade</strong> criadas no período. "Saldo quitado" conta como concluído/pago.
+          {/* Produção oficial de portabilidade (financeiro — inclui importados) */}
+          <div>
+            <div className="text-sm font-semibold">
+              Produção de Portabilidade <span className="text-muted-foreground font-normal">· financeiro (inclui importados — bate com o ranking)</span>
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              Total produzido em portabilidade no período, somando o do CRM + o importado do financeiro.
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard titulo="Produção (R$)" valor={data.producao.valor} formato="moeda" sub={`${data.producao.qtd} contratos`} />
+            </div>
+            <div className="mt-3">
+              <MiniBar titulo="Bancos mais portados (produção R$)" formato="moeda" dados={data.bancoProducao.map((b) => ({ nome: b.chave, valor: b.valor }))} />
+            </div>
+          </div>
+
+          {/* Funil/processo do CRM (etapas CIP/saldo, banco origem — só nas propostas) */}
+          <div className="text-sm font-semibold pt-2">
+            Funil do CRM (processo) <span className="text-muted-foreground font-normal">· propostas — etapas CIP/saldo, banco de origem; "Saldo quitado" = concluído</span>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

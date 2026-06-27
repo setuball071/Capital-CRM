@@ -125,6 +125,8 @@ export interface PortBancoItem {
 }
 
 export interface PortabilidadesResp {
+  producao: { valor: number; qtd: number }; // oficial (financeiro, inclui importados)
+  bancoProducao: PortBancoItem[];
   kpis: {
     total: number;
     valor: number;

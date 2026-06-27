@@ -564,7 +564,52 @@ export function registerDashboardGerencialRoutes(
           chave: x.chave, qtd: Number(x.qtd) || 0, valor: Number(x.valor) || 0,
         }));
 
-        return res.json({ kpis, funil, bancoDestino, bancoOrigem });
+        // PRODUÇÃO OFICIAL de portabilidade (financeiro — inclui importados; é o
+        // que conta no ranking). producoes_contratos + vendedor_contratos, tipo port.
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const filtrosOf = buildFiltrosOficialSql(req.query);
+        const [ppR, pvR] = await Promise.all([
+          db.execute(sql`
+            SELECT COALESCE(NULLIF(banco,''),'Não informado') AS chave,
+                   COALESCE(SUM(valor_base),0) AS valor, COUNT(*) AS qtd
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+              AND is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%'
+            GROUP BY 1
+          `),
+          db.execute(sql`
+            SELECT COALESCE(NULLIF(banco,''),'Não informado') AS chave,
+                   COALESCE(SUM(valor_contrato),0) AS valor, COUNT(*) AS qtd
+            FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId}
+              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+              AND LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%'
+            GROUP BY 1
+          `),
+        ]);
+        const mapBanco = new Map<string, { valor: number; qtd: number }>();
+        let prodValor = 0;
+        let prodQtd = 0;
+        for (const r of [...ppR.rows, ...pvR.rows] as any[]) {
+          const kk = String(r.chave || "Não informado").trim().toUpperCase();
+          const v = Number(r.valor) || 0;
+          const q = Number(r.qtd) || 0;
+          prodValor += v;
+          prodQtd += q;
+          const cur = mapBanco.get(kk) || { valor: 0, qtd: 0 };
+          cur.valor += v;
+          cur.qtd += q;
+          mapBanco.set(kk, cur);
+        }
+        const bancoProducao = [...mapBanco.entries()]
+          .map(([chave, x]) => ({ chave, valor: x.valor, qtd: x.qtd }))
+          .sort((a, b) => b.valor - a.valor)
+          .slice(0, 15);
+        const producao = { valor: prodValor, qtd: prodQtd };
+
+        return res.json({ producao, bancoProducao, kpis, funil, bancoDestino, bancoOrigem });
       } catch (e: any) {
         console.error("dashboard portabilidades error:", e);
         return res.status(500).json({ message: "Erro ao carregar portabilidades" });
