@@ -172,29 +172,23 @@ export default function PortabilidadesTab() {
           <div className="text-sm font-semibold">
             Produção de Portabilidade <span className="text-muted-foreground font-normal">· financeiro (inclui importados — bate com o ranking)</span>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <KpiCard titulo="Produção paga (R$)" valor={data.producao.valor} formato="moeda" sub={`${data.producao.qtd} contratos`} />
-            <div className="lg:col-span-2">
-              <Grafico
-                titulo="Bancos com mais produção paga (efetividade)"
-                subtitulo="quem efetivamente pagou/quitou (R$)"
-                tipo="pie"
-                formato="moeda"
-                dados={data.bancoProducao.map((b) => ({ nome: b.chave, valor: b.valor }))}
-              />
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard titulo="Cadastrado" valor={k!.valor} formato="moeda" sub={`${k!.total} propostas`} />
+            <KpiCard titulo="Produção paga" valor={data.producao.valor} formato="moeda" sub={`${data.producao.qtd} contratos`} />
+            <KpiCard titulo="Efetividade (cad.→produção)" valor={k!.valor ? data.producao.valor / k!.valor : 0} formato="percent" />
+            <KpiCard titulo="Em andamento" valor={k!.emAndamento} formato="numero" sub={`${k!.canceladas} canceladas/perdidas`} />
           </div>
+          <Grafico
+            titulo="Bancos com mais produção paga (efetividade)"
+            subtitulo="quem efetivamente pagou/quitou — financeiro, inclui importados (R$)"
+            tipo="pie"
+            formato="moeda"
+            dados={data.bancoProducao.map((b) => ({ nome: b.chave, valor: b.valor }))}
+          />
 
           {/* Funil / processo do CRM */}
           <div className="text-sm font-semibold pt-2">
             Funil do CRM (processo) <span className="text-muted-foreground font-normal">· propostas — etapas CIP/saldo, banco de origem; "Saldo quitado" = concluído</span>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard titulo="Portabilidades" valor={k!.valor} formato="moeda" sub={`${k!.total} no total`} />
-            <KpiCard titulo="Concluídas" valor={k!.pagas} formato="numero" sub={fmtMoeda(k!.valorPagas)} />
-            <KpiCard titulo="Efetividade" valor={k!.efetividade} formato="percent" />
-            <KpiCard titulo="Em andamento" valor={k!.emAndamento} formato="numero" sub={`${k!.canceladas} canceladas/perdidas`} />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
