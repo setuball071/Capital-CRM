@@ -11,7 +11,7 @@ import {
 import { useDashboardFilters } from "../useDashboardFilters";
 import { DashboardFilters } from "../DashboardFilters";
 import { KpiCard } from "../KpiCard";
-import { fmtMoeda, fmtNum } from "../fmt";
+import { fmtMoeda, fmtNum, fmtPercent } from "../fmt";
 import type { PerformanceResp, DashOpcoes, PerfDimItem } from "../types";
 
 function TabelaDim({ titulo, itens }: { titulo: string; itens: PerfDimItem[] }) {
@@ -28,17 +28,23 @@ function TabelaDim({ titulo, itens }: { titulo: string; itens: PerfDimItem[] }) 
             <TableHeader>
               <TableRow>
                 <TableHead>Item</TableHead>
-                <TableHead className="text-right">Qtd</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-right">Cad. (qtd)</TableHead>
+                <TableHead className="text-right">Cad. (R$)</TableHead>
+                <TableHead className="text-right">Pago (qtd)</TableHead>
+                <TableHead className="text-right">Pago (R$)</TableHead>
+                <TableHead className="text-right">Conversão</TableHead>
                 <TableHead className="text-right">Ticket médio</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {itens.map((i) => (
                 <TableRow key={i.chave}>
-                  <TableCell className="max-w-[200px] truncate">{i.chave}</TableCell>
-                  <TableCell className="text-right">{fmtNum(i.qtd)}</TableCell>
-                  <TableCell className="text-right">{fmtMoeda(i.valor)}</TableCell>
+                  <TableCell className="max-w-[180px] truncate">{i.chave}</TableCell>
+                  <TableCell className="text-right">{fmtNum(i.cadQtd)}</TableCell>
+                  <TableCell className="text-right">{fmtMoeda(i.cadValor)}</TableCell>
+                  <TableCell className="text-right">{fmtNum(i.pagoQtd)}</TableCell>
+                  <TableCell className="text-right">{fmtMoeda(i.pagoValor)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmtPercent(i.conversao)}</TableCell>
                   <TableCell className="text-right">{fmtMoeda(i.ticket)}</TableCell>
                 </TableRow>
               ))}
@@ -72,6 +78,8 @@ export default function PerformanceTab() {
     },
   });
 
+  const t = data?.totais;
+
   return (
     <div className="space-y-4" data-testid="tab-performance">
       <DashboardFilters filtros={filtros} opcoes={opcoes} onChange={setFiltros} />
@@ -82,18 +90,28 @@ export default function PerformanceTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          <div className="text-xs text-muted-foreground">Base: propostas pagas no período.</div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard titulo="Contratos / cliente" valor={data.porCliente.mediaContratos} formato="numero" sub={`${data.porCliente.clientes} clientes`} />
-            <KpiCard titulo="Clientes com 1 produto" valor={data.porCliente.pctUmProduto} formato="percent" />
-            <KpiCard titulo="Clientes com 2+ produtos" valor={data.porCliente.pctMultiProduto} formato="percent" />
-            <KpiCard titulo="Clientes únicos" valor={data.porCliente.clientes} formato="numero" />
+          <div className="text-xs text-muted-foreground">
+            Cadastrado = propostas criadas no período · Pago = propostas pagas no período · Conversão = pago ÷ cadastrado (qtd).
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <TabelaDim titulo="Produtos mais vendidos" itens={data.produto} />
-            <TabelaDim titulo="Bancos mais utilizados" itens={data.banco} />
-            <TabelaDim titulo="Convênios mais atendidos" itens={data.convenio} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
+            <KpiCard titulo="Pago" valor={t!.pagoValor} formato="moeda" sub={`${t!.pagoQtd} contratos`} />
+            <KpiCard titulo="Conversão" valor={t!.conversao} formato="percent" />
+            <KpiCard titulo="Ticket médio (pago)" valor={t!.ticket} formato="moeda" />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard titulo="Contratos / cliente" valor={data.porCliente.mediaContratos} formato="numero" sub={`${data.porCliente.clientes} clientes pagantes`} />
+            <KpiCard titulo="Clientes com 1 produto" valor={data.porCliente.pctUmProduto} formato="percent" />
+            <KpiCard titulo="Clientes com 2+ produtos" valor={data.porCliente.pctMultiProduto} formato="percent" />
+            <KpiCard titulo="Clientes pagantes" valor={data.porCliente.clientes} formato="numero" />
+          </div>
+
+          <div className="space-y-3">
+            <TabelaDim titulo="Por Produto" itens={data.produto} />
+            <TabelaDim titulo="Por Banco" itens={data.banco} />
+            <TabelaDim titulo="Por Convênio" itens={data.convenio} />
           </div>
         </>
       )}

@@ -79,12 +79,25 @@ export type DrillDim = "produto" | "banco" | "convenio";
 
 export interface PerfDimItem {
   chave: string;
-  qtd: number;
-  valor: number;
+  cadQtd: number;
+  cadValor: number;
+  pagoQtd: number;
+  pagoValor: number;
+  conversao: number; // 0..1 (pagoQtd / cadQtd)
+  ticket: number; // pago: valor/qtd
+}
+
+export interface PerfTotais {
+  cadQtd: number;
+  cadValor: number;
+  pagoQtd: number;
+  pagoValor: number;
+  conversao: number;
   ticket: number;
 }
 
 export interface PerformanceResp {
+  totais: PerfTotais;
   produto: PerfDimItem[];
   banco: PerfDimItem[];
   convenio: PerfDimItem[];

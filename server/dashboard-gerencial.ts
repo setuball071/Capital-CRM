@@ -319,25 +319,39 @@ export function registerDashboardGerencialRoutes(
           (req.query.inicio as string) ||
           new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
         const filtros = buildFiltrosSql(req.query);
-        const pagoCond = sql`p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr}`;
+        // cadastrado = created_at no período; pago = status PAGO por paid_at/updated_at no período
+        const cadF = sql`p.created_at::date BETWEEN ${inicioStr} AND ${fimStr}`;
+        const pagoF = sql`p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr}`;
+        const periodoCond = sql`(${cadF} OR ${pagoF})`;
 
-        // top por dimensão, com qtd, valor e ticket médio (base: propostas pagas)
+        const mapRow = (x: any) => {
+          const cadQtd = Number(x.cad_qtd) || 0;
+          const pagoQtd = Number(x.pago_qtd) || 0;
+          const pagoValor = Number(x.pago_valor) || 0;
+          return {
+            chave: x.chave,
+            cadQtd,
+            cadValor: Number(x.cad_valor) || 0,
+            pagoQtd,
+            pagoValor,
+            conversao: cadQtd ? pagoQtd / cadQtd : 0,
+            ticket: pagoQtd ? pagoValor / pagoQtd : 0,
+          };
+        };
+
+        // por dimensão: cadastrado + pago (split por FILTER)
         const topDim = async (col: any) => {
           const r = await db.execute(sql`
             SELECT COALESCE(NULLIF(${col}, ''), 'Não informado') AS chave,
-                   COUNT(*) AS qtd,
-                   COALESCE(SUM(p.contract_value), 0) AS valor,
-                   CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(p.contract_value),0) / COUNT(*) ELSE 0 END AS ticket
+                   COUNT(*) FILTER (WHERE ${cadF}) AS cad_qtd,
+                   COALESCE(SUM(p.contract_value) FILTER (WHERE ${cadF}), 0) AS cad_valor,
+                   COUNT(*) FILTER (WHERE ${pagoF}) AS pago_qtd,
+                   COALESCE(SUM(p.contract_value) FILTER (WHERE ${pagoF}), 0) AS pago_valor
             FROM proposals p
-            WHERE p.tenant_id = ${tenantId} AND ${pagoCond} ${filtros}
-            GROUP BY 1 ORDER BY valor DESC LIMIT 15
+            WHERE p.tenant_id = ${tenantId} AND ${periodoCond} ${filtros}
+            GROUP BY 1 ORDER BY cad_qtd DESC, pago_valor DESC LIMIT 15
           `);
-          return r.rows.map((x: any) => ({
-            chave: x.chave,
-            qtd: Number(x.qtd) || 0,
-            valor: Number(x.valor) || 0,
-            ticket: Number(x.ticket) || 0,
-          }));
+          return r.rows.map(mapRow);
         };
         const [produto, banco, convenio] = await Promise.all([
           topDim(sql`p.product`),
@@ -345,14 +359,26 @@ export function registerDashboardGerencialRoutes(
           topDim(sql`p.client_convenio`),
         ]);
 
-        // perfil por cliente: média de contratos, % com 1 produto vs 2+
+        // totais (cadastrado/pago/conversão/ticket no período)
+        const totR = await db.execute(sql`
+          SELECT 'TOTAL' AS chave,
+                 COUNT(*) FILTER (WHERE ${cadF}) AS cad_qtd,
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${cadF}), 0) AS cad_valor,
+                 COUNT(*) FILTER (WHERE ${pagoF}) AS pago_qtd,
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${pagoF}), 0) AS pago_valor
+          FROM proposals p
+          WHERE p.tenant_id = ${tenantId} AND ${periodoCond} ${filtros}
+        `);
+        const totais = mapRow(totR.rows[0] || {});
+
+        // perfil por cliente (entre quem PAGOU): média de contratos, % 1 produto vs 2+
         const cliR = await db.execute(sql`
           WITH c AS (
             SELECT p.client_cpf,
                    COUNT(*) AS contratos,
                    COUNT(DISTINCT p.product) AS produtos
             FROM proposals p
-            WHERE p.tenant_id = ${tenantId} AND ${pagoCond} ${filtros}
+            WHERE p.tenant_id = ${tenantId} AND ${pagoF} ${filtros}
               AND p.client_cpf IS NOT NULL AND p.client_cpf <> ''
             GROUP BY p.client_cpf
           )
@@ -371,7 +397,7 @@ export function registerDashboardGerencialRoutes(
           pctMultiProduto: clientes ? (Number(cr.multi_produto) || 0) / clientes : 0,
         };
 
-        return res.json({ produto, banco, convenio, porCliente });
+        return res.json({ totais, produto, banco, convenio, porCliente });
       } catch (e: any) {
         console.error("dashboard performance error:", e);
         return res.status(500).json({ message: "Erro ao carregar performance" });
