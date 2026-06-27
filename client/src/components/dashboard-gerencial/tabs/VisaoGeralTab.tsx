@@ -59,12 +59,32 @@ export default function VisaoGeralTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <KpiCard titulo="Produção paga" valor={k!.pagoValor} formato="moeda" anterior={c?.pagoValor} sub={`${k!.pagoQtd} contratos`} />
-            <KpiCard titulo="Ticket médio" valor={k!.ticketMedio} formato="moeda" anterior={c?.ticketMedio} />
-            <KpiCard titulo="Cadastrado" valor={k!.cadastradoValor} formato="moeda" anterior={c?.cadastradoValor} sub={`${k!.cadastradoQtd} propostas`} />
-            <KpiCard titulo="Conversão" valor={k!.conversao} formato="percent" anterior={c?.conversao} />
-            <KpiCard titulo="Qtd paga" valor={k!.pagoQtd} formato="numero" anterior={c?.pagoQtd} />
+          {/* Produção Oficial (módulo Produção/financeiro) — mesma base da Meta/Ranking */}
+          <div>
+            <div className="text-sm font-semibold mb-2">
+              Produção Oficial <span className="text-muted-foreground font-normal">· financeiro (igual à Meta/Ranking)</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <KpiCard titulo="Produção (geral)" valor={data.oficial.geral} formato="moeda" sub={`${data.oficial.qtd} contratos · sem cartão`} />
+              <KpiCard titulo="Novo" valor={data.oficial.novo} formato="moeda" />
+              <KpiCard titulo="Portabilidade" valor={data.oficial.portabilidade} formato="moeda" />
+              <KpiCard titulo="Cartão" valor={data.oficial.cartao} formato="moeda" />
+              <KpiCard titulo="Produção total" valor={data.oficial.total} formato="moeda" />
+            </div>
+          </div>
+
+          {/* Pipeline (operacional) — base proposals */}
+          <div>
+            <div className="text-sm font-semibold mb-2">
+              Pipeline <span className="text-muted-foreground font-normal">· operacional (propostas do CRM)</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <KpiCard titulo="Produção paga" valor={k!.pagoValor} formato="moeda" anterior={c?.pagoValor} sub={`${k!.pagoQtd} contratos`} />
+              <KpiCard titulo="Ticket médio" valor={k!.ticketMedio} formato="moeda" anterior={c?.ticketMedio} />
+              <KpiCard titulo="Cadastrado" valor={k!.cadastradoValor} formato="moeda" anterior={c?.cadastradoValor} sub={`${k!.cadastradoQtd} propostas`} />
+              <KpiCard titulo="Conversão" valor={k!.conversao} formato="percent" anterior={c?.conversao} />
+              <KpiCard titulo="Qtd paga" valor={k!.pagoQtd} formato="numero" anterior={c?.pagoQtd} />
+            </div>
           </div>
 
           <Card>

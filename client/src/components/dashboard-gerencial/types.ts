@@ -34,12 +34,22 @@ export interface QuebraItem {
   qtd: number;
 }
 
+export interface OficialBloco {
+  geral: number; // produção sem cartão (= Meta Geral da equipe)
+  novo: number;
+  portabilidade: number;
+  cartao: number;
+  total: number;
+  qtd: number;
+}
+
 export interface VisaoGeralResp {
   filtrosAplicados: { inicio: string; fim: string; gran: Gran };
   kpis: KpiBloco;
   comparativo: KpiBloco;
   serie: SeriePonto[];
   quebras: { produto: QuebraItem[]; banco: QuebraItem[]; convenio: QuebraItem[] };
+  oficial: OficialBloco;
 }
 
 export interface DrillItem {
