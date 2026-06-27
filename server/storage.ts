@@ -179,6 +179,22 @@ export const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+// Eleva o statement_timeout por conexão. O merge de importações grandes (um
+// único INSERT...SELECT sobre o staging, com checagem de FK) passava do limite
+// padrão do Postgres/Supabase e era cancelado ("canceling statement due to
+// statement timeout"), derrubando o import de arquivos grandes. Usamos um teto
+// generoso e finito (default 15 min), ajustável por env. Trade-off: uma query
+// patológica pode segurar a conexão até esse teto.
+const STATEMENT_TIMEOUT_MS = parseInt(
+  process.env.DB_STATEMENT_TIMEOUT_MS || "900000",
+  10,
+);
+pool.on("connect", (client) => {
+  client
+    .query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`)
+    .catch((e) => console.error("[pool] falha ao setar statement_timeout:", e?.message));
+});
+
 // neon-http e node-postgres retornam o MESMO formato em db.execute():
 // um QueryResult com `.rows` (e .rowCount). O código consome via `result.rows`
 // (273 usos). Por isso NÃO há wrapper — o retorno nativo do pg já é compatível.

@@ -194,12 +194,30 @@ export default function ContratosDetalhePage() {
     queryClient.invalidateQueries({ queryKey: ["/api/contracts/producao"] });
   };
 
-  // pré-preenche comissão uma vez
-  if (proposal && !commPrefilled) {
+  // pré-preenche comissão uma vez: do proposal (se já pago) ou da TABELA selecionada + grupo do vendedor
+  if (proposal && !commPrefilled && (financeiroConfig || proposal.commissionPercentage)) {
     setCommPrefilled(true);
     if (proposal.contractValue) setContractValComm(numToBr(proposal.contractValue));
+    const meta = proposal.clientMeta || {};
+    const tab = financeiroTabelas.find((t: any) => String(t.id) === String(meta.tabelaFinanceiroId));
+    const grupos = financeiroConfig?.dados?.grupos ?? [];
+    const corretores = financeiroConfig?.dados?.corretores ?? [];
+    const cor = corretores.find((c: any) => c._crmId === proposal.vendorId);
+    const grupo = cor ? grupos.find((g: any) => g.id === cor.grupoId) : null;
+    const tipoMap: Record<string, string> = { NOVO: "Novo", PORTABILIDADE: "Portabilidade", PORTABILIDADE_REFIN: "Portabilidade", REFINANCIAMENTO: "Refinanciamento", COMPRA_DIVIDA: "Compra de Dívida", CARTAO: "Cartão" };
+    const tipoProd = tipoMap[proposal.product as string] || null;
+    const repassePerc = (() => {
+      if (!grupo) return 0;
+      const rules = Array.isArray(grupo.repasseRules) ? grupo.repasseRules : [];
+      if (tipoProd) { const r = rules.find((x: any) => x.tipo === tipoProd); if (r && typeof r.repasse === "number") return r.repasse; }
+      return typeof grupo.repasse === "number" ? grupo.repasse : 0;
+    })();
+    // % Empresa: do proposal (já pago) ou da tabela selecionada
     if (proposal.commissionPercentage) setCommPercEmpresa((parseFloat(proposal.commissionPercentage) * 100).toFixed(2).replace(".", ","));
+    else if (tab?.pctEmpresa != null) setCommPercEmpresa(Number(tab.pctEmpresa).toFixed(2).replace(".", ","));
+    // % Repasse: do proposal ou do grupo do vendedor
     if (proposal.corretorCommissionPercentage) setCorretorPercRepasse((parseFloat(proposal.corretorCommissionPercentage) * 100).toFixed(2).replace(".", ","));
+    else if (repassePerc > 0) setCorretorPercRepasse(Number(repassePerc).toFixed(2).replace(".", ","));
   }
 
   const advanceStatusMutation = useMutation({
