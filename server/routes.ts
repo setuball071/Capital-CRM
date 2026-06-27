@@ -1490,7 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(resolveTenant);
 
   // ===== DASHBOARD GERENCIAL (só-Master) =====
-  registerDashboardGerencialRoutes(app);
+  registerDashboardGerencialRoutes(app, requireAuth, requireMaster);
 
   // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
   // Catches database connection errors and returns user-friendly messages

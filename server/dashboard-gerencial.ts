@@ -1,25 +1,6 @@
-import type { Express, Response, NextFunction } from "express";
+import type { Express, RequestHandler, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
-
-// requireMaster: dashboard gerencial é exclusivo para usuário Master.
-function requireMaster(req: any, res: Response, next: NextFunction) {
-  if (!req.user?.isMaster) {
-    return res
-      .status(403)
-      .json({ message: "Acesso negado - apenas administradores master" });
-  }
-  next();
-}
-
-function requireAuthLocal(req: any, res: Response, next: NextFunction) {
-  const userId = req.user?.id || req.session?.userId;
-  const tenantId = req.tenantId || req.session?.tenantId;
-  if (!userId || !tenantId) {
-    return res.status(401).json({ message: "Não autorizado" });
-  }
-  next();
-}
 
 // "a,b,c" -> ["a","b","c"] (trim, sem vazios)
 function parseList(v: any): string[] {
@@ -51,11 +32,15 @@ function buildFiltrosSql(q: any) {
   return frags.length ? sql.join(frags, sql` `) : sql``;
 }
 
-export function registerDashboardGerencialRoutes(app: Express) {
+export function registerDashboardGerencialRoutes(
+  app: Express,
+  requireAuth: RequestHandler,
+  requireMaster: RequestHandler,
+) {
   // ── Agregador da Aba 1 (Visão Geral) ──────────────────────────────────────
   app.get(
     "/api/gestao-comercial/dashboard/visao-geral",
-    requireAuthLocal,
+    requireAuth,
     requireMaster,
     async (req: any, res: Response) => {
       try {
@@ -186,7 +171,7 @@ export function registerDashboardGerencialRoutes(app: Express) {
   // ── Drill-down: lista detalhada das propostas que formam um indicador ──────
   app.get(
     "/api/gestao-comercial/dashboard/visao-geral/drill",
-    requireAuthLocal,
+    requireAuth,
     requireMaster,
     async (req: any, res: Response) => {
       try {
@@ -261,7 +246,7 @@ export function registerDashboardGerencialRoutes(app: Express) {
   // ── Opções pros filtros (bancos/convênios/corretores/parceiros do tenant) ──
   app.get(
     "/api/gestao-comercial/dashboard/opcoes",
-    requireAuthLocal,
+    requireAuth,
     requireMaster,
     async (req: any, res: Response) => {
       try {
