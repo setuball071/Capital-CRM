@@ -257,4 +257,32 @@ export function registerDashboardGerencialRoutes(app: Express) {
       }
     },
   );
+
+  // ── Opções pros filtros (bancos/convênios/corretores/parceiros do tenant) ──
+  app.get(
+    "/api/gestao-comercial/dashboard/opcoes",
+    requireAuthLocal,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const [bancosR, conveniosR, corretoresR, parceirosR] = await Promise.all([
+          db.execute(sql`SELECT DISTINCT bank AS v FROM proposals WHERE tenant_id = ${tenantId} AND bank IS NOT NULL AND bank <> '' ORDER BY bank`),
+          db.execute(sql`SELECT DISTINCT client_convenio AS v FROM proposals WHERE tenant_id = ${tenantId} AND client_convenio IS NOT NULL AND client_convenio <> '' ORDER BY client_convenio`),
+          db.execute(sql`SELECT DISTINCT u.id, u.name FROM proposals p JOIN users u ON u.id = p.vendor_id WHERE p.tenant_id = ${tenantId} ORDER BY u.name`),
+          db.execute(sql`SELECT DISTINCT pr.id, pr.name FROM proposals p JOIN partners pr ON pr.id = p.parceiro_id WHERE p.tenant_id = ${tenantId} ORDER BY pr.name`),
+        ]);
+        return res.json({
+          bancos: bancosR.rows.map((x: any) => x.v),
+          convenios: conveniosR.rows.map((x: any) => x.v),
+          produtos: ["NOVO", "PORTABILIDADE", "REFINANCIAMENTO", "CARTAO"],
+          corretores: corretoresR.rows.map((x: any) => ({ id: x.id, nome: x.name })),
+          parceiros: parceirosR.rows.map((x: any) => ({ id: x.id, nome: x.name })),
+        });
+      } catch (e: any) {
+        console.error("dashboard opcoes error:", e);
+        return res.status(500).json({ message: "Erro ao carregar opções" });
+      }
+    },
+  );
 }
