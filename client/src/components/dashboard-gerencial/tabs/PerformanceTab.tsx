@@ -90,8 +90,13 @@ export default function PerformanceTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          <div className="text-xs text-muted-foreground">
-            <strong>Cadastrado</strong> = propostas criadas no período · <strong>Produção</strong> = pago no financeiro (inclui o do CRM + os importados) · <strong>Conversão</strong> = produção ÷ cadastrado (valor).
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <div>
+              <strong>Cadastrado</strong> = R$ das propostas criadas no período · <strong>Produção</strong> = R$ pago no financeiro (inclui o do CRM + os importados) · <strong>Conversão</strong> = Produção R$ ÷ Cadastrado R$.
+            </div>
+            <div>
+              Conversão acima de 100% = aquele banco/produto produziu mais do que foi cadastrado aqui (contratos <strong>importados</strong> na transição). Daqui pra frente tende a ≤100% e vira a conversão real do funil.
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

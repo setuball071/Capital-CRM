@@ -325,15 +325,17 @@ export function registerDashboardGerencialRoutes(
 
         const mapRow = (x: any) => {
           const cadQtd = Number(x.cad_qtd) || 0;
+          const cadValor = Number(x.cad_valor) || 0;
           const prodQtd = Number(x.prod_qtd) || 0;
           const prodValor = Number(x.prod_valor) || 0;
           return {
             chave: x.chave,
             cadQtd,
-            cadValor: Number(x.cad_valor) || 0,
+            cadValor,
             prodQtd,
             prodValor,
-            conversao: cadQtd ? prodQtd / cadQtd : 0,
+            // Conversão por VALOR (consistente com o total): Produção R$ ÷ Cadastrado R$
+            conversao: cadValor ? prodValor / cadValor : 0,
             ticket: prodQtd ? prodValor / prodQtd : 0,
           };
         };
