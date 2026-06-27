@@ -1,0 +1,68 @@
+export type Gran = "dia" | "semana" | "mes";
+
+export interface DashFiltros {
+  inicio: string;
+  fim: string;
+  gran: Gran;
+  banco: string[];
+  produto: string[];
+  convenio: string[];
+  corretor: number[];
+  parceiro: number[];
+}
+
+export interface KpiBloco {
+  pagoValor: number;
+  pagoQtd: number;
+  ticketMedio: number;
+  cadastradoValor: number;
+  cadastradoQtd: number;
+  conversao: number; // 0..1
+}
+
+export interface SeriePonto {
+  periodo: string;
+  pagoValor: number;
+  pagoQtd: number;
+  cadastradoValor: number;
+  cadastradoQtd: number;
+}
+
+export interface QuebraItem {
+  chave: string;
+  valor: number;
+  qtd: number;
+}
+
+export interface VisaoGeralResp {
+  filtrosAplicados: { inicio: string; fim: string; gran: Gran };
+  kpis: KpiBloco;
+  comparativo: KpiBloco;
+  serie: SeriePonto[];
+  quebras: { produto: QuebraItem[]; banco: QuebraItem[]; convenio: QuebraItem[] };
+}
+
+export interface DrillItem {
+  id: number;
+  cliente: string;
+  cpf: string;
+  corretor: string | null;
+  banco: string | null;
+  produto: string | null;
+  convenio: string | null;
+  valor: number;
+  status: string;
+  criadoEm: string;
+  pagoEm: string | null;
+}
+
+export interface DashOpcoes {
+  bancos: string[];
+  convenios: string[];
+  produtos: string[];
+  corretores: { id: number; nome: string }[];
+  parceiros: { id: number; nome: string }[];
+}
+
+export type DrillMetrica = "pago" | "cadastro";
+export type DrillDim = "produto" | "banco" | "convenio";

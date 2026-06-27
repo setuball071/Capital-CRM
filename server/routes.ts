@@ -419,6 +419,7 @@ function dedupVinculosPorMatricula<
 }
 import { z } from "zod";
 import { storage, db } from "./storage";
+import { registerDashboardGerencialRoutes } from "./dashboard-gerencial";
 import {
   resolveTenant,
   requireTenant,
@@ -1487,6 +1488,9 @@ async function getPacotesPreco(): Promise<PacotePrecoData[]> {
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== TENANT RESOLUTION MIDDLEWARE =====
   app.use(resolveTenant);
+
+  // ===== DASHBOARD GERENCIAL (só-Master) =====
+  registerDashboardGerencialRoutes(app);
 
   // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
   // Catches database connection errors and returns user-friendly messages
