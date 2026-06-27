@@ -86,6 +86,51 @@ function Grafico({
   );
 }
 
+function fmtCompact(v: number) {
+  const n = Number(v) || 0;
+  if (n >= 1e6) return `R$ ${(n / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}M`;
+  if (n >= 1e3) return `R$ ${(n / 1e3).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}k`;
+  return fmtMoeda(n);
+}
+const pctTip = (v: any) => `${(Number(v) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+
+function StackedOrigem({ dados }: { dados: { chave: string; valor: number; pctPago: number; pctCancelado: number; pctAndamento: number }[] }) {
+  const data = dados.map((b) => ({
+    nome: `${b.chave} · ${fmtCompact(b.valor)}`,
+    pago: b.pctPago, cancelado: b.pctCancelado, andamento: b.pctAndamento,
+  }));
+  return (
+    <Card data-testid="port-origem-dificuldade">
+      <CardHeader className="pb-1">
+        <CardTitle className="text-sm">Dificuldade por banco de origem</CardTitle>
+        <div className="text-xs text-muted-foreground">
+          Cadastrado (R$ no rótulo) e o que aconteceu: % pago vs % cancelado vs % em andamento. Mais vermelho = mais difícil.
+        </div>
+      </CardHeader>
+      <CardContent>
+        {data.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-10 text-center">
+            Sem banco de origem preenchido — popula conforme o operacional informar na ficha.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(200, data.length * 40)}>
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }} stackOffset="expand">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+              <YAxis type="category" dataKey="nome" width={180} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: any, n: any) => [pctTip(v), n]} />
+              <Legend />
+              <Bar dataKey="pago" name="Pago" stackId="a" fill="#16a34a" />
+              <Bar dataKey="cancelado" name="Cancelado" stackId="a" fill="#dc2626" />
+              <Bar dataKey="andamento" name="Em andamento" stackId="a" fill="#d1d5db" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PortabilidadesTab() {
   const { filtros, setFiltros, queryString } = useDashboardFilters();
 
@@ -166,15 +211,9 @@ export default function PortabilidadesTab() {
             dados={data.funil.map((f) => ({ nome: f.label, valor: f.qtd, cor: COR_STATUS[f.color] || "#71717a" }))}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <Grafico titulo="Efetividade por banco (CRM)" formato="pct" nomeSerie="Efetividade" dados={efet.map((b) => ({ nome: b.chave, valor: b.efetividade || 0 }))} />
-            <Grafico
-              titulo="Por banco de origem (R$)"
-              subtitulo="de onde portou (preenchido na ficha)"
-              formato="moeda"
-              dados={origemReal.map((b) => ({ nome: b.chave, valor: b.valor }))}
-            />
-          </div>
+          <Grafico titulo="Efetividade por banco destino (CRM)" formato="pct" nomeSerie="Efetividade" dados={efet.map((b) => ({ nome: b.chave, valor: b.efetividade || 0 }))} />
+
+          <StackedOrigem dados={origemReal} />
         </>
       )}
     </div>

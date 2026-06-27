@@ -557,12 +557,24 @@ export function registerDashboardGerencialRoutes(
         });
         const bancoOrigR = await db.execute(sql`
           SELECT UPPER(TRIM(COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado'))) AS chave,
-                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor
+                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
+                 COUNT(*) FILTER (WHERE ${concluido}) AS pagas,
+                 COUNT(*) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')) AS canceladas
           FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY valor DESC LIMIT 15
         `);
-        const bancoOrigem = bancoOrigR.rows.map((x: any) => ({
-          chave: x.chave, qtd: Number(x.qtd) || 0, valor: Number(x.valor) || 0,
-        }));
+        const bancoOrigem = bancoOrigR.rows.map((x: any) => {
+          const qtd = Number(x.qtd) || 0;
+          const pagas = Number(x.pagas) || 0;
+          const canceladas = Number(x.canceladas) || 0;
+          return {
+            chave: x.chave,
+            qtd,
+            valor: Number(x.valor) || 0,
+            pctPago: qtd ? pagas / qtd : 0,
+            pctCancelado: qtd ? canceladas / qtd : 0,
+            pctAndamento: qtd ? (qtd - pagas - canceladas) / qtd : 0,
+          };
+        });
 
         // PRODUÇÃO OFICIAL de portabilidade (financeiro — inclui importados; é o
         // que conta no ranking). producoes_contratos + vendedor_contratos, tipo port.

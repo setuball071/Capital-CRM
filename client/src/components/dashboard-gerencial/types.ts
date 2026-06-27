@@ -124,6 +124,15 @@ export interface PortBancoItem {
   efetividade?: number;
 }
 
+export interface PortOrigemItem {
+  chave: string;
+  qtd: number;
+  valor: number;
+  pctPago: number;
+  pctCancelado: number;
+  pctAndamento: number;
+}
+
 export interface PortabilidadesResp {
   producao: { valor: number; qtd: number }; // oficial (financeiro, inclui importados)
   bancoProducao: PortBancoItem[];
@@ -142,5 +151,5 @@ export interface PortabilidadesResp {
   };
   funil: PortFunilItem[];
   bancoDestino: PortBancoItem[];
-  bancoOrigem: PortBancoItem[];
+  bancoOrigem: PortOrigemItem[];
 }
