@@ -90,15 +90,36 @@ export default function PerformanceTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          <div className="text-xs text-muted-foreground">
-            Cadastrado = propostas criadas no período · Pago = propostas pagas no período · Conversão = pago ÷ cadastrado (qtd).
+          {/* Produção Oficial (financeiro — inclui importado) */}
+          <div>
+            <div className="text-sm font-semibold">
+              Produção Oficial <span className="text-muted-foreground font-normal">· financeiro (inclui contratos importados)</span>
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              Este mês inclui produção paga <strong>importada de outra plataforma</strong> (transição). Daqui pra frente, tudo nasce no CRM e o funil abaixo fica completo.
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard titulo="Produção (geral)" valor={data.oficial.geral} formato="moeda" sub={`${data.oficial.qtd} contratos · sem cartão`} />
+              <KpiCard titulo="Produção total" valor={data.oficial.total} formato="moeda" />
+              <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
+              <KpiCard titulo="Conversão (cad.→produção)" valor={data.conversaoOficial} formato="percent" />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
-            <KpiCard titulo="Pago" valor={t!.pagoValor} formato="moeda" sub={`${t!.pagoQtd} contratos`} />
-            <KpiCard titulo="Conversão" valor={t!.conversao} formato="percent" />
-            <KpiCard titulo="Ticket médio (pago)" valor={t!.ticket} formato="moeda" />
+          {/* Funil do CRM (propostas) */}
+          <div>
+            <div className="text-sm font-semibold">
+              Funil do CRM <span className="text-muted-foreground font-normal">· propostas (cadastrado → pago)</span>
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              Mede só o que nasceu no CRM (cadastrado → pago). Pago aqui ≠ Produção Oficial enquanto houver importados.
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
+              <KpiCard titulo="Pago (CRM)" valor={t!.pagoValor} formato="moeda" sub={`${t!.pagoQtd} contratos`} />
+              <KpiCard titulo="Conversão (funil)" valor={t!.conversao} formato="percent" />
+              <KpiCard titulo="Ticket médio (pago)" valor={t!.ticket} formato="moeda" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

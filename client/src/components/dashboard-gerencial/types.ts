@@ -98,6 +98,8 @@ export interface PerfTotais {
 
 export interface PerformanceResp {
   totais: PerfTotais;
+  oficial: { total: number; geral: number; qtd: number };
+  conversaoOficial: number; // produção oficial total ÷ cadastrado (valor)
   produto: PerfDimItem[];
   banco: PerfDimItem[];
   convenio: PerfDimItem[];

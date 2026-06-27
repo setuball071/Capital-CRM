@@ -397,7 +397,40 @@ export function registerDashboardGerencialRoutes(
           pctMultiProduto: clientes ? (Number(cr.multi_produto) || 0) / clientes : 0,
         };
 
-        return res.json({ totais, produto, banco, convenio, porCliente });
+        // Produção Oficial (financeiro — inclui contratos importados de outra
+        // plataforma na transição). producoes_contratos + vendedor_contratos.
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const filtrosOf = buildFiltrosOficialSql(req.query);
+        const [opR, ovR] = await Promise.all([
+          db.execute(sql`
+            SELECT COALESCE(SUM(valor_base),0) AS total,
+                   COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END),0) AS cartao,
+                   COUNT(*) AS qtd
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+          `),
+          db.execute(sql`
+            SELECT COALESCE(SUM(valor_contrato),0) AS total,
+                   COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN valor_contrato ELSE 0 END),0) AS cartao,
+                   COUNT(*) AS qtd
+            FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+          `),
+        ]);
+        const op: any = opR.rows[0] || {};
+        const ov: any = ovR.rows[0] || {};
+        const ofTotal = (Number(op.total) || 0) + (Number(ov.total) || 0);
+        const ofCartao = (Number(op.cartao) || 0) + (Number(ov.cartao) || 0);
+        const oficial = {
+          total: ofTotal,
+          geral: ofTotal - ofCartao,
+          qtd: (Number(op.qtd) || 0) + (Number(ov.qtd) || 0),
+        };
+        const conversaoOficial = totais.cadValor ? ofTotal / totais.cadValor : 0;
+
+        return res.json({ totais, oficial, conversaoOficial, produto, banco, convenio, porCliente });
       } catch (e: any) {
         console.error("dashboard performance error:", e);
         return res.status(500).json({ message: "Erro ao carregar performance" });
