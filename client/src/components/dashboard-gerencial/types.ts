@@ -108,3 +108,37 @@ export interface PerformanceResp {
     pctMultiProduto: number;
   };
 }
+
+export interface PortFunilItem {
+  key: string;
+  label: string;
+  color: string;
+  qtd: number;
+  valor: number;
+}
+
+export interface PortBancoItem {
+  chave: string;
+  qtd: number;
+  valor: number;
+  efetividade?: number;
+}
+
+export interface PortabilidadesResp {
+  kpis: {
+    total: number;
+    valor: number;
+    pagas: number;
+    valorPagas: number;
+    canceladas: number;
+    emAndamento: number;
+    efetividade: number;
+    saldoInformado: number;
+    saldoPago: number;
+    diasAtePago: number | null;
+    diasCipSaldo: number | null;
+  };
+  funil: PortFunilItem[];
+  bancoDestino: PortBancoItem[];
+  bancoOrigem: PortBancoItem[];
+}

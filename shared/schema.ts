@@ -3489,6 +3489,12 @@ export const proposals = pgTable("proposals", {
   clientMeta: jsonb("client_meta"),
   vendorId: integer("vendor_id").references(() => users.id),
   createdBy: integer("created_by").notNull().references(() => users.id),
+  // Portabilidade — captura de origem/saldo/datas (preenchido na ficha; alimenta o dashboard Portabilidades)
+  bancoOrigem: varchar("banco_origem", { length: 255 }),
+  saldoInformado: decimal("saldo_informado", { precision: 12, scale: 2 }),
+  saldoPago: decimal("saldo_pago", { precision: 12, scale: 2 }),
+  dataCip: timestamp("data_cip"),
+  dataSaldo: timestamp("data_saldo"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

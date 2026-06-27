@@ -461,6 +461,108 @@ export function registerDashboardGerencialRoutes(
     },
   );
 
+  // ── Aba 3 (Portabilidades): funil por status + bancos + efetividade + tempos ─
+  app.get(
+    "/api/gestao-comercial/dashboard/portabilidades",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        // produto é sempre PORTABILIDADE aqui — ignora o filtro de produto da barra
+        const filtros = buildFiltrosSql({ ...req.query, produto: undefined });
+        const base = sql`p.tenant_id = ${tenantId} AND p.product = 'PORTABILIDADE'
+          AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}`;
+
+        const kpiR = await db.execute(sql`
+          SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(p.contract_value),0) AS valor,
+            COUNT(*) FILTER (WHERE p.status = 'PAGO') AS pagas,
+            COALESCE(SUM(p.contract_value) FILTER (WHERE p.status = 'PAGO'),0) AS valor_pagas,
+            COUNT(*) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')) AS canceladas,
+            COALESCE(SUM(p.saldo_informado),0) AS saldo_informado,
+            COALESCE(SUM(p.saldo_pago),0) AS saldo_pago,
+            AVG(EXTRACT(EPOCH FROM (p.paid_at - p.created_at))/86400)
+              FILTER (WHERE p.status='PAGO' AND p.paid_at IS NOT NULL) AS dias_ate_pago,
+            AVG(EXTRACT(EPOCH FROM (p.data_saldo - p.data_cip))/86400)
+              FILTER (WHERE p.data_cip IS NOT NULL AND p.data_saldo IS NOT NULL) AS dias_cip_saldo
+          FROM proposals p WHERE ${base}
+        `);
+        const k: any = kpiR.rows[0] || {};
+        const total = Number(k.total) || 0;
+        const pagas = Number(k.pagas) || 0;
+        const canceladas = Number(k.canceladas) || 0;
+        const kpis = {
+          total,
+          valor: Number(k.valor) || 0,
+          pagas,
+          valorPagas: Number(k.valor_pagas) || 0,
+          canceladas,
+          emAndamento: total - pagas - canceladas,
+          efetividade: total ? pagas / total : 0,
+          saldoInformado: Number(k.saldo_informado) || 0,
+          saldoPago: Number(k.saldo_pago) || 0,
+          diasAtePago: k.dias_ate_pago != null ? Number(k.dias_ate_pago) : null,
+          diasCipSaldo: k.dias_cip_saldo != null ? Number(k.dias_cip_saldo) : null,
+        };
+
+        // funil por status (dinâmico, ordenado pela config de contract_statuses)
+        const funilR = await db.execute(sql`
+          SELECT p.status AS key,
+                 COALESCE(cs.label, p.status) AS label,
+                 COALESCE(cs.color, 'zinc') AS color,
+                 COALESCE(cs.ordem, 999) AS ordem,
+                 COUNT(*) AS qtd,
+                 COALESCE(SUM(p.contract_value),0) AS valor
+          FROM proposals p
+          LEFT JOIN contract_statuses cs ON cs.tenant_id = p.tenant_id AND cs.key = p.status
+          WHERE ${base}
+          GROUP BY p.status, cs.label, cs.color, cs.ordem
+          ORDER BY ordem ASC, qtd DESC
+        `);
+        const funil = funilR.rows.map((x: any) => ({
+          key: x.key,
+          label: x.label,
+          color: x.color,
+          qtd: Number(x.qtd) || 0,
+          valor: Number(x.valor) || 0,
+        }));
+
+        // por banco destino (com efetividade) e por banco origem
+        const bancoDestR = await db.execute(sql`
+          SELECT COALESCE(NULLIF(p.bank,''),'Não informado') AS chave,
+                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
+                 COUNT(*) FILTER (WHERE p.status='PAGO') AS pagas
+          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
+        `);
+        const bancoDestino = bancoDestR.rows.map((x: any) => {
+          const qtd = Number(x.qtd) || 0;
+          const pg = Number(x.pagas) || 0;
+          return { chave: x.chave, qtd, valor: Number(x.valor) || 0, efetividade: qtd ? pg / qtd : 0 };
+        });
+        const bancoOrigR = await db.execute(sql`
+          SELECT COALESCE(NULLIF(p.banco_origem,''),'Não informado') AS chave,
+                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor
+          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
+        `);
+        const bancoOrigem = bancoOrigR.rows.map((x: any) => ({
+          chave: x.chave, qtd: Number(x.qtd) || 0, valor: Number(x.valor) || 0,
+        }));
+
+        return res.json({ kpis, funil, bancoDestino, bancoOrigem });
+      } catch (e: any) {
+        console.error("dashboard portabilidades error:", e);
+        return res.status(500).json({ message: "Erro ao carregar portabilidades" });
+      }
+    },
+  );
+
   // ── Opções pros filtros (bancos/convênios/corretores/parceiros do tenant) ──
   app.get(
     "/api/gestao-comercial/dashboard/opcoes",

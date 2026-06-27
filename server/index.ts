@@ -316,6 +316,16 @@ app.use((req, res, next) => {
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS ade_refin VARCHAR(100)
           `);
 
+          // Portabilidade — captura de origem/saldo/datas (dashboard Portabilidades)
+          await migDb.execute(migSql`
+            ALTER TABLE proposals
+              ADD COLUMN IF NOT EXISTS banco_origem VARCHAR(255),
+              ADD COLUMN IF NOT EXISTS saldo_informado DECIMAL(12,2),
+              ADD COLUMN IF NOT EXISTS saldo_pago DECIMAL(12,2),
+              ADD COLUMN IF NOT EXISTS data_cip TIMESTAMP,
+              ADD COLUMN IF NOT EXISTS data_saldo TIMESTAMP
+          `);
+
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS contract_statuses (
               id                 SERIAL PRIMARY KEY,
