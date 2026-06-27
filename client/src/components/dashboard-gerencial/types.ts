@@ -128,9 +128,9 @@ export interface PortOrigemItem {
   chave: string;
   qtd: number;
   valor: number;
-  pctPago: number;
-  pctCancelado: number;
-  pctAndamento: number;
+  valorPago: number;
+  valorCancelado: number;
+  valorAndamento: number;
 }
 
 export interface PortabilidadesResp {

@@ -558,21 +558,21 @@ export function registerDashboardGerencialRoutes(
         const bancoOrigR = await db.execute(sql`
           SELECT UPPER(TRIM(COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado'))) AS chave,
                  COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
-                 COUNT(*) FILTER (WHERE ${concluido}) AS pagas,
-                 COUNT(*) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')) AS canceladas
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${concluido}),0) AS valor_pago,
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')),0) AS valor_cancelado
           FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY valor DESC LIMIT 15
         `);
         const bancoOrigem = bancoOrigR.rows.map((x: any) => {
-          const qtd = Number(x.qtd) || 0;
-          const pagas = Number(x.pagas) || 0;
-          const canceladas = Number(x.canceladas) || 0;
+          const valor = Number(x.valor) || 0;
+          const valorPago = Number(x.valor_pago) || 0;
+          const valorCancelado = Number(x.valor_cancelado) || 0;
           return {
             chave: x.chave,
-            qtd,
-            valor: Number(x.valor) || 0,
-            pctPago: qtd ? pagas / qtd : 0,
-            pctCancelado: qtd ? canceladas / qtd : 0,
-            pctAndamento: qtd ? (qtd - pagas - canceladas) / qtd : 0,
+            qtd: Number(x.qtd) || 0,
+            valor,
+            valorPago,
+            valorCancelado,
+            valorAndamento: Math.max(0, valor - valorPago - valorCancelado),
           };
         });
 

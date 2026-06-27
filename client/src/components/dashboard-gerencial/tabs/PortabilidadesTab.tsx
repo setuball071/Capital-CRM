@@ -94,17 +94,17 @@ function fmtCompact(v: number) {
 }
 const pctTip = (v: any) => `${(Number(v) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
-function StackedOrigem({ dados }: { dados: { chave: string; valor: number; pctPago: number; pctCancelado: number; pctAndamento: number }[] }) {
+function StackedOrigem({ dados }: { dados: { chave: string; valor: number; valorPago: number; valorCancelado: number; valorAndamento: number }[] }) {
   const data = dados.map((b) => ({
-    nome: `${b.chave} · ${fmtCompact(b.valor)}`,
-    pago: b.pctPago, cancelado: b.pctCancelado, andamento: b.pctAndamento,
+    nome: b.chave,
+    pago: b.valorPago, cancelado: b.valorCancelado, andamento: b.valorAndamento,
   }));
   return (
     <Card data-testid="port-origem-dificuldade">
       <CardHeader className="pb-1">
-        <CardTitle className="text-sm">Dificuldade por banco de origem</CardTitle>
+        <CardTitle className="text-sm">Dificuldade por banco de origem (R$)</CardTitle>
         <div className="text-xs text-muted-foreground">
-          Cadastrado (R$ no rótulo) e o que aconteceu: % pago vs % cancelado vs % em andamento. Mais vermelho = mais difícil.
+          Tamanho da barra = cadastrado. Verde = pago · vermelho = cancelado · cinza = em andamento. Mais vermelho/longo = mais difícil.
         </div>
       </CardHeader>
       <CardContent>
@@ -114,11 +114,11 @@ function StackedOrigem({ dados }: { dados: { chave: string; valor: number; pctPa
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(200, data.length * 40)}>
-            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }} stackOffset="expand">
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
-              <YAxis type="category" dataKey="nome" width={180} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: any, n: any) => [pctTip(v), n]} />
+              <XAxis type="number" tickFormatter={(v) => fmtCompact(Number(v))} />
+              <YAxis type="category" dataKey="nome" width={130} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: any, n: any) => [fmtMoeda(Number(v)), n]} />
               <Legend />
               <Bar dataKey="pago" name="Pago" stackId="a" fill="#16a34a" />
               <Bar dataKey="cancelado" name="Cancelado" stackId="a" fill="#dc2626" />
