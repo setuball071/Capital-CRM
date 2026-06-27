@@ -205,10 +205,10 @@ export default function PortabilidadesTab() {
           </div>
 
           <Grafico
-            titulo="Funil por status (qtd)"
-            formato="num"
-            nomeSerie="Qtd"
-            dados={data.funil.map((f) => ({ nome: f.label, valor: f.qtd, cor: COR_STATUS[f.color] || "#71717a" }))}
+            titulo="Funil por status (R$)"
+            formato="moeda"
+            nomeSerie="Valor"
+            dados={data.funil.map((f) => ({ nome: f.label, valor: f.valor, cor: COR_STATUS[f.color] || "#71717a" }))}
           />
 
           <Grafico titulo="Efetividade por banco destino (CRM)" formato="pct" nomeSerie="Efetividade" dados={efet.map((b) => ({ nome: b.chave, valor: b.efetividade || 0 }))} />
