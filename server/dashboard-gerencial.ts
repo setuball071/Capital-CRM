@@ -479,19 +479,28 @@ export function registerDashboardGerencialRoutes(
         const base = sql`p.tenant_id = ${tenantId} AND p.product = 'PORTABILIDADE'
           AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}`;
 
+        // Dados da operação ficam em clientMeta (JSON): bancoOrigem, saldoDevedor, dataCip.
+        const saldoExpr = sql`CASE WHEN p.client_meta->>'saldoDevedor' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (p.client_meta->>'saldoDevedor')::numeric ELSE 0 END`;
+        const dataCipExpr = sql`CASE WHEN p.client_meta->>'dataCip' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN (substring(p.client_meta->>'dataCip' from 1 for 10))::date ELSE NULL END`;
+        // Concluído/pago = status PAGO OU um status "quitado" (saldo quitado conta como pago)
+        const concluido = sql`(p.status = 'PAGO' OR EXISTS (
+          SELECT 1 FROM contract_statuses cs
+          WHERE cs.tenant_id = p.tenant_id AND cs.key = p.status AND cs.label ILIKE '%quitad%'
+        ))`;
+
         const kpiR = await db.execute(sql`
           SELECT
             COUNT(*) AS total,
             COALESCE(SUM(p.contract_value),0) AS valor,
-            COUNT(*) FILTER (WHERE p.status = 'PAGO') AS pagas,
-            COALESCE(SUM(p.contract_value) FILTER (WHERE p.status = 'PAGO'),0) AS valor_pagas,
+            COUNT(*) FILTER (WHERE ${concluido}) AS pagas,
+            COALESCE(SUM(p.contract_value) FILTER (WHERE ${concluido}),0) AS valor_pagas,
             COUNT(*) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')) AS canceladas,
-            COALESCE(SUM(p.saldo_informado),0) AS saldo_informado,
-            COALESCE(SUM(p.saldo_pago),0) AS saldo_pago,
-            AVG(EXTRACT(EPOCH FROM (p.paid_at - p.created_at))/86400)
-              FILTER (WHERE p.status='PAGO' AND p.paid_at IS NOT NULL) AS dias_ate_pago,
-            AVG(EXTRACT(EPOCH FROM (p.data_saldo - p.data_cip))/86400)
-              FILTER (WHERE p.data_cip IS NOT NULL AND p.data_saldo IS NOT NULL) AS dias_cip_saldo
+            COALESCE(SUM(${saldoExpr}),0) AS saldo_informado,
+            COALESCE(SUM(${saldoExpr}) FILTER (WHERE ${concluido}),0) AS saldo_pago,
+            AVG(EXTRACT(EPOCH FROM (COALESCE(p.paid_at, p.updated_at) - p.created_at))/86400)
+              FILTER (WHERE ${concluido}) AS dias_ate_pago,
+            AVG((COALESCE(p.paid_at, p.updated_at)::date - ${dataCipExpr}))
+              FILTER (WHERE ${concluido} AND ${dataCipExpr} IS NOT NULL) AS dias_cip_saldo
           FROM proposals p WHERE ${base}
         `);
         const k: any = kpiR.rows[0] || {};
@@ -538,7 +547,7 @@ export function registerDashboardGerencialRoutes(
         const bancoDestR = await db.execute(sql`
           SELECT COALESCE(NULLIF(p.bank,''),'Não informado') AS chave,
                  COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
-                 COUNT(*) FILTER (WHERE p.status='PAGO') AS pagas
+                 COUNT(*) FILTER (WHERE ${concluido}) AS pagas
           FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
         `);
         const bancoDestino = bancoDestR.rows.map((x: any) => {
@@ -547,7 +556,7 @@ export function registerDashboardGerencialRoutes(
           return { chave: x.chave, qtd, valor: Number(x.valor) || 0, efetividade: qtd ? pg / qtd : 0 };
         });
         const bancoOrigR = await db.execute(sql`
-          SELECT COALESCE(NULLIF(p.banco_origem,''),'Não informado') AS chave,
+          SELECT COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado') AS chave,
                  COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor
           FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
         `);
