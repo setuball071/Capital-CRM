@@ -2,10 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
   Bar,
+  PieChart,
+  Pie,
   Cell,
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
@@ -18,6 +21,15 @@ import type { PortabilidadesResp, DashOpcoes } from "../types";
 
 const CORES = ["#7C3AED", "#EC4899", "#2563EB", "#059669", "#D97706", "#DC2626", "#0891B2", "#9333EA", "#65A30D", "#E11D48", "#0D9488", "#7E22CE"];
 
+// cores dos status (contract_statuses.color = nome do tailwind) -> hex
+const COR_STATUS: Record<string, string> = {
+  zinc: "#71717a", slate: "#64748b", gray: "#6b7280", neutral: "#737373", stone: "#78716c",
+  red: "#dc2626", rose: "#e11d48", orange: "#ea580c", amber: "#d97706", yellow: "#ca8a04",
+  lime: "#65a30d", green: "#16a34a", emerald: "#059669", teal: "#0d9488", cyan: "#0891b2",
+  sky: "#0284c7", blue: "#2563eb", indigo: "#4f46e5", violet: "#7c3aed", purple: "#9333ea",
+  fuchsia: "#c026d3", pink: "#db2777",
+};
+
 const fmtDias = (v: number | null) =>
   v == null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`;
 
@@ -28,22 +40,43 @@ function fmtVal(v: number, f: Formato) {
   return (Number(v) || 0).toLocaleString("pt-BR");
 }
 
-function MiniBar({ titulo, dados, formato, vazio }: { titulo: string; dados: { nome: string; valor: number }[]; formato: Formato; vazio?: string }) {
+interface ChartItem { nome: string; valor: number; cor?: string }
+
+function Grafico({
+  titulo, subtitulo, dados, formato, tipo = "bar", nomeSerie = "Valor",
+}: {
+  titulo: string; subtitulo?: string; dados: ChartItem[]; formato: Formato;
+  tipo?: "bar" | "pie"; nomeSerie?: string;
+}) {
+  const corDe = (d: ChartItem, i: number) => d.cor || CORES[i % CORES.length];
   return (
     <Card data-testid={`port-${titulo}`}>
-      <CardHeader className="pb-2"><CardTitle className="text-sm">{titulo}</CardTitle></CardHeader>
+      <CardHeader className="pb-1">
+        <CardTitle className="text-sm">{titulo}</CardTitle>
+        {subtitulo && <div className="text-xs text-muted-foreground">{subtitulo}</div>}
+      </CardHeader>
       <CardContent>
         {dados.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-10 text-center">{vazio || "Sem dados no período"}</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={Math.max(180, dados.length * 38)}>
-            <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" hide tickFormatter={(v) => fmtVal(v, formato)} />
-              <YAxis type="category" dataKey="nome" width={130} tick={{ fontSize: 11 }} />
+          <div className="text-sm text-muted-foreground py-10 text-center">Sem dados no período</div>
+        ) : tipo === "pie" ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
               <Tooltip formatter={(v: any) => fmtVal(Number(v), formato)} />
-              <Bar dataKey="valor" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 11, formatter: (v: any) => fmtVal(Number(v), formato) }}>
-                {dados.map((_, i) => <Cell key={i} fill={CORES[i % CORES.length]} />)}
+              <Legend />
+              <Pie data={dados} dataKey="valor" nameKey="nome" cx="50%" cy="50%" outerRadius={95} label={(e: any) => fmtVal(Number(e.valor), formato)}>
+                {dados.map((d, i) => <Cell key={i} fill={corDe(d, i)} />)}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(160, dados.length * 34)}>
+            <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 56 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="nome" width={130} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: any) => [fmtVal(Number(v), formato), nomeSerie]} />
+              <Bar dataKey="valor" name={nomeSerie} radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 11, formatter: (v: any) => fmtVal(Number(v), formato) }}>
+                {dados.map((d, i) => <Cell key={i} fill={corDe(d, i)} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -76,7 +109,9 @@ export default function PortabilidadesTab() {
   });
 
   const k = data?.kpis;
-  const origemReal = (data?.bancoOrigem || []).filter((b) => b.chave !== "Não informado");
+  const origemReal = (data?.bancoOrigem || []).filter((b) => b.chave !== "NÃO INFORMADO" && b.chave !== "Não informado");
+  // efetividade por banco destino, ordenada desc
+  const efet = (data?.bancoDestino || []).slice().sort((a, b) => (b.efetividade || 0) - (a.efetividade || 0));
 
   return (
     <div className="space-y-4" data-testid="tab-portabilidades">
@@ -88,23 +123,24 @@ export default function PortabilidadesTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          {/* Produção oficial de portabilidade (financeiro — inclui importados) */}
-          <div>
-            <div className="text-sm font-semibold">
-              Produção de Portabilidade <span className="text-muted-foreground font-normal">· financeiro (inclui importados — bate com o ranking)</span>
-            </div>
-            <div className="text-xs text-muted-foreground mb-2">
-              Total produzido em portabilidade no período, somando o do CRM + o importado do financeiro.
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard titulo="Produção (R$)" valor={data.producao.valor} formato="moeda" sub={`${data.producao.qtd} contratos`} />
-            </div>
-            <div className="mt-3">
-              <MiniBar titulo="Bancos mais portados (produção R$)" formato="moeda" dados={data.bancoProducao.map((b) => ({ nome: b.chave, valor: b.valor }))} />
+          {/* Produção oficial (financeiro — inclui importados) */}
+          <div className="text-sm font-semibold">
+            Produção de Portabilidade <span className="text-muted-foreground font-normal">· financeiro (inclui importados — bate com o ranking)</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <KpiCard titulo="Produção paga (R$)" valor={data.producao.valor} formato="moeda" sub={`${data.producao.qtd} contratos`} />
+            <div className="lg:col-span-2">
+              <Grafico
+                titulo="Bancos com mais produção paga (efetividade)"
+                subtitulo="quem efetivamente pagou/quitou (R$)"
+                tipo="pie"
+                formato="moeda"
+                dados={data.bancoProducao.map((b) => ({ nome: b.chave, valor: b.valor }))}
+              />
             </div>
           </div>
 
-          {/* Funil/processo do CRM (etapas CIP/saldo, banco origem — só nas propostas) */}
+          {/* Funil / processo do CRM */}
           <div className="text-sm font-semibold pt-2">
             Funil do CRM (processo) <span className="text-muted-foreground font-normal">· propostas — etapas CIP/saldo, banco de origem; "Saldo quitado" = concluído</span>
           </div>
@@ -123,19 +159,22 @@ export default function PortabilidadesTab() {
             <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Tempo CIP → saldo</div><div className="text-2xl font-semibold mt-1">{fmtDias(k!.diasCipSaldo)}</div></CardContent></Card>
           </div>
 
-          <MiniBar titulo="Funil por status (qtd)" formato="num" dados={data.funil.map((f) => ({ nome: f.label, valor: f.qtd }))} />
+          <Grafico
+            titulo="Funil por status (qtd)"
+            formato="num"
+            nomeSerie="Qtd"
+            dados={data.funil.map((f) => ({ nome: f.label, valor: f.qtd, cor: COR_STATUS[f.color] || "#71717a" }))}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <MiniBar titulo="Por banco destino (R$)" formato="moeda" dados={data.bancoDestino.map((b) => ({ nome: b.chave, valor: b.valor }))} />
-            <MiniBar titulo="Efetividade por banco destino" formato="pct" dados={data.bancoDestino.map((b) => ({ nome: b.chave, valor: b.efetividade || 0 }))} />
+            <Grafico titulo="Efetividade por banco (CRM)" formato="pct" nomeSerie="Efetividade" dados={efet.map((b) => ({ nome: b.chave, valor: b.efetividade || 0 }))} />
+            <Grafico
+              titulo="Por banco de origem (R$)"
+              subtitulo="de onde portou (preenchido na ficha)"
+              formato="moeda"
+              dados={origemReal.map((b) => ({ nome: b.chave, valor: b.valor }))}
+            />
           </div>
-
-          <MiniBar
-            titulo="Por banco de origem (R$)"
-            formato="moeda"
-            dados={origemReal.map((b) => ({ nome: b.chave, valor: b.valor }))}
-            vazio="Sem banco de origem preenchido ainda — popula conforme o operacional informar na ficha."
-          />
         </>
       )}
     </div>

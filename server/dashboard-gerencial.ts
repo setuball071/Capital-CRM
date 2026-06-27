@@ -556,9 +556,9 @@ export function registerDashboardGerencialRoutes(
           return { chave: x.chave, qtd, valor: Number(x.valor) || 0, efetividade: qtd ? pg / qtd : 0 };
         });
         const bancoOrigR = await db.execute(sql`
-          SELECT COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado') AS chave,
+          SELECT UPPER(TRIM(COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado'))) AS chave,
                  COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor
-          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
+          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY valor DESC LIMIT 15
         `);
         const bancoOrigem = bancoOrigR.rows.map((x: any) => ({
           chave: x.chave, qtd: Number(x.qtd) || 0, valor: Number(x.valor) || 0,
