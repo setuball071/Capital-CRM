@@ -30,8 +30,8 @@ function TabelaDim({ titulo, itens }: { titulo: string; itens: PerfDimItem[] }) 
                 <TableHead>Item</TableHead>
                 <TableHead className="text-right">Cad. (qtd)</TableHead>
                 <TableHead className="text-right">Cad. (R$)</TableHead>
-                <TableHead className="text-right">Pago (qtd)</TableHead>
-                <TableHead className="text-right">Pago (R$)</TableHead>
+                <TableHead className="text-right">Produção (qtd)</TableHead>
+                <TableHead className="text-right">Produção (R$)</TableHead>
                 <TableHead className="text-right">Conversão</TableHead>
                 <TableHead className="text-right">Ticket médio</TableHead>
               </TableRow>
@@ -42,8 +42,8 @@ function TabelaDim({ titulo, itens }: { titulo: string; itens: PerfDimItem[] }) 
                   <TableCell className="max-w-[180px] truncate">{i.chave}</TableCell>
                   <TableCell className="text-right">{fmtNum(i.cadQtd)}</TableCell>
                   <TableCell className="text-right">{fmtMoeda(i.cadValor)}</TableCell>
-                  <TableCell className="text-right">{fmtNum(i.pagoQtd)}</TableCell>
-                  <TableCell className="text-right">{fmtMoeda(i.pagoValor)}</TableCell>
+                  <TableCell className="text-right">{fmtNum(i.prodQtd)}</TableCell>
+                  <TableCell className="text-right">{fmtMoeda(i.prodValor)}</TableCell>
                   <TableCell className="text-right font-medium">{fmtPercent(i.conversao)}</TableCell>
                   <TableCell className="text-right">{fmtMoeda(i.ticket)}</TableCell>
                 </TableRow>
@@ -90,43 +90,22 @@ export default function PerformanceTab() {
         <div className="py-16 text-center text-muted-foreground">Sem dados.</div>
       ) : (
         <>
-          {/* Produção Oficial (financeiro — inclui importado) */}
-          <div>
-            <div className="text-sm font-semibold">
-              Produção Oficial <span className="text-muted-foreground font-normal">· financeiro (inclui contratos importados)</span>
-            </div>
-            <div className="text-xs text-muted-foreground mb-2">
-              Este mês inclui produção paga <strong>importada de outra plataforma</strong> (transição). Daqui pra frente, tudo nasce no CRM e o funil abaixo fica completo.
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard titulo="Produção (geral)" valor={data.oficial.geral} formato="moeda" sub={`${data.oficial.qtd} contratos · sem cartão`} />
-              <KpiCard titulo="Produção total" valor={data.oficial.total} formato="moeda" />
-              <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
-              <KpiCard titulo="Conversão (cad.→produção)" valor={data.conversaoOficial} formato="percent" />
-            </div>
-          </div>
-
-          {/* Funil do CRM (propostas) */}
-          <div>
-            <div className="text-sm font-semibold">
-              Funil do CRM <span className="text-muted-foreground font-normal">· propostas (cadastrado → pago)</span>
-            </div>
-            <div className="text-xs text-muted-foreground mb-2">
-              Mede só o que nasceu no CRM (cadastrado → pago). Pago aqui ≠ Produção Oficial enquanto houver importados.
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
-              <KpiCard titulo="Pago (CRM)" valor={t!.pagoValor} formato="moeda" sub={`${t!.pagoQtd} contratos`} />
-              <KpiCard titulo="Conversão (funil)" valor={t!.conversao} formato="percent" />
-              <KpiCard titulo="Ticket médio (pago)" valor={t!.ticket} formato="moeda" />
-            </div>
+          <div className="text-xs text-muted-foreground">
+            <strong>Cadastrado</strong> = propostas criadas no período · <strong>Produção</strong> = pago no financeiro (inclui o do CRM + os importados) · <strong>Conversão</strong> = produção ÷ cadastrado (valor).
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard titulo="Contratos / cliente" valor={data.porCliente.mediaContratos} formato="numero" sub={`${data.porCliente.clientes} clientes pagantes`} />
+            <KpiCard titulo="Cadastrado" valor={t!.cadValor} formato="moeda" sub={`${t!.cadQtd} propostas`} />
+            <KpiCard titulo="Produção (pago)" valor={t!.prodValor} formato="moeda" sub={`${t!.prodQtd} contratos`} />
+            <KpiCard titulo="Conversão" valor={t!.conversao} formato="percent" />
+            <KpiCard titulo="Ticket médio" valor={t!.ticket} formato="moeda" />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard titulo="Contratos / cliente" valor={data.porCliente.mediaContratos} formato="numero" sub={`${data.porCliente.clientes} clientes`} />
             <KpiCard titulo="Clientes com 1 produto" valor={data.porCliente.pctUmProduto} formato="percent" />
             <KpiCard titulo="Clientes com 2+ produtos" valor={data.porCliente.pctMultiProduto} formato="percent" />
-            <KpiCard titulo="Clientes pagantes" valor={data.porCliente.clientes} formato="numero" />
+            <KpiCard titulo="Clientes que produziram" valor={data.porCliente.clientes} formato="numero" />
           </div>
 
           <div className="space-y-3">

@@ -81,25 +81,23 @@ export interface PerfDimItem {
   chave: string;
   cadQtd: number;
   cadValor: number;
-  pagoQtd: number;
-  pagoValor: number;
-  conversao: number; // 0..1 (pagoQtd / cadQtd)
-  ticket: number; // pago: valor/qtd
+  prodQtd: number;
+  prodValor: number;
+  conversao: number; // 0..1 (prodQtd / cadQtd)
+  ticket: number; // produção: valor/qtd
 }
 
 export interface PerfTotais {
   cadQtd: number;
   cadValor: number;
-  pagoQtd: number;
-  pagoValor: number;
-  conversao: number;
+  prodQtd: number;
+  prodValor: number;
+  conversao: number; // prodValor / cadValor
   ticket: number;
 }
 
 export interface PerformanceResp {
   totais: PerfTotais;
-  oficial: { total: number; geral: number; qtd: number };
-  conversaoOficial: number; // produção oficial total ÷ cadastrado (valor)
   produto: PerfDimItem[];
   banco: PerfDimItem[];
   convenio: PerfDimItem[];

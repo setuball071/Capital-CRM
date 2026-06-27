@@ -318,72 +318,126 @@ export function registerDashboardGerencialRoutes(
         const inicioStr =
           (req.query.inicio as string) ||
           new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
-        const filtros = buildFiltrosSql(req.query);
-        // cadastrado = created_at no período; pago = status PAGO por paid_at/updated_at no período
-        const cadF = sql`p.created_at::date BETWEEN ${inicioStr} AND ${fimStr}`;
-        const pagoF = sql`p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr}`;
-        const periodoCond = sql`(${cadF} OR ${pagoF})`;
+        const filtros = buildFiltrosSql(req.query); // proposals (cadastrado)
+        const filtrosOf = buildFiltrosOficialSql(req.query); // producoes/vendedor (produção)
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
 
         const mapRow = (x: any) => {
           const cadQtd = Number(x.cad_qtd) || 0;
-          const pagoQtd = Number(x.pago_qtd) || 0;
-          const pagoValor = Number(x.pago_valor) || 0;
+          const prodQtd = Number(x.prod_qtd) || 0;
+          const prodValor = Number(x.prod_valor) || 0;
           return {
             chave: x.chave,
             cadQtd,
             cadValor: Number(x.cad_valor) || 0,
-            pagoQtd,
-            pagoValor,
-            conversao: cadQtd ? pagoQtd / cadQtd : 0,
-            ticket: pagoQtd ? pagoValor / pagoQtd : 0,
+            prodQtd,
+            prodValor,
+            conversao: cadQtd ? prodQtd / cadQtd : 0,
+            ticket: prodQtd ? prodValor / prodQtd : 0,
           };
         };
 
-        // por dimensão: cadastrado + pago (split por FILTER)
-        const topDim = async (col: any) => {
+        // Cadastrado = proposals; Produção (pago) = producoes_contratos +
+        // vendedor_contratos (fonte ÚNICA do pago — os pagos do CRM já entram aqui,
+        // mais os importados). Unificado por chave normalizada (UPPER/TRIM).
+        const dimUnificado = async (pCol: any, prodCol: any, vendCol: any) => {
           const r = await db.execute(sql`
-            SELECT COALESCE(NULLIF(${col}, ''), 'Não informado') AS chave,
-                   COUNT(*) FILTER (WHERE ${cadF}) AS cad_qtd,
-                   COALESCE(SUM(p.contract_value) FILTER (WHERE ${cadF}), 0) AS cad_valor,
-                   COUNT(*) FILTER (WHERE ${pagoF}) AS pago_qtd,
-                   COALESCE(SUM(p.contract_value) FILTER (WHERE ${pagoF}), 0) AS pago_valor
-            FROM proposals p
-            WHERE p.tenant_id = ${tenantId} AND ${periodoCond} ${filtros}
-            GROUP BY 1 ORDER BY cad_qtd DESC, pago_valor DESC LIMIT 15
+            WITH cad AS (
+              SELECT UPPER(TRIM(COALESCE(NULLIF(${pCol}, ''), 'Não informado'))) AS k,
+                     COUNT(*) AS qtd, COALESCE(SUM(p.contract_value), 0) AS valor
+              FROM proposals p
+              WHERE p.tenant_id = ${tenantId}
+                AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+              GROUP BY 1
+            ),
+            prod AS (
+              SELECT k, SUM(qtd) AS qtd, SUM(valor) AS valor FROM (
+                SELECT UPPER(TRIM(COALESCE(NULLIF(${prodCol}, ''), 'Não informado'))) AS k,
+                       COUNT(*) AS qtd, COALESCE(SUM(valor_base), 0) AS valor
+                FROM producoes_contratos
+                WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+                  AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+                GROUP BY 1
+                UNION ALL
+                SELECT UPPER(TRIM(COALESCE(NULLIF(${vendCol}, ''), 'Não informado'))),
+                       COUNT(*), COALESCE(SUM(valor_contrato), 0)
+                FROM vendedor_contratos
+                WHERE tenant_id = ${tenantId}
+                  AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+                GROUP BY 1
+              ) u GROUP BY k
+            )
+            SELECT COALESCE(cad.k, prod.k) AS chave,
+                   COALESCE(cad.qtd, 0) AS cad_qtd, COALESCE(cad.valor, 0) AS cad_valor,
+                   COALESCE(prod.qtd, 0) AS prod_qtd, COALESCE(prod.valor, 0) AS prod_valor
+            FROM cad FULL OUTER JOIN prod ON cad.k = prod.k
+            ORDER BY COALESCE(prod.valor, 0) DESC, COALESCE(cad.valor, 0) DESC
+            LIMIT 20
           `);
           return r.rows.map(mapRow);
         };
+
+        // produto: proposals.product é enum; producoes/vendedor via tipo -> bucket
+        const bucketProd = sql`CASE WHEN is_cartao = true THEN 'CARTAO'
+          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+          ELSE 'OUTRO' END`;
+        const bucketVend = sql`CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN 'CARTAO'
+          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+          ELSE 'OUTRO' END`;
+
         const [produto, banco, convenio] = await Promise.all([
-          topDim(sql`p.product`),
-          topDim(sql`p.bank`),
-          topDim(sql`p.client_convenio`),
+          dimUnificado(sql`p.product`, bucketProd, bucketVend),
+          dimUnificado(sql`p.bank`, sql`banco`, sql`banco`),
+          dimUnificado(sql`p.client_convenio`, sql`convenio`, sql`convenio`),
         ]);
 
-        // totais (cadastrado/pago/conversão/ticket no período)
-        const totR = await db.execute(sql`
-          SELECT 'TOTAL' AS chave,
-                 COUNT(*) FILTER (WHERE ${cadF}) AS cad_qtd,
-                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${cadF}), 0) AS cad_valor,
-                 COUNT(*) FILTER (WHERE ${pagoF}) AS pago_qtd,
-                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${pagoF}), 0) AS pago_valor
+        // totais
+        const cadTotR = await db.execute(sql`
+          SELECT COUNT(*) AS qtd, COALESCE(SUM(p.contract_value), 0) AS valor
           FROM proposals p
-          WHERE p.tenant_id = ${tenantId} AND ${periodoCond} ${filtros}
+          WHERE p.tenant_id = ${tenantId}
+            AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
         `);
-        const totais = mapRow(totR.rows[0] || {});
+        const prodTotR = await db.execute(sql`
+          SELECT SUM(qtd) AS qtd, SUM(valor) AS valor FROM (
+            SELECT COUNT(*) AS qtd, COALESCE(SUM(valor_base), 0) AS valor FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+            UNION ALL
+            SELECT COUNT(*), COALESCE(SUM(valor_contrato), 0) FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+          ) u
+        `);
+        const ct: any = cadTotR.rows[0] || {};
+        const pt: any = prodTotR.rows[0] || {};
+        const cadValorT = Number(ct.valor) || 0;
+        const prodQtdT = Number(pt.qtd) || 0;
+        const prodValorT = Number(pt.valor) || 0;
+        const totais = {
+          cadQtd: Number(ct.qtd) || 0,
+          cadValor: cadValorT,
+          prodQtd: prodQtdT,
+          prodValor: prodValorT,
+          conversao: cadValorT ? prodValorT / cadValorT : 0,
+          ticket: prodQtdT ? prodValorT / prodQtdT : 0,
+        };
 
-        // perfil por cliente (entre quem PAGOU): média de contratos, % 1 produto vs 2+
+        // perfil por cliente (entre quem PRODUZIU — producoes_contratos)
         const cliR = await db.execute(sql`
           WITH c AS (
-            SELECT p.client_cpf,
+            SELECT cpf_cliente,
                    COUNT(*) AS contratos,
-                   COUNT(DISTINCT p.product) AS produtos
-            FROM proposals p
-            WHERE p.tenant_id = ${tenantId} AND ${pagoF} ${filtros}
-              AND p.client_cpf IS NOT NULL AND p.client_cpf <> ''
-            GROUP BY p.client_cpf
+                   COUNT(DISTINCT (${bucketProd})) AS produtos
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+              AND cpf_cliente IS NOT NULL AND cpf_cliente <> ''
+            GROUP BY cpf_cliente
           )
-          SELECT COUNT(*) AS clientes,
-                 COALESCE(AVG(contratos), 0) AS media_contratos,
+          SELECT COUNT(*) AS clientes, COALESCE(AVG(contratos), 0) AS media_contratos,
                  COUNT(*) FILTER (WHERE produtos = 1) AS um_produto,
                  COUNT(*) FILTER (WHERE produtos >= 2) AS multi_produto
           FROM c
@@ -397,40 +451,7 @@ export function registerDashboardGerencialRoutes(
           pctMultiProduto: clientes ? (Number(cr.multi_produto) || 0) / clientes : 0,
         };
 
-        // Produção Oficial (financeiro — inclui contratos importados de outra
-        // plataforma na transição). producoes_contratos + vendedor_contratos.
-        const meses = mesesNoPeriodo(inicioStr, fimStr);
-        if (!meses.length) meses.push("0000-00");
-        const filtrosOf = buildFiltrosOficialSql(req.query);
-        const [opR, ovR] = await Promise.all([
-          db.execute(sql`
-            SELECT COALESCE(SUM(valor_base),0) AS total,
-                   COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END),0) AS cartao,
-                   COUNT(*) AS qtd
-            FROM producoes_contratos
-            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
-              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
-          `),
-          db.execute(sql`
-            SELECT COALESCE(SUM(valor_contrato),0) AS total,
-                   COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN valor_contrato ELSE 0 END),0) AS cartao,
-                   COUNT(*) AS qtd
-            FROM vendedor_contratos
-            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
-          `),
-        ]);
-        const op: any = opR.rows[0] || {};
-        const ov: any = ovR.rows[0] || {};
-        const ofTotal = (Number(op.total) || 0) + (Number(ov.total) || 0);
-        const ofCartao = (Number(op.cartao) || 0) + (Number(ov.cartao) || 0);
-        const oficial = {
-          total: ofTotal,
-          geral: ofTotal - ofCartao,
-          qtd: (Number(op.qtd) || 0) + (Number(ov.qtd) || 0),
-        };
-        const conversaoOficial = totais.cadValor ? ofTotal / totais.cadValor : 0;
-
-        return res.json({ totais, oficial, conversaoOficial, produto, banco, convenio, porCliente });
+        return res.json({ totais, produto, banco, convenio, porCliente });
       } catch (e: any) {
         console.error("dashboard performance error:", e);
         return res.status(500).json({ message: "Erro ao carregar performance" });
