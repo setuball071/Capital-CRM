@@ -182,6 +182,55 @@ export interface InteligenciaResp {
   insights: string[];
 }
 
+export interface DnaComponentes {
+  volume: number;
+  consistencia: number;
+  diversificacao: number;
+  crescimento: number;
+  abrangencia: number;
+}
+
+export interface DnaChaveValor {
+  chave: string;
+  valor: number;
+}
+
+export interface DnaSelecionado {
+  corretor: string;
+  score: number;
+  rankingPos: number | null;
+  totalCorretores: number;
+  volume: number;
+  qtd: number;
+  ticket: number;
+  componentes: DnaComponentes;
+  raw: {
+    mesesAtivos: number;
+    totalMeses: number;
+    nProd: number;
+    nBanco: number;
+    nConv: number;
+    nOrgao: number;
+    nUf: number;
+    crescimentoPct: number;
+    volumeAnterior: number;
+  };
+  mix: DnaChaveValor[];
+  bancos: DnaChaveValor[];
+  convenios: DnaChaveValor[];
+  orgaos: DnaChaveValor[];
+  estados: DnaChaveValor[];
+  fortes: string[];
+  fracos: string[];
+}
+
+export interface DnaResp {
+  periodo: { inicio: string; fim: string };
+  pesos: Record<string, number>;
+  ranking: { pos: number; corretor: string; score: number; volume: number }[];
+  selecionado: DnaSelecionado | null;
+}
+
 export interface PortabilidadesResp {
   producao: { valor: number; qtd: number }; // oficial (financeiro, inclui importados)
   bancoProducao: PortBancoItem[];

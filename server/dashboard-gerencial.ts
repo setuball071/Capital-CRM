@@ -1027,4 +1027,238 @@ export function registerDashboardGerencialRoutes(
       }
     },
   );
+
+  // ── Aba 7 (DNA do Corretor): score 0-100 relativo à equipe (percentil) sobre
+  //    5 fatores — Volume, Consistência, Diversificação, Crescimento, Abrangência
+  //    (público/órgão/estado) — + perfil detalhado do corretor selecionado.
+  //    SEMPRE sobre a produção oficial (financeiro + vendedor, inclui importados).
+  app.get(
+    "/api/gestao-comercial/dashboard/dna",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const selParam = (req.query.corretor as string) || "";
+
+        const inicio = new Date(inicioStr + "T00:00:00");
+        const fim = new Date(fimStr + "T23:59:59");
+        const durMs = fim.getTime() - inicio.getTime();
+        const prevFim = new Date(inicio.getTime() - 1000);
+        const prevInicio = new Date(prevFim.getTime() - durMs);
+        const prevInicioStr = prevInicio.toISOString().slice(0, 10);
+        const prevFimStr = prevFim.toISOString().slice(0, 10);
+
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const mesesPrev = mesesNoPeriodo(prevInicioStr, prevFimStr);
+        if (!mesesPrev.length) mesesPrev.push("0000-00");
+        const totalMeses = Math.max(1, meses.length);
+
+        // produção unificada (producoes por mês + vendedor por data) — uma linha por contrato
+        const prodUnion = (ms: string[], ini: string, f: string) => sql`
+          SELECT
+            COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
+            COALESCE(pc.valor_base,0) AS valor,
+            pc.mes_referencia AS mes,
+            CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END AS produto,
+            COALESCE(NULLIF(btrim(pc.banco),''),'Não informado') AS banco,
+            COALESCE(NULLIF(btrim(pc.convenio),''),'Não informado') AS convenio,
+            lpad(regexp_replace(COALESCE(pc.cpf_cliente,''),'[^0-9]','','g'),11,'0') AS cpf
+          FROM producoes_contratos pc
+          WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+            AND pc.mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query, "pc.")}
+          UNION ALL
+          SELECT
+            COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text) AS corretor,
+            COALESCE(vc.valor_contrato,0) AS valor,
+            to_char(vc.data_contrato,'YYYY-MM') AS mes,
+            CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END AS produto,
+            COALESCE(NULLIF(btrim(vc.banco),''),'Não informado') AS banco,
+            COALESCE(NULLIF(btrim(vc.convenio),''),'Não informado') AS convenio,
+            lpad(regexp_replace(COALESCE(vc.cliente_cpf,''),'[^0-9]','','g'),11,'0') AS cpf
+          FROM vendedor_contratos vc LEFT JOIN users u ON u.id = vc.vendedor_id
+          WHERE vc.tenant_id=${tenantId}
+            AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+        `;
+
+        // expressão do código de órgão (na base, o código pode estar em orgaodesc)
+        const orgaoCodeExpr = sql`COALESCE(NULLIF(btrim(cp.orgaocod),''), NULLIF(btrim(cp.orgaodesc),''))`;
+
+        const [curR, prevR, abrR] = await Promise.all([
+          db.execute(sql`
+            WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+            SELECT corretor,
+              SUM(valor) AS volume, COUNT(*) AS qtd,
+              COUNT(DISTINCT mes) AS meses_ativos,
+              COUNT(DISTINCT produto) AS n_prod,
+              COUNT(DISTINCT banco) AS n_banco,
+              COUNT(DISTINCT convenio) AS n_conv
+            FROM p GROUP BY corretor`),
+          db.execute(sql`
+            WITH p AS (${prodUnion(mesesPrev, prevInicioStr, prevFimStr)})
+            SELECT corretor, SUM(valor) AS volume FROM p GROUP BY corretor`),
+          db.execute(sql`
+            WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+            SELECT p.corretor,
+              COUNT(DISTINCT ${orgaoCodeExpr}) AS n_orgao,
+              COUNT(DISTINCT NULLIF(btrim(cp.uf),'')) AS n_uf
+            FROM p LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+            GROUP BY p.corretor`),
+        ]);
+
+        const prevMap = new Map<string, number>();
+        prevR.rows.forEach((x: any) => prevMap.set(x.corretor, Number(x.volume) || 0));
+        const abrMap = new Map<string, { orgao: number; uf: number }>();
+        abrR.rows.forEach((x: any) => abrMap.set(x.corretor, { orgao: Number(x.n_orgao) || 0, uf: Number(x.n_uf) || 0 }));
+
+        type Met = {
+          corretor: string; volume: number; qtd: number; mesesAtivos: number;
+          nProd: number; nBanco: number; nConv: number; volumeAnterior: number;
+          crescimentoPct: number; consistenciaRaw: number; diversificacaoRaw: number; abrangenciaRaw: number;
+          nOrgao: number; nUf: number;
+        };
+        const mets: Met[] = curR.rows.map((x: any) => {
+          const corretor = x.corretor as string;
+          const volume = Number(x.volume) || 0;
+          const volumeAnterior = prevMap.get(corretor) || 0;
+          const abr = abrMap.get(corretor) || { orgao: 0, uf: 0 };
+          const crescimentoPct = volumeAnterior > 0 ? (volume - volumeAnterior) / volumeAnterior : (volume > 0 ? 1 : 0);
+          return {
+            corretor, volume, qtd: Number(x.qtd) || 0,
+            mesesAtivos: Number(x.meses_ativos) || 0,
+            nProd: Number(x.n_prod) || 0, nBanco: Number(x.n_banco) || 0, nConv: Number(x.n_conv) || 0,
+            volumeAnterior, crescimentoPct,
+            consistenciaRaw: Math.min(1, (Number(x.meses_ativos) || 0) / totalMeses),
+            diversificacaoRaw: (Number(x.n_prod) || 0) + (Number(x.n_banco) || 0) + (Number(x.n_conv) || 0),
+            abrangenciaRaw: abr.orgao + abr.uf,
+            nOrgao: abr.orgao, nUf: abr.uf,
+          };
+        }).filter((m) => m.volume > 0);
+
+        // percentil (0-100, 100 = melhor) de um valor dentro de um array
+        const fabricaPercentil = (valores: number[]) => {
+          const n = valores.length;
+          return (v: number) => {
+            if (n <= 1) return 100;
+            let less = 0, eq = 0;
+            for (const x of valores) { if (x < v) less++; else if (x === v) eq++; }
+            return ((less + 0.5 * eq) / n) * 100;
+          };
+        };
+        const pVol = fabricaPercentil(mets.map((m) => m.volume));
+        const pCons = fabricaPercentil(mets.map((m) => m.consistenciaRaw));
+        const pDiv = fabricaPercentil(mets.map((m) => m.diversificacaoRaw));
+        const pCres = fabricaPercentil(mets.map((m) => m.crescimentoPct));
+        const pAbr = fabricaPercentil(mets.map((m) => m.abrangenciaRaw));
+
+        const W = { volume: 0.30, consistencia: 0.20, crescimento: 0.20, diversificacao: 0.15, abrangencia: 0.15 };
+        const comScore = mets.map((m) => {
+          const c = {
+            volume: pVol(m.volume),
+            consistencia: pCons(m.consistenciaRaw),
+            diversificacao: pDiv(m.diversificacaoRaw),
+            crescimento: pCres(m.crescimentoPct),
+            abrangencia: pAbr(m.abrangenciaRaw),
+          };
+          const score =
+            c.volume * W.volume + c.consistencia * W.consistencia + c.crescimento * W.crescimento +
+            c.diversificacao * W.diversificacao + c.abrangencia * W.abrangencia;
+          return { m, componentes: c, score: Math.round(score) };
+        });
+        comScore.sort((a, b) => b.score - a.score);
+
+        const ranking = comScore.map((cs, i) => ({
+          pos: i + 1, corretor: cs.m.corretor, score: cs.score, volume: cs.m.volume,
+        }));
+
+        // corretor selecionado (param) ou o top do ranking
+        const escolhido = comScore.find((cs) => cs.m.corretor === selParam) || comScore[0] || null;
+
+        let selecionado: any = null;
+        if (escolhido) {
+          const nome = escolhido.m.corretor;
+          // quebras do corretor (mix produto / bancos / convênios) + órgãos (nome) + estados
+          const [mixR, bancosR, convR, orgaosR, estadosR] = await Promise.all([
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT produto AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC`),
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT banco AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT convenio AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`
+              WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT COALESCE(no.nome, NULLIF(btrim(cp.orgaodesc),''), NULLIF(btrim(cp.orgaocod),''), 'Não informado') AS chave,
+                     SUM(p.valor) AS valor
+              FROM p
+              LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+              LEFT JOIN LATERAL (
+                SELECT n.nome FROM nomenclaturas n
+                WHERE n.ativo = true AND n.categoria IN ('ORGAO','RUBRICA')
+                  AND regexp_replace(COALESCE(n.codigo,''),'^0+','') = regexp_replace(COALESCE(${orgaoCodeExpr},''),'^0+','')
+                ORDER BY (n.categoria='ORGAO') DESC, n.id LIMIT 1
+              ) no ON true
+              WHERE p.corretor = ${nome}
+              GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`
+              WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT COALESCE(NULLIF(btrim(cp.uf),''),'Não informado') AS chave, SUM(p.valor) AS valor
+              FROM p LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+              WHERE p.corretor = ${nome}
+              GROUP BY 1 ORDER BY valor DESC LIMIT 10`),
+          ]);
+          const rows2arr = (r: any) => r.rows.map((x: any) => ({ chave: x.chave, valor: Number(x.valor) || 0 }));
+
+          const c = escolhido.componentes;
+          const LBL: Record<string, string> = {
+            volume: "Volume", consistencia: "Consistência", diversificacao: "Diversificação",
+            crescimento: "Crescimento", abrangencia: "Abrangência (público)",
+          };
+          const fortes = Object.entries(c).filter(([, v]) => v >= 70).map(([k]) => LBL[k]);
+          const fracos = Object.entries(c).filter(([, v]) => v <= 30).map(([k]) => LBL[k]);
+
+          selecionado = {
+            corretor: nome,
+            score: escolhido.score,
+            rankingPos: ranking.find((r) => r.corretor === nome)?.pos || null,
+            totalCorretores: mets.length,
+            volume: escolhido.m.volume,
+            qtd: escolhido.m.qtd,
+            ticket: escolhido.m.qtd ? escolhido.m.volume / escolhido.m.qtd : 0,
+            componentes: c,
+            raw: {
+              mesesAtivos: escolhido.m.mesesAtivos, totalMeses,
+              nProd: escolhido.m.nProd, nBanco: escolhido.m.nBanco, nConv: escolhido.m.nConv,
+              nOrgao: escolhido.m.nOrgao, nUf: escolhido.m.nUf,
+              crescimentoPct: escolhido.m.crescimentoPct, volumeAnterior: escolhido.m.volumeAnterior,
+            },
+            mix: rows2arr(mixR), bancos: rows2arr(bancosR), convenios: rows2arr(convR),
+            orgaos: rows2arr(orgaosR), estados: rows2arr(estadosR),
+            fortes, fracos,
+          };
+        }
+
+        return res.json({
+          periodo: { inicio: inicioStr, fim: fimStr },
+          pesos: W,
+          ranking,
+          selecionado,
+        });
+      } catch (e: any) {
+        console.error("dashboard dna error:", e?.message || e);
+        return res.status(500).json({ message: "Erro ao carregar DNA do corretor" });
+      }
+    },
+  );
 }
