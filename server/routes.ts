@@ -22246,6 +22246,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND mes_referencia = ${mesRef}
           AND confirmado = true
           AND comissao_repasse_valor > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM proposals pa
+            WHERE pa.tenant_id = producoes_contratos.tenant_id
+              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+          )
         GROUP BY TO_DATE(data_pagamento, 'DD/MM/YYYY')
         ORDER BY dia ASC
       `);
@@ -22283,6 +22289,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND mes_referencia = ${mesRef}
           AND confirmado = true
           AND comissao_repasse_valor > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM proposals pa
+            WHERE pa.tenant_id = producoes_contratos.tenant_id
+              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+          )
       `);
 
       const vendTotaisResult = await db.execute(sql`
@@ -22410,9 +22422,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allVendedoresRanking = await db.execute(sql`
         SELECT u.id as user_id,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND pa.unificada_em_id IS NOT NULL AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()}), 0)::numeric as prod_geral,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND pa.unificada_em_id IS NOT NULL AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
@@ -22565,6 +22577,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND mes_referencia = ${mesRef}
             AND confirmado = true
             AND comissao_repasse_valor > 0
+            AND NOT EXISTS (
+              SELECT 1 FROM proposals pa
+              WHERE pa.tenant_id = producoes_contratos.tenant_id
+                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+            )
         `);
 
         const vendResult = await db.execute(sql`
@@ -22757,6 +22775,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND mes_referencia = ${mesRef}
             AND confirmado = true
             AND comissao_repasse_valor > 0
+            AND NOT EXISTS (
+              SELECT 1 FROM proposals pa
+              WHERE pa.tenant_id = producoes_contratos.tenant_id
+                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+            )
         `);
 
         const vendResult = await db.execute(sql`
@@ -22998,6 +23022,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND pt_1000 > 0
             AND created_at >= ${dateFrom.toISOString()}
             AND created_at <= ${dateTo.toISOString()}
+            AND NOT EXISTS (
+              SELECT 1 FROM proposals pa
+              WHERE pa.tenant_id = producoes_contratos.tenant_id
+                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+            )
         `);
 
         const vendResult = await db.execute(sql`
@@ -23113,6 +23143,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND mes_referencia = ${mesRef}
           AND confirmado = true
           AND pt_1000 > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM proposals pa
+            WHERE pa.tenant_id = producoes_contratos.tenant_id
+              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+          )
       `);
 
         // Sum points from producoes_contratos for level calculation
@@ -23125,6 +23161,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND tenant_id = ${tenantId}
           AND mes_referencia = ${mesRef}
           AND confirmado = true
+          AND NOT EXISTS (
+            SELECT 1 FROM proposals pa
+            WHERE pa.tenant_id = producoes_contratos.tenant_id
+              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+          )
       `);
 
         const produzidoGeral =
@@ -23358,6 +23400,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         eq(producoesContratos.tenantId, tenantId),
         // Contratos com comissão zerada não são produção efetiva — empresa não ganhou
         sql`${producoesContratos.comissaoRepasseValor}::numeric > 0`,
+        // Exclui contratos de propostas UNIFICADAS em outra (não somam produção)
+        sql`NOT EXISTS (
+          SELECT 1 FROM proposals pa
+          WHERE pa.tenant_id = ${producoesContratos.tenantId}
+            AND pa.unificada_em_id IS NOT NULL
+            AND (pa.id = ${producoesContratos.proposalId} OR pa.ade = ${producoesContratos.contratoId})
+        )`,
       ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
@@ -24596,6 +24645,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at >= ${semana}::date
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
+          AND p.unificada_em_id IS NULL
           AND p.id NOT IN (
             SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
             FROM proposal_history ph
@@ -24616,6 +24666,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at >= ${semana}::date
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
+          AND p.unificada_em_id IS NULL
           AND p.id NOT IN (
             SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
             FROM proposal_history ph
@@ -26494,6 +26545,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND mes_referencia = ${mesRef}
             AND confirmado = true
             AND pt_1000 > 0
+            AND NOT EXISTS (
+              SELECT 1 FROM proposals pa
+              WHERE pa.tenant_id = producoes_contratos.tenant_id
+                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
+            )
         `);
 
         const vendResult = await db.execute(sql`
