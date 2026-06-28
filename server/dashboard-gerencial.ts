@@ -649,10 +649,13 @@ export function registerDashboardGerencialRoutes(
         const filtrosOf = buildFiltrosOficialSql(req.query, "pc.");
 
         // base: produção confirmada (financeiro, inclui importados) JOIN cadastro
+        // + nomenclaturas (categoria ORGAO) pra traduzir o código do órgão em nome.
         const baseProd = sql`
           FROM producoes_contratos pc
           LEFT JOIN clientes_pessoa cp
             ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
+          LEFT JOIN nomenclaturas no
+            ON no.categoria = 'ORGAO' AND no.codigo = cp.orgaocod
           WHERE pc.tenant_id = ${tenantId} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0
             AND pc.mes_referencia IN (${inVals(meses)}) ${filtrosOf}
         `;
@@ -679,13 +682,12 @@ export function registerDashboardGerencialRoutes(
           WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 70 THEN '60-69'
           ELSE '70+' END`;
 
-        const [convenio, uf, faixaEtaria, orgao, sitFunc, bancoRecebimento, totalR] =
+        const [convenio, uf, faixaEtaria, orgao, bancoRecebimento, totalR] =
           await Promise.all([
             porDim(sql`pc.convenio`),
             porDim(sql`cp.uf`),
             porDim(faixaExpr),
-            porDim(sql`cp.orgaodesc`),
-            porDim(sql`cp.sit_func`),
+            porDim(sql`COALESCE(no.nome, NULLIF(cp.orgaodesc,''), cp.orgaocod)`),
             porDim(sql`cp.banco_nome`),
             db.execute(sql`SELECT COALESCE(SUM(pc.valor_base),0) AS valor, COUNT(DISTINCT pc.cpf_cliente) AS clientes ${baseProd}`),
           ]);
@@ -693,7 +695,7 @@ export function registerDashboardGerencialRoutes(
 
         return res.json({
           total: { valor: Number(tt.valor) || 0, clientes: Number(tt.clientes) || 0 },
-          convenio, uf, faixaEtaria, orgao, sitFunc, bancoRecebimento,
+          convenio, uf, faixaEtaria, orgao, bancoRecebimento,
         });
       } catch (e: any) {
         console.error("dashboard perfil error:", e);

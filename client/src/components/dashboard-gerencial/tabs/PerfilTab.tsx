@@ -98,12 +98,9 @@ export default function PerfilTab() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Convênios (R$)" dados={data.convenio} tipo="pie" />
-            <Grafico titulo="Situação funcional (R$)" dados={data.sitFunc} tipo="pie" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Órgãos mais atendidos (R$)" dados={data.orgao} />
-            <Grafico titulo="Banco de recebimento (R$)" dados={data.bancoRecebimento} />
           </div>
+          <Grafico titulo="Banco de recebimento (R$)" dados={data.bancoRecebimento} />
         </>
       )}
     </div>

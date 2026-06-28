@@ -89,7 +89,6 @@ export interface PerfilResp {
   uf: PerfilDimItem[];
   faixaEtaria: PerfilDimItem[];
   orgao: PerfilDimItem[];
-  sitFunc: PerfilDimItem[];
   bancoRecebimento: PerfilDimItem[];
 }
 
