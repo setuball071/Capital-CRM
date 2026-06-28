@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDashboardFilters } from "../useDashboardFilters";
 import { DashboardFilters } from "../DashboardFilters";
@@ -13,65 +11,6 @@ import type { PerfilResp, DashOpcoes, PerfilDimItem } from "../types";
 
 const CORES = ["#7C3AED", "#EC4899", "#2563EB", "#059669", "#D97706", "#DC2626", "#0891B2", "#9333EA", "#65A30D", "#E11D48", "#0D9488", "#7E22CE"];
 const ORDEM_FAIXA = ["Até 29", "30-39", "40-49", "50-59", "60-69", "70+", "Sem data"];
-
-// roxo claro (#ede9fe) -> roxo escuro (#4c1d95) conforme a força de venda
-function corRoxo(v: number, max: number) {
-  if (!v || !max) return "#f3f4f6";
-  const t = Math.min(1, v / max);
-  const a = [237, 233, 254];
-  const b = [76, 29, 149];
-  const c = a.map((x, i) => Math.round(x + (b[i] - x) * t));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
-function BrasilMapa({ dados }: { dados: PerfilDimItem[] }) {
-  const mapa: Record<string, number> = {};
-  dados.forEach((d) => { mapa[String(d.chave).toUpperCase()] = d.valor; });
-  const max = Math.max(0, ...dados.map((d) => d.valor));
-  const [hover, setHover] = useState<{ uf: string; val: number } | null>(null);
-  return (
-    <Card data-testid="perfil-mapa">
-      <CardHeader className="pb-1"><CardTitle className="text-sm">Estados — produção (R$)</CardTitle></CardHeader>
-      <CardContent>
-        <div className="relative">
-          <ComposableMap
-            projection="geoMercator"
-            projectionConfig={{ scale: 720, center: [-54, -15] }}
-            width={460}
-            height={460}
-            style={{ width: "100%", height: "auto" }}
-          >
-            <Geographies geography="/br-uf.json">
-              {({ geographies }: any) =>
-                geographies.map((geo: any) => {
-                  const uf = String(geo.properties?.sigla || "").toUpperCase();
-                  const val = mapa[uf] || 0;
-                  return (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill={corRoxo(val, max)}
-                      stroke="#ffffff"
-                      strokeWidth={0.6}
-                      onMouseEnter={() => setHover({ uf, val })}
-                      onMouseLeave={() => setHover(null)}
-                      style={{ default: { outline: "none" }, hover: { outline: "none", opacity: 0.85, cursor: "pointer" }, pressed: { outline: "none" } }}
-                    />
-                  );
-                })
-              }
-            </Geographies>
-          </ComposableMap>
-          {hover && (
-            <div className="absolute top-2 right-2 bg-white border rounded px-2 py-1 text-xs shadow">
-              <strong>{hover.uf}</strong>: {fmtMoeda(hover.val)}
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function Grafico({ titulo, dados, tipo = "bar" }: { titulo: string; dados: PerfilDimItem[]; tipo?: "bar" | "pie" }) {
   return (
@@ -155,7 +94,7 @@ export default function PerfilTab() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Faixa etária (R$)" dados={faixaOrdenada} />
-            <BrasilMapa dados={data.uf} />
+            <Grafico titulo="Estados (R$)" dados={data.uf} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Convênios (R$)" dados={data.convenio} tipo="pie" />

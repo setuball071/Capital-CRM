@@ -654,8 +654,20 @@ export function registerDashboardGerencialRoutes(
           FROM producoes_contratos pc
           LEFT JOIN clientes_pessoa cp
             ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
-          LEFT JOIN nomenclaturas no
-            ON no.categoria = 'ORGAO' AND no.codigo = cp.orgaocod
+          LEFT JOIN LATERAL (
+            SELECT n.nome FROM nomenclaturas n
+            WHERE n.categoria = 'ORGAO' AND n.ativo = true
+              AND (
+                regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')
+                OR (
+                  regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                  AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
+                      = regexp_replace(substring(regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                )
+              )
+            ORDER BY (regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')) DESC, n.id
+            LIMIT 1
+          ) no ON true
           WHERE pc.tenant_id = ${tenantId} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0
             AND pc.mes_referencia IN (${inVals(meses)}) ${filtrosOf}
         `;
