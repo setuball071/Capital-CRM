@@ -23417,7 +23417,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
-      if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
+      if (corretor) conditions.push(sql`UPPER(${producoesContratos.nomeCorretor}) = UPPER(${corretor as string})`);
 
       const contratos = await db
         .select()
@@ -23470,7 +23470,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const meses = [...new Set(todos.map(c => c.mesReferencia).filter(Boolean))].sort().reverse();
       const bancos = [...new Set(todos.map(c => c.banco).filter(Boolean))].sort();
-      const corretores = [...new Set(todos.map(c => c.nomeCorretor).filter(Boolean))].sort();
+      const corretores = [...new Map(todos.map(c => c.nomeCorretor).filter(Boolean).map(n => [n!.toUpperCase(), n!.toUpperCase()])).values()].sort();
 
       return res.json({
         contratos: contratosComParceiro,
@@ -24009,7 +24009,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             tipoContrato,
             convenio: String(row.Convenio || "").trim(),
             prazo: String(row.Prazo || "").trim(),
-            nomeCorretor: String(row.NomeCorretor || "").trim(),
+            nomeCorretor: String(row.NomeCorretor || "").trim().toUpperCase(),
             codigoCorretor: String(row.CodigoCorretor || "").trim(),
             grupoVendedor: String(row.NomeGrupoVendedor || "").trim(),
             filial: String(row.Filial || "").trim(),

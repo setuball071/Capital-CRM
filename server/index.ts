@@ -418,6 +418,19 @@ app.use((req, res, next) => {
           console.error("Contratos migration error (non-fatal):", migErr);
         }
 
+        // Normaliza nomeCorretor para UPPER (elimina duplicatas de caixa)
+        try {
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos
+            SET nome_corretor = UPPER(TRIM(nome_corretor))
+            WHERE nome_corretor IS NOT NULL
+              AND nome_corretor <> UPPER(TRIM(nome_corretor))
+          `);
+          log("nomeCorretor normalization OK");
+        } catch (migErr) {
+          console.error("nomeCorretor normalization error (non-fatal):", migErr);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");
