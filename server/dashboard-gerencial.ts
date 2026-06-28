@@ -34,14 +34,15 @@ function buildFiltrosSql(q: any) {
 
 // Filtros da PRODUÇÃO OFICIAL (producoes_contratos / vendedor_contratos — mesmas
 // colunas banco/convenio/vendedor_id, sem alias). Produto/parceiro não se aplicam.
-function buildFiltrosOficialSql(q: any) {
+function buildFiltrosOficialSql(q: any, prefix = "") {
+  const px = prefix ? sql.raw(prefix) : sql``;
   const frags: any[] = [];
   const banco = parseList(q.banco);
   const convenio = parseList(q.convenio);
   const corretor = parseList(q.corretor).map((n) => parseInt(n)).filter((n) => !isNaN(n));
-  if (banco.length) frags.push(sql`AND banco IN (${inVals(banco)})`);
-  if (convenio.length) frags.push(sql`AND convenio IN (${inVals(convenio)})`);
-  if (corretor.length) frags.push(sql`AND vendedor_id IN (${inVals(corretor)})`);
+  if (banco.length) frags.push(sql`AND ${px}banco IN (${inVals(banco)})`);
+  if (convenio.length) frags.push(sql`AND ${px}convenio IN (${inVals(convenio)})`);
+  if (corretor.length) frags.push(sql`AND ${px}vendedor_id IN (${inVals(corretor)})`);
   return frags.length ? sql.join(frags, sql` `) : sql``;
 }
 
@@ -625,6 +626,78 @@ export function registerDashboardGerencialRoutes(
       } catch (e: any) {
         console.error("dashboard portabilidades error:", e);
         return res.status(500).json({ message: "Erro ao carregar portabilidades" });
+      }
+    },
+  );
+
+  // ── Aba 4 (Perfil dos Clientes): produção (financeiro, inclui importados) por
+  //    demografia do cliente (clientes_pessoa por CPF). ─────────────────────────
+  app.get(
+    "/api/gestao-comercial/dashboard/perfil",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const filtrosOf = buildFiltrosOficialSql(req.query, "pc.");
+
+        // base: produção confirmada (financeiro, inclui importados) JOIN cadastro
+        const baseProd = sql`
+          FROM producoes_contratos pc
+          LEFT JOIN clientes_pessoa cp
+            ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
+          WHERE pc.tenant_id = ${tenantId} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0
+            AND pc.mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+        `;
+
+        const porDim = async (colExpr: any) => {
+          const r = await db.execute(sql`
+            SELECT COALESCE(NULLIF(${colExpr}::text, ''), 'Não informado') AS chave,
+                   COALESCE(SUM(pc.valor_base), 0) AS valor,
+                   COUNT(DISTINCT pc.cpf_cliente) AS clientes
+            ${baseProd}
+            GROUP BY 1 ORDER BY valor DESC LIMIT 15
+          `);
+          return r.rows.map((x: any) => ({
+            chave: x.chave, valor: Number(x.valor) || 0, clientes: Number(x.clientes) || 0,
+          }));
+        };
+
+        const faixaExpr = sql`CASE
+          WHEN cp.data_nascimento IS NULL THEN 'Sem data'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 30 THEN 'Até 29'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 40 THEN '30-39'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 50 THEN '40-49'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 60 THEN '50-59'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 70 THEN '60-69'
+          ELSE '70+' END`;
+
+        const [convenio, uf, faixaEtaria, orgao, sitFunc, bancoRecebimento, totalR] =
+          await Promise.all([
+            porDim(sql`pc.convenio`),
+            porDim(sql`cp.uf`),
+            porDim(faixaExpr),
+            porDim(sql`cp.orgaodesc`),
+            porDim(sql`cp.sit_func`),
+            porDim(sql`cp.banco_nome`),
+            db.execute(sql`SELECT COALESCE(SUM(pc.valor_base),0) AS valor, COUNT(DISTINCT pc.cpf_cliente) AS clientes ${baseProd}`),
+          ]);
+        const tt: any = totalR.rows[0] || {};
+
+        return res.json({
+          total: { valor: Number(tt.valor) || 0, clientes: Number(tt.clientes) || 0 },
+          convenio, uf, faixaEtaria, orgao, sitFunc, bancoRecebimento,
+        });
+      } catch (e: any) {
+        console.error("dashboard perfil error:", e);
+        return res.status(500).json({ message: "Erro ao carregar perfil" });
       }
     },
   );

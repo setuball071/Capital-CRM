@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import VisaoGeralTab from "@/components/dashboard-gerencial/tabs/VisaoGeralTab";
 import PerformanceTab from "@/components/dashboard-gerencial/tabs/PerformanceTab";
 import PortabilidadesTab from "@/components/dashboard-gerencial/tabs/PortabilidadesTab";
+import PerfilTab from "@/components/dashboard-gerencial/tabs/PerfilTab";
 
 function EmBreve({ nome }: { nome: string }) {
   return (
@@ -36,7 +37,7 @@ export default function GestaoComercialDashboardPage() {
         </TabsContent>
         <TabsContent value="performance" className="mt-4"><PerformanceTab /></TabsContent>
         <TabsContent value="portabilidades" className="mt-4"><PortabilidadesTab /></TabsContent>
-        <TabsContent value="perfil" className="mt-4"><EmBreve nome="Perfil dos Clientes" /></TabsContent>
+        <TabsContent value="perfil" className="mt-4"><PerfilTab /></TabsContent>
         <TabsContent value="operacional" className="mt-4"><EmBreve nome="Gestão Operacional" /></TabsContent>
         <TabsContent value="inteligencia" className="mt-4"><EmBreve nome="Inteligência Comercial" /></TabsContent>
         <TabsContent value="dna" className="mt-4"><EmBreve nome="DNA do Corretor" /></TabsContent>

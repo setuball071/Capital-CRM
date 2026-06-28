@@ -77,6 +77,22 @@ export interface DashOpcoes {
 export type DrillMetrica = "pago" | "cadastro";
 export type DrillDim = "produto" | "banco" | "convenio";
 
+export interface PerfilDimItem {
+  chave: string;
+  valor: number;
+  clientes: number;
+}
+
+export interface PerfilResp {
+  total: { valor: number; clientes: number };
+  convenio: PerfilDimItem[];
+  uf: PerfilDimItem[];
+  faixaEtaria: PerfilDimItem[];
+  orgao: PerfilDimItem[];
+  sitFunc: PerfilDimItem[];
+  bancoRecebimento: PerfilDimItem[];
+}
+
 export interface PerfDimItem {
   chave: string;
   cadQtd: number;
