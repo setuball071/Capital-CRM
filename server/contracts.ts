@@ -268,6 +268,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           createdAt: proposals.createdAt,
           updatedAt: proposals.updatedAt,
           paidAt: proposals.paidAt,
+          unificadaEmId: proposals.unificadaEmId,
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))

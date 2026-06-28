@@ -341,6 +341,12 @@ app.use((req, res, next) => {
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);
           await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS unificada_em_id INTEGER
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS valor_pre_unificacao DECIMAL(12,2)
+          `);
+          await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS metas_digitacao_semanal (
               id                SERIAL PRIMARY KEY,
               tenant_id         INTEGER NOT NULL,
