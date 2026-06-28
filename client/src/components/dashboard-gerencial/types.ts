@@ -148,6 +148,40 @@ export interface PortOrigemItem {
   valorAndamento: number;
 }
 
+export interface CrescItem {
+  chave: string;
+  atual: number;
+  anterior: number;
+  delta: number;
+  deltaPct: number;
+}
+
+export interface ConcItem {
+  topNome: string;
+  topValor: number;
+  total: number;
+  n: number;
+  pct: number;
+  top5pct: number;
+}
+
+export interface InteligenciaResp {
+  periodo: { inicio: string; fim: string };
+  totais: { atual: number; anterior: number; variacaoPct: number };
+  projecao: {
+    mes: string;
+    realizado: number;
+    projetado: number;
+    mesAnterior: number;
+    diasUteisDecorridos: number;
+    diasUteisMes: number;
+    variacaoVsAnteriorPct: number;
+  };
+  crescimento: { corretor: CrescItem[]; banco: CrescItem[]; produto: CrescItem[] };
+  concentracao: { corretor: ConcItem; banco: ConcItem; convenio: ConcItem };
+  insights: string[];
+}
+
 export interface PortabilidadesResp {
   producao: { valor: number; qtd: number }; // oficial (financeiro, inclui importados)
   bancoProducao: PortBancoItem[];

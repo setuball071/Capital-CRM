@@ -1,6 +1,19 @@
 import type { Express, RequestHandler, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
+import { openai } from "./openaiClient";
+
+// dias úteis (seg-sex) entre duas datas, inclusive
+function diasUteis(start: Date, end: Date): number {
+  let n = 0;
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (d <= end) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) n++;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
 
 // "a,b,c" -> ["a","b","c"] (trim, sem vazios)
 function parseList(v: any): string[] {
@@ -758,6 +771,259 @@ export function registerDashboardGerencialRoutes(
       } catch (e: any) {
         console.error("dashboard opcoes error:", e);
         return res.status(500).json({ message: "Erro ao carregar opções" });
+      }
+    },
+  );
+
+  // ── Aba 6 (Inteligência Comercial): projeção, crescimento, concentração e
+  //    insights automáticos — SEMPRE sobre a produção oficial (financeiro +
+  //    vendedor_contratos, inclui importados; bate com o ranking). ────────────
+  app.get(
+    "/api/gestao-comercial/dashboard/inteligencia",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+
+        // período anterior equivalente (mesmo tamanho, imediatamente antes)
+        const inicio = new Date(inicioStr + "T00:00:00");
+        const fim = new Date(fimStr + "T23:59:59");
+        const durMs = fim.getTime() - inicio.getTime();
+        const prevFim = new Date(inicio.getTime() - 1000);
+        const prevInicio = new Date(prevFim.getTime() - durMs);
+        const prevInicioStr = prevInicio.toISOString().slice(0, 10);
+        const prevFimStr = prevFim.toISOString().slice(0, 10);
+
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const mesesPrev = mesesNoPeriodo(prevInicioStr, prevFimStr);
+        if (!mesesPrev.length) mesesPrev.push("0000-00");
+
+        // soma da produção oficial (producoes por mês + vendedor por data)
+        const sumProducao = async (ms: string[], ini: string, f: string) => {
+          const [a, b] = await Promise.all([
+            db.execute(sql`SELECT COALESCE(SUM(valor_base),0) AS v FROM producoes_contratos
+              WHERE tenant_id=${tenantId} AND confirmado=true AND comissao_repasse_valor>0
+                AND mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query)}`),
+            db.execute(sql`SELECT COALESCE(SUM(valor_contrato),0) AS v FROM vendedor_contratos
+              WHERE tenant_id=${tenantId} AND data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query)}`),
+          ]);
+          return (Number(a.rows[0]?.v) || 0) + (Number(b.rows[0]?.v) || 0);
+        };
+
+        // agregação por dimensão (corretor/banco/convenio/produto) -> Map chave->valor
+        const aggByDim = async (
+          dim: "corretor" | "banco" | "convenio" | "produto",
+          ms: string[], ini: string, f: string,
+        ) => {
+          let prodKey: any, vendKey: any, vendJoin: any = sql``;
+          if (dim === "corretor") {
+            prodKey = sql`COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text)`;
+            vendKey = sql`COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text)`;
+            vendJoin = sql`LEFT JOIN users u ON u.id = vc.vendedor_id`;
+          } else if (dim === "banco") {
+            prodKey = sql`pc.banco`; vendKey = sql`vc.banco`;
+          } else if (dim === "convenio") {
+            prodKey = sql`pc.convenio`; vendKey = sql`vc.convenio`;
+          } else {
+            prodKey = sql`CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END`;
+            vendKey = sql`CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END`;
+          }
+          const r = await db.execute(sql`
+            WITH un AS (
+              SELECT ${prodKey} AS chave, COALESCE(pc.valor_base,0) AS valor
+              FROM producoes_contratos pc
+              WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+                AND pc.mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query, "pc.")}
+              UNION ALL
+              SELECT ${vendKey} AS chave, COALESCE(vc.valor_contrato,0) AS valor
+              FROM vendedor_contratos vc
+              ${vendJoin}
+              WHERE vc.tenant_id=${tenantId}
+                AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+            )
+            SELECT COALESCE(NULLIF(btrim(chave),''),'Não informado') AS chave, SUM(valor) AS valor
+            FROM un GROUP BY 1
+          `);
+          const m = new Map<string, number>();
+          r.rows.forEach((x: any) => m.set(x.chave, Number(x.valor) || 0));
+          return m;
+        };
+
+        // crescimento por dimensão: atual x anterior
+        const crescimentoDim = async (dim: "corretor" | "banco" | "produto") => {
+          const [atual, ant] = await Promise.all([
+            aggByDim(dim, meses, inicioStr, fimStr),
+            aggByDim(dim, mesesPrev, prevInicioStr, prevFimStr),
+          ]);
+          const chaves = new Set<string>([...atual.keys(), ...ant.keys()]);
+          const itens = Array.from(chaves).map((chave) => {
+            const a = atual.get(chave) || 0;
+            const b = ant.get(chave) || 0;
+            return { chave, atual: a, anterior: b, delta: a - b, deltaPct: b > 0 ? (a - b) / b : (a > 0 ? 1 : 0) };
+          }).filter((x) => x.atual > 0 || x.anterior > 0);
+          itens.sort((x, y) => y.delta - x.delta);
+          return itens.slice(0, 40);
+        };
+
+        // concentração: quanto do total está no top 1 / top 5 da dimensão
+        const concentracaoDim = (m: Map<string, number>) => {
+          const arr = Array.from(m.entries()).map(([chave, valor]) => ({ chave, valor })).sort((a, b) => b.valor - a.valor);
+          const total = arr.reduce((s, x) => s + x.valor, 0);
+          const top = arr[0] || { chave: "—", valor: 0 };
+          const top5 = arr.slice(0, 5).reduce((s, x) => s + x.valor, 0);
+          return {
+            topNome: top.chave, topValor: top.valor, total, n: arr.length,
+            pct: total > 0 ? top.valor / total : 0,
+            top5pct: total > 0 ? top5 / total : 0,
+          };
+        };
+
+        // projeção do mês corrente (run-rate por dias úteis), respeita filtros de dimensão
+        const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+        const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+        const mesAntDate = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        const mesAntStr = `${mesAntDate.getFullYear()}-${String(mesAntDate.getMonth() + 1).padStart(2, "0")}`;
+        const ultimoDiaMesAnt = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+        const fmtD = (d: Date) => d.toISOString().slice(0, 10);
+
+        const [
+          totalAtual, totalAnterior,
+          crescCorretor, crescBanco, crescProduto,
+          mapCorretor, mapBanco, mapConvenio,
+          realizadoMes, mesAnteriorTotal,
+        ] = await Promise.all([
+          sumProducao(meses, inicioStr, fimStr),
+          sumProducao(mesesPrev, prevInicioStr, prevFimStr),
+          crescimentoDim("corretor"),
+          crescimentoDim("banco"),
+          crescimentoDim("produto"),
+          aggByDim("corretor", meses, inicioStr, fimStr),
+          aggByDim("banco", meses, inicioStr, fimStr),
+          aggByDim("convenio", meses, inicioStr, fimStr),
+          sumProducao([mesAtualStr], fmtD(primeiroDiaMes), fmtD(hoje)),
+          sumProducao([mesAntStr], fmtD(mesAntDate), fmtD(ultimoDiaMesAnt)),
+        ]);
+
+        const duDecorridos = diasUteis(primeiroDiaMes, hoje);
+        const duMes = diasUteis(primeiroDiaMes, ultimoDiaMes);
+        const projetado = duDecorridos > 0 ? (realizadoMes / duDecorridos) * duMes : realizadoMes;
+
+        const concCorretor = concentracaoDim(mapCorretor);
+        const concBanco = concentracaoDim(mapBanco);
+        const concConvenio = concentracaoDim(mapConvenio);
+
+        // ── insights automáticos (regras determinísticas) ──────────────────
+        const fmt = (v: number) =>
+          "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+        const insights: string[] = [];
+        const varTotal = totalAnterior > 0 ? (totalAtual - totalAnterior) / totalAnterior : (totalAtual > 0 ? 1 : 0);
+        insights.push(
+          `Produção de ${fmt(totalAtual)} no período — ${varTotal >= 0 ? "alta" : "queda"} de ${pct(Math.abs(varTotal))} vs o período anterior (${fmt(totalAnterior)}).`,
+        );
+        const topUp = crescCorretor.find((x) => x.delta > 0);
+        if (topUp) insights.push(`Maior crescimento: ${topUp.chave} (+${fmt(topUp.delta)}, ${pct(topUp.deltaPct)}).`);
+        const topDown = [...crescCorretor].reverse().find((x) => x.delta < 0);
+        if (topDown) insights.push(`Maior queda: ${topDown.chave} (${fmt(topDown.delta)}, ${pct(topDown.deltaPct)}).`);
+        const prodUp = crescProduto.find((x) => x.delta > 0);
+        if (prodUp) insights.push(`Produto em alta: ${prodUp.chave} (+${fmt(prodUp.delta)}).`);
+        const prodDown = [...crescProduto].reverse().find((x) => x.delta < 0);
+        if (prodDown) insights.push(`Produto em queda: ${prodDown.chave} (${fmt(prodDown.delta)}).`);
+        if (concCorretor.pct >= 0.4)
+          insights.push(`⚠️ Concentração: ${pct(concCorretor.pct)} da produção vem de ${concCorretor.topNome}. Avalie reduzir a dependência.`);
+        const bancoTop = concBanco;
+        if (bancoTop.pct >= 0.5)
+          insights.push(`⚠️ ${pct(bancoTop.pct)} da produção está no banco ${bancoTop.topNome}.`);
+        const varProj = mesAnteriorTotal > 0 ? (projetado - mesAnteriorTotal) / mesAnteriorTotal : 0;
+        insights.push(
+          `Projeção do mês (${mesAtualStr}): ${fmt(projetado)} — ${varProj >= 0 ? "+" : ""}${pct(varProj)} vs o mês anterior (${fmt(mesAnteriorTotal)}).`,
+        );
+
+        return res.json({
+          periodo: { inicio: inicioStr, fim: fimStr },
+          totais: { atual: totalAtual, anterior: totalAnterior, variacaoPct: varTotal },
+          projecao: {
+            mes: mesAtualStr,
+            realizado: realizadoMes,
+            projetado,
+            mesAnterior: mesAnteriorTotal,
+            diasUteisDecorridos: duDecorridos,
+            diasUteisMes: duMes,
+            variacaoVsAnteriorPct: varProj,
+          },
+          crescimento: { corretor: crescCorretor, banco: crescBanco, produto: crescProduto },
+          concentracao: { corretor: concCorretor, banco: concBanco, convenio: concConvenio },
+          insights,
+        });
+      } catch (e: any) {
+        console.error("dashboard inteligencia error:", e);
+        return res.status(500).json({ message: "Erro ao carregar inteligência comercial" });
+      }
+    },
+  );
+
+  // ── Análise por IA (sob demanda). Recebe o JSON já calculado do front e pede
+  //    ao LLM uma leitura executiva em PT-BR. Reusa o cliente OpenAI legado. ──
+  app.post(
+    "/api/gestao-comercial/dashboard/inteligencia/ia",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const dados = req.body?.dados;
+        if (!dados) return res.status(400).json({ message: "dados ausentes" });
+
+        const fmt = (v: number) =>
+          "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const topN = (arr: any[], n: number) =>
+          (arr || []).slice(0, n).map((x: any) => `${x.chave}: ${fmt(x.atual)} (antes ${fmt(x.anterior)}, Δ ${fmt(x.delta)})`).join("; ");
+
+        const resumo = [
+          `Período: ${dados.periodo?.inicio} a ${dados.periodo?.fim}.`,
+          `Produção total: ${fmt(dados.totais?.atual)} (anterior ${fmt(dados.totais?.anterior)}).`,
+          `Projeção do mês ${dados.projecao?.mes}: ${fmt(dados.projecao?.projetado)} (realizado até hoje ${fmt(dados.projecao?.realizado)}; mês anterior ${fmt(dados.projecao?.mesAnterior)}).`,
+          `Crescimento por corretor (topo→base): ${topN(dados.crescimento?.corretor, 8)}.`,
+          `Crescimento por banco: ${topN(dados.crescimento?.banco, 6)}.`,
+          `Crescimento por produto: ${topN(dados.crescimento?.produto, 6)}.`,
+          `Concentração — corretor: ${dados.concentracao?.corretor?.topNome} tem ${((dados.concentracao?.corretor?.pct || 0) * 100).toFixed(0)}% (top5 ${((dados.concentracao?.corretor?.top5pct || 0) * 100).toFixed(0)}%); banco: ${dados.concentracao?.banco?.topNome} ${((dados.concentracao?.banco?.pct || 0) * 100).toFixed(0)}%; convênio: ${dados.concentracao?.convenio?.topNome} ${((dados.concentracao?.convenio?.pct || 0) * 100).toFixed(0)}%.`,
+        ].join("\n");
+
+        const completion = await openai.chat.completions.create({
+          model: process.env.DASHBOARD_AI_MODEL || "gpt-4o-mini",
+          temperature: 0.4,
+          max_tokens: 700,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é um analista comercial sênior de uma empresa de crédito consignado (SIAPE/INSS). " +
+                "Receba os números agregados de produção e escreva uma análise executiva em português do Brasil, " +
+                "direta e acionável. Estruture em 3 seções curtas com marcadores: '📈 Destaques', '⚠️ Riscos/Atenção' e " +
+                "'✅ Recomendações'. Seja específico (cite nomes e valores), no máximo ~12 marcadores no total. " +
+                "Não invente dados além dos fornecidos. Não use tabelas.",
+            },
+            { role: "user", content: resumo },
+          ],
+        });
+        const analise = completion.choices?.[0]?.message?.content?.trim() || "Sem análise.";
+        return res.json({ analise });
+      } catch (e: any) {
+        console.error("dashboard inteligencia IA error:", e?.message || e);
+        return res.status(500).json({ message: "Falha ao gerar análise por IA. Verifique a OPENAI_API_KEY." });
       }
     },
   );
