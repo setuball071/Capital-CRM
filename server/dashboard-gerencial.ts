@@ -15,6 +15,48 @@ function diasUteis(start: Date, end: Date): number {
   return n;
 }
 
+// ── Motor de repasse ao consultor (espelha calcRepasseConsultorProd do
+//    financeiro-comissoes.html). repasse = valorEmpresa × pct/100, onde pct vem
+//    do override por contrato → grupo override → grupo do corretor (por nome) →
+//    fallback. Grupos/corretores vêm do financeiro_config (JSON). ─────────────
+function mapTipoFront(t: string): string {
+  const s = (t || "").toLowerCase();
+  if (s.includes("cart") || s.includes("benef") || s.includes("saque")) return "Cartão";
+  if (s.includes("port")) return "Portabilidade";
+  if (s.includes("compra") || s.includes("dívida") || s.includes("divida")) return "Compra de Dívida";
+  if (s.includes("refin")) return "Refinanciamento";
+  if (s.includes("novo") || s.includes("consig")) return "Novo";
+  return "Outro";
+}
+function getRepasseForTipo(grupo: any, tipo: string): number {
+  if (!grupo) return 0;
+  const rules: any[] = grupo.repasseRules || [];
+  let regra = rules.find((r) => r.tipo && r.tipo === tipo);
+  if (!regra) {
+    const tipoStd = mapTipoFront(tipo);
+    regra = rules.find((r) => r.tipo && r.tipo === tipoStd);
+  }
+  return regra != null ? Number(regra.repasse) : Number(grupo.repasse || 0);
+}
+function calcRepassePct(c: any, grupos: any[], corretores: any[]): number {
+  const grupoById = (id: any) => grupos.find((g) => g.id === id);
+  const ov = c.repassePercOverride;
+  if (ov !== null && ov !== undefined && ov !== "") {
+    const n = Number(ov);
+    if (!isNaN(n)) return n;
+  }
+  if (c.grupoIdOverride) {
+    const g = grupoById(c.grupoIdOverride);
+    if (g) return getRepasseForTipo(g, c.tipoContrato);
+  }
+  const nome = (c.vendedorNome || c.nomeCorretor || "").toLowerCase();
+  const cor = corretores.find((x) => (x.nome || "").toLowerCase() === nome);
+  if (!cor) return Number(c.comissaoRepassePerc || 0);
+  const g = grupoById(cor.grupoId);
+  if (!g) return Number(c.comissaoRepassePerc || 0);
+  return getRepasseForTipo(g, c.tipoContrato);
+}
+
 // "a,b,c" -> ["a","b","c"] (trim, sem vazios)
 function parseList(v: any): string[] {
   if (!v) return [];
@@ -1065,7 +1107,6 @@ export function registerDashboardGerencialRoutes(
           SELECT
             COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
             COALESCE(pc.valor_base,0) AS valor,
-            COALESCE(pc.comissao_repasse_valor,0) AS repasse,
             pc.mes_referencia AS mes,
             CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
               WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
@@ -1081,7 +1122,6 @@ export function registerDashboardGerencialRoutes(
           SELECT
             COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text) AS corretor,
             COALESCE(vc.valor_contrato,0) AS valor,
-            0 AS repasse,
             to_char(vc.data_contrato,'YYYY-MM') AS mes,
             CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
               WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
@@ -1098,13 +1138,11 @@ export function registerDashboardGerencialRoutes(
         // expressão do código de órgão (na base, o código pode estar em orgaodesc)
         const orgaoCodeExpr = sql`COALESCE(NULLIF(btrim(cp.orgaocod),''), NULLIF(btrim(cp.orgaodesc),''))`;
 
-        const [curR, prevR, abrR] = await Promise.all([
+        const [curR, prevR, abrR, cfgR, repR] = await Promise.all([
           db.execute(sql`
             WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
             SELECT corretor,
               SUM(valor) AS volume, COUNT(*) AS qtd,
-              SUM(repasse) AS repasse,
-              COUNT(*) FILTER (WHERE repasse > 0) AS qtd_repasse,
               COUNT(DISTINCT mes) AS meses_ativos,
               COUNT(DISTINCT produto) AS n_prod,
               COUNT(DISTINCT banco) AS n_banco,
@@ -1120,7 +1158,37 @@ export function registerDashboardGerencialRoutes(
               COUNT(DISTINCT NULLIF(btrim(cp.uf),'')) AS n_uf
             FROM p LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
             GROUP BY p.corretor`),
+          db.execute(sql`SELECT dados FROM financeiro_config WHERE tenant_id = ${String(tenantId)} LIMIT 1`),
+          db.execute(sql`
+            SELECT
+              COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
+              pc.vendedor_nome AS "vendedorNome",
+              pc.nome_corretor AS "nomeCorretor",
+              pc.tipo_contrato AS "tipoContrato",
+              CASE WHEN COALESCE(pc.comissao_empresa_valor,0) > 0 THEN pc.comissao_empresa_valor
+                   ELSE COALESCE(pc.comissao_repasse_valor,0) END AS emp_valor,
+              pc.repasse_perc_override AS "repassePercOverride",
+              pc.grupo_id_override AS "grupoIdOverride",
+              pc.comissao_repasse_perc AS "comissaoRepassePerc"
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+              AND pc.mes_referencia IN (${inVals(meses)}) ${buildFiltrosOficialSql(req.query, "pc.")}`),
         ]);
+
+        // repasse calculado por corretor (valorEmpresa × pct do grupo)
+        const cfg: any = (cfgR.rows[0] as any)?.dados || {};
+        const grupos: any[] = Array.isArray(cfg.grupos) ? cfg.grupos : [];
+        const corretoresCfg: any[] = Array.isArray(cfg.corretores) ? cfg.corretores : [];
+        const repasseMap = new Map<string, { repasse: number; qtd: number }>();
+        for (const row of repR.rows as any[]) {
+          const pct = calcRepassePct(row, grupos, corretoresCfg);
+          const emp = Number(row.emp_valor) || 0;
+          const vf = Math.round((emp * pct) / 100 * 100) / 100;
+          const cur = repasseMap.get(row.corretor) || { repasse: 0, qtd: 0 };
+          cur.repasse += vf;
+          if (vf > 0) cur.qtd += 1;
+          repasseMap.set(row.corretor, cur);
+        }
 
         const prevMap = new Map<string, number>();
         prevR.rows.forEach((x: any) => prevMap.set(x.corretor, Number(x.volume) || 0));
@@ -1139,9 +1207,10 @@ export function registerDashboardGerencialRoutes(
           const volumeAnterior = prevMap.get(corretor) || 0;
           const abr = abrMap.get(corretor) || { orgao: 0, uf: 0 };
           const crescimentoPct = volumeAnterior > 0 ? (volume - volumeAnterior) / volumeAnterior : (volume > 0 ? 1 : 0);
+          const rep = repasseMap.get(corretor) || { repasse: 0, qtd: 0 };
           return {
             corretor, volume, qtd: Number(x.qtd) || 0,
-            repasse: Number(x.repasse) || 0, qtdRepasse: Number(x.qtd_repasse) || 0,
+            repasse: rep.repasse, qtdRepasse: rep.qtd,
             mesesAtivos: Number(x.meses_ativos) || 0,
             nProd: Number(x.n_prod) || 0, nBanco: Number(x.n_banco) || 0, nConv: Number(x.n_conv) || 0,
             volumeAnterior, crescimentoPct,
