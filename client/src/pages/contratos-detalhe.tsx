@@ -317,6 +317,52 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao clonar", description: e.message, variant: "destructive" }),
   });
 
+  // ─── Unificação de parcelas (portabilidade) ─────────────────────────────────
+  const [showUnificar, setShowUnificar] = useState(false);
+  const [unifSelecionadas, setUnifSelecionadas] = useState<number[]>([]);
+  const [unifAdeRefin, setUnifAdeRefin] = useState("");
+  const isUnifGestor = !!(user?.isMaster || ["master", "operacional", "coordenacao"].includes(user?.role || ""));
+  const { data: todasPropostas = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/proposals"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/proposals", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: isUnifGestor,
+  });
+  const unificarMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/unificar`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ absorverIds: unifSelecionadas, adeRefin: unifAdeRefin || undefined }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Erro");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      invalidate(); setShowUnificar(false); setUnifSelecionadas([]); setUnifAdeRefin("");
+      toast({ title: "Parcelas unificadas" });
+    },
+    onError: (e: any) => toast({ title: "Falha ao unificar", description: e.message, variant: "destructive" }),
+  });
+  const desunificarMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/desunificar`, {
+        method: "POST", credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Erro");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+      invalidate(); toast({ title: "Unificação desfeita" });
+    },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
   // Transferir contrato para outro usuário
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferTo, setTransferTo] = useState("");
@@ -448,8 +494,18 @@ export default function ContratosDetalhePage() {
   // - master "Editar tudo" (item 3): libera qualquer campo em qualquer status
   // - corretor (item 2): edita os campos da digitação quando a proposta está numa
   //   pendência de corretor (returnStatusKey) ou status com allowsVendorEdit
-  const canEditFields = masterEditAll || (!isTerminal && (isOperacional || (isVendedor && (!!currentStatusDef?.allowsVendorEdit || !!currentStatusDef?.returnStatusKey))));
-  const canEditAde = masterEditAll || (!isTerminal && isOperacional); // ADE: só operacional/master/admin (item 2)
+  const canEditFields = !proposal.unificadaEmId && (masterEditAll || (!isTerminal && (isOperacional || (isVendedor && (!!currentStatusDef?.allowsVendorEdit || !!currentStatusDef?.returnStatusKey)))));
+  const canEditAde = !proposal.unificadaEmId && (masterEditAll || (!isTerminal && isOperacional)); // ADE: só operacional/master/admin (item 2)
+
+  // Unificação: parcelas do mesmo CPF disponíveis + filhas desta acumuladora
+  const cpfDigits = (proposal.clientCpf || "").replace(/\D/g, "");
+  const candidatasUnif = (todasPropostas as any[]).filter((p) =>
+    (p.clientCpf || "").replace(/\D/g, "") === cpfDigits &&
+    p.id !== proposal.id &&
+    !p.unificadaEmId &&
+    !["CANCELADA", "PERDIDA"].includes(p.status)
+  );
+  const filhasUnif = (todasPropostas as any[]).filter((p) => p.unificadaEmId === proposal.id);
 
   // dados bancários de crédito
   const cs = m.contaSelecionada || {};
@@ -598,6 +654,16 @@ export default function ContratosDetalhePage() {
               <Copy className="h-4 w-4" /> Clonar
             </Button>
           )}
+          {isUnifGestor && !proposal.unificadaEmId && filhasUnif.length === 0 && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setUnifSelecionadas([]); setUnifAdeRefin(proposal.adeRefin || ""); setShowUnificar(true); }} title="Unificar parcelas">
+              <Copy className="h-4 w-4" /> Unificar
+            </Button>
+          )}
+          {isUnifGestor && filhasUnif.length > 0 && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => desunificarMutation.mutate()} disabled={desunificarMutation.isPending} title="Desfazer unificação">
+              <X className="h-4 w-4" /> Desfazer unificação
+            </Button>
+          )}
           {isMasterUser && (
             <Button
               variant={masterEditAll ? "default" : "outline"}
@@ -616,6 +682,14 @@ export default function ContratosDetalhePage() {
           )}
         </div>
       </div>
+
+      {/* Banner: parcela absorvida numa unificação */}
+      {proposal.unificadaEmId && (
+        <div className="rounded-md border border-purple-200 bg-purple-50 dark:border-purple-900/40 dark:bg-purple-950/20 p-3 text-sm text-purple-700 dark:text-purple-300">
+          Esta parcela foi <strong>unificada na proposta #{proposal.unificadaEmId}</strong> e não conta na produção.{" "}
+          <button className="underline" onClick={() => setLocation(`/contratos/${proposal.unificadaEmId}`)}>Abrir a acumuladora</button>
+        </div>
+      )}
 
       {/* Pendência: banner de regularização (corretor, operacional e master) */}
       {(() => {
@@ -1089,6 +1163,61 @@ export default function ContratosDetalhePage() {
 
         </div>{/* fim coluna direita */}
       </div>{/* fim grid */}
+
+      {/* Parcelas unificadas (acumuladora) */}
+      {filhasUnif.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><Copy className="h-4 w-4" /> Parcelas unificadas ({filhasUnif.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {filhasUnif.map((f) => (
+              <div key={f.id} className="flex items-center justify-between text-sm border rounded-md p-2">
+                <button className="text-left hover:underline" onClick={() => setLocation(`/contratos/${f.id}`)}>
+                  #{f.id} · {f.bank || "—"} · {f.ade || "sem ADE"}
+                </button>
+                <span className="font-medium">{formatMoney(f.contractValue)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Diálogo: Unificar parcelas */}
+      <Dialog open={showUnificar} onOpenChange={setShowUnificar}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Unificar parcelas em #{proposal.id}</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Selecione as parcelas do mesmo cliente que serão absorvidas nesta. Elas deixam de contar na produção; o valor é somado aqui.
+          </p>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {candidatasUnif.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma outra parcela disponível para este CPF.</p>
+            ) : candidatasUnif.map((c) => {
+              const checked = unifSelecionadas.includes(c.id);
+              return (
+                <label key={c.id} className="flex items-center gap-2 text-sm border rounded-md p-2 cursor-pointer">
+                  <input type="checkbox" checked={checked} onChange={(e) =>
+                    setUnifSelecionadas((prev) => e.target.checked ? [...prev, c.id] : prev.filter((x) => x !== c.id))
+                  } />
+                  <span className="flex-1">#{c.id} · {c.bank || "—"} · {c.ade || "sem ADE"}</span>
+                  <span className="font-medium">{formatMoney(c.contractValue)}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">ADE de refin</p>
+            <Input value={unifAdeRefin} onChange={(e) => setUnifAdeRefin(e.target.value)} placeholder="Número do ADE de refinanciamento" />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowUnificar(false)}>Cancelar</Button>
+            <Button disabled={unifSelecionadas.length === 0 || unificarMutation.isPending} onClick={() => unificarMutation.mutate()}>
+              {unificarMutation.isPending ? "Unificando..." : "Unificar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo: Transferir contrato */}
       <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
