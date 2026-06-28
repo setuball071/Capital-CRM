@@ -3485,6 +3485,9 @@ export const proposals = pgTable("proposals", {
   commissionPaidAt: timestamp("commission_paid_at"),
   // Data em que a proposta virou PAGO (para "produção paga do mês")
   paidAt: timestamp("paid_at"),
+  // Unificação de parcelas (portabilidade): aponta para a acumuladora; valor original p/ desfazer
+  unificadaEmId: integer("unificada_em_id"),
+  valorPreUnificacao: decimal("valor_pre_unificacao", { precision: 12, scale: 2 }),
   // Dados extras por convênio (UF, órgão, ident SIAPE, conta salário, etc.)
   clientMeta: jsonb("client_meta"),
   vendorId: integer("vendor_id").references(() => users.id),
