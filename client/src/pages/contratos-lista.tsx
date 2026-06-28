@@ -816,6 +816,7 @@ export default function ContratosListaPage() {
     return !isNaN(d.getTime()) && d.getFullYear() === _now.getFullYear() && d.getMonth() === _now.getMonth();
   };
   function prodValueOf(p: any) {
+    if (p.unificadaEmId) return 0; // parcela absorvida numa unificação não soma produção
     if (CANCEL_STATUSES.includes(p.status)) return 0;
     const val = parseFloat(p.contractValue || "0") || 0;
     if (p.status === "PAGO") {
@@ -1227,6 +1228,9 @@ export default function ContratosListaPage() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
+                      {p.unificadaEmId && (
+                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
+                      )}
                       {p.isPaused && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Pend.</span>
                       )}
