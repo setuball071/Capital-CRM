@@ -175,6 +175,12 @@ export default function DnaTab() {
                     </CardContent>
                   </Card>
 
+                  {/* rentabilidade do corretor (repasse pago a ele) */}
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">Repasse no período</div><div className="text-xl font-semibold text-emerald-600">{fmtMoeda(sel.repasse)}</div><div className="text-[11px] text-muted-foreground mt-0.5">comissão paga a ele (produção financeira)</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">Média de ganho / contrato</div><div className="text-xl font-semibold text-emerald-600">{fmtMoeda(sel.mediaGanho)}</div><div className="text-[11px] text-muted-foreground mt-0.5">repasse ÷ contratos remunerados</div></CardContent></Card>
+                  </div>
+
                   {/* contexto numérico do DNA */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                     <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">Meses ativos</div><div className="text-lg font-semibold">{sel.raw.mesesAtivos}/{sel.raw.totalMeses}</div></CardContent></Card>

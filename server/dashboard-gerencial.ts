@@ -1065,6 +1065,7 @@ export function registerDashboardGerencialRoutes(
           SELECT
             COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
             COALESCE(pc.valor_base,0) AS valor,
+            COALESCE(pc.comissao_repasse_valor,0) AS repasse,
             pc.mes_referencia AS mes,
             CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
               WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
@@ -1080,6 +1081,7 @@ export function registerDashboardGerencialRoutes(
           SELECT
             COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text) AS corretor,
             COALESCE(vc.valor_contrato,0) AS valor,
+            0 AS repasse,
             to_char(vc.data_contrato,'YYYY-MM') AS mes,
             CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
               WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
@@ -1101,6 +1103,8 @@ export function registerDashboardGerencialRoutes(
             WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
             SELECT corretor,
               SUM(valor) AS volume, COUNT(*) AS qtd,
+              SUM(repasse) AS repasse,
+              COUNT(*) FILTER (WHERE repasse > 0) AS qtd_repasse,
               COUNT(DISTINCT mes) AS meses_ativos,
               COUNT(DISTINCT produto) AS n_prod,
               COUNT(DISTINCT banco) AS n_banco,
@@ -1127,7 +1131,7 @@ export function registerDashboardGerencialRoutes(
           corretor: string; volume: number; qtd: number; mesesAtivos: number;
           nProd: number; nBanco: number; nConv: number; volumeAnterior: number;
           crescimentoPct: number; consistenciaRaw: number; diversificacaoRaw: number; abrangenciaRaw: number;
-          nOrgao: number; nUf: number;
+          nOrgao: number; nUf: number; repasse: number; qtdRepasse: number;
         };
         const mets: Met[] = curR.rows.map((x: any) => {
           const corretor = x.corretor as string;
@@ -1137,6 +1141,7 @@ export function registerDashboardGerencialRoutes(
           const crescimentoPct = volumeAnterior > 0 ? (volume - volumeAnterior) / volumeAnterior : (volume > 0 ? 1 : 0);
           return {
             corretor, volume, qtd: Number(x.qtd) || 0,
+            repasse: Number(x.repasse) || 0, qtdRepasse: Number(x.qtd_repasse) || 0,
             mesesAtivos: Number(x.meses_ativos) || 0,
             nProd: Number(x.n_prod) || 0, nBanco: Number(x.n_banco) || 0, nConv: Number(x.n_conv) || 0,
             volumeAnterior, crescimentoPct,
@@ -1236,6 +1241,8 @@ export function registerDashboardGerencialRoutes(
             volume: escolhido.m.volume,
             qtd: escolhido.m.qtd,
             ticket: escolhido.m.qtd ? escolhido.m.volume / escolhido.m.qtd : 0,
+            repasse: escolhido.m.repasse,
+            mediaGanho: escolhido.m.qtdRepasse ? escolhido.m.repasse / escolhido.m.qtdRepasse : 0,
             componentes: c,
             raw: {
               mesesAtivos: escolhido.m.mesesAtivos, totalMeses,

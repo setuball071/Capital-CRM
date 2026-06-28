@@ -203,6 +203,8 @@ export interface DnaSelecionado {
   volume: number;
   qtd: number;
   ticket: number;
+  repasse: number;
+  mediaGanho: number;
   componentes: DnaComponentes;
   raw: {
     mesesAtivos: number;
