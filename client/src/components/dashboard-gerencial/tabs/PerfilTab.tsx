@@ -73,6 +73,12 @@ export default function PerfilTab() {
     .slice()
     .sort((a, b) => ORDEM_FAIXA.indexOf(a.chave) - ORDEM_FAIXA.indexOf(b.chave));
 
+  // "DPRF – DEPTO. DE POLICIA..." -> "DPRF" (parte antes do traço)
+  const orgaoSigla = (data?.orgao || []).map((o) => ({
+    ...o,
+    chave: o.chave.split(/\s[–-]\s/)[0].trim(),
+  }));
+
   return (
     <div className="space-y-4" data-testid="tab-perfil">
       <DashboardFilters filtros={filtros} opcoes={opcoes} onChange={setFiltros} />
@@ -98,7 +104,7 @@ export default function PerfilTab() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Convênios (R$)" dados={data.convenio} tipo="pie" />
-            <Grafico titulo="Órgãos mais atendidos (R$)" dados={data.orgao} />
+            <Grafico titulo="Órgãos mais atendidos (R$)" dados={orgaoSigla} />
           </div>
           <Grafico titulo="Banco de recebimento (R$)" dados={data.bancoRecebimento} />
         </>
