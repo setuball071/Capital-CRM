@@ -655,30 +655,33 @@ export function registerDashboardGerencialRoutes(
           LEFT JOIN clientes_pessoa cp
             ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
           LEFT JOIN LATERAL (
+            SELECT COALESCE(NULLIF(btrim(cp.orgaocod),''), NULLIF(btrim(cp.orgaodesc),'')) AS codigo
+          ) src ON true
+          LEFT JOIN LATERAL (
             SELECT n.nome,
               CASE
-                WHEN regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')
-                     OR upper(btrim(COALESCE(n.codigo,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                WHEN regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(src.codigo,''), '^0+', '')
+                     OR upper(btrim(COALESCE(n.codigo,''))) = upper(COALESCE(src.codigo,''))
                   THEN (CASE WHEN n.categoria='ORGAO' THEN 1 ELSE 2 END)
-                WHEN regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                WHEN regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
                      AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
-                         = regexp_replace(substring(regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                         = regexp_replace(substring(regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
                   THEN (CASE WHEN n.categoria='ORGAO' THEN 3 ELSE 4 END)
-                WHEN upper(btrim(COALESCE(n.nome,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                WHEN upper(btrim(COALESCE(n.nome,''))) = upper(COALESCE(src.codigo,''))
                   THEN (CASE WHEN n.categoria='ORGAO' THEN 5 ELSE 6 END)
                 ELSE 99
               END AS pri
             FROM nomenclaturas n
             WHERE n.ativo = true AND n.categoria IN ('ORGAO','RUBRICA')
               AND (
-                regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')
-                OR upper(btrim(COALESCE(n.codigo,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(src.codigo,''), '^0+', '')
+                OR upper(btrim(COALESCE(n.codigo,''))) = upper(COALESCE(src.codigo,''))
                 OR (
-                  regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                  regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
                   AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
-                      = regexp_replace(substring(regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                      = regexp_replace(substring(regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
                 )
-                OR upper(btrim(COALESCE(n.nome,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                OR upper(btrim(COALESCE(n.nome,''))) = upper(COALESCE(src.codigo,''))
               )
             ORDER BY pri, n.id
             LIMIT 1
