@@ -655,17 +655,32 @@ export function registerDashboardGerencialRoutes(
           LEFT JOIN clientes_pessoa cp
             ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
           LEFT JOIN LATERAL (
-            SELECT n.nome FROM nomenclaturas n
-            WHERE n.categoria = 'ORGAO' AND n.ativo = true
+            SELECT n.nome,
+              CASE
+                WHEN regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')
+                     OR upper(btrim(COALESCE(n.codigo,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 1 ELSE 2 END)
+                WHEN regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                     AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
+                         = regexp_replace(substring(regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 3 ELSE 4 END)
+                WHEN upper(btrim(COALESCE(n.nome,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 5 ELSE 6 END)
+                ELSE 99
+              END AS pri
+            FROM nomenclaturas n
+            WHERE n.ativo = true AND n.categoria IN ('ORGAO','RUBRICA')
               AND (
                 regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')
+                OR upper(btrim(COALESCE(n.codigo,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
                 OR (
                   regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
                   AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
                       = regexp_replace(substring(regexp_replace(COALESCE(cp.orgaocod,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
                 )
+                OR upper(btrim(COALESCE(n.nome,''))) = upper(btrim(COALESCE(cp.orgaocod,'')))
               )
-            ORDER BY (regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(cp.orgaocod,''), '^0+', '')) DESC, n.id
+            ORDER BY pri, n.id
             LIMIT 1
           ) no ON true
           WHERE pc.tenant_id = ${tenantId} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0
