@@ -533,6 +533,115 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // ─── Unificar parcelas (portabilidade) ──────────────────────────────────────
+  // :id é a acumuladora. Body: { absorverIds: number[], adeRefin?: string }
+  app.post("/api/contracts/proposals/:id/unificar", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      if (!user.isMaster && !["master", "operacional", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Sem permissão para unificar parcelas" });
+      }
+      const { absorverIds, adeRefin } = req.body;
+      if (!Array.isArray(absorverIds) || absorverIds.length === 0) {
+        return res.status(400).json({ message: "Selecione ao menos uma parcela para unificar" });
+      }
+      const [acum] = await db.select().from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId))).limit(1);
+      if (!acum) return res.status(404).json({ message: "Proposta não encontrada" });
+      if ((acum as any).unificadaEmId) {
+        return res.status(400).json({ message: "Esta proposta já está unificada em outra" });
+      }
+      const cpfAcum = (acum.clientCpf || "").replace(/\D/g, "");
+      const ids = absorverIds
+        .map((x: any) => parseInt(String(x), 10))
+        .filter((n: number) => !isNaN(n) && n !== id);
+      if (!ids.length) return res.status(400).json({ message: "Seleção inválida" });
+
+      const filhas = await db.select().from(proposals)
+        .where(and(inArray(proposals.id, ids), eq(proposals.tenantId, tenantId)));
+      for (const f of filhas) {
+        if ((f.clientCpf || "").replace(/\D/g, "") !== cpfAcum) {
+          return res.status(400).json({ message: "Todas as parcelas devem ser do mesmo CPF da acumuladora" });
+        }
+        if ((f as any).unificadaEmId) {
+          return res.status(400).json({ message: `A proposta #${f.id} já está unificada` });
+        }
+      }
+      // alguma das selecionadas já é acumuladora de outro grupo?
+      const jaAcum = await db.select({ id: proposals.id }).from(proposals)
+        .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.unificadaEmId, ids))).limit(1);
+      if (jaAcum.length) {
+        return res.status(400).json({ message: "Uma das parcelas selecionadas já é acumuladora de outro grupo" });
+      }
+
+      const soma = filhas.reduce((s, f) => s + (parseFloat(String(f.contractValue || "0")) || 0), 0);
+      const valorAcumAtual = parseFloat(String(acum.contractValue || "0")) || 0;
+      // preserva o valor original só na primeira unificação
+      const valorPre = (acum as any).valorPreUnificacao != null
+        ? parseFloat(String((acum as any).valorPreUnificacao))
+        : valorAcumAtual;
+
+      await db.update(proposals).set({
+        contractValue: String(valorAcumAtual + soma),
+        valorPreUnificacao: String(valorPre),
+        adeRefin: adeRefin || (acum as any).adeRefin || null,
+        updatedAt: new Date(),
+      } as any).where(eq(proposals.id, id));
+
+      await db.update(proposals).set({ unificadaEmId: id, updatedAt: new Date() } as any)
+        .where(and(inArray(proposals.id, filhas.map((f) => f.id)), eq(proposals.tenantId, tenantId)));
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        toStatus: acum.status,
+        action: "AVANCO",
+        notes: `Unificadas: ${filhas.map((f) => "#" + f.id).join(", ")}${adeRefin ? ` (ADE refin ${adeRefin})` : ""}`,
+        performedBy: user.id,
+      });
+
+      return res.json({ ok: true, unificadas: filhas.map((f) => f.id) });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/unificar error:", e);
+      return res.status(500).json({ message: `Erro ao unificar: ${e?.message || e}` });
+    }
+  });
+
+  // ─── Desfazer unificação ────────────────────────────────────────────────────
+  app.post("/api/contracts/proposals/:id/desunificar", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      if (!user.isMaster && !["master", "operacional", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const [acum] = await db.select().from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId))).limit(1);
+      if (!acum) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      const valorPre = (acum as any).valorPreUnificacao;
+      await db.update(proposals).set({
+        ...(valorPre != null ? { contractValue: String(valorPre) } : {}),
+        valorPreUnificacao: null,
+        updatedAt: new Date(),
+      } as any).where(eq(proposals.id, id));
+
+      await db.update(proposals).set({ unificadaEmId: null, updatedAt: new Date() } as any)
+        .where(and(eq(proposals.unificadaEmId, id), eq(proposals.tenantId, tenantId)));
+
+      await db.insert(proposalHistory).values({
+        proposalId: id, toStatus: acum.status, action: "AVANCO",
+        notes: "Unificação desfeita", performedBy: user.id,
+      });
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/desunificar error:", e);
+      return res.status(500).json({ message: "Erro ao desfazer unificação" });
+    }
+  });
+
   // ─── Cadastro em lote (Portabilidade) ───────────────────────────────────────
   app.post("/api/contracts/proposals/batch", requireAuth, async (req: any, res) => {
     try {
