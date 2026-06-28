@@ -12,7 +12,7 @@ import type { PerfilResp, DashOpcoes, PerfilDimItem } from "../types";
 const CORES = ["#7C3AED", "#EC4899", "#2563EB", "#059669", "#D97706", "#DC2626", "#0891B2", "#9333EA", "#65A30D", "#E11D48", "#0D9488", "#7E22CE"];
 const ORDEM_FAIXA = ["Até 29", "30-39", "40-49", "50-59", "60-69", "70+", "Sem data"];
 
-function Grafico({ titulo, dados, tipo = "bar" }: { titulo: string; dados: PerfilDimItem[]; tipo?: "bar" | "pie" }) {
+function Grafico({ titulo, dados, tipo = "bar", labelMap }: { titulo: string; dados: PerfilDimItem[]; tipo?: "bar" | "pie"; labelMap?: Record<string, string> }) {
   return (
     <Card data-testid={`perfil-${titulo}`}>
       <CardHeader className="pb-1"><CardTitle className="text-sm">{titulo}</CardTitle></CardHeader>
@@ -35,7 +35,7 @@ function Grafico({ titulo, dados, tipo = "bar" }: { titulo: string; dados: Perfi
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" hide />
               <YAxis type="category" dataKey="chave" width={130} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: any) => [fmtMoeda(Number(v)), "Produção"]} />
+              <Tooltip formatter={(v: any) => [fmtMoeda(Number(v)), "Produção"]} labelFormatter={(l: any) => (labelMap?.[l] ?? l)} />
               <Bar dataKey="valor" name="Produção" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 11, formatter: (v: any) => fmtMoeda(Number(v)) }}>
                 {dados.map((_, i) => <Cell key={i} fill={CORES[i % CORES.length]} />)}
               </Bar>
@@ -73,11 +73,15 @@ export default function PerfilTab() {
     .slice()
     .sort((a, b) => ORDEM_FAIXA.indexOf(a.chave) - ORDEM_FAIXA.indexOf(b.chave));
 
-  // "DPRF – DEPTO. DE POLICIA..." -> "DPRF" (parte antes do traço)
+  // "DPRF – DEPTO. DE POLICIA..." -> sigla "DPRF" no eixo, nome inteiro no tooltip
   const orgaoSigla = (data?.orgao || []).map((o) => ({
     ...o,
     chave: o.chave.split(/\s[–-]\s/)[0].trim(),
   }));
+  const orgaoLabelMap: Record<string, string> = {};
+  (data?.orgao || []).forEach((o) => {
+    orgaoLabelMap[o.chave.split(/\s[–-]\s/)[0].trim()] = o.chave;
+  });
 
   return (
     <div className="space-y-4" data-testid="tab-perfil">
@@ -104,7 +108,7 @@ export default function PerfilTab() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Grafico titulo="Convênios (R$)" dados={data.convenio} tipo="pie" />
-            <Grafico titulo="Órgãos mais atendidos (R$)" dados={orgaoSigla} />
+            <Grafico titulo="Órgãos mais atendidos (R$)" dados={orgaoSigla} labelMap={orgaoLabelMap} />
           </div>
           <Grafico titulo="Banco de recebimento (R$)" dados={data.bancoRecebimento} />
         </>
