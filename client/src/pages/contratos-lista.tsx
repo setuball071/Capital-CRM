@@ -1229,7 +1229,27 @@ export default function ContratosListaPage() {
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
-                  <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
+                  <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="group inline-flex items-center gap-1">
+                        {p.ade || "—"}
+                        {p.ade && (
+                          <button title="Copiar ADE" onClick={() => copyText(`ade-${p.id}`, p.ade)} className="text-muted-foreground hover:text-primary">
+                            {copiedKey === `ade-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        )}
+                      </span>
+                      {p.product === "PORTABILIDADE" && p.adeRefin && (
+                        <span className="group inline-flex items-center gap-1 text-muted-foreground">
+                          <span className="text-[10px] uppercase tracking-wide">refin</span>
+                          {p.adeRefin}
+                          <button title="Copiar ADE de refin" onClick={() => copyText(`aderefin-${p.id}`, p.adeRefin)} className="hover:text-primary">
+                            {copiedKey === `aderefin-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-1">
