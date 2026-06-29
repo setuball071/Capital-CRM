@@ -244,6 +244,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           status: proposals.status,
           isPaused: proposals.isPaused,
           ade: proposals.ade,
+          adeRefin: proposals.adeRefin,
           commissionStatus: proposals.commissionStatus,
           commissionPercentage: proposals.commissionPercentage,
           companyCommissionValue: proposals.companyCommissionValue,
