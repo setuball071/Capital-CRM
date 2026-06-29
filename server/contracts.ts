@@ -442,6 +442,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       // Monta clientMeta com nova tabela (ou sem tabela se não informou)
       const newMeta = { ...(src.clientMeta as Record<string, any> || {}) };
+      // Clone = nova digitação: a CIP ainda não começou; não herda a data CIP da origem
+      delete newMeta.dataCip;
       if (tableId) {
         newMeta.tabelaFinanceiroId = tableId;
         newMeta.tabelaNome = tableName || null;
@@ -806,6 +808,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (ade !== undefined) updateData.ade = ade;
       updateData.updatedAt = new Date();
 
+      // Ao mudar de fase (ex.: sair de "Aguardando retorno CIP"), zera a data CIP:
+      // o contador só faz sentido enquanto a proposta está aguardando o retorno.
+      if (status && status !== current.status) {
+        const cm = (current.clientMeta as Record<string, any>) || {};
+        if (cm.dataCip) updateData.clientMeta = { ...cm, dataCip: null };
+      }
+
       // Ao marcar PAGO: salva dados de comissão e inicializa commissionStatus = PENDENTE
       if (status === "PAGO") {
         if (contractValueInput !== undefined) updateData.contractValue = String(contractValueInput);
@@ -1082,9 +1091,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (!target) target = req.body?.fallbackStatus || null;
       if (!target) return res.status(400).json({ message: "Não foi possível identificar a fase de retorno" });
 
+      const regMeta = (current.clientMeta as Record<string, any>) || {};
       const [updated] = await db
         .update(proposals)
-        .set({ status: target, updatedAt: new Date() })
+        .set({
+          status: target,
+          updatedAt: new Date(),
+          // Mudou de fase → zera a data CIP (contador só vale aguardando o retorno)
+          ...(target !== current.status && regMeta.dataCip ? { clientMeta: { ...regMeta, dataCip: null } } : {}),
+        })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
@@ -1160,6 +1175,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
       for (const r of rows) {
+        // Mudou de fase → zera a data CIP da proposta (clientMeta é por-linha)
+        const cm = (r.clientMeta as Record<string, any>) || {};
+        if (r.status !== status && cm.dataCip) {
+          await db.update(proposals)
+            .set({ clientMeta: { ...cm, dataCip: null } })
+            .where(and(eq(proposals.id, r.id), eq(proposals.tenantId, tenantId)));
+        }
         await db.insert(proposalHistory).values({
           proposalId: r.id,
           fromStatus: r.status,
