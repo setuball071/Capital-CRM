@@ -897,7 +897,9 @@ export default function ContratosListaPage() {
     parceiro: (p) => (p.parceiroNome || "").toLowerCase(),
     status: (p) => new Date(p.updatedAt || p.createdAt || 0).getTime(), // atualização mais recente
   };
-  const sorted = sortBy && SORT_GET[sortBy]
+  // A caixa CIP mantém SEMPRE a ordem por data/urgência (ordenação por coluna não se
+  // aplica nela), para não embaralhar os dias de CIP com um sort herdado de outra caixa.
+  const sorted = (sortBy && SORT_GET[sortBy] && !isCipBox)
     ? [...displayed].sort((a, b) => {
         const va = SORT_GET[sortBy](a), vb = SORT_GET[sortBy](b);
         let cmp = 0;
@@ -911,9 +913,13 @@ export default function ContratosListaPage() {
     else { setSortBy(key); setSortDir("desc"); }
   }
   const sortHead = (key: string, label: string, cls = "") => (
-    <TableHead className={`cursor-pointer select-none hover:text-foreground ${cls}`} onClick={() => toggleSort(key)}>
+    // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
+    <TableHead
+      className={`select-none ${isCipBox ? "" : "cursor-pointer hover:text-foreground"} ${cls}`}
+      onClick={isCipBox ? undefined : () => toggleSort(key)}
+    >
       <span className={`inline-flex items-center gap-0.5 ${cls.includes("text-right") ? "justify-end w-full" : ""}`}>
-        {label}{sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+        {label}{!isCipBox && sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
       </span>
     </TableHead>
   );
