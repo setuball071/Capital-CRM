@@ -621,6 +621,7 @@ export default function ContratosListaPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkVendor, setBulkVendor] = useState("");
   const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status"; status?: string } | null>(null);
   const [quickValue, setQuickValue] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -778,6 +779,18 @@ export default function ContratosListaPage() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  // Usuários para transferência em lote (só operacional/master enxergam)
+  const { data: assignableUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/contracts/assignable-users"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts/assignable-users", { credentials: "include" });
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+    enabled: viewMode === "operacional",
+  });
+
   const bulkStatusMut = useMutation({
     mutationFn: async ({ ids, status, notes }: { ids: number[]; status: string; notes?: string }) => {
       const res = await fetch("/api/contracts/proposals/bulk-status", {
@@ -793,6 +806,25 @@ export default function ContratosListaPage() {
       setBulkStatus("");
       setBulkNotes("");
       toast({ title: `${data?.updated ?? 0} proposta(s) atualizada(s)` });
+    },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const bulkTransferMut = useMutation({
+    mutationFn: async ({ ids, vendorId, notes }: { ids: number[]; vendorId: string; notes?: string }) => {
+      const res = await fetch("/api/contracts/proposals/bulk-transfer", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ ids, vendorId, notes }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      invalidateProposals();
+      setSelected(new Set());
+      setBulkVendor("");
+      setBulkNotes("");
+      toast({ title: `${data?.updated ?? 0} proposta(s) transferida(s)` });
     },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -1132,6 +1164,28 @@ export default function ContratosListaPage() {
           >
             {bulkStatusMut.isPending ? "Aplicando..." : "Aplicar"}
           </Button>
+
+          <span className="mx-1 h-6 w-px bg-border" />
+
+          <Select value={bulkVendor} onValueChange={setBulkVendor}>
+            <SelectTrigger className="w-48 h-8 text-xs">
+              <SelectValue placeholder="Transferir para..." />
+            </SelectTrigger>
+            <SelectContent>
+              {assignableUsers.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!bulkVendor || bulkTransferMut.isPending}
+            onClick={() => bulkTransferMut.mutate({ ids: Array.from(selected), vendorId: bulkVendor, notes: bulkNotes || undefined })}
+          >
+            {bulkTransferMut.isPending ? "Transferindo..." : "Transferir"}
+          </Button>
+
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar seleção</Button>
         </div>
       )}

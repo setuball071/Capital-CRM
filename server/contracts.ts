@@ -1208,6 +1208,53 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     }
   });
 
+  // Transferência de contratos em lote (mudar corretor responsável) — só master/operacional
+  app.post("/api/contracts/proposals/bulk-transfer", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!user.isMaster && !["master", "operacional"].includes(user.role || "")) {
+        return res.status(403).json({ message: "Sem permissão para transferir contratos" });
+      }
+
+      const { ids, vendorId, notes } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "Nenhuma proposta selecionada" });
+      if (!vendorId) return res.status(400).json({ message: "Selecione o corretor de destino" });
+
+      const numericIds = ids.map((n: any) => parseInt(n)).filter((n: number) => !isNaN(n));
+      const novoVendorId = parseInt(String(vendorId));
+      if (isNaN(novoVendorId)) return res.status(400).json({ message: "Corretor inválido" });
+
+      const rows = await db
+        .select()
+        .from(proposals)
+        .where(and(inArray(proposals.id, numericIds), eq(proposals.tenantId, tenantId)));
+      if (rows.length === 0) return res.status(404).json({ message: "Nenhuma proposta encontrada" });
+
+      const okIds = rows.map((r) => r.id);
+      await db
+        .update(proposals)
+        .set({ vendorId: novoVendorId, updatedAt: new Date() })
+        .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
+
+      for (const r of rows) {
+        await db.insert(proposalHistory).values({
+          proposalId: r.id,
+          fromStatus: r.status,
+          toStatus: r.status,
+          action: "AVANCO",
+          notes: notes || "Contrato transferido (em lote)",
+          performedBy: user.id,
+        });
+      }
+
+      return res.json({ updated: rows.length });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/bulk-transfer error:", e);
+      return res.status(500).json({ message: "Erro na transferência em lote" });
+    }
+  });
+
   app.post("/api/contracts/proposals/:id/pause", requireAuth, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
