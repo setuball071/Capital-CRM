@@ -552,6 +552,10 @@ export default function ContratosDetalhePage() {
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
       case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
+      // Conta bancária de crédito: grava o objeto completo em contaSelecionada (origem manual)
+      case "bancoCredito":     body = { clientMetaPatch: { contaSelecionada: { banco: editVal.trim(), agencia, conta, origem: "manual" } } }; break;
+      case "agenciaCredito":   body = { clientMetaPatch: { contaSelecionada: { banco: bancoCredito, agencia: editVal.trim(), conta, origem: "manual" } } }; break;
+      case "contaCredito":     body = { clientMetaPatch: { contaSelecionada: { banco: bancoCredito, agencia, conta: editVal.trim(), origem: "manual" } } }; break;
       default: return;
     }
     editMutation.mutate(body);
@@ -817,9 +821,9 @@ export default function ContratosDetalhePage() {
             <CardTitle className="text-base flex items-center gap-2"><Landmark className="h-4 w-4" /> Dados Bancários (crédito)</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            {renderField({ fieldKey: "bancoCredito", label: "Banco", value: bancoCredito })}
-            {renderField({ fieldKey: "agencia", label: "Agência", value: agencia, mono: true })}
-            {renderField({ fieldKey: "conta", label: "Conta", value: conta, mono: true })}
+            {renderField({ fieldKey: "bancoCredito", label: "Banco", value: bancoCredito, editable: true })}
+            {renderField({ fieldKey: "agenciaCredito", label: "Agência", value: agencia, mono: true, editable: true })}
+            {renderField({ fieldKey: "contaCredito", label: "Conta", value: conta, mono: true, editable: true })}
           </CardContent>
         </Card>
       )}
