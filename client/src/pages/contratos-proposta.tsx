@@ -1009,6 +1009,25 @@ export default function ContratosPropostaPage() {
       sharedMeta.tipoContrato = contractType || "PORTABILIDADE";
       if (simPortData?.banco_destino) sharedMeta.bancoDestinoGlobal = simPortData.banco_destino;
 
+      // Conta bancária escolhida para crédito (manual ou do contracheque) — igual ao fluxo individual.
+      // Sem isso o lote descartava a conta escolhida e a ficha caía no fallback do contracheque.
+      if (selectedContaIdx === "manual") {
+        sharedMeta.contaSelecionada = {
+          banco:   v.contaBanco   || "",
+          agencia: v.contaAgencia || "",
+          conta:   v.contaConta   || "",
+          origem:  "manual" as const,
+        };
+      } else if (typeof selectedContaIdx === "number" && parsedData?.contas?.[selectedContaIdx]) {
+        const c = parsedData.contas[selectedContaIdx];
+        sharedMeta.contaSelecionada = {
+          banco:   c.banco,
+          agencia: c.agencia,
+          conta:   c.conta,
+          origem:  c.tipo as string,
+        };
+      }
+
       const proposalsBatch = portContratos.map((c) => {
         const tabela = c.tableId
           ? financeiroTabelas.find((t: any) => String(t.id) === c.tableId)
