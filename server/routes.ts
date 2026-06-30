@@ -23533,6 +23533,325 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   });
 
   // ==========================================
+  // Financeiro - Importar Produção por Parceiro
+  // ==========================================
+
+  app.post(
+    "/api/financeiro/producao/importar-parceiro/preview",
+    requireAuth,
+    upload.single("arquivo"),
+    async (req: any, res) => {
+      try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+        const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
+        if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
+
+        const parceiro = String(req.body?.parceiro || "").trim().toLowerCase();
+        if (!["d7", "gold", "amf", "bevi"].includes(parceiro)) {
+          return res.status(400).json({ message: "Parceiro inválido" });
+        }
+        const file = req.file;
+        if (!file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
+
+        const parseNumBR2 = (v: any): number => {
+          if (v == null || v === "") return 0;
+          let s = String(v).trim().replace(/R\$\s*/gi, "").replace(/\s+/g, "").replace(/%/g, "");
+          if (s === "" || s === "-" || s === "—") return 0;
+          if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
+            s = s.replace(/\./g, "").replace(",", ".");
+          } else if (s.indexOf(",") > -1) {
+            s = s.replace(",", ".");
+          }
+          const n = parseFloat(s);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const parseDateBR2 = (v: any): string => {
+          if (!v) return "";
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          const s = String(v).trim();
+          const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+          const serial = parseInt(s);
+          if (!isNaN(serial) && serial > 1000 && serial < 80000) {
+            const d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+            if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+          }
+          return "";
+        };
+
+        const parseCsvRows = (buf: Buffer): Record<string, string>[] => {
+          let text: string;
+          if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+            text = buf.slice(3).toString("utf-8");
+          } else {
+            const tentativa = buf.toString("utf-8");
+            text = tentativa.includes("") ? buf.toString("latin1") : tentativa;
+          }
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          if (lines.length < 2) return [];
+          const header = lines[0].split(";").map(h => h.replace(/^"|"$/g, "").trim());
+          const result: Record<string, string>[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(";").map(c => c.replace(/^"|"$/g, "").trim());
+            if (cols.length < 2) continue;
+            const row: Record<string, string> = {};
+            header.forEach((h, idx) => { row[h] = cols[idx] || ""; });
+            result.push(row);
+          }
+          return result;
+        };
+
+        interface ParsedRow {
+          ade: string;
+          nomeCliente: string;
+          cpfCliente: string;
+          banco: string;
+          dataPagamento: string;
+          valorBase: number;
+          comissaoPerc: number;
+          comissaoValor: number;
+          vendedor?: string;
+          tipoContrato?: string;
+          prazo?: string;
+        }
+
+        const rows: ParsedRow[] = [];
+        const invalidos: { linha: number; motivo: string }[] = [];
+
+        if (parceiro === "d7") {
+          const csvRows = parseCsvRows(file.buffer);
+          const byAde = new Map<string, { base: number; valor: number; cliente: string; cpf: string; banco: string; data: string; produto: string }>();
+          csvRows.forEach((r, i) => {
+            const ade = r["PROPOSTA"] || "";
+            if (!ade) { invalidos.push({ linha: i + 2, motivo: "PROPOSTA vazia" }); return; }
+            const base = parseNumBR2(r["BASE CALCULO"]);
+            const valor = parseNumBR2(r["VALOR"]);
+            const exist = byAde.get(ade);
+            if (exist) {
+              exist.base += base;
+              exist.valor += valor;
+            } else {
+              byAde.set(ade, {
+                base, valor,
+                cliente: r["CLIENTE"] || "",
+                cpf: r["CNPJ_CPF"] || "",
+                banco: r["BANCO"] || "INTER",
+                data: parseDateBR2(r["DATA PAGTO"]),
+                produto: r["PRODUTO"] || "",
+              });
+            }
+          });
+          for (const [ade, r] of byAde) {
+            rows.push({
+              ade,
+              nomeCliente: r.cliente,
+              cpfCliente: r.cpf,
+              banco: r.banco,
+              dataPagamento: r.data,
+              valorBase: r.base,
+              comissaoPerc: r.base > 0 ? Math.round((r.valor / r.base) * 10000) / 100 : 0,
+              comissaoValor: r.valor,
+              tipoContrato: r.produto,
+            });
+          }
+        } else if (parceiro === "gold") {
+          const csvRows = parseCsvRows(file.buffer);
+          csvRows.forEach((r, i) => {
+            const ade = r["NUM_PROPOSTA"] || r["NUM_CONTRATO"] || "";
+            if (!ade) { invalidos.push({ linha: i + 2, motivo: "NUM_PROPOSTA vazia" }); return; }
+            rows.push({
+              ade,
+              nomeCliente: r["NOM_CLIENTE"] || "",
+              cpfCliente: r["COD_CPF_CLIENTE"] || "",
+              banco: r["NOM_BANCO"] || "",
+              dataPagamento: parseDateBR2(r["DAT_CREDITO"] || r["DAT_EMPRESTIMO"]),
+              valorBase: parseNumBR2(r["VAL_BASE_COMISSAO"]),
+              comissaoPerc: parseNumBR2(r["PERCENTUAL_REPASSE_TOTAL"]),
+              comissaoValor: parseNumBR2(r["VAL_COMISSAO_TOTAL"]),
+              tipoContrato: r["DSC_TIPO_PROPOSTA_EMPRESTIMO"] || "",
+              prazo: r["QTD_PARCELA"] || "",
+            });
+          });
+        } else if (parceiro === "amf") {
+          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (data.length < 2) return res.status(400).json({ message: "Arquivo AMF vazio" });
+          const header = (data[0] as string[]).map(h => String(h).trim());
+          const idx = (name: string) => header.indexOf(name);
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i] as any[];
+            const ade = String(row[idx("Proposta")] || "").trim();
+            if (!ade) { invalidos.push({ linha: i + 1, motivo: "Proposta vazia" }); continue; }
+            rows.push({
+              ade,
+              nomeCliente: String(row[idx("Cliente")] || "").trim(),
+              cpfCliente: String(row[idx("CPF")] || "").trim(),
+              banco: String(row[idx("Banco")] || "").trim(),
+              dataPagamento: parseDateBR2(row[idx("Data Pagamento")]),
+              valorBase: parseNumBR2(row[idx("Valor bruto (R$)")]),
+              comissaoPerc: parseNumBR2(row[idx("(%) Comissão")]),
+              comissaoValor: parseNumBR2(row[idx("Valor Comissão (R$)")]),
+              vendedor: String(row[idx("Vendedor")] || "").trim() || undefined,
+              tipoContrato: String(row[idx("Tabela")] || "").trim() || undefined,
+              prazo: String(row[idx("Prazo")] || "").trim() || undefined,
+            });
+          }
+        } else if (parceiro === "bevi") {
+          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (data.length < 3) return res.status(400).json({ message: "Arquivo Bevi vazio" });
+          const header = (data[1] as string[]).map(h => String(h).trim());
+          const idx = (name: string) => header.indexOf(name);
+          for (let i = 2; i < data.length - 1; i++) {
+            const row = data[i] as any[];
+            const ade = String(row[idx("Nr. Adesão")] || row[idx("Nr. Contrato")] || "").trim();
+            if (!ade) { invalidos.push({ linha: i + 1, motivo: "Nr. Adesão vazio" }); continue; }
+            rows.push({
+              ade,
+              nomeCliente: String(row[idx("Cliente")] || "").trim(),
+              cpfCliente: String(row[idx("CPF")] || "").trim(),
+              banco: String(row[idx("Financeira")] || "").trim(),
+              dataPagamento: parseDateBR2(row[idx("Data Pagamento")]),
+              valorBase: parseNumBR2(row[idx("Valor Base Comissão")]),
+              comissaoPerc: parseNumBR2(row[idx("Perc. Comissão")]),
+              comissaoValor: parseNumBR2(row[idx("Valor Comissão")]),
+              tipoContrato: String(row[idx("Prazo")] || "").trim() || undefined,
+            });
+          }
+        }
+
+        if (!rows.length && !invalidos.length) {
+          return res.status(400).json({ message: "Nenhuma linha encontrada no arquivo" });
+        }
+
+        // Cruzar ADEs com proposals e verificar duplicatas
+        const adeList = [...new Set(rows.map(r => r.ade))];
+        const existingAdes = new Set<string>();
+        const proposalByAde = new Map<string, { id: number; vendedor: string | null }>();
+
+        if (adeList.length > 0) {
+          const existingRecs = await db
+            .select({ contratoId: producoesContratos.contratoId })
+            .from(producoesContratos)
+            .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.contratoId, adeList)));
+          for (const e of existingRecs) existingAdes.add(e.contratoId);
+
+          const props = await db
+            .select({ id: proposals.id, ade: proposals.ade, vendedor: users.name })
+            .from(proposals)
+            .leftJoin(users, eq(proposals.vendedorId, users.id))
+            .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
+          for (const p of props) if (p.ade) proposalByAde.set(p.ade, { id: p.id, vendedor: p.vendedor });
+        }
+
+        const matched: any[] = [];
+        const semMatch: any[] = [];
+        for (const row of rows) {
+          const jaExiste = existingAdes.has(row.ade);
+          const proposal = proposalByAde.get(row.ade);
+          const item = { ...row, jaExiste, proposalId: proposal?.id ?? null, vendedorProposal: proposal?.vendedor ?? null };
+          if (proposal) matched.push(item);
+          else semMatch.push(item);
+        }
+
+        return res.json({ matched, semMatch, invalidos });
+      } catch (error: any) {
+        console.error("[IMPORT-PARCEIRO-PREVIEW]", error);
+        return res.status(500).json({ message: "Erro ao analisar arquivo: " + error.message });
+      }
+    },
+  );
+
+  app.post("/api/financeiro/producao/importar-parceiro/confirmar", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
+      if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
+
+      const { linhas } = req.body || {};
+      if (!Array.isArray(linhas) || !linhas.length) return res.status(400).json({ message: "Nenhuma linha para importar" });
+
+      let inseridos = 0;
+      const erros: string[] = [];
+
+      for (const r of linhas) {
+        try {
+          const ade = String(r.ade || "").trim();
+          if (!ade) continue;
+          const mesRef = r.dataPagamento ? String(r.dataPagamento).slice(0, 7) : null;
+          const nomeCorr = String(r.vendedor || r.vendedorProposal || "").trim().toUpperCase() || null;
+          const record: any = {
+            tenantId,
+            contratoId: ade,
+            nomeCliente: r.nomeCliente || null,
+            cpfCliente: r.cpfCliente || null,
+            banco: r.banco || null,
+            tipoContrato: r.tipoContrato || null,
+            prazo: r.prazo || null,
+            dataPagamento: r.dataPagamento || null,
+            valorBase: r.valorBase != null ? String(r.valorBase) : null,
+            valorBruto: r.valorBase != null ? String(r.valorBase) : null,
+            comissaoRepassePerc: r.comissaoPerc != null ? String(r.comissaoPerc) : null,
+            comissaoRepasseValor: r.comissaoValor != null ? String(r.comissaoValor) : null,
+            status: "Importado",
+            mesReferencia: mesRef,
+            importadoPor: req.user?.id || null,
+            statusComissao: "Aguardando",
+            proposalId: r.proposalId || null,
+            vendedorNome: String(r.vendedor || r.vendedorProposal || "").trim() || null,
+            nomeCorretor: nomeCorr,
+          };
+
+          // Verifica se já existe
+          const existing = await db
+            .select({ id: producoesContratos.id })
+            .from(producoesContratos)
+            .where(and(eq(producoesContratos.contratoId, ade), eq(producoesContratos.tenantId, tenantId)))
+            .limit(1);
+
+          if (existing.length > 0) {
+            await db
+              .update(producoesContratos)
+              .set({
+                nomeCliente: record.nomeCliente,
+                cpfCliente: record.cpfCliente,
+                banco: record.banco,
+                tipoContrato: record.tipoContrato,
+                dataPagamento: record.dataPagamento,
+                valorBase: record.valorBase,
+                valorBruto: record.valorBruto,
+                comissaoRepassePerc: record.comissaoRepassePerc,
+                comissaoRepasseValor: record.comissaoRepasseValor,
+                status: record.status,
+                mesReferencia: record.mesReferencia,
+                proposalId: record.proposalId,
+                vendedorNome: record.vendedorNome,
+                nomeCorretor: record.nomeCorretor,
+              })
+              .where(and(eq(producoesContratos.id, existing[0].id), eq(producoesContratos.tenantId, tenantId)));
+          } else {
+            await db.insert(producoesContratos).values(record);
+          }
+          inseridos++;
+        } catch (e: any) {
+          erros.push(`ADE ${r.ade}: ${e.message}`);
+        }
+      }
+
+      return res.json({ ok: true, inseridos, erros });
+    } catch (error: any) {
+      console.error("[IMPORT-PARCEIRO-CONFIRMAR]", error);
+      return res.status(500).json({ message: "Erro ao importar: " + error.message });
+    }
+  });
+
+  // ==========================================
   // Financeiro - Pagamentos ao consultor
   // ==========================================
 
