@@ -252,6 +252,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           status: proposals.status,
           isPaused: proposals.isPaused,
           ade: proposals.ade,
+          adeRefin: proposals.adeRefin,
           commissionStatus: proposals.commissionStatus,
           commissionPercentage: proposals.commissionPercentage,
           companyCommissionValue: proposals.companyCommissionValue,
@@ -268,6 +269,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           createdAt: proposals.createdAt,
           updatedAt: proposals.updatedAt,
           paidAt: proposals.paidAt,
+          unificadaEmId: proposals.unificadaEmId,
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))
@@ -449,6 +451,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       // Monta clientMeta com nova tabela (ou sem tabela se não informou)
       const newMeta = { ...(src.clientMeta as Record<string, any> || {}) };
+      // Clone = nova digitação: a CIP ainda não começou; não herda a data CIP da origem
+      delete newMeta.dataCip;
       if (tableId) {
         newMeta.tabelaFinanceiroId = tableId;
         newMeta.tabelaNome = tableName || null;
@@ -529,6 +533,115 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("POST /api/contracts/proposals/:id/clone error:", e);
       return res.status(500).json({ message: `Erro ao clonar proposta: ${e?.message || e}` });
+    }
+  });
+
+  // ─── Unificar parcelas (portabilidade) ──────────────────────────────────────
+  // :id é a acumuladora. Body: { absorverIds: number[], adeRefin?: string }
+  app.post("/api/contracts/proposals/:id/unificar", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      if (!user.isMaster && !["master", "operacional", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Sem permissão para unificar parcelas" });
+      }
+      const { absorverIds, adeRefin } = req.body;
+      if (!Array.isArray(absorverIds) || absorverIds.length === 0) {
+        return res.status(400).json({ message: "Selecione ao menos uma parcela para unificar" });
+      }
+      const [acum] = await db.select().from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId))).limit(1);
+      if (!acum) return res.status(404).json({ message: "Proposta não encontrada" });
+      if ((acum as any).unificadaEmId) {
+        return res.status(400).json({ message: "Esta proposta já está unificada em outra" });
+      }
+      const cpfAcum = (acum.clientCpf || "").replace(/\D/g, "");
+      const ids = absorverIds
+        .map((x: any) => parseInt(String(x), 10))
+        .filter((n: number) => !isNaN(n) && n !== id);
+      if (!ids.length) return res.status(400).json({ message: "Seleção inválida" });
+
+      const filhas = await db.select().from(proposals)
+        .where(and(inArray(proposals.id, ids), eq(proposals.tenantId, tenantId)));
+      for (const f of filhas) {
+        if ((f.clientCpf || "").replace(/\D/g, "") !== cpfAcum) {
+          return res.status(400).json({ message: "Todas as parcelas devem ser do mesmo CPF da acumuladora" });
+        }
+        if ((f as any).unificadaEmId) {
+          return res.status(400).json({ message: `A proposta #${f.id} já está unificada` });
+        }
+      }
+      // alguma das selecionadas já é acumuladora de outro grupo?
+      const jaAcum = await db.select({ id: proposals.id }).from(proposals)
+        .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.unificadaEmId, ids))).limit(1);
+      if (jaAcum.length) {
+        return res.status(400).json({ message: "Uma das parcelas selecionadas já é acumuladora de outro grupo" });
+      }
+
+      const soma = filhas.reduce((s, f) => s + (parseFloat(String(f.contractValue || "0")) || 0), 0);
+      const valorAcumAtual = parseFloat(String(acum.contractValue || "0")) || 0;
+      // preserva o valor original só na primeira unificação
+      const valorPre = (acum as any).valorPreUnificacao != null
+        ? parseFloat(String((acum as any).valorPreUnificacao))
+        : valorAcumAtual;
+
+      await db.update(proposals).set({
+        contractValue: String(valorAcumAtual + soma),
+        valorPreUnificacao: String(valorPre),
+        adeRefin: adeRefin || (acum as any).adeRefin || null,
+        updatedAt: new Date(),
+      } as any).where(eq(proposals.id, id));
+
+      await db.update(proposals).set({ unificadaEmId: id, updatedAt: new Date() } as any)
+        .where(and(inArray(proposals.id, filhas.map((f) => f.id)), eq(proposals.tenantId, tenantId)));
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        toStatus: acum.status,
+        action: "AVANCO",
+        notes: `Unificadas: ${filhas.map((f) => "#" + f.id).join(", ")}${adeRefin ? ` (ADE refin ${adeRefin})` : ""}`,
+        performedBy: user.id,
+      });
+
+      return res.json({ ok: true, unificadas: filhas.map((f) => f.id) });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/unificar error:", e);
+      return res.status(500).json({ message: `Erro ao unificar: ${e?.message || e}` });
+    }
+  });
+
+  // ─── Desfazer unificação ────────────────────────────────────────────────────
+  app.post("/api/contracts/proposals/:id/desunificar", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = req.user!;
+      if (!user.isMaster && !["master", "operacional", "coordenacao"].includes(user.role)) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const [acum] = await db.select().from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId))).limit(1);
+      if (!acum) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      const valorPre = (acum as any).valorPreUnificacao;
+      await db.update(proposals).set({
+        ...(valorPre != null ? { contractValue: String(valorPre) } : {}),
+        valorPreUnificacao: null,
+        updatedAt: new Date(),
+      } as any).where(eq(proposals.id, id));
+
+      await db.update(proposals).set({ unificadaEmId: null, updatedAt: new Date() } as any)
+        .where(and(eq(proposals.unificadaEmId, id), eq(proposals.tenantId, tenantId)));
+
+      await db.insert(proposalHistory).values({
+        proposalId: id, toStatus: acum.status, action: "AVANCO",
+        notes: "Unificação desfeita", performedBy: user.id,
+      });
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/desunificar error:", e);
+      return res.status(500).json({ message: "Erro ao desfazer unificação" });
     }
   });
 
@@ -695,6 +808,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         companyCommissionValue: companyCommInput,
         corretorCommissionPercentage: corretorPctInput,
         corretorCommissionValue: corretorCommInput,
+        dataPagamento: dataPagamentoInput,
       } = req.body;
 
       const updateData: any = {};
@@ -702,6 +816,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (nextStepId) updateData.currentStepId = nextStepId;
       if (ade !== undefined) updateData.ade = ade;
       updateData.updatedAt = new Date();
+
+      // Ao mudar de fase (ex.: sair de "Aguardando retorno CIP"), zera a data CIP:
+      // o contador só faz sentido enquanto a proposta está aguardando o retorno.
+      if (status && status !== current.status) {
+        const cm = (current.clientMeta as Record<string, any>) || {};
+        if (cm.dataCip) updateData.clientMeta = { ...cm, dataCip: null };
+      }
 
       // Ao marcar PAGO: salva dados de comissão e inicializa commissionStatus = PENDENTE
       if (status === "PAGO") {
@@ -711,7 +832,10 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         if (corretorPctInput !== undefined) updateData.corretorCommissionPercentage = String(corretorPctInput);
         if (corretorCommInput !== undefined) updateData.corretorCommissionValue = String(corretorCommInput);
         updateData.commissionStatus = "PENDENTE"; // aguarda recebimento do banco
-        updateData.paidAt = new Date(); // data do pagamento (produção paga do mês)
+        // Data do pagamento: usa a informada (YYYY-MM-DD, pode ser anterior) ou hoje
+        updateData.paidAt = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
+          ? new Date(`${dataPagamentoInput}T12:00:00`)
+          : new Date();
       }
 
       const [updated] = await db
@@ -767,10 +891,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
             vendedorNome = v?.name || null;
           }
-          const now = new Date();
-          const mesRef = now.toISOString().slice(0, 7);
+          // Data do pagamento: usa a informada (YYYY-MM-DD) ou hoje
+          const dPag = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
+            ? new Date(`${dataPagamentoInput}T12:00:00`)
+            : new Date();
+          const mesRef = `${dPag.getFullYear()}-${String(dPag.getMonth() + 1).padStart(2, "0")}`;
           // Dashboard lê a data via TO_DATE(data_pagamento,'DD/MM/YYYY') — gravar no formato BR
-          const dataPag = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+          const dataPag = `${String(dPag.getDate()).padStart(2, "0")}/${String(dPag.getMonth() + 1).padStart(2, "0")}/${dPag.getFullYear()}`;
           const valBruto = updated.contractValue ? String(updated.contractValue) : null;
           const compEmp = updated.companyCommissionValue ? String(updated.companyCommissionValue) : null;
           // Repasse efetivo: corretor; se vazio, cai para a comissão da empresa (igual ao import CSV).
@@ -973,9 +1100,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (!target) target = req.body?.fallbackStatus || null;
       if (!target) return res.status(400).json({ message: "Não foi possível identificar a fase de retorno" });
 
+      const regMeta = (current.clientMeta as Record<string, any>) || {};
       const [updated] = await db
         .update(proposals)
-        .set({ status: target, updatedAt: new Date() })
+        .set({
+          status: target,
+          updatedAt: new Date(),
+          // Mudou de fase → zera a data CIP (contador só vale aguardando o retorno)
+          ...(target !== current.status && regMeta.dataCip ? { clientMeta: { ...regMeta, dataCip: null } } : {}),
+        })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
@@ -1051,6 +1184,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
       for (const r of rows) {
+        // Mudou de fase → zera a data CIP da proposta (clientMeta é por-linha)
+        const cm = (r.clientMeta as Record<string, any>) || {};
+        if (r.status !== status && cm.dataCip) {
+          await db.update(proposals)
+            .set({ clientMeta: { ...cm, dataCip: null } })
+            .where(and(eq(proposals.id, r.id), eq(proposals.tenantId, tenantId)));
+        }
         await db.insert(proposalHistory).values({
           proposalId: r.id,
           fromStatus: r.status,

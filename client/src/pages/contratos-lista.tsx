@@ -816,6 +816,7 @@ export default function ContratosListaPage() {
     return !isNaN(d.getTime()) && d.getFullYear() === _now.getFullYear() && d.getMonth() === _now.getMonth();
   };
   function prodValueOf(p: any) {
+    if (p.unificadaEmId) return 0; // parcela absorvida numa unificação não soma produção
     if (CANCEL_STATUSES.includes(p.status)) return 0;
     const val = parseFloat(p.contractValue || "0") || 0;
     if (p.status === "PAGO") {
@@ -896,7 +897,9 @@ export default function ContratosListaPage() {
     parceiro: (p) => (p.parceiroNome || "").toLowerCase(),
     status: (p) => new Date(p.updatedAt || p.createdAt || 0).getTime(), // atualização mais recente
   };
-  const sorted = sortBy && SORT_GET[sortBy]
+  // A caixa CIP mantém SEMPRE a ordem por data/urgência (ordenação por coluna não se
+  // aplica nela), para não embaralhar os dias de CIP com um sort herdado de outra caixa.
+  const sorted = (sortBy && SORT_GET[sortBy] && !isCipBox)
     ? [...displayed].sort((a, b) => {
         const va = SORT_GET[sortBy](a), vb = SORT_GET[sortBy](b);
         let cmp = 0;
@@ -910,9 +913,13 @@ export default function ContratosListaPage() {
     else { setSortBy(key); setSortDir("desc"); }
   }
   const sortHead = (key: string, label: string, cls = "") => (
-    <TableHead className={`cursor-pointer select-none hover:text-foreground ${cls}`} onClick={() => toggleSort(key)}>
+    // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
+    <TableHead
+      className={`select-none ${isCipBox ? "" : "cursor-pointer hover:text-foreground"} ${cls}`}
+      onClick={isCipBox ? undefined : () => toggleSort(key)}
+    >
       <span className={`inline-flex items-center gap-0.5 ${cls.includes("text-right") ? "justify-end w-full" : ""}`}>
-        {label}{sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+        {label}{!isCipBox && sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
       </span>
     </TableHead>
   );
@@ -1222,11 +1229,34 @@ export default function ContratosListaPage() {
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
-                  <TableCell className="text-sm font-mono text-xs">{p.ade || "—"}</TableCell>
+                  <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="group inline-flex items-center gap-1">
+                        {p.ade || "—"}
+                        {p.ade && (
+                          <button title="Copiar ADE" onClick={() => copyText(`ade-${p.id}`, p.ade)} className="text-muted-foreground hover:text-primary">
+                            {copiedKey === `ade-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        )}
+                      </span>
+                      {p.product === "PORTABILIDADE" && p.adeRefin && (
+                        <span className="group inline-flex items-center gap-1 text-muted-foreground">
+                          <span className="text-[10px] uppercase tracking-wide">refin</span>
+                          {p.adeRefin}
+                          <button title="Copiar ADE de refin" onClick={() => copyText(`aderefin-${p.id}`, p.adeRefin)} className="hover:text-primary">
+                            {copiedKey === `aderefin-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
+                      {p.unificadaEmId && (
+                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
+                      )}
                       {p.isPaused && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Pend.</span>
                       )}

@@ -341,6 +341,29 @@ app.use((req, res, next) => {
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);
           await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS unificada_em_id INTEGER
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE proposals ADD COLUMN IF NOT EXISTS valor_pre_unificacao DECIMAL(12,2)
+          `);
+          // Limpeza: zera a data CIP de propostas que NÃO estão num status de CIP.
+          // O contador de CIP só vale enquanto aguardando o retorno; ao sair da fase a data fica obsoleta.
+          // Guarda: só mexe em tenants que têm um status com "CIP" no rótulo (evita apagar em quem não usa CIP).
+          // Auto-limitante: após rodar, essas linhas ficam sem dataCip → 0 linhas nos boots seguintes.
+          await migDb.execute(migSql`
+            UPDATE proposals p
+            SET client_meta = p.client_meta - 'dataCip'
+            WHERE (p.client_meta ->> 'dataCip') IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM contract_statuses cs2
+                WHERE cs2.tenant_id = p.tenant_id AND lower(cs2.label) LIKE '%cip%'
+              )
+              AND p.status NOT IN (
+                SELECT cs.key FROM contract_statuses cs
+                WHERE cs.tenant_id = p.tenant_id AND lower(cs.label) LIKE '%cip%'
+              )
+          `);
+          await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS metas_digitacao_semanal (
               id                SERIAL PRIMARY KEY,
               tenant_id         INTEGER NOT NULL,
