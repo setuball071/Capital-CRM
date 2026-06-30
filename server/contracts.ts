@@ -801,6 +801,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         corretorCommissionPercentage: corretorPctInput,
         corretorCommissionValue: corretorCommInput,
         dataPagamento: dataPagamentoInput,
+        saldoInformado: saldoInformadoInput,
       } = req.body;
 
       const updateData: any = {};
@@ -809,11 +810,18 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (ade !== undefined) updateData.ade = ade;
       updateData.updatedAt = new Date();
 
-      // Ao mudar de fase (ex.: sair de "Aguardando retorno CIP"), zera a data CIP:
-      // o contador só faz sentido enquanto a proposta está aguardando o retorno.
-      if (status && status !== current.status) {
-        const cm = (current.clientMeta as Record<string, any>) || {};
-        if (cm.dataCip) updateData.clientMeta = { ...cm, dataCip: null };
+      // Mudanças no clientMeta (mescladas numa única gravação):
+      // - ao mudar de fase, zera a data CIP (contador só vale aguardando o retorno);
+      // - "Saldo informado": grava o saldo real informado em saldoDevedor.
+      let metaChanges: Record<string, any> | null = null;
+      if (status && status !== current.status && (current.clientMeta as any)?.dataCip) {
+        metaChanges = { ...(metaChanges || {}), dataCip: null };
+      }
+      if (saldoInformadoInput !== undefined && saldoInformadoInput !== null && String(saldoInformadoInput) !== "") {
+        metaChanges = { ...(metaChanges || {}), saldoDevedor: String(saldoInformadoInput) };
+      }
+      if (metaChanges) {
+        updateData.clientMeta = { ...((current.clientMeta as Record<string, any>) || {}), ...metaChanges };
       }
 
       // Ao marcar PAGO: salva dados de comissão e inicializa commissionStatus = PENDENTE

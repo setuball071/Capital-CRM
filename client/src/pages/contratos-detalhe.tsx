@@ -97,6 +97,7 @@ export default function ContratosDetalhePage() {
   const [actionNotes, setActionNotes] = useState("");
   const [adeValue, setAdeValue] = useState("");
   const [nextStatus, setNextStatus] = useState("");
+  const [saldoInformado, setSaldoInformado] = useState("");
 
   // edição inline de campos
   const [editField, setEditField] = useState<string | null>(null);
@@ -229,7 +230,7 @@ export default function ContratosDetalhePage() {
       if (!res.ok) throw new Error((await res.json()).message || "Erro");
       return res.json();
     },
-    onSuccess: () => { toast({ title: "Status atualizado" }); invalidate(); setActionNotes(""); setAdeValue(""); setNextStatus(""); },
+    onSuccess: () => { toast({ title: "Status atualizado" }); invalidate(); setActionNotes(""); setAdeValue(""); setNextStatus(""); setSaldoInformado(""); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
@@ -506,6 +507,10 @@ export default function ContratosDetalhePage() {
     !["CANCELADA", "PERDIDA"].includes(p.status)
   );
   const filhasUnif = (todasPropostas as any[]).filter((p) => p.unificadaEmId === proposal.id);
+
+  // Status "Saldo informado (aguardando corretor)": abre a caixa p/ informar o saldo real
+  const nextStatusDef = statusList.find((s) => s.key === nextStatus);
+  const isSaldoInformadoStatus = /saldo\s*informad/i.test(nextStatusDef?.label || "");
 
   // dados bancários de crédito
   const cs = m.contaSelecionada || {};
@@ -919,7 +924,7 @@ export default function ContratosDetalhePage() {
           {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
           {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
           {/* Financeiro da operação (portabilidade) */}
-          {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor", value: m.saldoDevedor, money: true, editable: true })}
+          {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
           {isPortabilidade && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
           {isPortabilidade && renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
           {/* Data CIP + contador de dias úteis (portabilidade) */}
@@ -1039,6 +1044,19 @@ export default function ContratosDetalhePage() {
               </div>
             </div>
 
+            {isSaldoInformadoStatus && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Saldo informado pelo banco</p>
+                <Input
+                  value={saldoInformado}
+                  onChange={(e) => setSaldoInformado(e.target.value)}
+                  placeholder="0,00"
+                  inputMode="decimal"
+                />
+                <p className="text-[11px] text-muted-foreground">Será salvo em "Saldo Devedor Informado" na Operação e somado ao troco no Valor Total.</p>
+              </div>
+            )}
+
             {nextStatus === "PAGO" && (
               <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20 p-3 space-y-2">
                 <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1">
@@ -1087,6 +1105,7 @@ export default function ContratosDetalhePage() {
                     ade: adeValue || undefined,
                     notes: actionNotes,
                     action: nextStatus === "PAGO" ? "PAGAMENTO" : ["CANCELADA", "PERDIDA"].includes(nextStatus) ? "CANCELAMENTO" : "AVANCO",
+                    ...(isSaldoInformadoStatus && saldoInformado.trim() ? { saldoInformado: parseBrNum(saldoInformado) } : {}),
                     ...(nextStatus === "PAGO" ? { dataPagamento } : {}),
                     ...(nextStatus === "PAGO" && commPercNum > 0 ? {
                       contractValue: contractValNum || undefined,
