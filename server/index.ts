@@ -454,6 +454,35 @@ app.use((req, res, next) => {
           console.error("nomeCorretor normalization error (non-fatal):", migErr);
         }
 
+        // Simulador de portabilidade: novos campos em regras de bancos + cotações salvas
+        try {
+          const { db: simMigDb } = await import("./storage");
+          const { sql: simMigSql } = await import("drizzle-orm");
+          await simMigDb.execute(simMigSql`
+            ALTER TABLE portability_bank_rules
+              ADD COLUMN IF NOT EXISTS pagas_min_portar INTEGER DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS pagas_min_remunerar INTEGER DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS une_saldo_negativo BOOLEAN DEFAULT FALSE,
+              ADD COLUMN IF NOT EXISTS excecoes_origem JSONB
+          `);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS cotacoes_simulador (
+              id           SERIAL PRIMARY KEY,
+              tenant_id    INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id      INTEGER,
+              cpf          VARCHAR(20) NOT NULL,
+              nome_cliente VARCHAR(255),
+              descricao    VARCHAR(500),
+              dados        JSONB NOT NULL,
+              criado_em    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_cotacoes_sim_cpf ON cotacoes_simulador(tenant_id, cpf)`);
+          log("Simulador migration OK");
+        } catch (migErr) {
+          console.error("Simulador migration error (non-fatal):", migErr);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");

@@ -28353,6 +28353,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
                taxa_livre          AS "taxaLivre",
                taxa_sugerida::float AS "taxaSugerida",
                obs,
+               COALESCE(pagas_min_portar, 0)    AS "pagasMinPortar",
+               COALESCE(pagas_min_remunerar, 0) AS "pagasMinRemunerar",
+               COALESCE(une_saldo_negativo, false) AS "uneSaldoNegativo",
+               excecoes_origem                  AS "excecoesOrigem",
                ordem,
                updated_at          AS "updatedAt"
         FROM portability_bank_rules
@@ -28397,6 +28401,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           taxaLivre: Boolean(r.taxaLivre),
           taxaSugerida: r.taxaSugerida == null || r.taxaSugerida === "" ? null : toNum(r.taxaSugerida),
           obs: Array.isArray(r.obs) ? r.obs : null,
+          pagasMinPortar: Number.isFinite(parseInt(r.pagasMinPortar, 10)) ? parseInt(r.pagasMinPortar, 10) : 0,
+          pagasMinRemunerar: Number.isFinite(parseInt(r.pagasMinRemunerar, 10)) ? parseInt(r.pagasMinRemunerar, 10) : 0,
+          uneSaldoNegativo: Boolean(r.uneSaldoNegativo),
+          excecoesOrigem: Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : null,
           ordem: Number.isFinite(parseInt(r.ordem, 10)) ? parseInt(r.ordem, 10) : idx,
         };
       });
@@ -28419,22 +28427,29 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         await db.execute(sql`
           INSERT INTO portability_bank_rules
             (tenant_id, banco, entrada_min, taxa_refim, saldo_min, min_troco,
-             taxa_livre, taxa_sugerida, obs, ordem, updated_by, updated_at)
+             taxa_livre, taxa_sugerida, obs, pagas_min_portar, pagas_min_remunerar,
+             une_saldo_negativo, excecoes_origem, ordem, updated_by, updated_at)
           VALUES
             (${tenantId}, ${r.banco}, ${r.entradaMin}, ${r.taxaRefim}, ${r.saldoMin}, ${r.minTroco},
              ${r.taxaLivre}, ${r.taxaSugerida}, ${r.obs ? JSON.stringify(r.obs) : null}::jsonb,
+             ${r.pagasMinPortar}, ${r.pagasMinRemunerar}, ${r.uneSaldoNegativo},
+             ${r.excecoesOrigem ? JSON.stringify(r.excecoesOrigem) : null}::jsonb,
              ${r.ordem}, ${user.id}, NOW())
           ON CONFLICT (tenant_id, banco) DO UPDATE SET
-            entrada_min   = EXCLUDED.entrada_min,
-            taxa_refim    = EXCLUDED.taxa_refim,
-            saldo_min     = EXCLUDED.saldo_min,
-            min_troco     = EXCLUDED.min_troco,
-            taxa_livre    = EXCLUDED.taxa_livre,
-            taxa_sugerida = EXCLUDED.taxa_sugerida,
-            obs           = EXCLUDED.obs,
-            ordem         = EXCLUDED.ordem,
-            updated_by    = ${user.id},
-            updated_at    = NOW()
+            entrada_min        = EXCLUDED.entrada_min,
+            taxa_refim         = EXCLUDED.taxa_refim,
+            saldo_min          = EXCLUDED.saldo_min,
+            min_troco          = EXCLUDED.min_troco,
+            taxa_livre         = EXCLUDED.taxa_livre,
+            taxa_sugerida      = EXCLUDED.taxa_sugerida,
+            obs                = EXCLUDED.obs,
+            pagas_min_portar   = EXCLUDED.pagas_min_portar,
+            pagas_min_remunerar= EXCLUDED.pagas_min_remunerar,
+            une_saldo_negativo = EXCLUDED.une_saldo_negativo,
+            excecoes_origem    = EXCLUDED.excecoes_origem,
+            ordem              = EXCLUDED.ordem,
+            updated_by         = ${user.id},
+            updated_at         = NOW()
         `);
       }
       if (bancosEnviados.length > 0) {
@@ -28454,6 +28469,77 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     } catch (err: any) {
       console.error("[PORTABILITY_RULES] PUT error:", err);
       res.status(500).json({ message: err?.message || "Erro ao salvar regras de portabilidade" });
+    }
+  });
+
+  // ── COTAÇÕES SIMULADOR ────────────────────────────────────────────────────
+  // Salva/restaura o estado completo do simulador de portabilidade por CPF
+
+  app.post("/api/cotacoes-simulador", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+      const { cpf, nomeCliente, descricao, dados } = req.body;
+      if (!cpf || !dados) return res.status(400).json({ message: "cpf e dados são obrigatórios" });
+      const result = await db.execute(sql`
+        INSERT INTO cotacoes_simulador (tenant_id, user_id, cpf, nome_cliente, descricao, dados)
+        VALUES (${tenantId}, ${userId}, ${cpf.trim()}, ${nomeCliente || null}, ${descricao || null}, ${JSON.stringify(dados)}::jsonb)
+        RETURNING id, criado_em AS "criadoEm"
+      `);
+      res.status(201).json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] POST error:", err);
+      res.status(500).json({ message: "Erro ao salvar cotação" });
+    }
+  });
+
+  app.get("/api/cotacoes-simulador", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const cpf = String(req.query.cpf || "").trim();
+      if (!cpf) return res.status(400).json({ message: "cpf é obrigatório" });
+      const result = await db.execute(sql`
+        SELECT id, cpf, nome_cliente AS "nomeCliente", descricao,
+               dados->>'refimBanco' AS "refimBanco",
+               criado_em AS "criadoEm"
+        FROM cotacoes_simulador
+        WHERE tenant_id = ${tenantId} AND cpf = ${cpf}
+        ORDER BY criado_em DESC
+        LIMIT 20
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] GET list error:", err);
+      res.status(500).json({ message: "Erro ao listar cotações" });
+    }
+  });
+
+  app.get("/api/cotacoes-simulador/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const id = parseInt(req.params.id, 10);
+      const result = await db.execute(sql`
+        SELECT id, cpf, nome_cliente AS "nomeCliente", descricao, dados, criado_em AS "criadoEm"
+        FROM cotacoes_simulador
+        WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+      if (!result.rows.length) return res.status(404).json({ message: "Cotação não encontrada" });
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] GET one error:", err);
+      res.status(500).json({ message: "Erro ao carregar cotação" });
+    }
+  });
+
+  app.delete("/api/cotacoes-simulador/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const id = parseInt(req.params.id, 10);
+      await db.execute(sql`DELETE FROM cotacoes_simulador WHERE id = ${id} AND tenant_id = ${tenantId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] DELETE error:", err);
+      res.status(500).json({ message: "Erro ao excluir cotação" });
     }
   });
 
