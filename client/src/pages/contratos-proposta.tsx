@@ -400,6 +400,8 @@ export default function ContratosPropostaPage() {
   const [cpfSearched, setCpfSearched] = useState(false);
   // Documentos reaproveitados do cadastro anterior (exibidos no wizard, linkados ao salvar)
   const [reusedDocs, setReusedDocs] = useState<{ id: number; documentType: string; fileName: string }[]>([]);
+  // Documentos do cadastro marcados para reaproveitar (padrão: todos)
+  const [selectedReuseDocIds, setSelectedReuseDocIds] = useState<number[]>([]);
 
   async function lookupByCpf(cpf: string): Promise<ClientLookup | null> {
     const raw = cpf.replace(/\D/g, "");
@@ -415,6 +417,7 @@ export default function ContratosPropostaPage() {
       }
       const existing: ClientLookup = await res.json();
       setClientLookup(existing);
+      setSelectedReuseDocIds((existing.documents ?? []).map((d) => d.id)); // padrão: todos marcados
       return existing;
     } catch {
       setClientLookup(null);
@@ -1325,7 +1328,8 @@ export default function ContratosPropostaPage() {
       setDocPhotoData(meta.docFoto as DocPhotoData); // dados do documento sem nova IA
       setDocPhotoSource("cached");
     }
-    setReusedDocs(clientLookup.documents ?? []); // arquivos exibidos e linkados ao salvar
+    // Reaproveita só os documentos marcados pelo corretor (padrão: todos)
+    setReusedDocs((clientLookup.documents ?? []).filter((d) => selectedReuseDocIds.includes(d.id)));
     const conv = CONVENIOS.find((c) => c.id === clientLookup.clientConvenio) || CONVENIOS.find((c) => c.id === "SIAPE");
     if (conv) setSelectedConvenio(conv);
     form.reset({
@@ -1391,10 +1395,26 @@ export default function ContratosPropostaPage() {
                 <div><span className="text-muted-foreground">Propostas anteriores: </span><span className="font-medium">{clientLookup.proposalCount}</span></div>
                 {!!clientLookup.documents?.length && (
                   <div>
-                    <span className="text-muted-foreground">Documentos no cadastro: </span>
-                    <span className="font-medium">{clientLookup.documents.length}</span>
-                    <ul className="mt-1 ml-1 text-xs text-muted-foreground list-disc list-inside">
-                      {clientLookup.documents.slice(0, 6).map((d) => <li key={d.id}>{d.fileName}</li>)}
+                    <span className="text-muted-foreground">Documentos no cadastro — selecione os que quer reaproveitar:</span>
+                    <ul className="mt-1.5 space-y-1">
+                      {clientLookup.documents.map((d) => {
+                        const checked = selectedReuseDocIds.includes(d.id);
+                        return (
+                          <li key={d.id}>
+                            <label className="flex items-center gap-2 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => setSelectedReuseDocIds((prev) =>
+                                  e.target.checked ? [...prev, d.id] : prev.filter((x) => x !== d.id)
+                                )}
+                              />
+                              <span className="font-medium">{d.fileName}</span>
+                              {d.documentType && <span className="text-muted-foreground">({d.documentType})</span>}
+                            </label>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

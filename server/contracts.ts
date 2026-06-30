@@ -1529,15 +1529,33 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       const latest = rows[0];
 
-      // Documentos do último cadastro (para reaproveitamento sem novo upload)
-      const lookupDocs = await db
+      // Documentos de TODAS as propostas deste cliente (para reaproveitamento sem novo upload).
+      // Dedup por (tipo + nome do arquivo), mantendo o da proposta mais recente. Só docs com
+      // arquivo no storage (os únicos reaproveitáveis).
+      const rawDocs = await db
         .select({
           id: proposalDocuments.id,
           documentType: proposalDocuments.documentType,
           fileName: proposalDocuments.fileName,
+          storageKey: proposalDocuments.storageKey,
         })
         .from(proposalDocuments)
-        .where(eq(proposalDocuments.proposalId, latest.id));
+        .innerJoin(proposals, eq(proposalDocuments.proposalId, proposals.id))
+        .where(and(
+          eq(proposals.tenantId, tenantId),
+          inArray(proposalDocuments.proposalId, rows.map((r) => r.id)),
+        ))
+        .orderBy(desc(proposals.createdAt));
+      const seenDoc = new Set<string>();
+      const lookupDocs = rawDocs
+        .filter((d) => !!d.storageKey)
+        .filter((d) => {
+          const key = `${d.documentType}|${(d.fileName || "").toLowerCase()}`;
+          if (seenDoc.has(key)) return false;
+          seenDoc.add(key);
+          return true;
+        })
+        .map((d) => ({ id: d.id, documentType: d.documentType, fileName: d.fileName }));
 
       return res.json({
         clientName: latest.clientName,
