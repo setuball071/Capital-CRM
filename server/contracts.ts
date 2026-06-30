@@ -17,23 +17,15 @@ import {
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
+import { saveDocument, getDocument } from "./document-storage";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import { Client as ObjectStorageClient } from "@replit/object-storage";
 
 const uploadDocMemory = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
-
-// Replit Object Storage — instanciado sob demanda (evita derrubar o boot se o bucket
-// ainda não estiver ativado). Persiste anexos entre deploys (disco do Replit é efêmero).
-let _objStore: ObjectStorageClient | null = null;
-function getObjectStore(): ObjectStorageClient {
-  if (!_objStore) _objStore = new ObjectStorageClient();
-  return _objStore;
-}
 
 // Content-Type simples por extensão (para servir o anexo com o tipo certo)
 function contentTypeFor(name: string): string {
@@ -506,23 +498,23 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(eq(proposalDocuments.proposalId, sourceId));
 
       for (const doc of docs) {
-        if (!doc.storageKey) continue; // legado sem arquivo no Object Storage
+        if (!doc.storageKey) continue; // legado sem arquivo no storage
         try {
-          const dl: any = await getObjectStore().downloadAsBytes(doc.storageKey);
-          if (!dl || dl.ok === false) continue;
-          const bytes: Uint8Array = dl.value ?? dl;
+          const { buffer, contentType } = await getDocument(doc.storageKey);
           const ext = path.extname(doc.fileName || doc.storageKey);
           const newKey = `proposals/${nova.id}/${doc.documentType}-${Date.now()}${ext}`;
-          const ul: any = await getObjectStore().uploadFromBytes(newKey, bytes);
-          if (ul && ul.ok === false) continue;
-          await db.insert(proposalDocuments).values({
+          await saveDocument(newKey, buffer, contentType || contentTypeFor(doc.fileName || newKey));
+          const [novoDoc] = await db.insert(proposalDocuments).values({
             proposalId: nova.id,
             documentType: doc.documentType,
-            fileUrl: newKey,
+            fileUrl: "",
             storageKey: newKey,
             fileName: doc.fileName,
             uploadedBy: user.id,
-          });
+          }).returning();
+          await db.update(proposalDocuments)
+            .set({ fileUrl: `/api/contracts/documents/${novoDoc.id}/file` })
+            .where(eq(proposalDocuments.id, novoDoc.id));
         } catch (docErr) {
           console.error(`[clone] falha ao copiar doc ${doc.id}:`, docErr);
           // não aborta o clone, só pula o arquivo
@@ -1401,30 +1393,37 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           .limit(1);
         if (!proposal) return res.status(404).json({ message: "Proposta não encontrada" });
 
-        // Grava no Replit Object Storage (persistente entre deploys)
-        const ext = path.extname(req.file.originalname);
-        const storageKey = `proposals/${proposalId}/${documentType}-${Date.now()}${ext}`;
-        try {
-          const result: any = await getObjectStore().uploadFromBytes(storageKey, req.file.buffer);
-          if (result && result.ok === false) throw new Error(result.error?.message || "upload falhou");
-        } catch (storErr: any) {
-          console.error("[Object Storage] upload error:", storErr);
-          return res.status(500).json({
-            message: "Falha ao salvar no Object Storage. Verifique se o Object Storage está ativado no Repl.",
-          });
-        }
+        const ext        = path.extname(req.file.originalname);
+        const fileName   = `${documentType}-${Date.now()}${ext}`;
+        const objectPath = `proposals/${proposalId}/${fileName}`;
 
+        // Grava no storage (Supabase em produção, disco como fallback)
+        await saveDocument(
+          objectPath,
+          req.file.buffer,
+          req.file.mimetype || "application/octet-stream",
+        );
+
+        // Insere o registro e, com o id em mãos, define a URL pública
+        // (endpoint protegido que resolve o storage por baixo).
         const [doc] = await db
           .insert(proposalDocuments)
           .values({
             proposalId,
             documentType,
-            fileUrl: storageKey,        // referência (a leitura é via /documents/:id/file)
-            storageKey,
+            fileUrl: "",
+            storageKey: objectPath,
             fileName: req.file.originalname,
             uploadedBy: user.id,
           })
           .returning();
+
+        const fileUrl = `/api/contracts/documents/${doc.id}/file`;
+        await db
+          .update(proposalDocuments)
+          .set({ fileUrl })
+          .where(eq(proposalDocuments.id, doc.id));
+        doc.fileUrl = fileUrl;
 
         return res.status(201).json(doc);
       } catch (e: any) {
@@ -1434,43 +1433,45 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     },
   );
 
-  // Servir/baixar um documento (lê do Object Storage) — autenticado e por tenant
-  app.get("/api/contracts/documents/:docId/file", requireAuth, async (req: any, res) => {
+  // ===================== DOWNLOAD DE DOCUMENTOS =====================
+
+  // Serve o anexo a partir do storage (Supabase ou disco), com checagem de
+  // sessão e de tenant. Anexos antigos (sem storageKey) caem no /uploads.
+  app.get("/api/contracts/documents/:id/file", requireAuth, async (req: any, res) => {
     try {
-      const docId = parseInt(req.params.docId);
+      const docId    = parseInt(req.params.id);
       const tenantId = req.tenantId!;
 
-      // Garante que o documento pertence a uma proposta do tenant
-      const [doc] = await db
+      const [row] = await db
         .select({
-          id: proposalDocuments.id,
-          fileName: proposalDocuments.fileName,
           storageKey: proposalDocuments.storageKey,
           fileUrl: proposalDocuments.fileUrl,
+          fileName: proposalDocuments.fileName,
         })
         .from(proposalDocuments)
-        .innerJoin(proposals, eq(proposalDocuments.proposalId, proposals.id))
+        .innerJoin(proposals, eq(proposals.id, proposalDocuments.proposalId))
         .where(and(eq(proposalDocuments.id, docId), eq(proposals.tenantId, tenantId)))
         .limit(1);
 
-      if (!doc) return res.status(404).json({ message: "Documento não encontrado" });
-      if (!doc.storageKey) {
-        return res.status(410).json({ message: "Arquivo legado indisponível (enviado antes do armazenamento permanente). Reenvie o documento." });
+      if (!row) return res.status(404).json({ message: "Documento não encontrado" });
+
+      // Anexos antigos sem storageKey eram servidos direto via /uploads.
+      if (!row.storageKey) {
+        if (row.fileUrl?.startsWith("/uploads/")) return res.redirect(row.fileUrl);
+        return res.status(404).json({ message: "Arquivo indisponível" });
       }
 
-      const result: any = await getObjectStore().downloadAsBytes(doc.storageKey);
-      if (!result || result.ok === false) {
-        return res.status(404).json({ message: "Arquivo não encontrado no armazenamento" });
-      }
-      const buffer: Buffer = Array.isArray(result.value) ? result.value[0] : result.value;
-
-      res.setHeader("Content-Type", contentTypeFor(doc.fileName));
+      const { buffer, contentType } = await getDocument(row.storageKey);
+      res.setHeader("Content-Type", contentType || contentTypeFor(row.fileName || ""));
       const disposition = req.query.download ? "attachment" : "inline";
-      res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(doc.fileName)}"`);
+      res.setHeader(
+        "Content-Disposition",
+        `${disposition}; filename="${encodeURIComponent(row.fileName || "documento")}"`,
+      );
       return res.send(buffer);
     } catch (e: any) {
-      console.error("GET /api/contracts/documents/:docId/file error:", e);
-      return res.status(500).json({ message: "Erro ao carregar documento" });
+      console.error("GET /api/contracts/documents/:id/file error:", e);
+      return res.status(500).json({ message: "Erro ao baixar documento" });
     }
   });
 

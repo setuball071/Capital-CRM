@@ -145,6 +145,11 @@ const BLOCKED_USER_AGENTS = [
 ];
 
 export function botDetection(req: Request, res: Response, next: NextFunction) {
+  // API externa (parceiros) usa API Key própria + rate limit próprio —
+  // é chamada servidor-a-servidor (sem User-Agent de browser), então isenta.
+  // Usa originalUrl pois o middleware é montado em "/api" (req.path vem sem o prefixo).
+  if (req.originalUrl.startsWith("/api/external/")) return next();
+
   // Lemit Worker usa chave própria — isento de detecção de bot
   if (req.headers["x-lemit-key"]) return next();
 

@@ -3492,6 +3492,12 @@ export const proposals = pgTable("proposals", {
   clientMeta: jsonb("client_meta"),
   vendorId: integer("vendor_id").references(() => users.id),
   createdBy: integer("created_by").notNull().references(() => users.id),
+  // Portabilidade — captura de origem/saldo/datas (preenchido na ficha; alimenta o dashboard Portabilidades)
+  bancoOrigem: varchar("banco_origem", { length: 255 }),
+  saldoInformado: decimal("saldo_informado", { precision: 12, scale: 2 }),
+  saldoPago: decimal("saldo_pago", { precision: 12, scale: 2 }),
+  dataCip: timestamp("data_cip"),
+  dataSaldo: timestamp("data_saldo"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -3547,6 +3553,9 @@ export const proposalDocuments = pgTable("proposal_documents", {
   proposalId: integer("proposal_id").notNull().references(() => proposals.id, { onDelete: "cascade" }),
   documentType: varchar("document_type", { length: 50 }).notNull(),
   fileUrl: text("file_url").notNull(),
+  // Chave do objeto no storage (Supabase Storage ou disco). Null em anexos antigos
+  // servidos direto via /uploads.
+  storageKey: text("storage_key"),
   fileName: varchar("file_name", { length: 255 }).notNull(),
   storageKey: text("storage_key"), // chave no Replit Object Storage (null = legado em disco)
   uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
@@ -3983,6 +3992,7 @@ export const apiKeys = pgTable("api_keys", {
   chaveHash: varchar("chave_hash", { length: 64 }).notNull().unique(),
   prefixo: varchar("prefixo", { length: 12 }),
   ativo: boolean("ativo").notNull().default(true),
+  escopos: jsonb("escopos").$type<string[]>().notNull().default(["margens", "contratos"]), // blocos que a chave pode retornar
   ultimoUso: timestamp("ultimo_uso"),
   totalRequisicoes: integer("total_requisicoes").notNull().default(0),
   criadoPor: integer("criado_por").references(() => users.id),

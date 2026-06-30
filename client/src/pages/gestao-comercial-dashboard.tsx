@@ -1,5 +1,19 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import VisaoGeralTab from "@/components/dashboard-gerencial/tabs/VisaoGeralTab";
+import PerformanceTab from "@/components/dashboard-gerencial/tabs/PerformanceTab";
+import PortabilidadesTab from "@/components/dashboard-gerencial/tabs/PortabilidadesTab";
+import PerfilTab from "@/components/dashboard-gerencial/tabs/PerfilTab";
+import InteligenciaTab from "@/components/dashboard-gerencial/tabs/InteligenciaTab";
+import DnaTab from "@/components/dashboard-gerencial/tabs/DnaTab";
+
+function EmBreve({ nome }: { nome: string }) {
+  return (
+    <div className="py-16 text-center text-muted-foreground" data-testid={`tab-placeholder-${nome}`}>
+      {nome} — em desenvolvimento.
+    </div>
+  );
+}
 
 export default function GestaoComercialDashboardPage() {
   return (
@@ -8,16 +22,28 @@ export default function GestaoComercialDashboardPage() {
         <BarChart3 className="h-6 w-6 text-muted-foreground" />
         <h1 className="text-2xl font-semibold" data-testid="text-page-title">Dashboard da Empresa</h1>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Visão Geral</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground" data-testid="text-placeholder">
-            Painel de indicadores da empresa em desenvolvimento.
-          </p>
-        </CardContent>
-      </Card>
+
+      <Tabs defaultValue="visao-geral">
+        <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
+          <TabsTrigger value="performance">Performance Comercial</TabsTrigger>
+          <TabsTrigger value="portabilidades">Portabilidades</TabsTrigger>
+          <TabsTrigger value="perfil">Perfil dos Clientes</TabsTrigger>
+          <TabsTrigger value="operacional">Gestão Operacional</TabsTrigger>
+          <TabsTrigger value="inteligencia">Inteligência Comercial</TabsTrigger>
+          <TabsTrigger value="dna">DNA do Corretor</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="visao-geral" className="mt-4">
+          <VisaoGeralTab />
+        </TabsContent>
+        <TabsContent value="performance" className="mt-4"><PerformanceTab /></TabsContent>
+        <TabsContent value="portabilidades" className="mt-4"><PortabilidadesTab /></TabsContent>
+        <TabsContent value="perfil" className="mt-4"><PerfilTab /></TabsContent>
+        <TabsContent value="operacional" className="mt-4"><EmBreve nome="Gestão Operacional" /></TabsContent>
+        <TabsContent value="inteligencia" className="mt-4"><InteligenciaTab /></TabsContent>
+        <TabsContent value="dna" className="mt-4"><DnaTab /></TabsContent>
+      </Tabs>
     </div>
   );
 }

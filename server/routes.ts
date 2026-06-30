@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
 import https from "https";
+import { randomBytes } from "crypto";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -377,8 +378,48 @@ function safeCompetencia(val: any): string | null {
   }
   return String(val);
 }
+
+// Deduplica vínculos que na verdade são o MESMO vínculo, divergindo só pela
+// formatação da matrícula (ex.: "162642" vs "0162642" — zero à esquerda, vindo
+// de importações diferentes). Agrupa por matrícula normalizada (sem zeros à
+// esquerda) e mantém um único representante por grupo, preferindo o vínculo
+// efetivo/selecionado (o que carrega a folha mais recente). Matrícula vazia não
+// é agrupada (cada uma fica separada pelo próprio id). Não altera a lista usada
+// internamente pra buscar folha/contratos — só a lista de EXIBIÇÃO.
+function dedupVinculosPorMatricula<
+  T extends { id: number; matricula?: string | null; ultimaAtualizacao?: any },
+>(vinculos: T[], preferId?: number | null): T[] {
+  const norm = (m: any) => String(m ?? "").trim().replace(/^0+/, "");
+  const grupos = new Map<string, T[]>();
+  for (const v of vinculos) {
+    const chave = norm(v.matricula);
+    const key = chave === "" ? `__id_${v.id}` : chave;
+    const arr = grupos.get(key) || [];
+    arr.push(v);
+    grupos.set(key, arr);
+  }
+  const repr: T[] = [];
+  for (const arr of grupos.values()) {
+    if (arr.length === 1) {
+      repr.push(arr[0]);
+      continue;
+    }
+    const preferido =
+      (preferId != null && arr.find((v) => v.id === preferId)) ||
+      arr
+        .slice()
+        .sort((a, b) => {
+          const ta = a.ultimaAtualizacao ? new Date(a.ultimaAtualizacao).getTime() : 0;
+          const tb = b.ultimaAtualizacao ? new Date(b.ultimaAtualizacao).getTime() : 0;
+          return tb - ta;
+        })[0];
+    repr.push(preferido);
+  }
+  return repr;
+}
 import { z } from "zod";
 import { storage, db } from "./storage";
+import { registerDashboardGerencialRoutes } from "./dashboard-gerencial";
 import {
   resolveTenant,
   requireTenant,
@@ -1447,6 +1488,9 @@ async function getPacotesPreco(): Promise<PacotePrecoData[]> {
 export async function registerRoutes(app: Express): Promise<Server> {
   // ===== TENANT RESOLUTION MIDDLEWARE =====
   app.use(resolveTenant);
+
+  // ===== DASHBOARD GERENCIAL (só-Master) =====
+  registerDashboardGerencialRoutes(app, requireAuth, requireMaster);
 
   // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
   // Catches database connection errors and returns user-friendly messages
@@ -10622,6 +10666,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
         const vinculos = vinculosTodos;
 
+        // Lista de EXIBIÇÃO deduplicada (mesmo vínculo com matrícula divergente
+        // por zero à esquerda vira um só). A lógica interna segue usando todos.
+        const vinculosDisplay = dedupVinculosPorMatricula(
+          vinculos,
+          vinculoIdEfetivo,
+        );
+
         // Get folha data - sempre buscar por vínculo quando disponível, senão por pessoa (fallback para dados legados)
         let folhaRegistros;
         if (vinculoIdEfetivo) {
@@ -10839,7 +10890,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             base_tag: c.baseTag,
             dados_brutos: c.dadosBrutos,
           })),
-          vinculos: vinculos.map((v) => ({
+          vinculos: vinculosDisplay.map((v) => ({
             id: v.id,
             cpf: v.cpf,
             matricula: v.matricula,
@@ -10854,7 +10905,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             extras_vinculo: v.extrasVinculo || null,
           })),
           vinculo_selecionado: vinculoIdEfetivo,
-          tem_multiplos_vinculos: vinculos.length > 1,
+          tem_multiplos_vinculos: vinculosDisplay.length > 1,
           higienizacao: {
             // Combina telefones da tabela clientes_telefones com telefones de client_contacts (dados complementares)
             telefones: [
@@ -15384,6 +15435,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       );
       const vinculosFiltrados =
         vinculosValidos.length > 0 ? vinculosValidos : vinculos;
+      // Deduplica mesma matrícula divergindo só por zero à esquerda (exibição).
+      const vinculosFiltradosDedup = dedupVinculosPorMatricula(
+        vinculosFiltrados,
+        vinculoAtual?.id,
+      );
 
       // Get folha
       let folhaRegistros;
@@ -15652,8 +15708,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           emails: uniqueEmails,
         },
         vinculo: vinculoAtual ? normalizarVinculo(vinculoAtual) : null,
-        vinculos: vinculosFiltrados.map(normalizarVinculo),
-        tem_multiplos_vinculos: vinculosFiltrados.length > 1,
+        vinculos: vinculosFiltradosDedup.map(normalizarVinculo),
+        tem_multiplos_vinculos: vinculosFiltradosDedup.length > 1,
         pessoaId: cliente.id,
         leadId,
         portfolioInfo: portfolioCheck?.portfolioInfo ?? null,
@@ -23410,7 +23466,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       ];
       if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
-      if (corretor) conditions.push(eq(producoesContratos.nomeCorretor, corretor as string));
+      if (corretor) conditions.push(sql`UPPER(${producoesContratos.nomeCorretor}) = UPPER(${corretor as string})`);
 
       const contratos = await db
         .select()
@@ -23463,7 +23519,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const meses = [...new Set(todos.map(c => c.mesReferencia).filter(Boolean))].sort().reverse();
       const bancos = [...new Set(todos.map(c => c.banco).filter(Boolean))].sort();
-      const corretores = [...new Set(todos.map(c => c.nomeCorretor).filter(Boolean))].sort();
+      const corretores = [...new Map(todos.map(c => c.nomeCorretor).filter(Boolean).map(n => [n!.toUpperCase(), n!.toUpperCase()])).values()].sort();
 
       return res.json({
         contratos: contratosComParceiro,
@@ -23473,6 +23529,325 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error: any) {
       console.error("[FINANCEIRO-PRODUCAO] Error:", error);
       return res.status(500).json({ message: "Erro ao buscar produção" });
+    }
+  });
+
+  // ==========================================
+  // Financeiro - Importar Produção por Parceiro
+  // ==========================================
+
+  app.post(
+    "/api/financeiro/producao/importar-parceiro/preview",
+    requireAuth,
+    upload.single("arquivo"),
+    async (req: any, res) => {
+      try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+        const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
+        if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
+
+        const parceiro = String(req.body?.parceiro || "").trim().toLowerCase();
+        if (!["d7", "gold", "amf", "bevi"].includes(parceiro)) {
+          return res.status(400).json({ message: "Parceiro inválido" });
+        }
+        const file = req.file;
+        if (!file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
+
+        const parseNumBR2 = (v: any): number => {
+          if (v == null || v === "") return 0;
+          let s = String(v).trim().replace(/R\$\s*/gi, "").replace(/\s+/g, "").replace(/%/g, "");
+          if (s === "" || s === "-" || s === "—") return 0;
+          if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
+            s = s.replace(/\./g, "").replace(",", ".");
+          } else if (s.indexOf(",") > -1) {
+            s = s.replace(",", ".");
+          }
+          const n = parseFloat(s);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const parseDateBR2 = (v: any): string => {
+          if (!v) return "";
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          const s = String(v).trim();
+          const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+          const serial = parseInt(s);
+          if (!isNaN(serial) && serial > 1000 && serial < 80000) {
+            const d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+            if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+          }
+          return "";
+        };
+
+        const parseCsvRows = (buf: Buffer): Record<string, string>[] => {
+          let text: string;
+          if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+            text = buf.slice(3).toString("utf-8");
+          } else {
+            const tentativa = buf.toString("utf-8");
+            text = tentativa.includes("") ? buf.toString("latin1") : tentativa;
+          }
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          if (lines.length < 2) return [];
+          const header = lines[0].split(";").map(h => h.replace(/^"|"$/g, "").trim());
+          const result: Record<string, string>[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(";").map(c => c.replace(/^"|"$/g, "").trim());
+            if (cols.length < 2) continue;
+            const row: Record<string, string> = {};
+            header.forEach((h, idx) => { row[h] = cols[idx] || ""; });
+            result.push(row);
+          }
+          return result;
+        };
+
+        interface ParsedRow {
+          ade: string;
+          nomeCliente: string;
+          cpfCliente: string;
+          banco: string;
+          dataPagamento: string;
+          valorBase: number;
+          comissaoPerc: number;
+          comissaoValor: number;
+          vendedor?: string;
+          tipoContrato?: string;
+          prazo?: string;
+        }
+
+        const rows: ParsedRow[] = [];
+        const invalidos: { linha: number; motivo: string }[] = [];
+
+        if (parceiro === "d7") {
+          const csvRows = parseCsvRows(file.buffer);
+          const byAde = new Map<string, { base: number; valor: number; cliente: string; cpf: string; banco: string; data: string; produto: string }>();
+          csvRows.forEach((r, i) => {
+            const ade = r["PROPOSTA"] || "";
+            if (!ade) { invalidos.push({ linha: i + 2, motivo: "PROPOSTA vazia" }); return; }
+            const base = parseNumBR2(r["BASE CALCULO"]);
+            const valor = parseNumBR2(r["VALOR"]);
+            const exist = byAde.get(ade);
+            if (exist) {
+              exist.base += base;
+              exist.valor += valor;
+            } else {
+              byAde.set(ade, {
+                base, valor,
+                cliente: r["CLIENTE"] || "",
+                cpf: r["CNPJ_CPF"] || "",
+                banco: r["BANCO"] || "INTER",
+                data: parseDateBR2(r["DATA PAGTO"]),
+                produto: r["PRODUTO"] || "",
+              });
+            }
+          });
+          for (const [ade, r] of byAde) {
+            rows.push({
+              ade,
+              nomeCliente: r.cliente,
+              cpfCliente: r.cpf,
+              banco: r.banco,
+              dataPagamento: r.data,
+              valorBase: r.base,
+              comissaoPerc: r.base > 0 ? Math.round((r.valor / r.base) * 10000) / 100 : 0,
+              comissaoValor: r.valor,
+              tipoContrato: r.produto,
+            });
+          }
+        } else if (parceiro === "gold") {
+          const csvRows = parseCsvRows(file.buffer);
+          csvRows.forEach((r, i) => {
+            const ade = r["NUM_PROPOSTA"] || r["NUM_CONTRATO"] || "";
+            if (!ade) { invalidos.push({ linha: i + 2, motivo: "NUM_PROPOSTA vazia" }); return; }
+            rows.push({
+              ade,
+              nomeCliente: r["NOM_CLIENTE"] || "",
+              cpfCliente: r["COD_CPF_CLIENTE"] || "",
+              banco: r["NOM_BANCO"] || "",
+              dataPagamento: parseDateBR2(r["DAT_CREDITO"] || r["DAT_EMPRESTIMO"]),
+              valorBase: parseNumBR2(r["VAL_BASE_COMISSAO"]),
+              comissaoPerc: parseNumBR2(r["PERCENTUAL_REPASSE_TOTAL"]),
+              comissaoValor: parseNumBR2(r["VAL_COMISSAO_TOTAL"]),
+              tipoContrato: r["DSC_TIPO_PROPOSTA_EMPRESTIMO"] || "",
+              prazo: r["QTD_PARCELA"] || "",
+            });
+          });
+        } else if (parceiro === "amf") {
+          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (data.length < 2) return res.status(400).json({ message: "Arquivo AMF vazio" });
+          const header = (data[0] as string[]).map(h => String(h).trim());
+          const idx = (name: string) => header.indexOf(name);
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i] as any[];
+            const ade = String(row[idx("Proposta")] || "").trim();
+            if (!ade) { invalidos.push({ linha: i + 1, motivo: "Proposta vazia" }); continue; }
+            rows.push({
+              ade,
+              nomeCliente: String(row[idx("Cliente")] || "").trim(),
+              cpfCliente: String(row[idx("CPF")] || "").trim(),
+              banco: String(row[idx("Banco")] || "").trim(),
+              dataPagamento: parseDateBR2(row[idx("Data Pagamento")]),
+              valorBase: parseNumBR2(row[idx("Valor bruto (R$)")]),
+              comissaoPerc: parseNumBR2(row[idx("(%) Comissão")]),
+              comissaoValor: parseNumBR2(row[idx("Valor Comissão (R$)")]),
+              vendedor: String(row[idx("Vendedor")] || "").trim() || undefined,
+              tipoContrato: String(row[idx("Tabela")] || "").trim() || undefined,
+              prazo: String(row[idx("Prazo")] || "").trim() || undefined,
+            });
+          }
+        } else if (parceiro === "bevi") {
+          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (data.length < 3) return res.status(400).json({ message: "Arquivo Bevi vazio" });
+          const header = (data[1] as string[]).map(h => String(h).trim());
+          const idx = (name: string) => header.indexOf(name);
+          for (let i = 2; i < data.length - 1; i++) {
+            const row = data[i] as any[];
+            const ade = String(row[idx("Nr. Adesão")] || row[idx("Nr. Contrato")] || "").trim();
+            if (!ade) { invalidos.push({ linha: i + 1, motivo: "Nr. Adesão vazio" }); continue; }
+            rows.push({
+              ade,
+              nomeCliente: String(row[idx("Cliente")] || "").trim(),
+              cpfCliente: String(row[idx("CPF")] || "").trim(),
+              banco: String(row[idx("Financeira")] || "").trim(),
+              dataPagamento: parseDateBR2(row[idx("Data Pagamento")]),
+              valorBase: parseNumBR2(row[idx("Valor Base Comissão")]),
+              comissaoPerc: parseNumBR2(row[idx("Perc. Comissão")]),
+              comissaoValor: parseNumBR2(row[idx("Valor Comissão")]),
+              tipoContrato: String(row[idx("Prazo")] || "").trim() || undefined,
+            });
+          }
+        }
+
+        if (!rows.length && !invalidos.length) {
+          return res.status(400).json({ message: "Nenhuma linha encontrada no arquivo" });
+        }
+
+        // Cruzar ADEs com proposals e verificar duplicatas
+        const adeList = [...new Set(rows.map(r => r.ade))];
+        const existingAdes = new Set<string>();
+        const proposalByAde = new Map<string, { id: number; vendedor: string | null }>();
+
+        if (adeList.length > 0) {
+          const existingRecs = await db
+            .select({ contratoId: producoesContratos.contratoId })
+            .from(producoesContratos)
+            .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.contratoId, adeList)));
+          for (const e of existingRecs) existingAdes.add(e.contratoId);
+
+          const props = await db
+            .select({ id: proposals.id, ade: proposals.ade, vendedor: users.name })
+            .from(proposals)
+            .leftJoin(users, eq(proposals.vendedorId, users.id))
+            .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
+          for (const p of props) if (p.ade) proposalByAde.set(p.ade, { id: p.id, vendedor: p.vendedor });
+        }
+
+        const matched: any[] = [];
+        const semMatch: any[] = [];
+        for (const row of rows) {
+          const jaExiste = existingAdes.has(row.ade);
+          const proposal = proposalByAde.get(row.ade);
+          const item = { ...row, jaExiste, proposalId: proposal?.id ?? null, vendedorProposal: proposal?.vendedor ?? null };
+          if (proposal) matched.push(item);
+          else semMatch.push(item);
+        }
+
+        return res.json({ matched, semMatch, invalidos });
+      } catch (error: any) {
+        console.error("[IMPORT-PARCEIRO-PREVIEW]", error);
+        return res.status(500).json({ message: "Erro ao analisar arquivo: " + error.message });
+      }
+    },
+  );
+
+  app.post("/api/financeiro/producao/importar-parceiro/confirmar", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
+      if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
+
+      const { linhas } = req.body || {};
+      if (!Array.isArray(linhas) || !linhas.length) return res.status(400).json({ message: "Nenhuma linha para importar" });
+
+      let inseridos = 0;
+      const erros: string[] = [];
+
+      for (const r of linhas) {
+        try {
+          const ade = String(r.ade || "").trim();
+          if (!ade) continue;
+          const mesRef = r.dataPagamento ? String(r.dataPagamento).slice(0, 7) : null;
+          const nomeCorr = String(r.vendedor || r.vendedorProposal || "").trim().toUpperCase() || null;
+          const record: any = {
+            tenantId,
+            contratoId: ade,
+            nomeCliente: r.nomeCliente || null,
+            cpfCliente: r.cpfCliente || null,
+            banco: r.banco || null,
+            tipoContrato: r.tipoContrato || null,
+            prazo: r.prazo || null,
+            dataPagamento: r.dataPagamento || null,
+            valorBase: r.valorBase != null ? String(r.valorBase) : null,
+            valorBruto: r.valorBase != null ? String(r.valorBase) : null,
+            comissaoRepassePerc: r.comissaoPerc != null ? String(r.comissaoPerc) : null,
+            comissaoRepasseValor: r.comissaoValor != null ? String(r.comissaoValor) : null,
+            status: "Importado",
+            mesReferencia: mesRef,
+            importadoPor: req.user?.id || null,
+            statusComissao: "Aguardando",
+            proposalId: r.proposalId || null,
+            vendedorNome: String(r.vendedor || r.vendedorProposal || "").trim() || null,
+            nomeCorretor: nomeCorr,
+          };
+
+          // Verifica se já existe
+          const existing = await db
+            .select({ id: producoesContratos.id })
+            .from(producoesContratos)
+            .where(and(eq(producoesContratos.contratoId, ade), eq(producoesContratos.tenantId, tenantId)))
+            .limit(1);
+
+          if (existing.length > 0) {
+            await db
+              .update(producoesContratos)
+              .set({
+                nomeCliente: record.nomeCliente,
+                cpfCliente: record.cpfCliente,
+                banco: record.banco,
+                tipoContrato: record.tipoContrato,
+                dataPagamento: record.dataPagamento,
+                valorBase: record.valorBase,
+                valorBruto: record.valorBruto,
+                comissaoRepassePerc: record.comissaoRepassePerc,
+                comissaoRepasseValor: record.comissaoRepasseValor,
+                status: record.status,
+                mesReferencia: record.mesReferencia,
+                proposalId: record.proposalId,
+                vendedorNome: record.vendedorNome,
+                nomeCorretor: record.nomeCorretor,
+              })
+              .where(and(eq(producoesContratos.id, existing[0].id), eq(producoesContratos.tenantId, tenantId)));
+          } else {
+            await db.insert(producoesContratos).values(record);
+          }
+          inseridos++;
+        } catch (e: any) {
+          erros.push(`ADE ${r.ade}: ${e.message}`);
+        }
+      }
+
+      return res.json({ ok: true, inseridos, erros });
+    } catch (error: any) {
+      console.error("[IMPORT-PARCEIRO-CONFIRMAR]", error);
+      return res.status(500).json({ message: "Erro ao importar: " + error.message });
     }
   });
 
@@ -24002,7 +24377,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             tipoContrato,
             convenio: String(row.Convenio || "").trim(),
             prazo: String(row.Prazo || "").trim(),
-            nomeCorretor: String(row.NomeCorretor || "").trim(),
+            nomeCorretor: String(row.NomeCorretor || "").trim().toUpperCase(),
             codigoCorretor: String(row.CodigoCorretor || "").trim(),
             grupoVendedor: String(row.NomeGrupoVendedor || "").trim(),
             filial: String(row.Filial || "").trim(),
@@ -27978,6 +28353,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
                taxa_livre          AS "taxaLivre",
                taxa_sugerida::float AS "taxaSugerida",
                obs,
+               COALESCE(pagas_min_portar, 0)    AS "pagasMinPortar",
+               COALESCE(pagas_min_remunerar, 0) AS "pagasMinRemunerar",
+               COALESCE(une_saldo_negativo, false) AS "uneSaldoNegativo",
+               excecoes_origem                  AS "excecoesOrigem",
                ordem,
                updated_at          AS "updatedAt"
         FROM portability_bank_rules
@@ -28022,6 +28401,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           taxaLivre: Boolean(r.taxaLivre),
           taxaSugerida: r.taxaSugerida == null || r.taxaSugerida === "" ? null : toNum(r.taxaSugerida),
           obs: Array.isArray(r.obs) ? r.obs : null,
+          pagasMinPortar: Number.isFinite(parseInt(r.pagasMinPortar, 10)) ? parseInt(r.pagasMinPortar, 10) : 0,
+          pagasMinRemunerar: Number.isFinite(parseInt(r.pagasMinRemunerar, 10)) ? parseInt(r.pagasMinRemunerar, 10) : 0,
+          uneSaldoNegativo: Boolean(r.uneSaldoNegativo),
+          excecoesOrigem: Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : null,
           ordem: Number.isFinite(parseInt(r.ordem, 10)) ? parseInt(r.ordem, 10) : idx,
         };
       });
@@ -28044,22 +28427,29 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         await db.execute(sql`
           INSERT INTO portability_bank_rules
             (tenant_id, banco, entrada_min, taxa_refim, saldo_min, min_troco,
-             taxa_livre, taxa_sugerida, obs, ordem, updated_by, updated_at)
+             taxa_livre, taxa_sugerida, obs, pagas_min_portar, pagas_min_remunerar,
+             une_saldo_negativo, excecoes_origem, ordem, updated_by, updated_at)
           VALUES
             (${tenantId}, ${r.banco}, ${r.entradaMin}, ${r.taxaRefim}, ${r.saldoMin}, ${r.minTroco},
              ${r.taxaLivre}, ${r.taxaSugerida}, ${r.obs ? JSON.stringify(r.obs) : null}::jsonb,
+             ${r.pagasMinPortar}, ${r.pagasMinRemunerar}, ${r.uneSaldoNegativo},
+             ${r.excecoesOrigem ? JSON.stringify(r.excecoesOrigem) : null}::jsonb,
              ${r.ordem}, ${user.id}, NOW())
           ON CONFLICT (tenant_id, banco) DO UPDATE SET
-            entrada_min   = EXCLUDED.entrada_min,
-            taxa_refim    = EXCLUDED.taxa_refim,
-            saldo_min     = EXCLUDED.saldo_min,
-            min_troco     = EXCLUDED.min_troco,
-            taxa_livre    = EXCLUDED.taxa_livre,
-            taxa_sugerida = EXCLUDED.taxa_sugerida,
-            obs           = EXCLUDED.obs,
-            ordem         = EXCLUDED.ordem,
-            updated_by    = ${user.id},
-            updated_at    = NOW()
+            entrada_min        = EXCLUDED.entrada_min,
+            taxa_refim         = EXCLUDED.taxa_refim,
+            saldo_min          = EXCLUDED.saldo_min,
+            min_troco          = EXCLUDED.min_troco,
+            taxa_livre         = EXCLUDED.taxa_livre,
+            taxa_sugerida      = EXCLUDED.taxa_sugerida,
+            obs                = EXCLUDED.obs,
+            pagas_min_portar   = EXCLUDED.pagas_min_portar,
+            pagas_min_remunerar= EXCLUDED.pagas_min_remunerar,
+            une_saldo_negativo = EXCLUDED.une_saldo_negativo,
+            excecoes_origem    = EXCLUDED.excecoes_origem,
+            ordem              = EXCLUDED.ordem,
+            updated_by         = ${user.id},
+            updated_at         = NOW()
         `);
       }
       if (bancosEnviados.length > 0) {
@@ -28079,6 +28469,77 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     } catch (err: any) {
       console.error("[PORTABILITY_RULES] PUT error:", err);
       res.status(500).json({ message: err?.message || "Erro ao salvar regras de portabilidade" });
+    }
+  });
+
+  // ── COTAÇÕES SIMULADOR ────────────────────────────────────────────────────
+  // Salva/restaura o estado completo do simulador de portabilidade por CPF
+
+  app.post("/api/cotacoes-simulador", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const userId = req.user!.id;
+      const { cpf, nomeCliente, descricao, dados } = req.body;
+      if (!cpf || !dados) return res.status(400).json({ message: "cpf e dados são obrigatórios" });
+      const result = await db.execute(sql`
+        INSERT INTO cotacoes_simulador (tenant_id, user_id, cpf, nome_cliente, descricao, dados)
+        VALUES (${tenantId}, ${userId}, ${cpf.trim()}, ${nomeCliente || null}, ${descricao || null}, ${JSON.stringify(dados)}::jsonb)
+        RETURNING id, criado_em AS "criadoEm"
+      `);
+      res.status(201).json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] POST error:", err);
+      res.status(500).json({ message: "Erro ao salvar cotação" });
+    }
+  });
+
+  app.get("/api/cotacoes-simulador", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const cpf = String(req.query.cpf || "").trim();
+      if (!cpf) return res.status(400).json({ message: "cpf é obrigatório" });
+      const result = await db.execute(sql`
+        SELECT id, cpf, nome_cliente AS "nomeCliente", descricao,
+               dados->>'refimBanco' AS "refimBanco",
+               criado_em AS "criadoEm"
+        FROM cotacoes_simulador
+        WHERE tenant_id = ${tenantId} AND cpf = ${cpf}
+        ORDER BY criado_em DESC
+        LIMIT 20
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] GET list error:", err);
+      res.status(500).json({ message: "Erro ao listar cotações" });
+    }
+  });
+
+  app.get("/api/cotacoes-simulador/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const id = parseInt(req.params.id, 10);
+      const result = await db.execute(sql`
+        SELECT id, cpf, nome_cliente AS "nomeCliente", descricao, dados, criado_em AS "criadoEm"
+        FROM cotacoes_simulador
+        WHERE id = ${id} AND tenant_id = ${tenantId}
+      `);
+      if (!result.rows.length) return res.status(404).json({ message: "Cotação não encontrada" });
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] GET one error:", err);
+      res.status(500).json({ message: "Erro ao carregar cotação" });
+    }
+  });
+
+  app.delete("/api/cotacoes-simulador/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const id = parseInt(req.params.id, 10);
+      await db.execute(sql`DELETE FROM cotacoes_simulador WHERE id = ${id} AND tenant_id = ${tenantId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[COTACOES_SIM] DELETE error:", err);
+      res.status(500).json({ message: "Erro ao excluir cotação" });
     }
   });
 
@@ -29388,8 +29849,14 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // Gera token aleatório de 32 bytes em hex (64 chars)
   function generateRawKey(): string {
-    const { randomBytes } = require("crypto");
     return randomBytes(32).toString("hex");
+  }
+
+  // Escopos válidos que uma chave pode retornar (além dos dados básicos, sempre incluídos)
+  const ESCOPOS_VALIDOS = ["margens", "contratos"];
+  function sanitizeEscopos(input: any): string[] {
+    if (!Array.isArray(input)) return [...ESCOPOS_VALIDOS];
+    return ESCOPOS_VALIDOS.filter((e) => input.includes(e));
   }
 
   // GET /api/admin/api-keys — lista chaves do tenant atual
@@ -29410,10 +29877,11 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
-      const { nome } = req.body;
+      const { nome, escopos } = req.body;
       if (!nome || typeof nome !== "string" || nome.trim().length === 0) {
         return res.status(400).json({ message: "Informe o nome do sistema parceiro" });
       }
+      const escoposValidos = sanitizeEscopos(escopos);
 
       const raw = generateRawKey();
       const hash = hashApiKey(raw);
@@ -29425,6 +29893,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         chaveHash: hash,
         prefixo,
         ativo: true,
+        escopos: escoposValidos,
         criadoPor: req.user?.id ?? null,
       });
 
@@ -29432,7 +29901,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       return res.json({ ...key, chave_completa: raw });
     } catch (err: any) {
       console.error("[API Keys] create error:", err);
-      return res.status(500).json({ message: "Erro ao criar API key" });
+      return res.status(500).json({ message: "Erro ao criar API key", detail: String(err?.message || err) });
     }
   });
 
@@ -29452,6 +29921,52 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     } catch (err: any) {
       console.error("[API Keys] toggle error:", err);
       return res.status(500).json({ message: "Erro ao atualizar API key" });
+    }
+  });
+
+  // PATCH /api/admin/api-keys/:id — edita nome e/ou escopos
+  app.patch("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+      const { nome, escopos } = req.body;
+      const patch: { nome?: string; escopos?: string[] } = {};
+      if (nome !== undefined) {
+        if (typeof nome !== "string" || nome.trim().length === 0) {
+          return res.status(400).json({ message: "Nome inválido" });
+        }
+        patch.nome = nome.trim();
+      }
+      if (escopos !== undefined) {
+        patch.escopos = sanitizeEscopos(escopos);
+      }
+
+      const key = await storage.updateApiKey(id, tenantId, patch);
+      if (!key) return res.status(404).json({ message: "API key não encontrada" });
+      return res.json(key);
+    } catch (err: any) {
+      console.error("[API Keys] update error:", err);
+      return res.status(500).json({ message: "Erro ao atualizar API key", detail: String(err?.message || err) });
+    }
+  });
+
+  // DELETE /api/admin/api-keys/:id — exclui permanentemente
+  app.delete("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+      const ok = await storage.deleteApiKey(id, tenantId);
+      if (!ok) return res.status(404).json({ message: "API key não encontrada" });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[API Keys] delete error:", err);
+      return res.status(500).json({ message: "Erro ao excluir API key", detail: String(err?.message || err) });
     }
   });
 
@@ -29488,10 +30003,36 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     return { saldo: s5, limitadoPorGlobal: false };
   }
 
+  // Resolve o nome a partir do código via nomenclaturas (espelha mapNomenclatura do frontend).
+  function mapNomenclaturaServer(noms: any[], categoria: string, codigo: string | null): string | null {
+    if (!codigo) return null;
+    if (!noms || noms.length === 0) return codigo;
+    const normalizedCodigo = codigo.replace(/^0+/, "") || "0";
+    const codigoUpper = codigo.trim().toUpperCase();
+    const codigoTruncado = /^\d{6,}$/.test(codigo.trim()) ? codigo.trim().substring(0, 5) : null;
+    const codigoTruncadoNorm = codigoTruncado ? (codigoTruncado.replace(/^0+/, "") || "0") : null;
+    const matchPorCodigo = (cat: string) => noms.find((n) => {
+      if (!n.ativo || n.categoria !== cat) return false;
+      const nCodigo = (n.codigo || "").replace(/^0+/, "") || "0";
+      if (n.codigo === codigo || nCodigo === normalizedCodigo || (n.codigo || "").trim().toUpperCase() === codigoUpper) return true;
+      if (codigoTruncado && (n.codigo === codigoTruncado || nCodigo === codigoTruncadoNorm)) return true;
+      return false;
+    });
+    const matchPorNome = (cat: string) => noms.find((n) =>
+      n.ativo && n.categoria === cat && (n.nome || "").trim().toUpperCase() === codigoUpper);
+    const found =
+      matchPorCodigo(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorCodigo("RUBRICA") : null) ||
+      matchPorNome(categoria) ||
+      (categoria !== "RUBRICA" ? matchPorNome("RUBRICA") : null);
+    return found ? found.nome : codigo;
+  }
+
   // GET /api/external/v1/clientes/:cpf
   app.get("/api/external/v1/clientes/:cpf", requireApiKey, async (req: any, res) => {
     try {
       const tenantId: number = req.apiTenantId;
+      const escopos: string[] = req.apiKeyEscopos ?? ["margens", "contratos"];
       const rawCpf = String(req.params.cpf).replace(/\D/g, "").padStart(11, "0");
 
       if (rawCpf.length !== 11) {
@@ -29505,13 +30046,16 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       }
       const pessoa = pessoas[0];
 
-      // Busca vínculos do tenant desta API key
+      // A base de clientes é compartilhada entre tenants — a consulta interna logada
+      // (/api/clientes/:pessoaId) usa TODOS os vínculos da pessoa, sem filtrar por tenant.
+      // Seguimos a mesma lógica: preferimos o vínculo do tenant da chave; se o cliente não
+      // tiver vínculo nesse tenant, usamos todos (folha/margens/contratos são da pessoa).
       const todosVinculos = await storage.getVinculosByPessoaId(pessoa.id);
-      const vinculos = todosVinculos.filter((v) => v.tenantId === tenantId);
-
-      if (vinculos.length === 0) {
+      if (todosVinculos.length === 0) {
         return res.status(404).json({ error: "Cliente não encontrado." });
       }
+      const doTenant = todosVinculos.filter((v) => v.tenantId === tenantId);
+      const vinculos = doTenant.length > 0 ? doTenant : todosVinculos;
 
       // Usa o vínculo com folha mais recente
       const vinculoIds = vinculos.map((v) => v.id);
@@ -29524,9 +30068,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       const vinculoSelecionado = vinculos.find((v) => v.id === vinculoIdEfetivo) ?? vinculos[0];
 
-      // Margens com regras aplicadas
+      // Margens com regras aplicadas (apenas se a chave tiver o escopo)
       let margens = null;
-      if (folhaAtual) {
+      if (folhaAtual && escopos.includes("margens")) {
         const credito5 = saldoCartao5LimitadoServer(
           folhaAtual.margemSaldo5, folhaAtual.margemBruta5, folhaAtual.margemUtilizada5,
           folhaAtual.margemSaldo35, folhaAtual.margemBruta35, folhaAtual.margemUtilizada35,
@@ -29564,14 +30108,34 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         };
       }
 
-      return res.json({
+      const nascimento = pessoa.dataNascimento
+        ? new Date(pessoa.dataNascimento as any).toISOString().slice(0, 10)
+        : null;
+
+      // Resolve o NOME do órgão a partir do código, via nomenclaturas (igual à tela interna).
+      const orgaoCodigo =
+        (vinculoSelecionado.orgao && vinculoSelecionado.orgao !== "DESCONHECIDO")
+          ? vinculoSelecionado.orgao
+          : (pessoa.orgaocod || pessoa.orgaodesc || null);
+      const noms = await getCachedNomenclaturas();
+      const orgaoNome = mapNomenclaturaServer(noms, "ORGAO", orgaoCodigo) ?? pessoa.orgaodesc ?? null;
+
+      const resposta: Record<string, any> = {
         cpf: pessoa.cpf,
         nome: pessoa.nome,
+        nascimento, // YYYY-MM-DD
+        situacao_funcional: vinculoSelecionado.sitFunc ?? pessoa.sitFunc ?? null,
+        orgao: orgaoNome,
+        orgao_codigo: orgaoCodigo,
         convenio: vinculoSelecionado.convenio ?? pessoa.convenio,
-        orgao: pessoa.orgaodesc,
-        sit_func: vinculoSelecionado.sitFunc,
-        margens,
-        contratos: contratos.map((c) => ({
+      };
+
+      if (escopos.includes("margens")) {
+        resposta.margens = margens;
+      }
+
+      if (escopos.includes("contratos")) {
+        resposta.contratos = contratos.map((c) => ({
           tipo: c.tipoContrato,
           banco: c.banco,
           valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
@@ -29579,8 +30143,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           parcelas_restantes: c.parcelasRestantes ?? null,
           numero_contrato: c.numeroContrato ?? null,
           competencia: c.competencia,
-        })),
-      });
+        }));
+      }
+
+      return res.json(resposta);
     } catch (err: any) {
       console.error("[External API] clientes/:cpf error:", err);
       return res.status(500).json({ error: "Erro interno." });

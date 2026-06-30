@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, or, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
 
 // Neon connection caching is enabled by default for better connection handling
@@ -160,9 +160,45 @@ import {
   type InsertApiKey,
 } from "@shared/schema";
 
-// Use neon-http for serverless/edge environments
-const queryClient = neon(process.env.DATABASE_URL!);
-export const db = drizzle(queryClient);
+// Postgres via node-postgres (pg) — fala com qualquer Postgres TCP
+// (Supabase self-hosted, Neon, etc.). SSL configurável por variável de ambiente:
+//   DATABASE_SSL=disable                  → sem SSL (ex.: rede interna do Cloudfy)
+//   DATABASE_SSL_REJECT_UNAUTHORIZED=true → valida o certificado (CA confiável)
+// Padrão: SSL ligado SEM validar o certificado (aceita o cert próprio do Supabase).
+function buildDbSsl(): false | { rejectUnauthorized: boolean } {
+  const mode = (process.env.DATABASE_SSL || "").toLowerCase();
+  if (mode === "disable" || mode === "off" || mode === "false") return false;
+  return { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" };
+}
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL!,
+  ssl: buildDbSsl(),
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+// Eleva o statement_timeout por conexão. O merge de importações grandes (um
+// único INSERT...SELECT sobre o staging, com checagem de FK) passava do limite
+// padrão do Postgres/Supabase e era cancelado ("canceling statement due to
+// statement timeout"), derrubando o import de arquivos grandes. Usamos um teto
+// generoso e finito (default 15 min), ajustável por env. Trade-off: uma query
+// patológica pode segurar a conexão até esse teto.
+const STATEMENT_TIMEOUT_MS = parseInt(
+  process.env.DB_STATEMENT_TIMEOUT_MS || "900000",
+  10,
+);
+pool.on("connect", (client) => {
+  client
+    .query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`)
+    .catch((e) => console.error("[pool] falha ao setar statement_timeout:", e?.message));
+});
+
+// neon-http e node-postgres retornam o MESMO formato em db.execute():
+// um QueryResult com `.rows` (e .rowCount). O código consome via `result.rows`
+// (273 usos). Por isso NÃO há wrapper — o retorno nativo do pg já é compatível.
+export const db = drizzle(pool);
 
 export interface IStorage {
   // Users
@@ -479,6 +515,8 @@ export interface IStorage {
   listApiKeys(tenantId: number): Promise<ApiKey[]>;
   getApiKeyByHash(hash: string): Promise<ApiKey | undefined>;
   toggleApiKey(id: number, tenantId: number, ativo: boolean): Promise<ApiKey | undefined>;
+  updateApiKey(id: number, tenantId: number, data: { nome?: string; escopos?: string[] }): Promise<ApiKey | undefined>;
+  deleteApiKey(id: number, tenantId: number): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -3875,6 +3913,30 @@ REGRAS:
       .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
       .returning();
     return key;
+  }
+
+  async updateApiKey(id: number, tenantId: number, data: { nome?: string; escopos?: string[] }): Promise<ApiKey | undefined> {
+    const patch: Partial<InsertApiKey> = {};
+    if (data.nome !== undefined) patch.nome = data.nome;
+    if (data.escopos !== undefined) patch.escopos = data.escopos;
+    if (Object.keys(patch).length === 0) {
+      const [key] = await db.select().from(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId))).limit(1);
+      return key;
+    }
+    const [key] = await db
+      .update(apiKeys)
+      .set(patch)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .returning();
+    return key;
+  }
+
+  async deleteApiKey(id: number, tenantId: number): Promise<boolean> {
+    const result = await db
+      .delete(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .returning();
+    return result.length > 0;
   }
 }
 

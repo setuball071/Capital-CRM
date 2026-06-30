@@ -76,10 +76,14 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Estáticos com hash no nome (assets/*) podem ser cacheados pra sempre;
+  // o index.html NÃO — ele precisa sempre revalidar para apontar para os
+  // hashes mais recentes (senão um deploy novo fica preso em cache antigo).
+  app.use(express.static(distPath, { index: false }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

@@ -558,7 +558,8 @@ function Router() {
                 {() => <ModuleRoute component={DashboardVendedorPage} module="modulo_meu_painel" />}
               </Route>
               <Route path="/vendas/gestao-comercial/dashboard">
-                {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master", "coordenacao"]} />}
+                {/* Dashboard Gerencial: exclusivo Master. (coordenacao pode ser reativado no futuro.) */}
+                {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master"]} />}
               </Route>
               <Route path="/vendas/gestao-comercial/importar-producao">
                 {() => <RoleRoute component={GestaoComercialImportarPage} allowedRoles={["master", "coordenacao"]} />}

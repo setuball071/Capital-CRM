@@ -1293,10 +1293,22 @@ body { background: #F8F8FC !important; color: #111827 !important; }
 <div class="container" id="app">
   <div style="display:none" id="headerLogo"></div>
 
-  <!-- Campos ocultos — preenchidos no modal do PDF -->
+  <!-- Campos ocultos — preenchidos no modal do PDF ou via extração automática do PDF -->
   <input type="hidden" id="nomeCliente" value="">
   <input type="hidden" id="cpfCliente" value="">
   <input type="hidden" id="convenio" value="">
+
+  <!-- BANNER: cliente detectado no PDF -->
+  <div id="clienteDetectado" style="display:none;margin-bottom:12px;padding:10px 16px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;display:none;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:0;">
+      <span style="font-size:12px;color:#15803D;font-weight:700;">👤 Cliente identificado:</span>
+      <span id="clienteDetectadoNome" style="font-size:13px;font-weight:600;color:#166534;margin-left:6px;"></span>
+      <span id="clienteDetectadoCpf" style="font-size:12px;color:#4B5563;margin-left:8px;"></span>
+    </div>
+    <button onclick="buscarCotacoesPorCpf(document.getElementById('cpfCliente').value)" style="padding:4px 10px;background:#16A34A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;">📂 Ver cotações salvas</button>
+  </div>
+  <!-- PAINEL: cotações salvas por CPF -->
+  <div id="cotacoesPanel"></div>
 
   <!-- CONTRATOS ATUAIS + DECISÃO -->
   <div class="box">
@@ -1544,9 +1556,10 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <tr>
               <th style="width:160px;">Banco Origem</th>
               <th style="width:110px;" class="text-right">Saldo Devedor</th>
-              <th style="width:100px;">Taxa Atual</th>
-              <th style="width:100px;">Parcela Atual</th>
-              <th style="width:120px;">Status</th>
+              <th style="width:90px;">Taxa Atual</th>
+              <th style="width:90px;">Parcela Atual</th>
+              <th style="width:70px;">Pagas</th>
+              <th style="width:160px;">Status</th>
             </tr>
           </thead>
           <tbody id="tbRefimContratos"></tbody>
@@ -1575,7 +1588,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <label>Modo</label>
             <select id="refimUnificado" onchange="toggleUnificado()">
               <option value="unificado">Unificado (1 prazo)</option>
-              <option value="separado">Separado (prazo por contrato)</option>
+              <option value="separado" selected>Separado (prazo por contrato)</option>
             </select>
           </div>
           <div class="field" style="max-width:180px;" id="wrapRefimPrazo">
@@ -1692,17 +1705,22 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Salvar para Digitação
       </button>
+      <button onclick="salvarCotacao()" style="width:100%;padding:10px;font-size:13px;background:#fff;border:2px solid #10B981;color:#10B981;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;margin-top:6px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Salvar Cotação
+      </button>
     </div>
   </div>
 
   <!-- MODAL REGRAS DOS BANCOS -->
   <div id="modalRegras" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:16px;padding:28px;width:min(95vw,600px);max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="background:#fff;border-radius:16px;padding:28px;width:min(95vw,920px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <h3 style="margin:0;color:#6C2BD9;">⚙️ Regras dos Bancos — Portabilidade com Refim</h3>
         <button onclick="fecharModalRegras()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6B7280;">✕</button>
       </div>
-      <table style="width:100%;">
+      <div style="overflow-x:auto;">
+      <table style="width:100%;min-width:820px;">
         <thead>
           <tr>
             <th style="text-align:left;padding:8px;">Banco</th>
@@ -1710,19 +1728,26 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <th style="text-align:center;padding:8px;">Taxa Refim (%)</th>
             <th style="text-align:center;padding:8px;">Saldo Mín (R$)</th>
             <th style="text-align:center;padding:8px;">Troco Mín (R$)</th>
-            <th style="width:40px;"></th>
+            <th style="text-align:center;padding:8px;" title="Pagas mínimas para aceitar a portabilidade">Porta c/ (pagas)</th>
+            <th style="text-align:center;padding:8px;" title="Pagas mínimas para remunerar o corretor">Rem. c/ (pagas)</th>
+            <th style="text-align:center;padding:8px;" title="Aceita unir saldos de contratos para cobrir margem negativa">Une neg.?</th>
+            <th style="width:70px;"></th>
           </tr>
         </thead>
         <tbody id="tbRegras"></tbody>
       </table>
+      </div>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #E5E7EB;">
         <h4 style="margin:0 0 10px;font-size:13px;color:#374151;">+ Adicionar Banco</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:120px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:90px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:90px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:90px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:80px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:110px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:80px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:80px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:80px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:70px;"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Porta c/ (pagas)</label><input id="novoRegPagasPortar" placeholder="0" style="width:70px;" type="number" min="0"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Rem. c/ (pagas)</label><input id="novoRegPagasRem" placeholder="12" style="width:70px;" type="number" min="0"></div>
+          <div style="align-self:flex-end;padding-bottom:6px;"><label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input id="novoRegUneNeg" type="checkbox"> Une neg.?</label></div>
           <button onclick="addRegra()" style="padding:8px 16px;background:#6C2BD9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Adicionar</button>
         </div>
       </div>
@@ -2543,6 +2568,16 @@ async function importarPDFFile(file) {
     textoCompleto.split('\n').forEach((l, i) => {
       if (l.trim()) console.log(`L${i}: |${l}|`);
     });
+
+    // Extrai CPF do cabeçalho do contracheque (formato 000.000.000-00)
+    const RE_CPF_PDF = /\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b/;
+    const cpfMatch = textoCompleto.match(RE_CPF_PDF);
+    if (cpfMatch) {
+      const cpfExtraido = cpfMatch[1];
+      document.getElementById('cpfCliente').value = cpfExtraido;
+      document.getElementById('modalCpfCliente').value = cpfExtraido;
+      _buscarClientePorCpf(cpfExtraido);
+    }
 
     // Processa usando itens com coordenadas (mais preciso para PDFs em colunas)
     const contratosDetectados = extrairContratos(textoCompleto, window._pdfItems);
@@ -5361,6 +5396,7 @@ async function criarApresentacao(dados) {
 const regrasBancosDefault = [
   {
     banco: 'Digio', entradaMin: 1.35, taxaRefim: 1.65, minTroco: 250, saldoMin: 5500,
+    pagasMinPortar: 12, pagasMinRemunerar: 12, uneSaldoNegativo: false, excecoesOrigem: [],
     obs: [
       { tipo: 'ok',    txt: 'Saldo mínimo de R$ 5.500,00 (SIAPE)' },
       { tipo: 'ok',    txt: 'Troco mínimo de R$ 250,00' },
@@ -5370,6 +5406,7 @@ const regrasBancosDefault = [
   },
   {
     banco: 'Inter', entradaMin: 0.70, taxaRefim: 1.65, minTroco: 300, saldoMin: 1000,
+    pagasMinPortar: 0, pagasMinRemunerar: 0, uneSaldoNegativo: true, excecoesOrigem: [],
     obs: [
       { tipo: 'ok',    txt: 'Saldo mínimo de R$ 1.000,00' },
       { tipo: 'ok',    txt: 'Liberação mínima (troco) de R$ 300,00' },
@@ -5384,6 +5421,7 @@ const regrasBancosDefault = [
   {
     banco: 'Caixa', entradaMin: 0, taxaRefim: 0, taxaLivre: true, taxaSugerida: 1.40,
     minTroco: 250, saldoMin: 0,
+    pagasMinPortar: 0, pagasMinRemunerar: 0, uneSaldoNegativo: false, excecoesOrigem: [],
     obs: [
       { tipo: 'ok',    txt: 'Taxa de entrada = taxa de refim (mesma operação)' },
       { tipo: 'ok',    txt: 'Sem trava de taxa de entrada' },
@@ -5404,12 +5442,15 @@ function _mesclarRegras(saved) {
   }
   return regrasBancosDefault.map(def => {
     const sv = saved.find(s => s.banco === def.banco);
-    return sv ? { ...def, entradaMin:   sv.entradaMin   ?? def.entradaMin,
-                          taxaRefim:    sv.taxaRefim    ?? def.taxaRefim,
-                          minTroco:     sv.minTroco     ?? def.minTroco,
-                          saldoMin:     sv.saldoMin     ?? def.saldoMin,
-                          taxaSugerida: sv.taxaSugerida ?? def.taxaSugerida,
-                          // obs: prioriza o da API se vier preenchido, senão mantém o do default
+    return sv ? { ...def, entradaMin:        sv.entradaMin        ?? def.entradaMin,
+                          taxaRefim:         sv.taxaRefim         ?? def.taxaRefim,
+                          minTroco:          sv.minTroco          ?? def.minTroco,
+                          saldoMin:          sv.saldoMin          ?? def.saldoMin,
+                          taxaSugerida:      sv.taxaSugerida      ?? def.taxaSugerida,
+                          pagasMinPortar:    sv.pagasMinPortar    ?? def.pagasMinPortar    ?? 0,
+                          pagasMinRemunerar: sv.pagasMinRemunerar ?? def.pagasMinRemunerar ?? 0,
+                          uneSaldoNegativo:  sv.uneSaldoNegativo  ?? def.uneSaldoNegativo  ?? false,
+                          excecoesOrigem:    sv.excecoesOrigem    ?? def.excecoesOrigem    ?? [],
                           obs: (Array.isArray(sv.obs) && sv.obs.length) ? sv.obs : def.obs } : {...def};
   }).concat(saved.filter(s => !regrasBancosDefault.find(d => d.banco === s.banco)));
 }
@@ -5456,15 +5497,19 @@ async function _pushRulesToAPI() {
   _saveTimeout = null;
   try {
     const payload = regrasBancos.map((r, idx) => ({
-      banco:        r.banco,
-      entradaMin:   Number(r.entradaMin)   || 0,
-      taxaRefim:    Number(r.taxaRefim)    || 0,
-      saldoMin:     Number(r.saldoMin)     || 0,
-      minTroco:     Number(r.minTroco)     || 0,
-      taxaLivre:    !!r.taxaLivre,
-      taxaSugerida: r.taxaSugerida == null ? null : Number(r.taxaSugerida),
-      obs:          Array.isArray(r.obs) ? r.obs : null,
-      ordem:        idx,
+      banco:             r.banco,
+      entradaMin:        Number(r.entradaMin)        || 0,
+      taxaRefim:         Number(r.taxaRefim)         || 0,
+      saldoMin:          Number(r.saldoMin)          || 0,
+      minTroco:          Number(r.minTroco)          || 0,
+      taxaLivre:         !!r.taxaLivre,
+      taxaSugerida:      r.taxaSugerida == null ? null : Number(r.taxaSugerida),
+      obs:               Array.isArray(r.obs) ? r.obs : null,
+      pagasMinPortar:    Number(r.pagasMinPortar)    || 0,
+      pagasMinRemunerar: Number(r.pagasMinRemunerar) || 0,
+      uneSaldoNegativo:  !!r.uneSaldoNegativo,
+      excecoesOrigem:    Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : null,
+      ordem:             idx,
     }));
     const resp = await fetch('/api/portability-bank-rules', {
       method: 'PUT',
@@ -5761,6 +5806,33 @@ function atualizarSimuladorRefim() {
 
 // Apenas repinta a tabela "Contratos Selecionados para Portar" + saldo elegível.
 // Não mexe em trocosSeparado/_refimResult, então é seguro chamar a cada edição.
+// Avalia elegibilidade de um contrato para um banco destino
+// Retorna { portavel: bool|null, remunera: bool|null, motivo, pagasRealizadas }
+function avaliarElegibilidade(contrato, regra) {
+  if (!regra) return { portavel: null, remunera: null, motivo: '' };
+  const prazoTotal    = parseInt(contrato.prazo_total) || 0;
+  const prazoRestante = parseInt(contrato.prazo)       || 0;
+  const pagasRealizadas = prazoTotal > 0 ? prazoTotal - prazoRestante : null;
+
+  const excecoes = Array.isArray(regra.excecoesOrigem) ? regra.excecoesOrigem : [];
+  const exc = excecoes.find(e =>
+    e.bancoOrigem && contrato.banco &&
+    contrato.banco.toLowerCase().includes(e.bancoOrigem.toLowerCase())
+  );
+  const minPortar    = exc ? (exc.pagasMinPortar    ?? regra.pagasMinPortar    ?? 0) : (regra.pagasMinPortar    ?? 0);
+  const minRemunerar = exc ? (exc.pagasMinRemunerar ?? regra.pagasMinRemunerar ?? 0) : (regra.pagasMinRemunerar ?? 0);
+
+  if (pagasRealizadas === null) return { portavel: null, remunera: null, motivo: 'Prazo total desconhecido', pagasRealizadas: null };
+
+  const portavel  = pagasRealizadas >= minPortar;
+  const remunera  = portavel && pagasRealizadas >= minRemunerar;
+  let motivo = '';
+  if (!portavel)       motivo = `Mín. ${minPortar} pagas para portar`;
+  else if (!remunera)  motivo = `Mín. ${minRemunerar} pagas para remunerar`;
+  else                 motivo = `${pagasRealizadas} pagas`;
+  return { portavel, remunera, motivo, pagasRealizadas };
+}
+
 function pintarRefimContratos() {
   const nome  = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nome);
@@ -5768,7 +5840,7 @@ function pintarRefimContratos() {
   const tb = document.getElementById('tbRefimContratos');
 
   if (!marcados.length) {
-    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:16px;">Nenhum contrato marcado para portar.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#9CA3AF;padding:16px;">Nenhum contrato marcado para portar.</td></tr>`;
     document.getElementById('refimSaldoTotal').textContent = '';
     return;
   }
@@ -5779,24 +5851,39 @@ function pintarRefimContratos() {
   tb.innerHTML = marcados.map(c => {
     const taxa  = parseBR(c.taxa);
     const saldo = parseBR(c.saldo);
-    let status = '';
+    const elig  = avaliarElegibilidade(c, regra);
+    const prazoTotal    = parseInt(c.prazo_total) || 0;
+    const prazoRestante = parseInt(c.prazo)       || 0;
+    const pagasStr = prazoTotal > 0 ? `${prazoTotal - prazoRestante}/${prazoTotal}` : '–';
+    let statusHtml = '';
 
     if (!regra) {
-      status = `<span style="color:#9CA3AF;">Selecione banco</span>`;
-    } else if (taxa >= regra.entradaMin) {
-      status = `<span style="color:#16A34A;font-weight:600;">✅ Aceito (≥${fmtPct(regra.entradaMin)})</span>`;
-      totalSaldo += saldo;
-      totalElegiveis++;
+      statusHtml = `<span style="color:#9CA3AF;font-size:12px;">Selecione banco</span>`;
     } else {
-      status = `<span style="color:#EF4444;font-weight:600;">❌ Rejeitado (&lt;${fmtPct(regra.entradaMin)})</span>`;
+      const taxaOk = taxa >= regra.entradaMin;
+      if (!taxaOk) {
+        statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Taxa baixa</span><br><span style="font-size:10px;color:#9CA3AF;">mín ${fmtPct(regra.entradaMin)}%</span>`;
+      } else if (elig.portavel === null) {
+        statusHtml = `<span style="color:#16A34A;font-weight:600;font-size:12px;">🟢 Taxa aceita</span><br><span style="font-size:10px;color:#9CA3AF;">pagas: ?</span>`;
+        totalSaldo += saldo; totalElegiveis++;
+      } else if (!elig.portavel) {
+        statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Não porta</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
+      } else if (!elig.remunera) {
+        statusHtml = `<span style="color:#D97706;font-weight:600;font-size:12px;">🟡 Sem remuneração</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
+        totalSaldo += saldo; totalElegiveis++;
+      } else {
+        statusHtml = `<span style="color:#16A34A;font-weight:600;font-size:12px;">🟢 Porta e remunera</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
+        totalSaldo += saldo; totalElegiveis++;
+      }
     }
 
     return `<tr>
-      <td>${c.banco || '-'}</td>
+      <td>${c.banco || '-'}${c.numero_contrato ? `<br><small style="color:#9CA3AF;font-size:10px;">${c.numero_contrato}</small>` : ''}</td>
       <td class="text-right">${fmtBRL(saldo)}</td>
       <td>${fmtPct(taxa)}</td>
       <td>${fmtBRL(parseBR(c.parcela))}</td>
-      <td>${status}</td>
+      <td style="text-align:center;font-size:12px;color:#6B7280;">${pagasStr}</td>
+      <td>${statusHtml}</td>
     </tr>`;
   }).join('');
 
@@ -6224,6 +6311,154 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
   _refimResult = { modo: 'unificado', parcela: parcelaTotal, troco: trocoLiquido, prazo };
 }
 
+// ── CPF: busca automática ao importar extrato ─────────────────────────────
+
+function _mostrarClienteDetectado(nome, cpf) {
+  const banner = document.getElementById('clienteDetectado');
+  if (!banner) return;
+  document.getElementById('clienteDetectadoNome').textContent = nome || '(não encontrado no sistema)';
+  document.getElementById('clienteDetectadoCpf').textContent  = cpf ? `— ${cpf}` : '';
+  banner.style.display = 'flex';
+}
+
+async function _buscarClientePorCpf(cpf) {
+  try {
+    const resp = await fetch(`/api/clientes/consulta?cpf=${encodeURIComponent(cpf)}`, { credentials: 'include' });
+    if (!resp.ok) { _mostrarClienteDetectado('', cpf); return; }
+    const data = await resp.json();
+    const lista = Array.isArray(data) ? data : (data.clientes || []);
+    if (lista.length > 0) {
+      const nome = lista[0].nome || '';
+      document.getElementById('nomeCliente').value     = nome;
+      document.getElementById('modalNomeCliente').value = nome;
+      _mostrarClienteDetectado(nome, cpf);
+    } else {
+      _mostrarClienteDetectado('', cpf);
+    }
+    buscarCotacoesPorCpf(cpf);
+  } catch (err) {
+    console.warn('[portabilidade] CPF lookup failed:', err);
+    _mostrarClienteDetectado('', cpf);
+  }
+}
+
+// ── COTAÇÕES SALVAS ────────────────────────────────────────────────────────
+
+async function salvarCotacao() {
+  const cpf  = document.getElementById('cpfCliente').value.trim();
+  const nome = document.getElementById('nomeCliente').value.trim();
+  if (!cpf) {
+    alert('CPF do cliente não identificado.\nImporte o extrato do cliente para que o CPF seja detectado automaticamente.');
+    return;
+  }
+  const descricao = prompt('Descrição da cotação (opcional, ex: "aguardando margem"):') ?? '';
+  const dados = {
+    contratos:        contratos.map(c => ({...c})),
+    refimBanco:       document.getElementById('refimBanco')?.value       || '',
+    refimUnificado:   document.getElementById('refimUnificado')?.value   || 'separado',
+    refimPrazo:       document.getElementById('refimPrazo')?.value       || '',
+    refimModo:        document.getElementById('refimModo')?.value        || 'troco',
+    refimTrocoInput:  document.getElementById('refimTrocoInput')?.value  || '',
+    refimParcelaInput:document.getElementById('refimParcelaInput')?.value|| '',
+    refimMargemNeg:   document.getElementById('refimMargemNeg')?.value   || '',
+    simpTaxa:         document.getElementById('simpTaxa')?.value         || '',
+    simpPrazo:        document.getElementById('simpPrazo')?.value        || '',
+    tipoPort,
+    _refimResult,
+  };
+  try {
+    const resp = await fetch('/api/cotacoes-simulador', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpf, nomeCliente: nome, descricao, dados }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).message || 'Erro');
+    alert('✅ Cotação salva!');
+    buscarCotacoesPorCpf(cpf);
+  } catch (err) {
+    alert('⚠️ Erro ao salvar cotação: ' + err.message);
+  }
+}
+
+async function buscarCotacoesPorCpf(cpf) {
+  const panel = document.getElementById('cotacoesPanel');
+  if (!panel || !cpf) return;
+  try {
+    const resp = await fetch(`/api/cotacoes-simulador?cpf=${encodeURIComponent(cpf)}`, { credentials: 'include' });
+    if (!resp.ok) return;
+    const lista = await resp.json();
+    if (!lista.length) { panel.innerHTML = ''; return; }
+    panel.innerHTML = `
+      <div style="margin-bottom:12px;padding:12px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;">
+        <div style="font-size:12px;font-weight:700;color:#6C2BD9;margin-bottom:8px;">📂 Cotações salvas para este cliente</div>
+        ${lista.map(c => `
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #EDE9FE;flex-wrap:wrap;">
+            <div style="flex:1;min-width:0;font-size:12px;">
+              <span style="font-weight:600;">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</span>
+              ${c.descricao ? `<span style="color:#6B7280;"> — ${c.descricao}</span>` : ''}
+              ${c.refimBanco ? `<span style="color:#7C3AED;font-weight:600;"> | ${c.refimBanco}</span>` : ''}
+            </div>
+            <button onclick="carregarCotacao(${c.id},'${cpf}')" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">▶ Retomar</button>
+            <button onclick="excluirCotacao(${c.id},'${cpf}')" style="padding:4px 8px;background:#FEE2E2;color:#DC2626;border:none;border-radius:5px;cursor:pointer;font-size:11px;">✕</button>
+          </div>`).join('')}
+      </div>`;
+  } catch (err) {
+    console.warn('[cotacoes] busca falhou:', err);
+  }
+}
+
+async function carregarCotacao(id, cpf) {
+  if (!confirm('Retomar esta cotação? O estado atual do simulador será substituído.')) return;
+  try {
+    const resp = await fetch(`/api/cotacoes-simulador/${id}`, { credentials: 'include' });
+    if (!resp.ok) throw new Error('Erro ao carregar');
+    const cot  = await resp.json();
+    const d    = cot.dados || {};
+    // Restaura contratos
+    if (Array.isArray(d.contratos)) {
+      contratos.length = 0;
+      d.contratos.forEach(c => contratos.push(c));
+      nextContratoId = contratos.reduce((mx, c) => Math.max(mx, c.id || 0), 0) + 1;
+    }
+    // Restaura campos
+    const set = (id, v) => { const el = document.getElementById(id); if(el && v != null) el.value = v; };
+    set('refimBanco',        d.refimBanco);
+    set('refimUnificado',    d.refimUnificado);
+    set('refimPrazo',        d.refimPrazo);
+    set('refimModo',         d.refimModo);
+    set('refimTrocoInput',   d.refimTrocoInput);
+    set('refimMargemNeg',    d.refimMargemNeg);
+    set('simpTaxa',          d.simpTaxa);
+    set('simpPrazo',         d.simpPrazo);
+    // Restaura cliente
+    document.getElementById('cpfCliente').value     = cot.cpf          || '';
+    document.getElementById('nomeCliente').value    = cot.nomeCliente  || '';
+    document.getElementById('modalCpfCliente').value = cot.cpf         || '';
+    document.getElementById('modalNomeCliente').value = cot.nomeCliente || '';
+    _mostrarClienteDetectado(cot.nomeCliente || '', cot.cpf || '');
+    _refimResult = d._refimResult || null;
+    if (d.tipoPort) setTipoPort(d.tipoPort);
+    renderContratos();
+    popularSelectBancos();
+    onBancoChange();
+    atualizarVisibilidadeCampos();
+    if (d.tipoPort === 'refim') calcRefim();
+    alert('✅ Cotação restaurada!');
+  } catch (err) {
+    alert('⚠️ Erro ao carregar cotação: ' + err.message);
+  }
+}
+
+async function excluirCotacao(id, cpf) {
+  if (!confirm('Excluir esta cotação salva?')) return;
+  try {
+    await fetch(`/api/cotacoes-simulador/${id}`, { method: 'DELETE', credentials: 'include' });
+    buscarCotacoesPorCpf(cpf);
+  } catch (err) {
+    alert('⚠️ Erro ao excluir: ' + err.message);
+  }
+}
+
 // ── MODAL REGRAS DOS BANCOS ────────────────────────────
 
 function abrirModalRegras() {
@@ -6243,30 +6478,95 @@ function fecharModalRegras() {
 function renderTbRegras() {
   const tb = document.getElementById('tbRegras');
   if(!tb) return;
-  tb.innerHTML = regrasBancos.map((r, i) => `
+  tb.innerHTML = regrasBancos.map((r, i) => {
+    const excRows = (Array.isArray(r.excecoesOrigem) && r.excecoesOrigem.length)
+      ? r.excecoesOrigem.map((e, ei) => `
+        <tr id="exc-row-${i}-${ei}" style="background:#FAFAFA;font-size:11px;">
+          <td style="padding:4px 8px;color:#6B7280;" colspan="2">
+            ↳ Exceto: <b>${e.bancoOrigem || '?'}</b>
+          </td>
+          <td colspan="2" style="padding:4px 8px;color:#6B7280;">
+            porta c/ <b>${e.pagasMinPortar ?? 0}</b> · rem. c/ <b>${e.pagasMinRemunerar ?? 0}</b>
+          </td>
+          <td colspan="3" style="padding:4px 8px;">
+            <button onclick="removerExcecao(${i},${ei})" style="background:#FEE2E2;color:#DC2626;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px;">✕</button>
+          </td>
+        </tr>`).join('')
+      : '';
+    const addExcForm = `
+      <tr id="exc-add-${i}" style="display:none;background:#F9F9FF;">
+        <td colspan="9" style="padding:6px 8px;">
+          <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;">
+            <div><label style="font-size:10px;display:block;">Banco Origem</label><input id="excBanco-${i}" placeholder="Ex: Caixa" style="width:100px;font-size:11px;"></div>
+            <div><label style="font-size:10px;display:block;">Porta c/ (pagas)</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <div><label style="font-size:10px;display:block;">Rem. c/ (pagas)</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar</button>
+            <button onclick="document.getElementById('exc-add-${i}').style.display='none'" style="padding:4px 8px;background:#E5E7EB;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Cancelar</button>
+          </div>
+        </td>
+      </tr>`;
+    return `
     <tr>
-      <td style="padding:8px;font-weight:600;">${r.banco}</td>
-      <td style="text-align:center;padding:8px;">
-        <input value="${String(r.entradaMin).replace('.',',')}" style="width:70px;text-align:center;"
+      <td style="padding:8px;font-weight:600;white-space:nowrap;">${r.banco}</td>
+      <td style="text-align:center;padding:6px;">
+        <input value="${String(r.entradaMin).replace('.',',')}" style="width:65px;text-align:center;"
           onchange="regrasBancos[${i}].entradaMin=parseBR(this.value);salvarRegras();popularSelectBancos();">
       </td>
-      <td style="text-align:center;padding:8px;">
-        <input value="${String(r.taxaRefim).replace('.',',')}" style="width:70px;text-align:center;"
+      <td style="text-align:center;padding:6px;">
+        <input value="${String(r.taxaRefim).replace('.',',')}" style="width:65px;text-align:center;"
           onchange="regrasBancos[${i}].taxaRefim=parseBR(this.value);salvarRegras();popularSelectBancos();">
       </td>
-      <td style="text-align:center;padding:8px;">
-        <input value="${String(r.saldoMin||0).replace('.',',')}" style="width:90px;text-align:center;"
+      <td style="text-align:center;padding:6px;">
+        <input value="${String(r.saldoMin||0).replace('.',',')}" style="width:80px;text-align:center;"
           onchange="regrasBancos[${i}].saldoMin=parseBR(this.value);salvarRegras();">
       </td>
-      <td style="text-align:center;padding:8px;">
-        <input value="${String(r.minTroco||250).replace('.',',')}" style="width:80px;text-align:center;"
+      <td style="text-align:center;padding:6px;">
+        <input value="${String(r.minTroco||250).replace('.',',')}" style="width:70px;text-align:center;"
           onchange="regrasBancos[${i}].minTroco=parseBR(this.value);salvarRegras();">
       </td>
-      <td style="padding:8px;">
-        <button onclick="removerRegra(${i})" style="background:#FEE2E2;color:#DC2626;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;">✕</button>
+      <td style="text-align:center;padding:6px;">
+        <input type="number" min="0" value="${r.pagasMinPortar ?? 0}" style="width:55px;text-align:center;"
+          onchange="regrasBancos[${i}].pagasMinPortar=parseInt(this.value)||0;salvarRegras();">
+      </td>
+      <td style="text-align:center;padding:6px;">
+        <input type="number" min="0" value="${r.pagasMinRemunerar ?? 0}" style="width:55px;text-align:center;"
+          onchange="regrasBancos[${i}].pagasMinRemunerar=parseInt(this.value)||0;salvarRegras();">
+      </td>
+      <td style="text-align:center;padding:6px;">
+        <input type="checkbox" ${r.uneSaldoNegativo ? 'checked' : ''}
+          onchange="regrasBancos[${i}].uneSaldoNegativo=this.checked;salvarRegras();">
+      </td>
+      <td style="padding:6px;white-space:nowrap;">
+        <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:#6C2BD9;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
+        <button onclick="removerRegra(${i})" style="background:#FEE2E2;color:#DC2626;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
       </td>
     </tr>
-  `).join('');
+    ${excRows}
+    ${addExcForm}`;
+  }).join('');
+}
+
+function toggleExcForm(i) {
+  const row = document.getElementById(`exc-add-${i}`);
+  if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function adicionarExcecao(i) {
+  const bancoOrigem = (document.getElementById(`excBanco-${i}`)?.value || '').trim();
+  const pagasMinPortar = parseInt(document.getElementById(`excPortar-${i}`)?.value) || 0;
+  const pagasMinRemunerar = parseInt(document.getElementById(`excRem-${i}`)?.value) || 0;
+  if (!bancoOrigem) { alert('Informe o banco de origem da exceção.'); return; }
+  if (!Array.isArray(regrasBancos[i].excecoesOrigem)) regrasBancos[i].excecoesOrigem = [];
+  regrasBancos[i].excecoesOrigem.push({ bancoOrigem, pagasMinPortar, pagasMinRemunerar });
+  salvarRegras();
+  renderTbRegras();
+}
+
+function removerExcecao(i, ei) {
+  if (!Array.isArray(regrasBancos[i].excecoesOrigem)) return;
+  regrasBancos[i].excecoesOrigem.splice(ei, 1);
+  salvarRegras();
+  renderTbRegras();
 }
 
 function addRegra() {
@@ -6276,17 +6576,19 @@ function addRegra() {
   const refim    = parseBR(document.getElementById('novoRegRefim').value);
   const saldoMin = parseBR(document.getElementById('novoRegSaldoMin').value) || 0;
   const minTroco = parseBR(document.getElementById('novoRegMinTroco').value) || 250;
-  if (!banco || !entrada || !refim) { alert('Preencha todos os campos.'); return; }
+  const pagasMinPortar    = parseInt(document.getElementById('novoRegPagasPortar').value) || 0;
+  const pagasMinRemunerar = parseInt(document.getElementById('novoRegPagasRem').value)    || 0;
+  const uneSaldoNegativo  = document.getElementById('novoRegUneNeg').checked;
+  if (!banco || !entrada || !refim) { alert('Preencha nome, entrada mínima e taxa refim.'); return; }
   if (regrasBancos.some(r => r.banco.toLowerCase() === banco.toLowerCase())) {
     alert(`Já existe um banco com o nome "${banco}".`); return;
   }
-  regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, saldoMin, minTroco });
+  regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, saldoMin, minTroco,
+                      pagasMinPortar, pagasMinRemunerar, uneSaldoNegativo, excecoesOrigem: [] });
   salvarRegras();
-  document.getElementById('novoRegBanco').value    = '';
-  document.getElementById('novoRegEntrada').value  = '';
-  document.getElementById('novoRegRefim').value    = '';
-  document.getElementById('novoRegSaldoMin').value = '';
-  document.getElementById('novoRegMinTroco').value = '';
+  ['novoRegBanco','novoRegEntrada','novoRegRefim','novoRegSaldoMin','novoRegMinTroco',
+   'novoRegPagasPortar','novoRegPagasRem'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('novoRegUneNeg').checked = false;
   renderTbRegras();
   popularSelectBancos();
 }

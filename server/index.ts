@@ -70,10 +70,15 @@ app.use(
       // Sem origin (ex: chamadas server-to-server, curl): só bloqueia em prod se não vier de origens conhecidas
       if (!origin) return callback(null, false);
 
-      // Sempre permite o próprio domínio Replit e dominios configurados
+      // Sempre permite o próprio domínio Replit/Railway e dominios configurados.
+      // OBS: os assets buildados são servidos com <script crossorigin>, o que faz
+      // o navegador mandar Origin (mesmo same-origin) e EXIGIR Access-Control-Allow-Origin.
+      // Sem liberar o domínio do Railway aqui, o CORS bloqueava o JS → tela branca.
       const replitPattern = /\.replit\.app$/;
+      const railwayPattern = /\.up\.railway\.app$/;
       if (
         replitPattern.test(origin) ||
+        railwayPattern.test(origin) ||
         allowedOrigins.some((allowed) => origin.includes(allowed))
       ) {
         return callback(null, true);
@@ -124,6 +129,22 @@ import nodePath from "path";
 
 // Static público (logos etc.) — não exige sessão
 app.use(express.static(nodePath.join(process.cwd(), "public")));
+
+// Assets do cliente buildado (JS/CSS hasheados) — servidos AQUI, ANTES do
+// middleware de sessão. Arquivos estáticos não precisam de sessão; passar pela
+// sessão fazia uma query no banco por request e, sob a rajada concorrente do
+// carregamento da página (js+css+favicon juntos) + jobs em background, o pool
+// esgotava e a query de sessão falhava → 500 em /assets/* → tela branca.
+// `index: false` mantém o "/" passando pelo fluxo normal (check de tenant).
+if (isProduction) {
+  app.use(
+    express.static(nodePath.join(import.meta.dirname, "public"), {
+      index: false,
+      maxAge: "1y",
+      immutable: true,
+    }),
+  );
+}
 // NOTA: /uploads (protegido) é registrado DEPOIS do middleware de sessão,
 // dentro do IIFE — caso contrário req.session ainda não existe e tudo cai em 401.
 
@@ -230,16 +251,10 @@ app.use((req, res, next) => {
         if (isProduction && process.env.DATABASE_URL) {
           try {
             const pgSession = (await import("connect-pg-simple")).default;
-            const pg = (await import("pg")).default;
+            // Reaproveita o pool compartilhado do storage (SSL configurável por env),
+            // em vez de criar um segundo pool com SSL fixo.
+            const { pool } = await import("./storage");
             const PgStore = pgSession(session);
-            const pool = new pg.Pool({
-              connectionString: process.env.DATABASE_URL,
-              // SSL com validação de certificado em produção
-              ssl: { rejectUnauthorized: true },
-              max: 5,
-              idleTimeoutMillis: 30000,
-              connectionTimeoutMillis: 10000,
-            });
             const pgStore = new PgStore({
               pool,
               tableName: "session",
@@ -282,6 +297,11 @@ app.use((req, res, next) => {
           `);
           await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_status ON lemit_jobs(status)`);
           await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_lemit_jobs_cpf ON lemit_jobs(cpf)`);
+          // Storage de anexos no Supabase: chave do objeto por documento
+          await migDb.execute(migSql`
+            ALTER TABLE proposal_documents
+              ADD COLUMN IF NOT EXISTS storage_key TEXT
+          `);
           log("Lemit migration OK");
         } catch (migErr) {
           console.error("Lemit migration error (non-fatal):", migErr);
@@ -294,6 +314,16 @@ app.use((req, res, next) => {
 
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS ade_refin VARCHAR(100)
+          `);
+
+          // Portabilidade — captura de origem/saldo/datas (dashboard Portabilidades)
+          await migDb.execute(migSql`
+            ALTER TABLE proposals
+              ADD COLUMN IF NOT EXISTS banco_origem VARCHAR(255),
+              ADD COLUMN IF NOT EXISTS saldo_informado DECIMAL(12,2),
+              ADD COLUMN IF NOT EXISTS saldo_pago DECIMAL(12,2),
+              ADD COLUMN IF NOT EXISTS data_cip TIMESTAMP,
+              ADD COLUMN IF NOT EXISTS data_saldo TIMESTAMP
           `);
 
           await migDb.execute(migSql`
@@ -385,9 +415,72 @@ app.use((req, res, next) => {
               created_at TIMESTAMP NOT NULL DEFAULT NOW()
             )
           `);
+          // API Keys externas
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS api_keys (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL,
+              nome               VARCHAR(255) NOT NULL,
+              chave_hash         VARCHAR(64) NOT NULL UNIQUE,
+              prefixo            VARCHAR(12),
+              ativo              BOOLEAN NOT NULL DEFAULT true,
+              escopos            JSONB NOT NULL DEFAULT '["margens","contratos"]'::jsonb,
+              ultimo_uso         TIMESTAMP,
+              total_requisicoes  INTEGER NOT NULL DEFAULT 0,
+              criado_por         INTEGER,
+              created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS escopos JSONB NOT NULL DEFAULT '["margens","contratos"]'::jsonb
+          `);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id)`);
+
           log("Contratos migration OK");
         } catch (migErr) {
           console.error("Contratos migration error (non-fatal):", migErr);
+        }
+
+        // Normaliza nomeCorretor para UPPER (elimina duplicatas de caixa)
+        try {
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos
+            SET nome_corretor = UPPER(TRIM(nome_corretor))
+            WHERE nome_corretor IS NOT NULL
+              AND nome_corretor <> UPPER(TRIM(nome_corretor))
+          `);
+          log("nomeCorretor normalization OK");
+        } catch (migErr) {
+          console.error("nomeCorretor normalization error (non-fatal):", migErr);
+        }
+
+        // Simulador de portabilidade: novos campos em regras de bancos + cotações salvas
+        try {
+          const { db: simMigDb } = await import("./storage");
+          const { sql: simMigSql } = await import("drizzle-orm");
+          await simMigDb.execute(simMigSql`
+            ALTER TABLE portability_bank_rules
+              ADD COLUMN IF NOT EXISTS pagas_min_portar INTEGER DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS pagas_min_remunerar INTEGER DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS une_saldo_negativo BOOLEAN DEFAULT FALSE,
+              ADD COLUMN IF NOT EXISTS excecoes_origem JSONB
+          `);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS cotacoes_simulador (
+              id           SERIAL PRIMARY KEY,
+              tenant_id    INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id      INTEGER,
+              cpf          VARCHAR(20) NOT NULL,
+              nome_cliente VARCHAR(255),
+              descricao    VARCHAR(500),
+              dados        JSONB NOT NULL,
+              criado_em    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_cotacoes_sim_cpf ON cotacoes_simulador(tenant_id, cpf)`);
+          log("Simulador migration OK");
+        } catch (migErr) {
+          console.error("Simulador migration error (non-fatal):", migErr);
         }
 
         // Database seed

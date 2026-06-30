@@ -325,6 +325,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <option value="Pago">Pago</option>
       </select>
       <button class="btn btn-sm" onclick="carregarProducaoAPI()" style="background:var(--accent);color:#fff;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px">🔄 Atualizar</button>
+      <button class="btn btn-sm" onclick="abrirImportParceiro()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px">📥 Importar</button>
     </div>
 
     <!-- KPIs -->
@@ -428,6 +429,11 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <span class="sim-input-label" id="sim-input-label">Valor da parcela (R$)</span>
       <input class="sim-input" type="number" id="sim-input" placeholder="0,00" min="0" oninput="simularContrato()"/>
       <button class="sim-clear" onclick="limparSim()" title="Limpar">✕</button>
+      <span style="width:1px;height:20px;background:var(--border);display:inline-block;margin:0 4px"></span>
+      <div class="sim-mode-wrap">
+        <button class="sim-mode-btn" id="srcc-btn-fora" onclick="setSrccFiltro('fora')">Fora da SRCC</button>
+        <button class="sim-mode-btn" id="srcc-btn-srcc" onclick="setSrccFiltro('srcc')">Na SRCC</button>
+      </div>
     </div>
   </div>
   <div class="table-wrap">
@@ -808,6 +814,92 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   </div>
 </div>
 
+<!-- Modal Importar Produção por Parceiro -->
+<div class="overlay" id="modal-import-parceiro">
+  <div class="modal" style="width:1060px;max-width:98vw">
+    <div class="modal-header"><h3>📥 Importar Produção por Parceiro</h3><button class="modal-close" onclick="fecharModal('modal-import-parceiro')">✕</button></div>
+    <div class="modal-body">
+      <!-- Step 1: upload -->
+      <div id="imp-parc-step1">
+        <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:700;display:block;margin-bottom:5px;letter-spacing:.5px">PARCEIRO</label>
+            <select id="imp-parc-sel" class="filter-select" style="min-width:160px">
+              <option value="">Selecione...</option>
+              <option value="d7">D7 (Inter)</option>
+              <option value="gold">Gold (BTW)</option>
+              <option value="amf">AMF</option>
+              <option value="bevi">Bevi</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:260px">
+            <label style="font-size:11px;color:var(--muted);font-weight:700;display:block;margin-bottom:5px;letter-spacing:.5px">ARQUIVO (CSV / XLSX / XLS)</label>
+            <div class="dropzone" id="imp-parc-drop" style="padding:12px 20px;min-height:52px;cursor:pointer;display:flex;align-items:center;gap:10px"
+              onclick="document.getElementById('imp-parc-file').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+              ondragleave="this.style.borderColor=''"
+              ondrop="event.preventDefault();this.style.borderColor='';impParcHandleFile(event.dataTransfer.files[0])">
+              <span style="font-size:20px">📂</span>
+              <span id="imp-parc-drop-txt" style="color:var(--muted);font-size:13px">Arraste aqui ou clique para selecionar</span>
+              <input type="file" id="imp-parc-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="impParcHandleFile(this.files[0])">
+            </div>
+          </div>
+        </div>
+        <div id="imp-parc-err" style="display:none;color:var(--red);font-size:13px;padding:8px 12px;background:rgba(239,68,68,.08);border-radius:6px;border:1px solid rgba(239,68,68,.3)"></div>
+      </div>
+      <!-- Step 2: preview -->
+      <div id="imp-parc-step2" style="display:none;margin-top:4px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <div class="kpi-card" style="flex:1;min-width:110px;padding:10px 14px;cursor:pointer" onclick="impParcMostraAba('matched')">
+            <div class="kpi-label">Vinculados</div><div class="kpi-value kpi-green" id="imp-parc-n-match">0</div>
+          </div>
+          <div class="kpi-card" style="flex:1;min-width:110px;padding:10px 14px;cursor:pointer" onclick="impParcMostraAba('sem')">
+            <div class="kpi-label">Sem vínculo</div><div class="kpi-value kpi-yellow" id="imp-parc-n-sem">0</div>
+          </div>
+          <div class="kpi-card" style="flex:1;min-width:110px;padding:10px 14px;cursor:pointer" onclick="impParcMostraAba('inv')">
+            <div class="kpi-label">Inválidos</div><div class="kpi-value" style="color:var(--red)" id="imp-parc-n-inv">0</div>
+          </div>
+          <div class="kpi-card" style="flex:1;min-width:110px;padding:10px 14px">
+            <div class="kpi-label">Total comissão</div><div class="kpi-value kpi-accent" id="imp-parc-tot-com">—</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          <button id="imp-parc-tab-matched" onclick="impParcMostraAba('matched')" class="btn btn-sm" style="font-size:12px">✅ Vinculados</button>
+          <button id="imp-parc-tab-sem" onclick="impParcMostraAba('sem')" class="btn btn-sm btn-ghost" style="font-size:12px">⚠️ Sem vínculo</button>
+          <button id="imp-parc-tab-inv" onclick="impParcMostraAba('inv')" class="btn btn-sm btn-ghost" style="font-size:12px">❌ Inválidos</button>
+        </div>
+        <!-- Matched -->
+        <div id="imp-parc-tbl-matched" class="table-wrap" style="max-height:300px;overflow-y:auto">
+          <table><thead><tr>
+            <th style="width:28px"><input type="checkbox" id="imp-parc-chk-all-matched" onchange="impParcToggleAll(this.checked,'matched')" style="cursor:pointer;width:14px;height:14px"></th>
+            <th>ADE</th><th>Cliente</th><th>CPF</th><th>Banco</th><th>Data Pgto</th><th>Vendedor</th><th class="r">Base</th><th class="r">% Com.</th><th class="r">Comissão</th><th>Situação</th>
+          </tr></thead>
+          <tbody id="imp-parc-tbody-matched"></tbody></table>
+        </div>
+        <!-- Sem match -->
+        <div id="imp-parc-tbl-sem" class="table-wrap" style="max-height:300px;overflow-y:auto;display:none">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.08);border-radius:6px">ADEs não encontrados nas propostas do sistema. Selecione os que deseja importar assim mesmo (sem vínculo com proposta).</div>
+          <table><thead><tr>
+            <th style="width:28px"><input type="checkbox" id="imp-parc-chk-all-sem" onchange="impParcToggleAll(this.checked,'sem')" style="cursor:pointer;width:14px;height:14px"></th>
+            <th>ADE</th><th>Cliente</th><th>CPF</th><th>Banco</th><th>Data Pgto</th><th class="r">Base</th><th class="r">% Com.</th><th class="r">Comissão</th>
+          </tr></thead>
+          <tbody id="imp-parc-tbody-sem"></tbody></table>
+        </div>
+        <!-- Inválidos -->
+        <div id="imp-parc-tbl-inv" class="table-wrap" style="max-height:300px;overflow-y:auto;display:none">
+          <table><thead><tr><th>Linha</th><th>Motivo</th></tr></thead>
+          <tbody id="imp-parc-tbody-inv"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-import-parceiro')">Cancelar</button>
+      <button id="imp-parc-btn-analisar" class="btn btn-primary" onclick="impParcAnalisar()">🔍 Analisar</button>
+      <button id="imp-parc-btn-confirmar" class="btn btn-primary" style="display:none" onclick="impParcConfirmar()">✅ Importar selecionados</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════ MODAIS TABELAS ════ -->
 <div class="overlay" id="modal-tabela">
   <div class="modal" style="width:560px">
@@ -1039,6 +1131,7 @@ let _importRows=[];
 let _csvRows=[];
 let _editContId=null,_editTabelaId=null,_editGrupoId=null,_editCorretorId=null;
 let _simModo='parcela',_simAtivo=false,_simValor=0;
+let _srccFiltro='';
 let _tbSortSim={col:'ganho',dir:'desc'};
 let _tbSortNorm={col:null,dir:'desc'};
 let _grpVigencias=[]; // regras de repasse por tipo de produto do grupo em edição
@@ -2281,6 +2374,8 @@ function renderTabelas(){
     if(conv&&t.convenio!==conv)return false;
     if(tipo&&t.tipo!==tipo)return false;
     if(prazo&&String(t.prazo)!==prazo)return false;
+    if(_srccFiltro==='srcc'&&!t.srcc)return false;
+    if(_srccFiltro==='fora'&&t.srcc)return false;
     return true;
   });
   document.getElementById('tb-count').textContent=list.length+' tabela'+(list.length!==1?'s':'');
@@ -2304,6 +2399,7 @@ function renderTabelas(){
       if(c==='prazo')return r.t.prazo;
       if(c==='empresa')return r.t.pctEmpresa;
       if(c==='flat')return r.flatPct;
+      if(c==='coef')return r.t.coef;
       if(c==='contrato')return r.valorContrato;
       if(c==='parcela')return r.parcela;
       return r.ganho; // 'ganho' default
@@ -2316,6 +2412,7 @@ function renderTabelas(){
       ${sTh('Convênio','convenio',s,'toggleSortSim')}
       ${sTh('Tipo','tipo',s,'toggleSortSim')}
       ${sTh('Prazo','prazo',s,'toggleSortSim','r')}
+      ${sTh('Coeficiente','coef',s,'toggleSortSim','r')}
       <th>Flags</th>
       ${thEmp}
       ${sTh('Flat %','flat',s,'toggleSortSim','r')}
@@ -2323,7 +2420,7 @@ function renderTabelas(){
       ${sTh('Parcela','parcela',s,'toggleSortSim','r')}
       ${sTh('Comissão','ganho',s,'toggleSortSim','r')}
     </tr>`;
-    if(!resultados.length){tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
+    if(!resultados.length){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
     tbody.innerHTML=resultados.map(({t,flatPct,valorContrato,parcela,ganho,rep},i)=>{
       const rc=['rank-1','rank-2','rank-3'][i]||'rank-n';
       const tdE=isMaster?`<td class="r"><span class="pct-empresa">${t.pctEmpresa}%</span></td>`:'';
@@ -2332,6 +2429,7 @@ function renderTabelas(){
         <td><div style="font-size:11px;color:var(--muted)">${t.banco}</div><div class="td-name">${t.nome}</div></td>
         <td>${tagConvenio(t.convenio)}</td><td>${tagTipo(t.tipo)}</td>
         <td class="r">${t.prazo}m</td>
+        <td class="r" style="font-family:monospace;font-size:12px">${fmtCoef(t.coef)}</td>
         <td>${badgesFlags(t)}</td>
         ${tdE}
         <td class="r"><span class="pct-corretor">${Number(flatPct).toFixed(2).replace('.',',')}%</span></td>
@@ -2424,6 +2522,12 @@ function setSimMode(modo){
   document.getElementById('sim-input').value='';
   _simAtivo=false;_simValor=0;
   document.getElementById('tb-sim-header').classList.remove('has-results');
+  renderTabelas();
+}
+function setSrccFiltro(modo){
+  _srccFiltro=(_srccFiltro===modo)?'':modo;
+  document.getElementById('srcc-btn-fora').classList.toggle('active',_srccFiltro==='fora');
+  document.getElementById('srcc-btn-srcc').classList.toggle('active',_srccFiltro==='srcc');
   renderTabelas();
 }
 function limparSim(){
@@ -3038,6 +3142,142 @@ function confirmarImportProd(){
     }
   });
   fecharModal('modal-import-prod');toast(`Importado! ${novos} novo(s), ${atualizados} atualizado(s).`);salvarDados();renderProducao();
+}
+
+// ══════════════════════════════════════════════════════
+// IMPORT PRODUÇÃO POR PARCEIRO
+// ══════════════════════════════════════════════════════
+let _impParcFile=null;
+let _impParcPreview={matched:[],semMatch:[],invalidos:[]};
+
+function abrirImportParceiro(){
+  _impParcFile=null;
+  _impParcPreview={matched:[],semMatch:[],invalidos:[]};
+  document.getElementById('imp-parc-sel').value='';
+  document.getElementById('imp-parc-drop-txt').textContent='Arraste aqui ou clique para selecionar';
+  document.getElementById('imp-parc-file').value='';
+  document.getElementById('imp-parc-err').style.display='none';
+  document.getElementById('imp-parc-step2').style.display='none';
+  document.getElementById('imp-parc-btn-analisar').style.display='';
+  document.getElementById('imp-parc-btn-analisar').disabled=false;
+  document.getElementById('imp-parc-btn-analisar').textContent='🔍 Analisar';
+  document.getElementById('imp-parc-btn-confirmar').style.display='none';
+  abrirModal('modal-import-parceiro');
+}
+
+function impParcHandleFile(file){
+  if(!file)return;
+  _impParcFile=file;
+  document.getElementById('imp-parc-drop-txt').textContent='📄 '+file.name+' ('+(file.size>1024?Math.round(file.size/1024)+' KB':file.size+' B')+')';
+}
+
+async function impParcAnalisar(){
+  const parceiro=document.getElementById('imp-parc-sel').value;
+  const errEl=document.getElementById('imp-parc-err');
+  errEl.style.display='none';
+  if(!parceiro){errEl.textContent='Selecione um parceiro.';errEl.style.display='';return;}
+  if(!_impParcFile){errEl.textContent='Selecione um arquivo.';errEl.style.display='';return;}
+  const btn=document.getElementById('imp-parc-btn-analisar');
+  btn.disabled=true;btn.textContent='⏳ Analisando...';
+  try{
+    const fd=new FormData();
+    fd.append('parceiro',parceiro);
+    fd.append('arquivo',_impParcFile);
+    const resp=await fetch('/api/financeiro/producao/importar-parceiro/preview',{method:'POST',body:fd,credentials:'include'});
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.message||'Erro');
+    _impParcPreview=data;
+    impParcRenderPreview();
+    document.getElementById('imp-parc-step2').style.display='';
+    document.getElementById('imp-parc-btn-confirmar').style.display='';
+  }catch(e){
+    errEl.textContent='Erro: '+e.message;errEl.style.display='';
+  }finally{
+    btn.disabled=false;btn.textContent='🔍 Analisar';
+  }
+}
+
+function _fmtBRL2(n){return'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function impParcRenderPreview(){
+  const{matched,semMatch,invalidos}=_impParcPreview;
+  document.getElementById('imp-parc-n-match').textContent=matched.length;
+  document.getElementById('imp-parc-n-sem').textContent=semMatch.length;
+  document.getElementById('imp-parc-n-inv').textContent=invalidos.length;
+  const totCom=[...matched,...semMatch].reduce((s,r)=>s+(r.comissaoValor||0),0);
+  document.getElementById('imp-parc-tot-com').textContent=_fmtBRL2(totCom);
+
+  document.getElementById('imp-parc-tbody-matched').innerHTML=matched.length?matched.map(r=>`<tr>
+    <td><input type="checkbox" class="imp-parc-chk-matched" data-ade="${r.ade}" ${r.jaExiste?'':'checked'} style="cursor:pointer;width:14px;height:14px"></td>
+    <td style="font-family:monospace;font-size:12px">${r.ade}</td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nomeCliente||'—'}</td>
+    <td style="font-family:monospace;font-size:11px">${r.cpfCliente||'—'}</td>
+    <td>${r.banco||'—'}</td>
+    <td>${r.dataPagamento||'—'}</td>
+    <td>${r.vendedorProposal||r.vendedor||'—'}</td>
+    <td class="r">${_fmtBRL2(r.valorBase)}</td>
+    <td class="r">${Number(r.comissaoPerc||0).toFixed(2)}%</td>
+    <td class="r">${_fmtBRL2(r.comissaoValor)}</td>
+    <td style="color:${r.jaExiste?'var(--yellow)':'var(--green)'};font-size:12px">${r.jaExiste?'⚠️ Já importado':'✅ Novo'}</td>
+  </tr>`).join(''):'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
+
+  document.getElementById('imp-parc-tbody-sem').innerHTML=semMatch.length?semMatch.map(r=>`<tr>
+    <td><input type="checkbox" class="imp-parc-chk-sem" data-ade="${r.ade}" style="cursor:pointer;width:14px;height:14px"></td>
+    <td style="font-family:monospace;font-size:12px">${r.ade}</td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nomeCliente||'—'}</td>
+    <td style="font-family:monospace;font-size:11px">${r.cpfCliente||'—'}</td>
+    <td>${r.banco||'—'}</td>
+    <td>${r.dataPagamento||'—'}</td>
+    <td class="r">${_fmtBRL2(r.valorBase)}</td>
+    <td class="r">${Number(r.comissaoPerc||0).toFixed(2)}%</td>
+    <td class="r">${_fmtBRL2(r.comissaoValor)}</td>
+  </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
+
+  document.getElementById('imp-parc-tbody-inv').innerHTML=invalidos.length?invalidos.map(r=>`<tr>
+    <td style="color:var(--muted)">${r.linha||'—'}</td>
+    <td style="color:var(--red)">${r.motivo||'—'}</td>
+  </tr>`).join(''):'<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
+
+  impParcMostraAba('matched');
+}
+
+function impParcMostraAba(aba){
+  ['matched','sem','inv'].forEach(a=>{
+    document.getElementById('imp-parc-tbl-'+a).style.display=a===aba?'':'none';
+    const btn=document.getElementById('imp-parc-tab-'+a);
+    if(btn){btn.style.background=a===aba?'var(--accent)':'';btn.style.color=a===aba?'#fff':'';}
+  });
+}
+
+function impParcToggleAll(checked,tipo){
+  document.querySelectorAll('.imp-parc-chk-'+tipo).forEach(c=>c.checked=checked);
+}
+
+async function impParcConfirmar(){
+  const{matched,semMatch}=_impParcPreview;
+  const selMatched=matched.filter(r=>{const c=document.querySelector(`.imp-parc-chk-matched[data-ade="${r.ade}"]`);return c&&c.checked;});
+  const selSem=semMatch.filter(r=>{const c=document.querySelector(`.imp-parc-chk-sem[data-ade="${r.ade}"]`);return c&&c.checked;});
+  const linhas=[...selMatched,...selSem];
+  if(!linhas.length){toast('Nenhuma linha selecionada.',true);return;}
+  const btn=document.getElementById('imp-parc-btn-confirmar');
+  btn.disabled=true;btn.textContent='⏳ Importando...';
+  try{
+    const resp=await fetch('/api/financeiro/producao/importar-parceiro/confirmar',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'include',
+      body:JSON.stringify({linhas,parceiro:document.getElementById('imp-parc-sel').value}),
+    });
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.message||'Erro');
+    fecharModal('modal-import-parceiro');
+    toast(`Importado! ${data.inseridos} registro(s).${data.erros?.length?' '+data.erros.length+' erro(s).':''}`);
+    carregarProducaoAPI();
+  }catch(e){
+    toast('Erro: '+e.message,true);
+  }finally{
+    btn.disabled=false;btn.textContent='✅ Importar selecionados';
+  }
 }
 
 // ══════════════════════════════════════════════════════

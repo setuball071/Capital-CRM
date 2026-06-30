@@ -1,0 +1,1340 @@
+import type { Express, RequestHandler, Response } from "express";
+import { sql } from "drizzle-orm";
+import { db } from "./storage";
+import { openai } from "./openaiClient";
+
+// dias úteis (seg-sex) entre duas datas, inclusive
+function diasUteis(start: Date, end: Date): number {
+  let n = 0;
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (d <= end) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) n++;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
+
+// ── Motor de repasse ao consultor (espelha calcRepasseConsultorProd do
+//    financeiro-comissoes.html). repasse = valorEmpresa × pct/100, onde pct vem
+//    do override por contrato → grupo override → grupo do corretor (por nome) →
+//    fallback. Grupos/corretores vêm do financeiro_config (JSON). ─────────────
+function mapTipoFront(t: string): string {
+  const s = (t || "").toLowerCase();
+  if (s.includes("cart") || s.includes("benef") || s.includes("saque")) return "Cartão";
+  if (s.includes("port")) return "Portabilidade";
+  if (s.includes("compra") || s.includes("dívida") || s.includes("divida")) return "Compra de Dívida";
+  if (s.includes("refin")) return "Refinanciamento";
+  if (s.includes("novo") || s.includes("consig")) return "Novo";
+  return "Outro";
+}
+function getRepasseForTipo(grupo: any, tipo: string): number {
+  if (!grupo) return 0;
+  const rules: any[] = grupo.repasseRules || [];
+  let regra = rules.find((r) => r.tipo && r.tipo === tipo);
+  if (!regra) {
+    const tipoStd = mapTipoFront(tipo);
+    regra = rules.find((r) => r.tipo && r.tipo === tipoStd);
+  }
+  return regra != null ? Number(regra.repasse) : Number(grupo.repasse || 0);
+}
+function calcRepassePct(c: any, grupos: any[], corretores: any[]): number {
+  const grupoById = (id: any) => grupos.find((g) => g.id === id);
+  const ov = c.repassePercOverride;
+  if (ov !== null && ov !== undefined && ov !== "") {
+    const n = Number(ov);
+    if (!isNaN(n)) return n;
+  }
+  if (c.grupoIdOverride) {
+    const g = grupoById(c.grupoIdOverride);
+    if (g) return getRepasseForTipo(g, c.tipoContrato);
+  }
+  const nome = (c.vendedorNome || c.nomeCorretor || "").toLowerCase();
+  const cor = corretores.find((x) => (x.nome || "").toLowerCase() === nome);
+  if (!cor) return Number(c.comissaoRepassePerc || 0);
+  const g = grupoById(cor.grupoId);
+  if (!g) return Number(c.comissaoRepassePerc || 0);
+  return getRepasseForTipo(g, c.tipoContrato);
+}
+
+// "a,b,c" -> ["a","b","c"] (trim, sem vazios)
+function parseList(v: any): string[] {
+  if (!v) return [];
+  return String(v)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Lista pra IN (...) — evita o "malformed array literal" do ANY(${jsArray}).
+function inVals(values: (string | number)[]) {
+  return sql.join(values.map((v) => sql`${v}`), sql`, `);
+}
+
+// Filtros do PIPELINE (tabela proposals, alias p). Cada fragmento começa com "AND".
+function buildFiltrosSql(q: any) {
+  const frags: any[] = [];
+  const banco = parseList(q.banco);
+  const produto = parseList(q.produto);
+  const convenio = parseList(q.convenio);
+  const corretor = parseList(q.corretor).map((n) => parseInt(n)).filter((n) => !isNaN(n));
+  const parceiro = parseList(q.parceiro).map((n) => parseInt(n)).filter((n) => !isNaN(n));
+  if (banco.length) frags.push(sql`AND p.bank IN (${inVals(banco)})`);
+  if (produto.length) frags.push(sql`AND p.product IN (${inVals(produto)})`);
+  if (convenio.length) frags.push(sql`AND p.client_convenio IN (${inVals(convenio)})`);
+  if (corretor.length) frags.push(sql`AND p.vendor_id IN (${inVals(corretor)})`);
+  if (parceiro.length) frags.push(sql`AND p.parceiro_id IN (${inVals(parceiro)})`);
+  return frags.length ? sql.join(frags, sql` `) : sql``;
+}
+
+// Filtros da PRODUÇÃO OFICIAL (producoes_contratos / vendedor_contratos — mesmas
+// colunas banco/convenio/vendedor_id, sem alias). Produto/parceiro não se aplicam.
+function buildFiltrosOficialSql(q: any, prefix = "") {
+  const px = prefix ? sql.raw(prefix) : sql``;
+  const frags: any[] = [];
+  const banco = parseList(q.banco);
+  const convenio = parseList(q.convenio);
+  const corretor = parseList(q.corretor).map((n) => parseInt(n)).filter((n) => !isNaN(n));
+  if (banco.length) frags.push(sql`AND ${px}banco IN (${inVals(banco)})`);
+  if (convenio.length) frags.push(sql`AND ${px}convenio IN (${inVals(convenio)})`);
+  if (corretor.length) frags.push(sql`AND ${px}vendedor_id IN (${inVals(corretor)})`);
+  return frags.length ? sql.join(frags, sql` `) : sql``;
+}
+
+// Lista de "YYYY-MM" entre as datas (inclusive) — pra filtrar mes_referencia.
+function mesesNoPeriodo(inicioStr: string, fimStr: string): string[] {
+  const [iy, im] = inicioStr.split("-").map(Number);
+  const [fy, fm] = fimStr.split("-").map(Number);
+  const out: string[] = [];
+  let y = iy, m = im;
+  let guard = 0;
+  while ((y < fy || (y === fy && m <= fm)) && guard < 240) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+    guard++;
+  }
+  return out;
+}
+
+export function registerDashboardGerencialRoutes(
+  app: Express,
+  requireAuth: RequestHandler,
+  requireMaster: RequestHandler,
+) {
+  // ── Aba 1 (Visão Geral): Pipeline (proposals) + Produção Oficial (financeiro) ─
+  app.get(
+    "/api/gestao-comercial/dashboard/visao-geral",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const gran = ["dia", "semana", "mes"].includes(req.query.gran) ? req.query.gran : "dia";
+        const truncUnit = gran === "mes" ? "month" : gran === "semana" ? "week" : "day";
+        const filtros = buildFiltrosSql(req.query);
+
+        // período anterior equivalente (mesmo tamanho imediatamente antes)
+        const inicio = new Date(inicioStr + "T00:00:00");
+        const fim = new Date(fimStr + "T23:59:59");
+        const durMs = fim.getTime() - inicio.getTime();
+        const prevFim = new Date(inicio.getTime() - 1000);
+        const prevInicio = new Date(prevFim.getTime() - durMs);
+        const prevInicioStr = prevInicio.toISOString().slice(0, 10);
+        const prevFimStr = prevFim.toISOString().slice(0, 10);
+
+        // PAGO = status PAGO, contabilizado por paid_at OU updated_at (igual ao
+        // card "Pagos" do operacional — muitas propostas PAGO não têm paid_at).
+        const kpis = async (ini: string, f: string) => {
+          const r = await db.execute(sql`
+            SELECT
+              COALESCE(SUM(CASE WHEN p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${ini} AND ${f}
+                                THEN p.contract_value ELSE 0 END), 0) AS pago_valor,
+              COUNT(*) FILTER (WHERE p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${ini} AND ${f}) AS pago_qtd,
+              COALESCE(SUM(CASE WHEN p.created_at::date BETWEEN ${ini} AND ${f}
+                                THEN p.contract_value ELSE 0 END), 0) AS cad_valor,
+              COUNT(*) FILTER (WHERE p.created_at::date BETWEEN ${ini} AND ${f}) AS cad_qtd
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId} ${filtros}
+          `);
+          const row: any = r.rows[0] || {};
+          const pagoValor = Number(row.pago_valor) || 0;
+          const pagoQtd = Number(row.pago_qtd) || 0;
+          const cadValor = Number(row.cad_valor) || 0;
+          const cadQtd = Number(row.cad_qtd) || 0;
+          return {
+            pagoValor,
+            pagoQtd,
+            ticketMedio: pagoQtd ? pagoValor / pagoQtd : 0,
+            cadastradoValor: cadValor,
+            cadastradoQtd: cadQtd,
+            conversao: cadQtd ? pagoQtd / cadQtd : 0,
+          };
+        };
+
+        const [atual, anterior] = await Promise.all([
+          kpis(inicioStr, fimStr),
+          kpis(prevInicioStr, prevFimStr),
+        ]);
+
+        // série temporal (paga por paid_at/updated_at, cadastro por created_at)
+        const serieRes = await db.execute(sql`
+          WITH base AS (
+            SELECT date_trunc(${truncUnit}, COALESCE(p.paid_at, p.updated_at))::date AS periodo,
+                   SUM(p.contract_value) AS pago_valor, COUNT(*) AS pago_qtd,
+                   0::numeric AS cad_valor, 0 AS cad_qtd
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId} AND p.status = 'PAGO'
+              AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+            GROUP BY 1
+            UNION ALL
+            SELECT date_trunc(${truncUnit}, p.created_at)::date AS periodo,
+                   0::numeric, 0, SUM(p.contract_value), COUNT(*)
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId}
+              AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+            GROUP BY 1
+          )
+          SELECT to_char(periodo, 'YYYY-MM-DD') AS periodo,
+                 SUM(pago_valor) AS pago_valor, SUM(pago_qtd) AS pago_qtd,
+                 SUM(cad_valor) AS cad_valor, SUM(cad_qtd) AS cad_qtd
+          FROM base GROUP BY periodo ORDER BY periodo
+        `);
+        const serie = serieRes.rows.map((r: any) => ({
+          periodo: r.periodo,
+          pagoValor: Number(r.pago_valor) || 0,
+          pagoQtd: Number(r.pago_qtd) || 0,
+          cadastradoValor: Number(r.cad_valor) || 0,
+          cadastradoQtd: Number(r.cad_qtd) || 0,
+        }));
+
+        // quebras de produção PAGA (top 12; o front agrupa "outros")
+        const quebra = async (col: any) => {
+          const r = await db.execute(sql`
+            SELECT COALESCE(NULLIF(${col}, ''), 'Não informado') AS chave,
+                   SUM(p.contract_value) AS valor, COUNT(*) AS qtd
+            FROM proposals p
+            WHERE p.tenant_id = ${tenantId} AND p.status = 'PAGO'
+              AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+            GROUP BY 1 ORDER BY valor DESC LIMIT 12
+          `);
+          return r.rows.map((x: any) => ({
+            chave: x.chave,
+            valor: Number(x.valor) || 0,
+            qtd: Number(x.qtd) || 0,
+          }));
+        };
+        const [produto, banco, convenio] = await Promise.all([
+          quebra(sql`p.product`),
+          quebra(sql`p.bank`),
+          quebra(sql`p.client_convenio`),
+        ]);
+
+        // ── PRODUÇÃO OFICIAL (mesma definição da Meta/Ranking) ──────────────
+        // producoes_contratos (confirmado, valor_base, por mes_referencia) +
+        // vendedor_contratos (valor_contrato, por data_contrato). Novo/Port/Cartão
+        // por tipo. "geral" = total - cartão (como a Meta Geral da equipe).
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00"); // guarda: nunca IN () vazio
+        const filtrosOf = buildFiltrosOficialSql(req.query);
+        const [prodR, vendR] = await Promise.all([
+          db.execute(sql`
+            SELECT
+              COALESCE(SUM(valor_base),0) AS total,
+              COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END),0) AS cartao,
+              COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END),0) AS portabilidade,
+              COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END),0) AS novo,
+              COUNT(*) AS qtd
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+          `),
+          db.execute(sql`
+            SELECT
+              COALESCE(SUM(valor_contrato),0) AS total,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN valor_contrato ELSE 0 END),0) AS cartao,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%' THEN valor_contrato ELSE 0 END),0) AS portabilidade,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND (LOWER(COALESCE(tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_operacao,'')) LIKE '%consig%') THEN valor_contrato ELSE 0 END),0) AS novo,
+              COUNT(*) AS qtd
+            FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId}
+              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+          `),
+        ]);
+        const pr: any = prodR.rows[0] || {};
+        const vr: any = vendR.rows[0] || {};
+        const num = (a: any, b: any) => (Number(a) || 0) + (Number(b) || 0);
+        const ofCartao = num(pr.cartao, vr.cartao);
+        const ofTotal = num(pr.total, vr.total);
+        const oficial = {
+          geral: ofTotal - ofCartao, // produção sem cartão (= Meta Geral)
+          novo: num(pr.novo, vr.novo),
+          portabilidade: num(pr.portabilidade, vr.portabilidade),
+          cartao: ofCartao,
+          total: ofTotal,
+          qtd: num(pr.qtd, vr.qtd),
+        };
+
+        return res.json({
+          filtrosAplicados: { inicio: inicioStr, fim: fimStr, gran },
+          kpis: atual,
+          comparativo: anterior,
+          serie,
+          quebras: { produto, banco, convenio },
+          oficial,
+        });
+      } catch (e: any) {
+        console.error("dashboard visao-geral error:", e);
+        return res.status(500).json({ message: "Erro ao carregar dashboard" });
+      }
+    },
+  );
+
+  // ── Drill-down: lista detalhada das propostas (pipeline) ───────────────────
+  app.get(
+    "/api/gestao-comercial/dashboard/visao-geral/drill",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const filtros = buildFiltrosSql(req.query);
+        const metrica = req.query.metrica === "cadastro" ? "cadastro" : "pago";
+        const dim = ["produto", "banco", "convenio"].includes(req.query.dim) ? req.query.dim : null;
+        const valor = req.query.valor != null ? String(req.query.valor) : null;
+
+        const dataCond =
+          metrica === "pago"
+            ? sql`p.status = 'PAGO' AND COALESCE(p.paid_at, p.updated_at)::date BETWEEN ${inicioStr} AND ${fimStr}`
+            : sql`p.created_at::date BETWEEN ${inicioStr} AND ${fimStr}`;
+
+        let dimCond = sql``;
+        if (dim && valor != null) {
+          const col =
+            dim === "produto" ? sql`p.product` : dim === "banco" ? sql`p.bank` : sql`p.client_convenio`;
+          dimCond =
+            valor === "Não informado"
+              ? sql`AND (${col} IS NULL OR ${col} = '')`
+              : sql`AND ${col} = ${valor}`;
+        }
+
+        const orderCol = metrica === "pago" ? sql`COALESCE(p.paid_at, p.updated_at)` : sql`p.created_at`;
+        const r = await db.execute(sql`
+          SELECT p.id, p.client_name, p.client_cpf, u.name AS corretor,
+                 p.bank, p.product, p.client_convenio, p.contract_value, p.status,
+                 to_char(p.created_at, 'YYYY-MM-DD') AS criado_em,
+                 to_char(COALESCE(p.paid_at, p.updated_at), 'YYYY-MM-DD') AS pago_em
+          FROM proposals p
+          LEFT JOIN users u ON u.id = p.vendor_id
+          WHERE p.tenant_id = ${tenantId} AND ${dataCond} ${filtros} ${dimCond}
+          ORDER BY ${orderCol} DESC NULLS LAST
+          LIMIT 1000
+        `);
+        const itens = r.rows.map((x: any) => ({
+          id: x.id,
+          cliente: x.client_name,
+          cpf: x.client_cpf,
+          corretor: x.corretor,
+          banco: x.bank,
+          produto: x.product,
+          convenio: x.client_convenio,
+          valor: Number(x.contract_value) || 0,
+          status: x.status,
+          criadoEm: x.criado_em,
+          pagoEm: x.pago_em,
+        }));
+        return res.json({ itens });
+      } catch (e: any) {
+        console.error("dashboard drill error:", e);
+        return res.status(500).json({ message: "Erro ao carregar detalhe" });
+      }
+    },
+  );
+
+  // ── Aba 2 (Performance Comercial): top dimensões c/ ticket + perfil por cliente ─
+  app.get(
+    "/api/gestao-comercial/dashboard/performance",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const filtros = buildFiltrosSql(req.query); // proposals (cadastrado)
+        const filtrosOf = buildFiltrosOficialSql(req.query); // producoes/vendedor (produção)
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+
+        const mapRow = (x: any) => {
+          const cadQtd = Number(x.cad_qtd) || 0;
+          const cadValor = Number(x.cad_valor) || 0;
+          const prodQtd = Number(x.prod_qtd) || 0;
+          const prodValor = Number(x.prod_valor) || 0;
+          return {
+            chave: x.chave,
+            cadQtd,
+            cadValor,
+            prodQtd,
+            prodValor,
+            // Conversão por VALOR (consistente com o total): Produção R$ ÷ Cadastrado R$
+            conversao: cadValor ? prodValor / cadValor : 0,
+            ticket: prodQtd ? prodValor / prodQtd : 0,
+          };
+        };
+
+        // Cadastrado = proposals; Produção (pago) = producoes_contratos +
+        // vendedor_contratos (fonte ÚNICA do pago — os pagos do CRM já entram aqui,
+        // mais os importados). Unificado por chave normalizada (UPPER/TRIM).
+        const dimUnificado = async (pCol: any, prodCol: any, vendCol: any) => {
+          const r = await db.execute(sql`
+            WITH cad AS (
+              SELECT UPPER(TRIM(COALESCE(NULLIF(${pCol}, ''), 'Não informado'))) AS k,
+                     COUNT(*) AS qtd, COALESCE(SUM(p.contract_value), 0) AS valor
+              FROM proposals p
+              WHERE p.tenant_id = ${tenantId}
+                AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+              GROUP BY 1
+            ),
+            prod AS (
+              SELECT k, SUM(qtd) AS qtd, SUM(valor) AS valor FROM (
+                SELECT UPPER(TRIM(COALESCE(NULLIF(${prodCol}, ''), 'Não informado'))) AS k,
+                       COUNT(*) AS qtd, COALESCE(SUM(valor_base), 0) AS valor
+                FROM producoes_contratos
+                WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+                  AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+                GROUP BY 1
+                UNION ALL
+                SELECT UPPER(TRIM(COALESCE(NULLIF(${vendCol}, ''), 'Não informado'))),
+                       COUNT(*), COALESCE(SUM(valor_contrato), 0)
+                FROM vendedor_contratos
+                WHERE tenant_id = ${tenantId}
+                  AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+                GROUP BY 1
+              ) u GROUP BY k
+            )
+            SELECT COALESCE(cad.k, prod.k) AS chave,
+                   COALESCE(cad.qtd, 0) AS cad_qtd, COALESCE(cad.valor, 0) AS cad_valor,
+                   COALESCE(prod.qtd, 0) AS prod_qtd, COALESCE(prod.valor, 0) AS prod_valor
+            FROM cad FULL OUTER JOIN prod ON cad.k = prod.k
+            ORDER BY COALESCE(prod.valor, 0) DESC, COALESCE(cad.valor, 0) DESC
+            LIMIT 20
+          `);
+          return r.rows.map(mapRow);
+        };
+
+        // produto: proposals.product é enum; producoes/vendedor via tipo -> bucket
+        const bucketProd = sql`CASE WHEN is_cartao = true THEN 'CARTAO'
+          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+          ELSE 'OUTRO' END`;
+        const bucketVend = sql`CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN 'CARTAO'
+          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+          ELSE 'OUTRO' END`;
+
+        const [produto, banco, convenio] = await Promise.all([
+          dimUnificado(sql`p.product`, bucketProd, bucketVend),
+          dimUnificado(sql`p.bank`, sql`banco`, sql`banco`),
+          dimUnificado(sql`p.client_convenio`, sql`convenio`, sql`convenio`),
+        ]);
+
+        // totais
+        const cadTotR = await db.execute(sql`
+          SELECT COUNT(*) AS qtd, COALESCE(SUM(p.contract_value), 0) AS valor
+          FROM proposals p
+          WHERE p.tenant_id = ${tenantId}
+            AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}
+        `);
+        const prodTotR = await db.execute(sql`
+          SELECT SUM(qtd) AS qtd, SUM(valor) AS valor FROM (
+            SELECT COUNT(*) AS qtd, COALESCE(SUM(valor_base), 0) AS valor FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+            UNION ALL
+            SELECT COUNT(*), COALESCE(SUM(valor_contrato), 0) FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+          ) u
+        `);
+        const ct: any = cadTotR.rows[0] || {};
+        const pt: any = prodTotR.rows[0] || {};
+        const cadValorT = Number(ct.valor) || 0;
+        const prodQtdT = Number(pt.qtd) || 0;
+        const prodValorT = Number(pt.valor) || 0;
+        const totais = {
+          cadQtd: Number(ct.qtd) || 0,
+          cadValor: cadValorT,
+          prodQtd: prodQtdT,
+          prodValor: prodValorT,
+          conversao: cadValorT ? prodValorT / cadValorT : 0,
+          ticket: prodQtdT ? prodValorT / prodQtdT : 0,
+        };
+
+        // perfil por cliente (entre quem PRODUZIU — producoes_contratos)
+        const cliR = await db.execute(sql`
+          WITH c AS (
+            SELECT cpf_cliente,
+                   COUNT(*) AS contratos,
+                   COUNT(DISTINCT (${bucketProd})) AS produtos
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+              AND cpf_cliente IS NOT NULL AND cpf_cliente <> ''
+            GROUP BY cpf_cliente
+          )
+          SELECT COUNT(*) AS clientes, COALESCE(AVG(contratos), 0) AS media_contratos,
+                 COUNT(*) FILTER (WHERE produtos = 1) AS um_produto,
+                 COUNT(*) FILTER (WHERE produtos >= 2) AS multi_produto
+          FROM c
+        `);
+        const cr: any = cliR.rows[0] || {};
+        const clientes = Number(cr.clientes) || 0;
+        const porCliente = {
+          clientes,
+          mediaContratos: Number(cr.media_contratos) || 0,
+          pctUmProduto: clientes ? (Number(cr.um_produto) || 0) / clientes : 0,
+          pctMultiProduto: clientes ? (Number(cr.multi_produto) || 0) / clientes : 0,
+        };
+
+        return res.json({ totais, produto, banco, convenio, porCliente });
+      } catch (e: any) {
+        console.error("dashboard performance error:", e);
+        return res.status(500).json({ message: "Erro ao carregar performance" });
+      }
+    },
+  );
+
+  // ── Aba 3 (Portabilidades): funil por status + bancos + efetividade + tempos ─
+  app.get(
+    "/api/gestao-comercial/dashboard/portabilidades",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        // produto é sempre PORTABILIDADE aqui — ignora o filtro de produto da barra
+        const filtros = buildFiltrosSql({ ...req.query, produto: undefined });
+        const base = sql`p.tenant_id = ${tenantId} AND p.product = 'PORTABILIDADE'
+          AND p.created_at::date BETWEEN ${inicioStr} AND ${fimStr} ${filtros}`;
+
+        // Dados da operação ficam em clientMeta (JSON): bancoOrigem, saldoDevedor, dataCip.
+        const saldoExpr = sql`CASE WHEN p.client_meta->>'saldoDevedor' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (p.client_meta->>'saldoDevedor')::numeric ELSE 0 END`;
+        const dataCipExpr = sql`CASE WHEN p.client_meta->>'dataCip' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN (substring(p.client_meta->>'dataCip' from 1 for 10))::date ELSE NULL END`;
+        // Concluído/pago = status PAGO OU um status "quitado" (saldo quitado conta como pago)
+        const concluido = sql`(p.status = 'PAGO' OR EXISTS (
+          SELECT 1 FROM contract_statuses cs
+          WHERE cs.tenant_id = p.tenant_id AND cs.key = p.status AND cs.label ILIKE '%quitad%'
+        ))`;
+
+        const kpiR = await db.execute(sql`
+          SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(p.contract_value),0) AS valor,
+            COUNT(*) FILTER (WHERE ${concluido}) AS pagas,
+            COALESCE(SUM(p.contract_value) FILTER (WHERE ${concluido}),0) AS valor_pagas,
+            COUNT(*) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')) AS canceladas,
+            COALESCE(SUM(${saldoExpr}),0) AS saldo_informado,
+            COALESCE(SUM(${saldoExpr}) FILTER (WHERE ${concluido}),0) AS saldo_pago,
+            AVG(EXTRACT(EPOCH FROM (COALESCE(p.paid_at, p.updated_at) - p.created_at))/86400)
+              FILTER (WHERE ${concluido}) AS dias_ate_pago,
+            AVG((COALESCE(p.paid_at, p.updated_at)::date - ${dataCipExpr}))
+              FILTER (WHERE ${concluido} AND ${dataCipExpr} IS NOT NULL) AS dias_cip_saldo
+          FROM proposals p WHERE ${base}
+        `);
+        const k: any = kpiR.rows[0] || {};
+        const total = Number(k.total) || 0;
+        const pagas = Number(k.pagas) || 0;
+        const canceladas = Number(k.canceladas) || 0;
+        const kpis = {
+          total,
+          valor: Number(k.valor) || 0,
+          pagas,
+          valorPagas: Number(k.valor_pagas) || 0,
+          canceladas,
+          emAndamento: total - pagas - canceladas,
+          efetividade: total ? pagas / total : 0,
+          saldoInformado: Number(k.saldo_informado) || 0,
+          saldoPago: Number(k.saldo_pago) || 0,
+          diasAtePago: k.dias_ate_pago != null ? Number(k.dias_ate_pago) : null,
+          diasCipSaldo: k.dias_cip_saldo != null ? Number(k.dias_cip_saldo) : null,
+        };
+
+        // funil por status (dinâmico, ordenado pela config de contract_statuses)
+        const funilR = await db.execute(sql`
+          SELECT p.status AS key,
+                 COALESCE(cs.label, p.status) AS label,
+                 COALESCE(cs.color, 'zinc') AS color,
+                 COALESCE(cs.ordem, 999) AS ordem,
+                 COUNT(*) AS qtd,
+                 COALESCE(SUM(p.contract_value),0) AS valor
+          FROM proposals p
+          LEFT JOIN contract_statuses cs ON cs.tenant_id = p.tenant_id AND cs.key = p.status
+          WHERE ${base}
+          GROUP BY p.status, cs.label, cs.color, cs.ordem
+          ORDER BY ordem ASC, qtd DESC
+        `);
+        const funil = funilR.rows.map((x: any) => ({
+          key: x.key,
+          label: x.label,
+          color: x.color,
+          qtd: Number(x.qtd) || 0,
+          valor: Number(x.valor) || 0,
+        }));
+
+        // por banco destino (com efetividade) e por banco origem
+        const bancoDestR = await db.execute(sql`
+          SELECT COALESCE(NULLIF(p.bank,''),'Não informado') AS chave,
+                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
+                 COUNT(*) FILTER (WHERE ${concluido}) AS pagas
+          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY qtd DESC LIMIT 15
+        `);
+        const bancoDestino = bancoDestR.rows.map((x: any) => {
+          const qtd = Number(x.qtd) || 0;
+          const pg = Number(x.pagas) || 0;
+          return { chave: x.chave, qtd, valor: Number(x.valor) || 0, efetividade: qtd ? pg / qtd : 0 };
+        });
+        const bancoOrigR = await db.execute(sql`
+          SELECT UPPER(TRIM(COALESCE(NULLIF(p.client_meta->>'bancoOrigem',''),'Não informado'))) AS chave,
+                 COUNT(*) AS qtd, COALESCE(SUM(p.contract_value),0) AS valor,
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE ${concluido}),0) AS valor_pago,
+                 COALESCE(SUM(p.contract_value) FILTER (WHERE p.status IN ('CANCELADA','PERDIDA')),0) AS valor_cancelado
+          FROM proposals p WHERE ${base} GROUP BY 1 ORDER BY valor DESC LIMIT 15
+        `);
+        const bancoOrigem = bancoOrigR.rows.map((x: any) => {
+          const valor = Number(x.valor) || 0;
+          const valorPago = Number(x.valor_pago) || 0;
+          const valorCancelado = Number(x.valor_cancelado) || 0;
+          return {
+            chave: x.chave,
+            qtd: Number(x.qtd) || 0,
+            valor,
+            valorPago,
+            valorCancelado,
+            valorAndamento: Math.max(0, valor - valorPago - valorCancelado),
+          };
+        });
+
+        // PRODUÇÃO OFICIAL de portabilidade (financeiro — inclui importados; é o
+        // que conta no ranking). producoes_contratos + vendedor_contratos, tipo port.
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const filtrosOf = buildFiltrosOficialSql(req.query);
+        const [ppR, pvR] = await Promise.all([
+          db.execute(sql`
+            SELECT COALESCE(NULLIF(banco,''),'Não informado') AS chave,
+                   COALESCE(SUM(valor_base),0) AS valor, COUNT(*) AS qtd
+            FROM producoes_contratos
+            WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
+              AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+              AND is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%'
+            GROUP BY 1
+          `),
+          db.execute(sql`
+            SELECT COALESCE(NULLIF(banco,''),'Não informado') AS chave,
+                   COALESCE(SUM(valor_contrato),0) AS valor, COUNT(*) AS qtd
+            FROM vendedor_contratos
+            WHERE tenant_id = ${tenantId}
+              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+              AND LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%'
+            GROUP BY 1
+          `),
+        ]);
+        const mapBanco = new Map<string, { valor: number; qtd: number }>();
+        let prodValor = 0;
+        let prodQtd = 0;
+        for (const r of [...ppR.rows, ...pvR.rows] as any[]) {
+          const kk = String(r.chave || "Não informado").trim().toUpperCase();
+          const v = Number(r.valor) || 0;
+          const q = Number(r.qtd) || 0;
+          prodValor += v;
+          prodQtd += q;
+          const cur = mapBanco.get(kk) || { valor: 0, qtd: 0 };
+          cur.valor += v;
+          cur.qtd += q;
+          mapBanco.set(kk, cur);
+        }
+        const bancoProducao = [...mapBanco.entries()]
+          .map(([chave, x]) => ({ chave, valor: x.valor, qtd: x.qtd }))
+          .sort((a, b) => b.valor - a.valor)
+          .slice(0, 15);
+        const producao = { valor: prodValor, qtd: prodQtd };
+
+        return res.json({ producao, bancoProducao, kpis, funil, bancoDestino, bancoOrigem });
+      } catch (e: any) {
+        console.error("dashboard portabilidades error:", e);
+        return res.status(500).json({ message: "Erro ao carregar portabilidades" });
+      }
+    },
+  );
+
+  // ── Aba 4 (Perfil dos Clientes): produção (financeiro, inclui importados) por
+  //    demografia do cliente (clientes_pessoa por CPF). ─────────────────────────
+  app.get(
+    "/api/gestao-comercial/dashboard/perfil",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const filtrosOf = buildFiltrosOficialSql(req.query, "pc.");
+
+        // base: produção confirmada (financeiro, inclui importados) JOIN cadastro
+        // + nomenclaturas (categoria ORGAO) pra traduzir o código do órgão em nome.
+        const baseProd = sql`
+          FROM producoes_contratos pc
+          LEFT JOIN clientes_pessoa cp
+            ON cp.cpf = lpad(regexp_replace(COALESCE(pc.cpf_cliente,''), '[^0-9]', '', 'g'), 11, '0')
+          LEFT JOIN LATERAL (
+            SELECT COALESCE(NULLIF(btrim(cp.orgaocod),''), NULLIF(btrim(cp.orgaodesc),'')) AS codigo
+          ) src ON true
+          LEFT JOIN LATERAL (
+            SELECT n.nome,
+              CASE
+                WHEN regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(src.codigo,''), '^0+', '')
+                     OR upper(btrim(COALESCE(n.codigo,''))) = upper(COALESCE(src.codigo,''))
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 1 ELSE 2 END)
+                WHEN regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                     AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
+                         = regexp_replace(substring(regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 3 ELSE 4 END)
+                WHEN upper(btrim(COALESCE(n.nome,''))) = upper(COALESCE(src.codigo,''))
+                  THEN (CASE WHEN n.categoria='ORGAO' THEN 5 ELSE 6 END)
+                ELSE 99
+              END AS pri
+            FROM nomenclaturas n
+            WHERE n.ativo = true AND n.categoria IN ('ORGAO','RUBRICA')
+              AND (
+                regexp_replace(COALESCE(n.codigo,''), '^0+', '') = regexp_replace(COALESCE(src.codigo,''), '^0+', '')
+                OR upper(btrim(COALESCE(n.codigo,''))) = upper(COALESCE(src.codigo,''))
+                OR (
+                  regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') ~ '^[0-9]{6,}$'
+                  AND regexp_replace(COALESCE(n.codigo,''), '^0+', '')
+                      = regexp_replace(substring(regexp_replace(COALESCE(src.codigo,''), '[^0-9]', '', 'g') FROM 1 FOR 5), '^0+', '')
+                )
+                OR upper(btrim(COALESCE(n.nome,''))) = upper(COALESCE(src.codigo,''))
+              )
+            ORDER BY pri, n.id
+            LIMIT 1
+          ) no ON true
+          WHERE pc.tenant_id = ${tenantId} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0
+            AND pc.mes_referencia IN (${inVals(meses)}) ${filtrosOf}
+        `;
+
+        const porDim = async (colExpr: any) => {
+          const r = await db.execute(sql`
+            SELECT COALESCE(NULLIF(${colExpr}::text, ''), 'Não informado') AS chave,
+                   COALESCE(SUM(pc.valor_base), 0) AS valor,
+                   COUNT(DISTINCT pc.cpf_cliente) AS clientes
+            ${baseProd}
+            GROUP BY 1 ORDER BY valor DESC LIMIT 15
+          `);
+          return r.rows.map((x: any) => ({
+            chave: x.chave, valor: Number(x.valor) || 0, clientes: Number(x.clientes) || 0,
+          }));
+        };
+
+        const faixaExpr = sql`CASE
+          WHEN cp.data_nascimento IS NULL THEN 'Sem data'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 30 THEN 'Até 29'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 40 THEN '30-39'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 50 THEN '40-49'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 60 THEN '50-59'
+          WHEN EXTRACT(YEAR FROM age(cp.data_nascimento)) < 70 THEN '60-69'
+          ELSE '70+' END`;
+
+        const [convenio, uf, faixaEtaria, orgao, bancoRecebimento, totalR] =
+          await Promise.all([
+            porDim(sql`pc.convenio`),
+            porDim(sql`cp.uf`),
+            porDim(faixaExpr),
+            porDim(sql`COALESCE(no.nome, NULLIF(cp.orgaodesc,''), cp.orgaocod)`),
+            porDim(sql`cp.banco_nome`),
+            db.execute(sql`SELECT COALESCE(SUM(pc.valor_base),0) AS valor, COUNT(DISTINCT pc.cpf_cliente) AS clientes ${baseProd}`),
+          ]);
+        const tt: any = totalR.rows[0] || {};
+
+        return res.json({
+          total: { valor: Number(tt.valor) || 0, clientes: Number(tt.clientes) || 0 },
+          convenio, uf, faixaEtaria, orgao, bancoRecebimento,
+        });
+      } catch (e: any) {
+        console.error("dashboard perfil error:", e);
+        return res.status(500).json({ message: "Erro ao carregar perfil" });
+      }
+    },
+  );
+
+  // ── Opções pros filtros (bancos/convênios/corretores/parceiros do tenant) ──
+  app.get(
+    "/api/gestao-comercial/dashboard/opcoes",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const [bancosR, conveniosR, corretoresR, parceirosR] = await Promise.all([
+          db.execute(sql`SELECT DISTINCT bank AS v FROM proposals WHERE tenant_id = ${tenantId} AND bank IS NOT NULL AND bank <> '' ORDER BY bank`),
+          db.execute(sql`SELECT DISTINCT client_convenio AS v FROM proposals WHERE tenant_id = ${tenantId} AND client_convenio IS NOT NULL AND client_convenio <> '' ORDER BY client_convenio`),
+          db.execute(sql`SELECT DISTINCT u.id, u.name FROM proposals p JOIN users u ON u.id = p.vendor_id WHERE p.tenant_id = ${tenantId} ORDER BY u.name`),
+          db.execute(sql`SELECT DISTINCT pr.id, pr.name FROM proposals p JOIN partners pr ON pr.id = p.parceiro_id WHERE p.tenant_id = ${tenantId} ORDER BY pr.name`),
+        ]);
+        return res.json({
+          bancos: bancosR.rows.map((x: any) => x.v),
+          convenios: conveniosR.rows.map((x: any) => x.v),
+          produtos: ["NOVO", "PORTABILIDADE", "REFINANCIAMENTO", "CARTAO"],
+          corretores: corretoresR.rows.map((x: any) => ({ id: x.id, nome: x.name })),
+          parceiros: parceirosR.rows.map((x: any) => ({ id: x.id, nome: x.name })),
+        });
+      } catch (e: any) {
+        console.error("dashboard opcoes error:", e);
+        return res.status(500).json({ message: "Erro ao carregar opções" });
+      }
+    },
+  );
+
+  // ── Aba 6 (Inteligência Comercial): projeção, crescimento, concentração e
+  //    insights automáticos — SEMPRE sobre a produção oficial (financeiro +
+  //    vendedor_contratos, inclui importados; bate com o ranking). ────────────
+  app.get(
+    "/api/gestao-comercial/dashboard/inteligencia",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+
+        // período anterior equivalente (mesmo tamanho, imediatamente antes)
+        const inicio = new Date(inicioStr + "T00:00:00");
+        const fim = new Date(fimStr + "T23:59:59");
+        const durMs = fim.getTime() - inicio.getTime();
+        const prevFim = new Date(inicio.getTime() - 1000);
+        const prevInicio = new Date(prevFim.getTime() - durMs);
+        const prevInicioStr = prevInicio.toISOString().slice(0, 10);
+        const prevFimStr = prevFim.toISOString().slice(0, 10);
+
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const mesesPrev = mesesNoPeriodo(prevInicioStr, prevFimStr);
+        if (!mesesPrev.length) mesesPrev.push("0000-00");
+
+        // soma da produção oficial (producoes por mês + vendedor por data)
+        const sumProducao = async (ms: string[], ini: string, f: string) => {
+          const [a, b] = await Promise.all([
+            db.execute(sql`SELECT COALESCE(SUM(valor_base),0) AS v FROM producoes_contratos
+              WHERE tenant_id=${tenantId} AND confirmado=true AND comissao_repasse_valor>0
+                AND mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query)}`),
+            db.execute(sql`SELECT COALESCE(SUM(valor_contrato),0) AS v FROM vendedor_contratos
+              WHERE tenant_id=${tenantId} AND data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query)}`),
+          ]);
+          return (Number(a.rows[0]?.v) || 0) + (Number(b.rows[0]?.v) || 0);
+        };
+
+        // agregação por dimensão (corretor/banco/convenio/produto) -> Map chave->valor
+        const aggByDim = async (
+          dim: "corretor" | "banco" | "convenio" | "produto",
+          ms: string[], ini: string, f: string,
+        ) => {
+          let prodKey: any, vendKey: any, vendJoin: any = sql``;
+          if (dim === "corretor") {
+            prodKey = sql`COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text)`;
+            vendKey = sql`COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text)`;
+            vendJoin = sql`LEFT JOIN users u ON u.id = vc.vendedor_id`;
+          } else if (dim === "banco") {
+            prodKey = sql`pc.banco`; vendKey = sql`vc.banco`;
+          } else if (dim === "convenio") {
+            prodKey = sql`pc.convenio`; vendKey = sql`vc.convenio`;
+          } else {
+            prodKey = sql`CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END`;
+            vendKey = sql`CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END`;
+          }
+          const r = await db.execute(sql`
+            WITH un AS (
+              SELECT ${prodKey} AS chave, COALESCE(pc.valor_base,0) AS valor
+              FROM producoes_contratos pc
+              WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+                AND pc.mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query, "pc.")}
+              UNION ALL
+              SELECT ${vendKey} AS chave, COALESCE(vc.valor_contrato,0) AS valor
+              FROM vendedor_contratos vc
+              ${vendJoin}
+              WHERE vc.tenant_id=${tenantId}
+                AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+            )
+            SELECT COALESCE(NULLIF(btrim(chave),''),'Não informado') AS chave, SUM(valor) AS valor
+            FROM un GROUP BY 1
+          `);
+          const m = new Map<string, number>();
+          r.rows.forEach((x: any) => m.set(x.chave, Number(x.valor) || 0));
+          return m;
+        };
+
+        // crescimento por dimensão: atual x anterior
+        const crescimentoDim = async (dim: "corretor" | "banco" | "produto") => {
+          const [atual, ant] = await Promise.all([
+            aggByDim(dim, meses, inicioStr, fimStr),
+            aggByDim(dim, mesesPrev, prevInicioStr, prevFimStr),
+          ]);
+          const chaves = new Set<string>([...atual.keys(), ...ant.keys()]);
+          const itens = Array.from(chaves).map((chave) => {
+            const a = atual.get(chave) || 0;
+            const b = ant.get(chave) || 0;
+            return { chave, atual: a, anterior: b, delta: a - b, deltaPct: b > 0 ? (a - b) / b : (a > 0 ? 1 : 0) };
+          }).filter((x) => x.atual > 0 || x.anterior > 0);
+          itens.sort((x, y) => y.delta - x.delta);
+          return itens.slice(0, 40);
+        };
+
+        // concentração: quanto do total está no top 1 / top 5 da dimensão
+        const concentracaoDim = (m: Map<string, number>) => {
+          const arr = Array.from(m.entries()).map(([chave, valor]) => ({ chave, valor })).sort((a, b) => b.valor - a.valor);
+          const total = arr.reduce((s, x) => s + x.valor, 0);
+          const top = arr[0] || { chave: "—", valor: 0 };
+          const top5 = arr.slice(0, 5).reduce((s, x) => s + x.valor, 0);
+          return {
+            topNome: top.chave, topValor: top.valor, total, n: arr.length,
+            pct: total > 0 ? top.valor / total : 0,
+            top5pct: total > 0 ? top5 / total : 0,
+          };
+        };
+
+        // projeção do mês corrente (run-rate por dias úteis), respeita filtros de dimensão
+        const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+        const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+        const mesAntDate = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        const mesAntStr = `${mesAntDate.getFullYear()}-${String(mesAntDate.getMonth() + 1).padStart(2, "0")}`;
+        const ultimoDiaMesAnt = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+        const fmtD = (d: Date) => d.toISOString().slice(0, 10);
+
+        const [
+          totalAtual, totalAnterior,
+          crescCorretor, crescBanco, crescProduto,
+          mapCorretor, mapBanco, mapConvenio,
+          realizadoMes, mesAnteriorTotal,
+        ] = await Promise.all([
+          sumProducao(meses, inicioStr, fimStr),
+          sumProducao(mesesPrev, prevInicioStr, prevFimStr),
+          crescimentoDim("corretor"),
+          crescimentoDim("banco"),
+          crescimentoDim("produto"),
+          aggByDim("corretor", meses, inicioStr, fimStr),
+          aggByDim("banco", meses, inicioStr, fimStr),
+          aggByDim("convenio", meses, inicioStr, fimStr),
+          sumProducao([mesAtualStr], fmtD(primeiroDiaMes), fmtD(hoje)),
+          sumProducao([mesAntStr], fmtD(mesAntDate), fmtD(ultimoDiaMesAnt)),
+        ]);
+
+        const duDecorridos = diasUteis(primeiroDiaMes, hoje);
+        const duMes = diasUteis(primeiroDiaMes, ultimoDiaMes);
+        const projetado = duDecorridos > 0 ? (realizadoMes / duDecorridos) * duMes : realizadoMes;
+
+        const concCorretor = concentracaoDim(mapCorretor);
+        const concBanco = concentracaoDim(mapBanco);
+        const concConvenio = concentracaoDim(mapConvenio);
+
+        // ── insights automáticos (regras determinísticas) ──────────────────
+        const fmt = (v: number) =>
+          "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+        const insights: string[] = [];
+        const varTotal = totalAnterior > 0 ? (totalAtual - totalAnterior) / totalAnterior : (totalAtual > 0 ? 1 : 0);
+        insights.push(
+          `Produção de ${fmt(totalAtual)} no período — ${varTotal >= 0 ? "alta" : "queda"} de ${pct(Math.abs(varTotal))} vs o período anterior (${fmt(totalAnterior)}).`,
+        );
+        const topUp = crescCorretor.find((x) => x.delta > 0);
+        if (topUp) insights.push(`Maior crescimento: ${topUp.chave} (+${fmt(topUp.delta)}, ${pct(topUp.deltaPct)}).`);
+        const topDown = [...crescCorretor].reverse().find((x) => x.delta < 0);
+        if (topDown) insights.push(`Maior queda: ${topDown.chave} (${fmt(topDown.delta)}, ${pct(topDown.deltaPct)}).`);
+        const prodUp = crescProduto.find((x) => x.delta > 0);
+        if (prodUp) insights.push(`Produto em alta: ${prodUp.chave} (+${fmt(prodUp.delta)}).`);
+        const prodDown = [...crescProduto].reverse().find((x) => x.delta < 0);
+        if (prodDown) insights.push(`Produto em queda: ${prodDown.chave} (${fmt(prodDown.delta)}).`);
+        if (concCorretor.pct >= 0.4)
+          insights.push(`⚠️ Concentração: ${pct(concCorretor.pct)} da produção vem de ${concCorretor.topNome}. Avalie reduzir a dependência.`);
+        const bancoTop = concBanco;
+        if (bancoTop.pct >= 0.5)
+          insights.push(`⚠️ ${pct(bancoTop.pct)} da produção está no banco ${bancoTop.topNome}.`);
+        const varProj = mesAnteriorTotal > 0 ? (projetado - mesAnteriorTotal) / mesAnteriorTotal : 0;
+        insights.push(
+          `Projeção do mês (${mesAtualStr}): ${fmt(projetado)} — ${varProj >= 0 ? "+" : ""}${pct(varProj)} vs o mês anterior (${fmt(mesAnteriorTotal)}).`,
+        );
+
+        return res.json({
+          periodo: { inicio: inicioStr, fim: fimStr },
+          totais: { atual: totalAtual, anterior: totalAnterior, variacaoPct: varTotal },
+          projecao: {
+            mes: mesAtualStr,
+            realizado: realizadoMes,
+            projetado,
+            mesAnterior: mesAnteriorTotal,
+            diasUteisDecorridos: duDecorridos,
+            diasUteisMes: duMes,
+            variacaoVsAnteriorPct: varProj,
+          },
+          crescimento: { corretor: crescCorretor, banco: crescBanco, produto: crescProduto },
+          concentracao: { corretor: concCorretor, banco: concBanco, convenio: concConvenio },
+          insights,
+        });
+      } catch (e: any) {
+        console.error("dashboard inteligencia error:", e);
+        return res.status(500).json({ message: "Erro ao carregar inteligência comercial" });
+      }
+    },
+  );
+
+  // ── Análise por IA (sob demanda). Recebe o JSON já calculado do front e pede
+  //    ao LLM uma leitura executiva em PT-BR. Reusa o cliente OpenAI legado. ──
+  app.post(
+    "/api/gestao-comercial/dashboard/inteligencia/ia",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const dados = req.body?.dados;
+        if (!dados) return res.status(400).json({ message: "dados ausentes" });
+
+        const fmt = (v: number) =>
+          "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const topN = (arr: any[], n: number) =>
+          (arr || []).slice(0, n).map((x: any) => `${x.chave}: ${fmt(x.atual)} (antes ${fmt(x.anterior)}, Δ ${fmt(x.delta)})`).join("; ");
+
+        const resumo = [
+          `Período: ${dados.periodo?.inicio} a ${dados.periodo?.fim}.`,
+          `Produção total: ${fmt(dados.totais?.atual)} (anterior ${fmt(dados.totais?.anterior)}).`,
+          `Projeção do mês ${dados.projecao?.mes}: ${fmt(dados.projecao?.projetado)} (realizado até hoje ${fmt(dados.projecao?.realizado)}; mês anterior ${fmt(dados.projecao?.mesAnterior)}).`,
+          `Crescimento por corretor (topo→base): ${topN(dados.crescimento?.corretor, 8)}.`,
+          `Crescimento por banco: ${topN(dados.crescimento?.banco, 6)}.`,
+          `Crescimento por produto: ${topN(dados.crescimento?.produto, 6)}.`,
+          `Concentração — corretor: ${dados.concentracao?.corretor?.topNome} tem ${((dados.concentracao?.corretor?.pct || 0) * 100).toFixed(0)}% (top5 ${((dados.concentracao?.corretor?.top5pct || 0) * 100).toFixed(0)}%); banco: ${dados.concentracao?.banco?.topNome} ${((dados.concentracao?.banco?.pct || 0) * 100).toFixed(0)}%; convênio: ${dados.concentracao?.convenio?.topNome} ${((dados.concentracao?.convenio?.pct || 0) * 100).toFixed(0)}%.`,
+        ].join("\n");
+
+        const completion = await openai.chat.completions.create({
+          model: process.env.DASHBOARD_AI_MODEL || "gpt-4o-mini",
+          temperature: 0.4,
+          max_tokens: 700,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é um analista comercial sênior de uma empresa de crédito consignado (SIAPE/INSS). " +
+                "Receba os números agregados de produção e escreva uma análise executiva em português do Brasil, " +
+                "direta e acionável. Estruture em 3 seções curtas com marcadores: '📈 Destaques', '⚠️ Riscos/Atenção' e " +
+                "'✅ Recomendações'. Seja específico (cite nomes e valores), no máximo ~12 marcadores no total. " +
+                "Não invente dados além dos fornecidos. Não use tabelas.",
+            },
+            { role: "user", content: resumo },
+          ],
+        });
+        const analise = completion.choices?.[0]?.message?.content?.trim() || "Sem análise.";
+        return res.json({ analise });
+      } catch (e: any) {
+        console.error("dashboard inteligencia IA error:", e?.message || e);
+        return res.status(500).json({ message: "Falha ao gerar análise por IA. Verifique a OPENAI_API_KEY." });
+      }
+    },
+  );
+
+  // ── Aba 7 (DNA do Corretor): score 0-100 relativo à equipe (percentil) sobre
+  //    5 fatores — Volume, Consistência, Diversificação, Crescimento, Abrangência
+  //    (público/órgão/estado) — + perfil detalhado do corretor selecionado.
+  //    SEMPRE sobre a produção oficial (financeiro + vendedor, inclui importados).
+  app.get(
+    "/api/gestao-comercial/dashboard/dna",
+    requireAuth,
+    requireMaster,
+    async (req: any, res: Response) => {
+      try {
+        const tenantId = req.tenantId || req.session?.tenantId;
+        const hoje = new Date();
+        const fimStr = (req.query.fim as string) || hoje.toISOString().slice(0, 10);
+        const inicioStr =
+          (req.query.inicio as string) ||
+          new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+        const selParam = (req.query.corretor as string) || "";
+
+        const inicio = new Date(inicioStr + "T00:00:00");
+        const fim = new Date(fimStr + "T23:59:59");
+        const durMs = fim.getTime() - inicio.getTime();
+        const prevFim = new Date(inicio.getTime() - 1000);
+        const prevInicio = new Date(prevFim.getTime() - durMs);
+        const prevInicioStr = prevInicio.toISOString().slice(0, 10);
+        const prevFimStr = prevFim.toISOString().slice(0, 10);
+
+        const meses = mesesNoPeriodo(inicioStr, fimStr);
+        if (!meses.length) meses.push("0000-00");
+        const mesesPrev = mesesNoPeriodo(prevInicioStr, prevFimStr);
+        if (!mesesPrev.length) mesesPrev.push("0000-00");
+        const totalMeses = Math.max(1, meses.length);
+
+        // produção unificada (producoes por mês + vendedor por data) — uma linha por contrato
+        const prodUnion = (ms: string[], ini: string, f: string) => sql`
+          SELECT
+            COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
+            COALESCE(pc.valor_base,0) AS valor,
+            pc.mes_referencia AS mes,
+            CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END AS produto,
+            COALESCE(NULLIF(btrim(pc.banco),''),'Não informado') AS banco,
+            COALESCE(NULLIF(btrim(pc.convenio),''),'Não informado') AS convenio,
+            lpad(regexp_replace(COALESCE(pc.cpf_cliente,''),'[^0-9]','','g'),11,'0') AS cpf
+          FROM producoes_contratos pc
+          WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+            AND pc.mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query, "pc.")}
+          UNION ALL
+          SELECT
+            COALESCE(NULLIF(btrim(u.name),''), 'ID '||vc.vendedor_id::text) AS corretor,
+            COALESCE(vc.valor_contrato,0) AS valor,
+            to_char(vc.data_contrato,'YYYY-MM') AS mes,
+            CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
+              ELSE 'OUTRO' END AS produto,
+            COALESCE(NULLIF(btrim(vc.banco),''),'Não informado') AS banco,
+            COALESCE(NULLIF(btrim(vc.convenio),''),'Não informado') AS convenio,
+            lpad(regexp_replace(COALESCE(vc.cliente_cpf,''),'[^0-9]','','g'),11,'0') AS cpf
+          FROM vendedor_contratos vc LEFT JOIN users u ON u.id = vc.vendedor_id
+          WHERE vc.tenant_id=${tenantId}
+            AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+        `;
+
+        // expressão do código de órgão (na base, o código pode estar em orgaodesc)
+        const orgaoCodeExpr = sql`COALESCE(NULLIF(btrim(cp.orgaocod),''), NULLIF(btrim(cp.orgaodesc),''))`;
+
+        const [curR, prevR, abrR, cfgR, repR] = await Promise.all([
+          db.execute(sql`
+            WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+            SELECT corretor,
+              SUM(valor) AS volume, COUNT(*) AS qtd,
+              COUNT(DISTINCT mes) AS meses_ativos,
+              COUNT(DISTINCT produto) AS n_prod,
+              COUNT(DISTINCT banco) AS n_banco,
+              COUNT(DISTINCT convenio) AS n_conv
+            FROM p GROUP BY corretor`),
+          db.execute(sql`
+            WITH p AS (${prodUnion(mesesPrev, prevInicioStr, prevFimStr)})
+            SELECT corretor, SUM(valor) AS volume FROM p GROUP BY corretor`),
+          db.execute(sql`
+            WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+            SELECT p.corretor,
+              COUNT(DISTINCT ${orgaoCodeExpr}) AS n_orgao,
+              COUNT(DISTINCT NULLIF(btrim(cp.uf),'')) AS n_uf
+            FROM p LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+            GROUP BY p.corretor`),
+          db.execute(sql`SELECT dados FROM financeiro_config WHERE tenant_id = ${String(tenantId)} LIMIT 1`),
+          db.execute(sql`
+            SELECT
+              COALESCE(NULLIF(btrim(pc.vendedor_nome),''), NULLIF(btrim(pc.nome_corretor),''), 'ID '||pc.vendedor_id::text) AS corretor,
+              pc.vendedor_nome AS "vendedorNome",
+              pc.nome_corretor AS "nomeCorretor",
+              pc.tipo_contrato AS "tipoContrato",
+              CASE WHEN COALESCE(pc.comissao_empresa_valor,0) > 0 THEN pc.comissao_empresa_valor
+                   ELSE COALESCE(pc.comissao_repasse_valor,0) END AS emp_valor,
+              pc.repasse_perc_override AS "repassePercOverride",
+              pc.grupo_id_override AS "grupoIdOverride",
+              pc.comissao_repasse_perc AS "comissaoRepassePerc"
+            FROM producoes_contratos pc
+            WHERE pc.tenant_id=${tenantId} AND pc.confirmado=true AND pc.comissao_repasse_valor>0
+              AND pc.mes_referencia IN (${inVals(meses)}) ${buildFiltrosOficialSql(req.query, "pc.")}`),
+        ]);
+
+        // repasse calculado por corretor (valorEmpresa × pct do grupo)
+        const cfg: any = (cfgR.rows[0] as any)?.dados || {};
+        const grupos: any[] = Array.isArray(cfg.grupos) ? cfg.grupos : [];
+        const corretoresCfg: any[] = Array.isArray(cfg.corretores) ? cfg.corretores : [];
+        const repasseMap = new Map<string, { repasse: number; qtd: number }>();
+        for (const row of repR.rows as any[]) {
+          const pct = calcRepassePct(row, grupos, corretoresCfg);
+          const emp = Number(row.emp_valor) || 0;
+          const vf = Math.round((emp * pct) / 100 * 100) / 100;
+          const cur = repasseMap.get(row.corretor) || { repasse: 0, qtd: 0 };
+          cur.repasse += vf;
+          if (vf > 0) cur.qtd += 1;
+          repasseMap.set(row.corretor, cur);
+        }
+
+        const prevMap = new Map<string, number>();
+        prevR.rows.forEach((x: any) => prevMap.set(x.corretor, Number(x.volume) || 0));
+        const abrMap = new Map<string, { orgao: number; uf: number }>();
+        abrR.rows.forEach((x: any) => abrMap.set(x.corretor, { orgao: Number(x.n_orgao) || 0, uf: Number(x.n_uf) || 0 }));
+
+        type Met = {
+          corretor: string; volume: number; qtd: number; mesesAtivos: number;
+          nProd: number; nBanco: number; nConv: number; volumeAnterior: number;
+          crescimentoPct: number; consistenciaRaw: number; diversificacaoRaw: number; abrangenciaRaw: number;
+          nOrgao: number; nUf: number; repasse: number; qtdRepasse: number;
+        };
+        const mets: Met[] = curR.rows.map((x: any) => {
+          const corretor = x.corretor as string;
+          const volume = Number(x.volume) || 0;
+          const volumeAnterior = prevMap.get(corretor) || 0;
+          const abr = abrMap.get(corretor) || { orgao: 0, uf: 0 };
+          const crescimentoPct = volumeAnterior > 0 ? (volume - volumeAnterior) / volumeAnterior : (volume > 0 ? 1 : 0);
+          const rep = repasseMap.get(corretor) || { repasse: 0, qtd: 0 };
+          return {
+            corretor, volume, qtd: Number(x.qtd) || 0,
+            repasse: rep.repasse, qtdRepasse: rep.qtd,
+            mesesAtivos: Number(x.meses_ativos) || 0,
+            nProd: Number(x.n_prod) || 0, nBanco: Number(x.n_banco) || 0, nConv: Number(x.n_conv) || 0,
+            volumeAnterior, crescimentoPct,
+            consistenciaRaw: Math.min(1, (Number(x.meses_ativos) || 0) / totalMeses),
+            diversificacaoRaw: (Number(x.n_prod) || 0) + (Number(x.n_banco) || 0) + (Number(x.n_conv) || 0),
+            abrangenciaRaw: abr.orgao + abr.uf,
+            nOrgao: abr.orgao, nUf: abr.uf,
+          };
+        }).filter((m) => m.volume > 0);
+
+        // percentil (0-100, 100 = melhor) de um valor dentro de um array
+        const fabricaPercentil = (valores: number[]) => {
+          const n = valores.length;
+          return (v: number) => {
+            if (n <= 1) return 100;
+            let less = 0, eq = 0;
+            for (const x of valores) { if (x < v) less++; else if (x === v) eq++; }
+            return ((less + 0.5 * eq) / n) * 100;
+          };
+        };
+        const pVol = fabricaPercentil(mets.map((m) => m.volume));
+        const pCons = fabricaPercentil(mets.map((m) => m.consistenciaRaw));
+        const pDiv = fabricaPercentil(mets.map((m) => m.diversificacaoRaw));
+        const pCres = fabricaPercentil(mets.map((m) => m.crescimentoPct));
+        const pAbr = fabricaPercentil(mets.map((m) => m.abrangenciaRaw));
+
+        const W = { volume: 0.30, consistencia: 0.20, crescimento: 0.20, diversificacao: 0.15, abrangencia: 0.15 };
+        const comScore = mets.map((m) => {
+          const c = {
+            volume: pVol(m.volume),
+            consistencia: pCons(m.consistenciaRaw),
+            diversificacao: pDiv(m.diversificacaoRaw),
+            crescimento: pCres(m.crescimentoPct),
+            abrangencia: pAbr(m.abrangenciaRaw),
+          };
+          const score =
+            c.volume * W.volume + c.consistencia * W.consistencia + c.crescimento * W.crescimento +
+            c.diversificacao * W.diversificacao + c.abrangencia * W.abrangencia;
+          return { m, componentes: c, score: Math.round(score) };
+        });
+        comScore.sort((a, b) => b.score - a.score);
+
+        const ranking = comScore.map((cs, i) => ({
+          pos: i + 1, corretor: cs.m.corretor, score: cs.score, volume: cs.m.volume,
+        }));
+
+        // corretor selecionado (param) ou o top do ranking
+        const escolhido = comScore.find((cs) => cs.m.corretor === selParam) || comScore[0] || null;
+
+        let selecionado: any = null;
+        if (escolhido) {
+          const nome = escolhido.m.corretor;
+          // quebras do corretor (mix produto / bancos / convênios) + órgãos (nome) + estados
+          const [mixR, bancosR, convR, orgaosR, estadosR] = await Promise.all([
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT produto AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC`),
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT banco AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT convenio AS chave, SUM(valor) AS valor FROM p WHERE corretor = ${nome} GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`
+              WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT COALESCE(no.nome, NULLIF(btrim(cp.orgaodesc),''), NULLIF(btrim(cp.orgaocod),''), 'Não informado') AS chave,
+                     SUM(p.valor) AS valor
+              FROM p
+              LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+              LEFT JOIN LATERAL (
+                SELECT n.nome FROM nomenclaturas n
+                WHERE n.ativo = true AND n.categoria IN ('ORGAO','RUBRICA')
+                  AND regexp_replace(COALESCE(n.codigo,''),'^0+','') = regexp_replace(COALESCE(${orgaoCodeExpr},''),'^0+','')
+                ORDER BY (n.categoria='ORGAO') DESC, n.id LIMIT 1
+              ) no ON true
+              WHERE p.corretor = ${nome}
+              GROUP BY 1 ORDER BY valor DESC LIMIT 8`),
+            db.execute(sql`
+              WITH p AS (${prodUnion(meses, inicioStr, fimStr)})
+              SELECT COALESCE(NULLIF(btrim(cp.uf),''),'Não informado') AS chave, SUM(p.valor) AS valor
+              FROM p LEFT JOIN clientes_pessoa cp ON cp.cpf = p.cpf
+              WHERE p.corretor = ${nome}
+              GROUP BY 1 ORDER BY valor DESC LIMIT 10`),
+          ]);
+          const rows2arr = (r: any) => r.rows.map((x: any) => ({ chave: x.chave, valor: Number(x.valor) || 0 }));
+
+          const c = escolhido.componentes;
+          const LBL: Record<string, string> = {
+            volume: "Volume", consistencia: "Consistência", diversificacao: "Diversificação",
+            crescimento: "Crescimento", abrangencia: "Abrangência (público)",
+          };
+          const fortes = Object.entries(c).filter(([, v]) => v >= 70).map(([k]) => LBL[k]);
+          const fracos = Object.entries(c).filter(([, v]) => v <= 30).map(([k]) => LBL[k]);
+
+          selecionado = {
+            corretor: nome,
+            score: escolhido.score,
+            rankingPos: ranking.find((r) => r.corretor === nome)?.pos || null,
+            totalCorretores: mets.length,
+            volume: escolhido.m.volume,
+            qtd: escolhido.m.qtd,
+            ticket: escolhido.m.qtd ? escolhido.m.volume / escolhido.m.qtd : 0,
+            repasse: escolhido.m.repasse,
+            mediaGanho: escolhido.m.qtdRepasse ? escolhido.m.repasse / escolhido.m.qtdRepasse : 0,
+            componentes: c,
+            raw: {
+              mesesAtivos: escolhido.m.mesesAtivos, totalMeses,
+              nProd: escolhido.m.nProd, nBanco: escolhido.m.nBanco, nConv: escolhido.m.nConv,
+              nOrgao: escolhido.m.nOrgao, nUf: escolhido.m.nUf,
+              crescimentoPct: escolhido.m.crescimentoPct, volumeAnterior: escolhido.m.volumeAnterior,
+            },
+            mix: rows2arr(mixR), bancos: rows2arr(bancosR), convenios: rows2arr(convR),
+            orgaos: rows2arr(orgaosR), estados: rows2arr(estadosR),
+            fortes, fracos,
+          };
+        }
+
+        return res.json({
+          periodo: { inicio: inicioStr, fim: fimStr },
+          pesos: W,
+          ranking,
+          selecionado,
+        });
+      } catch (e: any) {
+        console.error("dashboard dna error:", e?.message || e);
+        return res.status(500).json({ message: "Erro ao carregar DNA do corretor" });
+      }
+    },
+  );
+}
