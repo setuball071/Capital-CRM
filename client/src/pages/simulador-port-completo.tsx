@@ -42,7 +42,7 @@ export default function SimuladorPortCompletoPage() {
     <div className="flex flex-col h-full w-full" style={{ height: "calc(100vh - 60px)" }}>
       <iframe
         ref={frameRef}
-        src="/ferramentas-portabilidade.html#simulador"
+        src="/ferramentas-portabilidade.html?v=20260629#simulador"
         title="Simulador de Portabilidade"
         className="w-full flex-1 border-0"
         style={{ height: "100%" }}

@@ -37,7 +37,7 @@ export default function CriadorPropostaPage() {
     <div className="flex flex-col h-full w-full" style={{ height: "calc(100vh - 60px)" }}>
       <iframe
         ref={frameRef}
-        src="/ferramentas-portabilidade.html#proposta"
+        src="/ferramentas-portabilidade.html?v=20260629#proposta"
         title="Criador de Proposta"
         className="w-full flex-1 border-0"
         style={{ height: "100%" }}

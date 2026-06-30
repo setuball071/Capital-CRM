@@ -215,7 +215,7 @@ export default function SimuladoresHub() {
           {/* Simulador de Portabilidade — iframe (lógica complexa com PDF import, regras de bancos) */}
           <iframe
             ref={portabilidadeRef}
-            src="/ferramentas-portabilidade.html#simulador"
+            src="/ferramentas-portabilidade.html?v=20260629#simulador"
             title="Simulador de Portabilidade"
             style={{
               display: activeTab === "portabilidade" ? "block" : "none",
