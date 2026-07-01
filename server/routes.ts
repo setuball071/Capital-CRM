@@ -22531,6 +22531,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         WHERE p.tenant_id = ${tenantId} AND p.vendor_id = ${userId}
           AND cs.is_final = false
           AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
+          AND LOWER(cs.label) NOT LIKE '%envio%'
       `);
       emAndamento = parseFloat(andamentoVendRes.rows[0]?.valor as string) || 0;
       emAndamentoContratos = parseInt(andamentoVendRes.rows[0]?.qtd as string) || 0;
@@ -22538,6 +22539,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SELECT DISTINCT label FROM contract_statuses
         WHERE tenant_id = ${tenantId} AND is_final = false
           AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
+          AND LOWER(label) NOT LIKE '%envio%'
         ORDER BY label
       `);
       statusEmAndamento = lblVendRes.rows.map((r: any) => r.label as string);
@@ -22752,6 +22754,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           WHERE p.tenant_id = ${tenantId}
             AND cs.is_final = false
             AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
+            AND LOWER(cs.label) NOT LIKE '%envio%'
             AND p.vendor_id = ANY(ARRAY[${sql.raw(teamMemberIds.join(","))}]::int[])
           GROUP BY p.vendor_id
         `);
@@ -22765,6 +22768,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           SELECT DISTINCT label FROM contract_statuses
           WHERE tenant_id = ${tenantId} AND is_final = false
             AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
+            AND LOWER(label) NOT LIKE '%envio%'
           ORDER BY label
         `);
         statusEmAndamento = lblRes.rows.map((r: any) => r.label as string);
@@ -22801,6 +22805,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         .sort((a, b) => b.efetivado - a.efetivado)
         .map((v, i) => ({ ...v, posicao: i + 1 }));
 
+      // Delta % do efetivado vs mês anterior + total de propostas em aberto (equipe)
+      const prevDate = new Date(year, month - 1, 1);
+      const prevMesRef = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+      const prevFirst = new Date(prevDate.getFullYear(), prevDate.getMonth(), 1);
+      const prevLast = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0);
+      let efetivadoAnterior = 0;
+      if (teamMemberIds.length > 0) {
+        const idsArr = sql.raw(teamMemberIds.join(","));
+        const [pAnt, vAnt] = await Promise.all([
+          db.execute(sql`SELECT COALESCE(SUM(valor_base),0)::numeric AS v FROM producoes_contratos WHERE tenant_id=${tenantId} AND mes_referencia=${prevMesRef} AND confirmado=true AND comissao_repasse_valor>0 AND vendedor_id = ANY(ARRAY[${idsArr}]::int[])`),
+          db.execute(sql`SELECT COALESCE(SUM(valor_contrato),0)::numeric AS v FROM vendedor_contratos WHERE tenant_id=${tenantId} AND data_contrato >= ${prevFirst.toISOString()} AND data_contrato <= ${prevLast.toISOString()} AND vendedor_id = ANY(ARRAY[${idsArr}]::int[])`),
+        ]);
+        efetivadoAnterior = (parseFloat(pAnt.rows[0]?.v as string) || 0) + (parseFloat(vAnt.rows[0]?.v as string) || 0);
+      }
+      const deltaPercentual = efetivadoAnterior > 0 ? ((totalEfetivado - efetivadoAnterior) / efetivadoAnterior) * 100 : 0;
+      const propostasEmAberto = Array.from(emAndamentoMap.values()).reduce((s, x) => s + x.qtd, 0);
+
       return res.json({
         equipe: {
           meta: metaEquipe,
@@ -22810,6 +22831,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           portabilidade: Math.round(totalPortabilidade * 100) / 100,
           cartao: Math.round(totalCartao * 100) / 100,
           percentual: metaEquipe > 0 ? Math.round((totalEfetivado / metaEquipe) * 100) : 0,
+          deltaPercentual: Math.round(deltaPercentual * 10) / 10,
+          propostasEmAberto,
         },
         ranking,
         statusEmAndamento,

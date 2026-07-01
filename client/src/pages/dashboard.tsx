@@ -1,18 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { Target, Trophy, Loader2, Clock } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Target, Clock, TrendingUp, TrendingDown, CalendarDays, Trophy, Users, Info, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 interface VendedorRanking {
   userId: number;
   nome: string;
-  foto: string | null;
-  efetivado: number;            // produção efetivada (financeiro), inclui cartão
-  emAndamento: number;          // pipeline (proposals) nos status Em andamento / Aguardando CIP
+  efetivado: number;
+  emAndamento: number;
   emAndamentoContratos: number;
-  novo: number;                 // breakdown do efetivado
+  novo: number;
   portabilidade: number;
   cartao: number;
   contratos: number;
@@ -30,205 +26,178 @@ interface GestorDashboardData {
     portabilidade: number;
     cartao: number;
     percentual: number;
+    deltaPercentual: number;
+    propostasEmAberto: number;
   };
   ranking: VendedorRanking[];
   statusEmAndamento: string[];
   mesAno: string;
 }
 
+// ── Tokens de marca (Capital Go) ──────────────────────────────────────────────
+const CG = {
+  purple: "#6C2BD9", blue: "#1E88E5", pink: "#E91E63", green: "#00C853", greenText: "#0A7A3B",
+  warning: "#F9A825", black: "#121212", gray800: "#333333", gray500: "#6B7280", gray400: "#9CA3AF",
+  gray200: "#E5E7EB", gray100: "#F3F4F6", gray50: "#F9FAFB", border: "#E5E7EB", muted: "#6B7280",
+  purpleSoft: "#F2EBFC",
+};
+const GRAD_CTA = "linear-gradient(90deg,#6C2BD9 0%,#1E88E5 100%)";
+const GRAD_GO = "linear-gradient(90deg,#A855F7 0%,#E91E63 100%)";
+const SHADOW = "0 1px 2px rgba(16,24,40,.06)";
+const FONT = "'Inter', system-ui, sans-serif";
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const num = { fontVariantNumeric: "tabular-nums" as const };
+
+function fmtCent(v: number): string {
+  return "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtInt(v: number): string {
+  return "R$ " + Math.round(Number(v) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
 function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+function periodoLabel(mesAno: string): string {
+  const [mm, yy] = (mesAno || "").split("/");
+  const idx = parseInt(mm, 10) - 1;
+  return `${MESES[idx] || ""} ${yy || ""}`.trim();
 }
 
-function formatBRL(value: number): string {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
-}
-
-function EquipeCard({ efetivado, emAndamento, meta, percentual, novo, portabilidade, cartao }: {
-  efetivado: number;
-  emAndamento: number;
-  meta: number;
-  percentual: number;
-  novo: number;
-  portabilidade: number;
-  cartao: number;
-}) {
-  return (
-    <Card className="border-primary/20" data-testid="card-equipe-meta">
-      <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Target size={16} className="text-primary" />
-          <h3 className="font-bold text-sm uppercase tracking-wider text-primary">Meta da Equipe</h3>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Efetivado</div>
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-equipe-efetivado">
-              {formatBRL(efetivado)}
-            </div>
-            <div className="text-sm text-muted-foreground">Meta: {formatBRL(meta)}</div>
-          </div>
-          <div className="border-l pl-4">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-              <Clock size={11} /> Em andamento
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400" data-testid="text-equipe-andamento">
-              {formatBRL(emAndamento)}
-            </div>
-            <div className="text-sm text-muted-foreground">pipeline em aberto</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex-1 h-2.5 rounded-full overflow-hidden bg-muted">
-            <div
-              className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-chart-2"
-              style={{ width: `${Math.min(percentual, 100)}%` }}
-            />
-          </div>
-          <div className="shrink-0 px-3 py-1 rounded-md border bg-primary/10 border-primary/20">
-            <span className="text-lg font-bold text-primary" data-testid="text-equipe-percent">{percentual}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-md border bg-muted/40 px-3 py-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contrato Novo</p>
-            <p className="text-sm font-bold" data-testid="text-equipe-novo">{formatBRL(novo)}</p>
-          </div>
-          <div className="rounded-md border bg-muted/40 px-3 py-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
-            <p className="text-sm font-bold" data-testid="text-equipe-portabilidade">{formatBRL(portabilidade)}</p>
-          </div>
-          <div className="rounded-md border bg-muted/40 px-3 py-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cartão</p>
-            <p className="text-sm font-bold" data-testid="text-equipe-cartao">{formatBRL(cartao)}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RankingAvatar({ nome, posicao }: { nome: string; posicao: number }) {
-  const initials = getInitials(nome);
-  const bgClass =
-    posicao === 1 ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 ring-yellow-500/30" :
-    posicao === 2 ? "bg-gray-300/20 text-gray-600 dark:text-gray-300 ring-gray-400/30" :
-    posicao === 3 ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 ring-orange-500/30" :
-    "bg-muted text-muted-foreground ring-border";
+function MetaCard({ e, periodo }: { e: GestorDashboardData["equipe"]; periodo: string }) {
+  const pctMeta = e.meta > 0 ? Math.round((e.efetivado / e.meta) * 100) : 0;
+  const faltam = Math.max(0, e.meta - e.efetivado);
+  const somaProd = e.novo + e.portabilidade + e.cartao;
+  const share = (v: number) => (somaProd > 0 ? Math.round((v / somaProd) * 100) : 0);
+  const produtos = [
+    { nome: "Contrato novo", valor: e.novo, cor: CG.purple },
+    { nome: "Portabilidade", valor: e.portabilidade, cor: CG.blue },
+    { nome: "Cartão", valor: e.cartao, cor: CG.pink },
+  ];
+  const up = e.deltaPercentual >= 0;
 
   return (
-    <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ring-1 shrink-0 ${bgClass}`} data-testid={`avatar-ranking-${posicao}`}>
-      {initials}
+    <div style={{ background: "#fff", border: `1px solid ${CG.border}`, borderRadius: 16, boxShadow: SHADOW, overflow: "hidden" }}>
+      <div style={{ padding: "26px 30px", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Target size={20} color={CG.purple} />
+            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: CG.purple }}>META DA EQUIPE</span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 32, padding: "0 14px", borderRadius: 999, background: CG.gray100, color: CG.gray800, fontSize: 13, fontWeight: 600 }}>
+            <CalendarDays size={16} color={CG.muted} />{periodo}
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 32, alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", color: CG.muted }}>EFETIVADO NO MÊS</span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 42, fontWeight: 700, color: CG.black, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.efetivado)}</span>
+              {e.deltaPercentual !== 0 && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 14, fontWeight: 700, color: up ? CG.green : CG.pink }}>
+                  {up ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                  {Math.abs(e.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 14, color: CG.muted }}>Meta do mês: <b style={{ color: CG.gray800, ...num }}>{fmtCent(e.meta)}</b></span>
+          </div>
+          <div style={{ width: 1, height: 64, background: CG.border }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", color: CG.warning }}>
+              <Clock size={16} />EM ANDAMENTO
+            </span>
+            <span style={{ fontSize: 38, fontWeight: 700, color: CG.warning, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.emAndamento)}</span>
+            <span style={{ fontSize: 14, color: CG.muted }}>{e.propostasEmAberto} propostas em aberto, aguardando efetivação</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: CG.gray800 }}><b style={{ color: CG.purple, fontSize: 16 }}>{pctMeta}%</b> da meta atingida</span>
+            <span style={{ fontSize: 14, color: CG.muted }}>faltam <b style={{ color: CG.gray800, ...num }}>{fmtCent(faltam)}</b></span>
+          </div>
+          <div style={{ position: "relative", height: 16, borderRadius: 999, background: CG.gray200, overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${Math.min(pctMeta, 100)}%`, borderRadius: 999, background: GRAD_CTA }} />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          {produtos.map((p) => (
+            <div key={p.nome} style={{ border: `1px solid ${CG.border}`, borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: CG.gray800 }}>{p.nome}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: p.cor }}>{share(p.valor)}%</span>
+              </div>
+              <span style={{ fontSize: 21, fontWeight: 700, color: CG.black, ...num }}>{fmtInt(p.valor)}</span>
+              <div style={{ height: 6, borderRadius: 999, background: CG.gray100 }}>
+                <div style={{ width: `${share(p.valor)}%`, height: "100%", borderRadius: 999, background: p.cor }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function RankingTable({ data, statusEmAndamento }: {
-  data: VendedorRanking[];
-  statusEmAndamento: string[];
-}) {
+function medalStyle(pos: number): { bg: string; color: string } | null {
+  if (pos === 1) return { bg: "#F4C64A", color: "#6B4E00" };
+  if (pos === 2) return { bg: "#CBD1D8", color: "#3B4252" };
+  if (pos === 3) return { bg: "#E6B486", color: "#6B3B14" };
+  return null;
+}
+
+function RankingRow({ v }: { v: VendedorRanking }) {
+  const top3 = v.posicao <= 3;
+  const medal = medalStyle(v.posicao);
+  const pct = v.percentual || 0;
+  const rowBg = v.posicao === 1 ? "linear-gradient(100deg, #FEF8E7 0%, #fff 40%)" : "#fff";
+  const barFill = top3 ? CG.green : CG.purple;
+
   return (
-    <Card data-testid="card-ranking" className="flex flex-col">
-      <CardContent className="p-0 flex flex-col flex-1">
-        <div className="flex items-center gap-2 p-4 pb-3 border-b shrink-0">
-          <Trophy size={18} className="text-primary" />
-          <h3 className="font-bold text-base">Ranking dos Corretores</h3>
-          <Badge variant="outline" className="ml-auto">{data.length} corretores</Badge>
-        </div>
-
-        {statusEmAndamento.length > 0 && (
-          <div className="px-4 py-2 text-[11px] text-muted-foreground border-b bg-muted/30">
-            <Clock size={11} className="inline mr-1" />
-            Em andamento conta os status: <strong>{statusEmAndamento.join(", ")}</strong>
-          </div>
-        )}
-
-        {data.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">
-            Nenhum corretor encontrado
-          </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 30px", borderBottom: `1px solid ${CG.border}`, background: rowBg }}>
+      <span style={{ width: 34, display: "flex", justifyContent: "center" }}>
+        {medal ? (
+          <span style={{ width: 30, height: 30, borderRadius: "50%", background: medal.bg, color: medal.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{v.posicao}</span>
         ) : (
-          <div className="flex-1 overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12 text-center">#</TableHead>
-                  <TableHead>Corretor</TableHead>
-                  <TableHead className="text-right">Efetivado</TableHead>
-                  <TableHead className="text-right">Em andamento</TableHead>
-                  <TableHead className="text-right">% Meta</TableHead>
-                  <TableHead className="text-right w-16">Ctts</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.map((v) => (
-                  <TableRow key={v.userId} data-testid={`row-ranking-${v.userId}`}>
-                    <TableCell className="text-center align-top pt-3">
-                      {v.posicao <= 3 ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
-                          v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
-                          v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
-                          "bg-orange-500/20 text-orange-600 dark:text-orange-400"
-                        }`}>
-                          {v.posicao}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{v.posicao}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <RankingAvatar nome={v.nome} posicao={v.posicao} />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${v.userId}`}>{v.nome}</div>
-                          <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5">
-                            <span>Novo: {formatBRL(v.novo || 0)}</span>
-                            <span>·</span>
-                            <span>Port: {formatBRL(v.portabilidade || 0)}</span>
-                            <span>·</span>
-                            <span>Cartão: {formatBRL(v.cartao || 0)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm align-top pt-3" data-testid={`text-ranking-efetivado-${v.userId}`}>
-                      {formatBRL(v.efetivado)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm align-top pt-3 text-amber-600 dark:text-amber-400" data-testid={`text-ranking-andamento-${v.userId}`}>
-                      {formatBRL(v.emAndamento)}
-                      {v.emAndamentoContratos > 0 && (
-                        <span className="text-[10px] text-muted-foreground ml-1">({v.emAndamentoContratos})</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right align-top pt-3">
-                      <Badge
-                        variant={v.percentual >= 100 ? "default" : "outline"}
-                        className={v.percentual >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
-                        data-testid={`text-ranking-pct-${v.userId}`}
-                      >
-                        {v.percentual}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground align-top pt-3" data-testid={`text-ranking-contratos-${v.userId}`}>
-                      {v.contratos}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <span style={{ fontWeight: 700, fontSize: 15, color: CG.gray400 }}>{v.posicao}</span>
         )}
-      </CardContent>
-    </Card>
+      </span>
+      <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 15, flexShrink: 0 }}>
+        {getInitials(v.nome)}
+      </div>
+      <div style={{ flex: 1, minWidth: 160 }}>
+        <div style={{ fontSize: 15.5, fontWeight: top3 ? 700 : 600, color: CG.black }}>{v.nome}</div>
+        <div style={{ fontSize: 12, color: CG.muted }}>Novo {fmtInt(v.novo)} · Port. {fmtInt(v.portabilidade)} · Cartão {fmtInt(v.cartao)}</div>
+      </div>
+      <div style={{ width: 210, display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ height: 8, borderRadius: 999, background: CG.gray100 }}>
+          <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", borderRadius: 999, background: barFill }} />
+        </div>
+        <span style={{ fontSize: 12, color: CG.muted }}>
+          <b style={{ color: top3 ? CG.greenText : CG.gray800 }}>{pct}%</b> de {fmtInt(v.meta)}
+        </span>
+      </div>
+      <span style={{ width: 128, textAlign: "right", fontSize: 14, color: CG.warning, fontWeight: 600, ...num }}>{fmtInt(v.emAndamento)}</span>
+      <span style={{ width: 140, textAlign: "right", fontWeight: 700, fontSize: 18, color: top3 ? CG.black : CG.gray800, ...num }}>{fmtInt(v.efetivado)}</span>
+      <span style={{ width: 46, textAlign: "right", fontSize: 14, fontWeight: 600, color: CG.gray800 }}>{v.contratos}</span>
+    </div>
+  );
+}
+
+function ColHead() {
+  const base = { fontSize: 11.5, fontWeight: 700 as const, letterSpacing: "0.05em", color: CG.muted };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 30px", borderBottom: `1px solid ${CG.border}` }}>
+      <span style={{ width: 34, textAlign: "center", ...base }}>#</span>
+      <span style={{ width: 44 }} />
+      <span style={{ flex: 1, minWidth: 160, ...base }}>CORRETOR</span>
+      <span style={{ width: 210, ...base }}>% DA META</span>
+      <span style={{ width: 128, textAlign: "right", ...base }}>EM ABERTO</span>
+      <span style={{ width: 140, textAlign: "right", ...base }}>EFETIVADO</span>
+      <span style={{ width: 46, textAlign: "right", ...base }}>CTTS</span>
+    </div>
   );
 }
 
@@ -240,48 +209,57 @@ function GestorDashboard() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <div style={{ display: "flex", justifyContent: "center", padding: 64 }}><Loader2 className="h-8 w-8 animate-spin" color={CG.purple} /></div>;
   }
-
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-2">
-        <div className="text-destructive font-medium">Erro ao carregar dashboard</div>
-        <div className="text-sm text-muted-foreground">{error instanceof Error ? error.message : "Erro desconhecido"}</div>
+      <div style={{ textAlign: "center", padding: 64, fontFamily: FONT }}>
+        <div style={{ color: CG.pink, fontWeight: 600 }}>Erro ao carregar dashboard</div>
+        <div style={{ fontSize: 14, color: CG.muted, marginTop: 4 }}>{error instanceof Error ? error.message : "Erro desconhecido"}</div>
       </div>
     );
   }
-
   if (!data) return null;
 
-  const mesLabel = data.mesAno || "";
+  const periodo = periodoLabel(data.mesAno);
+  const legenda = data.statusEmAndamento?.length
+    ? `conta propostas em ${data.statusEmAndamento.join(", ")}, ainda não efetivadas.`
+    : "conta propostas em andamento, ainda não efetivadas.";
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="border-b bg-background p-4 shrink-0">
-        <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard da Equipe</h1>
-        <p className="text-sm text-muted-foreground">Produção e rankings do mês {mesLabel}</p>
-      </header>
+    <div style={{ display: "flex", justifyContent: "center", padding: 24, background: "#E9EAEE", minHeight: "100%" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
+      <div style={{ width: "100%", maxWidth: 1120, background: CG.gray100, borderRadius: 18, padding: 28, display: "flex", flexDirection: "column", gap: 24, boxShadow: SHADOW, fontFamily: FONT, color: CG.black }}>
+        <MetaCard e={data.equipe} periodo={periodo} />
 
-      <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <EquipeCard
-            efetivado={data.equipe.efetivado}
-            emAndamento={data.equipe.emAndamento}
-            meta={data.equipe.meta}
-            percentual={data.equipe.percentual}
-            novo={data.equipe.novo}
-            portabilidade={data.equipe.portabilidade}
-            cartao={data.equipe.cartao}
-          />
+        <div style={{ background: "#fff", border: `1px solid ${CG.border}`, borderRadius: 16, boxShadow: SHADOW, overflow: "hidden" }}>
+          <div style={{ padding: "22px 30px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${CG.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Trophy size={24} color={CG.purple} />
+              <span style={{ fontSize: 19, fontWeight: 700, color: CG.black }}>Ranking dos corretores</span>
+            </div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px", borderRadius: 999, background: CG.purpleSoft, color: CG.purple, fontSize: 13, fontWeight: 600 }}>
+              <Users size={16} />{data.ranking.length} corretores
+            </span>
+          </div>
 
-          <RankingTable data={data.ranking} statusEmAndamento={data.statusEmAndamento || []} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: CG.muted, padding: "12px 30px", background: CG.gray50, borderBottom: `1px solid ${CG.border}` }}>
+            <Info size={16} />
+            <span><b style={{ color: CG.gray800 }}>Em aberto</b> {legenda}</span>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: 900 }}>
+              <ColHead />
+              {data.ranking.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: CG.muted, fontSize: 14 }}>Nenhum contrato efetivado neste período.</div>
+              ) : (
+                data.ranking.map((v) => <RankingRow key={v.userId} v={v} />)
+              )}
+            </div>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
