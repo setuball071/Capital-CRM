@@ -22542,11 +22542,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       `);
       statusEmAndamento = lblVendRes.rows.map((r: any) => r.label as string);
 
+      // Delta % do efetivado vs mês anterior (mesmo corretor)
+      const prevDate2 = new Date(year, month - 1, 1);
+      const prevMesRef2 = `${prevDate2.getFullYear()}-${String(prevDate2.getMonth() + 1).padStart(2, "0")}`;
+      const prevFirst2 = new Date(prevDate2.getFullYear(), prevDate2.getMonth(), 1);
+      const prevLast2 = new Date(prevDate2.getFullYear(), prevDate2.getMonth() + 1, 0);
+      const [pAntV, vAntV] = await Promise.all([
+        db.execute(sql`SELECT COALESCE(SUM(valor_base),0)::numeric AS v FROM producoes_contratos WHERE vendedor_id=${userId} AND tenant_id=${tenantId} AND mes_referencia=${prevMesRef2} AND confirmado=true AND comissao_repasse_valor>0`),
+        db.execute(sql`SELECT COALESCE(SUM(valor_contrato),0)::numeric AS v FROM vendedor_contratos WHERE vendedor_id=${userId} AND tenant_id=${tenantId} AND data_contrato >= ${prevFirst2.toISOString()} AND data_contrato <= ${prevLast2.toISOString()}`),
+      ]);
+      const efetivadoAnterior2 = (parseFloat(pAntV.rows[0]?.v as string) || 0) + (parseFloat(vAntV.rows[0]?.v as string) || 0);
+      const deltaPercentualV = efetivadoAnterior2 > 0 ? ((totalValor - efetivadoAnterior2) / efetivadoAnterior2) * 100 : 0;
+
       return res.json({
         vendedorNome: user.name,
         metaMensal,
         metaCartao,
         metaUnificada,
+        deltaPercentual: Math.round(deltaPercentualV * 10) / 10,
         emAndamento: Math.round(emAndamento * 100) / 100,
         emAndamentoContratos,
         statusEmAndamento,

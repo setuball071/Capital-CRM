@@ -60,7 +60,7 @@ import SimuladorPortCompletoPage from "@/pages/simulador-port-completo";
 import SimuladoresHub from "@/pages/simuladores-hub";
 import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
-import DashboardVendedorPage from "@/pages/dashboard-vendedor";
+import DashboardVendedorPage from "@/pages/dashboard-vendedor-cg";
 import GestaoComercialDashboardPage from "@/pages/gestao-comercial-dashboard";
 import GestaoComercialImportarPage from "@/pages/gestao-comercial-importar";
 import GestaoComercialMetasPage from "@/pages/gestao-comercial-metas";
