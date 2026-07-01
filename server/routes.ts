@@ -22531,7 +22531,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         WHERE p.tenant_id = ${tenantId} AND p.vendor_id = ${userId}
           AND cs.is_final = false
           AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
-          AND LOWER(cs.label) NOT LIKE '%envio%'
       `);
       emAndamento = parseFloat(andamentoVendRes.rows[0]?.valor as string) || 0;
       emAndamentoContratos = parseInt(andamentoVendRes.rows[0]?.qtd as string) || 0;
@@ -22539,7 +22538,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SELECT DISTINCT label FROM contract_statuses
         WHERE tenant_id = ${tenantId} AND is_final = false
           AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
-          AND LOWER(label) NOT LIKE '%envio%'
         ORDER BY label
       `);
       statusEmAndamento = lblVendRes.rows.map((r: any) => r.label as string);
@@ -22754,7 +22752,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           WHERE p.tenant_id = ${tenantId}
             AND cs.is_final = false
             AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
-            AND LOWER(cs.label) NOT LIKE '%envio%'
             AND p.vendor_id = ANY(ARRAY[${sql.raw(teamMemberIds.join(","))}]::int[])
           GROUP BY p.vendor_id
         `);
@@ -22768,7 +22765,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           SELECT DISTINCT label FROM contract_statuses
           WHERE tenant_id = ${tenantId} AND is_final = false
             AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
-            AND LOWER(label) NOT LIKE '%envio%'
           ORDER BY label
         `);
         statusEmAndamento = lblRes.rows.map((r: any) => r.label as string);
