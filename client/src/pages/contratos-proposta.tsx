@@ -343,6 +343,19 @@ function StepIndicator({ current, steps = WIZARD_STEPS_DEFAULT }: { current: str
   );
 }
 
+// A IA de OCR às vezes devolve a STRING "null"/"undefined" em vez de vazio. Converte esses
+// casos para null nos dados do documento — inclui docs antigos reaproveitados do cadastro.
+function cleanDocNulls<T>(doc: T): T {
+  if (!doc || typeof doc !== "object") return doc;
+  const isNullish = (s: any) => typeof s === "string" && ["", "null", "undefined", "n/a", "na", "-"].includes(s.trim().toLowerCase());
+  const out: any = Array.isArray(doc) ? [] : {};
+  for (const [k, v] of Object.entries(doc as any)) {
+    if (Array.isArray(v)) out[k] = v.map((x) => (isNullish(x) ? null : x));
+    else out[k] = isNullish(v) ? null : v;
+  }
+  return out;
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ContratosPropostaPage() {
@@ -504,7 +517,7 @@ export default function ContratosPropostaPage() {
         try { serverMsg = (await res.json())?.message || ""; } catch {}
         throw new Error(serverMsg || "OCR falhou");
       }
-      const data: DocPhotoData = await res.json();
+      const data: DocPhotoData = cleanDocNulls(await res.json());
       setDocPhotoData(data);
       setDocPhotoSource("ocr");
     } catch (err: any) {
@@ -548,7 +561,7 @@ export default function ContratosPropostaPage() {
       const savedDoc = (existing as ClientLookup | null)?.clientMeta?.docFoto;
       if (savedDoc?.tipo) {
         // ✅ Dados já existem — usa sem chamar IA
-        setDocPhotoData(savedDoc as DocPhotoData);
+        setDocPhotoData(cleanDocNulls(savedDoc as DocPhotoData));
         setDocPhotoSource("cached");
         return;
       }
@@ -1325,7 +1338,7 @@ export default function ContratosPropostaPage() {
       inicioPensao: meta.inicioPensao, terminoPensao: meta.terminoPensao,
     } as any);
     if (meta.docFoto?.tipo) {
-      setDocPhotoData(meta.docFoto as DocPhotoData); // dados do documento sem nova IA
+      setDocPhotoData(cleanDocNulls(meta.docFoto as DocPhotoData)); // dados do documento sem nova IA
       setDocPhotoSource("cached");
     }
     // Reaproveita só os documentos marcados pelo corretor (padrão: todos)

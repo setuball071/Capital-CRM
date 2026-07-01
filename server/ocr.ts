@@ -32,6 +32,23 @@ const upload = multer({
   },
 });
 
+// A IA às vezes devolve a STRING "null"/"undefined" (ou "N/A", "-") em vez de null real.
+// Converte esses casos e strings vazias para null, recursivamente — assim os campos não
+// chegam ao formulário preenchidos com a palavra "null" (que travava a próxima tela).
+function nullifyStrings(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(nullifyStrings);
+  if (obj && typeof obj === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = nullifyStrings(v);
+    return out;
+  }
+  if (typeof obj === "string") {
+    const t = obj.trim().toLowerCase();
+    if (t === "" || t === "null" || t === "undefined" || t === "n/a" || t === "na" || t === "-") return null;
+  }
+  return obj;
+}
+
 export interface DocPhotoExtracted {
   tipo: "RG" | "CNH" | "outro";
   nome: string | null;
@@ -135,7 +152,7 @@ Formato exato:
 
         let extracted: DocPhotoExtracted;
         try {
-          extracted = JSON.parse(jsonMatch[0]);
+          extracted = nullifyStrings(JSON.parse(jsonMatch[0]));
         } catch {
           return res
             .status(422)
