@@ -198,7 +198,7 @@ export default function ProducaoFinanceiraPage() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {isMaster
               ? "Visão consolidada de toda a equipe"
-              : "Suas propostas em andamento e comissões"}
+              : "Suas propostas em andamento e prêmios"}
           </p>
         </div>
 
@@ -284,7 +284,7 @@ export default function ProducaoFinanceiraPage() {
           {isLoading ? (
             [1, 2, 3].map((i) => <div key={i} className="h-16 rounded-md bg-muted animate-pulse" />)
           ) : aReceber.length === 0 ? (
-            <EmptyState label="aguardando recebimento de comissão" />
+            <EmptyState label="aguardando recebimento de prêmio" />
           ) : (
             <>
               <div className="flex items-center justify-between text-sm text-muted-foreground pb-1">
@@ -308,7 +308,7 @@ export default function ProducaoFinanceiraPage() {
           {isLoading ? (
             [1, 2, 3].map((i) => <div key={i} className="h-16 rounded-md bg-muted animate-pulse" />)
           ) : recebido.length === 0 ? (
-            <EmptyState label="com comissão confirmada" />
+            <EmptyState label="com prêmio confirmado" />
           ) : (
             <>
               <div className="flex items-center justify-between text-sm text-muted-foreground pb-1">

@@ -300,7 +300,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <table>
         <thead><tr>
           <th>ADE</th><th>Data</th><th>Cliente</th><th>Banco / Tabela</th><th>Conv.</th><th>Tipo</th>
-          <th class="r">Val. Contrato</th><th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Banco</th><th>Status Flat</th>
+          <th class="r">Val. Contrato</th><th class="r">Prêmio %</th><th class="r">Prêmio R$</th><th>Status Banco</th><th>Status Prêmio</th>
         </tr></thead>
         <tbody id="cc-tbody"></tbody>
         <tfoot id="cc-tfoot"></tfoot>
@@ -363,7 +363,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   </div>
   <!-- Consultor Produção -->
   <div id="prod-consultor" style="display:none">
-    <div class="banner banner-consultor">👤 <strong>Visão Consultor:</strong> você vê apenas seus contratos e sua comissão.</div>
+    <div class="banner banner-consultor">👤 <strong>Visão Consultor:</strong> você vê apenas seus contratos e seus prêmios.</div>
     <div class="filter-bar">
       <input class="search" id="c-busca" placeholder="🔍 Buscar..." oninput="carregarProducaoConsultor()"/>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
@@ -377,7 +377,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <button onclick="document.getElementById('c-mes').value='';carregarProducaoConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
       </div>
       <select class="filter-select" id="c-stbanco" onchange="carregarProducaoConsultor()"><option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option></select>
-      <select class="filter-select" id="c-stflat" onchange="carregarProducaoConsultor()"><option value="">Status flat (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
+      <select class="filter-select" id="c-stflat" onchange="carregarProducaoConsultor()"><option value="">Status prêmio (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
       <span class="count-chip" id="c-count">—</span>
     </div>
     <div class="kpi-grid kpi-grid-4" id="c-kpis"></div>
@@ -386,15 +386,15 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <span><span class="legenda-dot" style="background:var(--muted)"></span>Aguardando</span>
         <span><span class="legenda-dot" style="background:var(--accent)"></span>No relatório</span>
         <span><span class="legenda-dot" style="background:var(--green)"></span>Confirmado</span>
-        <span><span class="legenda-dot" style="background:var(--yellow)"></span>Flat a receber</span>
-        <span><span class="legenda-dot" style="background:var(--blue)"></span>Flat recebido</span>
+        <span><span class="legenda-dot" style="background:var(--yellow)"></span>Prêmio a receber</span>
+        <span><span class="legenda-dot" style="background:var(--blue)"></span>Prêmio recebido</span>
       </div>
       <table>
         <thead><tr>
           <th>ADE</th><th>Data</th><th>Cliente</th>
           <th>Banco / Tabela</th><th>Conv.</th><th>Tipo</th>
-          <th class="r">Val. Contrato</th><th class="r">Flat</th>
-          <th>Status Banco</th><th>Status Flat</th><th>Data Status Flat</th>
+          <th class="r">Val. Contrato</th><th class="r">Prêmio</th>
+          <th>Status Banco</th><th>Status Prêmio</th><th>Data Status Prêmio</th>
         </tr></thead>
         <tbody id="c-tbody"></tbody>
         <tfoot id="c-tfoot"></tfoot>
@@ -532,14 +532,14 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <div class="form-group"><label>Valor do Contrato (R$)</label><input type="number" id="cont-valor" placeholder="0,00" oninput="calcContrato()"/></div>
       <div class="calc-box" id="cont-calc">
         <div class="calc-row"><span class="calc-label">Val. Empresa</span><span class="calc-value" id="cc-emp">—</span></div>
-        <div class="calc-row"><span class="calc-label">Flat % → Valor</span><span class="calc-value" id="cc-flat">—</span></div>
+        <div class="calc-row"><span class="calc-label">Prêmio % → Valor</span><span class="calc-value" id="cc-flat">—</span></div>
         <div class="calc-row"><span class="calc-label">Parcela aprox.</span><span class="calc-value" id="cc-parcela">—</span></div>
       </div>
       <div class="form-grid-2">
         <div class="form-group"><label>Status Banco</label>
           <select id="cont-stb"><option>Aguardando</option><option>Importado</option><option>Recebido</option><option>Cancelado</option></select>
         </div>
-        <div class="form-group"><label>Status Flat</label>
+        <div class="form-group"><label>Status Prêmio</label>
           <select id="cont-stc"><option>Aguardando</option><option>A Pagar</option><option>Pago</option><option>Cancelado</option></select>
         </div>
       </div>
@@ -1690,7 +1690,7 @@ function verDetalheContrato(id){
     <div class="calc-box">
       <div class="calc-row"><span class="calc-label">Valor do Contrato</span><span class="calc-value">${fmtBRL(c.valor)}</span></div>
       <div class="calc-row"><span class="calc-label">Val. Empresa</span><span class="calc-value v-green">${fmtBRL(ve)}</span></div>
-      <div class="calc-row"><span class="calc-label">Flat % / Valor</span><span class="calc-value v-yellow">${fmtPct(fp)} / ${fmtBRL(vf)}</span></div>
+      <div class="calc-row"><span class="calc-label">Prêmio % / Valor</span><span class="calc-value v-yellow">${fmtPct(fp)} / ${fmtBRL(vf)}</span></div>
     </div>
     <div class="info-box">
       <div class="info-row"><span class="info-row-label">Status Banco</span><span class="info-row-val">${c.statusBanco}</span></div>
@@ -2418,7 +2418,7 @@ function renderTabelas(){
       ${sTh('Flat %','flat',s,'toggleSortSim','r')}
       ${sTh('Val. Contrato','contrato',s,'toggleSortSim','r')}
       ${sTh('Parcela','parcela',s,'toggleSortSim','r')}
-      ${sTh('Comissão','ganho',s,'toggleSortSim','r')}
+      ${sTh('Prêmio','ganho',s,'toggleSortSim','r')}
     </tr>`;
     if(!resultados.length){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
     tbody.innerHTML=resultados.map(({t,flatPct,valorContrato,parcela,ganho,rep},i)=>{

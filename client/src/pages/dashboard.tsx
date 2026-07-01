@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Target, CreditCard, Trophy, Loader2 } from "lucide-react";
+import { Target, Trophy, Loader2, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -9,32 +9,30 @@ interface VendedorRanking {
   userId: number;
   nome: string;
   foto: string | null;
-  producaoGeral: number;         // soma sem cartão (Novo + Port + Refin + Outro)
-  producaoNovo: number;          // breakdown da produção geral
-  producaoPortabilidade: number; // breakdown da produção geral
-  producaoCartao: number;
+  efetivado: number;            // produção efetivada (financeiro), inclui cartão
+  emAndamento: number;          // pipeline (proposals) nos status Em andamento / Aguardando CIP
+  emAndamentoContratos: number;
+  novo: number;                 // breakdown do efetivado
+  portabilidade: number;
+  cartao: number;
   contratos: number;
-  contratosCartao: number;
-  metaGeral: number;
-  metaCartao: number;
-  percentualMeta: number;
-  percentualMetaCartao: number;
+  meta: number;
+  percentual: number;
   posicao: number;
 }
 
 interface GestorDashboardData {
   equipe: {
-    metaGeral: number;
-    metaCartao: number;
-    totalProduzidoGeral: number;         // sem cartão
-    totalProduzidoCartao: number;
-    totalProduzidoNovo: number;          // breakdown
-    totalProduzidoPortabilidade: number; // breakdown
-    percentualGeral: number;
-    percentualCartao: number;
+    meta: number;
+    efetivado: number;
+    emAndamento: number;
+    novo: number;
+    portabilidade: number;
+    cartao: number;
+    percentual: number;
   };
-  rankingGeral: VendedorRanking[];
-  rankingCartao: VendedorRanking[];
+  ranking: VendedorRanking[];
+  statusEmAndamento: string[];
   mesAno: string;
 }
 
@@ -52,70 +50,68 @@ function formatBRL(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 }
 
-function EquipeMetaCard({ label, icon: Icon, produzido, meta, percentual, variant, novo, portabilidade }: {
-  label: string;
-  icon: typeof Target;
-  produzido: number;
+function EquipeCard({ efetivado, emAndamento, meta, percentual, novo, portabilidade, cartao }: {
+  efetivado: number;
+  emAndamento: number;
   meta: number;
   percentual: number;
-  variant: "geral" | "cartao";
-  novo?: number;
-  portabilidade?: number;
+  novo: number;
+  portabilidade: number;
+  cartao: number;
 }) {
-  const isCartao = variant === "cartao";
-
   return (
-    <Card className={`flex-1 min-w-0 ${isCartao ? "bg-[#1a1a2e] dark:bg-[#111122] border-purple-500/20" : "border-primary/20"}`} data-testid={`card-equipe-meta-${variant}`}>
+    <Card className="border-primary/20" data-testid="card-equipe-meta">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Icon size={16} className={isCartao ? "text-purple-400" : "text-primary"} />
-          <h3 className={`font-bold text-sm uppercase tracking-wider ${isCartao ? "text-purple-300" : "text-primary"}`}>
-            {label}
-          </h3>
+        <div className="flex items-center gap-2 mb-4">
+          <Target size={16} className="text-primary" />
+          <h3 className="font-bold text-sm uppercase tracking-wider text-primary">Meta da Equipe</h3>
         </div>
 
-        <div className="flex items-end justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${isCartao ? "text-purple-400" : ""}`} data-testid={`text-equipe-produzido-${variant}`}>
-              {formatBRL(produzido)}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Efetivado</div>
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-equipe-efetivado">
+              {formatBRL(efetivado)}
             </div>
-            <div className={`text-sm ${isCartao ? "text-gray-500" : "text-muted-foreground"}`}>
-              Meta: {formatBRL(meta)}
-            </div>
+            <div className="text-sm text-muted-foreground">Meta: {formatBRL(meta)}</div>
           </div>
-          <div className={`shrink-0 px-3 py-1.5 rounded-md border ${isCartao ? "bg-purple-500/20 border-purple-500/30" : "bg-primary/10 border-primary/20"}`}>
-            <span className={`text-xl font-bold ${isCartao ? "text-purple-400" : "text-primary"}`} data-testid={`text-equipe-percent-${variant}`}>
-              {percentual}%
-            </span>
+          <div className="border-l pl-4">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+              <Clock size={11} /> Em andamento
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400" data-testid="text-equipe-andamento">
+              {formatBRL(emAndamento)}
+            </div>
+            <div className="text-sm text-muted-foreground">pipeline em aberto</div>
           </div>
         </div>
 
-        <div className={`w-full h-2.5 rounded-full overflow-hidden ${isCartao ? "bg-gray-700" : "bg-muted"} mb-3`}>
-          <div
-            className={`h-full rounded-full transition-all duration-1000 ${isCartao ? "bg-gradient-to-r from-purple-600 to-purple-400" : "bg-gradient-to-r from-primary to-chart-2"}`}
-            style={{ width: `${Math.min(percentual, 100)}%` }}
-          />
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 h-2.5 rounded-full overflow-hidden bg-muted">
+            <div
+              className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-chart-2"
+              style={{ width: `${Math.min(percentual, 100)}%` }}
+            />
+          </div>
+          <div className="shrink-0 px-3 py-1 rounded-md border bg-primary/10 border-primary/20">
+            <span className="text-lg font-bold text-primary" data-testid="text-equipe-percent">{percentual}%</span>
+          </div>
         </div>
 
-        {/* Breakdown Contrato Novo + Portabilidade (só na Meta Geral) */}
-        {!isCartao && (novo !== undefined || portabilidade !== undefined) && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-md border bg-muted/40 px-3 py-2">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contrato Novo</p>
-              <p className="text-sm font-bold" data-testid="text-equipe-novo">{formatBRL(novo || 0)}</p>
-            </div>
-            <div className="rounded-md border bg-muted/40 px-3 py-2">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
-              <p className="text-sm font-bold" data-testid="text-equipe-portabilidade">{formatBRL(portabilidade || 0)}</p>
-            </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border bg-muted/40 px-3 py-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Contrato Novo</p>
+            <p className="text-sm font-bold" data-testid="text-equipe-novo">{formatBRL(novo)}</p>
           </div>
-        )}
-
-        {isCartao && (
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">
-            Acompanhamento separado da Meta Geral
-          </p>
-        )}
+          <div className="rounded-md border bg-muted/40 px-3 py-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
+            <p className="text-sm font-bold" data-testid="text-equipe-portabilidade">{formatBRL(portabilidade)}</p>
+          </div>
+          <div className="rounded-md border bg-muted/40 px-3 py-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cartão</p>
+            <p className="text-sm font-bold" data-testid="text-equipe-cartao">{formatBRL(cartao)}</p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -136,22 +132,25 @@ function RankingAvatar({ nome, posicao }: { nome: string; posicao: number }) {
   );
 }
 
-function RankingTable({ title, icon: Icon, data, type }: {
-  title: string;
-  icon: typeof Trophy;
+function RankingTable({ data, statusEmAndamento }: {
   data: VendedorRanking[];
-  type: "geral" | "cartao";
+  statusEmAndamento: string[];
 }) {
-  const isCartao = type === "cartao";
-
   return (
-    <Card data-testid={`card-ranking-${type}`} className="flex flex-col">
+    <Card data-testid="card-ranking" className="flex flex-col">
       <CardContent className="p-0 flex flex-col flex-1">
         <div className="flex items-center gap-2 p-4 pb-3 border-b shrink-0">
-          <Icon size={18} className={isCartao ? "text-purple-400" : "text-primary"} />
-          <h3 className="font-bold text-base">{title}</h3>
+          <Trophy size={18} className="text-primary" />
+          <h3 className="font-bold text-base">Ranking dos Corretores</h3>
           <Badge variant="outline" className="ml-auto">{data.length} corretores</Badge>
         </div>
+
+        {statusEmAndamento.length > 0 && (
+          <div className="px-4 py-2 text-[11px] text-muted-foreground border-b bg-muted/30">
+            <Clock size={11} className="inline mr-1" />
+            Em andamento conta os status: <strong>{statusEmAndamento.join(", ")}</strong>
+          </div>
+        )}
 
         {data.length === 0 ? (
           <div className="p-6 text-center text-muted-foreground text-sm">
@@ -164,65 +163,66 @@ function RankingTable({ title, icon: Icon, data, type }: {
                 <TableRow>
                   <TableHead className="w-12 text-center">#</TableHead>
                   <TableHead>Corretor</TableHead>
-                  <TableHead className="text-right">{isCartao ? "Cartão" : "Produção"}</TableHead>
+                  <TableHead className="text-right">Efetivado</TableHead>
+                  <TableHead className="text-right">Em andamento</TableHead>
                   <TableHead className="text-right">% Meta</TableHead>
-                  <TableHead className="text-right w-20">Ctts</TableHead>
+                  <TableHead className="text-right w-16">Ctts</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((v) => {
-                  const prod = isCartao ? v.producaoCartao : v.producaoGeral;
-                  const pct = isCartao ? v.percentualMetaCartao : v.percentualMeta;
-                  const contratos = isCartao ? v.contratosCartao : v.contratos;
-
-                  return (
-                    <TableRow key={v.userId} data-testid={`row-ranking-${type}-${v.userId}`}>
-                      <TableCell className="text-center align-top pt-3">
-                        {v.posicao <= 3 ? (
-                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
-                            v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
-                            v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
-                            "bg-orange-500/20 text-orange-600 dark:text-orange-400"
-                          }`}>
-                            {v.posicao}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">{v.posicao}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <RankingAvatar nome={v.nome} posicao={v.posicao} />
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${type}-${v.userId}`}>{v.nome}</div>
-                            {!isCartao && (
-                              <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5">
-                                <span data-testid={`text-ranking-novo-${v.userId}`}>Novo: {formatBRL(v.producaoNovo || 0)}</span>
-                                <span>·</span>
-                                <span data-testid={`text-ranking-portabilidade-${v.userId}`}>Port: {formatBRL(v.producaoPortabilidade || 0)}</span>
-                              </div>
-                            )}
+                {data.map((v) => (
+                  <TableRow key={v.userId} data-testid={`row-ranking-${v.userId}`}>
+                    <TableCell className="text-center align-top pt-3">
+                      {v.posicao <= 3 ? (
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
+                          v.posicao === 1 ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" :
+                          v.posicao === 2 ? "bg-gray-300/30 text-gray-600 dark:text-gray-300" :
+                          "bg-orange-500/20 text-orange-600 dark:text-orange-400"
+                        }`}>
+                          {v.posicao}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">{v.posicao}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <RankingAvatar nome={v.nome} posicao={v.posicao} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-sm truncate" data-testid={`text-ranking-nome-${v.userId}`}>{v.nome}</div>
+                          <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5">
+                            <span>Novo: {formatBRL(v.novo || 0)}</span>
+                            <span>·</span>
+                            <span>Port: {formatBRL(v.portabilidade || 0)}</span>
+                            <span>·</span>
+                            <span>Cartão: {formatBRL(v.cartao || 0)}</span>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm align-top pt-3" data-testid={`text-ranking-prod-${type}-${v.userId}`}>
-                        {formatBRL(prod)}
-                      </TableCell>
-                      <TableCell className="text-right align-top pt-3">
-                        <Badge
-                          variant={pct >= 100 ? "default" : "outline"}
-                          className={pct >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
-                          data-testid={`text-ranking-pct-${type}-${v.userId}`}
-                        >
-                          {pct}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground align-top pt-3" data-testid={`text-ranking-contratos-${type}-${v.userId}`}>
-                        {contratos}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm align-top pt-3" data-testid={`text-ranking-efetivado-${v.userId}`}>
+                      {formatBRL(v.efetivado)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm align-top pt-3 text-amber-600 dark:text-amber-400" data-testid={`text-ranking-andamento-${v.userId}`}>
+                      {formatBRL(v.emAndamento)}
+                      {v.emAndamentoContratos > 0 && (
+                        <span className="text-[10px] text-muted-foreground ml-1">({v.emAndamentoContratos})</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right align-top pt-3">
+                      <Badge
+                        variant={v.percentual >= 100 ? "default" : "outline"}
+                        className={v.percentual >= 100 ? "bg-green-600 text-white no-default-hover-elevate" : ""}
+                        data-testid={`text-ranking-pct-${v.userId}`}
+                      >
+                        {v.percentual}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground align-top pt-3" data-testid={`text-ranking-contratos-${v.userId}`}>
+                      {v.contratos}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -268,43 +268,18 @@ function GestorDashboard() {
       </header>
 
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <EquipeMetaCard
-              label="Meta Geral da Equipe"
-              icon={Target}
-              produzido={data.equipe.totalProduzidoGeral}
-              meta={data.equipe.metaGeral}
-              percentual={data.equipe.percentualGeral}
-              variant="geral"
-              novo={data.equipe.totalProduzidoNovo}
-              portabilidade={data.equipe.totalProduzidoPortabilidade}
-            />
-            <EquipeMetaCard
-              label="Meta Cartão da Equipe"
-              icon={CreditCard}
-              produzido={data.equipe.totalProduzidoCartao}
-              meta={data.equipe.metaCartao}
-              percentual={data.equipe.percentualCartao}
-              variant="cartao"
-            />
-          </div>
+        <div className="max-w-5xl mx-auto space-y-6">
+          <EquipeCard
+            efetivado={data.equipe.efetivado}
+            emAndamento={data.equipe.emAndamento}
+            meta={data.equipe.meta}
+            percentual={data.equipe.percentual}
+            novo={data.equipe.novo}
+            portabilidade={data.equipe.portabilidade}
+            cartao={data.equipe.cartao}
+          />
 
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-            <RankingTable
-              title="Ranking Geral dos Corretores"
-              icon={Trophy}
-              data={data.rankingGeral}
-              type="geral"
-            />
-
-            <RankingTable
-              title="Ranking Cartão dos Corretores"
-              icon={CreditCard}
-              data={data.rankingCartao}
-              type="cartao"
-            />
-          </div>
+          <RankingTable data={data.ranking} statusEmAndamento={data.statusEmAndamento || []} />
         </div>
       </main>
     </div>

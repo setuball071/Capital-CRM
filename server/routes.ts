@@ -22697,27 +22697,85 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         });
       }
 
-      const totalProduzidoGeral = vendedoresData.reduce((s, v) => s + v.producaoGeral, 0);
-      const totalProduzidoCartao = vendedoresData.reduce((s, v) => s + v.producaoCartao, 0);
-      const totalProduzidoNovo = vendedoresData.reduce((s, v) => s + v.producaoNovo, 0);
-      const totalProduzidoPortabilidade = vendedoresData.reduce((s, v) => s + v.producaoPortabilidade, 0);
+      // Meta unificada da equipe = geral + cartão (num pote só)
+      const metaEquipe = metaGeralEquipe + metaCartaoEquipe;
 
-      const rankingGeral = [...vendedoresData].sort((a, b) => b.producaoGeral - a.producaoGeral).map((v, i) => ({ ...v, posicao: i + 1 }));
-      const rankingCartao = [...vendedoresData].sort((a, b) => b.producaoCartao - a.producaoCartao).map((v, i) => ({ ...v, posicao: i + 1 }));
+      // Em andamento (pipeline atual): proposals cujo status atual é "Em andamento"
+      // ou "Aguardando retorno CIP" (casado pelo label do contract_statuses, não-final).
+      // NÃO filtrado por mês — é o pipeline aberto agora.
+      const emAndamentoMap = new Map<number, { valor: number; qtd: number }>();
+      let statusEmAndamento: string[] = [];
+      if (teamMemberIds.length > 0) {
+        const andamentoRes = await db.execute(sql`
+          SELECT p.vendor_id AS vid,
+                 COALESCE(SUM(p.contract_value), 0)::numeric AS valor,
+                 COUNT(*)::int AS qtd
+          FROM proposals p
+          JOIN contract_statuses cs ON cs.tenant_id = p.tenant_id AND cs.key = p.status
+          WHERE p.tenant_id = ${tenantId}
+            AND cs.is_final = false
+            AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
+            AND p.vendor_id = ANY(ARRAY[${sql.raw(teamMemberIds.join(","))}]::int[])
+          GROUP BY p.vendor_id
+        `);
+        andamentoRes.rows.forEach((r: any) => {
+          emAndamentoMap.set(parseInt(r.vid), {
+            valor: parseFloat(r.valor as string) || 0,
+            qtd: parseInt(r.qtd as string) || 0,
+          });
+        });
+        const lblRes = await db.execute(sql`
+          SELECT DISTINCT label FROM contract_statuses
+          WHERE tenant_id = ${tenantId} AND is_final = false
+            AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
+          ORDER BY label
+        `);
+        statusEmAndamento = lblRes.rows.map((r: any) => r.label as string);
+      }
+
+      // Unificado por corretor: efetivado = geral + cartão; meta = metaGeral + metaCartao.
+      const unificados = vendedoresData.map((v) => {
+        const efetivado = Math.round((v.producaoGeral + v.producaoCartao) * 100) / 100;
+        const meta = (v.metaGeral || 0) + (v.metaCartao || 0);
+        const ea = emAndamentoMap.get(v.userId) || { valor: 0, qtd: 0 };
+        return {
+          userId: v.userId,
+          nome: v.nome,
+          foto: v.foto,
+          efetivado,
+          emAndamento: Math.round(ea.valor * 100) / 100,
+          emAndamentoContratos: ea.qtd,
+          novo: v.producaoNovo,
+          portabilidade: v.producaoPortabilidade,
+          cartao: v.producaoCartao,
+          contratos: v.contratos,
+          meta,
+          percentual: meta > 0 ? Math.round((efetivado / meta) * 100) : 0,
+        };
+      });
+
+      const totalEfetivado = unificados.reduce((s, v) => s + v.efetivado, 0);
+      const totalEmAndamento = unificados.reduce((s, v) => s + v.emAndamento, 0);
+      const totalNovo = unificados.reduce((s, v) => s + v.novo, 0);
+      const totalPortabilidade = unificados.reduce((s, v) => s + v.portabilidade, 0);
+      const totalCartao = unificados.reduce((s, v) => s + v.cartao, 0);
+
+      const ranking = unificados
+        .sort((a, b) => b.efetivado - a.efetivado)
+        .map((v, i) => ({ ...v, posicao: i + 1 }));
 
       return res.json({
         equipe: {
-          metaGeral: metaGeralEquipe,
-          metaCartao: metaCartaoEquipe,
-          totalProduzidoGeral: Math.round(totalProduzidoGeral * 100) / 100,
-          totalProduzidoCartao: Math.round(totalProduzidoCartao * 100) / 100,
-          totalProduzidoNovo: Math.round(totalProduzidoNovo * 100) / 100,
-          totalProduzidoPortabilidade: Math.round(totalProduzidoPortabilidade * 100) / 100,
-          percentualGeral: metaGeralEquipe > 0 ? Math.round((totalProduzidoGeral / metaGeralEquipe) * 100) : 0,
-          percentualCartao: metaCartaoEquipe > 0 ? Math.round((totalProduzidoCartao / metaCartaoEquipe) * 100) : 0,
+          meta: metaEquipe,
+          efetivado: Math.round(totalEfetivado * 100) / 100,
+          emAndamento: Math.round(totalEmAndamento * 100) / 100,
+          novo: Math.round(totalNovo * 100) / 100,
+          portabilidade: Math.round(totalPortabilidade * 100) / 100,
+          cartao: Math.round(totalCartao * 100) / 100,
+          percentual: metaEquipe > 0 ? Math.round((totalEfetivado / metaEquipe) * 100) : 0,
         },
-        rankingGeral,
-        rankingCartao,
+        ranking,
+        statusEmAndamento,
         mesAno: `${(month + 1).toString().padStart(2, "0")}/${year}`,
       });
     } catch (error) {

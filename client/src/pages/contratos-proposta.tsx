@@ -3242,20 +3242,20 @@ export default function ContratosPropostaPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
                     <BadgePercent className="h-4 w-4" />
-                    Sua Comissão
+                    Seu Prêmio
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {myGrupo ? (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">% Repasse Corretor</p>
+                        <p className="text-xs text-muted-foreground">% Prêmio</p>
                         <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
                           {pctCorretor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">R$ Comissão Corretor</p>
+                        <p className="text-xs text-muted-foreground">R$ Prêmio</p>
                         <div className="h-10 px-3 flex items-center rounded-md border bg-green-50 dark:bg-green-950/30 text-sm font-semibold text-green-700 dark:text-green-400">
                           {fmtBRL(valCorretor)}
                         </div>
@@ -3265,7 +3265,7 @@ export default function ContratosPropostaPage() {
                     <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-3 text-sm text-amber-800 dark:text-amber-300">
                       <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>
-                        Seu usuário ainda não está vinculado a um grupo de comissão.
+                        Seu usuário ainda não está vinculado a um grupo de prêmio.
                         Peça ao administrador para cadastrá-lo em <strong>Financeiro → Configurações</strong>.
                       </span>
                     </div>
@@ -3835,12 +3835,12 @@ export default function ContratosPropostaPage() {
           <Card className="border-green-200 dark:border-green-900">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
-                <BadgePercent className="h-4 w-4" /> Sua Comissão
+                <BadgePercent className="h-4 w-4" /> Seu Prêmio
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 text-sm">
-              <InfoField label="% Repasse Corretor" value={`${pctCorretor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`} />
-              <InfoField label="R$ Comissão Corretor" value={fmtBRL(valCorretor)} />
+              <InfoField label="% Prêmio" value={`${pctCorretor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`} />
+              <InfoField label="R$ Prêmio" value={fmtBRL(valCorretor)} />
             </CardContent>
           </Card>
         )}
