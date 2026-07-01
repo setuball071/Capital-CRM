@@ -376,6 +376,10 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS valor_pre_unificacao DECIMAL(12,2)
           `);
+          // Material de apoio: suporte a arquivo enviado (Storage) além de link
+          await migDb.execute(migSql`ALTER TABLE materials ADD COLUMN IF NOT EXISTS storage_key TEXT`);
+          await migDb.execute(migSql`ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_name TEXT`);
+          await migDb.execute(migSql`ALTER TABLE materials ALTER COLUMN url DROP NOT NULL`);
           // Limpeza: zera a data CIP de propostas que NÃO estão num status de CIP.
           // O contador de CIP só vale enquanto aguardando o retorno; ao sair da fase a data fica obsoleta.
           // Guarda: só mexe em tenants que têm um status com "CIP" no rótulo (evita apagar em quem não usa CIP).

@@ -3237,8 +3237,10 @@ export const materials = pgTable("materials", {
   title: text("title").notNull(),
   category: text("category").notNull(),
   type: text("type").notNull(),
-  url: text("url").notNull(),
+  url: text("url"), // link externo (materiais por arquivo usam storageKey e deixam url nulo)
   description: text("description"),
+  storageKey: text("storage_key"), // chave no Storage quando o material é um arquivo enviado
+  fileName: text("file_name"),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: integer("created_by").references(() => users.id),

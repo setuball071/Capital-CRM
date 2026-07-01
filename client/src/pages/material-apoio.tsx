@@ -73,6 +73,8 @@ export default function MaterialApoioPage() {
     url: "",
     description: "",
   });
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const categoryParam = activeCategory !== "todos" ? activeCategory : undefined;
   const { data: materialsList = [], isLoading } = useQuery<Material[]>({
@@ -88,13 +90,14 @@ export default function MaterialApoioPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/materials", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
       setDialogOpen(false);
       setFormData({ title: "", category: "tabelas", type: "pdf", url: "", description: "" });
+      setMaterialFile(null);
       toast({ title: "Material adicionado" });
     },
     onError: () => {
@@ -121,12 +124,32 @@ export default function MaterialApoioPage() {
     window.history.replaceState(null, "", newUrl);
   };
 
-  const handleSubmit = () => {
-    if (!formData.title.trim() || !formData.url.trim()) {
-      toast({ title: "Preencha título e URL", variant: "destructive" });
+  const handleSubmit = async () => {
+    if (!formData.title.trim()) {
+      toast({ title: "Informe o título", variant: "destructive" });
       return;
     }
-    createMutation.mutate(formData);
+    if (!materialFile && !formData.url.trim()) {
+      toast({ title: "Cole um link ou anexe um arquivo", variant: "destructive" });
+      return;
+    }
+    try {
+      let payload: any = { ...formData };
+      if (materialFile) {
+        setUploading(true);
+        const fd = new FormData();
+        fd.append("file", materialFile);
+        const res = await fetch("/api/materials/upload", { method: "POST", credentials: "include", body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Falha no upload");
+        const up = await res.json();
+        payload = { ...formData, url: "", storageKey: up.storageKey, fileName: up.fileName };
+      }
+      createMutation.mutate(payload);
+    } catch (e: any) {
+      toast({ title: e.message || "Erro ao enviar arquivo", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -243,7 +266,7 @@ export default function MaterialApoioPage() {
                     size="sm"
                     className="flex-1"
                     style={{ background: "linear-gradient(90deg, #6C2BD9, #1E88E5)" }}
-                    onClick={() => window.open(mat.url, "_blank")}
+                    onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
                     data-testid={`button-open-${mat.id}`}
                   >
                     <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
@@ -322,11 +345,25 @@ export default function MaterialApoioPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>URL</Label>
+              <Label>Anexar arquivo</Label>
+              <Input
+                type="file"
+                onChange={(e) => setMaterialFile(e.target.files?.[0] || null)}
+                data-testid="input-material-file"
+              />
+              {materialFile && (
+                <p className="text-xs text-muted-foreground">
+                  {materialFile.name} ({(materialFile.size / 1024 / 1024).toFixed(1)} MB)
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ou cole um link (opcional se anexar arquivo)</Label>
               <Input
                 value={formData.url}
                 onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 placeholder="https://drive.google.com/..."
+                disabled={!!materialFile}
                 data-testid="input-material-url"
               />
             </div>
@@ -345,9 +382,9 @@ export default function MaterialApoioPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)} data-testid="button-cancel-material">
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-save-material">
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Salvar
+            <Button onClick={handleSubmit} disabled={createMutation.isPending || uploading} data-testid="button-save-material">
+              {(createMutation.isPending || uploading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {uploading ? "Enviando arquivo..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
