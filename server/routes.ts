@@ -27312,14 +27312,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const { buffer, contentType } = await getDocument(item.storageKey);
         const ext = (item.fileName || item.storageKey).split(".").pop()?.toLowerCase() || "";
         const extMap: Record<string, string> = {
+          html: "text/html; charset=utf-8", htm: "text/html; charset=utf-8",
           pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-          gif: "image/gif", webp: "image/webp", mp4: "video/mp4", webm: "video/webm",
-          mov: "video/quicktime", doc: "application/msword",
+          gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+          mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+          doc: "application/msword",
           docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           xls: "application/vnd.ms-excel",
           xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         };
-        res.setHeader("Content-Type", contentType || extMap[ext] || "application/octet-stream");
+        // Prioriza o tipo pela extensão (o content-type armazenado às vezes vem genérico,
+        // fazendo o navegador exibir HTML como texto em vez de renderizar).
+        res.setHeader("Content-Type", extMap[ext] || contentType || "application/octet-stream");
         const disposition = req.query.download ? "attachment" : "inline";
         res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(item.fileName || "material")}"`);
         res.send(buffer);
