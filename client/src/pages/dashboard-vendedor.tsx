@@ -47,7 +47,11 @@ interface DashboardData {
   vendedorNome: string;
   metaMensal: number;
   metaCartao: number;
-  totalValor: number;
+  metaUnificada?: number;      // meta geral + cartão (pote único)
+  emAndamento?: number;        // pipeline nos status Em andamento / Aguardando CIP
+  emAndamentoContratos?: number;
+  statusEmAndamento?: string[];
+  totalValor: number;          // produção total EFETIVADA (inclui cartão)
   totalCartao: number;
   totalGeral: number;          // produção total sem cartão (Novo + Port + Refin + Outro)
   totalNovo: number;           // breakdown da Meta Geral
@@ -92,6 +96,97 @@ const TIER_ICONS: Record<string, typeof Shield> = {
 
 function getTierIcon(iconName: string) {
   return TIER_ICONS[iconName] || Shield;
+}
+
+function MetaUnificadaCard({ efetivado, emAndamento, emAndamentoContratos, meta, totalNovo, totalPortabilidade, totalCartao, mesNome, posicaoRanking, statusEmAndamento }: {
+  efetivado: number;
+  emAndamento: number;
+  emAndamentoContratos: number;
+  meta: number;
+  totalNovo: number;
+  totalPortabilidade: number;
+  totalCartao: number;
+  mesNome: string;
+  posicaoRanking?: number;
+  statusEmAndamento?: string[];
+}) {
+  const percentual = meta > 0 ? Math.round((efetivado / meta) * 100) : 0;
+
+  return (
+    <Card className="rounded-2xl border-primary/20 shadow-lg flex-1 min-w-0 w-full" data-testid="card-meta-unificada">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Target size={14} className="text-primary" />
+          <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-primary" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Minha Meta – {mesNome}
+          </h3>
+          {posicaoRanking && posicaoRanking > 0 && (
+            <span className="ml-auto inline-flex items-center bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-md text-xs font-bold" data-testid="badge-ranking-unificado">
+              #{posicaoRanking}
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-3">
+          <div className="min-w-0">
+            <div className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Efetivado</div>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-primary tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-efetivado">
+                R$ {efetivado.toLocaleString("pt-BR")}
+              </span>
+              <span className="text-sm sm:text-base font-bold text-muted-foreground/50">
+                / {meta.toLocaleString("pt-BR")}
+              </span>
+            </div>
+          </div>
+          <div className="min-w-0 border-l border-border pl-4">
+            <div className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+              <Clock size={10} /> Em andamento
+            </div>
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-amber-600 dark:text-amber-400 tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-andamento">
+              R$ {emAndamento.toLocaleString("pt-BR")}
+            </span>
+            {emAndamentoContratos > 0 && (
+              <span className="text-[10px] text-muted-foreground ml-1">({emAndamentoContratos})</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-chart-2"
+              style={{ width: `${Math.min(percentual, 100)}%` }}
+            />
+          </div>
+          <div className="shrink-0 bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
+            <span className="text-lg sm:text-xl font-black text-primary" data-testid="text-meta-unificada-percent">{percentual}%</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Novo</p>
+            <p className="text-sm font-black text-foreground tracking-tight" data-testid="text-meta-novo">R$ {totalNovo.toLocaleString("pt-BR")}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Portabilidade</p>
+            <p className="text-sm font-black text-foreground tracking-tight" data-testid="text-meta-portabilidade">R$ {totalPortabilidade.toLocaleString("pt-BR")}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cartão</p>
+            <p className="text-sm font-black text-foreground tracking-tight" data-testid="text-meta-cartao-detalhe">R$ {totalCartao.toLocaleString("pt-BR")}</p>
+          </div>
+        </div>
+
+        {statusEmAndamento && statusEmAndamento.length > 0 && (
+          <p className="text-[9px] sm:text-[10px] text-muted-foreground/70 uppercase tracking-wider">
+            Em andamento: {statusEmAndamento.join(", ")}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function MetaGeralCard({ totalGeral, totalNovo, totalPortabilidade, mesNome, metaMensal, posicaoRanking }: {
@@ -472,26 +567,18 @@ export default function DashboardVendedorPage() {
 
   const DashboardPanel = () => (
     <div className="space-y-5 sm:space-y-6 relative" style={{ zIndex: 5 }} data-testid="dashboard-vendedor">
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch">
-        <div className="lg:col-span-3 flex">
-          <MetaGeralCard
-            totalGeral={data?.totalGeral ?? 0}
-            totalNovo={data?.totalNovo ?? 0}
-            totalPortabilidade={data?.totalPortabilidade ?? 0}
-            mesNome={mesNome}
-            metaMensal={data?.metaMensal || 0}
-            posicaoRanking={data?.posicaoRankingGeral}
-          />
-        </div>
-        <div className="lg:col-span-2 flex">
-          <MetaCartaoCard
-            totalCartao={data?.totalCartao ?? 0}
-            mesNome={mesNome}
-            metaCartao={data?.metaCartao || 0}
-            posicaoRanking={data?.posicaoRankingCartao}
-          />
-        </div>
-      </div>
+      <MetaUnificadaCard
+        efetivado={data?.totalValor ?? 0}
+        emAndamento={data?.emAndamento ?? 0}
+        emAndamentoContratos={data?.emAndamentoContratos ?? 0}
+        meta={data?.metaUnificada ?? ((data?.metaMensal ?? 0) + (data?.metaCartao ?? 0))}
+        totalNovo={data?.totalNovo ?? 0}
+        totalPortabilidade={data?.totalPortabilidade ?? 0}
+        totalCartao={data?.totalCartao ?? 0}
+        mesNome={mesNome}
+        posicaoRanking={data?.posicaoRankingGeral}
+        statusEmAndamento={data?.statusEmAndamento}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
         <div className="lg:col-span-12">

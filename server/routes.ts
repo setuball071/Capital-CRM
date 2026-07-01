@@ -22391,17 +22391,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         (parseFloat(vendTotaisResult.rows[0]?.total_portabilidade as string) || 0);
       // Meta Geral = produção sem cartão (Novo + Portabilidade + Refin + Outro)
       const totalGeral = totalValor - totalCartao;
+      // Meta unificada (geral + cartão): a produção (totalValor) já inclui cartão,
+      // então projeção/saldo/% passam a ser contra a meta unificada.
+      const metaUnificada = metaMensal + metaCartao;
 
       const metaDiariaOriginal =
-        diasUteisNoMes > 0 ? metaMensal / diasUteisNoMes : 0;
-      const saldoDevedor = Math.max(0, metaMensal - totalValor);
+        diasUteisNoMes > 0 ? metaUnificada / diasUteisNoMes : 0;
+      const saldoDevedor = Math.max(0, metaUnificada - totalValor);
       const metaDiariaAjustada =
         diasUteisRestantes > 0 ? saldoDevedor / diasUteisRestantes : 0;
       const mediaAtual =
         diasUteisAteHoje > 0 ? totalValor / diasUteisAteHoje : 0;
       const projecaoMensal = mediaAtual * diasUteisNoMes;
       const percentualMeta =
-        metaMensal > 0 ? (totalValor / metaMensal) * 100 : 0;
+        metaUnificada > 0 ? (totalValor / metaUnificada) * 100 : 0;
 
       const currentTier = getTierForValue(totalValor);
       const nextTier = getNextTierForValue(totalValor);
@@ -22516,10 +22519,37 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
 
+      // Em andamento (pipeline do próprio corretor): proposals nos status
+      // "Em andamento" / "Aguardando retorno CIP" (por label do contract_statuses).
+      let emAndamento = 0;
+      let emAndamentoContratos = 0;
+      let statusEmAndamento: string[] = [];
+      const andamentoVendRes = await db.execute(sql`
+        SELECT COALESCE(SUM(p.contract_value), 0)::numeric AS valor, COUNT(*)::int AS qtd
+        FROM proposals p
+        JOIN contract_statuses cs ON cs.tenant_id = p.tenant_id AND cs.key = p.status
+        WHERE p.tenant_id = ${tenantId} AND p.vendor_id = ${userId}
+          AND cs.is_final = false
+          AND (LOWER(cs.label) LIKE '%andamento%' OR LOWER(cs.label) LIKE '%cip%')
+      `);
+      emAndamento = parseFloat(andamentoVendRes.rows[0]?.valor as string) || 0;
+      emAndamentoContratos = parseInt(andamentoVendRes.rows[0]?.qtd as string) || 0;
+      const lblVendRes = await db.execute(sql`
+        SELECT DISTINCT label FROM contract_statuses
+        WHERE tenant_id = ${tenantId} AND is_final = false
+          AND (LOWER(label) LIKE '%andamento%' OR LOWER(label) LIKE '%cip%')
+        ORDER BY label
+      `);
+      statusEmAndamento = lblVendRes.rows.map((r: any) => r.label as string);
+
       return res.json({
         vendedorNome: user.name,
         metaMensal,
         metaCartao,
+        metaUnificada,
+        emAndamento: Math.round(emAndamento * 100) / 100,
+        emAndamentoContratos,
+        statusEmAndamento,
         totalValor: Math.round(totalValor * 100) / 100,
         totalCartao: Math.round(totalCartao * 100) / 100,
         totalGeral: Math.round(totalGeral * 100) / 100,
