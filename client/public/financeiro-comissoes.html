@@ -1573,8 +1573,8 @@ async function renderConsultorContratos(){
     document.getElementById('cc-kpis').innerHTML=`
       <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+      <div class="kpi-card"><div class="kpi-label">Prêmio a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Prêmio Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
   }catch(e){
     if(tbody)tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
   }
@@ -1834,8 +1834,8 @@ async function carregarProducaoConsultor() {
     document.getElementById('c-kpis').innerHTML = `
       <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Flat a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Flat Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+      <div class="kpi-card"><div class="kpi-label">Prêmio a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Prêmio Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
   } catch(e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
   }
