@@ -22486,6 +22486,23 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allChartData = [...contratosPorDia, ...futureDays];
 
+      // Escopo do ranking do corretor = membros da(s) equipe(s) dele (alinha com o
+      // ranking da equipe). Sem equipe → cai pra todos os corretores ativos.
+      const rankScopeRes = await db.execute(sql`
+        SELECT DISTINCT ctm2.user_id AS uid
+        FROM commercial_team_members ctm
+        JOIN commercial_team_members ctm2
+          ON ctm2.team_id = ctm.team_id AND ctm2.tenant_id = ctm.tenant_id
+          AND ctm2.ativo = true AND ctm2.user_id IS NOT NULL
+        WHERE ctm.tenant_id = ${tenantId} AND ctm.user_id = ${userId} AND ctm.ativo = true
+      `);
+      const rankMemberIds = rankScopeRes.rows
+        .map((r: any) => parseInt(r.uid))
+        .filter((n: number) => !isNaN(n));
+      const rankScopeSql = rankMemberIds.length > 0
+        ? sql`AND u.id = ANY(ARRAY[${sql.raw(rankMemberIds.join(","))}]::int[])`
+        : sql``;
+
       const allVendedoresRanking = await db.execute(sql`
         SELECT u.id as user_id,
           COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND pa.unificada_em_id IS NOT NULL AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
@@ -22494,7 +22511,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
-        WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
+        WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE) ${rankScopeSql}
         ORDER BY prod_geral DESC
       `);
 
