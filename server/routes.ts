@@ -533,6 +533,7 @@ import {
 import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
+import { saveDocument, getDocument, deleteDocument } from "./document-storage";
 import ExcelJS from "exceljs";
 import * as fs from "fs";
 import * as path from "path";
@@ -564,6 +565,12 @@ const upload = multer({
       cb(new Error("Formato de arquivo inválido. Use .xlsx, .xls ou .csv"));
     }
   },
+});
+
+// Upload de material de apoio (arquivo em memória → Storage). Aceita qualquer tipo, 100MB.
+const uploadMaterial = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
 // Configure multer for massive streaming imports using disk storage
@@ -27213,12 +27220,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     async (req: Request, res: Response) => {
       try {
         const userRole = req.user!.role;
-        if (userRole !== "master" && userRole !== "coordenacao") {
+        if (!req.user!.isMaster && userRole !== "master" && userRole !== "coordenacao") {
           return res.status(403).json({ message: "Sem permissão" });
         }
         const parsed = insertMaterialSchema.parse(req.body);
+        if (!parsed.title?.trim() || (!parsed.url?.trim() && !parsed.storageKey)) {
+          return res.status(400).json({ message: "Informe o título e um link ou arquivo" });
+        }
         const [created] = await db.insert(materials).values({
           ...parsed,
+          url: parsed.url?.trim() || null,
           tenantId: req.tenantId!,
           createdBy: req.user!.id,
         }).returning();
@@ -27226,6 +27237,65 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } catch (error) {
         console.error("POST /api/materials error:", error);
         res.status(500).json({ message: "Erro ao criar material" });
+      }
+    }
+  );
+
+  // Upload de arquivo para material de apoio → salva no Storage e devolve a chave
+  app.post(
+    "/api/materials/upload",
+    requireAuth,
+    resolveTenant,
+    requireTenant,
+    uploadMaterial.single("file"),
+    async (req: Request, res: Response) => {
+      try {
+        const userRole = req.user!.role;
+        if (!req.user!.isMaster && userRole !== "master" && userRole !== "coordenacao") {
+          return res.status(403).json({ message: "Sem permissão" });
+        }
+        const file = (req as any).file;
+        if (!file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
+        const safe = (file.originalname || "arquivo").replace(/[^\w.\-]+/g, "_");
+        const key = `materials/${req.tenantId!}/${Date.now()}-${safe}`;
+        await saveDocument(key, file.buffer, file.mimetype || "application/octet-stream");
+        res.json({ storageKey: key, fileName: file.originalname || safe });
+      } catch (error) {
+        console.error("POST /api/materials/upload error:", error);
+        res.status(500).json({ message: "Erro ao enviar arquivo" });
+      }
+    }
+  );
+
+  // Serve/baixa o arquivo de um material (por tenant)
+  app.get(
+    "/api/materials/:id/file",
+    requireAuth,
+    resolveTenant,
+    requireTenant,
+    async (req: Request, res: Response) => {
+      try {
+        const id = parseInt(req.params.id);
+        const [item] = await db.select().from(materials)
+          .where(and(eq(materials.id, id), eq(materials.tenantId, req.tenantId!)));
+        if (!item || !item.storageKey) return res.status(404).json({ message: "Arquivo não encontrado" });
+        const { buffer, contentType } = await getDocument(item.storageKey);
+        const ext = (item.fileName || item.storageKey).split(".").pop()?.toLowerCase() || "";
+        const extMap: Record<string, string> = {
+          pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+          gif: "image/gif", webp: "image/webp", mp4: "video/mp4", webm: "video/webm",
+          mov: "video/quicktime", doc: "application/msword",
+          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          xls: "application/vnd.ms-excel",
+          xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        };
+        res.setHeader("Content-Type", contentType || extMap[ext] || "application/octet-stream");
+        const disposition = req.query.download ? "attachment" : "inline";
+        res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(item.fileName || "material")}"`);
+        res.send(buffer);
+      } catch (error) {
+        console.error("GET /api/materials/:id/file error:", error);
+        res.status(500).json({ message: "Erro ao baixar arquivo" });
       }
     }
   );
@@ -27247,6 +27317,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         if (!item) {
           return res.status(404).json({ message: "Material não encontrado" });
         }
+        if (item.storageKey) await deleteDocument(item.storageKey).catch(() => {});
         await db.delete(materials).where(eq(materials.id, id));
         res.json({ message: "Material removido" });
       } catch (error) {

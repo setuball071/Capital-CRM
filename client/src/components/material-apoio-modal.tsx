@@ -271,7 +271,7 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
                         size="sm"
                         className="flex-1"
                         style={{ background: "linear-gradient(90deg, #6C2BD9, #1E88E5)" }}
-                        onClick={() => window.open(mat.url, "_blank")}
+                        onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
                         data-testid={`modal-open-${mat.id}`}
                       >
                         <ExternalLink className="h-3 w-3 mr-1" />
