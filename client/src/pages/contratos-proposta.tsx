@@ -141,6 +141,7 @@ const formSchema = z.object({
   clientName: z.string().min(1, "Nome obrigatório"),
   clientCpf: z.string().min(11, "CPF inválido"),
   clientMatricula: z.string().optional(),
+  clientSexo: z.string().min(1, "Sexo obrigatório"),
   // Contato
   clientPhone: z.string().min(10, "Telefone obrigatório"),
   clientEmail: z.string().email("E-mail inválido"),
@@ -165,6 +166,7 @@ const formSchema = z.object({
   bancoOrigem: z.string().optional(),
   saldoDevedor: z.string().optional(),
   prazoAtual: z.string().optional(),
+  margemCliente: z.string().optional(),
   // Conta bancária para crédito (manual)
   contaBanco: z.string().optional(),
   contaAgencia: z.string().optional(),
@@ -390,6 +392,9 @@ export default function ContratosPropostaPage() {
 
   // ── Portabilidade em lote ────────────────────────────────────────────────────
   const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
+  // Banco/tabela "para todos os contratos" (aplicação em massa; cada linha pode sobrescrever individualmente)
+  const [globalBancoDestino, setGlobalBancoDestino] = useState("");
+  const [globalTableId,      setGlobalTableId]      = useState("");
   const [simPortFile,  setSimPortFile]  = useState<File | null>(null);
   const [simPortData,  setSimPortData]  = useState<SimulacaoPort | null>(null);
   const simPortRef = useRef<HTMLInputElement>(null);
@@ -451,6 +456,16 @@ export default function ContratosPropostaPage() {
     dataExpedicao: string | null;
     orgaoEmissor: string | null;
     naturalidade: string | null;
+  }
+  // Todos os campos do documento são obrigatórios — se a IA não leu algum, o usuário
+  // precisa preencher manualmente antes de a proposta poder avançar.
+  function docFotoIsComplete(d: DocPhotoData | null): boolean {
+    if (!d) return false;
+    return !!(
+      d.nome && d.cpf && d.numeroRegistro && d.dataNascimento &&
+      d.dataExpedicao && d.orgaoEmissor && d.naturalidade &&
+      d.filiacao?.[0] && d.filiacao?.[1]
+    );
   }
   const [docFrenteFile, setDocFrenteFile] = useState<File | null>(null);
   const [docVersoFile,  setDocVersoFile]  = useState<File | null>(null);
@@ -519,7 +534,14 @@ export default function ContratosPropostaPage() {
       }
       const data: DocPhotoData = cleanDocNulls(await res.json());
       setDocPhotoData(data);
-      setDocPhotoSource("ocr");
+      if (docFotoIsComplete(data)) {
+        setDocPhotoSource("ocr");
+      } else {
+        // IA leu só parcialmente — abre edição manual (pré-preenchida) para completar
+        // os campos que faltaram. A proposta não pode avançar com isso em branco.
+        setDocPhotoSource("manual");
+        setOcrError("A IA não conseguiu ler todos os dados do documento. Complete manualmente os campos em branco abaixo.");
+      }
     } catch (err: any) {
       setOcrError(
         err?.message ||
@@ -561,8 +583,15 @@ export default function ContratosPropostaPage() {
       const savedDoc = (existing as ClientLookup | null)?.clientMeta?.docFoto;
       if (savedDoc?.tipo) {
         // ✅ Dados já existem — usa sem chamar IA
-        setDocPhotoData(cleanDocNulls(savedDoc as DocPhotoData));
-        setDocPhotoSource("cached");
+        const cleaned = cleanDocNulls(savedDoc as DocPhotoData);
+        setDocPhotoData(cleaned);
+        if (docFotoIsComplete(cleaned)) {
+          setDocPhotoSource("cached");
+        } else {
+          // Cadastro anterior também está incompleto — exige completar antes de avançar
+          setDocPhotoSource("manual");
+          setOcrError("Os dados do documento salvos no cadastro anterior estão incompletos. Complete os campos em branco abaixo.");
+        }
         return;
       }
     }
@@ -755,14 +784,14 @@ export default function ContratosPropostaPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      clientName: "", clientCpf: "", clientMatricula: "",
+      clientName: "", clientCpf: "", clientMatricula: "", clientSexo: "",
       clientPhone: "", clientEmail: "",
       clientCep: "", clientLogradouro: "", clientNumero: "",
       clientComplemento: "", clientBairro: "", clientCidade: "", clientEstado: "",
       bank: "", product: "", tableId: "",
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
-      bancoOrigem: "", saldoDevedor: "", prazoAtual: "",
+      bancoOrigem: "", saldoDevedor: "", prazoAtual: "", margemCliente: "",
     },
   });
 
@@ -905,6 +934,7 @@ export default function ContratosPropostaPage() {
           ...(contractType ? { tipoContrato: contractType } : {}),
           // Referência à tabela do financeiro config (ID do JSONB, não FK do banco)
           ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
+          ...(data.clientSexo ? { sexo: data.clientSexo } : {}),
           // Contato
           ...(data.clientPhone ? { telefone: data.clientPhone } : {}),
           ...(data.clientEmail ? { email:    data.clientEmail } : {}),
@@ -1013,6 +1043,8 @@ export default function ContratosPropostaPage() {
           naturalidade:   docPhotoData.naturalidade,
         };
       }
+      if (v.clientSexo) sharedMeta.sexo = v.clientSexo;
+      if (v.margemCliente) sharedMeta.margemCliente = v.margemCliente;
       if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
       if (v.clientEmail) sharedMeta.email    = v.clientEmail;
       if (v.clientCep) {
@@ -1242,6 +1274,7 @@ export default function ContratosPropostaPage() {
       clientName:       nome,
       clientCpf:        parsedData.cpf ? formatCpf(parsedData.cpf) : "",
       clientMatricula:  matricula,
+      clientSexo:       meta.sexo ?? "",
       // Contato — reutiliza do cadastro anterior se disponível
       clientPhone:      meta.telefone ?? "",
       clientEmail:      meta.email    ?? "",
@@ -1338,8 +1371,13 @@ export default function ContratosPropostaPage() {
       inicioPensao: meta.inicioPensao, terminoPensao: meta.terminoPensao,
     } as any);
     if (meta.docFoto?.tipo) {
-      setDocPhotoData(cleanDocNulls(meta.docFoto as DocPhotoData)); // dados do documento sem nova IA
-      setDocPhotoSource("cached");
+      const cleaned = cleanDocNulls(meta.docFoto as DocPhotoData); // dados do documento sem nova IA
+      setDocPhotoData(cleaned);
+      setDocPhotoSource(docFotoIsComplete(cleaned) ? "cached" : "manual");
+    } else {
+      // Cadastro anterior não tem documento salvo — exige upload/preenchimento agora
+      setDocPhotoData(null);
+      setDocPhotoSource(null);
     }
     // Reaproveita só os documentos marcados pelo corretor (padrão: todos)
     setReusedDocs((clientLookup.documents ?? []).filter((d) => selectedReuseDocIds.includes(d.id)));
@@ -1349,6 +1387,7 @@ export default function ContratosPropostaPage() {
       clientName: clientLookup.clientName || "",
       clientCpf: formatCpf((clientLookup.clientCpf || cpfInput).replace(/\D/g, "")),
       clientMatricula: clientLookup.clientMatricula || "",
+      clientSexo: meta.sexo ?? "",
       clientPhone: meta.telefone ?? "",
       clientEmail: meta.email ?? "",
       clientCep: end.cep ?? "", clientLogradouro: end.logradouro ?? "",
@@ -1865,13 +1904,21 @@ export default function ContratosPropostaPage() {
         <div className="flex flex-wrap items-center gap-3 max-w-4xl">
           <Button
             onClick={handleContinue}
-            disabled={!parsedData || isParsing || isOcring}
+            disabled={
+              !parsedData || isParsing || isOcring ||
+              !docFrenteFile || !docVersoFile ||
+              !docFotoIsComplete(docPhotoData)
+            }
             className="flex-1 sm:flex-none"
           >
             {isParsing || isOcring
               ? "Processando..."
               : !parsedData
               ? "Aguardando contracheque..."
+              : (!docFrenteFile || !docVersoFile)
+              ? "Envie a frente e o verso do documento"
+              : !docFotoIsComplete(docPhotoData)
+              ? "Complete os dados do documento"
               : "Continuar →"}
           </Button>
           <button
@@ -2054,6 +2101,26 @@ export default function ContratosPropostaPage() {
                   </FormItem>
                 )}
               />
+              {/* Sexo */}
+              <FormField
+                control={form.control}
+                name="clientSexo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sexo *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="FEMININO">Feminino</SelectItem>
+                        <SelectItem value="MASCULINO">Masculino</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               {/* Telefone */}
               <FormField
                 control={form.control}
@@ -2091,7 +2158,7 @@ export default function ContratosPropostaPage() {
 
           {/* ── Dados do Documento com Foto (campos sempre editáveis) ── */}
           {docPhotoData && (
-            <Card className="border-purple-200 dark:border-purple-900">
+            <Card id="doc-foto-card" className="border-purple-200 dark:border-purple-900">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
                   <CreditCard className="h-4 w-4" />
@@ -2562,7 +2629,7 @@ export default function ContratosPropostaPage() {
               type="button"
               onClick={async () => {
                 const valid = await form.trigger([
-                  "clientName", "clientCpf",
+                  "clientName", "clientCpf", "clientSexo",
                   "clientPhone", "clientEmail",
                   "clientCep", "clientLogradouro", "clientNumero",
                   "clientBairro", "clientCidade", "clientEstado",
@@ -2573,6 +2640,20 @@ export default function ContratosPropostaPage() {
                   if (firstError) {
                     document.querySelector<HTMLInputElement>(`input[name="${firstError}"]`)?.focus();
                   }
+                  return;
+                }
+
+                // Barreira: documento com foto (RG/CNH) completo — cobre também dados
+                // incompletos vindos de "Reaproveitar dados e documentos" de um cadastro antigo.
+                // Os campos ficam logo abaixo, sempre editáveis, nesta mesma tela.
+                if (isSiape && !docFotoIsComplete(docPhotoData)) {
+                  if (!docPhotoData) startManualDoc(); // abre os campos em branco para preencher
+                  toast({
+                    title: "Documento incompleto",
+                    description: "Complete os dados do documento (RG/CNH) antes de continuar.",
+                    variant: "destructive",
+                  });
+                  setTimeout(() => document.getElementById("doc-foto-card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
                   return;
                 }
 
@@ -3442,6 +3523,24 @@ export default function ContratosPropostaPage() {
           </Card>
         </div>
 
+        {/* ── Margem do cliente (única para a operação) ── */}
+        <Card>
+          <CardContent className="pt-4 flex items-center gap-3 flex-wrap">
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-sm font-medium mb-1.5">Margem do Cliente</p>
+              <Input
+                value={form.watch("margemCliente") || ""}
+                onChange={(e) => form.setValue("margemCliente", e.target.value.replace(/[^0-9,.\-]/g, ""))}
+                placeholder="1000,00 ou -1000,00"
+                className="max-w-xs"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              Informe a margem disponível do cliente. Use valor negativo se a margem estiver estourada (ex.: -1000,00).
+            </p>
+          </CardContent>
+        </Card>
+
         {/* ── Tabela de contratos ── */}
         <Card>
           <CardHeader className="pb-2">
@@ -3475,6 +3574,64 @@ export default function ContratosPropostaPage() {
                 Importe a cotação do simulador ou adicione contratos manualmente.
               </div>
             ) : (
+              <>
+                {portContratos.length > 1 && (
+                  <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-2.5">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Banco (para todos)</p>
+                      <select
+                        className="w-32 border rounded px-1.5 py-1 text-xs bg-background"
+                        value={globalBancoDestino}
+                        onChange={(e) => { setGlobalBancoDestino(e.target.value); setGlobalTableId(""); }}
+                      >
+                        <option value="">— banco —</option>
+                        {Array.from(new Set(
+                          financeiroTabelas
+                            .filter((t: any) => t.tipo === "Portabilidade" &&
+                              (!t.convenio || t.convenio.toUpperCase() === (selectedConvenio?.id || "").toUpperCase()))
+                            .map((t: any) => t.banco as string)
+                            .filter(Boolean)
+                        )).map((banco) => (
+                          <option key={banco} value={banco}>{banco}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Tabela (para todos)</p>
+                      <select
+                        className="w-32 border rounded px-1.5 py-1 text-xs bg-background"
+                        value={globalTableId}
+                        onChange={(e) => setGlobalTableId(e.target.value)}
+                      >
+                        <option value="">— tabela —</option>
+                        {financeiroTabelas
+                          .filter((t: any) => {
+                            if (t.tipo !== "Portabilidade") return false;
+                            if (t.convenio && t.convenio.toUpperCase() !== (selectedConvenio?.id || "").toUpperCase()) return false;
+                            if (globalBancoDestino && t.banco !== globalBancoDestino) return false;
+                            return true;
+                          })
+                          .map((t: any) => (
+                            <option key={String(t.id)} value={String(t.id)}>{t.nome}</option>
+                          ))}
+                      </select>
+                    </div>
+                    <Button
+                      size="sm" variant="outline" type="button"
+                      disabled={!globalBancoDestino && !globalTableId}
+                      onClick={() => setPortContratos((prev) => prev.map((c) => ({
+                        ...c,
+                        ...(globalBancoDestino ? { bancoDestino: globalBancoDestino } : {}),
+                        ...(globalTableId ? { tableId: globalTableId } : {}),
+                      })))}
+                    >
+                      Aplicar a todos os contratos
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground w-full">
+                      Aplica o banco/tabela a todas as linhas abaixo. Cada linha continua podendo ser ajustada individualmente depois.
+                    </p>
+                  </div>
+                )}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -3590,6 +3747,7 @@ export default function ContratosPropostaPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
