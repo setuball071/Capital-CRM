@@ -22312,7 +22312,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND NOT EXISTS (
             SELECT 1 FROM proposals pa
             WHERE pa.tenant_id = producoes_contratos.tenant_id
-              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
               AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
           )
         GROUP BY TO_DATE(data_pagamento, 'DD/MM/YYYY')
@@ -22355,7 +22355,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND NOT EXISTS (
             SELECT 1 FROM proposals pa
             WHERE pa.tenant_id = producoes_contratos.tenant_id
-              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
               AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
           )
       `);
@@ -22485,9 +22485,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allVendedoresRanking = await db.execute(sql`
         SELECT u.id as user_id,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND pa.unificada_em_id IS NOT NULL AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()}), 0)::numeric as prod_geral,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND pa.unificada_em_id IS NOT NULL AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
@@ -22643,7 +22643,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND NOT EXISTS (
               SELECT 1 FROM proposals pa
               WHERE pa.tenant_id = producoes_contratos.tenant_id
-                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
                 AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
             )
         `);
@@ -22841,7 +22841,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND NOT EXISTS (
               SELECT 1 FROM proposals pa
               WHERE pa.tenant_id = producoes_contratos.tenant_id
-                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
                 AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
             )
         `);
@@ -23088,7 +23088,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND NOT EXISTS (
               SELECT 1 FROM proposals pa
               WHERE pa.tenant_id = producoes_contratos.tenant_id
-                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
                 AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
             )
         `);
@@ -23209,7 +23209,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND NOT EXISTS (
             SELECT 1 FROM proposals pa
             WHERE pa.tenant_id = producoes_contratos.tenant_id
-              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
               AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
           )
       `);
@@ -23227,7 +23227,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND NOT EXISTS (
             SELECT 1 FROM proposals pa
             WHERE pa.tenant_id = producoes_contratos.tenant_id
-              AND pa.unificada_em_id IS NOT NULL
+              AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
               AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
           )
       `);
@@ -23467,7 +23467,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         sql`NOT EXISTS (
           SELECT 1 FROM proposals pa
           WHERE pa.tenant_id = ${producoesContratos.tenantId}
-            AND pa.unificada_em_id IS NOT NULL
+            AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
             AND (pa.id = ${producoesContratos.proposalId} OR pa.ade = ${producoesContratos.contratoId})
         )`,
       ];
@@ -25028,6 +25028,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
           AND p.unificada_em_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM financeiro_config fc
+            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb
+            WHERE fc.tenant_id = p.tenant_id::text
+              AND (tb->>'id') = (p.client_meta->>'tabelaFinanceiroId')
+              AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0
+          )
           AND p.id NOT IN (
             SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
             FROM proposal_history ph
@@ -25049,6 +25056,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           AND p.created_at <  (${semana}::date + INTERVAL '7 days')
           AND p.status NOT IN ('CANCELADA', 'PERDIDA')
           AND p.unificada_em_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM financeiro_config fc
+            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb
+            WHERE fc.tenant_id = p.tenant_id::text
+              AND (tb->>'id') = (p.client_meta->>'tabelaFinanceiroId')
+              AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0
+          )
           AND p.id NOT IN (
             SELECT (substring(ph.notes from 'Clonada da proposta #([0-9]+)'))::int
             FROM proposal_history ph
@@ -26930,7 +26944,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND NOT EXISTS (
               SELECT 1 FROM proposals pa
               WHERE pa.tenant_id = producoes_contratos.tenant_id
-                AND pa.unificada_em_id IS NOT NULL
+                AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0))
                 AND (pa.id = producoes_contratos.proposal_id OR pa.ade = producoes_contratos.contrato_id)
             )
         `);
