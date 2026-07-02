@@ -1859,8 +1859,9 @@ export const MODULE_SUB_ITEMS = {
     { key: "minha_carteira", label: "Minha Carteira" },
   ],
   modulo_financeiro: [
-    { key: "contratos", label: "Contratos" },
+    { key: "contratos", label: "Pagamentos" },
     { key: "producao", label: "Produção" },
+    { key: "proventos", label: "Proventos e Descontos" },
     { key: "tabelas", label: "Tabelas" },
     { key: "configuracoes", label: "Configurações" },
   ],
@@ -2941,6 +2942,48 @@ export const pagamentosConsultorItens = pgTable("pagamentos_consultor_itens", {
 
 export type PagamentoConsultor = typeof pagamentosConsultor.$inferSelect;
 export type PagamentoConsultorItem = typeof pagamentosConsultorItens.$inferSelect;
+
+// Proventos e Descontos — conta corrente interna do corretor.
+// Cada lançamento tem valor total e valor já compensado em fechamentos;
+// o saldo (valor - valor_compensado) fica disponível para próximos fechamentos.
+export const lancamentosCorretor = pgTable("lancamentos_corretor", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  data: varchar("data", { length: 20 }).notNull(),
+  // Chave do corretor: nome em UPPER (mesma chave usada na produção)
+  nomeCorretor: varchar("nome_corretor", { length: 255 }).notNull(),
+  tipo: varchar("tipo", { length: 20 }).notNull(), // 'Provento' | 'Desconto'
+  categoria: varchar("categoria", { length: 100 }),
+  valor: decimal("valor", { precision: 14, scale: 2 }).notNull(),
+  valorCompensado: decimal("valor_compensado", { precision: 14, scale: 2 }).notNull().default("0"),
+  observacao: text("observacao"),
+  criadoPor: integer("criado_por").references(() => users.id),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  // 'Pendente' | 'Parcial' | 'Compensado'
+  status: varchar("status", { length: 30 }).notNull().default("Pendente"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Histórico de compensações de um lançamento (em qual fechamento e quanto foi usado)
+export const lancamentosCompensacoes = pgTable("lancamentos_compensacoes", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  lancamentoId: integer("lancamento_id")
+    .references(() => lancamentosCorretor.id, { onDelete: "cascade" })
+    .notNull(),
+  // Fechamento (pagamento) em que foi usado; null = compensação manual
+  pagamentoId: integer("pagamento_id"),
+  valor: decimal("valor", { precision: 14, scale: 2 }).notNull(),
+  data: varchar("data", { length: 20 }),
+  usuarioId: integer("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type LancamentoCorretor = typeof lancamentosCorretor.$inferSelect;
+export type LancamentoCompensacao = typeof lancamentosCompensacoes.$inferSelect;
 
 export type InsertProducaoContrato = z.infer<
   typeof insertProducaoContratoSchema

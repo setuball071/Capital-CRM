@@ -15,6 +15,7 @@ interface CRMUser {
 // Mapeia URL para o tab do iframe
 function tabFromLocation(location: string): string {
   if (location.includes("/producao")) return "producao";
+  if (location.includes("/proventos")) return "proventos";
   if (location.includes("/tabelas")) return "tabelas";
   if (location.includes("/configuracoes")) return "configuracoes";
   return "contratos";
@@ -89,7 +90,7 @@ export default function FinanceiroComissoes() {
     <div style={{ height: "100%", overflow: "hidden" }}>
       <iframe
         ref={frameRef}
-        src="/financeiro-comissoes.html?v=20260702b"
+        src="/financeiro-comissoes.html?v=20260702c"
         title="Financeiro — Comissões"
         style={{ display: "block", width: "100%", height: "100%", border: "none" }}
         allow="same-origin"

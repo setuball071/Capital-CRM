@@ -527,6 +527,8 @@ import {
   lemitJobs,
   pagamentosConsultor,
   pagamentosConsultorItens,
+  lancamentosCorretor,
+  lancamentosCompensacoes,
   apiKeys,
   type ApiKey,
 } from "@shared/schema";
@@ -24341,6 +24343,223 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // ==========================================
+  // Financeiro - Proventos e Descontos (conta corrente do corretor)
+  // ==========================================
+
+  const statusLancamento = (valor: number, compensado: number) =>
+    compensado <= 0 ? "Pendente" : compensado >= valor - 0.005 ? "Compensado" : "Parcial";
+
+  const isMasterUser = (req: any) => req.user?.isMaster || req.user?.role === "master";
+  const isGestorOuMaster = (req: any) => isMasterUser(req) || req.user?.role === "coordenacao";
+
+  // Listar lançamentos (+ compensações) — master/coordenação veem tudo; corretor só o próprio extrato
+  app.get("/api/financeiro/lancamentos", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+
+      const conditions: any[] = [eq(lancamentosCorretor.tenantId, tenantId)];
+      if (!isGestorOuMaster(req)) {
+        // Corretor: apenas o próprio extrato (chave = nome em UPPER)
+        const meuNome = String(req.user?.name || "").trim().toUpperCase();
+        if (!meuNome) return res.json({ lancamentos: [], compensacoes: [] });
+        conditions.push(sql`UPPER(${lancamentosCorretor.nomeCorretor}) = ${meuNome}`);
+      } else {
+        const { corretor, tipo, status } = req.query;
+        if (corretor) conditions.push(sql`UPPER(${lancamentosCorretor.nomeCorretor}) = UPPER(${corretor as string})`);
+        if (tipo) conditions.push(eq(lancamentosCorretor.tipo, tipo as string));
+        if (status) conditions.push(eq(lancamentosCorretor.status, status as string));
+      }
+
+      const lancamentos = await db
+        .select()
+        .from(lancamentosCorretor)
+        .where(and(...conditions))
+        .orderBy(desc(lancamentosCorretor.data), desc(lancamentosCorretor.id));
+
+      const ids = lancamentos.map(l => l.id);
+      let compensacoes: any[] = [];
+      if (ids.length) {
+        compensacoes = await db
+          .select({
+            id: lancamentosCompensacoes.id,
+            lancamentoId: lancamentosCompensacoes.lancamentoId,
+            pagamentoId: lancamentosCompensacoes.pagamentoId,
+            valor: lancamentosCompensacoes.valor,
+            data: lancamentosCompensacoes.data,
+            usuarioNome: lancamentosCompensacoes.usuarioNome,
+            pagamentoData: pagamentosConsultor.dataPagamento,
+            pagamentoVendedor: pagamentosConsultor.vendedorNome,
+          })
+          .from(lancamentosCompensacoes)
+          .leftJoin(pagamentosConsultor, eq(lancamentosCompensacoes.pagamentoId, pagamentosConsultor.id))
+          .where(and(eq(lancamentosCompensacoes.tenantId, tenantId), inArray(lancamentosCompensacoes.lancamentoId, ids)))
+          .orderBy(desc(lancamentosCompensacoes.id));
+      }
+
+      return res.json({ lancamentos, compensacoes });
+    } catch (e: any) {
+      console.error("[LANCAMENTOS-GET]", e);
+      return res.status(500).json({ message: "Erro ao buscar lançamentos" });
+    }
+  });
+
+  // Criar lançamento — master/coordenação
+  app.post("/api/financeiro/lancamentos", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      if (!isGestorOuMaster(req)) return res.status(403).json({ message: "Sem permissão" });
+
+      const { data, nomeCorretor, tipo, categoria, valor, observacao } = req.body || {};
+      const nome = String(nomeCorretor || "").trim().toUpperCase();
+      const v = parseFloat(String(valor));
+      if (!data || !nome || !["Provento", "Desconto"].includes(tipo) || isNaN(v) || v <= 0) {
+        return res.status(400).json({ message: "Dados inválidos (data, corretor, tipo e valor > 0 são obrigatórios)" });
+      }
+      const [lanc] = await db
+        .insert(lancamentosCorretor)
+        .values({
+          tenantId,
+          data: String(data),
+          nomeCorretor: nome,
+          tipo,
+          categoria: categoria || null,
+          valor: String(Math.round(v * 100) / 100),
+          observacao: observacao || null,
+          criadoPor: req.user?.id || null,
+          criadoPorNome: req.user?.name || null,
+        })
+        .returning();
+      return res.json({ ok: true, lancamento: lanc });
+    } catch (e: any) {
+      console.error("[LANCAMENTOS-POST]", e);
+      return res.status(500).json({ message: "Erro ao criar lançamento" });
+    }
+  });
+
+  // Editar lançamento — apenas master/admin
+  app.patch("/api/financeiro/lancamentos/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      if (!isMasterUser(req)) return res.status(403).json({ message: "Apenas master pode editar lançamentos" });
+      const id = Number(req.params.id);
+      if (!id) return res.status(400).json({ message: "ID inválido" });
+
+      const [atual] = await db
+        .select()
+        .from(lancamentosCorretor)
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)))
+        .limit(1);
+      if (!atual) return res.status(404).json({ message: "Lançamento não encontrado" });
+
+      const { data, nomeCorretor, tipo, categoria, valor, observacao } = req.body || {};
+      const set: any = {};
+      if (data) set.data = String(data);
+      if (nomeCorretor) set.nomeCorretor = String(nomeCorretor).trim().toUpperCase();
+      if (tipo && ["Provento", "Desconto"].includes(tipo)) set.tipo = tipo;
+      if (categoria !== undefined) set.categoria = categoria || null;
+      if (observacao !== undefined) set.observacao = observacao || null;
+      if (valor !== undefined) {
+        const v = parseFloat(String(valor));
+        const compensado = parseFloat(atual.valorCompensado || "0");
+        if (isNaN(v) || v <= 0) return res.status(400).json({ message: "Valor inválido" });
+        if (v < compensado) {
+          return res.status(400).json({ message: `Valor não pode ser menor que o já compensado (R$ ${compensado.toFixed(2)})` });
+        }
+        set.valor = String(Math.round(v * 100) / 100);
+        set.status = statusLancamento(v, compensado);
+      }
+      if (!Object.keys(set).length) return res.status(400).json({ message: "Nada para atualizar" });
+
+      await db
+        .update(lancamentosCorretor)
+        .set(set)
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)));
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[LANCAMENTOS-PATCH]", e);
+      return res.status(500).json({ message: "Erro ao editar lançamento" });
+    }
+  });
+
+  // Excluir lançamento — apenas master/admin; bloqueia se já houve compensação
+  app.delete("/api/financeiro/lancamentos/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      if (!isMasterUser(req)) return res.status(403).json({ message: "Apenas master pode excluir lançamentos" });
+      const id = Number(req.params.id);
+      if (!id) return res.status(400).json({ message: "ID inválido" });
+
+      const [atual] = await db
+        .select({ valorCompensado: lancamentosCorretor.valorCompensado })
+        .from(lancamentosCorretor)
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)))
+        .limit(1);
+      if (!atual) return res.status(404).json({ message: "Lançamento não encontrado" });
+      if (parseFloat(atual.valorCompensado || "0") > 0) {
+        return res.status(400).json({ message: "Lançamento já tem compensações — não pode ser excluído (edite o valor se necessário)" });
+      }
+
+      await db
+        .delete(lancamentosCorretor)
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)));
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[LANCAMENTOS-DELETE]", e);
+      return res.status(500).json({ message: "Erro ao excluir lançamento" });
+    }
+  });
+
+  // Compensação manual (fora de fechamento) — master/coordenação
+  app.post("/api/financeiro/lancamentos/:id/compensar", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      if (!isGestorOuMaster(req)) return res.status(403).json({ message: "Sem permissão" });
+      const id = Number(req.params.id);
+      const { valor, data } = req.body || {};
+      const v = parseFloat(String(valor));
+      if (!id || isNaN(v) || v <= 0) return res.status(400).json({ message: "Valor inválido" });
+
+      const [lanc] = await db
+        .select()
+        .from(lancamentosCorretor)
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)))
+        .limit(1);
+      if (!lanc) return res.status(404).json({ message: "Lançamento não encontrado" });
+
+      const total = parseFloat(lanc.valor || "0");
+      const compensado = parseFloat(lanc.valorCompensado || "0");
+      const saldo = Math.round((total - compensado) * 100) / 100;
+      if (v > saldo + 0.005) {
+        return res.status(400).json({ message: `Valor maior que o saldo pendente (R$ ${saldo.toFixed(2)})` });
+      }
+
+      await db.insert(lancamentosCompensacoes).values({
+        tenantId,
+        lancamentoId: id,
+        pagamentoId: null,
+        valor: String(Math.round(v * 100) / 100),
+        data: data || new Date().toISOString().slice(0, 10),
+        usuarioId: req.user?.id || null,
+        usuarioNome: req.user?.name || null,
+      });
+      const novoCompensado = Math.round((compensado + v) * 100) / 100;
+      await db
+        .update(lancamentosCorretor)
+        .set({ valorCompensado: String(novoCompensado), status: statusLancamento(total, novoCompensado) })
+        .where(and(eq(lancamentosCorretor.id, id), eq(lancamentosCorretor.tenantId, tenantId)));
+      return res.json({ ok: true, saldoRestante: Math.round((total - novoCompensado) * 100) / 100 });
+    } catch (e: any) {
+      console.error("[LANCAMENTOS-COMPENSAR]", e);
+      return res.status(500).json({ message: "Erro ao compensar lançamento" });
+    }
+  });
+
   // Criar um pagamento (lote) — marca contratos como Pago e gera recibo
   app.post("/api/financeiro/pagamentos", requireAuth, async (req: any, res) => {
     try {
@@ -24357,15 +24576,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         dataPagamento,
         observacao,
         itens, // [{ contratoId, valorComissao }, ...]
+        compensacoes, // [{ lancamentoId, valor }, ...] — proventos/descontos aplicados neste fechamento
       } = req.body || {};
       if (!dataPagamento || !Array.isArray(itens) || !itens.length) {
         return res.status(400).json({ message: "Dados insuficientes" });
       }
 
-      const valorTotal = itens.reduce(
+      let valorTotal = itens.reduce(
         (s: number, i: any) => s + (parseFloat(i.valorComissao) || 0),
         0,
       );
+
+      // Valida compensações ANTES de criar o pagamento (saldo suficiente + tenant)
+      const compsValidas: { lanc: any; valor: number }[] = [];
+      if (Array.isArray(compensacoes) && compensacoes.length) {
+        for (const c of compensacoes) {
+          const cid = Number(c.lancamentoId);
+          const cv = Math.round((parseFloat(String(c.valor)) || 0) * 100) / 100;
+          if (!cid || cv <= 0) continue;
+          const [lanc] = await db
+            .select()
+            .from(lancamentosCorretor)
+            .where(and(eq(lancamentosCorretor.id, cid), eq(lancamentosCorretor.tenantId, tenantId)))
+            .limit(1);
+          if (!lanc) return res.status(400).json({ message: `Lançamento ${cid} não encontrado` });
+          const saldo = Math.round((parseFloat(lanc.valor || "0") - parseFloat(lanc.valorCompensado || "0")) * 100) / 100;
+          if (cv > saldo + 0.005) {
+            return res.status(400).json({ message: `Lançamento ${lanc.categoria || lanc.tipo} (${lanc.nomeCorretor}): valor R$ ${cv.toFixed(2)} maior que o saldo pendente R$ ${saldo.toFixed(2)}` });
+          }
+          compsValidas.push({ lanc, valor: cv });
+          // Provento soma ao pagamento; Desconto subtrai
+          valorTotal += lanc.tipo === "Provento" ? cv : -cv;
+        }
+      }
 
       const [pag] = await db
         .insert(pagamentosConsultor)
@@ -24408,6 +24651,25 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             inArray(producoesContratos.id, contratoIds),
           ),
         );
+
+      // Aplica compensações de proventos/descontos vinculadas a este fechamento
+      for (const { lanc, valor: cv } of compsValidas) {
+        await db.insert(lancamentosCompensacoes).values({
+          tenantId,
+          lancamentoId: lanc.id,
+          pagamentoId: pag.id,
+          valor: String(cv),
+          data: String(dataPagamento),
+          usuarioId: req.user?.id || null,
+          usuarioNome: req.user?.name || null,
+        });
+        const total = parseFloat(lanc.valor || "0");
+        const novoCompensado = Math.round((parseFloat(lanc.valorCompensado || "0") + cv) * 100) / 100;
+        await db
+          .update(lancamentosCorretor)
+          .set({ valorCompensado: String(novoCompensado), status: statusLancamento(total, novoCompensado) })
+          .where(and(eq(lancamentosCorretor.id, lanc.id), eq(lancamentosCorretor.tenantId, tenantId)));
+      }
 
       res.json({ ok: true, pagamentoId: pag.id, valorTotal });
     } catch (e: any) {
@@ -24467,7 +24729,20 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         )
         .where(eq(pagamentosConsultorItens.pagamentoId, id));
 
-      res.json({ pagamento: pag, itens });
+      // Proventos/descontos aplicados neste fechamento
+      const compensacoes = await db
+        .select({
+          id: lancamentosCompensacoes.id,
+          valor: lancamentosCompensacoes.valor,
+          tipo: lancamentosCorretor.tipo,
+          categoria: lancamentosCorretor.categoria,
+          observacao: lancamentosCorretor.observacao,
+        })
+        .from(lancamentosCompensacoes)
+        .innerJoin(lancamentosCorretor, eq(lancamentosCompensacoes.lancamentoId, lancamentosCorretor.id))
+        .where(and(eq(lancamentosCompensacoes.tenantId, tenantId), eq(lancamentosCompensacoes.pagamentoId, id)));
+
+      res.json({ pagamento: pag, itens, compensacoes });
     } catch (e: any) {
       console.error("[FINANCEIRO-PAGAMENTO-DETAIL] Error:", e);
       res.status(500).json({ message: "Erro ao buscar pagamento" });

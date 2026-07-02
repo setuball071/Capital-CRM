@@ -611,6 +611,9 @@ function Router() {
               <Route path="/financeiro/tabelas">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
+              <Route path="/financeiro/proventos">
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+              </Route>
               <Route path="/financeiro/configuracoes">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>

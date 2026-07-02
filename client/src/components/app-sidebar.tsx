@@ -48,7 +48,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/abordagem", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas", "/vendas/importar-higienizados", "/vendas/minha-carteira"],
-  modulo_financeiro: ["/financeiro/contratos", "/financeiro/producao", "/financeiro/tabelas", "/financeiro/configuracoes"],
+  modulo_financeiro: ["/financeiro/contratos", "/financeiro/producao", "/financeiro/proventos", "/financeiro/tabelas", "/financeiro/configuracoes"],
 };
 
 function getModuleForUrl(url: string): string | undefined {
@@ -238,6 +238,7 @@ export function AppSidebar() {
       items: [
         { title: "Pagamentos", url: "/financeiro/contratos", icon: FileText, module: "modulo_financeiro", subItem: "contratos" },
         { title: "Produção", url: "/financeiro/producao", icon: BarChart3, module: "modulo_financeiro", subItem: "producao" },
+        { title: "Proventos e Descontos", url: "/financeiro/proventos", icon: Receipt, module: "modulo_financeiro", subItem: "proventos" },
         { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, module: "modulo_financeiro", subItem: "tabelas" },
         { title: "Configurações", url: "/financeiro/configuracoes", icon: Settings2, module: "modulo_financeiro", subItem: "configuracoes" },
       ],

@@ -415,6 +415,46 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   </div>
 </div>
 
+<!-- ═══ MÓDULO: PROVENTOS E DESCONTOS ═══ -->
+<div id="mod-proventos" style="display:none">
+  <!-- Master/Gestor -->
+  <div id="prov-master">
+    <div class="filter-bar">
+      <select class="filter-select" id="pv-corretor" onchange="renderLancamentos()"><option value="">Todos corretores</option></select>
+      <select class="filter-select" id="pv-tipo" onchange="renderLancamentos()"><option value="">Todos tipos</option><option>Provento</option><option>Desconto</option></select>
+      <select class="filter-select" id="pv-status" onchange="renderLancamentos()"><option value="">Todos status</option><option>Pendente</option><option>Parcial</option><option>Compensado</option></select>
+      <button class="btn btn-sm" onclick="carregarLancamentos()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px">🔄 Atualizar</button>
+      <button class="btn btn-sm" onclick="abrirModalLancamento()" style="background:var(--accent);color:#fff;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px">➕ Novo Lançamento</button>
+    </div>
+    <div class="kpi-grid kpi-grid-4" id="pv-kpis" style="margin:16px 0"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>Corretor</th><th>Tipo</th><th>Categoria</th>
+          <th class="r">Valor</th><th class="r">Compensado</th><th class="r">Saldo</th>
+          <th>Status</th><th>Obs</th><th>Lançado por</th><th></th>
+        </tr></thead>
+        <tbody id="pv-tbody"><tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Consultor: extrato próprio -->
+  <div id="prov-consultor" style="display:none">
+    <div class="banner banner-consultor">👤 <strong>Meu Extrato:</strong> créditos, débitos e saldo da sua conta corrente interna.</div>
+    <div class="kpi-grid kpi-grid-4" id="pvc-kpis" style="margin:16px 0"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>Tipo</th><th>Categoria</th>
+          <th class="r">Valor</th><th class="r">Compensado</th><th class="r">Saldo</th>
+          <th>Status</th><th>Obs</th><th></th>
+        </tr></thead>
+        <tbody id="pvc-tbody"><tr><td colspan="9" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MÓDULO: TABELAS ═══ -->
 <div id="mod-tabelas" style="display:none">
   <div class="filter-bar">
@@ -704,6 +744,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <label style="font-size:12px;color:var(--muted)">Observação (opcional)</label>
         <textarea id="pag-obs" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
       </div>
+      <div id="pag-lancamentos" style="margin-top:14px"></div>
       <div id="pag-lista" style="margin-top:14px;max-height:280px;overflow:auto"></div>
     </div>
     <div class="modal-footer">
@@ -909,6 +950,45 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <button id="imp-parc-btn-analisar" class="btn btn-primary" onclick="impParcAnalisar()">🔍 Analisar</button>
       <button id="imp-parc-btn-confirmar" class="btn btn-primary" style="display:none" onclick="impParcConfirmar()">✅ Confirmar recebimento</button>
     </div>
+  </div>
+</div>
+
+<!-- ════ MODAIS PROVENTOS E DESCONTOS ════ -->
+<div class="overlay" id="modal-lancamento">
+  <div class="modal" style="width:480px">
+    <div class="modal-header"><h3 id="lanc-modal-titulo">➕ Novo Lançamento</h3><button class="modal-close" onclick="fecharModal('modal-lancamento')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid-2">
+        <div class="form-group"><label>Data</label><input type="date" id="lanc-data"/></div>
+        <div class="form-group"><label>Tipo</label>
+          <select id="lanc-tipo" onchange="atualizarCategoriasLanc()">
+            <option value="Provento">Provento (crédito)</option>
+            <option value="Desconto">Desconto (débito)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Corretor</label>
+        <select id="lanc-corretor"></select>
+        <input id="lanc-corretor-outro" placeholder="Nome do corretor" style="display:none;margin-top:6px"/>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>Categoria</label><select id="lanc-categoria"></select></div>
+        <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" min="0.01" id="lanc-valor" placeholder="0,00"/></div>
+      </div>
+      <div class="form-group"><label>Observação</label><textarea id="lanc-obs" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:vertical"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-lancamento')">Cancelar</button>
+      <button class="btn btn-primary" id="lanc-btn-salvar" onclick="salvarLancamento()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-lanc-hist">
+  <div class="modal" style="width:560px">
+    <div class="modal-header"><h3>📜 Histórico de Compensações</h3><button class="modal-close" onclick="fecharModal('modal-lanc-hist')">✕</button></div>
+    <div class="modal-body" id="lanc-hist-body"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="fecharModal('modal-lanc-hist')">Fechar</button></div>
   </div>
 </div>
 
@@ -1345,10 +1425,10 @@ function _hideTip(){document.getElementById('sens-tip').classList.remove('vis');
 // ══════════════════════════════════════════════════════
 function setModule(mod){
   // Mapeia slug da URL para o id do módulo
-  const map={contratos:'contratos',producao:'producao',tabelas:'tabelas',configuracoes:'config',config:'config'};
+  const map={contratos:'contratos',producao:'producao',proventos:'proventos',tabelas:'tabelas',configuracoes:'config',config:'config'};
   const resolved=map[mod]||'contratos';
   _activeModule=resolved;
-  ['contratos','producao','tabelas','config'].forEach(m=>{
+  ['contratos','producao','proventos','tabelas','config'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el)el.style.display=m===resolved?'':'none';
   });
@@ -1373,6 +1453,7 @@ function renderAll(){
   salvarDados();
   if(_activeModule==='contratos')renderContratos();
   else if(_activeModule==='producao')renderProducao();
+  else if(_activeModule==='proventos')renderProventos();
   else if(_activeModule==='tabelas')renderTabelas();
   else if(_activeModule==='config')renderConfig();
 }
@@ -3230,6 +3311,232 @@ function confirmarImportProd(){
 }
 
 // ══════════════════════════════════════════════════════
+// PROVENTOS E DESCONTOS (conta corrente do corretor)
+// ══════════════════════════════════════════════════════
+const CATS_LANC={
+  Provento:['Diferença de comissão','Bonificação','Prêmio','Ajuste positivo','Crédito diverso'],
+  Desconto:['Estorno de contrato','Diferença financeira','Desconto autorizado','Adiantamento','Outro débito'],
+};
+let _lancData={lancamentos:[],compensacoes:[]};
+let _lancEditId=null;
+
+function saldoLanc(l){return Math.round((parseFloat(l.valor||0)-parseFloat(l.valorCompensado||0))*100)/100;}
+function badgeLanc(st){const m={Pendente:'b-aguardando',Parcial:'b-a-pagar',Compensado:'b-pago'};return`<span class="badge no-click ${m[st]||'b-aguardando'}">${st}</span>`;}
+function _nCompLanc(id){return(_lancData.compensacoes||[]).filter(c=>c.lancamentoId===id).length;}
+
+function renderProventos(){
+  const isMaster=_role==='master';
+  document.getElementById('prov-master').style.display=isMaster?'':'none';
+  document.getElementById('prov-consultor').style.display=isMaster?'none':'';
+  carregarLancamentos();
+}
+
+async function carregarLancamentos(){
+  try{
+    const resp=await fetch('/api/financeiro/lancamentos',{credentials:'include'});
+    if(!resp.ok)throw new Error('Erro '+resp.status);
+    _lancData=await resp.json();
+  }catch(e){_lancData={lancamentos:[],compensacoes:[]};}
+  const sel=document.getElementById('pv-corretor');
+  if(sel){
+    const prev=sel.value;
+    const nomes=[...new Set((_lancData.lancamentos||[]).map(l=>l.nomeCorretor))].filter(Boolean).sort();
+    sel.innerHTML='<option value="">Todos corretores</option>'+nomes.map(n=>`<option ${n===prev?'selected':''}>${escHtml(n)}</option>`).join('');
+  }
+  renderLancamentos();
+}
+
+function renderLancamentos(){
+  if(_role==='master')renderLancamentosMaster();
+  else renderExtratoConsultor();
+}
+
+function renderLancamentosMaster(){
+  const fc=document.getElementById('pv-corretor')?.value||'';
+  const ft=document.getElementById('pv-tipo')?.value||'';
+  const fs=document.getElementById('pv-status')?.value||'';
+  const list=(_lancData.lancamentos||[]).filter(l=>{
+    if(fc&&l.nomeCorretor!==fc)return false;
+    if(ft&&l.tipo!==ft)return false;
+    if(fs&&l.status!==fs)return false;
+    return true;
+  });
+  let provPend=0,descPend=0;
+  (_lancData.lancamentos||[]).forEach(l=>{const sd=saldoLanc(l);if(l.tipo==='Provento')provPend+=sd;else descPend+=sd;});
+  document.getElementById('pv-kpis').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Lançamentos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Proventos pendentes</div><div class="kpi-value kpi-green">${fmtBRL(provPend)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Descontos pendentes</div><div class="kpi-value" style="color:var(--red)">${fmtBRL(descPend)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Saldo líquido pendente</div><div class="kpi-value kpi-yellow">${fmtBRL(provPend-descPend)}</div></div>`;
+  document.getElementById('pv-tbody').innerHTML=list.length?list.map(l=>{
+    const sd=saldoLanc(l);
+    return`<tr>
+      <td>${fmtData(l.data)}</td>
+      <td style="font-weight:600">${escHtml(l.nomeCorretor)}</td>
+      <td>${l.tipo==='Provento'?'<span style="color:var(--green);font-weight:600">▲ Provento</span>':'<span style="color:var(--red);font-weight:600">▼ Desconto</span>'}</td>
+      <td style="font-size:12px">${escHtml(l.categoria||'—')}</td>
+      <td class="r" style="font-weight:600">${fmtBRL(parseFloat(l.valor||0))}</td>
+      <td class="r" style="color:var(--muted)">${fmtBRL(parseFloat(l.valorCompensado||0))}</td>
+      <td class="r" style="font-weight:700;color:${l.tipo==='Provento'?'var(--green)':'var(--red)'}">${fmtBRL(sd)}</td>
+      <td>${badgeLanc(l.status)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)" title="${escHtml(l.observacao||'')}">${escHtml(l.observacao||'—')}</td>
+      <td style="font-size:11px;color:var(--muted)">${escHtml(l.criadoPorNome||'—')}</td>
+      <td style="white-space:nowrap">
+        ${sd>0?`<button class="btn btn-ghost btn-sm" title="Compensar manualmente" onclick="compensarManualLanc(${l.id})">↧</button>`:''}
+        ${_nCompLanc(l.id)?`<button class="btn btn-ghost btn-sm" title="Histórico de compensações" onclick="verHistLanc(${l.id})">📜</button>`:''}
+        <button class="btn btn-ghost btn-sm" title="Editar" onclick="abrirModalLancamento(${l.id})">✏️</button>
+        <button class="btn btn-ghost btn-sm" title="Excluir" onclick="excluirLancamento(${l.id})">🗑</button>
+      </td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">Nenhum lançamento</td></tr>';
+}
+
+function renderExtratoConsultor(){
+  const list=_lancData.lancamentos||[];
+  let cred=0,deb=0,credPend=0,debPend=0;
+  list.forEach(l=>{const v=parseFloat(l.valor||0),sd=saldoLanc(l);if(l.tipo==='Provento'){cred+=v;credPend+=sd;}else{deb+=v;debPend+=sd;}});
+  document.getElementById('pvc-kpis').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Créditos (total)</div><div class="kpi-value kpi-green">${fmtBRL(cred)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Débitos (total)</div><div class="kpi-value" style="color:var(--red)">${fmtBRL(deb)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Créditos pendentes</div><div class="kpi-value kpi-green">${fmtBRL(credPend)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Saldo líquido pendente</div><div class="kpi-value kpi-yellow">${fmtBRL(credPend-debPend)}</div></div>`;
+  document.getElementById('pvc-tbody').innerHTML=list.length?list.map(l=>{
+    const sd=saldoLanc(l);
+    return`<tr>
+      <td>${fmtData(l.data)}</td>
+      <td>${l.tipo==='Provento'?'<span style="color:var(--green);font-weight:600">▲ Provento</span>':'<span style="color:var(--red);font-weight:600">▼ Desconto</span>'}</td>
+      <td style="font-size:12px">${escHtml(l.categoria||'—')}</td>
+      <td class="r" style="font-weight:600">${fmtBRL(parseFloat(l.valor||0))}</td>
+      <td class="r" style="color:var(--muted)">${fmtBRL(parseFloat(l.valorCompensado||0))}</td>
+      <td class="r" style="font-weight:700;color:${l.tipo==='Provento'?'var(--green)':'var(--red)'}">${fmtBRL(sd)}</td>
+      <td>${badgeLanc(l.status)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)" title="${escHtml(l.observacao||'')}">${escHtml(l.observacao||'—')}</td>
+      <td>${_nCompLanc(l.id)?`<button class="btn btn-ghost btn-sm" title="Histórico" onclick="verHistLanc(${l.id})">📜</button>`:''}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--muted)">Nenhum lançamento no seu extrato</td></tr>';
+}
+
+function abrirModalLancamento(id){
+  _lancEditId=id||null;
+  const l=id?(_lancData.lancamentos||[]).find(x=>x.id===id):null;
+  document.getElementById('lanc-modal-titulo').textContent=l?'✏️ Editar Lançamento':'➕ Novo Lançamento';
+  document.getElementById('lanc-data').value=l?(l.data||'').slice(0,10):new Date().toISOString().slice(0,10);
+  document.getElementById('lanc-tipo').value=l?l.tipo:'Provento';
+  const sel=document.getElementById('lanc-corretor');
+  const outro=document.getElementById('lanc-corretor-outro');
+  const nomes=[...new Set([
+    ...CORRETORES.map(c=>String(c.nome||'').trim().toUpperCase()),
+    ...(_lancData.lancamentos||[]).map(x=>x.nomeCorretor),
+  ])].filter(Boolean).sort();
+  sel.innerHTML=nomes.map(n=>`<option>${escHtml(n)}</option>`).join('')+'<option value="__outro">— Outro (digitar) —</option>';
+  sel.onchange=()=>{outro.style.display=sel.value==='__outro'?'':'none';};
+  outro.value='';
+  if(l){
+    if(nomes.includes(l.nomeCorretor))sel.value=l.nomeCorretor;
+    else{sel.value='__outro';outro.value=l.nomeCorretor;}
+  }
+  outro.style.display=sel.value==='__outro'?'':'none';
+  atualizarCategoriasLanc(l?l.categoria:null);
+  document.getElementById('lanc-valor').value=l?parseFloat(l.valor):'';
+  document.getElementById('lanc-obs').value=l?(l.observacao||''):'';
+  abrirModal('modal-lancamento');
+}
+
+function atualizarCategoriasLanc(selecionada){
+  const tipo=document.getElementById('lanc-tipo').value;
+  const cats=CATS_LANC[tipo]||[];
+  document.getElementById('lanc-categoria').innerHTML=cats.map(c=>`<option ${c===selecionada?'selected':''}>${c}</option>`).join('');
+}
+
+async function salvarLancamento(){
+  const sel=document.getElementById('lanc-corretor');
+  const nome=(sel.value==='__outro'?document.getElementById('lanc-corretor-outro').value:sel.value).trim();
+  const valor=parseFloat(document.getElementById('lanc-valor').value);
+  const body={
+    data:document.getElementById('lanc-data').value,
+    nomeCorretor:nome,
+    tipo:document.getElementById('lanc-tipo').value,
+    categoria:document.getElementById('lanc-categoria').value,
+    valor,
+    observacao:document.getElementById('lanc-obs').value||'',
+  };
+  if(!body.data||!nome||isNaN(valor)||valor<=0){toast('Preencha data, corretor e valor válido',true);return;}
+  const btn=document.getElementById('lanc-btn-salvar');
+  btn.disabled=true;
+  try{
+    const url=_lancEditId?'/api/financeiro/lancamentos/'+_lancEditId:'/api/financeiro/lancamentos';
+    const resp=await fetch(url,{method:_lancEditId?'PATCH':'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    fecharModal('modal-lancamento');
+    toast('Lançamento salvo!');
+    carregarLancamentos();
+  }catch(e){toast('Erro: '+e.message,true);}
+  finally{btn.disabled=false;}
+}
+
+async function excluirLancamento(id){
+  if(!confirm('Excluir este lançamento?'))return;
+  try{
+    const resp=await fetch('/api/financeiro/lancamentos/'+id,{method:'DELETE',credentials:'include'});
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    toast('Lançamento excluído');
+    carregarLancamentos();
+  }catch(e){toast('Erro: '+e.message,true);}
+}
+
+async function compensarManualLanc(id){
+  const l=(_lancData.lancamentos||[]).find(x=>x.id===id);
+  if(!l)return;
+  const saldo=saldoLanc(l);
+  const v=prompt(`Compensação manual — ${l.tipo} · ${l.categoria||''} (${l.nomeCorretor})\nSaldo pendente: ${fmtBRL(saldo)}\n\nValor a compensar:`);
+  if(v===null)return;
+  const s=String(v).trim();
+  const num=s.indexOf(',')>-1?parseFloat(s.replace(/\./g,'').replace(',','.')):parseFloat(s);
+  if(isNaN(num)||num<=0){toast('Valor inválido',true);return;}
+  try{
+    const resp=await fetch(`/api/financeiro/lancamentos/${id}/compensar`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({valor:num})});
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    const d=await resp.json();
+    toast(`Compensado! Saldo restante: ${fmtBRL(d.saldoRestante)}`);
+    carregarLancamentos();
+  }catch(e){toast('Erro: '+e.message,true);}
+}
+
+function verHistLanc(id){
+  const l=(_lancData.lancamentos||[]).find(x=>x.id===id);
+  if(!l)return;
+  const comps=(_lancData.compensacoes||[]).filter(c=>c.lancamentoId===id);
+  document.getElementById('lanc-hist-body').innerHTML=`
+    <div style="background:var(--surface2);padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px">
+      <b>${escHtml(l.nomeCorretor)}</b> — ${l.tipo} · ${escHtml(l.categoria||'')}<br>
+      Valor: <b>${fmtBRL(parseFloat(l.valor||0))}</b> · Compensado: <b>${fmtBRL(parseFloat(l.valorCompensado||0))}</b> · Saldo: <b>${fmtBRL(saldoLanc(l))}</b>
+    </div>
+    ${comps.length?`<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+      <th style="padding:6px">Data</th><th class="r">Valor</th><th>Fechamento</th><th>Por</th></tr></thead><tbody>
+      ${comps.map(c=>`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px">${fmtData(c.data)}</td>
+        <td class="r" style="font-weight:600">${fmtBRL(parseFloat(c.valor||0))}</td>
+        <td>${c.pagamentoId?`Pagamento #${c.pagamentoId}${c.pagamentoData?' — '+fmtData(c.pagamentoData):''}`:'Manual'}</td>
+        <td style="font-size:11px;color:var(--muted)">${escHtml(c.usuarioNome||'')}</td>
+      </tr>`).join('')}
+    </tbody></table>`:'<div style="text-align:center;color:var(--muted);padding:16px">Nenhuma compensação ainda.</div>'}`;
+  abrirModal('modal-lanc-hist');
+}
+
+// Recalcula o total do fechamento considerando proventos/descontos digitados
+function recalcTotalPagamento(){
+  const p=window._pagamentoPending;
+  if(!p)return;
+  let total=p.total;
+  document.querySelectorAll('.pag-lanc-val').forEach(inp=>{
+    const v=parseFloat(inp.value||0)||0;
+    if(v<=0)return;
+    total+=inp.dataset.tipo==='Provento'?v:-v;
+  });
+  document.getElementById('pag-total').textContent=fmtBRL(total);
+}
+
+// ══════════════════════════════════════════════════════
 // IMPORT PRODUÇÃO POR PARCEIRO
 // ══════════════════════════════════════════════════════
 let _impParcFile=null;
@@ -3536,7 +3843,7 @@ window.limparAjuste=limparAjuste;
 // ══════════════════════════════════════════════════════
 // PAGAMENTO ao Consultor
 // ══════════════════════════════════════════════════════
-function abrirModalPagamento(){
+async function abrirModalPagamento(){
   const chks=[...document.querySelectorAll('#cm-tbody .cont-chk:checked')];
   if(!chks.length){toast('Selecione ao menos um contrato',true);return;}
   // Agrupa por consultor
@@ -3569,8 +3876,30 @@ function abrirModalPagamento(){
     </div>`;
   }).join('');
   document.getElementById('pag-lista').innerHTML=linhas;
+  // Proventos/Descontos pendentes dos consultores selecionados — valor editável por fechamento
+  const boxLanc=document.getElementById('pag-lancamentos');
+  boxLanc.innerHTML='';
+  try{
+    const resp=await fetch('/api/financeiro/lancamentos',{credentials:'include'});
+    if(resp.ok){
+      const d=await resp.json();
+      const vends=Object.keys(porVend).map(v=>v.toUpperCase());
+      const pend=(d.lancamentos||[]).filter(l=>vends.includes((l.nomeCorretor||'').toUpperCase())&&saldoLanc(l)>0);
+      if(pend.length){
+        boxLanc.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">💱 Proventos e Descontos pendentes</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Informe quanto usar neste fechamento (0 = não usar agora; o saldo continua na conta do corretor).</div>`+
+          pend.map(l=>{const sd=saldoLanc(l);return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+            <span style="flex:1"><b>${escHtml(l.nomeCorretor)}</b> — ${l.tipo==='Provento'?'<span style="color:var(--green)">▲</span>':'<span style="color:var(--red)">▼</span>'} ${escHtml(l.categoria||l.tipo)}${l.observacao?` <span style="color:var(--muted)">(${escHtml(l.observacao)})</span>`:''}</span>
+            <span style="color:var(--muted);white-space:nowrap">saldo ${fmtBRL(sd)}</span>
+            <input type="number" step="0.01" min="0" max="${sd}" value="0" class="pag-lanc-val" data-lanc="${l.id}" data-tipo="${l.tipo}" data-vend="${escHtml(l.nomeCorretor)}" oninput="recalcTotalPagamento()" style="width:100px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);text-align:right"/>
+            <button class="btn btn-ghost btn-sm" title="Usar saldo total" onclick="this.previousElementSibling.value=${sd};recalcTotalPagamento()">tudo</button>
+          </div>`;}).join('');
+      }
+    }
+  }catch(e){/* lançamentos indisponíveis não bloqueiam o fechamento */}
   // Guarda para uso no confirmar
   window._pagamentoPending={porVend,total,chks};
+  recalcTotalPagamento();
   abrirModal('modal-pagamento');
 }
 
@@ -3587,11 +3916,15 @@ async function confirmarPagamento(){
     for(const vendNome of Object.keys(p.porVend)){
       const o=p.porVend[vendNome];
       const itens=o.ids.map(x=>({contratoId:x.id,valorComissao:x.vf}));
+      // Compensações de proventos/descontos deste consultor (valor > 0)
+      const compensacoes=[...document.querySelectorAll('.pag-lanc-val')]
+        .filter(i=>(i.dataset.vend||'').toUpperCase()===vendNome.toUpperCase()&&(parseFloat(i.value||0)||0)>0)
+        .map(i=>({lancamentoId:Number(i.dataset.lanc),valor:parseFloat(i.value)}));
       const resp=await fetch('/api/financeiro/pagamentos',{
         method:'POST',
         credentials:'include',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({vendedorNome:vendNome,dataPagamento:data,observacao:obs,itens}),
+        body:JSON.stringify({vendedorNome:vendNome,dataPagamento:data,observacao:obs,itens,compensacoes}),
       });
       if(!resp.ok){
         const e=await resp.json().catch(()=>({}));
@@ -3668,8 +4001,18 @@ async function verReciboPagamento(id){
           <td class="r v-yellow">${fmtBRL(parseFloat(i.valorComissao||0))}</td>
         </tr>`).join('')}
         </tbody>
+      </table>
+      ${(d.compensacoes||[]).length?`
+      <div style="margin-top:12px;font-size:12px;font-weight:700">💱 Proventos e Descontos aplicados</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:4px">
+        ${(d.compensacoes||[]).map(c=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px">${c.tipo==='Provento'?'▲':'▼'} ${escHtml(c.categoria||c.tipo)}${c.observacao?` <span style="color:var(--muted)">(${escHtml(c.observacao)})</span>`:''}</td>
+          <td class="r" style="font-weight:600;color:${c.tipo==='Provento'?'var(--green)':'var(--red)'}">${c.tipo==='Provento'?'+':'−'} ${fmtBRL(parseFloat(c.valor||0))}</td>
+        </tr>`).join('')}
+      </table>`:''}
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
         <tfoot><tr style="border-top:2px solid var(--border);font-weight:700">
-          <td colspan="4" style="padding:8px 6px">Total</td>
+          <td style="padding:8px 6px">Total</td>
           <td class="r v-accent">${fmtBRL(parseFloat(p.valorTotal||0))}</td>
         </tr></tfoot>
       </table>

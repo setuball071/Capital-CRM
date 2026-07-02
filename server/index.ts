@@ -373,6 +373,40 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS data_recebimento VARCHAR(20),
               ADD COLUMN IF NOT EXISTS parceiro_relatorio VARCHAR(100)
           `);
+          // Proventos e Descontos — conta corrente interna do corretor
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS lancamentos_corretor (
+              id                SERIAL PRIMARY KEY,
+              tenant_id         INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              data              VARCHAR(20) NOT NULL,
+              nome_corretor     VARCHAR(255) NOT NULL,
+              tipo              VARCHAR(20) NOT NULL,
+              categoria         VARCHAR(100),
+              valor             DECIMAL(14,2) NOT NULL,
+              valor_compensado  DECIMAL(14,2) NOT NULL DEFAULT 0,
+              observacao        TEXT,
+              criado_por        INTEGER,
+              criado_por_nome   VARCHAR(255),
+              status            VARCHAR(30) NOT NULL DEFAULT 'Pendente',
+              created_at        TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS lancamentos_compensacoes (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL,
+              lancamento_id  INTEGER NOT NULL REFERENCES lancamentos_corretor(id) ON DELETE CASCADE,
+              pagamento_id   INTEGER,
+              valor          DECIMAL(14,2) NOT NULL,
+              data           VARCHAR(20),
+              usuario_id     INTEGER,
+              usuario_nome   VARCHAR(255),
+              created_at     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_lancamentos_corretor_tenant ON lancamentos_corretor(tenant_id, nome_corretor)
+          `);
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);
