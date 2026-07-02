@@ -3309,10 +3309,11 @@ function impParcRenderPreview(){
   document.getElementById('imp-parc-tbody-sem').innerHTML=semMatch.length?semMatch.map(r=>{
     const cands=r.candidatos||[];
     // Auto-seleciona quando há exatamente 1 candidata ainda não recebida
-    const auto=cands.length===1&&!cands[0].jaRecebido?cands[0].id:'';
+    const candVal=c=>(c.kind==='producao'?'c:':'p:')+c.id;
+    const auto=cands.length===1&&!cands[0].jaRecebido?candVal(cands[0]):'';
     const sel=`<select class="filter-select imp-parc-vinc" data-ade="${r.ade}" style="font-size:11px;max-width:250px;padding:3px 6px">
       <option value="">— sem vínculo —</option>
-      ${cands.map(c=>`<option value="${c.id}" data-vend="${escHtml(c.vendedor||'')}" ${c.id===auto?'selected':''}>ADE ${c.ade||'—'}${c.adeRefin?' / '+c.adeRefin:''} · ${escHtml(c.tipo||'')} · ${_fmtBRL2(c.valor)} · ${escHtml(c.status||'')}${c.jaRecebido?' · ✔ já recebido':c.temProducao?' · na produção':''}</option>`).join('')}
+      ${cands.map(c=>`<option value="${candVal(c)}" data-vend="${escHtml(c.vendedor||'')}" ${candVal(c)===auto?'selected':''}>ADE ${c.ade||'—'}${c.adeRefin?' / '+c.adeRefin:''} · ${escHtml(c.tipo||'')} · ${_fmtBRL2(c.valor)} · ${escHtml(c.status||'')}${c.jaRecebido?' · ✔ já recebido':c.kind==='producao'?' · produção importada':c.temProducao?' · na produção':''}</option>`).join('')}
     </select>`;
     return`<tr>
     <td><input type="checkbox" class="imp-parc-chk-sem" data-ade="${r.ade}" ${auto?'checked':''} style="cursor:pointer;width:14px;height:14px"></td>
@@ -3353,11 +3354,14 @@ async function impParcConfirmar(){
   const selMatched=matched.filter(r=>{const c=document.querySelector(`.imp-parc-chk-matched[data-ade="${r.ade}"]`);return c&&c.checked;});
   const selSem=semMatch.filter(r=>{const c=document.querySelector(`.imp-parc-chk-sem[data-ade="${r.ade}"]`);return c&&c.checked;})
     .map(r=>{
-      // Aplica o vínculo manual escolhido no dropdown (proposta do mesmo CPF)
+      // Aplica o vínculo manual escolhido (proposta "p:id" ou produção importada "c:id")
       const sel=document.querySelector(`.imp-parc-vinc[data-ade="${r.ade}"]`);
       if(sel&&sel.value){
         const opt=sel.options[sel.selectedIndex];
-        return{...r,proposalId:Number(sel.value),vendedorProposal:(opt&&opt.dataset.vend)||r.vendedorProposal||null};
+        const vend=(opt&&opt.dataset.vend)||r.vendedorProposal||null;
+        const[kind,id]=sel.value.split(':');
+        if(kind==='c')return{...r,producaoId:Number(id),vendedorProposal:vend};
+        return{...r,proposalId:Number(id),vendedorProposal:vend};
       }
       return r;
     });

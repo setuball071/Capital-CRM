@@ -24035,6 +24035,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               const dig = String(c.cpf || "").replace(/\D/g, "");
               if (!candsByCpf.has(dig)) candsByCpf.set(dig, []);
               candsByCpf.get(dig)!.push({
+                kind: "proposal",
                 id: c.id,
                 ade: c.ade,
                 adeRefin: c.adeRefin,
@@ -24046,9 +24047,44 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 jaRecebido: !!prodByPid.get(c.id),
               });
             }
+            // Também sugere produção importada (formato antigo, sem proposta no CRM)
+            const prodCpfExpr = sql`regexp_replace(coalesce(${producoesContratos.cpfCliente}, ''), '[^0-9]', '', 'g')`;
+            const prodCands = await db
+              .select({
+                id: producoesContratos.id,
+                contratoId: producoesContratos.contratoId,
+                cpf: producoesContratos.cpfCliente,
+                tipo: producoesContratos.tipoContrato,
+                valor: producoesContratos.valorBruto,
+                statusComissao: producoesContratos.statusComissao,
+                dataRecebimento: producoesContratos.dataRecebimento,
+                proposalId: producoesContratos.proposalId,
+                vendedorNome: producoesContratos.vendedorNome,
+                nomeCorretor: producoesContratos.nomeCorretor,
+              })
+              .from(producoesContratos)
+              .where(and(eq(producoesContratos.tenantId, tenantId), inArray(prodCpfExpr, cpfDigits)));
+            for (const p of prodCands) {
+              // Produção já vinculada a proposta candidata aparece via a própria proposta
+              if (p.proposalId && cands.some(c => c.id === p.proposalId)) continue;
+              const dig = String(p.cpf || "").replace(/\D/g, "");
+              if (!candsByCpf.has(dig)) candsByCpf.set(dig, []);
+              candsByCpf.get(dig)!.push({
+                kind: "producao",
+                id: p.id,
+                ade: p.contratoId,
+                adeRefin: null,
+                tipo: p.tipo,
+                valor: p.valor != null ? Number(p.valor) : null,
+                status: p.statusComissao || "Aguardando",
+                vendedor: p.vendedorNome || p.nomeCorretor,
+                temProducao: true,
+                jaRecebido: !!p.dataRecebimento,
+              });
+            }
             for (const item of semMatch) {
               const dig = String(item.cpfCliente || "").replace(/\D/g, "");
-              item.candidatos = (candsByCpf.get(dig) || []).slice(0, 10);
+              item.candidatos = (candsByCpf.get(dig) || []).slice(0, 12);
             }
           }
         } catch (candErr) {
@@ -24114,17 +24150,19 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             nomeCorretor: nomeCorr,
           };
 
-          // Verifica se já existe — por ADE ou pela proposta vinculada
+          // Verifica se já existe — em ordem de prioridade: registro de produção
+          // escolhido manualmente no dropdown → proposta vinculada → ADE.
           // (portabilidade: produção pode estar registrada com a ADE original
           //  enquanto o relatório traz a ADE do refin)
-          const matchExistente = r.proposalId
-            ? or(eq(producoesContratos.contratoId, ade), eq(producoesContratos.proposalId, Number(r.proposalId)))
-            : eq(producoesContratos.contratoId, ade);
-          const existing = await db
+          const buscaExistente = (cond: any) => db
             .select({ id: producoesContratos.id, statusComissao: producoesContratos.statusComissao })
             .from(producoesContratos)
-            .where(and(matchExistente, eq(producoesContratos.tenantId, tenantId)))
+            .where(and(cond, eq(producoesContratos.tenantId, tenantId)))
             .limit(1);
+          let existing: { id: number; statusComissao: string | null }[] = [];
+          if (r.producaoId) existing = await buscaExistente(eq(producoesContratos.id, Number(r.producaoId)));
+          if (!existing.length && r.proposalId) existing = await buscaExistente(eq(producoesContratos.proposalId, Number(r.proposalId)));
+          if (!existing.length) existing = await buscaExistente(eq(producoesContratos.contratoId, ade));
 
           if (existing.length > 0) {
             const set: any = {
