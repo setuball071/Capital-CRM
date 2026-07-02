@@ -1313,7 +1313,16 @@ function flatPct(c){
 function tagConvenio(v){const m={SIAPE:'tag-siape',INSS:'tag-inss',Militar:'tag-militar',Privado:'tag-privado'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao',Refinanciamento:'tag-refin','Compra de Dívida':'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function fmtCoef(v){return Number(v).toFixed(5).replace('.',',');}
-function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+// Robusto: aceita DD/MM/AAAA (retorna como está), ISO AAAA-MM-DD (converte sem fuso) e timestamps
+function fmtData(iso){
+  if(!iso)return'—';
+  const str=(iso+'').trim();
+  if(str.indexOf('/')>-1)return str;
+  const m=str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return`${m[3]}/${m[2]}/${m[1]}`;
+  const d=new Date(str);
+  return isNaN(d.getTime())?str:d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
 function badgesFlags(t){let h=t.srcc?`<span class="badge-srcc">SRCC</span>`:`<span class="badge-fora-srcc">Fora da SRCC</span>`;if(t.tipo==='Portabilidade'&&t.remuneraMenos12)h+=`<span class="badge-rem12">Rem. &lt;12</span>`;return h;}
 function pctCorretorGrupo(pctEmpresa,repasse){return(pctEmpresa*repasse)/100;}
 function chipSemana(d){if(!d)return'';const dt=new Date(d+'T12:00:00');const wk=getISOWeek(dt);return`<span class="semana-chip">S${wk}</span>`;}
@@ -3284,7 +3293,7 @@ function impParcRenderPreview(){
   document.getElementById('imp-parc-tot-com').textContent=_fmtBRL2(totCom);
 
   document.getElementById('imp-parc-tbody-matched').innerHTML=matched.length?matched.map(r=>`<tr>
-    <td><input type="checkbox" class="imp-parc-chk-matched" data-ade="${r.ade}" ${r.jaExiste?'':'checked'} style="cursor:pointer;width:14px;height:14px"></td>
+    <td><input type="checkbox" class="imp-parc-chk-matched" data-ade="${r.ade}" ${r.jaRecebido?'':'checked'} style="cursor:pointer;width:14px;height:14px"></td>
     <td style="font-family:monospace;font-size:12px">${r.ade}</td>
     <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nomeCliente||'—'}</td>
     <td style="font-family:monospace;font-size:11px">${r.cpfCliente||'—'}</td>
@@ -3294,7 +3303,7 @@ function impParcRenderPreview(){
     <td class="r">${_fmtBRL2(r.valorBase)}</td>
     <td class="r">${Number(r.comissaoPerc||0).toFixed(2)}%</td>
     <td class="r">${_fmtBRL2(r.comissaoValor)}</td>
-    <td style="color:${r.jaExiste?'var(--yellow)':'var(--green)'};font-size:12px">${r.jaExiste?'⚠️ Já importado':'✅ Novo'}</td>
+    <td style="font-size:12px">${r.jaRecebido?`<span style="color:var(--green)">✔ Já recebido${r.dataRecebimentoAtual?' em '+fmtData(r.dataRecebimentoAtual):''}</span>`:r.jaExiste?'<span style="color:var(--yellow)">💰 A confirmar</span>':'<span style="color:var(--accent)">🆕 Novo na produção</span>'}</td>
   </tr>`).join(''):'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
 
   document.getElementById('imp-parc-tbody-sem').innerHTML=semMatch.length?semMatch.map(r=>`<tr>

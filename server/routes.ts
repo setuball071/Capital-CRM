@@ -23873,17 +23873,18 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Nenhuma linha encontrada no arquivo" });
         }
 
-        // Cruzar ADEs com proposals e verificar duplicatas
+        // Cruzar ADEs com proposals e verificar recebimento já confirmado
         const adeList = [...new Set(rows.map(r => r.ade))];
-        const existingAdes = new Set<string>();
+        // ADE → data_recebimento (null = existe na produção mas ainda não recebido)
+        const existingByAde = new Map<string, string | null>();
         const proposalByAde = new Map<string, { id: number; vendedor: string | null }>();
 
         if (adeList.length > 0) {
           const existingRecs = await db
-            .select({ contratoId: producoesContratos.contratoId })
+            .select({ contratoId: producoesContratos.contratoId, dataRecebimento: producoesContratos.dataRecebimento })
             .from(producoesContratos)
             .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.contratoId, adeList)));
-          for (const e of existingRecs) existingAdes.add(e.contratoId);
+          for (const e of existingRecs) existingByAde.set(e.contratoId, e.dataRecebimento);
 
           const props = await db
             .select({ id: proposals.id, ade: proposals.ade, vendedor: users.name })
@@ -23896,9 +23897,17 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const matched: any[] = [];
         const semMatch: any[] = [];
         for (const row of rows) {
-          const jaExiste = existingAdes.has(row.ade);
+          const jaExiste = existingByAde.has(row.ade);
+          const jaRecebido = !!existingByAde.get(row.ade);
           const proposal = proposalByAde.get(row.ade);
-          const item = { ...row, jaExiste, proposalId: proposal?.id ?? null, vendedorProposal: proposal?.vendedor ?? null };
+          const item = {
+            ...row,
+            jaExiste,
+            jaRecebido,
+            dataRecebimentoAtual: existingByAde.get(row.ade) || null,
+            proposalId: proposal?.id ?? null,
+            vendedorProposal: proposal?.vendedor ?? null,
+          };
           if (proposal) matched.push(item);
           else semMatch.push(item);
         }
