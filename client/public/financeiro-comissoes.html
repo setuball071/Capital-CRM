@@ -2066,11 +2066,14 @@ async function marcarRecebido(recebido){
   if(!ids.length){toast('Selecione ao menos um',true);return;}
   let dataRecebimento=null;
   if(recebido){
-    const d=prompt('Data do recebimento (AAAA-MM-DD).\nDeixe vazio para usar a data de pagamento de cada contrato.','');
+    const d=prompt('Data do recebimento (DD/MM/AAAA).\nDeixe vazio para usar a data de pagamento de cada contrato.','');
     if(d===null)return;
     const dt=d.trim();
-    if(dt&&!/^\d{4}-\d{2}-\d{2}$/.test(dt)){toast('Data inválida. Use AAAA-MM-DD',true);return;}
-    dataRecebimento=dt||null;
+    if(dt){
+      const m=dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if(!m){toast('Data inválida. Use DD/MM/AAAA',true);return;}
+      dataRecebimento=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    }
   }
   try{
     const resp=await fetch('/api/financeiro/producao/recebimento',{
