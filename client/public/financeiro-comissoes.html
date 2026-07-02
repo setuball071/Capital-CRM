@@ -3185,7 +3185,10 @@ async function impParcAnalisar(){
     fd.append('arquivo',_impParcFile);
     const resp=await fetch('/api/financeiro/producao/importar-parceiro/preview',{method:'POST',body:fd,credentials:'include'});
     const data=await resp.json();
-    if(!resp.ok)throw new Error(data.message||'Erro');
+    if(!resp.ok){
+      const dbg=data._debug?(' | '+JSON.stringify(data._debug)):'';
+      throw new Error((data.message||'Erro')+dbg);
+    }
     _impParcPreview=data;
     impParcRenderPreview();
     document.getElementById('imp-parc-step2').style.display='';
