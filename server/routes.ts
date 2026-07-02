@@ -23998,6 +23998,63 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           else semMatch.push(item);
         }
 
+        // Sem vínculo por ADE: sugere propostas do mesmo CPF para vínculo manual
+        try {
+          const cpfDigits = [...new Set(semMatch
+            .map((r: any) => String(r.cpfCliente || "").replace(/\D/g, ""))
+            .filter((c: string) => c.length === 11))];
+          if (cpfDigits.length) {
+            const cpfExpr = sql`regexp_replace(${proposals.clientCpf}, '[^0-9]', '', 'g')`;
+            const cands = await db
+              .select({
+                id: proposals.id,
+                ade: proposals.ade,
+                adeRefin: proposals.adeRefin,
+                cpf: proposals.clientCpf,
+                tipo: proposals.product,
+                valor: proposals.contractValue,
+                status: proposals.status,
+                vendedor: users.name,
+              })
+              .from(proposals)
+              .leftJoin(users, eq(proposals.vendorId, users.id))
+              .where(and(eq(proposals.tenantId, tenantId), inArray(cpfExpr, cpfDigits)))
+              .orderBy(desc(proposals.createdAt));
+            // Marca candidatas que já têm produção vinculada (e se já receberam)
+            const candIds = cands.map(c => c.id);
+            const prodByPid = new Map<number, string | null>();
+            if (candIds.length) {
+              const prods = await db
+                .select({ proposalId: producoesContratos.proposalId, dataRecebimento: producoesContratos.dataRecebimento })
+                .from(producoesContratos)
+                .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.proposalId, candIds)));
+              for (const p of prods) if (p.proposalId) prodByPid.set(p.proposalId, p.dataRecebimento);
+            }
+            const candsByCpf = new Map<string, any[]>();
+            for (const c of cands) {
+              const dig = String(c.cpf || "").replace(/\D/g, "");
+              if (!candsByCpf.has(dig)) candsByCpf.set(dig, []);
+              candsByCpf.get(dig)!.push({
+                id: c.id,
+                ade: c.ade,
+                adeRefin: c.adeRefin,
+                tipo: c.tipo,
+                valor: c.valor != null ? Number(c.valor) : null,
+                status: c.status,
+                vendedor: c.vendedor,
+                temProducao: prodByPid.has(c.id),
+                jaRecebido: !!prodByPid.get(c.id),
+              });
+            }
+            for (const item of semMatch) {
+              const dig = String(item.cpfCliente || "").replace(/\D/g, "");
+              item.candidatos = (candsByCpf.get(dig) || []).slice(0, 10);
+            }
+          }
+        } catch (candErr) {
+          console.error("[IMPORT-PARCEIRO-PREVIEW] candidatos por CPF (non-fatal):", candErr);
+        }
+
         return res.json({ matched, semMatch, invalidos });
       } catch (error: any) {
         console.error("[IMPORT-PARCEIRO-PREVIEW]", error);

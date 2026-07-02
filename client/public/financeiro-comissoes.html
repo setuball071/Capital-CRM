@@ -890,10 +890,10 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         </div>
         <!-- Sem match -->
         <div id="imp-parc-tbl-sem" class="table-wrap" style="max-height:300px;overflow-y:auto;display:none">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.08);border-radius:6px">ADEs não encontrados nas propostas do sistema. Selecione os que deseja importar assim mesmo (sem vínculo com proposta).</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.08);border-radius:6px">ADEs não encontrados nas propostas. O sistema sugere propostas do mesmo CPF — escolha a qual vincular, ou importe sem vínculo.</div>
           <table><thead><tr>
             <th style="width:28px"><input type="checkbox" id="imp-parc-chk-all-sem" onchange="impParcToggleAll(this.checked,'sem')" style="cursor:pointer;width:14px;height:14px"></th>
-            <th>ADE</th><th>Cliente</th><th>CPF</th><th>Banco</th><th>Data Pgto</th><th class="r">Base</th><th class="r">% Com.</th><th class="r">Comissão</th>
+            <th>ADE</th><th>Cliente</th><th>CPF</th><th>Banco</th><th>Data Pgto</th><th class="r">Base</th><th class="r">% Com.</th><th class="r">Comissão</th><th>Vincular à proposta</th>
           </tr></thead>
           <tbody id="imp-parc-tbody-sem"></tbody></table>
         </div>
@@ -3306,8 +3306,16 @@ function impParcRenderPreview(){
     <td style="font-size:12px">${r.jaRecebido?`<span style="color:var(--green)">✔ Já recebido${r.dataRecebimentoAtual?' em '+fmtData(r.dataRecebimentoAtual):''}</span>`:r.jaExiste?'<span style="color:var(--yellow)">💰 A confirmar</span>':'<span style="color:var(--accent)">🆕 Novo na produção</span>'}</td>
   </tr>`).join(''):'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
 
-  document.getElementById('imp-parc-tbody-sem').innerHTML=semMatch.length?semMatch.map(r=>`<tr>
-    <td><input type="checkbox" class="imp-parc-chk-sem" data-ade="${r.ade}" style="cursor:pointer;width:14px;height:14px"></td>
+  document.getElementById('imp-parc-tbody-sem').innerHTML=semMatch.length?semMatch.map(r=>{
+    const cands=r.candidatos||[];
+    // Auto-seleciona quando há exatamente 1 candidata ainda não recebida
+    const auto=cands.length===1&&!cands[0].jaRecebido?cands[0].id:'';
+    const sel=`<select class="filter-select imp-parc-vinc" data-ade="${r.ade}" style="font-size:11px;max-width:250px;padding:3px 6px">
+      <option value="">— sem vínculo —</option>
+      ${cands.map(c=>`<option value="${c.id}" data-vend="${escHtml(c.vendedor||'')}" ${c.id===auto?'selected':''}>ADE ${c.ade||'—'}${c.adeRefin?' / '+c.adeRefin:''} · ${escHtml(c.tipo||'')} · ${_fmtBRL2(c.valor)} · ${escHtml(c.status||'')}${c.jaRecebido?' · ✔ já recebido':c.temProducao?' · na produção':''}</option>`).join('')}
+    </select>`;
+    return`<tr>
+    <td><input type="checkbox" class="imp-parc-chk-sem" data-ade="${r.ade}" ${auto?'checked':''} style="cursor:pointer;width:14px;height:14px"></td>
     <td style="font-family:monospace;font-size:12px">${r.ade}</td>
     <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nomeCliente||'—'}</td>
     <td style="font-family:monospace;font-size:11px">${r.cpfCliente||'—'}</td>
@@ -3316,7 +3324,9 @@ function impParcRenderPreview(){
     <td class="r">${_fmtBRL2(r.valorBase)}</td>
     <td class="r">${Number(r.comissaoPerc||0).toFixed(2)}%</td>
     <td class="r">${_fmtBRL2(r.comissaoValor)}</td>
-  </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
+    <td>${cands.length?sel:'<span style="color:var(--muted);font-size:11px">nenhuma proposta com esse CPF</span>'}</td>
+  </tr>`;
+  }).join(''):'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Nenhum</td></tr>';
 
   document.getElementById('imp-parc-tbody-inv').innerHTML=invalidos.length?invalidos.map(r=>`<tr>
     <td style="color:var(--muted)">${r.linha||'—'}</td>
@@ -3341,7 +3351,16 @@ function impParcToggleAll(checked,tipo){
 async function impParcConfirmar(){
   const{matched,semMatch}=_impParcPreview;
   const selMatched=matched.filter(r=>{const c=document.querySelector(`.imp-parc-chk-matched[data-ade="${r.ade}"]`);return c&&c.checked;});
-  const selSem=semMatch.filter(r=>{const c=document.querySelector(`.imp-parc-chk-sem[data-ade="${r.ade}"]`);return c&&c.checked;});
+  const selSem=semMatch.filter(r=>{const c=document.querySelector(`.imp-parc-chk-sem[data-ade="${r.ade}"]`);return c&&c.checked;})
+    .map(r=>{
+      // Aplica o vínculo manual escolhido no dropdown (proposta do mesmo CPF)
+      const sel=document.querySelector(`.imp-parc-vinc[data-ade="${r.ade}"]`);
+      if(sel&&sel.value){
+        const opt=sel.options[sel.selectedIndex];
+        return{...r,proposalId:Number(sel.value),vendedorProposal:(opt&&opt.dataset.vend)||r.vendedorProposal||null};
+      }
+      return r;
+    });
   const linhas=[...selMatched,...selSem];
   if(!linhas.length){toast('Nenhuma linha selecionada.',true);return;}
   const btn=document.getElementById('imp-parc-btn-confirmar');
