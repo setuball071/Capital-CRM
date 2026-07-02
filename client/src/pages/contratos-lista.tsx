@@ -1229,8 +1229,8 @@ export default function ContratosListaPage() {
                 {sortHead("parcela", "Parcela", "text-right")}
                 {sortHead("contrato", "Contrato", "text-right")}
                 {sortHead("ade", "ADE")}
-                {showParceiroCol && sortHead("parceiro", "Parceiro")}
                 {sortHead("status", "Status")}
+                {showParceiroCol && sortHead("parceiro", "Parceiro")}
                 {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
@@ -1304,7 +1304,6 @@ export default function ContratosListaPage() {
                       )}
                     </div>
                   </TableCell>
-                  {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
@@ -1319,6 +1318,7 @@ export default function ContratosListaPage() {
                       )}
                     </div>
                   </TableCell>
+                  {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
                   {showSelectCol && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
