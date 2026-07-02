@@ -91,7 +91,6 @@ import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle, Table, PlusCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
-import ProducaoFinanceiraPage from "@/pages/producao-financeira";
 import { NotificationBell } from "@/components/notification-bell";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -619,7 +618,7 @@ function Router() {
                 {() => <Redirect to="/financeiro/contratos" />}
               </Route>
               <Route path="/minha-producao">
-                {() => <ProtectedRoute component={ProducaoFinanceiraPage} />}
+                {() => <Redirect to="/financeiro/producao" />}
               </Route>
               <Route path="/contratos/nova">
                 {() => <ProtectedRoute component={ContratosPropostaPage} />}

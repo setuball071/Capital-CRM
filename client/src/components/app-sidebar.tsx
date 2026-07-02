@@ -141,7 +141,6 @@ export function AppSidebar() {
       icon: Wrench,
       items: [
         { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
-        { title: "Minha Produção", url: "/minha-producao", icon: TrendingUp },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
         { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
         { title: "Configurações", url: "/contratos/configuracoes", icon: Settings, rolesAllowed: ["master", "operacional"] },
