@@ -1036,9 +1036,13 @@ export default function ContratosDetalhePage() {
                 <Select value={nextStatus} onValueChange={setNextStatus}>
                   <SelectTrigger data-testid="select-next-status"><SelectValue placeholder="Selecione o status..." /></SelectTrigger>
                   <SelectContent>
-                    {statusList.filter((s) => s.key !== proposal.status).map((s) => (
-                      <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-                    ))}
+                    {statusList
+                      .filter((s) => s.key !== proposal.status)
+                      .slice()
+                      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+                      .map((s) => (
+                        <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

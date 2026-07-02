@@ -1146,9 +1146,12 @@ export default function ContratosListaPage() {
               <SelectValue placeholder="Alterar status para..." />
             </SelectTrigger>
             <SelectContent>
-              {statusList.map((s) => (
-                <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-              ))}
+              {statusList
+                .slice()
+                .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+                .map((s) => (
+                  <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                ))}
             </SelectContent>
           </Select>
           <Input
@@ -1329,7 +1332,11 @@ export default function ContratosListaPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
                           <DropdownMenuLabel>Alterar status</DropdownMenuLabel>
-                          {statusList.filter((s) => s.key !== p.status).map((s) => (
+                          {statusList
+                            .filter((s) => s.key !== p.status)
+                            .slice()
+                            .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+                            .map((s) => (
                             <DropdownMenuItem
                               key={s.key}
                               onClick={() => { setQuick({ id: p.id, mode: "status", status: s.key }); setQuickValue(""); }}
@@ -1379,9 +1386,12 @@ export default function ContratosListaPage() {
                 <Select value={quick.status} onValueChange={(v) => setQuick((q) => q ? { ...q, status: v } : q)}>
                   <SelectTrigger><SelectValue placeholder="Selecione o status..." /></SelectTrigger>
                   <SelectContent>
-                    {statusList.map((s) => (
-                      <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-                    ))}
+                    {statusList
+                      .slice()
+                      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+                      .map((s) => (
+                        <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
