@@ -2872,6 +2872,9 @@ export const producoesContratos = pgTable(
     mesReferencia: varchar("mes_referencia", { length: 7 }),
     importadoPor: integer("importado_por").references(() => users.id),
     confirmado: boolean("confirmado").default(false),
+    // Recebimento da comissão pela empresa (confirmado via relatório de parceiro importado)
+    dataRecebimento: varchar("data_recebimento", { length: 20 }),
+    parceiroRelatorio: varchar("parceiro_relatorio", { length: 100 }),
     // Status de pagamento ao consultor (fluxo interno):
     //   'Aguardando' | 'A Pagar' | 'Pago' | 'Cancelado'
     statusComissao: varchar("status_comissao", { length: 50 }).default("Aguardando"),

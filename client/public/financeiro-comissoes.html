@@ -324,8 +324,19 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <option value="A Pagar">A pagar</option>
         <option value="Pago">Pago</option>
       </select>
+      <select class="filter-select" id="pf-receb" onchange="carregarProducaoAPI()">
+        <option value="">Recebimento (todos)</option>
+        <option value="areceber">A Receber</option>
+        <option value="recebido">Recebido</option>
+      </select>
+      <select class="filter-select" id="pf-parc" onchange="carregarProducaoAPI()"><option value="">Todos parceiros</option></select>
+      <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
+        <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">📅 Recebido em:</span>
+        <input type="month" id="pf-mes-receb" onchange="carregarProducaoAPI()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
+        <button onclick="document.getElementById('pf-mes-receb').value='';carregarProducaoAPI()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+      </div>
       <button class="btn btn-sm" onclick="carregarProducaoAPI()" style="background:var(--accent);color:#fff;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px">🔄 Atualizar</button>
-      <button class="btn btn-sm" onclick="abrirImportParceiro()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px">📥 Importar</button>
+      <button class="btn btn-sm" onclick="abrirImportParceiro()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px">📥 Importar Relatório</button>
     </div>
 
     <!-- KPIs -->
@@ -352,11 +363,12 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
             <th class="r">Flat %</th>
             <th class="r">Flat R$</th>
             <th>Status</th>
+            <th>Recebimento</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="prod-tbody">
-          <tr><td colspan="13" style="text-align:center;padding:30px;color:var(--muted)">Selecione um período para carregar</td></tr>
+          <tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Selecione um período para carregar</td></tr>
         </tbody>
       </table>
     </div>
@@ -817,7 +829,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 <!-- Modal Importar Produção por Parceiro -->
 <div class="overlay" id="modal-import-parceiro">
   <div class="modal" style="width:1060px;max-width:98vw">
-    <div class="modal-header"><h3>📥 Importar Produção por Parceiro</h3><button class="modal-close" onclick="fecharModal('modal-import-parceiro')">✕</button></div>
+    <div class="modal-header"><h3>📥 Importar Relatório de Comissão</h3><button class="modal-close" onclick="fecharModal('modal-import-parceiro')">✕</button></div>
     <div class="modal-body">
       <!-- Step 1: upload -->
       <div id="imp-parc-step1">
@@ -895,7 +907,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharModal('modal-import-parceiro')">Cancelar</button>
       <button id="imp-parc-btn-analisar" class="btn btn-primary" onclick="impParcAnalisar()">🔍 Analisar</button>
-      <button id="imp-parc-btn-confirmar" class="btn btn-primary" style="display:none" onclick="impParcConfirmar()">✅ Importar selecionados</button>
+      <button id="imp-parc-btn-confirmar" class="btn btn-primary" style="display:none" onclick="impParcConfirmar()">✅ Confirmar recebimento</button>
     </div>
   </div>
 </div>
@@ -1851,7 +1863,7 @@ async function carregarProducaoAPI() {
 
   // Mostrar loading
   const tbody = document.getElementById('prod-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">⏳ Carregando...</td></tr>';
 
   try {
     const params = new URLSearchParams();
@@ -1873,7 +1885,7 @@ async function carregarProducaoAPI() {
     renderTabelaProducaoAPI(data);
 
   } catch (e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
   } finally {
     _prodLoading = false;
   }
@@ -1929,17 +1941,34 @@ function renderTabelaProducaoAPI(data) {
   const { contratos, totais } = data;
   _producaoContratosCache = contratos || [];
 
-  // Filtro client-side por status
+  // Popula filtro de parceiros (relatórios já importados), preservando seleção
+  const parcSel = document.getElementById('pf-parc');
+  if (parcSel) {
+    const prevParc = parcSel.value;
+    const parceiros = [...new Set(_producaoContratosCache.map(c => c.parceiroRelatorio).filter(Boolean))].sort();
+    parcSel.innerHTML = '<option value="">Todos parceiros</option>' +
+      parceiros.map(p => `<option value="${escHtml(p)}" ${p===prevParc?'selected':''}>${escHtml(p)}</option>`).join('');
+  }
+
+  // Filtros client-side: status do prêmio + recebimento + parceiro + mês de recebimento
   const filtroSt = document.getElementById('pf-status')?.value || '';
+  const filtroReceb = document.getElementById('pf-receb')?.value || '';
+  const filtroParc = document.getElementById('pf-parc')?.value || '';
+  const filtroMesReceb = document.getElementById('pf-mes-receb')?.value || '';
   let lista = _producaoContratosCache;
   if (filtroSt) lista = lista.filter(c => (c.statusComissao||'Aguardando') === filtroSt);
+  if (filtroReceb === 'recebido') lista = lista.filter(c => c.dataRecebimento);
+  if (filtroReceb === 'areceber') lista = lista.filter(c => !c.dataRecebimento);
+  if (filtroParc) lista = lista.filter(c => (c.parceiroRelatorio||'') === filtroParc);
+  if (filtroMesReceb) lista = lista.filter(c => (c.dataRecebimento||'').startsWith(filtroMesReceb));
 
   // Recalcula totais aplicando regra do grupo
-  let totVal = 0, totEmp = 0, totFlat = 0;
+  let totVal = 0, totEmp = 0, totFlat = 0, totRecebido = 0, totAReceber = 0;
   lista.forEach(c => {
     totVal += parseFloat(c.valorBruto||0);
     const emp = parseFloat(c.comissaoEmpresaValor||0) || parseFloat(c.comissaoRepasseValor||0);
     totEmp += emp;
+    if (c.dataRecebimento) totRecebido += emp; else totAReceber += emp;
     const pct = calcRepasseConsultorProd(c);
     totFlat += Math.round(emp * pct / 100 * 100) / 100;
   });
@@ -1949,6 +1978,8 @@ function renderTabelaProducaoAPI(data) {
     kpisEl.innerHTML = `
       <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${lista.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Produção (bruto)</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Comissão A Receber</div><div class="kpi-value kpi-yellow">${fmtBRL(totAReceber)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Comissão Recebida</div><div class="kpi-value kpi-green">${fmtBRL(totRecebido)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Val. Empresa</div><div class="kpi-value kpi-yellow">${fmtBRL(totEmp)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Comissão Total (consultor)</div><div class="kpi-value kpi-blue">${fmtBRL(totFlat)}</div></div>
     `;
@@ -1957,7 +1988,7 @@ function renderTabelaProducaoAPI(data) {
   const tbody = document.getElementById('prod-tbody');
   if (!tbody) return;
   if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">Nenhum contrato encontrado</td></tr>';
     atualizarBarraProducao();
     return;
   }
@@ -1972,6 +2003,9 @@ function renderTabelaProducaoAPI(data) {
     const pctFlat = valorBruto>0 ? (vf / valorBruto * 100) : 0;
     const stFlat = c.statusComissao || 'Aguardando';
     const bFlat = `<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'}">${stFlat==='A Pagar'?'A pagar':stFlat}</span>`;
+    const bReceb = c.dataRecebimento
+      ? `<span class="badge b-recebido">Recebido</span><div class="td-muted" style="font-size:10px;margin-top:2px">${fmtData(c.dataRecebimento)}${c.parceiroRelatorio?' · '+escHtml(c.parceiroRelatorio):''}</div>`
+      : `<span class="badge b-aguardando">A Receber</span>`;
     const corNome = c.vendedorNome || c.nomeCorretor || '—';
     const temOverride = !!((c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!=='')||c.grupoIdOverride);
     const disabledChk = stFlat === 'Pago' ? 'disabled' : '';
@@ -1989,6 +2023,7 @@ function renderTabelaProducaoAPI(data) {
       <td class="r">${pctFlat.toFixed(2)}% <span style="font-size:10px;color:var(--muted)">(${pctGrupo.toFixed(0)}% do grupo)</span>${temOverride?' <span title="Ajuste manual" style="color:#e67e22">✏️</span>':''}</td>
       <td class="r v-yellow">${fmtBRL(vf)}</td>
       <td>${bFlat}</td>
+      <td>${bReceb}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="abrirAjusteContrato(${c.id})" title="Ajustar repasse">✏️</button></td>
     </tr>`;
   }).join('');
@@ -3271,12 +3306,12 @@ async function impParcConfirmar(){
     const data=await resp.json();
     if(!resp.ok)throw new Error(data.message||'Erro');
     fecharModal('modal-import-parceiro');
-    toast(`Importado! ${data.inseridos} registro(s).${data.erros?.length?' '+data.erros.length+' erro(s).':''}`);
+    toast(`Recebimento confirmado! ${data.inseridos} contrato(s).${data.erros?.length?' '+data.erros.length+' erro(s).':''}`);
     carregarProducaoAPI();
   }catch(e){
     toast('Erro: '+e.message,true);
   }finally{
-    btn.disabled=false;btn.textContent='✅ Importar selecionados';
+    btn.disabled=false;btn.textContent='✅ Confirmar recebimento';
   }
 }
 

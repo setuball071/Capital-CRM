@@ -23918,8 +23918,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
       if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
 
-      const { linhas } = req.body || {};
+      const { linhas, parceiro } = req.body || {};
       if (!Array.isArray(linhas) || !linhas.length) return res.status(400).json({ message: "Nenhuma linha para importar" });
+
+      const PARCEIRO_LABELS: Record<string, string> = {
+        d7: "D7 (Inter)", gold: "Gold (BTW)", amf: "AMF", bevi: "Bevi",
+      };
+      const parceiroLabel = PARCEIRO_LABELS[String(parceiro || "").toLowerCase()] || String(parceiro || "") || null;
+      const hoje = new Date().toISOString().slice(0, 10);
 
       let inseridos = 0;
       const erros: string[] = [];
@@ -23930,6 +23936,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           if (!ade) continue;
           const mesRef = r.dataPagamento ? String(r.dataPagamento).slice(0, 7) : null;
           const nomeCorr = String(r.vendedor || r.vendedorProposal || "").trim().toUpperCase() || null;
+          // Relatório de comissão = confirmação de recebimento: marca Recebido
+          // e libera automaticamente o prêmio do consultor para "A Pagar"
           const record: any = {
             tenantId,
             contratoId: ade,
@@ -23943,10 +23951,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             valorBruto: r.valorBase != null ? String(r.valorBase) : null,
             comissaoRepassePerc: r.comissaoPerc != null ? String(r.comissaoPerc) : null,
             comissaoRepasseValor: r.comissaoValor != null ? String(r.comissaoValor) : null,
-            status: "Importado",
+            status: "Recebido",
+            dataRecebimento: r.dataPagamento || hoje,
+            parceiroRelatorio: parceiroLabel,
             mesReferencia: mesRef,
             importadoPor: req.user?.id || null,
-            statusComissao: "Aguardando",
+            statusComissao: "A Pagar",
             proposalId: r.proposalId || null,
             vendedorNome: String(r.vendedor || r.vendedorProposal || "").trim() || null,
             nomeCorretor: nomeCorr,
@@ -23954,30 +23964,36 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
           // Verifica se já existe
           const existing = await db
-            .select({ id: producoesContratos.id })
+            .select({ id: producoesContratos.id, statusComissao: producoesContratos.statusComissao })
             .from(producoesContratos)
             .where(and(eq(producoesContratos.contratoId, ade), eq(producoesContratos.tenantId, tenantId)))
             .limit(1);
 
           if (existing.length > 0) {
+            const set: any = {
+              nomeCliente: record.nomeCliente,
+              cpfCliente: record.cpfCliente,
+              banco: record.banco,
+              tipoContrato: record.tipoContrato,
+              dataPagamento: record.dataPagamento,
+              valorBase: record.valorBase,
+              valorBruto: record.valorBruto,
+              comissaoRepassePerc: record.comissaoRepassePerc,
+              comissaoRepasseValor: record.comissaoRepasseValor,
+              status: record.status,
+              dataRecebimento: record.dataRecebimento,
+              parceiroRelatorio: record.parceiroRelatorio,
+              mesReferencia: record.mesReferencia,
+              proposalId: record.proposalId,
+              vendedorNome: record.vendedorNome,
+              nomeCorretor: record.nomeCorretor,
+            };
+            // Libera prêmio para pagamento, mas nunca regride quem já foi Pago
+            const stAtual = existing[0].statusComissao || "Aguardando";
+            if (stAtual !== "Pago" && stAtual !== "Cancelado") set.statusComissao = "A Pagar";
             await db
               .update(producoesContratos)
-              .set({
-                nomeCliente: record.nomeCliente,
-                cpfCliente: record.cpfCliente,
-                banco: record.banco,
-                tipoContrato: record.tipoContrato,
-                dataPagamento: record.dataPagamento,
-                valorBase: record.valorBase,
-                valorBruto: record.valorBruto,
-                comissaoRepassePerc: record.comissaoRepassePerc,
-                comissaoRepasseValor: record.comissaoRepasseValor,
-                status: record.status,
-                mesReferencia: record.mesReferencia,
-                proposalId: record.proposalId,
-                vendedorNome: record.vendedorNome,
-                nomeCorretor: record.nomeCorretor,
-              })
+              .set(set)
               .where(and(eq(producoesContratos.id, existing[0].id), eq(producoesContratos.tenantId, tenantId)));
           } else {
             await db.insert(producoesContratos).values(record);

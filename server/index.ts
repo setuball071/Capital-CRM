@@ -367,6 +367,12 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE producoes_contratos ADD COLUMN IF NOT EXISTS proposal_id INTEGER
           `);
+          // Recebimento de comissão via relatório de parceiro (D7/Gold/AMF/Bevi)
+          await migDb.execute(migSql`
+            ALTER TABLE producoes_contratos
+              ADD COLUMN IF NOT EXISTS data_recebimento VARCHAR(20),
+              ADD COLUMN IF NOT EXISTS parceiro_relatorio VARCHAR(100)
+          `);
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);
@@ -447,7 +453,9 @@ app.use((req, res, next) => {
 
         // Normaliza nomeCorretor para UPPER (elimina duplicatas de caixa)
         try {
-          await migDb.execute(migSql`
+          const { db: normDb } = await import("./storage");
+          const { sql: normSql } = await import("drizzle-orm");
+          await normDb.execute(normSql`
             UPDATE producoes_contratos
             SET nome_corretor = UPPER(TRIM(nome_corretor))
             WHERE nome_corretor IS NOT NULL

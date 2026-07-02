@@ -237,7 +237,7 @@ export function AppSidebar() {
       title: "Financeiro",
       icon: TrendingUp,
       items: [
-        { title: "Contratos", url: "/financeiro/contratos", icon: FileText, module: "modulo_financeiro", subItem: "contratos" },
+        { title: "Pagamentos", url: "/financeiro/contratos", icon: FileText, module: "modulo_financeiro", subItem: "contratos" },
         { title: "Produção", url: "/financeiro/producao", icon: BarChart3, module: "modulo_financeiro", subItem: "producao" },
         { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, module: "modulo_financeiro", subItem: "tabelas" },
         { title: "Configurações", url: "/financeiro/configuracoes", icon: Settings2, module: "modulo_financeiro", subItem: "configuracoes" },
