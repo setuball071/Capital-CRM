@@ -23820,7 +23820,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             });
           });
         } else if (parceiro === "amf") {
-          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          // Aceita xlsx OU o export CSV (vírgula + aspas, UTF-8)
+          let wb: XLSX.WorkBook;
+          if (/\.csv$/i.test(file.originalname || "")) {
+            let text: string;
+            if (file.buffer.length >= 3 && file.buffer[0] === 0xEF && file.buffer[1] === 0xBB && file.buffer[2] === 0xBF) {
+              text = file.buffer.slice(3).toString("utf-8");
+            } else {
+              const tentativa = file.buffer.toString("utf-8");
+              text = tentativa.includes("�") ? file.buffer.toString("latin1") : tentativa;
+            }
+            // raw:true preserva números BR como texto ("21.470,46")
+            wb = XLSX.read(text, { type: "string", raw: true });
+          } else {
+            wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+          }
           const ws = wb.Sheets[wb.SheetNames[0]];
           const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
           if (data.length < 2) return res.status(400).json({ message: "Arquivo AMF vazio" });
@@ -23871,27 +23885,51 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             const ws = wb.Sheets[wb.SheetNames[0]];
             data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true }) as any[][];
           }
-          // Localiza a linha de cabeçalho (a que contém Cliente + CPF)
-          const hIdx = data.findIndex(r =>
+          // Dois formatos conhecidos:
+          //   A) "CREDITO COMISSAO - Detalhe Completo" (título + header Cliente/CPF)
+          //   B) "comissoes_pagas" (header NOME/NUMERO ADE, números formato US)
+          const hIdxB = data.findIndex(r =>
+            Array.isArray(r) && r.some(c => decodeEnt(c) === "NUMERO ADE"));
+          const hIdxA = data.findIndex(r =>
             Array.isArray(r) && r.some(c => decodeEnt(c) === "Cliente") && r.some(c => decodeEnt(c) === "CPF"));
-          if (hIdx < 0) return res.status(400).json({ message: "Arquivo Bevi não reconhecido (cabeçalho Cliente/CPF não encontrado)" });
+          if (hIdxB < 0 && hIdxA < 0) {
+            return res.status(400).json({ message: "Arquivo Bevi não reconhecido (cabeçalho não encontrado)" });
+          }
+          const hIdx = hIdxB >= 0 ? hIdxB : hIdxA;
           const header = data[hIdx].map(h => decodeEnt(h));
           const idx = (name: string) => header.indexOf(name);
           for (let i = hIdx + 1; i < data.length; i++) {
             const row = data[i];
-            const ade = decodeEnt(row[idx("Nr. Adesão")]) || decodeEnt(row[idx("Nr. Contrato")]);
-            if (!ade) continue; // linha de total ou vazia
-            rows.push({
-              ade,
-              nomeCliente: decodeEnt(row[idx("Cliente")]),
-              cpfCliente: decodeEnt(row[idx("CPF")]),
-              banco: decodeEnt(row[idx("Financeira")]),
-              dataPagamento: parseDateBR2(decodeEnt(row[idx("Data Pagamento")])),
-              valorBase: parseNumBR2(row[idx("Valor Base Comissão")]),
-              comissaoPerc: parseNumBR2(row[idx("Perc. Comissão")]),
-              comissaoValor: parseNumBR2(row[idx("Valor Comissão")]),
-              tipoContrato: decodeEnt(row[idx("Prazo")]) || undefined,
-            });
+            if (hIdxB >= 0) {
+              const ade = decodeEnt(row[idx("NUMERO ADE")]) || decodeEnt(row[idx("NUMERO DO CONTRATO")]);
+              if (!ade) continue;
+              rows.push({
+                ade,
+                nomeCliente: decodeEnt(row[idx("NOME")]),
+                cpfCliente: decodeEnt(row[idx("CPF")]),
+                banco: decodeEnt(row[idx("BANCO")]),
+                dataPagamento: parseDateBR2(decodeEnt(row[idx("DT PAGAMENTO")])),
+                valorBase: parseNumBR2(row[idx("VALOR EMPRESTIMO")]),
+                comissaoPerc: parseNumBR2(row[idx("PERCENTUAL COMISSAO")]),
+                comissaoValor: parseNumBR2(row[idx("VALOR COMISSAO")]),
+                tipoContrato: decodeEnt(row[idx("OPERACAO")]) || undefined,
+                prazo: decodeEnt(row[idx("PRAZO")]) || undefined,
+              });
+            } else {
+              const ade = decodeEnt(row[idx("Nr. Adesão")]) || decodeEnt(row[idx("Nr. Contrato")]);
+              if (!ade) continue; // linha de total ou vazia
+              rows.push({
+                ade,
+                nomeCliente: decodeEnt(row[idx("Cliente")]),
+                cpfCliente: decodeEnt(row[idx("CPF")]),
+                banco: decodeEnt(row[idx("Financeira")]),
+                dataPagamento: parseDateBR2(decodeEnt(row[idx("Data Pagamento")])),
+                valorBase: parseNumBR2(row[idx("Valor Base Comissão")]),
+                comissaoPerc: parseNumBR2(row[idx("Perc. Comissão")]),
+                comissaoValor: parseNumBR2(row[idx("Valor Comissão")]),
+                tipoContrato: decodeEnt(row[idx("Prazo")]) || undefined,
+              });
+            }
           }
         }
 
