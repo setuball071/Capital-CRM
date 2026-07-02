@@ -23888,7 +23888,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           const props = await db
             .select({ id: proposals.id, ade: proposals.ade, vendedor: users.name })
             .from(proposals)
-            .leftJoin(users, eq(proposals.vendedorId, users.id))
+            .leftJoin(users, eq(proposals.vendorId, users.id))
             .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
           for (const p of props) if (p.ade) proposalByAde.set(p.ade, { id: p.id, vendedor: p.vendedor });
         }
@@ -23906,15 +23906,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.json({ matched, semMatch, invalidos });
       } catch (error: any) {
         console.error("[IMPORT-PARCEIRO-PREVIEW]", error);
-        return res.status(500).json({
-          message: "Erro ao analisar arquivo: " + error.message,
-          _debug: {
-            stack: String(error.stack || "").split("\n").slice(0, 8),
-            code: error.code,
-            position: error.position,
-            detail: error.detail,
-          },
-        });
+        return res.status(500).json({ message: "Erro ao analisar arquivo: " + error.message });
       }
     },
   );
