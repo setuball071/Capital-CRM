@@ -23937,11 +23937,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: "Nenhuma linha encontrada no arquivo" });
         }
 
-        // Cruzar ADEs com proposals e verificar recebimento já confirmado
+        // Cruzar ADEs com proposals e verificar recebimento já confirmado.
+        // Portabilidade: após quitar o saldo é feito o refin com ADE nova (proposals.adeRefin)
+        // — o relatório de comissão geralmente traz a ADE do refin, então o match
+        // considera as duas ADEs da proposta.
         const adeList = [...new Set(rows.map(r => r.ade))];
         // ADE → data_recebimento (null = existe na produção mas ainda não recebido)
         const existingByAde = new Map<string, string | null>();
         const proposalByAde = new Map<string, { id: number; vendedor: string | null }>();
+        // proposalId → produção já existente (vínculo criado quando a proposta virou PAGO)
+        const prodByProposalId = new Map<number, { dataRecebimento: string | null }>();
 
         if (adeList.length > 0) {
           const existingRecs = await db
@@ -23951,24 +23956,41 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           for (const e of existingRecs) existingByAde.set(e.contratoId, e.dataRecebimento);
 
           const props = await db
-            .select({ id: proposals.id, ade: proposals.ade, vendedor: users.name })
+            .select({ id: proposals.id, ade: proposals.ade, adeRefin: proposals.adeRefin, vendedor: users.name })
             .from(proposals)
             .leftJoin(users, eq(proposals.vendorId, users.id))
-            .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.ade, adeList)));
-          for (const p of props) if (p.ade) proposalByAde.set(p.ade, { id: p.id, vendedor: p.vendedor });
+            .where(and(
+              eq(proposals.tenantId, tenantId),
+              or(inArray(proposals.ade, adeList), inArray(proposals.adeRefin, adeList)),
+            ));
+          for (const p of props) {
+            if (p.ade && adeList.includes(p.ade)) proposalByAde.set(p.ade, { id: p.id, vendedor: p.vendedor });
+            if (p.adeRefin && adeList.includes(p.adeRefin)) proposalByAde.set(p.adeRefin, { id: p.id, vendedor: p.vendedor });
+          }
+
+          // Produção vinculada por proposalId (pode estar registrada com a OUTRA ADE da proposta)
+          const propIds = [...new Set([...proposalByAde.values()].map(p => p.id))];
+          if (propIds.length) {
+            const prodRecs = await db
+              .select({ proposalId: producoesContratos.proposalId, dataRecebimento: producoesContratos.dataRecebimento })
+              .from(producoesContratos)
+              .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.proposalId, propIds)));
+            for (const r of prodRecs) if (r.proposalId) prodByProposalId.set(r.proposalId, { dataRecebimento: r.dataRecebimento });
+          }
         }
 
         const matched: any[] = [];
         const semMatch: any[] = [];
         for (const row of rows) {
-          const jaExiste = existingByAde.has(row.ade);
-          const jaRecebido = !!existingByAde.get(row.ade);
           const proposal = proposalByAde.get(row.ade);
+          const prodViaProposal = proposal ? prodByProposalId.get(proposal.id) : undefined;
+          const jaExiste = existingByAde.has(row.ade) || !!prodViaProposal;
+          const jaRecebido = !!existingByAde.get(row.ade) || !!prodViaProposal?.dataRecebimento;
           const item = {
             ...row,
             jaExiste,
             jaRecebido,
-            dataRecebimentoAtual: existingByAde.get(row.ade) || null,
+            dataRecebimentoAtual: existingByAde.get(row.ade) || prodViaProposal?.dataRecebimento || null,
             proposalId: proposal?.id ?? null,
             vendedorProposal: proposal?.vendedor ?? null,
           };
@@ -24035,11 +24057,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             nomeCorretor: nomeCorr,
           };
 
-          // Verifica se já existe
+          // Verifica se já existe — por ADE ou pela proposta vinculada
+          // (portabilidade: produção pode estar registrada com a ADE original
+          //  enquanto o relatório traz a ADE do refin)
+          const matchExistente = r.proposalId
+            ? or(eq(producoesContratos.contratoId, ade), eq(producoesContratos.proposalId, Number(r.proposalId)))
+            : eq(producoesContratos.contratoId, ade);
           const existing = await db
             .select({ id: producoesContratos.id, statusComissao: producoesContratos.statusComissao })
             .from(producoesContratos)
-            .where(and(eq(producoesContratos.contratoId, ade), eq(producoesContratos.tenantId, tenantId)))
+            .where(and(matchExistente, eq(producoesContratos.tenantId, tenantId)))
             .limit(1);
 
           if (existing.length > 0) {
