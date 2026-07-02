@@ -89,7 +89,7 @@ export default function FinanceiroComissoes() {
     <div style={{ height: "100%", overflow: "hidden" }}>
       <iframe
         ref={frameRef}
-        src="/financeiro-comissoes.html?v=20260701e"
+        src="/financeiro-comissoes.html?v=20260701f"
         title="Financeiro — Comissões"
         style={{ display: "block", width: "100%", height: "100%", border: "none" }}
         allow="same-origin"

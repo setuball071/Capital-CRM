@@ -24067,6 +24067,49 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
+  // Marcar/desmarcar recebimento manual de comissão em lote (master/coord)
+  // Usado para acertar histórico anterior aos relatórios de parceiro
+  app.patch("/api/financeiro/producao/recebimento", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
+      if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
+
+      const { contratoIds, recebido, dataRecebimento } = req.body || {};
+      if (!Array.isArray(contratoIds) || !contratoIds.length) {
+        return res.status(400).json({ message: "contratoIds vazio" });
+      }
+      const ids = contratoIds.map(Number).filter((n: number) => !isNaN(n));
+      if (!ids.length) return res.status(400).json({ message: "IDs inválidos" });
+
+      if (recebido) {
+        const dt = dataRecebimento && /^\d{4}-\d{2}-\d{2}$/.test(String(dataRecebimento)) ? String(dataRecebimento) : null;
+        const hoje = new Date().toISOString().slice(0, 10);
+        await db
+          .update(producoesContratos)
+          .set({
+            // sem data informada: usa a data de pagamento do próprio contrato
+            dataRecebimento: sql`COALESCE(${dt}::varchar, data_pagamento, ${hoje}::varchar)`,
+            status: "Recebido",
+            parceiroRelatorio: sql`COALESCE(parceiro_relatorio, 'Manual')`,
+            // libera prêmio para pagamento sem regredir quem já foi Pago/Cancelado
+            statusComissao: sql`CASE WHEN status_comissao IN ('Pago','Cancelado') THEN status_comissao ELSE 'A Pagar' END`,
+          })
+          .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.id, ids)));
+      } else {
+        await db
+          .update(producoesContratos)
+          .set({ dataRecebimento: null, parceiroRelatorio: null, status: "Importado" })
+          .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.id, ids)));
+      }
+      return res.json({ ok: true, atualizados: ids.length });
+    } catch (e: any) {
+      console.error("[FINANCEIRO-RECEBIMENTO] Error:", e);
+      return res.status(500).json({ message: "Erro ao atualizar recebimento" });
+    }
+  });
+
   // Atualizar status de comissão de um ou mais contratos (master/coord)
   app.patch("/api/financeiro/producao/status", requireAuth, async (req: any, res) => {
     try {

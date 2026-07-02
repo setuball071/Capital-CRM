@@ -2008,7 +2008,8 @@ function renderTabelaProducaoAPI(data) {
       : `<span class="badge b-aguardando">A Receber</span>`;
     const corNome = c.vendedorNome || c.nomeCorretor || '—';
     const temOverride = !!((c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!=='')||c.grupoIdOverride);
-    const disabledChk = stFlat === 'Pago' ? 'disabled' : '';
+    // Pago também é selecionável (para marcar recebimento); marcarParaPagamento ignora Pago
+    const disabledChk = '';
     return `<tr>
       <td style="padding:6px"><input type="checkbox" class="prod-chk" value="${c.id}" data-vf="${vf}" data-vend="${escHtml(corNome)}" ${_selectedProducao.has(String(c.id))?'checked':''} ${disabledChk} onchange="toggleProducaoSelecionado('${c.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td><span class="ade-chip">${escHtml(c.contratoId)}</span></td>
@@ -2054,13 +2055,42 @@ function atualizarBarraProducao(){
   bar.innerHTML=`
     <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} selecionado${chks.length>1?'s':''} • Total: <b>${fmtBRL(total)}</b></div>
     <div style="display:flex;gap:8px">
+      <button class="btn" style="background:#fff;color:var(--green);font-weight:600" onclick="marcarRecebido(true)">✔ Marcar Recebido</button>
+      <button class="btn btn-ghost" style="color:#fff;border:1px solid #fff" onclick="marcarRecebido(false)">Desfazer Recebido</button>
       <button class="btn" style="background:#fff;color:var(--accent);font-weight:600" onclick="marcarParaPagamento()">📌 Marcar para Pagamento</button>
       <button class="btn btn-ghost" style="color:#fff;border:1px solid #fff" onclick="desmarcarSelecionadosProd()">↩ Desmarcar</button>
     </div>`;
 }
-async function marcarParaPagamento(){
+async function marcarRecebido(recebido){
   const ids=[..._selectedProducao].map(Number);
   if(!ids.length){toast('Selecione ao menos um',true);return;}
+  let dataRecebimento=null;
+  if(recebido){
+    const d=prompt('Data do recebimento (AAAA-MM-DD).\nDeixe vazio para usar a data de pagamento de cada contrato.','');
+    if(d===null)return;
+    const dt=d.trim();
+    if(dt&&!/^\d{4}-\d{2}-\d{2}$/.test(dt)){toast('Data inválida. Use AAAA-MM-DD',true);return;}
+    dataRecebimento=dt||null;
+  }
+  try{
+    const resp=await fetch('/api/financeiro/producao/recebimento',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contratoIds:ids,recebido,dataRecebimento}),
+    });
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    toast(recebido?`${ids.length} contrato${ids.length>1?'s':''} marcado${ids.length>1?'s':''} como Recebido`:`Recebimento desfeito em ${ids.length} contrato${ids.length>1?'s':''}`);
+    _selectedProducao.clear();
+    carregarProducaoAPI();
+  }catch(e){toast('Erro: '+(e.message||e),true);}
+}
+async function marcarParaPagamento(){
+  // Ignora contratos já Pagos (o endpoint de status regrediria para A Pagar)
+  const ids=[..._selectedProducao].map(Number).filter(id=>{
+    const c=_producaoContratosCache.find(x=>x.id===id);
+    return !c||(c.statusComissao||'Aguardando')!=='Pago';
+  });
+  if(!ids.length){toast('Selecione ao menos um contrato não Pago',true);return;}
   try{
     const resp=await fetch('/api/financeiro/producao/status',{
       method:'PATCH',credentials:'include',
