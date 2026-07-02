@@ -23845,26 +23845,52 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             });
           }
         } else if (parceiro === "bevi") {
-          const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-          if (data.length < 3) return res.status(400).json({ message: "Arquivo Bevi vazio" });
-          const header = (data[1] as string[]).map(h => String(h).trim());
+          // O ".xls" da Bevi é uma tabela HTML disfarçada (headers com &atilde; etc.);
+          // raw:true evita o parser destruir números BR ("316,63" viraria 31663).
+          // Também aceita o export CSV (;) com título na linha 1.
+          const decodeEnt = (s: any) => String(s ?? "")
+            .replace(/&atilde;/gi, "ã").replace(/&otilde;/gi, "õ").replace(/&ccedil;/gi, "ç")
+            .replace(/&aacute;/gi, "á").replace(/&eacute;/gi, "é").replace(/&iacute;/gi, "í")
+            .replace(/&oacute;/gi, "ó").replace(/&uacute;/gi, "ú").replace(/&acirc;/gi, "â")
+            .replace(/&ecirc;/gi, "ê").replace(/&ocirc;/gi, "ô").replace(/&nbsp;/gi, " ")
+            .replace(/&amp;/gi, "&").trim();
+          let data: any[][] = [];
+          const isCsv = /\.csv$/i.test(file.originalname || "");
+          if (isCsv) {
+            let text: string;
+            if (file.buffer.length >= 3 && file.buffer[0] === 0xEF && file.buffer[1] === 0xBB && file.buffer[2] === 0xBF) {
+              text = file.buffer.slice(3).toString("utf-8");
+            } else {
+              const tentativa = file.buffer.toString("utf-8");
+              text = tentativa.includes("�") ? file.buffer.toString("latin1") : tentativa;
+            }
+            data = text.split(/\r?\n/).filter(l => l.trim())
+              .map(l => l.split(";").map(c => c.replace(/^"|"$/g, "").trim()));
+          } else {
+            const wb = XLSX.read(file.buffer, { type: "buffer", raw: true });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true }) as any[][];
+          }
+          // Localiza a linha de cabeçalho (a que contém Cliente + CPF)
+          const hIdx = data.findIndex(r =>
+            Array.isArray(r) && r.some(c => decodeEnt(c) === "Cliente") && r.some(c => decodeEnt(c) === "CPF"));
+          if (hIdx < 0) return res.status(400).json({ message: "Arquivo Bevi não reconhecido (cabeçalho Cliente/CPF não encontrado)" });
+          const header = data[hIdx].map(h => decodeEnt(h));
           const idx = (name: string) => header.indexOf(name);
-          for (let i = 2; i < data.length - 1; i++) {
-            const row = data[i] as any[];
-            const ade = String(row[idx("Nr. Adesão")] || row[idx("Nr. Contrato")] || "").trim();
-            if (!ade) { invalidos.push({ linha: i + 1, motivo: "Nr. Adesão vazio" }); continue; }
+          for (let i = hIdx + 1; i < data.length; i++) {
+            const row = data[i];
+            const ade = decodeEnt(row[idx("Nr. Adesão")]) || decodeEnt(row[idx("Nr. Contrato")]);
+            if (!ade) continue; // linha de total ou vazia
             rows.push({
               ade,
-              nomeCliente: String(row[idx("Cliente")] || "").trim(),
-              cpfCliente: String(row[idx("CPF")] || "").trim(),
-              banco: String(row[idx("Financeira")] || "").trim(),
-              dataPagamento: parseDateBR2(row[idx("Data Pagamento")]),
+              nomeCliente: decodeEnt(row[idx("Cliente")]),
+              cpfCliente: decodeEnt(row[idx("CPF")]),
+              banco: decodeEnt(row[idx("Financeira")]),
+              dataPagamento: parseDateBR2(decodeEnt(row[idx("Data Pagamento")])),
               valorBase: parseNumBR2(row[idx("Valor Base Comissão")]),
               comissaoPerc: parseNumBR2(row[idx("Perc. Comissão")]),
               comissaoValor: parseNumBR2(row[idx("Valor Comissão")]),
-              tipoContrato: String(row[idx("Prazo")] || "").trim() || undefined,
+              tipoContrato: decodeEnt(row[idx("Prazo")]) || undefined,
             });
           }
         }
