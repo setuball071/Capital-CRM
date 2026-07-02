@@ -651,6 +651,22 @@ export default function ContratosListaPage() {
     },
   });
 
+  // Tabelas de comissão (Financeiro → Tabelas) — usadas para excluir da produção
+  // contratos digitados com tabela de % Empresa zerado (sem repasse nenhum).
+  const { data: financeiroConfig } = useQuery<{ dados: any } | null>({
+    queryKey: ["/api/financeiro/config"],
+    queryFn: async () => {
+      const res = await fetch("/api/financeiro/config", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+  const tabelasRepasseZerado = new Set(
+    ((financeiroConfig?.dados?.tabelas as any[]) ?? [])
+      .filter((t) => Number(t.pctEmpresa) === 0)
+      .map((t) => String(t.id))
+  );
+
   const { data: statusList = [] } = useQuery<StatusDef[]>({
     queryKey: ["/api/contracts/statuses"],
     queryFn: async () => {
@@ -850,6 +866,8 @@ export default function ContratosListaPage() {
   function prodValueOf(p: any) {
     if (p.unificadaEmId) return 0; // parcela absorvida numa unificação não soma produção
     if (CANCEL_STATUSES.includes(p.status)) return 0;
+    const tabelaId = p.clientMeta?.tabelaFinanceiroId;
+    if (tabelaId && tabelasRepasseZerado.has(String(tabelaId))) return 0; // tabela sem repasse (% Empresa = 0)
     const val = parseFloat(p.contractValue || "0") || 0;
     if (p.status === "PAGO") {
       return isCurrentMonth(p.paidAt || p.updatedAt) ? val : 0;
