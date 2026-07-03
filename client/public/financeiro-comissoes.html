@@ -409,7 +409,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <input class="search" id="tb-busca" placeholder="🔍 Buscar tabela ou banco..." oninput="renderTabelas()"/>
     <select class="filter-select" id="tb-banco" onchange="renderTabelas()"><option value="">Todos os bancos</option></select>
     <select class="filter-select" id="tb-conv" onchange="renderTabelas()"><option value="">Todos convênios</option><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option><option>Outro</option></select>
-    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
+    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
     <select class="filter-select" id="tb-prazo" onchange="renderTabelas()"><option value="">Todos os prazos</option></select>
     <span class="count-chip" id="tb-count">—</span>
     <div class="filter-right" id="tb-master-btns">
@@ -914,7 +914,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <select id="t-conv" onchange="atualizarPreviewTabela()"><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option></select>
         </div>
         <div class="form-group"><label>Tipo</label>
-          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
+          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
         </div>
       </div>
       <div class="form-grid-2">
@@ -2791,7 +2791,7 @@ function renderCorretores(){
 }
 // ── Regras de repasse por tipo de produto ─────────────────────
 // Tipos padrão do sistema — mesmos do campo "Tipo" nas tabelas
-const TIPOS_PADRAO=['Novo','Portabilidade','Refinanciamento','Cartão','Compra de Dívida','Outro'];
+const TIPOS_PADRAO=['Novo','Portabilidade','Refin de Portabilidade','Refinanciamento','Cartão','Compra de Dívida','Outro'];
 function _tipoOpts(selected){
   return`<option value="">Selecione o tipo...</option>`+TIPOS_PADRAO.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
 }
@@ -2811,6 +2811,9 @@ function getRepasseForTipo(grupo,tipo){
 function mapTipoFront(t){
   const s=(t||'').toLowerCase();
   if(s.includes('cart')||s.includes('benef')||s.includes('saque'))return'Cartão';
+  // Refin de Portabilidade (troco pago separado, ex. Paraná) — testar ANTES de 'port'.
+  // Começa com 'refin' p/ não capturar o legado PORTABILIDADE_REFIN (que é Portabilidade).
+  if(s.startsWith('refin')&&s.includes('port'))return'Refin de Portabilidade';
   if(s.includes('port'))return'Portabilidade';
   if(s.includes('compra')||s.includes('dívida')||s.includes('divida'))return'Compra de Dívida';
   if(s.includes('refin'))return'Refinanciamento';
