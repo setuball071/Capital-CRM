@@ -41,6 +41,25 @@ const CIP_ROW: Record<CipState, string> = {
   due:  "bg-amber-100 dark:bg-amber-900/30",
 };
 
+// ─── Acompanhamento operacional: tempo desde a última consulta ────────────────
+// Sem consulta registrada ainda, conta a partir da última atualização da proposta.
+function consultaElapsed(p: any): { label: string; hours: number } | null {
+  const ref = p.ultimaConsulta || p.updatedAt || p.createdAt;
+  if (!ref) return null;
+  const ms = Date.now() - new Date(ref).getTime();
+  if (isNaN(ms) || ms < 0) return null;
+  const hours = ms / 36e5;
+  const d = Math.floor(hours / 24);
+  const h = Math.floor(hours % 24);
+  const label = d > 0 ? `${d}d ${h}h` : hours >= 1 ? `${h}h` : `${Math.max(1, Math.floor(ms / 6e4))}min`;
+  return { label, hours };
+}
+function consultaBadgeCls(hours: number): string {
+  if (hours < 24) return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+  if (hours < 48) return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+  return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+}
+
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
 
 const BADGE_COLORS: Record<string, string> = {
@@ -622,7 +641,7 @@ export default function ContratosListaPage() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkNotes, setBulkNotes] = useState("");
   const [bulkVendor, setBulkVendor] = useState("");
-  const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status"; status?: string } | null>(null);
+  const [quick, setQuick] = useState<{ id: number; mode: "ade" | "obs" | "status" | "consulta"; status?: string } | null>(null);
   const [quickValue, setQuickValue] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   function copyText(key: string, text: string) {
@@ -795,6 +814,31 @@ export default function ContratosListaPage() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  // Registrar consulta no banco (acompanhamento) — atualiza só a linha no cache,
+  // sem refetch da lista inteira.
+  const consultaMut = useMutation({
+    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
+      const res = await fetch(`/api/contracts/proposals/${id}/consulta`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ notes }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Erro");
+      return res.json();
+    },
+    onSuccess: (data: any, vars) => {
+      queryClient.setQueryData(["/api/contracts/proposals"], (old: any) =>
+        Array.isArray(old)
+          ? old.map((p: any) => p.id === vars.id
+              ? { ...p, ultimaConsulta: data.ultimaConsulta, ultimaConsultaPor: user?.name || user?.email || "" }
+              : p)
+          : old
+      );
+      setQuick(null); setQuickValue("");
+      toast({ title: "Consulta registrada" });
+    },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
   // Usuários para transferência em lote (só operacional/master enxergam)
   const { data: assignableUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/contracts/assignable-users"],
@@ -946,6 +990,7 @@ export default function ContratosListaPage() {
     ade: (p) => (p.ade || "").toLowerCase(),
     parceiro: (p) => (p.parceiroNome || "").toLowerCase(),
     status: (p) => new Date(p.updatedAt || p.createdAt || 0).getTime(), // atualização mais recente
+    consulta: (p) => new Date(p.ultimaConsulta || p.updatedAt || p.createdAt || 0).getTime(), // consulta mais antiga/recente
   };
   // A caixa CIP mantém SEMPRE a ordem por data/urgência (ordenação por coluna não se
   // aplica nela), para não embaralhar os dias de CIP com um sort herdado de outra caixa.
@@ -977,6 +1022,8 @@ export default function ContratosListaPage() {
   const showCorretorCol = viewMode === "operacional";
   const showParceiroCol = canManageContracts;
   const showSelectCol = isOperacional;
+  // Acompanhamento (última consulta no banco) — ferramenta de gestão: só no modo Operacional
+  const showConsultaCol = viewMode === "operacional";
 
   // ── Seleção ─────────────────────────────────────────────────────────────────
 
@@ -1252,6 +1299,7 @@ export default function ContratosListaPage() {
                 {sortHead("ade", "ADE")}
                 {sortHead("status", "Status")}
                 {showParceiroCol && sortHead("parceiro", "Parceiro")}
+                {showConsultaCol && sortHead("consulta", "Consulta")}
                 {showSelectCol && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
@@ -1348,6 +1396,34 @@ export default function ContratosListaPage() {
                     </div>
                   </TableCell>
                   {showParceiroCol && <TableCell className="text-sm text-muted-foreground">{p.parceiroNome || "—"}</TableCell>}
+                  {showConsultaCol && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const el = consultaElapsed(p);
+                        return (
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            {el && (
+                              <span
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${consultaBadgeCls(el.hours)}`}
+                                title={p.ultimaConsulta
+                                  ? `Consultado por ${p.ultimaConsultaPor || "—"} em ${new Date(p.ultimaConsulta).toLocaleString("pt-BR")}`
+                                  : "Sem consulta registrada — contando da última atualização da proposta"}
+                              >
+                                {el.label}
+                              </span>
+                            )}
+                            <button
+                              title="Registrar consulta no banco"
+                              className="text-muted-foreground hover:text-primary"
+                              onClick={() => { setQuick({ id: p.id, mode: "consulta" }); setQuickValue(""); }}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                  )}
                   {showSelectCol && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
@@ -1401,7 +1477,7 @@ export default function ContratosListaPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {quick?.mode === "status" ? "Alterar status" : quick?.mode === "ade" ? "Registrar ADE" : "Adicionar observação"}
+              {quick?.mode === "status" ? "Alterar status" : quick?.mode === "ade" ? "Registrar ADE" : quick?.mode === "consulta" ? "Registrar consulta no banco" : "Adicionar observação"}
             </DialogTitle>
           </DialogHeader>
 
@@ -1436,24 +1512,43 @@ export default function ContratosListaPage() {
             <Textarea value={quickValue} onChange={(e) => setQuickValue(e.target.value)} placeholder="Observação..." rows={3} autoFocus />
           )}
 
+          {quick?.mode === "consulta" && (
+            <div className="space-y-1.5">
+              <Textarea
+                value={quickValue}
+                onChange={(e) => setQuickValue(e.target.value)}
+                placeholder="Como está o contrato no banco? (ex: em análise na esteira, aguardando averbação, sem retorno ainda...)"
+                rows={3}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Registra a consulta no histórico e zera o contador de acompanhamento. Não altera o status.
+              </p>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setQuick(null); setQuickValue(""); }}>Cancelar</Button>
             <Button
               disabled={
-                (quick?.mode === "status" ? (!quick?.status || quickStatusMut.isPending) : (!quickValue.trim() || quickPatchMut.isPending))
+                quick?.mode === "status" ? (!quick?.status || quickStatusMut.isPending)
+                : quick?.mode === "consulta" ? (!quickValue.trim() || consultaMut.isPending)
+                : (!quickValue.trim() || quickPatchMut.isPending)
               }
               onClick={() => {
                 if (!quick) return;
                 if (quick.mode === "status") {
                   if (!quick.status) return;
                   quickStatusMut.mutate({ id: quick.id, status: quick.status, notes: quickValue.trim() || undefined });
+                } else if (quick.mode === "consulta") {
+                  consultaMut.mutate({ id: quick.id, notes: quickValue.trim() });
                 } else {
                   const body = quick.mode === "ade" ? { ade: quickValue.trim() } : { notes: quickValue.trim() };
                   quickPatchMut.mutate({ id: quick.id, body });
                 }
               }}
             >
-              {(quick?.mode === "status" ? quickStatusMut.isPending : quickPatchMut.isPending) ? "Salvando..." : "Salvar"}
+              {(quick?.mode === "status" ? quickStatusMut.isPending : quick?.mode === "consulta" ? consultaMut.isPending : quickPatchMut.isPending) ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>

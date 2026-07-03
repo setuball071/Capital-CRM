@@ -3536,6 +3536,9 @@ export const proposals = pgTable("proposals", {
   // Unificação de parcelas (portabilidade): aponta para a acumuladora; valor original p/ desfazer
   unificadaEmId: integer("unificada_em_id"),
   valorPreUnificacao: decimal("valor_pre_unificacao", { precision: 12, scale: 2 }),
+  // Acompanhamento operacional: última consulta do contrato no banco (botão na listagem)
+  ultimaConsulta: timestamp("ultima_consulta"),
+  ultimaConsultaPor: varchar("ultima_consulta_por", { length: 255 }),
   // Dados extras por convênio (UF, órgão, ident SIAPE, conta salário, etc.)
   clientMeta: jsonb("client_meta"),
   vendorId: integer("vendor_id").references(() => users.id),
