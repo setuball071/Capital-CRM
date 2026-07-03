@@ -1241,6 +1241,9 @@ let _tiposContrato=[]; // tipos distintos carregados do banco
 let _recContId=null,_comContId=null,_recProdId=null,_comProdId=null;
 // Sempre abre como consultor — visão master exige contrassenha (privacidade do repasse da empresa)
 let _role='consultor';
+// Branding do tenant (nome + logo) — usado no recibo de pagamento
+let _tenantBrand=null;
+fetch('/api/tenant/current',{credentials:'include'}).then(r=>r.ok?r.json():null).then(t=>{_tenantBrand=t;}).catch(()=>{});
 let _myUserId=null,_myUserEmail=null,_myCorretorId=null,_isMasterUser=false;
 let _pendingModule=null,_inicializado=false;
 let _selectedContratos=new Set(),_selectedCorretores=new Set(),_selectedTabelas=new Set();
@@ -4084,49 +4087,69 @@ async function verReciboPagamento(id){
     const d=await resp.json();
     const p=d.pagamento;
     const itens=d.itens||[];
+    const brand=_tenantBrand||{};
+    const nomeEmpresa=brand.name||'Capital Go';
+    const logoHtml=brand.logoUrl
+      ?`<img src="${brand.logoUrl}" alt="${escHtml(nomeEmpresa)}" style="height:42px;max-width:200px;object-fit:contain"/>`
+      :`<div style="font-size:20px;font-weight:800;color:var(--accent)">${escHtml(nomeEmpresa)}</div>`;
     document.getElementById('recibo-pag-body').innerHTML=`
-      <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-        <div style="font-size:14px;font-weight:700;color:var(--accent)">💼 Capital CRM</div>
-        <div style="font-size:11px;color:var(--muted)">Comprovante de Pagamento — Pagamento #${p.id}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:3px solid var(--accent);margin-bottom:18px">
+        <div>${logoHtml}</div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:800;letter-spacing:.03em">RECIBO DE PAGAMENTO</div>
+          <div style="font-size:11px;color:var(--muted)">Nº ${p.id} &nbsp;·&nbsp; ${fmtData(p.dataPagamento)}</div>
+        </div>
       </div>
-      <div style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Consultor:</span><b>${escHtml(p.vendedorNome||'—')}</b></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Data do pagamento:</span><b>${fmtData(p.dataPagamento)}</b></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Qtd contratos:</span><b>${p.qtdContratos||itens.length}</b></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Pago por:</span><b>${escHtml(p.pagoPorNome||'')}</b></div>
+      <div style="background:var(--surface2);padding:14px 16px;border-radius:8px;margin-bottom:16px;border-left:4px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Consultor:</span><b>${escHtml(p.vendedorNome||'—')}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Data do pagamento:</span><b>${fmtData(p.dataPagamento)}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Qtd contratos:</span><b>${p.qtdContratos||itens.length}</b></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Emitido por:</span><b>${escHtml(p.pagoPorNome||'')}</b></div>
         ${p.observacao?`<div style="margin-top:8px;font-size:12px;color:var(--muted)">Obs: ${escHtml(p.observacao)}</div>`:''}
       </div>
       <table style="width:100%;font-size:12px;border-collapse:collapse">
-        <thead><tr style="border-bottom:1px solid var(--border)">
-          <th style="text-align:left;padding:6px">Contrato</th><th style="text-align:left">Cliente</th>
-          <th style="text-align:left">Banco</th><th class="r">Valor Contrato</th><th class="r">Comissão</th>
+        <thead><tr style="background:rgba(var(--accent-rgb),.08)">
+          <th style="text-align:left;padding:8px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Contrato</th>
+          <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Cliente</th>
+          <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Banco</th>
+          <th class="r" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Val. Contrato</th>
+          <th class="r" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-right:6px">Prêmio</th>
         </tr></thead><tbody>
         ${itens.map(i=>`<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px">${escHtml(i.contratoId||'—')}</td>
           <td>${escHtml(i.nomeCliente||'')}</td>
           <td>${escHtml(i.banco||'')}</td>
           <td class="r">${fmtBRL(parseFloat(i.valorBruto||0))}</td>
-          <td class="r v-yellow">${fmtBRL(parseFloat(i.valorComissao||0))}</td>
+          <td class="r" style="font-weight:600;padding-right:6px">${fmtBRL(parseFloat(i.valorComissao||0))}</td>
         </tr>`).join('')}
         </tbody>
       </table>
       ${(d.compensacoes||[]).length?`
-      <div style="margin-top:12px;font-size:12px;font-weight:700">💱 Proventos e Descontos aplicados</div>
+      <div style="margin-top:14px;font-size:12px;font-weight:700">Proventos e Descontos aplicados</div>
       <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:4px">
         ${(d.compensacoes||[]).map(c=>`<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px">${c.tipo==='Provento'?'▲':'▼'} ${escHtml(c.categoria||c.tipo)}${c.observacao?` <span style="color:var(--muted)">(${escHtml(c.observacao)})</span>`:''}</td>
           <td class="r" style="font-weight:600;color:${c.tipo==='Provento'?'var(--green)':'var(--red)'}">${c.tipo==='Provento'?'+':'−'} ${fmtBRL(parseFloat(c.valor||0))}</td>
         </tr>`).join('')}
       </table>`:''}
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
-        <tfoot><tr style="border-top:2px solid var(--border);font-weight:700">
-          <td style="padding:8px 6px">Total</td>
-          <td class="r v-accent">${fmtBRL(parseFloat(p.valorTotal||0))}</td>
-        </tr></tfoot>
-      </table>
-      <div style="margin-top:30px;text-align:center;font-size:11px;color:var(--muted)">
-        Recebi de Capital CRM a quantia acima referente aos contratos listados.
-        <div style="margin-top:30px">Assinatura: ____________________________________________</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <div style="background:rgba(var(--accent-rgb),.08);border-radius:8px;padding:10px 18px;text-align:right">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Total pago</div>
+          <div style="font-size:20px;font-weight:800;color:var(--accent)">${fmtBRL(parseFloat(p.valorTotal||0))}</div>
+        </div>
+      </div>
+      <div style="margin-top:26px;font-size:12px;color:var(--text);text-align:center">
+        Recebi de <b>${escHtml(nomeEmpresa)}</b> a importância de <b>${fmtBRL(parseFloat(p.valorTotal||0))}</b>,
+        referente ao prêmio dos contratos listados neste recibo.
+      </div>
+      <div style="margin-top:48px;text-align:center">
+        <div style="border-top:1px solid var(--muted);width:320px;margin:0 auto;padding-top:6px;font-size:12px">
+          <b>${escHtml(p.vendedorNome||'')}</b><br>
+          <span style="color:var(--muted);font-size:11px">Assinatura do consultor</span>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:10px;color:var(--muted);margin-top:20px">
+        Documento gerado por ${escHtml(nomeEmpresa)} — Recibo Nº ${p.id}
       </div>`;
     abrirModal('modal-recibo-pag');
   }catch(e){toast('Erro ao abrir recibo',true);}
@@ -4134,15 +4157,23 @@ async function verReciboPagamento(id){
 
 function imprimirReciboPag(){
   const html=document.getElementById('recibo-pag-body').innerHTML;
+  // Resolve as variáveis do tema atual para a janela de impressão (sempre em fundo claro)
+  const cs=getComputedStyle(document.documentElement);
+  const accent=(cs.getPropertyValue('--accent')||'').trim()||'#7c3aed';
+  const accentRgb=(cs.getPropertyValue('--accent-rgb')||'').trim()||'124,58,237';
   const w=window.open('','_blank','width=800,height=900');
-  w.document.write(`<html><head><title>Recibo</title><style>
-    body{font-family:Arial,sans-serif;padding:30px;color:#222}
+  w.document.write(`<html><head><title>Recibo de Pagamento</title><style>
+    :root{--accent:${accent};--accent-rgb:${accentRgb};--muted:#6b7280;--border:#d7dae0;--surface2:#f3f4f6;--green:#15803d;--yellow:#b45309;--red:#dc2626;--text:#1a1a1a}
+    body{font-family:'Segoe UI',Arial,sans-serif;padding:34px;color:#1a1a1a;font-size:13px;background:#fff}
     table{border-collapse:collapse;width:100%}
     .r{text-align:right}
-    .v-yellow{color:#b58900}
-    .v-accent{color:#0066cc;font-weight:bold}
+    .v-yellow{color:#b45309}.v-green{color:#15803d}
+    .v-accent{color:${accent};font-weight:bold}
+    img{max-height:44px}
+    @media print{body{padding:10mm}}
   </style></head><body>${html}</body></html>`);
-  w.document.close();setTimeout(()=>{w.print();},250);
+  w.document.close();
+  setTimeout(()=>{w.print();},500);
 }
 
 function toggleContratoSelecionado(id,checked){
