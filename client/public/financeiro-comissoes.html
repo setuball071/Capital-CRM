@@ -271,12 +271,22 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div id="cm-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid rgba(var(--accent-rgb),.4);border-left:4px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:8px;margin:10px 0;box-shadow:var(--shadow)"></div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
+        <thead id="cm-thead"><tr>
           <th style="width:36px;padding:6px 14px"><input type="checkbox" id="cm-chk-all" onchange="toggleTodosContratos(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
-          <th>ADE</th><th>Data Pgto</th><th>Cliente / CPF</th><th>Consultor</th><th>Banco</th>
-          <th>Conv.</th><th>Tipo</th><th class="r">Val. Contrato</th><th class="r">Val. Empresa</th>
-          <th class="r">Flat %</th><th class="r">Flat Valor</th><th>Status Flat</th><th>Data Pag.</th><th></th>
-          <th class="col-parceiro">Parceiro</th>
+          <th class="sort-th" data-sort="ade" data-label="ADE" onclick="toggleSortCm('ade')">ADE</th>
+          <th class="sort-th" data-sort="dataPgto" data-label="Data Pgto" onclick="toggleSortCm('dataPgto')">Data Pgto</th>
+          <th class="sort-th" data-sort="cliente" data-label="Cliente / CPF" onclick="toggleSortCm('cliente')">Cliente / CPF</th>
+          <th class="sort-th" data-sort="consultor" data-label="Consultor" onclick="toggleSortCm('consultor')">Consultor</th>
+          <th class="sort-th" data-sort="banco" data-label="Banco" onclick="toggleSortCm('banco')">Banco</th>
+          <th class="sort-th" data-sort="conv" data-label="Conv." onclick="toggleSortCm('conv')">Conv.</th>
+          <th class="sort-th" data-sort="tipo" data-label="Tipo" onclick="toggleSortCm('tipo')">Tipo</th>
+          <th class="r sort-th" data-sort="valContrato" data-label="Val. Contrato" onclick="toggleSortCm('valContrato')">Val. Contrato</th>
+          <th class="r sort-th" data-sort="valEmpresa" data-label="Val. Empresa" onclick="toggleSortCm('valEmpresa')">Val. Empresa</th>
+          <th class="r sort-th" data-sort="flatPct" data-label="Flat %" onclick="toggleSortCm('flatPct')">Flat %</th>
+          <th class="r sort-th" data-sort="flatValor" data-label="Flat Valor" onclick="toggleSortCm('flatValor')">Flat Valor</th>
+          <th class="sort-th" data-sort="statusFlat" data-label="Status Flat" onclick="toggleSortCm('statusFlat')">Status Flat</th>
+          <th class="sort-th" data-sort="dataPag" data-label="Data Pag." onclick="toggleSortCm('dataPag')">Data Pag.</th><th></th>
+          <th class="col-parceiro sort-th" data-sort="parceiro" data-label="Parceiro" onclick="toggleSortCm('parceiro')">Parceiro</th>
         </tr></thead>
         <tbody id="cm-tbody"></tbody>
         <tfoot id="cm-tfoot"></tfoot>
@@ -348,22 +358,22 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <!-- Tabela -->
     <div style="overflow-x:auto">
       <table class="tbl">
-        <thead>
+        <thead id="prod-thead">
           <tr>
             <th style="width:36px"><input type="checkbox" id="prod-chk-all" onchange="toggleTodosProducao(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>
-            <th>Contrato</th>
-            <th>Cliente</th>
-            <th>Banco</th>
-            <th>Tipo</th>
-            <th>Vendedor</th>
-            <th>Data Pgto</th>
-            <th class="r">Valor Bruto</th>
-            <th class="r">% Empresa</th>
-            <th class="r">Val. Empresa</th>
-            <th class="r">Flat %</th>
-            <th class="r">Flat R$</th>
-            <th>Status</th>
-            <th>Recebimento</th>
+            <th class="sort-th" data-sort="contrato" data-label="Contrato" onclick="toggleSortProd('contrato')">Contrato</th>
+            <th class="sort-th" data-sort="cliente" data-label="Cliente" onclick="toggleSortProd('cliente')">Cliente</th>
+            <th class="sort-th" data-sort="banco" data-label="Banco" onclick="toggleSortProd('banco')">Banco</th>
+            <th class="sort-th" data-sort="tipo" data-label="Tipo" onclick="toggleSortProd('tipo')">Tipo</th>
+            <th class="sort-th" data-sort="vendedor" data-label="Vendedor" onclick="toggleSortProd('vendedor')">Vendedor</th>
+            <th class="sort-th" data-sort="dataPgto" data-label="Data Pgto" onclick="toggleSortProd('dataPgto')">Data Pgto</th>
+            <th class="r sort-th" data-sort="valorBruto" data-label="Valor Bruto" onclick="toggleSortProd('valorBruto')">Valor Bruto</th>
+            <th class="r sort-th" data-sort="pctEmpresa" data-label="% Empresa" onclick="toggleSortProd('pctEmpresa')">% Empresa</th>
+            <th class="r sort-th" data-sort="valEmpresa" data-label="Val. Empresa" onclick="toggleSortProd('valEmpresa')">Val. Empresa</th>
+            <th class="r sort-th" data-sort="flatPct" data-label="Flat %" onclick="toggleSortProd('flatPct')">Flat %</th>
+            <th class="r sort-th" data-sort="flatValor" data-label="Flat R$" onclick="toggleSortProd('flatValor')">Flat R$</th>
+            <th class="sort-th" data-sort="status" data-label="Status" onclick="toggleSortProd('status')">Status</th>
+            <th class="sort-th" data-sort="receb" data-label="Recebimento" onclick="toggleSortProd('receb')">Recebimento</th>
             <th></th>
           </tr>
         </thead>
@@ -1505,6 +1515,40 @@ function filtrarContMaster(){
     return true;
   });
 }
+// Ordenação por coluna em Pagamentos (clica no título; clica de novo inverte)
+let _cmSort={col:null,dir:'desc'};
+function toggleSortCm(col){
+  if(_cmSort.col===col)_cmSort.dir=_cmSort.dir==='asc'?'desc':'asc';
+  else _cmSort={col,dir:['cliente','consultor','banco','conv','tipo','ade','statusFlat','parceiro'].includes(col)?'asc':'desc'};
+  renderContratos();
+}
+function _cmSortVal(c,col){
+  const emp=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
+  switch(col){
+    case 'ade':return String(c.contratoId||'');
+    case 'dataPgto':return _dataOrdProd(c.dataPagamento);
+    case 'cliente':return String(c.nomeCliente||'').toUpperCase();
+    case 'consultor':return String(c.vendedorNome||c.nomeCorretor||'').toUpperCase();
+    case 'banco':return String(c.banco||'').toUpperCase();
+    case 'conv':return String(c.convenio||'').toUpperCase();
+    case 'tipo':return String(c.tipoContrato||'').toUpperCase();
+    case 'valContrato':return parseFloat(c.valorBruto||0);
+    case 'valEmpresa':return emp;
+    case 'flatPct':return calcRepasseConsultorProd(c);
+    case 'flatValor':{const pct=calcRepasseConsultorProd(c);return Math.round(emp*pct/100*100)/100;}
+    case 'statusFlat':return String(c.statusComissao||'Aguardando');
+    case 'dataPag':return _dataOrdProd(c.dataPagComissao);
+    case 'parceiro':return String(c.parceiro||'').toUpperCase();
+    default:return 0;
+  }
+}
+function atualizarSetasCm(){
+  document.querySelectorAll('#cm-thead th[data-sort]').forEach(th=>{
+    const ativo=_cmSort.col===th.dataset.sort;
+    th.innerHTML=escHtml(th.dataset.label)+(ativo?(_cmSort.dir==='asc'?' <span style="color:var(--accent)">↑</span>':' <span style="color:var(--accent)">↓</span>'):'');
+  });
+}
+
 async function renderMasterContratos(){
   // Carrega contratos importados da API se ainda não carregou
   const tbody=document.getElementById('cm-tbody');
@@ -1529,7 +1573,7 @@ async function renderMasterContratos(){
   const conv=document.getElementById('cm-conv').value;
   const st=document.getElementById('cm-st').value;
   const mes=document.getElementById('cm-mes').value;
-  const list=_contratosMasterAPI.filter(c=>{
+  let list=_contratosMasterAPI.filter(c=>{
     const stat=c.statusComissao||'Aguardando';
     // Filtra apenas A Pagar e Pago — Produção é onde se marca para pagamento
     if(stat!=='A Pagar'&&stat!=='Pago')return false;
@@ -1540,6 +1584,16 @@ async function renderMasterContratos(){
     if(mes&&c.mesReferencia!==mes)return false;
     return true;
   });
+  // Ordenação escolhida no cabeçalho (clique no título da coluna)
+  if(_cmSort.col){
+    const dir=_cmSort.dir==='asc'?1:-1;
+    list=[...list].sort((a,b)=>{
+      const va=_cmSortVal(a,_cmSort.col),vb=_cmSortVal(b,_cmSort.col);
+      if(typeof va==='string'||typeof vb==='string')return String(va).localeCompare(String(vb),'pt-BR')*dir;
+      return (va-vb)*dir;
+    });
+  }
+  atualizarSetasCm();
   document.getElementById('cm-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
   let totVal=0,totEmp=0,totFlat=0,totPago=0,totReceber=0;
   // Usa função global calcRepasseConsultorProd (mesma lógica para Produção e Contratos)
@@ -2035,6 +2089,49 @@ function calcRepasseConsultorProd(c){
   return getRepasseForTipo(g,c.tipoContrato);
 }
 
+// Ordenação por coluna na Produção master (clica no título; clica de novo inverte)
+let _prodSort={col:null,dir:'desc'};
+function toggleSortProd(col){
+  if(_prodSort.col===col)_prodSort.dir=_prodSort.dir==='asc'?'desc':'asc';
+  else _prodSort={col,dir:['cliente','banco','tipo','vendedor','contrato','status'].includes(col)?'asc':'desc'};
+  if(_prodData)renderTabelaProducaoAPI(_prodData);
+}
+function _dataOrdProd(s){
+  if(!s)return 0;
+  const str=String(s).trim();
+  let m=str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return +(m[1]+m[2]+m[3]);
+  m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return +(m[3]+m[2].padStart(2,'0')+m[1].padStart(2,'0'));
+  return 0;
+}
+function _prodSortVal(c,col){
+  const emp=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
+  const bruto=parseFloat(c.valorBruto||0);
+  switch(col){
+    case 'contrato':return String(c.contratoId||'');
+    case 'cliente':return String(c.nomeCliente||'').toUpperCase();
+    case 'banco':return String(c.banco||'').toUpperCase();
+    case 'tipo':return String(c.tipoContrato||'').toUpperCase();
+    case 'vendedor':return String(c.vendedorNome||c.nomeCorretor||'').toUpperCase();
+    case 'dataPgto':return _dataOrdProd(c.dataPagamento);
+    case 'valorBruto':return bruto;
+    case 'pctEmpresa':return parseFloat(c.comissaoEmpresaPerc||0)||(bruto>0?emp/bruto*100:0);
+    case 'valEmpresa':return emp;
+    case 'flatPct':{const pct=calcRepasseConsultorProd(c);const vf=Math.round(emp*pct/100*100)/100;return bruto>0?vf/bruto*100:0;}
+    case 'flatValor':{const pct=calcRepasseConsultorProd(c);return Math.round(emp*pct/100*100)/100;}
+    case 'status':return String(c.statusComissao||'Aguardando');
+    case 'receb':return _dataOrdProd(c.dataRecebimento);
+    default:return 0;
+  }
+}
+function atualizarSetasProd(){
+  document.querySelectorAll('#prod-thead th[data-sort]').forEach(th=>{
+    const ativo=_prodSort.col===th.dataset.sort;
+    th.innerHTML=escHtml(th.dataset.label)+(ativo?(_prodSort.dir==='asc'?' <span style="color:var(--accent)">↑</span>':' <span style="color:var(--accent)">↓</span>'):'');
+  });
+}
+
 function renderTabelaProducaoAPI(data) {
   const { contratos, totais } = data;
   _producaoContratosCache = contratos || [];
@@ -2059,6 +2156,17 @@ function renderTabelaProducaoAPI(data) {
   if (filtroReceb === 'areceber') lista = lista.filter(c => !c.dataRecebimento);
   if (filtroParc) lista = lista.filter(c => (c.parceiroRelatorio||'') === filtroParc);
   if (filtroMesReceb) lista = lista.filter(c => (c.dataRecebimento||'').startsWith(filtroMesReceb));
+
+  // Ordenação escolhida no cabeçalho (clique no título da coluna)
+  if (_prodSort.col) {
+    const dir = _prodSort.dir === 'asc' ? 1 : -1;
+    lista = [...lista].sort((a, b) => {
+      const va = _prodSortVal(a, _prodSort.col), vb = _prodSortVal(b, _prodSort.col);
+      if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+      return (va - vb) * dir;
+    });
+  }
+  atualizarSetasProd();
 
   // Recalcula totais aplicando regra do grupo
   let totVal = 0, totEmp = 0, totFlat = 0, totRecebido = 0, totAReceber = 0;
