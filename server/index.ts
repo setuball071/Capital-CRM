@@ -407,6 +407,27 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             CREATE INDEX IF NOT EXISTS idx_lancamentos_corretor_tenant ON lancamentos_corretor(tenant_id, nome_corretor)
           `);
+          // Campanhas: remove atribuições duplicadas (mesmo lead 2x na mesma campanha,
+          // causado por distribuições concorrentes) — mantém a não-'novo' ou a mais antiga.
+          // Depois cria índice único que impede novas duplicatas e recalcula contadores.
+          await migDb.execute(migSql`
+            DELETE FROM sales_lead_assignments WHERE id IN (
+              SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                  PARTITION BY campaign_id, lead_id
+                  ORDER BY CASE WHEN status <> 'novo' THEN 0 ELSE 1 END, id
+                ) rn FROM sales_lead_assignments
+              ) t WHERE rn > 1
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sla_campanha_lead ON sales_lead_assignments(campaign_id, lead_id)
+          `);
+          await migDb.execute(migSql`
+            UPDATE sales_campaigns c SET
+              leads_distribuidos = (SELECT COUNT(*) FROM sales_lead_assignments a WHERE a.campaign_id = c.id),
+              leads_disponiveis = GREATEST(0, c.total_leads - (SELECT COUNT(*) FROM sales_lead_assignments a WHERE a.campaign_id = c.id))
+          `);
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP
           `);

@@ -14327,14 +14327,47 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     },
   );
 
+  // Trava por campanha: evita distribuições concorrentes (duplo clique) duplicarem leads
+  const _distribuicoesEmAndamento = new Set<number>();
+
+  // Insert em lote com proteção do índice único (campaign_id, lead_id):
+  // duplicata concorrente é ignorada em vez de criada. Retorna quantos entraram de fato.
+  const inserirAssignmentsBulk = async (rows: any[]): Promise<number> => {
+    let inseridos = 0;
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const r = await db
+        .insert(salesLeadAssignments)
+        .values(chunk)
+        .onConflictDoNothing()
+        .returning({ id: salesLeadAssignments.id });
+      inseridos += r.length;
+    }
+    return inseridos;
+  };
+
+  // Contadores calculados do banco (não de leitura possivelmente desatualizada)
+  const recalcularContadoresCampanha = async (campaignId: number) => {
+    await db.execute(sql`
+      UPDATE sales_campaigns SET
+        leads_distribuidos = (SELECT COUNT(*) FROM sales_lead_assignments WHERE campaign_id = ${campaignId}),
+        leads_disponiveis = GREATEST(0, total_leads - (SELECT COUNT(*) FROM sales_lead_assignments WHERE campaign_id = ${campaignId}))
+      WHERE id = ${campaignId}
+    `);
+  };
+
   // POST /api/vendas/campanhas/:id/distribuir-leads - Distribuir leads para vendedor
   app.post(
     "/api/vendas/campanhas/:id/distribuir-leads",
     requireAuth,
     requireCRMAdmin,
     async (req, res) => {
+      const campaignId = parseInt(req.params.id);
+      if (_distribuicoesEmAndamento.has(campaignId)) {
+        return res.status(409).json({ message: "Já existe uma distribuição em andamento nesta campanha — aguarde concluir." });
+      }
+      _distribuicoesEmAndamento.add(campaignId);
       try {
-        const campaignId = parseInt(req.params.id);
         const { userId, quantidade } = req.body;
 
         if (!userId || !quantidade || quantidade < 1) {
@@ -14361,35 +14394,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }
 
         // Get current max ordem_fila for this user/campaign
-        let ordemFila = await storage.getMaxOrdemFila(userId, campaignId);
+        const ordemBase = await storage.getMaxOrdemFila(userId, campaignId);
 
-        // Create assignments
-        for (const lead of leadsDisponiveis) {
-          ordemFila++;
-          await storage.createSalesLeadAssignment({
+        // Insert em lote (rápido + protegido contra duplicata pelo índice único)
+        const inseridos = await inserirAssignmentsBulk(
+          leadsDisponiveis.map((lead, i) => ({
             leadId: lead.id,
             userId,
             campaignId,
             status: "novo",
-            ordemFila,
-          });
-        }
+            ordemFila: ordemBase + i + 1,
+          })),
+        );
 
-        // Update campaign counters
-        await storage.updateSalesCampaign(campaignId, {
-          leadsDisponiveis: Math.max(
-            0,
-            (campanha.leadsDisponiveis || 0) - leadsDisponiveis.length,
-          ),
-          leadsDistribuidos:
-            (campanha.leadsDistribuidos || 0) + leadsDisponiveis.length,
-        });
+        // Contadores reais direto do banco
+        await recalcularContadoresCampanha(campaignId);
 
         try {
           await createNotification({
             userId,
             title: "Novos leads recebidos",
-            message: `Você recebeu ${leadsDisponiveis.length} lead(s) da campanha "${campanha.nome}".`,
+            message: `Você recebeu ${inseridos} lead(s) da campanha "${campanha.nome}".`,
             type: "carteira",
             actionUrl: "/vendas/atendimento",
           });
@@ -14399,11 +14424,13 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         return res.json({
           message: "Leads distribuídos com sucesso",
-          quantidade: leadsDisponiveis.length,
+          quantidade: inseridos,
         });
       } catch (error) {
         console.error("Distribute leads error:", error);
         return res.status(500).json({ message: "Erro ao distribuir leads" });
+      } finally {
+        _distribuicoesEmAndamento.delete(campaignId);
       }
     },
   );
@@ -14414,8 +14441,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     requireAuth,
     requireCRMAdmin,
     async (req, res) => {
+      const campaignId = parseInt(req.params.id);
+      if (_distribuicoesEmAndamento.has(campaignId)) {
+        return res.status(409).json({ message: "Já existe uma distribuição em andamento nesta campanha — aguarde concluir." });
+      }
+      _distribuicoesEmAndamento.add(campaignId);
       try {
-        const campaignId = parseInt(req.params.id);
         const { distributions } = req.body;
 
         if (
@@ -14489,33 +14520,26 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           if (!leadsDoUser.length) continue;
 
           // Get current max ordem_fila for this user/campaign
-          let ordemFila = await storage.getMaxOrdemFila(d.userId, campaignId);
+          const ordemBase = await storage.getMaxOrdemFila(d.userId, campaignId);
 
-          for (const lead of leadsDoUser) {
-            ordemFila++;
-            await storage.createSalesLeadAssignment({
+          // Insert em lote (rápido + protegido contra duplicata pelo índice único)
+          const inseridos = await inserirAssignmentsBulk(
+            leadsDoUser.map((lead, i) => ({
               leadId: lead.id,
               userId: d.userId,
               campaignId,
               status: "novo",
-              ordemFila,
-            });
-          }
+              ordemFila: ordemBase + i + 1,
+            })),
+          );
 
-          totalDistributed += leadsDoUser.length;
-          results.push({ userId: d.userId, quantidade: leadsDoUser.length });
+          totalDistributed += inseridos;
+          results.push({ userId: d.userId, quantidade: inseridos });
         }
 
-        // Update campaign counters
+        // Contadores reais direto do banco
         if (totalDistributed > 0) {
-          await storage.updateSalesCampaign(campaignId, {
-            leadsDisponiveis: Math.max(
-              0,
-              (campanha.leadsDisponiveis || 0) - totalDistributed,
-            ),
-            leadsDistribuidos:
-              (campanha.leadsDistribuidos || 0) + totalDistributed,
-          });
+          await recalcularContadoresCampanha(campaignId);
 
           for (const r of results) {
             try {
@@ -14543,6 +14567,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } catch (error) {
         console.error("Distribute multi leads error:", error);
         return res.status(500).json({ message: "Erro ao distribuir leads" });
+      } finally {
+        _distribuicoesEmAndamento.delete(campaignId);
       }
     },
   );
